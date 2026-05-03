@@ -2,7 +2,14 @@ import {
   "bobzhang/kimicc/parser",
   "bobzhang/kimicc/codegen",
   "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/stdio",
 }
+
+options(
+  "native-stub": ["stub.c"],
+)
+
+supported_targets = "+native"

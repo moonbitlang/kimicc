@@ -1,4 +1,12 @@
 ///|
+#borrow(path, content)
+extern "c" fn moonbit_write_file(path : Bytes, content : Bytes) -> Int = "moonbit_write_file"
+
+///|
+#borrow(cmd)
+extern "c" fn moonbit_system(cmd : Bytes) -> Int = "moonbit_system"
+
+///|
 fn compile(source : String) -> String {
   let prog = @parser.parse(source)
   let codegen = @codegen.Codegen::new()
@@ -6,20 +14,40 @@ fn compile(source : String) -> String {
 }
 
 ///|
-async test "compile hello fixture" {
+fn run_source(source : String) -> Int {
+  let assembly = compile(source)
+  let asm_path = "/tmp/kimicc_test.s"
+  let bin_path = "/tmp/kimicc_test"
+  let _ = moonbit_write_file(
+    @utf8.encode(asm_path),
+    @utf8.encode(assembly),
+  )
+  let link_rc = moonbit_system(@utf8.encode("clang -o " + bin_path + " " + asm_path))
+  if link_rc != 0 {
+    abort("Link failed with code: " + link_rc.to_string())
+  }
+  moonbit_system(@utf8.encode(bin_path))
+}
+
+///|
+fn run_source_async(source : String) -> Int {
+  run_source(source)
+}
+
+///|
+async test "run hello fixture" {
   let source =
     #|int main() {
     #|  int a = 1;
     #|  int b = 2;
     #|  return a + b + 3;
     #|}
-  let assembly = compile(source)
-  assert_true(assembly.contains("_main:"))
-  assert_true(assembly.contains(".globl\t_main"))
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="6")
 }
 
 ///|
-async test "compile var_decls fixture" {
+async test "run var_decls fixture" {
   let source =
     #|int main() {
     #|  int a, b, c;
@@ -36,12 +64,12 @@ async test "compile var_decls fixture" {
     #|  }
     #|  return c + 100;
     #|}
-  let assembly = compile(source)
-  assert_true(assembly.contains("_main:"))
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="100")
 }
 
 ///|
-async test "compile switch fixture" {
+async test "run switch fixture" {
   let source =
     #|int main() {
     #|  int x = 2;
@@ -52,12 +80,12 @@ async test "compile switch fixture" {
     #|    default: return 0;
     #|  }
     #|}
-  let assembly = compile(source)
-  assert_true(assembly.contains("_main:"))
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="20")
 }
 
 ///|
-async test "compile pointers fixture" {
+async test "run pointers fixture" {
   let source =
     #|int main() {
     #|  int x = 42;
@@ -65,23 +93,12 @@ async test "compile pointers fixture" {
     #|  *p = *p + 8;
     #|  return x;
     #|}
-  let assembly = compile(source)
-  assert_true(assembly.contains("_main:"))
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="50")
 }
 
 ///|
-async test "compile c4_stripped fixture" {
-  let data = @fs.read_file("test/fixtures/c4_stripped.c")
-  let source = data.text()
-  let assembly = compile(source)
-  assert_true(assembly.contains("_main:"))
-  assert_true(assembly.contains("_next:"))
-  assert_true(assembly.contains("_expr:"))
-  assert_true(assembly.contains("_stmt:"))
-}
-
-///|
-async test "compile struct fixture" {
+async test "run struct fixture" {
   let source =
     #|struct Point {
     #|  int x;
@@ -93,12 +110,12 @@ async test "compile struct fixture" {
     #|  p.y = 4;
     #|  return p.x + p.y;
     #|}
-  let assembly = compile(source)
-  assert_true(assembly.contains("_main:"))
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="7")
 }
 
 ///|
-async test "compile arrays fixture" {
+async test "run arrays fixture" {
   let source =
     #|int main() {
     #|  int a[5];
@@ -107,12 +124,12 @@ async test "compile arrays fixture" {
     #|  a[2] = a[0] + a[1];
     #|  return a[2];
     #|}
-  let assembly = compile(source)
-  assert_true(assembly.contains("_main:"))
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="3")
 }
 
 ///|
-async test "compile logic fixture" {
+async test "run logic fixture" {
   let source =
     #|int main() {
     #|  int a = 1;
@@ -121,19 +138,19 @@ async test "compile logic fixture" {
     #|    return 1;
     #|  }
     #|  if (a || b) {
+    #|    if (!b) {
+    #|      return 3;
+    #|    }
     #|    return 2;
-    #|  }
-    #|  if (!b) {
-    #|    return 3;
     #|  }
     #|  return 0;
     #|}
-  let assembly = compile(source)
-  assert_true(assembly.contains("_main:"))
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="3")
 }
 
 ///|
-async test "compile globals fixture" {
+async test "run globals fixture" {
   let source =
     #|int counter = 0;
     #|int inc() {
@@ -145,14 +162,12 @@ async test "compile globals fixture" {
     #|  inc();
     #|  return counter;
     #|}
-  let assembly = compile(source)
-  assert_true(assembly.contains("_main:"))
-  assert_true(assembly.contains("_counter:"))
-  assert_true(assembly.contains("_inc:"))
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="2")
 }
 
 ///|
-async test "compile loops fixture" {
+async test "run loops fixture" {
   let source =
     #|int main() {
     #|  int sum = 0;
@@ -169,12 +184,12 @@ async test "compile loops fixture" {
     #|  }
     #|  return sum;
     #|}
-  let assembly = compile(source)
-  assert_true(assembly.contains("_main:"))
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="30")
 }
 
 ///|
-async test "compile funcall fixture" {
+async test "run funcall fixture" {
   let source =
     #|int add(int a, int b) {
     #|  return a + b;
@@ -185,26 +200,24 @@ async test "compile funcall fixture" {
     #|int main() {
     #|  return add(2, 3) + mul(4, 5);
     #|}
-  let assembly = compile(source)
-  assert_true(assembly.contains("_main:"))
-  assert_true(assembly.contains("_add:"))
-  assert_true(assembly.contains("_mul:"))
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="25")
 }
 
 ///|
-async test "compile enum fixture" {
+async test "run enum fixture" {
   let source =
     #|enum Color { Red, Green, Blue };
     #|int main() {
     #|  int c = Green;
     #|  return c + 1;
     #|}
-  let assembly = compile(source)
-  assert_true(assembly.contains("_main:"))
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="2")
 }
 
 ///|
-async test "compile bitwise fixture" {
+async test "run bitwise fixture" {
   let source =
     #|int main() {
     #|  int a = 15;
@@ -215,12 +228,12 @@ async test "compile bitwise fixture" {
     #|  r = r | ~a;
     #|  return r;
     #|}
-  let assembly = compile(source)
-  assert_true(assembly.contains("_main:"))
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="255")
 }
 
 ///|
-async test "compile prepost incdec fixture" {
+async test "run prepost incdec fixture" {
   let source =
     #|int main() {
     #|  int x = 5;
@@ -230,29 +243,40 @@ async test "compile prepost incdec fixture" {
     #|  int d = x--;
     #|  return a + b + c + d;
     #|}
-  let assembly = compile(source)
-  assert_true(assembly.contains("_main:"))
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="24")
 }
 
 ///|
-async test "compile ternary fixture" {
+async test "run ternary fixture" {
   let source =
     #|int main() {
     #|  int a = 5;
     #|  int b = 3;
     #|  return a > b ? a * 2 : b * 2;
     #|}
-  let assembly = compile(source)
-  assert_true(assembly.contains("_main:"))
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="10")
 }
 
 ///|
-async test "compile sizeof fixture" {
+async test "run sizeof fixture" {
   let source =
     #|int main() {
     #|  int x;
     #|  return sizeof(x) + sizeof(int);
     #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="16")
+}
+
+///|
+async test "compile c4_stripped fixture" {
+  let data = @fs.read_file("test/fixtures/c4_stripped.c")
+  let source = data.text()
   let assembly = compile(source)
   assert_true(assembly.contains("_main:"))
+  assert_true(assembly.contains("_next:"))
+  assert_true(assembly.contains("_expr:"))
+  assert_true(assembly.contains("_stmt:"))
 }
