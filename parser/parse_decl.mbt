@@ -1,5 +1,6 @@
 ///|
 fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
+  self.skip_attributes()
   while self.token == Inline {
     self.advance()
     self.skip_attributes()
@@ -27,12 +28,25 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       n
     }
     _ => {
-      // Not a normal function declaration (might be function pointer variable)
-      // Skip the rest of the declaration
+      // Not a normal function declaration (might be function pointer variable
+      // or function returning function pointer)
+      // Skip balanced parentheses and possibly a brace body
+      let mut paren_depth = 0
       while self.token != Semicolon && self.token != EOF {
+        if self.token == LParen {
+          paren_depth += 1
+        } else if self.token == RParen {
+          paren_depth -= 1
+        } else if self.token == LBrace && paren_depth == 0 {
+          // Function body - skip it
+          self.skip_brace_initializer()
+          break
+        }
         self.advance()
       }
-      self.expect(Semicolon)
+      if self.token == Semicolon {
+        self.expect(Semicolon)
+      }
       return { ret: Void, name: "", params: [], body: None }
     }
   }
@@ -159,20 +173,34 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
 // Returns (type, name) where type is Pointer(Void).
 fn Parser::parse_func_ptr_decl(self : Parser) -> (Type, String) {
   self.expect(LParen)
-  if self.token == Star || self.token == BitXor {
+  // Consume all * and qualifiers for multiple indirection: (**name)
+  while self.token == Star || self.token == BitXor {
     self.advance()
-  } else {
-    abort("Expected * in function pointer declaration")
+    self.skip_qualifiers()
   }
   while self.token == Ident("_Nullable") || self.token == Ident("_Nonnull") ||
         self.token == Ident("_Null_unspecified") || self.token == Const ||
         self.token == Restrict || self.token == Volatile {
     self.advance()
   }
-  let fname = match self.token {
-    Ident(n) => { self.advance(); n }
-    RParen => ""
-    _ => abort("Expected function pointer name")
+  let fname = if self.token == LParen {
+    // Nested function pointer declarator: type (*(*name)(inner))(outer)
+    let (_, name) = self.parse_func_ptr_decl()
+    self.expect(RParen)
+    self.expect(LParen)
+    let mut depth = 1
+    while depth > 0 && self.token != EOF {
+      if self.token == LParen { depth += 1 }
+      else if self.token == RParen { depth -= 1 }
+      if depth > 0 { self.advance() } else { self.advance(); break }
+    }
+    return (Pointer(Void), name)
+  } else {
+    match self.token {
+      Ident(n) => { self.advance(); n }
+      RParen => ""
+      _ => abort("Expected function pointer name")
+    }
   }
   self.expect(RParen)
   self.expect(LParen)
@@ -195,10 +223,10 @@ fn Parser::parse_param(self : Parser) -> Param {
   // Handle function pointer: type (*name)(...) or type (^name)(...)
   if self.token == LParen {
     self.expect(LParen)
-    if self.token == Star || self.token == BitXor {
+    // Consume all * and qualifiers for multiple indirection: (**name)
+    while self.token == Star || self.token == BitXor {
       self.advance()
-    } else {
-      abort("Expected * or ^ in function pointer")
+      self.skip_qualifiers()
     }
     // Skip qualifiers like _Nullable, _Nonnull, const, restrict
     while self.token == Ident("_Nullable") || self.token == Ident("_Nonnull") ||
@@ -206,12 +234,38 @@ fn Parser::parse_param(self : Parser) -> Param {
           self.token == Restrict || self.token == Volatile {
       self.advance()
     }
-    let fname = match self.token {
-      Ident(n) => { self.advance(); n }
-      RParen => ""
-      _ => abort("Expected function pointer name")
-    }
-    if self.token != RParen {
+    let fname = if self.token == LParen {
+      // Nested function pointer declarator: type (*(*name)(inner))(outer)
+      let (_, name) = self.parse_func_ptr_decl()
+      self.expect(RParen)
+      self.expect(LParen)
+      let mut depth = 1
+      while depth > 0 && self.token != EOF {
+        if self.token == LParen {
+          depth += 1
+        } else if self.token == RParen {
+          depth -= 1
+        }
+        if depth > 0 {
+          self.advance()
+        } else {
+          self.advance()
+          break
+        }
+      }
+      self.skip_attributes()
+      return { ty: Pointer(Void), name: name }
+    } else {
+      match self.token {
+        Ident(n) => { self.advance(); n }
+        RParen => ""
+        _ => {
+          let pos = self.lexer.pos
+          let near_end = @math.minimum(pos + 40, self.lexer.input.length())
+          let near = self.lexer.input[pos:near_end].to_string()
+          abort("Expected function pointer name, got " + self.token.to_string() + " near=" + near)
+        }
+      }
     }
     self.expect(RParen)
     self.expect(LParen)

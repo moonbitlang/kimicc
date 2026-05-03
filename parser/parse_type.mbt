@@ -2,6 +2,7 @@
 fn Parser::skip_qualifiers(self : Parser) -> Unit {
   while self.token == Const || self.token == Restrict || self.token == Extern ||
         self.token == Static || self.token == Volatile || self.token == Inline ||
+        self.token == Register || self.token == Auto ||
         self.token == Ident("__extension__") ||
         self.token == Ident("__inline") || self.token == Ident("__inline__") ||
         self.token == Ident("__restrict") || self.token == Ident("__restrict__") ||
@@ -294,23 +295,28 @@ fn Parser::parse_type(self : Parser) -> Type {
     }
     Enum => {
       self.advance()
+      self.skip_attributes()
       // Optional enum name
       if self.token is Ident(_) {
         self.advance()
+        self.skip_attributes()
       }
       // Optional underlying type (C++11/ObjC style: enum : uint32_t { ... })
       if self.token == Colon {
         self.advance()
         let _ = self.parse_type()
       }
+      self.skip_attributes()
       // Optional enum body
       if self.token == LBrace {
         self.expect(LBrace)
         let mut next_value = 0
         while self.token != RBrace {
+          self.skip_attributes()
           match self.token {
             Ident(name) => {
               self.advance()
+              self.skip_attributes()
               let value = if self.token == Assign {
                 self.advance()
                 let expr = self.parse_assign()

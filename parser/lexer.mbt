@@ -28,6 +28,8 @@ pub(all) enum Token {
   Return
   Sizeof
   Inline
+  Register
+  Auto
   For
   Enum
   Switch
@@ -116,6 +118,8 @@ impl Show for Token with to_string(self) {
     Return => "return"
     Sizeof => "sizeof"
     Inline => "inline"
+    Register => "register"
+    Auto => "auto"
     For => "for"
     Enum => "enum"
     Switch => "switch"
@@ -621,6 +625,8 @@ fn Lexer::read_ident(self : Lexer) -> Token {
     "return" => Return
     "sizeof" => Sizeof
     "inline" => Inline
+    "register" => Register
+    "auto" => Auto
     "for" => For
     "enum" => Enum
     "switch" => Switch

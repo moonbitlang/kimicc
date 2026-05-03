@@ -70,7 +70,7 @@ fn Parser::parse_ternary(self : Parser) -> Expr {
   let cond = self.parse_logical_or()
   if self.token == Question {
     self.advance()
-    let then_expr = self.parse_ternary()
+    let then_expr = self.parse_expr()
     self.expect(Colon)
     let else_expr = self.parse_ternary()
     Ternary(cond, then_expr, else_expr)
@@ -378,8 +378,10 @@ fn Parser::parse_unary(self : Parser) -> Expr {
         } else if self.token == LParen {
           // Function pointer type cast: (void (*)(void*, int))p
           self.expect(LParen)
-          if self.token == Star || self.token == BitXor {
+          // Consume all * and qualifiers for multiple indirection
+          while self.token == Star || self.token == BitXor {
             self.advance()
+            self.skip_qualifiers()
           }
           while self.token == Ident("_Nullable") || self.token == Ident("_Nonnull") ||
                 self.token == Ident("_Null_unspecified") || self.token == Const ||

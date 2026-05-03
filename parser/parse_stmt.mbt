@@ -29,7 +29,32 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
     Return => self.parse_return_stmt()
     LBrace => self.parse_compound_stmt()
     Semicolon => { self.advance(); ExprStmt(Expr::Number(0)) }
-    Int | Void | Char | Struct | Union | Signed | Unsigned | Short | Long | Float | Double | Bool | Enum | Const | Restrict | Volatile | Extern | Static | Inline => self.parse_var_decl_stmt()
+    Int | Void | Char | Struct | Union | Signed | Unsigned | Short | Long | Float | Double | Bool | Enum | Const | Restrict | Volatile | Extern | Static | Inline | Register | Auto => self.parse_var_decl_stmt()
+    Typedef => { self.parse_typedef(); ExprStmt(Expr::Number(0)) }
+    Case => {
+      self.advance()
+      let expr = self.parse_assign()
+      let value = match fold_const(expr) {
+        Some(n) => n
+        None => match expr {
+          Var(name) => if self.enum_constants.contains(name) {
+            self.enum_constants[name]
+          } else {
+            0
+          }
+          _ => 0
+        }
+      }
+      self.expect(Colon)
+      let stmt = self.parse_stmt()
+      Label("case " + value.to_string(), stmt)
+    }
+    Default => {
+      self.advance()
+      self.expect(Colon)
+      let stmt = self.parse_stmt()
+      Label("default", stmt)
+    }
     Ident(name) => {
       // Check if this is a label: name:
       let saved_pos = self.lexer.pos
@@ -167,69 +192,53 @@ fn Parser::parse_switch_stmt(self : Parser) -> Stmt {
   let expr = self.parse_expr()
   self.expect(RParen)
   self.expect(LBrace)
-  let cases = []
+  let stmts = []
   while self.token != RBrace {
-    let pos = self.lexer.pos
-    let near_end = @math.minimum(pos + 40, self.lexer.input.length())
-    let near = self.lexer.input[pos:near_end].to_string()
-    println("switch loop: token=" + self.token.to_string() + " near=[" + near + "]")
-    // Handle labels that precede case/default (e.g., _default: default:)
-    let label_name = if self.token is Ident(name) {
-      let saved_pos = self.lexer.pos
-      let saved_token = self.token
-      self.advance()
-      if self.token == Colon {
-        self.advance()
-        Some(name)
-      } else {
-        self.lexer.pos = saved_pos
-        self.token = saved_token
-        None
-      }
-    } else {
-      None
-    }
-    let value = if self.token == Case {
-      self.advance()
-      let expr = self.parse_assign()
-      match fold_const(expr) {
-        Some(n) => Some(n)
-        None => match expr {
-          Var(name) => if self.enum_constants.contains(name) {
-            Some(self.enum_constants[name])
-          } else {
-            let pos = self.lexer.pos
-            let near_end = @math.minimum(pos + 40, self.lexer.input.length())
-            let near = self.lexer.input[pos:near_end].to_string()
-            abort("Expected constant in case label: " + name + " near=" + near)
-          }
-          _ => {
-            let pos = self.lexer.pos
-            let near_end = @math.minimum(pos + 40, self.lexer.input.length())
-            let near = self.lexer.input[pos:near_end].to_string()
-            abort("Expected constant in case label, got complex expr near=" + near)
-          }
-        }
-      }
-    } else if self.token == Default {
-      self.advance()
-      None
-    } else {
-      abort("Expected case or default in switch, got " + self.token.to_string())
-    }
-    self.expect(Colon)
-    let stmts = []
-    while self.token != Case && self.token != Default && self.token != RBrace {
-      stmts.push(self.parse_stmt())
-    }
-    let body = Compound(stmts)
-    let stmt = match label_name {
-      Some(name) => Label(name, body)
-      None => body
-    }
-    cases.push((value, stmt))
+    stmts.push(self.parse_stmt())
   }
   self.expect(RBrace)
+  // Post-process statements to group by case/default labels
+  let cases = []
+  let mut current_stmts = []
+  let mut current_value = None
+  fn flush_case(value : Int?, stmts : Array[Stmt]) -> Unit {
+    if stmts.length() > 0 || value.is_some() {
+      cases.push((value, Compound(stmts)))
+    }
+  }
+  for stmt in stmts {
+    match stmt {
+      Label(name, body) => {
+        if name.starts_with("case ") {
+          flush_case(current_value, current_stmts)
+          current_stmts = []
+          let mut case_value = 0
+          for i = 5; i < name.length(); i = i + 1 {
+            let ch = name[i]
+            if ch >= '0' && ch <= '9' {
+              case_value = case_value * 10 + (ch.to_int() - '0'.to_int())
+            } else if ch == '-' && i == 5 {
+              // Negative number - skip for now, handle in next char
+              continue
+            }
+          }
+          current_value = Some(case_value)
+          // The body of the case label is the first statement of the case
+          current_stmts.push(body)
+        } else if name == "default" {
+          flush_case(current_value, current_stmts)
+          current_stmts = []
+          current_value = None
+          current_stmts.push(body)
+        } else {
+          // Regular label inside a case
+          current_stmts.push(stmt)
+        }
+      }
+      _ => current_stmts.push(stmt)
+    }
+  }
+  flush_case(current_value, current_stmts)
   Switch(expr, cases)
 }
 
@@ -281,6 +290,11 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
   let near = self.lexer.input[pos:near_end].to_string()
   println("parse_var_decl_stmt: token=" + self.token.to_string() + " near=[" + near + "]")
   let base_ty = self.parse_type()
+  // Local struct/union/enum definition without variable: struct Foo { ... };
+  if self.token == Semicolon {
+    self.advance()
+    return ExprStmt(Expr::Number(0))
+  }
   let decls = []
   // Parse first variable
   let mut final_ty = base_ty

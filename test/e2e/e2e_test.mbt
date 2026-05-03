@@ -288,3 +288,118 @@ async test "parse tinycc stripped" {
   let assembly = compile(source)
   assert_true(assembly.contains("_main:"))
 }
+
+///|
+async test "nested function pointer struct field" {
+  let source =
+    #|struct vfs {
+    #|  void *(*xDlOpen)(struct vfs*, const char*);
+    #|  void (*(*xDlSym)(struct vfs*, void*, const char*))(void);
+    #|};
+    #|int main(){ return 0; }
+  let assembly = compile(source)
+  assert_true(assembly.contains("_main:"))
+}
+
+///|
+async test "multiple indirection function pointer" {
+  let source =
+    #|typedef void (*callback_t)(void);
+    #|typedef void (**callback_ptr_t)(void);
+    #|void register_cb(callback_t **cb);
+    #|int main(){ return 0; }
+  let assembly = compile(source)
+  assert_true(assembly.contains("_main:"))
+}
+
+///|
+async test "register and auto storage class" {
+  let source =
+    #|int main(){
+    #|  register int x = 1;
+    #|  auto int y = 2;
+    #|  return x + y;
+    #|}
+  let assembly = compile(source)
+  assert_true(assembly.contains("_main:"))
+}
+
+///|
+async test "local struct definition and typedef" {
+  let source =
+    #|int main(){
+    #|  struct Point { int x; int y; };
+    #|  struct Point p;
+    #|  p.x = 1;
+    #|  typedef int arr_t[10];
+    #|  arr_t a;
+    #|  typedef int empty_arr_t[];
+    #|  return p.x;
+    #|}
+  let assembly = compile(source)
+  assert_true(assembly.contains("_main:"))
+}
+
+///|
+async test "comma separated typedef" {
+  let source =
+    #|typedef int foo_t, bar_t, *baz_t;
+    #|int main(){ foo_t a = 1; bar_t b = 2; baz_t p = &a; return *p + b; }
+  let assembly = compile(source)
+  assert_true(assembly.contains("_main:"))
+}
+
+///|
+async test "switch with case labels in compound stmt" {
+  let source =
+    #|int main(){
+    #|  int x = 2;
+    #|  switch (x) {
+    #|    case 1: {
+    #|      int a = 1;
+    #|    case 2:
+    #|      a = 2;
+    #|    }
+    #|    break;
+    #|  }
+    #|  return 0;
+    #|}
+  let assembly = compile(source)
+  assert_true(assembly.contains("_main:"))
+}
+
+///|
+async test "enum with attributes and function type typedef" {
+  let source =
+    #|typedef enum __attribute__((__flag_enum__)) : unsigned int {
+    #|  FLAG_A = 1,
+    #|  FLAG_B = 2,
+    #|} flags_t;
+    #|
+    #|typedef void (handler_t)(int);
+    #|typedef void (*handler_ptr_t)(int);
+    #|
+    #|int main(){ return 0; }
+  let assembly = compile(source)
+  assert_true(assembly.contains("_main:"))
+}
+
+///|
+async test "ternary with comma operator" {
+  let source =
+    #|int main(){
+    #|  int a = 1, b = 2;
+    #|  int x = a ? (b = 3, b) : 0;
+    #|  return x;
+    #|}
+  let assembly = compile(source)
+  assert_true(assembly.contains("_main:"))
+}
+
+///|
+async test "parse sqlite3 preprocessed" {
+  let data = @fs.read_file("/tmp/sqlite3_preprocessed.c")
+  let source = data.text()
+  let assembly = compile(source)
+  assert_true(assembly.contains("_sqlite3_open:"))
+}

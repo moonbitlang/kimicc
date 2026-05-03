@@ -236,37 +236,33 @@ fn Parser::parse_typedef(self : Parser) -> Unit {
   self.skip_qualifiers()
   let base_ty = self.parse_type()
   self.skip_attributes()
+  // Parse first typedef name
+  let mut name = ""
+  let mut ty = base_ty
   // Handle function pointer typedef: typedef int (*name)(...); or typedef int (^name)(...);
-  let (name, _is_func_ptr) = if self.token == LParen {
+  if self.token == LParen {
     self.expect(LParen)
-    if self.token == Star || self.token == BitXor {
+    // Consume all * and qualifiers for multiple indirection: (**name)
+    while self.token == Star || self.token == BitXor {
       self.advance()
-    } else {
-      abort("Expected * or ^ in function pointer typedef")
+      self.skip_qualifiers()
     }
-    self.skip_qualifiers()
     let fname = match self.token {
       Ident(n) => { self.advance(); n }
+      RParen => ""
       _ => abort("Expected function pointer name in typedef")
     }
     self.expect(RParen)
-    self.expect(LParen)
-    // Skip parameter list
-    let mut depth = 1
-    while depth > 0 && self.token != EOF {
-      if self.token == LParen {
-        depth += 1
-      } else if self.token == RParen {
-        depth -= 1
-      }
-      if depth > 0 {
-        self.advance()
-      } else {
-        self.advance()
-        break
+    if self.token == LParen {
+      self.expect(LParen)
+      let mut depth = 1
+      while depth > 0 && self.token != EOF {
+        if self.token == LParen { depth += 1 }
+        else if self.token == RParen { depth -= 1 }
+        if depth > 0 { self.advance() } else { self.advance(); break }
       }
     }
-    (fname, true)
+    name = fname
   } else {
     let n = match self.token {
       Ident(name) => { self.advance(); name }
@@ -282,24 +278,62 @@ fn Parser::parse_typedef(self : Parser) -> Unit {
         if depth > 0 { self.advance() } else { self.advance(); break }
       }
     }
-    (n, false)
+    name = n
   }
-  // Handle typedef with array suffix: typedef int foo[10];
-  let ty = if self.token == LBracket {
+  // Handle typedef with array suffix: typedef int foo[10]; or typedef int foo[];
+  if self.token == LBracket {
     self.advance()
-    let size_expr = self.parse_assign()
-    self.expect(RBracket)
-    let size = match fold_const(size_expr) {
-      Some(n) => n
-      None => 0
+    let size = if self.token == RBracket {
+      self.advance()
+      0
+    } else {
+      let size_expr = self.parse_assign()
+      self.expect(RBracket)
+      match fold_const(size_expr) {
+        Some(n) => n
+        None => 0
+      }
     }
-    Array(base_ty, size)
-  } else {
-    base_ty
+    ty = Array(base_ty, size)
   }
   self.skip_attributes()
-  self.expect(Semicolon)
   self.typedefs[name] = ty
+  // Handle comma-separated typedef names: typedef int a, b, c;
+  while self.token == Comma {
+    self.advance()
+    self.skip_attributes()
+    self.skip_qualifiers()
+    // Additional names may have pointer stars
+    let mut extra_ty = base_ty
+    while self.token == Star {
+      self.advance()
+      self.skip_qualifiers()
+      extra_ty = Pointer(extra_ty)
+    }
+    let extra_name = match self.token {
+      Ident(n) => { self.advance(); n }
+      _ => abort("Expected typedef name after comma")
+    }
+    // Handle array suffix for additional names
+    if self.token == LBracket {
+      self.advance()
+      let size = if self.token == RBracket {
+        self.advance()
+        0
+      } else {
+        let size_expr = self.parse_assign()
+        self.expect(RBracket)
+        match fold_const(size_expr) {
+          Some(n) => n
+          None => 0
+        }
+      }
+      extra_ty = Array(extra_ty, size)
+    }
+    self.skip_attributes()
+    self.typedefs[extra_name] = extra_ty
+  }
+  self.expect(Semicolon)
 }
 
 ///|
@@ -313,10 +347,12 @@ fn Parser::parse_enum(self : Parser) -> Unit {
   self.expect(LBrace)
   let mut next_value = 0
   while self.token != RBrace {
+    self.skip_attributes()
     let name = match self.token {
       Ident(n) => { self.advance(); n }
       _ => abort("Expected enum constant name")
     }
+    self.skip_attributes()
     let value = if self.token == Assign {
       self.advance()
       let expr = self.parse_assign()
