@@ -21,6 +21,7 @@ pub(all) enum Token {
   Long
   Float
   Double
+  Bool
   If
   Else
   While
@@ -39,6 +40,8 @@ pub(all) enum Token {
   Ellipsis
   Plus
   Minus
+  PlusPlus
+  MinusMinus
   Star
   Slash
   Percent
@@ -106,6 +109,7 @@ impl Show for Token with to_string(self) {
     Long => "long"
     Float => "float"
     Double => "double"
+    Bool => "bool"
     If => "if"
     Else => "else"
     While => "while"
@@ -124,6 +128,8 @@ impl Show for Token with to_string(self) {
     Ellipsis => "..."
     Plus => "+"
     Minus => "-"
+    PlusPlus => "++"
+    MinusMinus => "--"
     Star => "*"
     Slash => "/"
     Percent => "%"
@@ -189,7 +195,10 @@ pub fn Lexer::next_token(self : Lexer) -> Token {
   match ch {
     '+' => {
       self.advance()
-      if self.peek() == '=' {
+      if self.peek() == '+' {
+        self.advance()
+        PlusPlus
+      } else if self.peek() == '=' {
         self.advance()
         PlusEq
       } else {
@@ -201,6 +210,9 @@ pub fn Lexer::next_token(self : Lexer) -> Token {
       if self.peek() == '>' {
         self.advance()
         Arrow
+      } else if self.peek() == '-' {
+        self.advance()
+        MinusMinus
       } else if self.peek() == '=' {
         self.advance()
         MinusEq
@@ -294,6 +306,24 @@ pub fn Lexer::next_token(self : Lexer) -> Token {
         } else {
           abort("Unexpected token: ..")
         }
+      } else if is_digit(self.peek()) {
+        // Float literal starting with .: .5, .5e10
+        while is_digit(self.peek()) {
+          self.advance()
+        }
+        if self.peek() == 'e' || self.peek() == 'E' {
+          self.advance()
+          if self.peek() == '+' || self.peek() == '-' {
+            self.advance()
+          }
+          while is_digit(self.peek()) {
+            self.advance()
+          }
+        }
+        if self.peek() == 'f' || self.peek() == 'F' || self.peek() == 'l' || self.peek() == 'L' {
+          self.advance()
+        }
+        Number(0)
       } else {
         Dot
       }
@@ -465,8 +495,89 @@ fn Lexer::skip_whitespace(self : Lexer) -> Unit {
 ///|
 fn Lexer::read_number(self : Lexer) -> Token {
   let start = self.pos
+  // Check for hex prefix 0x or 0X
+  if self.peek() == '0' && (self.peek_next() == 'x' || self.peek_next() == 'X') {
+    self.advance() // skip '0'
+    self.advance() // skip 'x'/'X'
+    let hex_start = self.pos
+    while is_hex_digit(self.peek()) {
+      self.advance()
+    }
+    let s = self.input[hex_start:self.pos]
+    let mut n = 0
+    for i = 0; i < s.length(); i = i + 1 {
+      let ch = s[i]
+      let digit = if ch >= '0' && ch <= '9' {
+        ch.to_int() - '0'.to_int()
+      } else if ch >= 'a' && ch <= 'f' {
+        ch.to_int() - 'a'.to_int() + 10
+      } else {
+        ch.to_int() - 'A'.to_int() + 10
+      }
+      n = n * 16 + digit
+    }
+    // Skip integer suffixes for hex literals too
+    if self.peek() == 'u' || self.peek() == 'U' {
+      self.advance()
+      if self.peek() == 'l' || self.peek() == 'L' {
+        self.advance()
+        if self.peek() == 'l' || self.peek() == 'L' {
+          self.advance()
+        }
+      }
+    } else if self.peek() == 'l' || self.peek() == 'L' {
+      self.advance()
+      if self.peek() == 'l' || self.peek() == 'L' {
+        self.advance()
+      }
+      if self.peek() == 'u' || self.peek() == 'U' {
+        self.advance()
+      }
+    }
+    return Number(n)
+  }
   while is_digit(self.peek()) {
     self.advance()
+  }
+  // Check for float literal: 123.45, 123., 123e10
+  if self.peek() == '.' || self.peek() == 'e' || self.peek() == 'E' {
+    if self.peek() == '.' {
+      self.advance()
+      while is_digit(self.peek()) {
+        self.advance()
+      }
+    }
+    if self.peek() == 'e' || self.peek() == 'E' {
+      self.advance()
+      if self.peek() == '+' || self.peek() == '-' {
+        self.advance()
+      }
+      while is_digit(self.peek()) {
+        self.advance()
+      }
+    }
+    if self.peek() == 'f' || self.peek() == 'F' || self.peek() == 'l' || self.peek() == 'L' {
+      self.advance()
+    }
+    return Number(0)
+  }
+  // Skip integer suffixes: u, U, l, L, ll, LL, ul, UL, lu, LU, ull, ULL, llu, LLU
+  if self.peek() == 'u' || self.peek() == 'U' {
+    self.advance()
+    if self.peek() == 'l' || self.peek() == 'L' {
+      self.advance()
+      if self.peek() == 'l' || self.peek() == 'L' {
+        self.advance()
+      }
+    }
+  } else if self.peek() == 'l' || self.peek() == 'L' {
+    self.advance()
+    if self.peek() == 'l' || self.peek() == 'L' {
+      self.advance()
+    }
+    if self.peek() == 'u' || self.peek() == 'U' {
+      self.advance()
+    }
   }
   let s = self.input[start:self.pos]
   let mut n = 0
@@ -502,6 +613,8 @@ fn Lexer::read_ident(self : Lexer) -> Token {
     "long" => Long
     "float" => Float
     "double" => Double
+    "bool" => Bool
+    "_Bool" => Bool
     "if" => If
     "else" => Else
     "while" => While
@@ -558,13 +671,42 @@ fn Lexer::read_char(self : Lexer) -> Token {
   if ch == '\\' {
     self.advance()
     let next = self.peek()
-    match next {
-      'n' => { value = '\n'.to_int(); self.advance() }
-      't' => { value = '\t'.to_int(); self.advance() }
-      '\\' => { value = '\\'.to_int(); self.advance() }
-      '\'' => { value = '\''.to_int(); self.advance() }
-      '0' => { value = 0; self.advance() }
-      _ => { value = next.to_int(); self.advance() }
+    if next >= '0' && next <= '7' {
+      // Octal escape: \0, \01, \012
+      value = 0
+      let mut count = 0
+      while count < 3 && self.peek() >= '0' && self.peek() <= '7' {
+        value = value * 8 + (self.peek().to_int() - '0'.to_int())
+        self.advance()
+        count += 1
+      }
+    } else {
+      match next {
+        'n' => { value = '\n'.to_int(); self.advance() }
+        't' => { value = '\t'.to_int(); self.advance() }
+        'r' => { value = '\r'.to_int(); self.advance() }
+        '\\' => { value = '\\'.to_int(); self.advance() }
+        '\'' => { value = '\''.to_int(); self.advance() }
+        '"' => { value = '"'.to_int(); self.advance() }
+        'x' => {
+          self.advance()
+          value = 0
+          while true {
+            let c = self.peek()
+            if c >= '0' && c <= '9' {
+              value = value * 16 + (c.to_int() - '0'.to_int())
+            } else if c >= 'a' && c <= 'f' {
+              value = value * 16 + (c.to_int() - 'a'.to_int() + 10)
+            } else if c >= 'A' && c <= 'F' {
+              value = value * 16 + (c.to_int() - 'A'.to_int() + 10)
+            } else {
+              break
+            }
+            self.advance()
+          }
+        }
+        _ => { value = next.to_int(); self.advance() }
+      }
     }
   } else {
     value = ch.to_int()
@@ -578,8 +720,22 @@ fn Lexer::read_char(self : Lexer) -> Token {
 }
 
 ///|
+fn Lexer::peek_next(self : Lexer) -> Char {
+  if self.pos + 1 >= self.input.length() {
+    '\u0000'
+  } else {
+    self.input.get_char(self.pos + 1).unwrap_or('\u0000')
+  }
+}
+
+///|
 fn is_digit(ch : Char) -> Bool {
   ch >= '0' && ch <= '9'
+}
+
+///|
+fn is_hex_digit(ch : Char) -> Bool {
+  (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F')
 }
 
 ///|

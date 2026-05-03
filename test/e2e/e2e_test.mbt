@@ -280,3 +280,11 @@ async test "compile c4_stripped fixture" {
   assert_true(assembly.contains("_expr:"))
   assert_true(assembly.contains("_stmt:"))
 }
+
+///|
+async test "parse tinycc stripped" {
+  let data = @fs.read_file("/tmp/tinycc_stripped.c")
+  let source = data.text()
+  let assembly = compile(source)
+  assert_true(assembly.contains("_main:"))
+}

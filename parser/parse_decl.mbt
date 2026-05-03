@@ -5,6 +5,10 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
     self.skip_attributes()
     self.skip_qualifiers()
   }
+  let pos = self.lexer.pos
+  let near_end = @math.minimum(pos + 40, self.lexer.input.length())
+  let near = self.lexer.input[pos:near_end].to_string()
+  println("parse_func_decl start: token=" + self.token.to_string() + " near=[" + near + "]")
   let mut ret = self.parse_type()
   while true {
     self.skip_attributes()
@@ -16,6 +20,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       break
     }
   }
+  self.skip_qualifiers()
   let name = match self.token {
     Ident(n) => {
       self.advance()
@@ -31,6 +36,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       return { ret: Void, name: "", params: [], body: None }
     }
   }
+  println("parse_func_decl name=" + name + " next_token=" + self.token.to_string())
   self.skip_attributes()
   // Check if this is a variable declaration (not a function)
   if self.token == Semicolon || self.token == Assign || self.token == Comma ||
@@ -56,7 +62,17 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
     // Skip initializer for first variable
     if self.token == Assign {
       self.advance()
-      let _ = self.parse_expr()
+      if self.token == LBrace {
+        let mut depth = 1
+        self.advance()
+        while depth > 0 && self.token != EOF {
+          if self.token == LBrace { depth += 1 }
+          else if self.token == RBrace { depth -= 1 }
+          if depth > 0 { self.advance() } else { self.advance(); break }
+        }
+      } else {
+        let _ = self.parse_expr()
+      }
     }
     self.globals.push((final_ty, name))
     // Handle additional variables separated by comma
@@ -87,7 +103,17 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
           }
           if self.token == Assign {
             self.advance()
-            let _ = self.parse_expr()
+            if self.token == LBrace {
+              let mut depth = 1
+              self.advance()
+              while depth > 0 && self.token != EOF {
+                if self.token == LBrace { depth += 1 }
+                else if self.token == RBrace { depth -= 1 }
+                if depth > 0 { self.advance() } else { self.advance(); break }
+              }
+            } else {
+              let _ = self.parse_expr()
+            }
           }
           self.globals.push((vty, vname))
         }
@@ -126,6 +152,37 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
     None
   }
   { ret, name, params, body }
+}
+
+///|
+// Parse function pointer suffix: (*name)(params) after a base type has been parsed.
+// Returns (type, name) where type is Pointer(Void).
+fn Parser::parse_func_ptr_decl(self : Parser) -> (Type, String) {
+  self.expect(LParen)
+  if self.token == Star || self.token == BitXor {
+    self.advance()
+  } else {
+    abort("Expected * in function pointer declaration")
+  }
+  while self.token == Ident("_Nullable") || self.token == Ident("_Nonnull") ||
+        self.token == Ident("_Null_unspecified") || self.token == Const ||
+        self.token == Restrict || self.token == Volatile {
+    self.advance()
+  }
+  let fname = match self.token {
+    Ident(n) => { self.advance(); n }
+    RParen => ""
+    _ => abort("Expected function pointer name")
+  }
+  self.expect(RParen)
+  self.expect(LParen)
+  let mut depth = 1
+  while depth > 0 && self.token != EOF {
+    if self.token == LParen { depth += 1 }
+    else if self.token == RParen { depth -= 1 }
+    if depth > 0 { self.advance() } else { self.advance(); break }
+  }
+  (Pointer(Void), fname)
 }
 
 ///|

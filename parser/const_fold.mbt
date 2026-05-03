@@ -27,11 +27,52 @@ fn fold_const(expr : Expr) -> Int? {
         (Some(x), Some(y)) => if y != 0 { Some(x % y) } else { None }
         _ => None
       }
+    Binary("|", a, b) =>
+      match (fold_const(a), fold_const(b)) {
+        (Some(x), Some(y)) => Some(x | y)
+        _ => None
+      }
+    Binary("&", a, b) =>
+      match (fold_const(a), fold_const(b)) {
+        (Some(x), Some(y)) => Some(x & y)
+        _ => None
+      }
+    Binary("^", a, b) =>
+      match (fold_const(a), fold_const(b)) {
+        (Some(x), Some(y)) => Some(x ^ y)
+        _ => None
+      }
+    Binary("<<", a, b) =>
+      match (fold_const(a), fold_const(b)) {
+        (Some(x), Some(y)) => Some(x << y)
+        _ => None
+      }
+    Binary(">>", a, b) =>
+      match (fold_const(a), fold_const(b)) {
+        (Some(x), Some(y)) => Some(x >> y)
+        _ => None
+      }
     Ternary(cond, a, b) =>
       match fold_const(cond) {
         Some(0) => fold_const(b)
         Some(_) => fold_const(a)
         None => None
+      }
+    Unary("-", e) =>
+      match fold_const(e) {
+        Some(x) => Some(-x)
+        _ => None
+      }
+    Unary("~", e) =>
+      match fold_const(e) {
+        Some(x) => Some(-x - 1)
+        _ => None
+      }
+    Unary("!", e) =>
+      match fold_const(e) {
+        Some(0) => Some(1)
+        Some(_) => Some(0)
+        _ => None
       }
     Cast(_, e) => fold_const(e)
     Sizeof(ty) => Some(basic_type_size(ty))

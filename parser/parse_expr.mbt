@@ -274,36 +274,36 @@ fn Parser::parse_multiplicative(self : Parser) -> Expr {
 
 ///|
 fn Parser::parse_unary(self : Parser) -> Expr {
+  // Skip __extension__ before expressions
+  while self.token == Ident("__extension__") {
+    self.advance()
+  }
   match self.token {
     Minus => {
       self.advance()
-      if self.token == Minus {
-        // Prefix --
-        self.advance()
-        let expr = self.parse_unary()
-        if is_lvalue(expr) {
-          PrefixDec(expr)
-        } else {
-          abort("-- requires an lvalue")
-        }
-      } else {
-        Unary("-", self.parse_unary())
-      }
+      Unary("-", self.parse_unary())
     }
     Plus => {
       self.advance()
-      if self.token == Plus {
-        // Prefix ++
-        self.advance()
-        let expr = self.parse_unary()
-        if is_lvalue(expr) {
-          PrefixInc(expr)
-        } else {
-          abort("++ requires an lvalue")
-        }
+      // Unary + is a no-op
+      self.parse_unary()
+    }
+    PlusPlus => {
+      self.advance()
+      let expr = self.parse_unary()
+      if is_lvalue(expr) {
+        PrefixInc(expr)
       } else {
-        // Unary + is a no-op
-        self.parse_unary()
+        abort("++ requires an lvalue")
+      }
+    }
+    MinusMinus => {
+      self.advance()
+      let expr = self.parse_unary()
+      if is_lvalue(expr) {
+        PrefixDec(expr)
+      } else {
+        abort("-- requires an lvalue")
       }
     }
     BitNot => {
@@ -331,7 +331,7 @@ fn Parser::parse_unary(self : Parser) -> Expr {
         self.advance() // past (
         // Try to parse as type
         let is_type = match self.token {
-          Int | Void | Char | Struct | Union | Signed | Unsigned | Short | Long | Const | Restrict | Volatile => true
+          Int | Void | Char | Struct | Union | Signed | Unsigned | Short | Long | Float | Double | Bool | Enum | Const | Restrict | Volatile => true
           Ident(name) => self.typedefs.contains(name)
           _ => false
         }
@@ -341,19 +341,16 @@ fn Parser::parse_unary(self : Parser) -> Expr {
             self.advance()
             Sizeof(ty)
           } else {
-            // Not a type after all, restore and parse as expression
+            // Not a type after all, restore and parse as unary-expression
             self.lexer.pos = saved_pos
             self.token = saved_token
-            self.advance() // past (
-            let expr = self.parse_expr()
-            self.expect(RParen)
-            SizeofExpr(expr)
+            SizeofExpr(self.parse_unary())
           }
         } else {
-          // sizeof(expr)
-          let expr = self.parse_expr()
-          self.expect(RParen)
-          SizeofExpr(expr)
+          // sizeof unary-expression
+          self.lexer.pos = saved_pos
+          self.token = saved_token
+          SizeofExpr(self.parse_unary())
         }
       } else {
         // sizeof expr
@@ -367,7 +364,8 @@ fn Parser::parse_unary(self : Parser) -> Expr {
       self.advance() // past (
       // Try to parse as type
       let is_cast = match self.token {
-        Int | Void | Char | Struct | Union | Signed | Unsigned | Short | Long | Const | Restrict | Volatile => true
+        Int | Void | Char | Struct | Union | Signed | Unsigned | Short | Long | Float | Double | Bool | Enum | Const | Restrict | Volatile | Static | Extern | Inline => true
+        Ident("_Float16") => true
         Ident(name) => self.typedefs.contains(name)
         _ => false
       }
@@ -376,7 +374,29 @@ fn Parser::parse_unary(self : Parser) -> Expr {
         let ty = self.parse_type()
         if self.token == RParen {
           self.advance() // past )
-          Cast(ty, self.parse_unary())
+          self.apply_postfix(Cast(ty, self.parse_unary()))
+        } else if self.token == LParen {
+          // Function pointer type cast: (void (*)(void*, int))p
+          self.expect(LParen)
+          if self.token == Star || self.token == BitXor {
+            self.advance()
+          }
+          while self.token == Ident("_Nullable") || self.token == Ident("_Nonnull") ||
+                self.token == Ident("_Null_unspecified") || self.token == Const ||
+                self.token == Restrict || self.token == Volatile {
+            self.advance()
+          }
+          self.expect(RParen)
+          self.expect(LParen)
+          let mut depth = 1
+          while depth > 0 && self.token != EOF {
+            if self.token == LParen { depth += 1 }
+            else if self.token == RParen { depth -= 1 }
+            if depth > 0 { self.advance() } else { self.advance(); break }
+          }
+          self.skip_attributes()
+          self.expect(RParen)
+          self.apply_postfix(Cast(Pointer(Void), self.parse_unary()))
         } else {
           // Not a cast after all, restore and parse as parenthesized expr
           self.lexer.pos = saved_pos
@@ -384,7 +404,7 @@ fn Parser::parse_unary(self : Parser) -> Expr {
           self.advance() // past (
           let expr = self.parse_expr()
           self.expect(RParen)
-          expr
+          self.apply_postfix(expr)
         }
       } else {
         // Parenthesized expression
@@ -415,7 +435,7 @@ fn Parser::apply_postfix(self : Parser, expr_ : Expr) -> Expr {
             self.advance()
             expr = MemberAccess(expr, name)
           }
-          _ => abort("Expected field name after .")
+          _ => abort("Expected field name after ., got " + self.token.to_string())
         }
       }
       Arrow => {
@@ -428,41 +448,35 @@ fn Parser::apply_postfix(self : Parser, expr_ : Expr) -> Expr {
           _ => abort("Expected field name after ->")
         }
       }
-      Plus => {
-        // Handle postfix ++
-        let saved_pos = self.lexer.pos
-        let saved_token = self.token
+      PlusPlus => {
         self.advance()
-        if self.token == Plus {
-          self.advance()
-          if is_lvalue(expr) {
-            expr = PostfixInc(expr)
-          } else {
-            abort("++ requires an lvalue")
-          }
+        if is_lvalue(expr) {
+          expr = PostfixInc(expr)
         } else {
-          self.lexer.pos = saved_pos
-          self.token = saved_token
-          break
+          abort("++ requires an lvalue")
         }
       }
-      Minus => {
-        // Handle postfix --
-        let saved_pos = self.lexer.pos
-        let saved_token = self.token
+      MinusMinus => {
         self.advance()
-        if self.token == Minus {
-          self.advance()
-          if is_lvalue(expr) {
-            expr = PostfixDec(expr)
-          } else {
-            abort("-- requires an lvalue")
-          }
+        if is_lvalue(expr) {
+          expr = PostfixDec(expr)
         } else {
-          self.lexer.pos = saved_pos
-          self.token = saved_token
-          break
+          abort("-- requires an lvalue")
         }
+      }
+      LParen => {
+        // Function call through expression: (expr)(args)
+        self.advance()
+        let args = []
+        if self.token != RParen {
+          args.push(self.parse_assign())
+          while self.token == Comma {
+            self.advance()
+            args.push(self.parse_assign())
+          }
+        }
+        self.expect(RParen)
+        expr = Call(expr, args)
       }
       _ => break
     }
@@ -491,16 +505,27 @@ fn Parser::parse_primary(self : Parser) -> Expr {
       self.advance()
       if self.token == LParen {
         self.advance()
-        let args = []
-        if self.token != RParen {
-          args.push(self.parse_assign())
-          while self.token == Comma {
-            self.advance()
-            args.push(self.parse_assign())
+        if name == "__builtin_va_arg" || name == "__builtin_offsetof" {
+          // Skip __builtin_va_arg(ap, type) or __builtin_offsetof(type, field) and return dummy value
+          let mut depth = 1
+          while depth > 0 && self.token != EOF {
+            if self.token == LParen { depth += 1 }
+            else if self.token == RParen { depth -= 1 }
+            if depth > 0 { self.advance() } else { self.advance(); break }
           }
+          Number(0)
+        } else {
+          let args = []
+          if self.token != RParen {
+            args.push(self.parse_assign())
+            while self.token == Comma {
+              self.advance()
+              args.push(self.parse_assign())
+            }
+          }
+          self.expect(RParen)
+          Call(Var(name), args)
         }
-        self.expect(RParen)
-        Call(name, args)
       } else if self.enum_constants.contains(name) {
         Number(self.enum_constants[name])
       } else {
@@ -514,7 +539,11 @@ fn Parser::parse_primary(self : Parser) -> Expr {
       expr
     }
     _ => {
-      abort("Unexpected token: " + self.token.to_string())
+      // Debug: print context before abort
+      let pos = self.lexer.pos
+      let near = self.lexer.input[pos:pos+30].to_string()
+      println("PARSE ERROR: token=" + self.token.to_string() + " pos=" + pos.to_string() + " near=[" + near + "]")
+      abort("Unexpected token in primary: " + self.token.to_string())
     }
   }
 }

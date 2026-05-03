@@ -1,9 +1,11 @@
 import {
   "bobzhang/kimicc/parser",
   "bobzhang/kimicc/codegen",
-  "moonbitlang/core/env",
+  "moonbitlang/core/argparse",
+  "moonbitlang/core/encoding/utf8",
 }
 
 options(
   "is-main": true,
+  "native-stub": ["stub.c"],
 )

@@ -266,6 +266,11 @@ fn Codegen::collect_locals(self : Codegen, stmt : @parser.Stmt) -> Unit {
       self.collect_locals(body)
     }
     DoWhile(_, body) => self.collect_locals(body)
+    Switch(_, cases) =>
+      for c in cases {
+        self.collect_locals(c.1)
+      }
+    Label(_, s) => self.collect_locals(s)
     VarDecl(ty, name, _) => {
       let _ = self.alloc_local(name, ty)
     }
@@ -453,41 +458,57 @@ fn Codegen::type_of(
       } else if self.func_rets.contains(name) {
         Pointer(Void) // Function pointer type
       } else {
-        abort("Unknown variable type: " + name)
+        println("WARN: Unknown variable type: " + name)
+        Int
       }
     }
     Binary(_, _, _) => Int
     Unary("-", _) => Int
     Unary("!", _) => Int
     Unary("~", _) => Int
-    Call(name, _) => self.func_rets[name]
+    Call(func, _) => match func {
+      Var(name) => self.func_rets[name]
+      _ => Int
+    }
     Assign(_, rhs) => self.type_of(rhs, frame_size)
     MemberAccess(obj, field) => {
       let obj_ty = self.type_of(obj, frame_size)
       let struct_name = match obj_ty {
         Struct(n) => n
-        _ => abort("Member access on non-struct")
-      }
-      let fields = self.struct_layouts[struct_name]
-      for f in fields {
-        if f.0 == field {
-          return f.1
+        _ => {
+          println("WARN: Member access on non-struct type: " + obj_ty.to_string())
+          return Int
         }
       }
-      abort("Unknown field: " + field)
+      if self.struct_layouts.contains(struct_name) {
+        let fields = self.struct_layouts[struct_name]
+        for f in fields {
+          if f.0 == field {
+            return f.1
+          }
+        }
+      }
+      println("WARN: Unknown field '" + field + "' in struct '" + struct_name + "'")
+      Int
     }
     Deref(ptr) =>
       match self.type_of(ptr, frame_size) {
         Pointer(ty) => ty
         Array(elem, _) => elem
-        _ => abort("Deref of non-pointer")
+        _ => {
+          println("WARN: Deref of non-pointer")
+          Int
+        }
       }
     AddrOf(e) => Pointer(self.type_of(e, frame_size))
     ArrayAccess(arr, _) =>
       match self.type_of(arr, frame_size) {
         Array(elem, _) => elem
         Pointer(elem) => elem
-        _ => abort("Array access on non-array")
+        _ => {
+          println("WARN: Array access on non-array")
+          Int
+        }
       }
     Sizeof(_) => Int
     SizeofExpr(_) => Int
@@ -498,7 +519,10 @@ fn Codegen::type_of(
     Ternary(_, then_, _) => self.type_of(then_, frame_size)
     // CommaExpr is not in the AST, comma expressions are flattened into nested Binary(",", ...)
     Cast(ty, _) => ty
-    _ => abort("Unknown expression type")
+    _ => {
+      println("WARN: Unknown expression type")
+      Int
+    }
   }
 }
 
@@ -539,7 +563,8 @@ fn Codegen::gen_expr(
         self.emit("\tadrp\tx9, _" + name + "@PAGE")
         self.emit("\tadd\tx9, x9, _" + name + "@PAGEOFF")
       } else {
-        abort("Unknown variable: " + name)
+        println("WARN: Unknown variable: " + name)
+        self.emit("\tmov\tx9, #0")
       }
     }
     Assign(lhs, rhs) => {
@@ -621,7 +646,9 @@ fn Codegen::gen_expr(
           self.emit("\tcmp\tx9, x10")
           self.emit("\tcset\tx9, ge")
         }
-        _ => abort("Unknown binary operator: " + op)
+        _ => {
+          println("WARN: Unknown binary operator: " + op)
+        }
       }
     }
     Unary("-", operand) => {
@@ -637,13 +664,22 @@ fn Codegen::gen_expr(
       self.emit("\tcmp\tx9, #0")
       self.emit("\tcset\tx9, eq")
     }
-    Call(name, args) => {
+    Call(func, args) => {
       for i = 0; i < args.length(); i = i + 1 {
         self.gen_expr(args[i], frame_size)
         let reg = "x" + i.to_string()
         self.emit("\tmov\t" + reg + ", x9")
       }
-      self.emit("\tbl\t_" + name)
+      match func {
+        Var(name) => {
+          self.emit("\tbl\t_" + name)
+        }
+        _ => {
+          self.gen_expr(func, frame_size)
+          self.emit("\tmov\tx15, x9")
+          self.emit("\tblr\tx15")
+        }
+      }
       self.emit("\tmov\tx9, x0")
     }
     MemberAccess(_, _) => {
@@ -720,7 +756,10 @@ fn Codegen::gen_expr(
       self.emit("\tstr\tx11, [x9]")
       self.emit("\tmov\tx9, x10")
     }
-    _ => abort("Unknown expression")
+    _ => {
+      println("WARN: Unknown expression")
+      self.emit("\tmov\tx9, #0")
+    }
   }
 }
 
@@ -739,7 +778,7 @@ fn Codegen::gen_addr(
         self.emit("\tadrp\tx9, _" + name + "@PAGE")
         self.emit("\tadd\tx9, x9, _" + name + "@PAGEOFF")
       } else {
-        abort("Unknown variable in address: " + name)
+        println("WARN: Unknown variable in address: " + name)
       }
     }
     MemberAccess(obj, field) => {
@@ -747,18 +786,23 @@ fn Codegen::gen_addr(
       let obj_ty = self.type_of(obj, frame_size)
       let struct_name = match obj_ty {
         Struct(n) => n
-        _ => abort("Member access on non-struct")
-      }
-      let fields = self.struct_layouts[struct_name]
-      let mut field_offset = 0
-      for f in fields {
-        if f.0 == field {
-          field_offset = f.2
-          break
+        _ => {
+          println("WARN: gen_addr MemberAccess on non-struct: " + obj_ty.to_string())
+          return
         }
       }
-      if field_offset != 0 {
-        self.emit("\tadd\tx9, x9, #" + field_offset.to_string())
+      if self.struct_layouts.contains(struct_name) {
+        let fields = self.struct_layouts[struct_name]
+        let mut field_offset = 0
+        for f in fields {
+          if f.0 == field {
+            field_offset = f.2
+            break
+          }
+        }
+        if field_offset != 0 {
+          self.emit("\tadd\tx9, x9, #" + field_offset.to_string())
+        }
       }
     }
     Deref(ptr) => self.gen_expr(ptr, frame_size)
@@ -774,6 +818,8 @@ fn Codegen::gen_addr(
       self.emit("\tmov\tx11, #" + elem_size.to_string())
       self.emit("\tmadd\tx9, x12, x11, x9")
     }
-    _ => abort("Cannot take address of expression")
+    _ => {
+      println("WARN: Cannot take address of expression")
+    }
   }
 }

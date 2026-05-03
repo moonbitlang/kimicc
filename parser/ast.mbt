@@ -27,7 +27,7 @@ pub(all) enum Expr {
   Var(String)
   Binary(String, Expr, Expr)
   Unary(String, Expr)
-  Call(String, Array[Expr])
+  Call(Expr, Array[Expr])
   Assign(Expr, Expr)
   MemberAccess(Expr, String)
   Deref(Expr)

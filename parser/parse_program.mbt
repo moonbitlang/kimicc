@@ -1,4 +1,79 @@
 ///|
+// Parse variable declarations after a struct/union definition: struct Foo { ... } *ptr, arr[8];
+fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
+  // First variable declarator
+  let mut ty = base_ty
+  while self.token == Star {
+    self.advance()
+    ty = Pointer(ty)
+  }
+  if self.token is Ident(name) {
+    self.advance()
+    while self.token == LBracket {
+      self.advance()
+      if self.token == RBracket {
+        self.advance()
+        ty = Array(ty, 0)
+      } else {
+        let size_expr = self.parse_assign()
+        self.expect(RBracket)
+        let size = match fold_const(size_expr) {
+          Some(n) => n
+          None => 0
+        }
+        ty = Array(ty, size)
+      }
+    }
+    if self.token == Assign {
+      self.advance()
+      if self.token == LBrace {
+        self.skip_brace_initializer()
+      } else {
+        let _ = self.parse_expr()
+      }
+    }
+    self.globals.push((ty, name))
+    // Additional variables separated by comma
+    while self.token == Comma {
+      self.advance()
+      let mut vty = base_ty
+      while self.token == Star {
+        self.advance()
+        vty = Pointer(vty)
+      }
+      if self.token is Ident(vname) {
+        self.advance()
+        while self.token == LBracket {
+          self.advance()
+          if self.token == RBracket {
+            self.advance()
+            vty = Array(vty, 0)
+          } else {
+            let size_expr = self.parse_assign()
+            self.expect(RBracket)
+            let size = match fold_const(size_expr) {
+              Some(n) => n
+              None => 0
+            }
+            vty = Array(vty, size)
+          }
+        }
+        if self.token == Assign {
+          self.advance()
+          if self.token == LBrace {
+            self.skip_brace_initializer()
+          } else {
+            let _ = self.parse_expr()
+          }
+        }
+        self.globals.push((vty, vname))
+      }
+    }
+  }
+  self.expect(Semicolon)
+}
+
+///|
 fn Parser::parse_program(self : Parser) -> Program {
   let structs = []
   let decls = []
@@ -29,16 +104,26 @@ fn Parser::parse_program(self : Parser) -> Program {
               // Skip bit-field width if present
               if self.token == Colon {
                 self.advance()
-                let _ = self.parse_expr()
+                let _ = self.parse_assign()
               }
               fields.push(first_field)
               // Handle comma-separated fields
               while self.token == Comma {
                 self.advance()
-                let f = self.parse_param()
+                self.skip_qualifiers()
+                let mut vty = base_type(first_field.ty)
+                while self.token == Star {
+                  self.advance()
+                  vty = Pointer(vty)
+                }
+                let fname = match self.token {
+                  Ident(n) => { self.advance(); n }
+                  _ => ""
+                }
+                let f = self.parse_type_suffixes(vty, fname)
                 if self.token == Colon {
                   self.advance()
-                  let _ = self.parse_expr()
+                  let _ = self.parse_assign()
                 }
                 fields.push(f)
               }
@@ -46,7 +131,12 @@ fn Parser::parse_program(self : Parser) -> Program {
             }
             self.expect(RBrace)
             self.skip_attributes()
-            self.expect(Semicolon)
+            // Handle struct definition followed by variable declarations: struct Foo { ... } *ptr;
+            if self.token != Semicolon {
+              self.parse_struct_vars(Struct(name))
+            } else {
+              self.expect(Semicolon)
+            }
             structs.push({ name, fields })
           } else if self.token == Semicolon {
             // Forward struct declaration: struct Foo;
@@ -75,6 +165,8 @@ fn Parser::parse_program(self : Parser) -> Program {
       self.parse_typedef()
     } else if self.token == Enum {
       self.parse_enum()
+    } else if self.token == Semicolon {
+      self.advance()
     } else {
       let decl = self.parse_func_decl()
       if decl.name != "" {
@@ -114,11 +206,16 @@ fn Parser::parse_struct_decl(self : Parser) -> StructDecl {
     while self.token == Comma {
       self.advance()
       self.skip_qualifiers()
+      let mut vty = base_type(first_field.ty)
+      while self.token == Star {
+        self.advance()
+        vty = Pointer(vty)
+      }
       let name = match self.token {
         Ident(n) => { self.advance(); n }
         _ => ""
       }
-      let f = self.parse_type_suffixes(base_type(first_field.ty), name)
+      let f = self.parse_type_suffixes(vty, name)
       if self.token == Colon {
         self.advance()
         let _ = self.parse_assign()
@@ -139,10 +236,14 @@ fn Parser::parse_typedef(self : Parser) -> Unit {
   self.skip_qualifiers()
   let base_ty = self.parse_type()
   self.skip_attributes()
-  // Handle function pointer typedef: typedef int (*name)(...);
+  // Handle function pointer typedef: typedef int (*name)(...); or typedef int (^name)(...);
   let (name, _is_func_ptr) = if self.token == LParen {
     self.expect(LParen)
-    self.expect(Star)
+    if self.token == Star || self.token == BitXor {
+      self.advance()
+    } else {
+      abort("Expected * or ^ in function pointer typedef")
+    }
     self.skip_qualifiers()
     let fname = match self.token {
       Ident(n) => { self.advance(); n }
@@ -170,6 +271,16 @@ fn Parser::parse_typedef(self : Parser) -> Unit {
     let n = match self.token {
       Ident(name) => { self.advance(); name }
       _ => abort("Expected typedef name")
+    }
+    // Handle function type typedef without (*): typedef void *name(...);
+    if self.token == LParen {
+      self.expect(LParen)
+      let mut depth = 1
+      while depth > 0 && self.token != EOF {
+        if self.token == LParen { depth += 1 }
+        else if self.token == RParen { depth -= 1 }
+        if depth > 0 { self.advance() } else { self.advance(); break }
+      }
     }
     (n, false)
   }
@@ -208,9 +319,10 @@ fn Parser::parse_enum(self : Parser) -> Unit {
     }
     let value = if self.token == Assign {
       self.advance()
-      match self.token {
-        Number(n) => { self.advance(); n }
-        _ => abort("Expected number in enum constant assignment")
+      let expr = self.parse_assign()
+      match fold_const(expr) {
+        Some(n) => n
+        None => next_value
       }
     } else {
       next_value
