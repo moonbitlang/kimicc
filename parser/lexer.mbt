@@ -19,12 +19,23 @@ pub(all) enum Token {
   Unsigned
   Short
   Long
+  Float
+  Double
   If
   Else
   While
   Return
   Sizeof
   Inline
+  For
+  Enum
+  Switch
+  Case
+  Default
+  Break
+  Goto
+  Continue
+  Do
   Ellipsis
   Plus
   Minus
@@ -39,7 +50,23 @@ pub(all) enum Token {
   Ge
   And
   Or
+  BitOr
+  BitXor
+  LShift
+  RShift
+  BitNot
+  Not
   Assign
+  PlusEq
+  MinusEq
+  StarEq
+  SlashEq
+  PercentEq
+  BitOrEq
+  AmpersandEq
+  BitXorEq
+  LShiftEq
+  RShiftEq
   Semicolon
   Comma
   LParen
@@ -50,6 +77,8 @@ pub(all) enum Token {
   RBracket
   Dot
   Arrow
+  Colon
+  Question
   Ampersand
 } derive(Eq)
 
@@ -75,12 +104,23 @@ impl Show for Token with to_string(self) {
     Unsigned => "unsigned"
     Short => "short"
     Long => "long"
+    Float => "float"
+    Double => "double"
     If => "if"
     Else => "else"
     While => "while"
     Return => "return"
     Sizeof => "sizeof"
     Inline => "inline"
+    For => "for"
+    Enum => "enum"
+    Switch => "switch"
+    Case => "case"
+    Default => "default"
+    Break => "break"
+    Goto => "goto"
+    Continue => "continue"
+    Do => "do"
     Ellipsis => "..."
     Plus => "+"
     Minus => "-"
@@ -95,7 +135,23 @@ impl Show for Token with to_string(self) {
     Ge => ">="
     And => "&&"
     Or => "||"
+    BitOr => "|"
+    BitXor => "^"
+    LShift => "<<"
+    RShift => ">>"
+    BitNot => "~"
+    Not => "!"
     Assign => "="
+    PlusEq => "+="
+    MinusEq => "-="
+    StarEq => "*="
+    SlashEq => "/="
+    PercentEq => "%="
+    BitOrEq => "|="
+    AmpersandEq => "&="
+    BitXorEq => "^="
+    LShiftEq => "<<="
+    RShiftEq => ">>="
     Semicolon => ";"
     Comma => ","
     LParen => "("
@@ -106,6 +162,8 @@ impl Show for Token with to_string(self) {
     RBracket => "]"
     Dot => "."
     Arrow => "->"
+    Colon => ":"
+    Question => "?"
     Ampersand => "&"
   }
 }
@@ -131,28 +189,57 @@ pub fn Lexer::next_token(self : Lexer) -> Token {
   match ch {
     '+' => {
       self.advance()
-      Plus
+      if self.peek() == '=' {
+        self.advance()
+        PlusEq
+      } else {
+        Plus
+      }
     }
     '-' => {
       self.advance()
       if self.peek() == '>' {
         self.advance()
         Arrow
+      } else if self.peek() == '=' {
+        self.advance()
+        MinusEq
       } else {
         Minus
       }
     }
     '*' => {
       self.advance()
-      Star
+      if self.peek() == '=' {
+        self.advance()
+        StarEq
+      } else {
+        Star
+      }
     }
     '/' => {
       self.advance()
-      Slash
+      if self.peek() == '/' {
+        // Line comment: skip until end of line
+        while self.pos < self.input.length() && self.peek() != '\n' {
+          self.pos += 1
+        }
+        self.next_token()
+      } else if self.peek() == '=' {
+        self.advance()
+        SlashEq
+      } else {
+        Slash
+      }
     }
     '%' => {
       self.advance()
-      Percent
+      if self.peek() == '=' {
+        self.advance()
+        PercentEq
+      } else {
+        Percent
+      }
     }
     ';' => {
       self.advance()
@@ -200,11 +287,22 @@ pub fn Lexer::next_token(self : Lexer) -> Token {
         Dot
       }
     }
+    ':' => {
+      self.advance()
+      Colon
+    }
+    '?' => {
+      self.advance()
+      Question
+    }
     '&' => {
       self.advance()
       if self.peek() == '&' {
         self.advance()
         And
+      } else if self.peek() == '=' {
+        self.advance()
+        AmpersandEq
       } else {
         Ampersand
       }
@@ -214,9 +312,25 @@ pub fn Lexer::next_token(self : Lexer) -> Token {
       if self.peek() == '|' {
         self.advance()
         Or
+      } else if self.peek() == '=' {
+        self.advance()
+        BitOrEq
       } else {
-        abort("Unexpected character: |")
+        BitOr
       }
+    }
+    '^' => {
+      self.advance()
+      if self.peek() == '=' {
+        self.advance()
+        BitXorEq
+      } else {
+        BitXor
+      }
+    }
+    '~' => {
+      self.advance()
+      BitNot
     }
     '=' => {
       self.advance()
@@ -233,12 +347,20 @@ pub fn Lexer::next_token(self : Lexer) -> Token {
         self.advance()
         Ne
       } else {
-        abort("Unexpected character: !")
+        Not
       }
     }
     '<' => {
       self.advance()
-      if self.peek() == '=' {
+      if self.peek() == '<' {
+        self.advance()
+        if self.peek() == '=' {
+          self.advance()
+          LShiftEq
+        } else {
+          LShift
+        }
+      } else if self.peek() == '=' {
         self.advance()
         Le
       } else {
@@ -247,7 +369,15 @@ pub fn Lexer::next_token(self : Lexer) -> Token {
     }
     '>' => {
       self.advance()
-      if self.peek() == '=' {
+      if self.peek() == '>' {
+        self.advance()
+        if self.peek() == '=' {
+          self.advance()
+          RShiftEq
+        } else {
+          RShift
+        }
+      } else if self.peek() == '=' {
         self.advance()
         Ge
       } else {
@@ -255,10 +385,34 @@ pub fn Lexer::next_token(self : Lexer) -> Token {
       }
     }
     '"' => {
-      self.read_string()
+      let mut result = self.read_string()
+      // Concatenate adjacent string literals
+      while true {
+        self.skip_whitespace()
+        if self.pos < self.input.length() && self.peek() == '"' {
+          let next = self.read_string()
+          match (result, next) {
+            (String(s1), String(s2)) => result = String(s1 + s2)
+            _ => ()
+          }
+        } else {
+          break
+        }
+      }
+      result
     }
     '\'' => {
       self.read_char()
+    }
+    '#' => {
+      // Skip preprocessor directive until end of line
+      while self.pos < self.input.length() && self.peek() != '\n' {
+        self.pos += 1
+      }
+      if self.pos < self.input.length() {
+        self.pos += 1
+      }
+      self.next_token()
     }
     _ =>
       if is_digit(ch) {
@@ -335,12 +489,23 @@ fn Lexer::read_ident(self : Lexer) -> Token {
     "unsigned" => Unsigned
     "short" => Short
     "long" => Long
+    "float" => Float
+    "double" => Double
     "if" => If
     "else" => Else
     "while" => While
     "return" => Return
     "sizeof" => Sizeof
     "inline" => Inline
+    "for" => For
+    "enum" => Enum
+    "switch" => Switch
+    "case" => Case
+    "default" => Default
+    "break" => Break
+    "goto" => Goto
+    "continue" => Continue
+    "do" => Do
     _ => Ident(s.to_owned())
   }
 }

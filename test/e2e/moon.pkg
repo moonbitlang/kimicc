@@ -1,0 +1,8 @@
+import {
+  "bobzhang/kimicc/parser",
+  "bobzhang/kimicc/codegen",
+  "moonbitlang/core/env",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/stdio",
+}

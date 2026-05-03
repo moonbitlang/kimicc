@@ -34,6 +34,13 @@ pub(all) enum Expr {
   AddrOf(Expr)
   ArrayAccess(Expr, Expr)
   Sizeof(Type)
+  SizeofExpr(Expr)
+  Cast(Type, Expr)
+  PrefixInc(Expr)
+  PrefixDec(Expr)
+  PostfixInc(Expr)
+  PostfixDec(Expr)
+  Ternary(Expr, Expr, Expr)
 } derive(Eq)
 
 ///|
@@ -44,6 +51,13 @@ pub(all) enum Stmt {
   While(Expr, Stmt)
   Compound(Array[Stmt])
   VarDecl(Type, String, Expr?)
+  Break
+  Continue
+  Switch(Expr, Array[(Int?, Stmt)])
+  Goto(String)
+  Label(String, Stmt)
+  For(Stmt?, Expr, Expr?, Stmt)
+  DoWhile(Expr, Stmt)
 } derive(Eq)
 
 ///|
@@ -69,5 +83,6 @@ pub(all) struct FuncDecl {
 ///|
 pub(all) struct Program {
   structs : Array[StructDecl]
+  globals : Array[(Type, String)]
   decls : Array[FuncDecl]
 }

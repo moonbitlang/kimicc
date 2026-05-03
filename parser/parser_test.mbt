@@ -91,6 +91,223 @@ test "parse comparison" {
 }
 
 ///|
+test "parse sizeof expr" {
+  let source = "int main() { int x; return sizeof x; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound([VarDecl(Int, "x", None), Return(Some(SizeofExpr(Var("x"))))])) =>
+      ()
+    _ => fail("Expected sizeof expr")
+  }
+}
+
+///|
+test "parse comma operator" {
+  let source = "int main() { return 1, 2; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound([Return(Some(Binary(",", Number(1), Number(2))))])) => ()
+    _ => fail("Expected comma operator")
+  }
+}
+
+///|
+test "parse ternary" {
+  let source = "int main() { int x = 1; int y = 2; return x > 0 ? y : 0; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(
+      Compound(
+        [
+          VarDecl(Int, "x", Some(Number(1))),
+          VarDecl(Int, "y", Some(Number(2))),
+          Return(Some(Ternary(Binary(">", Var("x"), Number(0)), Var("y"), Number(0)))),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected ternary expression")
+  }
+}
+
+///|
+test "parse do while" {
+  let source = "int main() { int i = 0; do { i = i + 1; } while (i < 5); return i; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound([VarDecl(Int, "i", Some(Number(0))), DoWhile(_, _), Return(Some(Var("i")))])) =>
+      ()
+    _ => fail("Expected do-while")
+  }
+}
+
+///|
+test "parse continue" {
+  let source = "int main() { int i = 0; while (i < 5) { i = i + 1; continue; } return i; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound([_, While(_, Compound([_, Continue])), _])) => ()
+    _ => fail("Expected continue")
+  }
+}
+
+///|
+test "parse bitwise operators" {
+  let source = "int main() { return (3 & 1) | (2 ^ 1) | (4 << 1) | (8 >> 1) | ~0; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound([Return(Some(Binary("|", _, _)))])) => ()
+    _ => fail("Expected bitwise expression")
+  }
+}
+
+///|
+test "parse goto and label" {
+  let source = "int main() { int x = 0; goto end; x = 1; end: return x; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(
+      Compound(
+        [
+          VarDecl(Int, "x", Some(Number(0))),
+          Goto("end"),
+          ExprStmt(Assign(Var("x"), Number(1))),
+          Label("end", Return(Some(Var("x")))),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected goto and label")
+  }
+}
+
+///|
+test "parse switch" {
+  let source = #|int main() {
+  #|  int x = 2;
+  #|  int r = 0;
+  #|  switch (x) {
+  #|    case 1: r = 10; break;
+  #|    case 2: r = 20; break;
+  #|    default: r = 30; break;
+  #|  }
+  #|  return r;
+  #|}
+  
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound(stmts)) => {
+      inspect(stmts.length(), content="4")
+      match stmts[2] {
+        Switch(_, cases) => {
+          inspect(cases.length(), content="3")
+          match cases[0] {
+            (Some(1), Compound([ExprStmt(Assign(Var("r"), Number(10))), Break])) => ()
+            _ => fail("Expected case 1")
+          }
+          match cases[1] {
+            (Some(2), Compound([ExprStmt(Assign(Var("r"), Number(20))), Break])) => ()
+            _ => fail("Expected case 2")
+          }
+          match cases[2] {
+            (None, Compound([ExprStmt(Assign(Var("r"), Number(30))), Break])) => ()
+            _ => fail("Expected default")
+          }
+        }
+        _ => fail("Expected switch statement")
+      }
+    }
+    _ => fail("Expected compound body")
+  }
+}
+
+///|
+test "parse cast" {
+  let source = "int main() { return (char)256; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound([Return(Some(Cast(Char, Number(256))))])) => ()
+    _ => fail("Expected cast expression")
+  }
+}
+
+///|
+test "parse prefix increment" {
+  let source = "int main() { int x = 5; return ++x; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound([VarDecl(Int, "x", Some(Number(5))), Return(Some(PrefixInc(Var("x"))))])) =>
+      ()
+    _ => fail("Expected prefix increment")
+  }
+}
+
+///|
+test "parse postfix increment" {
+  let source = "int main() { int x = 5; return x++; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound([VarDecl(Int, "x", Some(Number(5))), Return(Some(PostfixInc(Var("x"))))])) =>
+      ()
+    _ => fail("Expected postfix increment")
+  }
+}
+
+///|
+test "parse enum" {
+  let source = "enum Color { Red, Green, Blue }; int main() { return Green; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound([Return(Some(Number(1)))])) => ()
+    _ => fail("Expected enum Green to be 1")
+  }
+}
+
+///|
+test "parse enum with values" {
+  let source = "enum { A = 10, B, C = 20 }; int main() { return B + C; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound([Return(Some(Binary("+", Number(11), Number(20))))])) => ()
+    _ => fail("Expected B=11 and C=20")
+  }
+}
+
+///|
+test "parse for loop" {
+  let source = "int main() { int s = 0; for (int i = 0; i < 3; i = i + 1) s = s + i; return s; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound(stmts)) => {
+      inspect(stmts.length(), content="3")
+      // Stmt 1: var decl s=0
+      match stmts[0] {
+        VarDecl(Int, "s", Some(Number(0))) => ()
+        _ => fail("Expected s declaration")
+      }
+      // Stmt 2: for loop as native For node
+      match stmts[1] {
+        For(Some(VarDecl(Int, "i", Some(Number(0)))), _, Some(_), _) => ()
+        _ => fail("Expected For AST node")
+      }
+    }
+    _ => fail("Expected compound body")
+  }
+}
+
+///|
 test "parse assignment" {
   let source = "int main() { int x; x = 5; return x; }"
   let prog = @parser.parse(source)

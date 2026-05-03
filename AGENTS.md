@@ -15,6 +15,32 @@ You can browse and install extra skills here:
 - In the toplevel directory, there is a `moon.mod.json` file listing module
   metadata.
 
+## Target
+
+**This project targets native ARM64 macOS.** Use `--target native` for all builds
+and tests. The native target produces a `main.exe` binary (~20x faster than wasm-gc).
+
+```bash
+moon build --target native
+moon test --target native
+moon run cmd/main --target native -- "<source code>"
+```
+
+## Running the Compiler
+
+The compiler reads C source code from command-line argument `args[1]`:
+
+```bash
+# Using moon run
+moon run cmd/main --target native -- "$(cat input.c)" > out.s
+
+# Using the native binary directly
+_build/native/debug/build/cmd/main/main.exe "$(cat input.c)" > out.s
+
+# Link with clang
+clang -o out out.s && ./out
+```
+
 ## Coding convention
 
 - MoonBit code is organized in block style, each block is separated by `///|`,
@@ -41,7 +67,7 @@ You can browse and install extra skills here:
   format the code. Check the diffs of `.mbti` file to see if the changes are
   expected.
 
-- Run `moon test` to check tests pass. MoonBit supports snapshot testing; when
+- Run `moon test --target native` to check tests pass. MoonBit supports snapshot testing; when
   changes affect outputs, run `moon test --update` to refresh snapshots.
 
 - Prefer `assert_eq` or `assert_true(pattern is Pattern(...))` for results that

@@ -10,6 +10,9 @@ pub struct Codegen {
   struct_layouts : Map[String, Array[(String, @parser.Type, Int, Int)]]
   struct_decls : Map[String, @parser.StructDecl]
   strings : Array[String]
+  mut break_label : String?
+  mut continue_label : String?
+  globals : Map[String, @parser.Type]
 }
 
 ///|
@@ -41,6 +44,9 @@ pub fn Codegen::new() -> Codegen {
     struct_layouts: {},
     struct_decls: {},
     strings: [],
+    break_label: None,
+    continue_label: None,
+    globals: {},
   }
 }
 
@@ -58,8 +64,23 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   for decl in prog.decls {
     self.func_rets[decl.name] = decl.ret
   }
+  // Record global variables
+  for g in prog.globals {
+    self.globals[g.1] = g.0
+  }
   for decl in prog.decls {
     self.gen_func(decl)
+  }
+  // Emit uninitialized global variables
+  if self.globals.length() > 0 {
+    self.emit("	.section	__DATA,__bss")
+    for name, ty in self.globals {
+      let size = self.type_size(ty)
+      self.emit("	.globl	_" + name)
+      self.emit("	.p2align	3")
+      self.emit("_" + name + ":")
+      self.emit("	.space	" + size.to_string())
+    }
   }
   // Emit string literals
   if self.strings.length() > 0 {
@@ -237,6 +258,14 @@ fn Codegen::collect_locals(self : Codegen, stmt : @parser.Stmt) -> Unit {
       }
     }
     While(_, body) => self.collect_locals(body)
+    For(init, _, _, body) => {
+      match init {
+        Some(i) => self.collect_locals(i)
+        None => ()
+      }
+      self.collect_locals(body)
+    }
+    DoWhile(_, body) => self.collect_locals(body)
     VarDecl(ty, name, _) => {
       let _ = self.alloc_local(name, ty)
     }
@@ -282,12 +311,117 @@ fn Codegen::gen_stmt(
     While(cond, body) => {
       let start_label = self.new_label()
       let end_label = self.new_label()
+      let old_break = self.break_label
+      let old_continue = self.continue_label
+      self.break_label = Some(end_label)
+      self.continue_label = Some(start_label)
       self.emit(start_label + ":")
       self.gen_expr(cond, frame_size)
       self.emit("\tcbz\tx9, " + end_label)
       self.gen_stmt(body, frame_size)
       self.emit("\tb\t" + start_label)
       self.emit(end_label + ":")
+      self.break_label = old_break
+      self.continue_label = old_continue
+    }
+    For(init, cond, update, body) => {
+      let start_label = self.new_label()
+      let continue_label = self.new_label()
+      let end_label = self.new_label()
+      let old_break = self.break_label
+      let old_continue = self.continue_label
+      self.break_label = Some(end_label)
+      self.continue_label = Some(continue_label)
+      // init
+      match init {
+        Some(i) => self.gen_stmt(i, frame_size)
+        None => ()
+      }
+      self.emit(start_label + ":")
+      self.gen_expr(cond, frame_size)
+      self.emit("\tcbz\tx9, " + end_label)
+      self.gen_stmt(body, frame_size)
+      self.emit(continue_label + ":")
+      match update {
+        Some(u) => self.gen_expr(u, frame_size)
+        None => ()
+      }
+      self.emit("\tb\t" + start_label)
+      self.emit(end_label + ":")
+      self.break_label = old_break
+      self.continue_label = old_continue
+    }
+    DoWhile(cond, body) => {
+      let start_label = self.new_label()
+      let cond_label = self.new_label()
+      let end_label = self.new_label()
+      let old_break = self.break_label
+      let old_continue = self.continue_label
+      self.break_label = Some(end_label)
+      self.continue_label = Some(cond_label)
+      self.emit(start_label + ":")
+      self.gen_stmt(body, frame_size)
+      self.emit(cond_label + ":")
+      self.gen_expr(cond, frame_size)
+      self.emit("\tcbnz\tx9, " + start_label)
+      self.emit(end_label + ":")
+      self.break_label = old_break
+      self.continue_label = old_continue
+    }
+    Break => {
+      match self.break_label {
+        Some(label) => self.emit("\tb\t" + label)
+        None => abort("break outside of loop or switch")
+      }
+    }
+    Continue => {
+      match self.continue_label {
+        Some(label) => self.emit("\tb\t" + label)
+        None => abort("continue outside of loop")
+      }
+    }
+    Switch(expr, cases) => {
+      let end_label = self.new_label()
+      let old_break = self.break_label
+      self.break_label = Some(end_label)
+      self.gen_expr(expr, frame_size)
+      // Generate comparison and branch for each case
+      let case_labels = []
+      for c in cases {
+        let label = self.new_label()
+        case_labels.push(label)
+        match c.0 {
+          Some(n) => {
+            self.emit("\tcmp\tx9, #" + n.to_string())
+            self.emit("\tb.eq\t" + label)
+          }
+          None => () // default handled after all cases
+        }
+      }
+      // Branch to default or end
+      let default_label = if cases.length() > 0 {
+        match cases[cases.length() - 1].0 {
+          None => case_labels[cases.length() - 1]
+          Some(_) => end_label
+        }
+      } else {
+        end_label
+      }
+      self.emit("\tb\t" + default_label)
+      // Generate case bodies
+      for i = 0; i < cases.length(); i = i + 1 {
+        self.emit(case_labels[i] + ":")
+        self.gen_stmt(cases[i].1, frame_size)
+      }
+      self.emit(end_label + ":")
+      self.break_label = old_break
+    }
+    Goto(name) => {
+      self.emit("\tb\t_label_" + name)
+    }
+    Label(name, stmt) => {
+      self.emit("_label_" + name + ":")
+      self.gen_stmt(stmt, frame_size)
     }
     VarDecl(ty, name, init) => {
       let offset = self.alloc_local(name, ty)
@@ -310,9 +444,22 @@ fn Codegen::type_of(
 ) -> @parser.Type {
   match expr {
     Number(_) => Int
-    Var(name) => self.var_types[name]
+    String(_) => Pointer(Char)
+    Var(name) => {
+      if self.var_types.contains(name) {
+        self.var_types[name]
+      } else if self.globals.contains(name) {
+        self.globals[name]
+      } else if self.func_rets.contains(name) {
+        Pointer(Void) // Function pointer type
+      } else {
+        abort("Unknown variable type: " + name)
+      }
+    }
     Binary(_, _, _) => Int
     Unary("-", _) => Int
+    Unary("!", _) => Int
+    Unary("~", _) => Int
     Call(name, _) => self.func_rets[name]
     Assign(_, rhs) => self.type_of(rhs, frame_size)
     MemberAccess(obj, field) => {
@@ -343,6 +490,14 @@ fn Codegen::type_of(
         _ => abort("Array access on non-array")
       }
     Sizeof(_) => Int
+    SizeofExpr(_) => Int
+    PrefixInc(e) => self.type_of(e, frame_size)
+    PrefixDec(e) => self.type_of(e, frame_size)
+    PostfixInc(e) => self.type_of(e, frame_size)
+    PostfixDec(e) => self.type_of(e, frame_size)
+    Ternary(_, then_, _) => self.type_of(then_, frame_size)
+    // CommaExpr is not in the AST, comma expressions are flattened into nested Binary(",", ...)
+    Cast(ty, _) => ty
     _ => abort("Unknown expression type")
   }
 }
@@ -363,12 +518,28 @@ fn Codegen::gen_expr(
       self.emit("\tadd\tx9, x9, " + label + "@PAGEOFF")
     }
     Var(name) => {
-      let ty = self.var_types[name]
-      let offset = self.local_offsets[name]
-      match ty {
-        Array(_, _) | Struct(_) =>
-          self.emit_local_addr(offset, frame_size)
-        _ => self.emit_load_local("x9", offset, frame_size)
+      if self.local_offsets.contains(name) {
+        let ty = self.var_types[name]
+        let offset = self.local_offsets[name]
+        match ty {
+          Array(_, _) | Struct(_) =>
+            self.emit_local_addr(offset, frame_size)
+          _ => self.emit_load_local("x9", offset, frame_size)
+        }
+      } else if self.globals.contains(name) {
+        let ty = self.globals[name]
+        self.emit("\tadrp\tx9, _" + name + "@PAGE")
+        self.emit("\tadd\tx9, x9, _" + name + "@PAGEOFF")
+        match ty {
+          Array(_, _) | Struct(_) => ()
+          _ => self.emit("\tldr\tx9, [x9]")
+        }
+      } else if self.func_rets.contains(name) {
+        // Function pointer / function address
+        self.emit("\tadrp\tx9, _" + name + "@PAGE")
+        self.emit("\tadd\tx9, x9, _" + name + "@PAGEOFF")
+      } else {
+        abort("Unknown variable: " + name)
       }
     }
     Assign(lhs, rhs) => {
@@ -417,6 +588,15 @@ fn Codegen::gen_expr(
         "*" => self.emit("\tmul\tx9, x9, x10")
         "/" => self.emit("\tsdiv\tx9, x9, x10")
         "%" => self.emit("\tsdiv\tx11, x9, x10\n\tmsub\tx9, x11, x10, x9")
+        "&" => self.emit("\tand\tx9, x9, x10")
+        "|" => self.emit("\torr\tx9, x9, x10")
+        "^" => self.emit("\teor\tx9, x9, x10")
+        "<<" => self.emit("\tlsl\tx9, x9, x10")
+        ">>" => self.emit("\tasr\tx9, x9, x10")
+        "," => {
+          // Result is the right operand (in x10)
+          self.emit("\tmov\tx9, x10")
+        }
         "==" => {
           self.emit("\tcmp\tx9, x10")
           self.emit("\tcset\tx9, eq")
@@ -448,6 +628,15 @@ fn Codegen::gen_expr(
       self.gen_expr(operand, frame_size)
       self.emit("\tneg\tx9, x9")
     }
+    Unary("~", operand) => {
+      self.gen_expr(operand, frame_size)
+      self.emit("\tmvn\tx9, x9")
+    }
+    Unary("!", operand) => {
+      self.gen_expr(operand, frame_size)
+      self.emit("\tcmp\tx9, #0")
+      self.emit("\tcset\tx9, eq")
+    }
     Call(name, args) => {
       for i = 0; i < args.length(); i = i + 1 {
         self.gen_expr(args[i], frame_size)
@@ -474,6 +663,63 @@ fn Codegen::gen_expr(
       let size = self.type_size(ty)
       self.emit("\tmov\tx9, #" + size.to_string())
     }
+    SizeofExpr(expr) => {
+      let ty = self.type_of(expr, frame_size)
+      let size = self.type_size(ty)
+      self.emit("\tmov\tx9, #" + size.to_string())
+    }
+    Cast(ty, expr) => {
+      self.gen_expr(expr, frame_size)
+      match ty {
+        Char => {
+          // Truncate to 8 bits and sign-extend
+          self.emit("\tsxtb\tx9, w9")
+        }
+        _ => {
+          // int, pointer, struct, array, void: no-op
+          ()
+        }
+      }
+    }
+    Ternary(cond, then_expr, else_expr) => {
+      let else_label = self.new_label()
+      let end_label = self.new_label()
+      self.gen_expr(cond, frame_size)
+      self.emit("\tcbz\tx9, " + else_label)
+      self.gen_expr(then_expr, frame_size)
+      self.emit("\tb\t" + end_label)
+      self.emit(else_label + ":")
+      self.gen_expr(else_expr, frame_size)
+      self.emit(end_label + ":")
+    }
+    PrefixInc(expr) => {
+      self.gen_addr(expr, frame_size)
+      self.emit("\tldr\tx10, [x9]")
+      self.emit("\tadd\tx11, x10, #1")
+      self.emit("\tstr\tx11, [x9]")
+      self.emit("\tmov\tx9, x11")
+    }
+    PrefixDec(expr) => {
+      self.gen_addr(expr, frame_size)
+      self.emit("\tldr\tx10, [x9]")
+      self.emit("\tsub\tx11, x10, #1")
+      self.emit("\tstr\tx11, [x9]")
+      self.emit("\tmov\tx9, x11")
+    }
+    PostfixInc(expr) => {
+      self.gen_addr(expr, frame_size)
+      self.emit("\tldr\tx10, [x9]")
+      self.emit("\tadd\tx11, x10, #1")
+      self.emit("\tstr\tx11, [x9]")
+      self.emit("\tmov\tx9, x10")
+    }
+    PostfixDec(expr) => {
+      self.gen_addr(expr, frame_size)
+      self.emit("\tldr\tx10, [x9]")
+      self.emit("\tsub\tx11, x10, #1")
+      self.emit("\tstr\tx11, [x9]")
+      self.emit("\tmov\tx9, x10")
+    }
     _ => abort("Unknown expression")
   }
 }
@@ -486,8 +732,15 @@ fn Codegen::gen_addr(
 ) -> Unit {
   match expr {
     Var(name) => {
-      let offset = self.local_offsets[name]
-      self.emit_local_addr(offset, frame_size)
+      if self.local_offsets.contains(name) {
+        let offset = self.local_offsets[name]
+        self.emit_local_addr(offset, frame_size)
+      } else if self.globals.contains(name) || self.func_rets.contains(name) {
+        self.emit("\tadrp\tx9, _" + name + "@PAGE")
+        self.emit("\tadd\tx9, x9, _" + name + "@PAGEOFF")
+      } else {
+        abort("Unknown variable in address: " + name)
+      }
     }
     MemberAccess(obj, field) => {
       self.gen_addr(obj, frame_size)
