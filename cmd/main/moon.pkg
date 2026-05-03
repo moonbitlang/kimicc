@@ -1,0 +1,9 @@
+import {
+  "bobzhang/kimicc/parser",
+  "bobzhang/kimicc/codegen",
+  "moonbitlang/core/env",
+}
+
+options(
+  "is-main": true,
+)
