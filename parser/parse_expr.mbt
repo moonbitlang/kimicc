@@ -366,6 +366,8 @@ fn Parser::parse_unary(self : Parser) -> Expr {
       let is_cast = match self.token {
         Int | Void | Char | Struct | Union | Signed | Unsigned | Short | Long | Float | Double | Bool | Enum | Const | Restrict | Volatile | Static | Extern | Inline => true
         Ident("_Float16") => true
+        Ident("__int128") => true
+        Ident("_Atomic") => true
         Ident(name) => self.typedefs.contains(name)
         _ => false
       }
@@ -374,7 +376,13 @@ fn Parser::parse_unary(self : Parser) -> Expr {
         let ty = self.parse_type()
         if self.token == RParen {
           self.advance() // past )
-          self.apply_postfix(Cast(ty, self.parse_unary()))
+          if self.token == LBrace {
+            // Compound literal: (Type){ ... }
+            self.skip_brace_initializer()
+            self.apply_postfix(Number(0))
+          } else {
+            self.apply_postfix(Cast(ty, self.parse_unary()))
+          }
         } else if self.token == LParen {
           // Function pointer type cast: (void (*)(void*, int))p
           self.expect(LParen)

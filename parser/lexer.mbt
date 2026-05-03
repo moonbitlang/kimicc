@@ -434,6 +434,16 @@ pub fn Lexer::next_token(self : Lexer) -> Token {
       // Concatenate adjacent string literals
       while true {
         self.skip_whitespace()
+        // Skip preprocessor directives between adjacent strings
+        while self.pos < self.input.length() && self.peek() == '#' {
+          while self.pos < self.input.length() && self.peek() != '\n' {
+            self.pos += 1
+          }
+          if self.pos < self.input.length() {
+            self.pos += 1
+          }
+          self.skip_whitespace()
+        }
         if self.pos < self.input.length() && self.peek() == '"' {
           let next = self.read_string()
           match (result, next) {

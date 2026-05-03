@@ -18,7 +18,7 @@ fn Parser::skip_qualifiers(self : Parser) -> Unit {
 
 ///|
 fn Parser::skip_attributes(self : Parser) -> Unit {
-  while self.token == Ident("__attribute__") || self.token == Ident("__attribute__") ||
+  while self.token == Ident("__attribute__") || self.token == Ident("__attribute") ||
         self.token == Ident("__asm") || self.token == Ident("__asm__") {
     self.advance()
     self.expect(LParen)
@@ -44,6 +44,18 @@ fn Parser::skip_attributes(self : Parser) -> Unit {
 fn Parser::parse_type(self : Parser) -> Type {
   // Skip type qualifiers (const, restrict, extern, static, volatile)
   self.skip_qualifiers()
+  // Handle _Atomic(type) or _Atomic type
+  if self.token == Ident("_Atomic") {
+    self.advance()
+    self.skip_qualifiers()
+    if self.token == LParen {
+      self.expect(LParen)
+      let _ = self.parse_type()
+      self.expect(RParen)
+    }
+    self.skip_qualifiers()
+    return self.parse_type_suffix(Type::Int)
+  }
   // Handle type modifiers (signed, unsigned, short, long)
   let has_modifier = self.token == Signed || self.token == Unsigned ||
                      self.token == Short || self.token == Long
@@ -56,13 +68,15 @@ fn Parser::parse_type(self : Parser) -> Type {
     // After modifiers, the base type may be implicit or explicit
     self.skip_qualifiers()
     if self.token == Int || self.token == Char || self.token == Void ||
-       self.token == Float || self.token == Double {
+       self.token == Float || self.token == Double ||
+       self.token == Ident("__int128") {
       let base = match self.token {
         Int => { self.advance(); Type::Int }
         Char => { self.advance(); Type::Char }
         Void => { self.advance(); Type::Void }
         Float => { self.advance(); Type::Int }
         Double => { self.advance(); Type::Int }
+        Ident("__int128") => { self.advance(); Type::Int }
         _ => Type::Int
       }
       self.skip_qualifiers()
@@ -285,7 +299,7 @@ fn Parser::parse_type(self : Parser) -> Type {
         self.advance()
         // va_list is typically a char* or void* array on ARM64
         Pointer(Char)
-      } else if name == "__uint128_t" {
+      } else if name == "__uint128_t" || name == "__int128" {
         self.advance()
         // 128-bit integer not supported, treat as Int
         Type::Int

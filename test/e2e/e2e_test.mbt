@@ -403,3 +403,58 @@ async test "parse sqlite3 preprocessed" {
   let assembly = compile(source)
   assert_true(assembly.contains("_sqlite3_open:"))
 }
+
+///|
+async test "compound literal" {
+  let source =
+    #|typedef struct { int x; int y; } Point;
+    #|int main(){
+    #|  Point p = (Point){ 1, 2 };
+    #|  return p.x;
+    #|}
+  let assembly = compile(source)
+  assert_true(assembly.contains("_main:"))
+}
+
+///|
+async test "__int128 and _Atomic types" {
+  let source =
+    #|typedef unsigned __int128 uint128_t;
+    #|typedef _Atomic(int) atomic_int_t;
+    #|typedef _Atomic(unsigned long long) atomic_ullong_t;
+    #|int main(){ return 0; }
+  let assembly = compile(source)
+  assert_true(assembly.contains("_main:"))
+}
+
+///|
+async test "computed goto" {
+  let source =
+    #|int main(){
+    #|  void *tab[] = { &&L1, &&L2 };
+    #|  goto *tab[0];
+    #|L1:
+    #|  return 1;
+    #|L2:
+    #|  return 2;
+    #|}
+  let assembly = compile(source)
+  assert_true(assembly.contains("_main:"))
+}
+
+///|
+async test "__attribute without trailing underscores" {
+  let source =
+    #|static void __attribute((unused)) foo(int x) {}
+    #|int main(){ foo(1); return 0; }
+  let assembly = compile(source)
+  assert_true(assembly.contains("_main:"))
+}
+
+///|
+async test "parse quickjs preprocessed" {
+  let data = @fs.read_file("/tmp/quickjs_preprocessed.c")
+  let source = data.text()
+  let assembly = compile(source)
+  assert_true(assembly.contains("_JS_Eval:"))
+}

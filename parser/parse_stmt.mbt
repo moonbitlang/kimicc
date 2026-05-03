@@ -252,6 +252,12 @@ fn Parser::parse_break_stmt(self : Parser) -> Stmt {
 ///|
 fn Parser::parse_goto_stmt(self : Parser) -> Stmt {
   self.advance() // goto
+  if self.token == Star {
+    // Computed goto: goto *expr;
+    let _ = self.parse_expr()
+    self.expect(Semicolon)
+    return Goto("*computed*")
+  }
   let name = match self.token {
     Ident(n) => { self.advance(); n }
     _ => abort("Expected label name after goto")
