@@ -325,3 +325,208 @@ test "parse assignment" {
     _ => fail("Expected assignment")
   }
 }
+
+///|
+test "parse compound assignment" {
+  let source = "int main() { int x = 5; x += 3; x -= 1; x *= 2; x /= 2; x %= 3; return x; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound(stmts)) => {
+      // Stmt 1: var decl
+      // Stmt 2: x += 3 -> Assign(Var("x"), Binary("+", Var("x"), Number(3)))
+      match stmts[1] {
+        ExprStmt(Assign(Var("x"), Binary("+", Var("x"), Number(3)))) => ()
+        _ => fail("Expected +=")
+      }
+      match stmts[3] {
+        ExprStmt(Assign(Var("x"), Binary("*", Var("x"), Number(2)))) => ()
+        _ => fail("Expected *=")
+      }
+    }
+    _ => fail("Expected compound body")
+  }
+}
+
+///|
+test "parse logical operators" {
+  let source = "int main() { int a = 1; int b = 0; return a && b || !a; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound([_, _, Return(Some(Binary("||", Binary("&&", Var("a"), Var("b")), Unary("!", Var("a")))))])) =>
+      ()
+    _ => fail("Expected logical operators")
+  }
+}
+
+///|
+test "parse empty for loop" {
+  let source = "int main() { for (;;) return 42; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound([For(None, Number(1), None, Return(Some(Number(42))))])) => ()
+    _ => fail("Expected empty for loop")
+  }
+}
+
+///|
+test "parse nested loops with break" {
+  let source =
+    #|int main() {
+    #|  int x = 0;
+    #|  for (int i = 0; i < 3; i = i + 1) {
+    #|    for (int j = 0; j < 3; j = j + 1) {
+    #|      if (j == 1) break;
+    #|      x = x + 1;
+    #|    }
+    #|  }
+    #|  return x;
+    #|}
+  
+  let prog = @parser.parse(source)
+  inspect(prog.decls.length(), content="1")
+}
+
+///|
+test "parse sizeof type" {
+  let source = "int main() { return sizeof(int); }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound([Return(Some(Sizeof(Int)))])) => ()
+    _ => fail("Expected sizeof type")
+  }
+}
+
+///|
+test "parse struct definition and member access" {
+  let source =
+    #|struct Point { int x; int y; };
+    #|int main() {
+    #|  struct Point p;
+    #|  p.x = 10;
+    #|  p.y = 20;
+    #|  return p.x + p.y;
+    #|}
+  
+  let prog = @parser.parse(source)
+  inspect(prog.decls.length(), content="1")
+  inspect(prog.structs.length(), content="1")
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound(stmts)) => {
+      inspect(stmts.length(), content="4")
+      match stmts[1] {
+        ExprStmt(Assign(MemberAccess(Var("p"), "x"), Number(10))) => ()
+        _ => fail("Expected member access assignment")
+      }
+    }
+    _ => fail("Expected compound body")
+  }
+}
+
+///|
+test "parse pointer to struct member access" {
+  let source =
+    #|struct Node { int val; struct Node *next; };
+    #|int main() {
+    #|  struct Node n;
+    #|  n.val = 5;
+    #|  n.next = &n;
+    #|  return n.next->val;
+    #|}
+  
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound(stmts)) => {
+      match stmts[3] {
+        Return(Some(MemberAccess(Deref(MemberAccess(Var("n"), "next")), "val"))) => ()
+        _ => fail("Expected arrow member access")
+      }
+    }
+    _ => fail("Expected compound body")
+  }
+}
+
+///|
+test "parse array declaration and access" {
+  let source = "int main() { int a[5]; a[2] = 42; return a[2]; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound([VarDecl(Array(Int, 5), "a", None), ExprStmt(Assign(ArrayAccess(Var("a"), Number(2)), Number(42))), Return(Some(ArrayAccess(Var("a"), Number(2))))])) =>
+      ()
+    _ => fail("Expected array decl and access")
+  }
+}
+
+///|
+test "parse global variable" {
+  let source = "int g = 10; int main() { return g; }"
+  let prog = @parser.parse(source)
+  inspect(prog.globals.length(), content="1")
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound([Return(Some(Var("g")))])) => ()
+    _ => fail("Expected global access")
+  }
+}
+
+///|
+test "parse multiple functions" {
+  let source =
+    #|int add(int a, int b) { return a + b; }
+    #|int mul(int a, int b) { return a * b; }
+    #|int main() { return add(2, 3) + mul(4, 5); }
+  
+  let prog = @parser.parse(source)
+  inspect(prog.decls.length(), content="3")
+  inspect(prog.decls[0].name, content="add")
+  inspect(prog.decls[1].name, content="mul")
+  inspect(prog.decls[2].name, content="main")
+}
+
+///|
+test "parse string literal" {
+  let source = "int main() { char *s = \"hello\"; return 0; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound([VarDecl(Pointer(Char), "s", Some(String("hello"))), Return(Some(Number(0)))])) =>
+      ()
+    _ => fail("Expected string literal")
+  }
+}
+
+///|
+test "parse adjacent string concatenation" {
+  let source = "int main() { char *s = \"he\" \"llo\"; return 0; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound([VarDecl(Pointer(Char), "s", Some(String("hello"))), Return(Some(Number(0)))])) =>
+      ()
+    _ => fail("Expected concatenated string literal")
+  }
+}
+
+///|
+test "parse comments" {
+  let source =
+    #|// Line comment
+    #|int main() {
+    #|  /* block
+    #|     comment */
+    #|  return 42;
+    #|}
+  
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound([Return(Some(Number(42)))])) => ()
+    _ => fail("Expected return 42 after comments")
+  }
+}

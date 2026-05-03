@@ -225,6 +225,17 @@ pub fn Lexer::next_token(self : Lexer) -> Token {
           self.pos += 1
         }
         self.next_token()
+      } else if self.peek() == '*' {
+        // Block comment: skip until */
+        self.advance() // skip *
+        while self.pos < self.input.length() {
+          if self.peek() == '*' && self.pos + 1 < self.input.length() && self.input[self.pos + 1] == '/' {
+            self.pos += 2
+            break
+          }
+          self.pos += 1
+        }
+        self.next_token()
       } else if self.peek() == '=' {
         self.advance()
         SlashEq

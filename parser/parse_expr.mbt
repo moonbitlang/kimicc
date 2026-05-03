@@ -493,10 +493,10 @@ fn Parser::parse_primary(self : Parser) -> Expr {
         self.advance()
         let args = []
         if self.token != RParen {
-          args.push(self.parse_expr())
+          args.push(self.parse_assign())
           while self.token == Comma {
             self.advance()
-            args.push(self.parse_expr())
+            args.push(self.parse_assign())
           }
         }
         self.expect(RParen)
