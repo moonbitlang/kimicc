@@ -1478,3 +1478,62 @@ async test "recursive factorial" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="120")
 }
+
+///|
+async test "array initializer partial" {
+  let source =
+    #|int main() {
+    #|  int arr[5] = {1, 2};
+    #|  return arr[0] + arr[1];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="3")
+}
+
+///|
+async test "pointer subtraction" {
+  let source =
+    #|int main() {
+    #|  int arr[5] = {10, 20, 30, 40, 50};
+    #|  int *p = &arr[4];
+    #|  int *q = &arr[1];
+    #|  return p - q;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="3")
+}
+
+///|
+async test "void pointer cast" {
+  let source =
+    #|int main() {
+    #|  int x = 42;
+    #|  void *vp = &x;
+    #|  int *ip = (int *)vp;
+    #|  return *ip;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "long long type" {
+  let source =
+    #|int main() {
+    #|  long long x = 100;
+    #|  return (int)x;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="100")
+}
+
+///|
+async test "character literal as int" {
+  let source =
+    #|int main() {
+    #|  int x = 'A';
+    #|  return x;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="65")
+}
