@@ -173,12 +173,14 @@ pub(all) enum Stmt {
 pub(all) struct Param {
   ty : Type
   name : String
+  bit_width : Int?
 } derive(Eq)
 
 ///|
 pub(all) struct StructDecl {
   name : String
   fields : Array[Param]
+  is_union : Bool
 } derive(Eq)
 
 ///|

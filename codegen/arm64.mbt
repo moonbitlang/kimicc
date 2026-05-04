@@ -7,7 +7,7 @@ pub struct Codegen {
   mut stack_size : Int
   mut func_name : String
   func_rets : Map[String, @parser.Type]
-  struct_layouts : Map[String, Array[(String, @parser.Type, Int, Int)]]
+  struct_layouts : Map[String, Array[(String, @parser.Type, Int, Int, Int, Int)]]
   struct_decls : Map[String, @parser.StructDecl]
   strings : Array[String]
   mut break_label : String?
@@ -217,11 +217,21 @@ fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
         }
       }
       let fields = self.struct_layouts[name]
-      let mut total = 0
+      let mut max_end = 0
+      let mut max_align = 1
       for field in fields {
-        total += field.3
+        let end = field.2 + field.3
+        if end > max_end {
+          max_end = end
+        }
+        let fa = self.type_align(field.1)
+        if fa > max_align {
+          max_align = fa
+        }
       }
-      total
+      // Round up to struct alignment (trailing padding)
+      let padding = (max_align - max_end % max_align) % max_align
+      max_end + padding
     }
     Union(name) => {
       if not(self.struct_layouts.contains(name)) {
@@ -298,17 +308,103 @@ fn Codegen::compute_struct_layout(
   self : Codegen,
   decl : @parser.StructDecl,
 ) -> Unit {
+  if decl.is_union {
+    self.compute_union_layout(decl)
+    return
+  }
   let mut offset = 0
+  let layout = []
+  // Bit-field packing state
+  let mut current_container_size = 0
+  let mut current_container_offset = 0
+  let mut current_bit_offset = 0
+  for field in decl.fields {
+    match field.bit_width {
+      None => {
+        // Normal field: align to natural boundary, reset bit packing
+        let size = self.type_size(field.ty)
+        let align = self.type_align(field.ty)
+        let padding = (align - offset % align) % align
+        offset += padding
+        layout.push((field.name, field.ty, offset, size, 0, 0))
+        offset += size
+        current_container_size = 0
+        current_container_offset = 0
+        current_bit_offset = 0
+      }
+      Some(w) => {
+        let container_size = self.type_size(field.ty)
+        let container_align = self.type_align(field.ty)
+        if w == 0 {
+          // Zero-width bit-field: force alignment to next container boundary
+          let padding = (container_align - offset % container_align) % container_align
+          offset += padding
+          current_container_size = 0
+          current_container_offset = 0
+          current_bit_offset = 0
+          // Don't add a layout entry for zero-width bit-fields
+        } else {
+          // Start new container if needed
+          if current_container_size == 0 ||
+            current_container_size != container_size ||
+            current_bit_offset + w > current_container_size * 8 {
+            let padding = (container_align - offset % container_align) % container_align
+            offset += padding
+            current_container_offset = offset
+            current_container_size = container_size
+            current_bit_offset = 0
+            offset += container_size
+          }
+          layout.push(
+            (field.name, field.ty, current_container_offset, container_size, current_bit_offset, w),
+          )
+          current_bit_offset += w
+        }
+      }
+    }
+  }
+  self.struct_layouts[decl.name] = layout
+}
+
+///|
+fn Codegen::compute_union_layout(
+  self : Codegen,
+  decl : @parser.StructDecl,
+) -> Unit {
   let layout = []
   for field in decl.fields {
     let size = self.type_size(field.ty)
-    let align = self.type_align(field.ty)
-    let padding = (align - offset % align) % align
-    offset += padding
-    layout.push((field.name, field.ty, offset, size))
-    offset += size
+    match field.bit_width {
+      None => {
+        layout.push((field.name, field.ty, 0, size, 0, 0))
+      }
+      Some(w) => {
+        if w == 0 {
+          // Zero-width bit-field in union: no effect
+        } else {
+          layout.push((field.name, field.ty, 0, size, 0, w))
+        }
+      }
+    }
   }
   self.struct_layouts[decl.name] = layout
+}
+
+///|
+fn Codegen::find_field_layout(
+  self : Codegen,
+  struct_name : String,
+  field : String
+) -> (String, @parser.Type, Int, Int, Int, Int)? {
+  if not(self.struct_layouts.contains(struct_name)) {
+    return None
+  }
+  for f in self.struct_layouts[struct_name] {
+    if f.0 == field {
+      return Some(f)
+    }
+  }
+  None
 }
 
 ///|
@@ -738,12 +834,83 @@ fn Codegen::gen_expr(
       }
     }
     Assign(lhs, rhs) => {
-      self.gen_expr(rhs, frame_size)
-      self.emit("\tstr\tx9, [sp, #-16]!")
-      self.gen_addr(lhs, frame_size)
-      self.emit("\tmov\tx10, x9")
-      self.emit("\tldr\tx9, [sp], #16")
-      self.emit("\tstr\tx9, [x10]")
+      // Check if lhs is a bit-field member access
+      let is_bitfield = match lhs {
+        MemberAccess(obj, field) => {
+          let obj_ty = self.type_of(obj, frame_size)
+          let struct_name = match obj_ty {
+            Struct(n) => n
+            Union(n) => n
+            _ => ""
+          }
+          if struct_name != "" {
+            match self.find_field_layout(struct_name, field) {
+              Some((_, _, _, _, _, bit_width)) => bit_width > 0
+              None => false
+            }
+          } else {
+            false
+          }
+        }
+        _ => false
+      }
+      if is_bitfield {
+        // Bit-field assignment: read-modify-write
+        self.gen_expr(rhs, frame_size)
+        self.emit("\tstr\tx9, [sp, #-16]!")
+        self.gen_addr(lhs, frame_size)  // returns container address
+        self.emit("\tmov\tx10, x9")
+        self.emit("\tldr\tx9, [sp], #16")  // value in x9
+        // Get bit-field info
+        match lhs {
+          MemberAccess(obj, field) => {
+            let obj_ty = self.type_of(obj, frame_size)
+            let struct_name = match obj_ty {
+              Struct(n) => n
+              Union(n) => n
+              _ => ""
+            }
+            match self.find_field_layout(struct_name, field) {
+              Some((_, _, _, size, bit_offset, bit_width)) => {
+                // Load container
+                match size {
+                  1 => self.emit("\tldrb\tw11, [x10]")
+                  2 => self.emit("\tldrh\tw11, [x10]")
+                  4 => self.emit("\tldr\tw11, [x10]")
+                  _ => self.emit("\tldr\tx11, [x10]")
+                }
+                // Clear old bits
+                let mask = (1 << bit_width) - 1
+                self.emit_load_int("x12", mask)
+                self.emit("\tlsl\tx12, x12, #" + bit_offset.to_string())
+                self.emit("\tmvn\tx12, x12")
+                self.emit("\tand\tx11, x11, x12")
+                // Insert new value
+                self.emit_load_int("x12", mask)
+                self.emit("\tand\tx9, x9, x12")
+                self.emit("\tlsl\tx9, x9, #" + bit_offset.to_string())
+                self.emit("\torr\tx11, x11, x9")
+                // Store container back
+                match size {
+                  1 => self.emit("\tstrb\tw11, [x10]")
+                  2 => self.emit("\tstrh\tw11, [x10]")
+                  4 => self.emit("\tstr\tw11, [x10]")
+                  _ => self.emit("\tstr\tx11, [x10]")
+                }
+              }
+              None => ()
+            }
+          }
+          _ => ()
+        }
+      } else {
+        self.gen_expr(rhs, frame_size)
+        self.emit("\tstr\tx9, [sp, #-16]!")
+        self.gen_addr(lhs, frame_size)
+        self.emit("\tmov\tx10, x9")
+        self.emit("\tldr\tx9, [sp], #16")
+        self.emit("\tstr\tx9, [x10]")
+      }
     }
     Binary("&&", left, right) => {
       let end_label = self.new_label()
@@ -852,9 +1019,53 @@ fn Codegen::gen_expr(
       }
       self.emit("\tmov\tx9, x0")
     }
-    MemberAccess(_, _) => {
-      self.gen_addr(expr, frame_size)
-      self.emit("\tldr\tx9, [x9]")
+    MemberAccess(obj, field) => {
+      let obj_ty = self.type_of(obj, frame_size)
+      let struct_name = match obj_ty {
+        Struct(n) => n
+        Union(n) => n
+        _ => {
+          println("WARN: MemberAccess on non-struct: " + obj_ty.to_string())
+          self.gen_addr(expr, frame_size)
+          self.emit("\tldr\tx9, [x9]")
+          return
+        }
+      }
+      match self.find_field_layout(struct_name, field) {
+        None => {
+          println("WARN: Unknown field '" + field + "' in struct '" + struct_name + "'")
+          self.emit("\tmov\tx9, #0")
+        }
+        Some((_, ty, offset, size, bit_offset, bit_width)) => {
+          // Compute address of container
+          self.gen_addr(obj, frame_size)
+          if offset != 0 {
+            self.emit("\tadd\tx9, x9, #" + offset.to_string())
+          }
+          // Load container based on size
+          match size {
+            1 => self.emit("\tldrb\tw9, [x9]")
+            2 => self.emit("\tldrh\tw9, [x9]")
+            4 => self.emit("\tldr\tw9, [x9]")
+            _ => self.emit("\tldr\tx9, [x9]")
+          }
+          if bit_width > 0 {
+            // Extract bit-field
+            self.emit("\tlsr\tx9, x9, #" + bit_offset.to_string())
+            if bit_width < 64 {
+              let mask = (1 << bit_width) - 1
+              self.emit_load_int("x10", mask)
+              self.emit("\tand\tx9, x9, x10")
+            }
+            // Sign-extend if signed type
+            if ty.is_signed() {
+              let shift = 64 - bit_width
+              self.emit("\tlsl\tx9, x9, #" + shift.to_string())
+              self.emit("\tasr\tx9, x9, #" + shift.to_string())
+            }
+          }
+        }
+      }
     }
     Deref(ptr) => {
       self.gen_expr(ptr, frame_size)

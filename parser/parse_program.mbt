@@ -49,6 +49,7 @@ fn Parser::parse_program(self : Parser) -> Program {
       // Peek ahead to distinguish struct/union definition from function declaration
       let saved_pos = self.lexer.pos
       let saved_token = self.token
+      let is_union = self.token == Union
       self.advance() // past struct/union
       match self.token {
         Ident(name) => {
@@ -65,7 +66,7 @@ fn Parser::parse_program(self : Parser) -> Program {
             } else {
               self.expect(Semicolon)
             }
-            structs.push({ name, fields })
+            structs.push({ name, fields, is_union })
           } else if self.token == Semicolon {
             // Forward struct declaration: struct Foo;
             self.advance()

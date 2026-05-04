@@ -458,3 +458,70 @@ async test "parse quickjs preprocessed" {
   let assembly = compile(source)
   assert_true(assembly.contains("_JS_Eval:"))
 }
+
+///|
+async test "struct trailing padding" {
+  let source =
+    #|struct S { int a; char b; };
+    #|int main() {
+    #|  return sizeof(struct S);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="8")
+}
+
+///|
+async test "bit-field read" {
+  let source =
+    #|struct S { unsigned int a:3; unsigned int b:4; };
+    #|int main() {
+    #|  struct S s;
+    #|  s.a = 5;
+    #|  s.b = 7;
+    #|  return s.a + s.b;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="12")
+}
+
+///|
+async test "bit-field write and read back" {
+  let source =
+    #|struct S { unsigned int a:5; unsigned int b:3; };
+    #|int main() {
+    #|  struct S s;
+    #|  s.a = 17;
+    #|  s.b = 5;
+    #|  if (s.a != 17) return 1;
+    #|  if (s.b != 5) return 2;
+    #|  s.a = 31;
+    #|  if (s.a != 31) return 3;
+    #|  return 0;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
+
+///|
+async test "union size is max field" {
+  let source =
+    #|union U { char c; int i; };
+    #|int main() {
+    #|  return sizeof(union U);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="4")
+}
+
+///|
+async test "signed bit-field sign extension" {
+  let source =
+    #|struct S { int a:3; };
+    #|int main() {
+    #|  struct S s;
+    #|  s.a = -1;  // 0b111 in 3-bit signed = -1
+    #|  return s.a + 1;  // should be 0
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}

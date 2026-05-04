@@ -203,7 +203,7 @@ fn Parser::parse_struct_type_specifier(self : Parser) -> Type {
         self.expect(LBrace)
         let fields = self.parse_struct_body()
         self.expect(RBrace)
-        self.anonymous_structs.push({ name: n, fields })
+        self.anonymous_structs.push({ name: n, fields, is_union: false })
         Type::Struct(n)
       } else {
         Type::Struct(n)
@@ -215,7 +215,7 @@ fn Parser::parse_struct_type_specifier(self : Parser) -> Type {
       self.expect(RBrace)
       let name = "__anon_struct_" + self.anon_counter.to_string()
       self.anon_counter += 1
-      self.anonymous_structs.push({ name, fields })
+      self.anonymous_structs.push({ name, fields, is_union: false })
       Type::Struct(name)
     }
     _ => abort("Expected struct name or {\n")
@@ -232,7 +232,7 @@ fn Parser::parse_union_type_specifier(self : Parser) -> Type {
         self.expect(LBrace)
         let fields = self.parse_struct_body()
         self.expect(RBrace)
-        self.anonymous_structs.push({ name: n, fields })
+        self.anonymous_structs.push({ name: n, fields, is_union: true })
         Type::Union(n)
       } else {
         Type::Union(n)
@@ -244,7 +244,7 @@ fn Parser::parse_union_type_specifier(self : Parser) -> Type {
       self.expect(RBrace)
       let name = "__anon_union_" + self.anon_counter.to_string()
       self.anon_counter += 1
-      self.anonymous_structs.push({ name, fields })
+      self.anonymous_structs.push({ name, fields, is_union: true })
       Type::Union(name)
     }
     _ => abort("Expected union name or {\n")
@@ -305,21 +305,31 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] {
     self.skip_qualifiers()
     let spec = self.parse_decl_specifiers()
     let decl = self.parse_declarator(spec.base_type)
-    if self.token == Colon {
+    let bit_width = if self.token == Colon {
       self.advance()
-      let _ = self.parse_assign()
+      match fold_const(self.parse_assign()) {
+        Some(n) => Some(n)
+        None => abort("Bit-field width must be a constant integer")
+      }
+    } else {
+      None
     }
-    fields.push({ ty: decl.ty, name: decl.name })
+    fields.push({ ty: decl.ty, name: decl.name, bit_width })
     while self.token == Comma {
       self.advance()
       self.skip_attributes()
       self.skip_qualifiers()
       let extra = self.parse_declarator(spec.base_type)
-      if self.token == Colon {
+      let extra_bit_width = if self.token == Colon {
         self.advance()
-        let _ = self.parse_assign()
+        match fold_const(self.parse_assign()) {
+          Some(n) => Some(n)
+          None => abort("Bit-field width must be a constant integer")
+        }
+      } else {
+        None
       }
-      fields.push({ ty: extra.ty, name: extra.name })
+      fields.push({ ty: extra.ty, name: extra.name, bit_width: extra_bit_width })
     }
     self.expect(Semicolon)
   }

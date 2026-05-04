@@ -24,7 +24,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
     // Apply array-to-pointer decay for function parameters
     for i = 0; i < params.length(); i = i + 1 {
       match params[i].ty {
-        Array(elem, _) => params[i] = { ty: Pointer(elem), name: params[i].name }
+        Array(elem, _) => params[i] = { ty: Pointer(elem), name: params[i].name, bit_width: None }
         _ => ()
       }
     }
@@ -93,12 +93,12 @@ fn Parser::parse_global_var_tail(self : Parser, spec : DeclSpec, decl : Declarat
 fn Parser::parse_param(self : Parser) -> Param {
   if self.token == Ellipsis {
     self.advance()
-    return { ty: Void, name: "..." }
+    return { ty: Void, name: "...", bit_width: None }
   }
   let spec = self.parse_decl_specifiers()
   let decl = self.parse_declarator(spec.base_type)
   self.skip_attributes()
-  { ty: decl.ty, name: decl.name }
+  { ty: decl.ty, name: decl.name, bit_width: None }
 }
 
 
