@@ -304,6 +304,45 @@ fn Codegen::type_align(self : Codegen, ty : @parser.Type) -> Int {
 }
 
 ///|
+fn Codegen::is_anon_type(self : Codegen, ty : @parser.Type) -> Bool {
+  match ty {
+    Struct(name) | Union(name) => name.has_prefix("__anon_")
+    _ => false
+  }
+}
+
+///|
+fn Codegen::flatten_anon_fields(
+  self : Codegen,
+  ty : @parser.Type,
+  base_offset : Int
+) -> Array[(String, @parser.Type, Int, Int, Int, Int)] {
+  let name = match ty {
+    Struct(n) | Union(n) => n
+    _ => return []
+  }
+  if not(self.struct_layouts.contains(name)) {
+    if self.struct_decls.contains(name) {
+      self.compute_struct_layout(self.struct_decls[name])
+    } else {
+      return []
+    }
+  }
+  let result = []
+  for f in self.struct_layouts[name] {
+    if f.0 == "" && self.is_anon_type(f.1) {
+      // Nested anonymous struct/union: recursively flatten
+      for inner in self.flatten_anon_fields(f.1, base_offset + f.2) {
+        result.push(inner)
+      }
+    } else {
+      result.push((f.0, f.1, base_offset + f.2, f.3, f.4, f.5))
+    }
+  }
+  result
+}
+
+///|
 fn Codegen::compute_struct_layout(
   self : Codegen,
   decl : @parser.StructDecl,
@@ -319,6 +358,20 @@ fn Codegen::compute_struct_layout(
   let mut current_container_offset = 0
   let mut current_bit_offset = 0
   for field in decl.fields {
+    // Anonymous struct/union member: flatten its fields into parent
+    if field.name == "" && self.is_anon_type(field.ty) {
+      let align = self.type_align(field.ty)
+      let padding = (align - offset % align) % align
+      offset += padding
+      for f in self.flatten_anon_fields(field.ty, offset) {
+        layout.push(f)
+      }
+      offset += self.type_size(field.ty)
+      current_container_size = 0
+      current_container_offset = 0
+      current_bit_offset = 0
+      continue
+    }
     match field.bit_width {
       None => {
         // Normal field: align to natural boundary, reset bit packing
@@ -373,6 +426,13 @@ fn Codegen::compute_union_layout(
 ) -> Unit {
   let layout = []
   for field in decl.fields {
+    // Anonymous struct/union member: flatten its fields into parent
+    if field.name == "" && self.is_anon_type(field.ty) {
+      for f in self.flatten_anon_fields(field.ty, 0) {
+        layout.push(f)
+      }
+      continue
+    }
     let size = self.type_size(field.ty)
     match field.bit_width {
       None => {
