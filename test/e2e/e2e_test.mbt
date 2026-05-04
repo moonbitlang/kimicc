@@ -1102,3 +1102,67 @@ async test "logical operators short circuit" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="0")
 }
+
+///|
+async test "array decay in function parameter" {
+  let source =
+    #|int sum(int a[], int n) {
+    #|  int s = 0;
+    #|  for (int i = 0; i < n; i = i + 1) {
+    #|    s = s + a[i];
+    #|  }
+    #|  return s;
+    #|}
+    #|int main() {
+    #|  int arr[] = {1, 2, 3, 4, 5};
+    #|  return sum(arr, 5);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="15")
+}
+
+///|
+async test "multiple pointer dereference" {
+  let source =
+    #|int main() {
+    #|  int x = 42;
+    #|  int *p = &x;
+    #|  int **pp = &p;
+    #|  return **pp;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "bitwise shift operators" {
+  let source =
+    #|int main() {
+    #|  int a = 1;
+    #|  return (a << 3) | (16 >> 2);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="12")
+}
+
+///|
+async test "negative number expression" {
+  let source =
+    #|int main() {
+    #|  int x = -5;
+    #|  return x + 10;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="5")
+}
+
+///|
+async test "large hex constant" {
+  let source =
+    #|int main() {
+    #|  unsigned long x = 0xFFFFFFFF;
+    #|  return (int)(x >> 24);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="255")
+}

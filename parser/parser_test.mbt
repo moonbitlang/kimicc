@@ -661,3 +661,29 @@ test "parse array initializer explicit size" {
     _ => fail("Expected compound body")
   }
 }
+
+///|
+test "parse global array initializer inferred size" {
+  let source = "int arr[] = {1, 2, 3};\nint main() { return 0; }"
+  let prog = @parser.parse(source)
+  inspect(prog.globals.length(), content="1")
+  let g = prog.globals[0]
+  inspect(g.0, content="Array(SInt, 3)")
+  inspect(g.1, content="arr")
+}
+
+///|
+test "parse computed goto label address" {
+  let source = "int main() { void *p = &&label; label: return 0; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound(stmts)) => {
+      match stmts[0] {
+        VarDecl(Pointer(Void), "p", Some(Number(0))) => ()
+        _ => fail("Expected VarDecl with computed goto placeholder")
+      }
+    }
+    _ => fail("Expected compound body")
+  }
+}
