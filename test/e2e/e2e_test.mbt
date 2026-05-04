@@ -1166,3 +1166,103 @@ async test "large hex constant" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="255")
 }
+
+///|
+async test "struct array access" {
+  let source =
+    #|struct Point { int x; int y; };
+    #|int main() {
+    #|  struct Point p;
+    #|  p.x = 3;
+    #|  p.y = 4;
+    #|  return p.x + p.y;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="7")
+}
+
+///|
+async test "union basic usage" {
+  let source =
+    #|union U { int i; char c; };
+    #|int main() {
+    #|  union U u;
+    #|  u.i = 1;
+    #|  return u.i;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="1")
+}
+
+///|
+async test "bit-field basic" {
+  let source =
+    #|struct S {
+    #|  unsigned int a : 4;
+    #|  unsigned int b : 4;
+    #|};
+    #|int main() {
+    #|  struct S s;
+    #|  s.a = 5;
+    #|  s.b = 7;
+    #|  return s.a + s.b;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="12")
+}
+
+///|
+async test "continue in loop" {
+  let source =
+    #|int main() {
+    #|  int sum = 0;
+    #|  for (int i = 0; i < 5; i = i + 1) {
+    #|    if (i == 2) continue;
+    #|    sum = sum + i;
+    #|  }
+    #|  return sum;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="8")
+}
+
+///|
+async test "break in nested loop" {
+  let source =
+    #|int main() {
+    #|  int sum = 0;
+    #|  for (int i = 0; i < 5; i = i + 1) {
+    #|    for (int j = 0; j < 5; j = j + 1) {
+    #|      if (j == 2) break;
+    #|      sum = sum + 1;
+    #|    }
+    #|  }
+    #|  return sum;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="10")
+}
+
+///|
+async test "function pointer call" {
+  let source =
+    #|int add(int a, int b) { return a + b; }
+    #|int main() {
+    #|  int (*f)(int, int) = add;
+    #|  return f(2, 3);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="5")
+}
+
+///|
+async test "NULL pointer comparison" {
+  let source =
+    #|int main() {
+    #|  int *p = 0;
+    #|  if (p) return 1;
+    #|  return 0;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
