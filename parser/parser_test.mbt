@@ -530,3 +530,92 @@ test "parse comments" {
     _ => fail("Expected return 42 after comments")
   }
 }
+
+///|
+test "parse array initializer infers size" {
+  let source = "int main() { int arr[] = {1, 2, 3}; return 0; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound(outer)) => {
+      inspect(outer.length(), content="2")
+      match outer[0] {
+        Compound(inner) => {
+          inspect(inner.length(), content="4")
+          match inner[0] {
+            VarDecl(Array(SInt, 3), "arr", None) => ()
+            _ => fail("Expected Array(SInt, 3) var decl")
+          }
+          match inner[1] {
+            ExprStmt(Assign(ArrayAccess(Var("arr"), Number(0)), Number(1))) => ()
+            _ => fail("Expected arr[0]=1")
+          }
+          match inner[2] {
+            ExprStmt(Assign(ArrayAccess(Var("arr"), Number(1)), Number(2))) => ()
+            _ => fail("Expected arr[1]=2")
+          }
+          match inner[3] {
+            ExprStmt(Assign(ArrayAccess(Var("arr"), Number(2)), Number(3))) => ()
+            _ => fail("Expected arr[2]=3")
+          }
+        }
+        _ => fail("Expected inner compound")
+      }
+    }
+    _ => fail("Expected compound body")
+  }
+}
+
+///|
+test "parse array initializer with expression element" {
+  let source = "int main() { int arr[] = {1 + 1}; return 0; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound(outer)) => {
+      match outer[0] {
+        Compound(inner) => {
+          match inner[1] {
+            ExprStmt(Assign(ArrayAccess(Var("arr"), Number(0)), Binary("+", Number(1), Number(1)))) => ()
+            _ => fail("Expected arr[0]=1+1")
+          }
+        }
+        _ => fail("Expected inner compound")
+      }
+    }
+    _ => fail("Expected compound body")
+  }
+}
+
+///|
+test "parse multiple vars one with array initializer" {
+  let source = "int main() { int a = 1, b[] = {2}, c = 3; return 0; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound(outer)) => {
+      match outer[0] {
+        Compound(inner) => {
+          match inner[0] {
+            VarDecl(SInt, "a", Some(Number(1))) => ()
+            _ => fail("Expected a=1")
+          }
+          match inner[1] {
+            VarDecl(Array(SInt, 1), "b", None) => ()
+            _ => fail("Expected b array decl")
+          }
+          match inner[2] {
+            ExprStmt(Assign(ArrayAccess(Var("b"), Number(0)), Number(2))) => ()
+            _ => fail("Expected b[0]=2")
+          }
+          match inner[3] {
+            VarDecl(SInt, "c", Some(Number(3))) => ()
+            _ => fail("Expected c=3")
+          }
+        }
+        _ => fail("Expected inner compound")
+      }
+    }
+    _ => fail("Expected compound body")
+  }
+}

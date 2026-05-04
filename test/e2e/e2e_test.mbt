@@ -632,3 +632,97 @@ async test "multiple variables with array initializer" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="10")
 }
+
+///|
+async test "function taking initialized array" {
+  let source =
+    #|int sum(int arr[], int n) {
+    #|  int s = 0;
+    #|  for (int i = 0; i < n; i = i + 1) {
+    #|    s = s + arr[i];
+    #|  }
+    #|  return s;
+    #|}
+    #|int main() {
+    #|  int arr[] = {3, 1, 4, 1, 5};
+    #|  return sum(arr, 5);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="14")
+}
+
+///|
+async test "address of array element with initializer" {
+  let source =
+    #|int main() {
+    #|  int arr[] = {10, 20, 30};
+    #|  int *p = &arr[1];
+    #|  return *p;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="20")
+}
+
+///|
+async test "struct with array field explicit assignment" {
+  let source =
+    #|struct S { int arr[3]; };
+    #|int main() {
+    #|  struct S s;
+    #|  s.arr[0] = 1;
+    #|  s.arr[1] = 2;
+    #|  s.arr[2] = 3;
+    #|  return s.arr[0] + s.arr[1] + s.arr[2];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="6")
+}
+
+///|
+async test "array initializer in nested loop" {
+  let source =
+    #|int main() {
+    #|  int arr[] = {1, 2, 3, 4, 5, 6};
+    #|  int sum = 0;
+    #|  for (int i = 0; i < 2; i = i + 1) {
+    #|    for (int j = 0; j < 3; j = j + 1) {
+    #|      sum = sum + arr[i * 3 + j];
+    #|    }
+    #|  }
+    #|  return sum;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="21")
+}
+
+///|
+async test "switch with array initializer" {
+  let source =
+    #|int main() {
+    #|  int arr[] = {10, 20, 30};
+    #|  int idx = 1;
+    #|  switch (idx) {
+    #|    case 0: return arr[0];
+    #|    case 1: return arr[1];
+    #|    case 2: return arr[2];
+    #|    default: return 0;
+    #|  }
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="20")
+}
+
+///|
+async test "array initializer reverse traversal" {
+  let source =
+    #|int main() {
+    #|  int arr[] = {5, 4, 3, 2, 1};
+    #|  int sum = 0;
+    #|  for (int i = 4; i >= 0; i = i - 1) {
+    #|    sum = sum + arr[i];
+    #|  }
+    #|  return sum;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="15")
+}
