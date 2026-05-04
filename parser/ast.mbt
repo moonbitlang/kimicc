@@ -131,7 +131,7 @@ pub fn Type::align(self : Type) -> Int {
 
 ///|
 pub(all) enum Expr {
-  Number(Int)
+  Number(Int64)
   String(String)
   Var(String)
   Binary(String, Expr, Expr)
@@ -162,7 +162,7 @@ pub(all) enum Stmt {
   VarDecl(Type, String, Expr?)
   Break
   Continue
-  Switch(Expr, Array[(Int?, Stmt)])
+  Switch(Expr, Array[(Int64?, Stmt)])
   Goto(String)
   Label(String, Stmt)
   For(Stmt?, Expr, Expr?, Stmt)

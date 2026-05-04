@@ -110,7 +110,7 @@ fn Codegen::new_label(self : Codegen) -> String {
 
 ///|
 // Check if a value fits in ARM64 movz/movn immediate encoding.
-fn fits_mov_imm(n : Int) -> Bool {
+fn fits_mov_imm(n : Int64) -> Bool {
   let shifts = [0, 16, 32, 48]
   if n >= 0 {
     for shift in shifts {
@@ -135,14 +135,14 @@ fn fits_mov_imm(n : Int) -> Bool {
 ///|
 // Emit instruction(s) to load a 32-bit signed constant into a 64-bit register.
 // Uses mov/movn when possible, otherwise movz + movk sequence.
-fn Codegen::emit_load_int(self : Codegen, reg : String, n : Int) -> Unit {
+fn Codegen::emit_load_int(self : Codegen, reg : String, n : Int64) -> Unit {
   if fits_mov_imm(n) {
     self.emit("\tmov\t" + reg + ", #" + n.to_string())
     return
   }
   // Decompose into 16-bit chunks. For negative values we need sign-extension.
-  let low = n & 0xFFFF
-  let high = (n >> 16) & 0xFFFF
+  let low = (n & 0xFFFFL).to_int()
+  let high = ((n >> 16) & 0xFFFFL).to_int()
   if n >= 0 {
     // Zero-extended 32-bit value in 64-bit register
     self.emit("\tmovz\t" + reg + ", #" + low.to_string())
@@ -172,6 +172,68 @@ fn sanitize_label(name : String) -> String {
 }
 
 ///|
+// Convert xN register name to wN for 32-bit operations.
+fn w_reg(x : String) -> String {
+  match x {
+    "x9" => "w9"
+    "x10" => "w10"
+    "x11" => "w11"
+    "x12" => "w12"
+    "x13" => "w13"
+    "x14" => "w14"
+    "x15" => "w15"
+    _ => x
+  }
+}
+
+///|
+// Load a value of type ty from [addr_reg] into reg.
+// Uses correct width and sign/zero extension.
+fn Codegen::emit_load_typed(
+  self : Codegen,
+  reg : String,
+  addr_reg : String,
+  ty : @parser.Type
+) -> Unit {
+  match ty {
+    Bool | UChar => self.emit("\tldrb\t" + w_reg(reg) + ", [" + addr_reg + "]")
+    SChar => {
+      self.emit("\tldrb\t" + w_reg(reg) + ", [" + addr_reg + "]")
+      self.emit("\tsxtb\t" + reg + ", " + w_reg(reg))
+    }
+    UShort => self.emit("\tldrh\t" + w_reg(reg) + ", [" + addr_reg + "]")
+    SShort => {
+      self.emit("\tldrh\t" + w_reg(reg) + ", [" + addr_reg + "]")
+      self.emit("\tsxth\t" + reg + ", " + w_reg(reg))
+    }
+    UInt => self.emit("\tldr\t" + w_reg(reg) + ", [" + addr_reg + "]")
+    SInt => {
+      self.emit("\tldr\t" + w_reg(reg) + ", [" + addr_reg + "]")
+      self.emit("\tsxtw\t" + reg + ", " + w_reg(reg))
+    }
+    Atomic(inner) => self.emit_load_typed(reg, addr_reg, inner)
+    _ => self.emit("\tldr\t" + reg + ", [" + addr_reg + "]")
+  }
+}
+
+///|
+// Store a value of type ty from value_reg to [addr_reg].
+fn Codegen::emit_store_typed(
+  self : Codegen,
+  value_reg : String,
+  addr_reg : String,
+  ty : @parser.Type
+) -> Unit {
+  match ty {
+    Bool | SChar | UChar => self.emit("\tstrb\t" + w_reg(value_reg) + ", [" + addr_reg + "]")
+    SShort | UShort => self.emit("\tstrh\t" + w_reg(value_reg) + ", [" + addr_reg + "]")
+    SInt | UInt | Float => self.emit("\tstr\t" + w_reg(value_reg) + ", [" + addr_reg + "]")
+    Atomic(inner) => self.emit_store_typed(value_reg, addr_reg, inner)
+    _ => self.emit("\tstr\t" + value_reg + ", [" + addr_reg + "]")
+  }
+}
+
+///|
 // Get or create the assembly label name for an AST label.
 // Case/default labels get unique anonymous labels (they are never goto targets).
 // Regular labels are scoped to the function and sanitized.
@@ -188,7 +250,7 @@ fn Codegen::label_ref(self : Codegen, name : String) -> String {
 ///|
 // Check if an integer fits in ARM64 cmp immediate encoding.
 // Valid: 0..4095 or k*4096 where 1<=k<=4095 (and negatives via cmn).
-fn fits_cmp_imm(n : Int) -> Bool {
+fn fits_cmp_imm(n : Int64) -> Bool {
   if n < 0 {
     let m = -n
     m <= 4095 || (m % 4096 == 0 && m <= 16773120)
@@ -552,6 +614,7 @@ fn Codegen::alloc_local(
   ty : @parser.Type,
 ) -> Int {
   if self.local_offsets.contains(name) {
+    self.var_types[name] = ty
     return self.local_offsets[name]
   }
   let size = self.type_size(ty)
@@ -792,7 +855,12 @@ fn Codegen::type_of(
     Unary("!", _) => SInt
     Unary("~", _) => SInt
     Call(func, _) => match func {
-      Var(name) => self.func_rets[name]
+      Var(name) =>
+        if self.func_rets.contains(name) {
+          self.func_rets[name]
+        } else {
+          SInt
+        }
       _ => SInt
     }
     Assign(_, rhs) => self.type_of(rhs, frame_size)
@@ -874,7 +942,10 @@ fn Codegen::gen_expr(
         match ty {
           Array(_, _) | Struct(_) | Union(_) =>
             self.emit_local_addr(offset, frame_size)
-          _ => self.emit_load_local("x9", offset, frame_size)
+          _ => {
+            self.emit_local_addr(offset, frame_size)
+            self.emit_load_typed("x9", "x9", ty)
+          }
         }
       } else if self.globals.contains(name) {
         let ty = self.globals[name]
@@ -882,7 +953,7 @@ fn Codegen::gen_expr(
         self.emit("\tadd\tx9, x9, _" + name + "@PAGEOFF")
         match ty {
           Array(_, _) | Struct(_) | Union(_) => ()
-          _ => self.emit("\tldr\tx9, [x9]")
+          _ => self.emit_load_typed("x9", "x9", ty)
         }
       } else if self.func_rets.contains(name) {
         // Function pointer / function address
@@ -941,12 +1012,12 @@ fn Codegen::gen_expr(
                 }
                 // Clear old bits
                 let mask = (1 << bit_width) - 1
-                self.emit_load_int("x12", mask)
+                self.emit_load_int("x12", mask.to_int64())
                 self.emit("\tlsl\tx12, x12, #" + bit_offset.to_string())
                 self.emit("\tmvn\tx12, x12")
                 self.emit("\tand\tx11, x11, x12")
                 // Insert new value
-                self.emit_load_int("x12", mask)
+                self.emit_load_int("x12", mask.to_int64())
                 self.emit("\tand\tx9, x9, x12")
                 self.emit("\tlsl\tx9, x9, #" + bit_offset.to_string())
                 self.emit("\torr\tx11, x11, x9")
@@ -969,7 +1040,8 @@ fn Codegen::gen_expr(
         self.gen_addr(lhs, frame_size)
         self.emit("\tmov\tx10, x9")
         self.emit("\tldr\tx9, [sp], #16")
-        self.emit("\tstr\tx9, [x10]")
+        let lhs_ty = self.type_of(lhs, frame_size)
+        self.emit_store_typed("x9", "x10", lhs_ty)
       }
     }
     Binary("&&", left, right) => {
@@ -999,14 +1071,40 @@ fn Codegen::gen_expr(
       self.emit(end_label + ":")
     }
     Binary(op, left, right) => {
+      let left_ty = self.type_of(left, frame_size)
+      let right_ty = self.type_of(right, frame_size)
+      let ptr_scale = match (left_ty, right_ty) {
+        (Pointer(elem), _) => self.type_size(elem)
+        (Array(elem, _), _) => self.type_size(elem)
+        (_, Pointer(elem)) => self.type_size(elem)
+        (_, Array(elem, _)) => self.type_size(elem)
+        _ => 1
+      }
+      let is_ptr_diff = match (left_ty, right_ty) {
+        (Pointer(_), Pointer(_)) => true
+        (Array(_, _), Pointer(_)) => true
+        (Pointer(_), Array(_, _)) => true
+        (Array(_, _), Array(_, _)) => true
+        _ => false
+      }
       self.gen_expr(left, frame_size)
       self.emit("\tstr\tx9, [sp, #-16]!")
       self.gen_expr(right, frame_size)
+      if ptr_scale > 1 && not(is_ptr_diff) {
+        self.emit("\tmov\tx11, #" + ptr_scale.to_string())
+        self.emit("\tmul\tx9, x9, x11")
+      }
       self.emit("\tmov\tx10, x9")
       self.emit("\tldr\tx9, [sp], #16")
       match op {
         "+" => self.emit("\tadd\tx9, x9, x10")
-        "-" => self.emit("\tsub\tx9, x9, x10")
+        "-" => {
+          self.emit("\tsub\tx9, x9, x10")
+          if is_ptr_diff && ptr_scale > 1 {
+            self.emit("\tmov\tx11, #" + ptr_scale.to_string())
+            self.emit("\tsdiv\tx9, x9, x11")
+          }
+        }
         "*" => self.emit("\tmul\tx9, x9, x10")
         "/" => self.emit("\tsdiv\tx9, x9, x10")
         "%" => self.emit("\tsdiv\tx11, x9, x10\n\tmsub\tx9, x11, x10, x9")
@@ -1069,7 +1167,14 @@ fn Codegen::gen_expr(
       }
       match func {
         Var(name) => {
-          self.emit("\tbl\t_" + name)
+          if self.local_offsets.contains(name) || self.globals.contains(name) {
+            // Function pointer variable: load and call indirectly
+            self.gen_expr(func, frame_size)
+            self.emit("\tmov\tx15, x9")
+            self.emit("\tblr\tx15")
+          } else {
+            self.emit("\tbl\t_" + name)
+          }
         }
         _ => {
           self.gen_expr(func, frame_size)
@@ -1114,14 +1219,25 @@ fn Codegen::gen_expr(
             self.emit("\tlsr\tx9, x9, #" + bit_offset.to_string())
             if bit_width < 64 {
               let mask = (1 << bit_width) - 1
-              self.emit_load_int("x10", mask)
+              self.emit_load_int("x10", mask.to_int64())
               self.emit("\tand\tx9, x9, x10")
             }
-            // Sign-extend if signed type
-            if ty.is_signed() {
+          }
+          // Sign-extend if signed type
+          if ty.is_signed() {
+            if bit_width > 0 {
+              // Bit-field: sign-extend from bit_width
               let shift = 64 - bit_width
               self.emit("\tlsl\tx9, x9, #" + shift.to_string())
               self.emit("\tasr\tx9, x9, #" + shift.to_string())
+            } else {
+              // Normal field: sign-extend from field size
+              match size {
+                1 => self.emit("\tsxtb\tx9, w9")
+                2 => self.emit("\tsxth\tx9, w9")
+                4 => self.emit("\tsxtw\tx9, w9")
+                _ => ()
+              }
             }
           }
         }
@@ -1129,21 +1245,27 @@ fn Codegen::gen_expr(
     }
     Deref(ptr) => {
       self.gen_expr(ptr, frame_size)
-      self.emit("\tldr\tx9, [x9]")
+      let deref_ty = match self.type_of(ptr, frame_size) {
+        Pointer(ty) => ty
+        Array(elem, _) => elem
+        _ => SInt
+      }
+      self.emit_load_typed("x9", "x9", deref_ty)
     }
     AddrOf(e) => self.gen_addr(e, frame_size)
     ArrayAccess(_, _) => {
       self.gen_addr(expr, frame_size)
-      self.emit("\tldr\tx9, [x9]")
+      let elem_ty = self.type_of(expr, frame_size)
+      self.emit_load_typed("x9", "x9", elem_ty)
     }
     Sizeof(ty) => {
       let size = self.type_size(ty)
-      self.emit_load_int("x9", size)
+      self.emit_load_int("x9", size.to_int64())
     }
     SizeofExpr(expr) => {
       let ty = self.type_of(expr, frame_size)
       let size = self.type_size(ty)
-      self.emit_load_int("x9", size)
+      self.emit_load_int("x9", size.to_int64())
     }
     Cast(ty, expr) => {
       self.gen_expr(expr, frame_size)
@@ -1191,31 +1313,87 @@ fn Codegen::gen_expr(
     }
     PrefixInc(expr) => {
       self.gen_addr(expr, frame_size)
-      self.emit("\tldr\tx10, [x9]")
-      self.emit("\tadd\tx11, x10, #1")
-      self.emit("\tstr\tx11, [x9]")
-      self.emit("\tmov\tx9, x11")
+      let ty = self.type_of(expr, frame_size)
+      let ptr_scale = match ty {
+        Pointer(elem) => self.type_size(elem)
+        _ => 1
+      }
+      self.emit_load_typed("x10", "x9", ty)
+      if ptr_scale > 1 {
+        self.emit("\tadd\tx11, x10, #" + ptr_scale.to_string())
+      } else {
+        self.emit("\tadd\tx11, x10, #1")
+      }
+      self.emit_store_typed("x11", "x9", ty)
+      match ty {
+        SChar => self.emit("\tsxtb\tx9, w11")
+        SShort => self.emit("\tsxth\tx9, w11")
+        SInt => self.emit("\tsxtw\tx9, w11")
+        _ => self.emit("\tmov\tx9, x11")
+      }
     }
     PrefixDec(expr) => {
       self.gen_addr(expr, frame_size)
-      self.emit("\tldr\tx10, [x9]")
-      self.emit("\tsub\tx11, x10, #1")
-      self.emit("\tstr\tx11, [x9]")
-      self.emit("\tmov\tx9, x11")
+      let ty = self.type_of(expr, frame_size)
+      let ptr_scale = match ty {
+        Pointer(elem) => self.type_size(elem)
+        _ => 1
+      }
+      self.emit_load_typed("x10", "x9", ty)
+      if ptr_scale > 1 {
+        self.emit("\tsub\tx11, x10, #" + ptr_scale.to_string())
+      } else {
+        self.emit("\tsub\tx11, x10, #1")
+      }
+      self.emit_store_typed("x11", "x9", ty)
+      match ty {
+        SChar => self.emit("\tsxtb\tx9, w11")
+        SShort => self.emit("\tsxth\tx9, w11")
+        SInt => self.emit("\tsxtw\tx9, w11")
+        _ => self.emit("\tmov\tx9, x11")
+      }
     }
     PostfixInc(expr) => {
       self.gen_addr(expr, frame_size)
-      self.emit("\tldr\tx10, [x9]")
-      self.emit("\tadd\tx11, x10, #1")
-      self.emit("\tstr\tx11, [x9]")
-      self.emit("\tmov\tx9, x10")
+      let ty = self.type_of(expr, frame_size)
+      let ptr_scale = match ty {
+        Pointer(elem) => self.type_size(elem)
+        _ => 1
+      }
+      self.emit_load_typed("x10", "x9", ty)
+      if ptr_scale > 1 {
+        self.emit("\tadd\tx11, x10, #" + ptr_scale.to_string())
+      } else {
+        self.emit("\tadd\tx11, x10, #1")
+      }
+      self.emit_store_typed("x11", "x9", ty)
+      match ty {
+        SChar => self.emit("\tsxtb\tx9, w10")
+        SShort => self.emit("\tsxth\tx9, w10")
+        SInt => self.emit("\tsxtw\tx9, w10")
+        _ => self.emit("\tmov\tx9, x10")
+      }
     }
     PostfixDec(expr) => {
       self.gen_addr(expr, frame_size)
-      self.emit("\tldr\tx10, [x9]")
-      self.emit("\tsub\tx11, x10, #1")
-      self.emit("\tstr\tx11, [x9]")
-      self.emit("\tmov\tx9, x10")
+      let ty = self.type_of(expr, frame_size)
+      let ptr_scale = match ty {
+        Pointer(elem) => self.type_size(elem)
+        _ => 1
+      }
+      self.emit_load_typed("x10", "x9", ty)
+      if ptr_scale > 1 {
+        self.emit("\tsub\tx11, x10, #" + ptr_scale.to_string())
+      } else {
+        self.emit("\tsub\tx11, x10, #1")
+      }
+      self.emit_store_typed("x11", "x9", ty)
+      match ty {
+        SChar => self.emit("\tsxtb\tx9, w10")
+        SShort => self.emit("\tsxth\tx9, w10")
+        SInt => self.emit("\tsxtw\tx9, w10")
+        _ => self.emit("\tmov\tx9, x10")
+      }
     }
     _ => {
       println("WARN: Unknown expression")
@@ -1270,7 +1448,11 @@ fn Codegen::gen_addr(
     Deref(ptr) => self.gen_expr(ptr, frame_size)
     AddrOf(e) => self.gen_addr(e, frame_size)
     ArrayAccess(arr, index) => {
-      self.gen_expr(arr, frame_size)
+      // Array decay: if arr is an array type, use its address; if pointer, use its value
+      match self.type_of(arr, frame_size) {
+        Array(_, _) => self.gen_addr(arr, frame_size)
+        _ => self.gen_expr(arr, frame_size)
+      }
       self.emit("\tstr\tx9, [sp, #-16]!")
       self.gen_expr(index, frame_size)
       self.emit("\tmov\tx12, x9")
@@ -1279,6 +1461,10 @@ fn Codegen::gen_addr(
       let elem_size = self.type_size(elem_ty)
       self.emit("\tmov\tx11, #" + elem_size.to_string())
       self.emit("\tmadd\tx9, x12, x11, x9")
+    }
+    Call(_, _) => {
+      // Function call result used as address (e.g., compound literal or GCC extension)
+      self.gen_expr(expr, frame_size)
     }
     _ => {
       println("WARN: Cannot take address of expression")

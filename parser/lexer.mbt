@@ -2,7 +2,7 @@
 pub(all) enum Token {
   EOF
   Ident(String)
-  Number(Int)
+  Number(Int64)
   String(String)
   Int
   Void
@@ -518,7 +518,7 @@ fn Lexer::read_number(self : Lexer) -> Token {
       self.advance()
     }
     let s = self.input[hex_start:self.pos]
-    let mut n = 0
+    let mut n = 0L
     for i = 0; i < s.length(); i = i + 1 {
       let ch = s[i]
       let digit = if ch >= '0' && ch <= '9' {
@@ -528,7 +528,7 @@ fn Lexer::read_number(self : Lexer) -> Token {
       } else {
         ch.to_int() - 'A'.to_int() + 10
       }
-      n = n * 16 + digit
+      n = n * 16L + digit.to_int64()
     }
     // Skip integer suffixes for hex literals too
     if self.peek() == 'u' || self.peek() == 'U' {
@@ -553,6 +553,9 @@ fn Lexer::read_number(self : Lexer) -> Token {
   while is_digit(self.peek()) {
     self.advance()
   }
+  // Extract digits before suffix/float check
+  let s = self.input[start:self.pos]
+
   // Check for float literal: 123.45, 123., 123e10
   if self.peek() == '.' || self.peek() == 'e' || self.peek() == 'E' {
     if self.peek() == '.' {
@@ -593,12 +596,12 @@ fn Lexer::read_number(self : Lexer) -> Token {
       self.advance()
     }
   }
-  let s = self.input[start:self.pos]
-  let mut n = 0
+  let mut n = 0L
   for i = 0; i < s.length(); i = i + 1 {
     let ch = s[i]
-    n = n * 10 + (ch.to_int() - '0'.to_int())
+    n = n * 10L + (ch.to_int() - '0'.to_int()).to_int64()
   }
+
   Number(n)
 }
 
@@ -683,7 +686,7 @@ fn Lexer::read_string(self : Lexer) -> Token {
 fn Lexer::read_char(self : Lexer) -> Token {
   self.advance() // skip opening '
   let ch = self.peek()
-  let mut value = 0
+  let mut value : Int64 = 0
   if ch == '\\' {
     self.advance()
     let next = self.peek()
@@ -692,40 +695,40 @@ fn Lexer::read_char(self : Lexer) -> Token {
       value = 0
       let mut count = 0
       while count < 3 && self.peek() >= '0' && self.peek() <= '7' {
-        value = value * 8 + (self.peek().to_int() - '0'.to_int())
+        value = value * 8 + (self.peek().to_int() - '0'.to_int()).to_int64()
         self.advance()
         count += 1
       }
     } else {
       match next {
-        'n' => { value = '\n'.to_int(); self.advance() }
-        't' => { value = '\t'.to_int(); self.advance() }
-        'r' => { value = '\r'.to_int(); self.advance() }
-        '\\' => { value = '\\'.to_int(); self.advance() }
-        '\'' => { value = '\''.to_int(); self.advance() }
-        '"' => { value = '"'.to_int(); self.advance() }
+        'n' => { value = '\n'.to_int().to_int64(); self.advance() }
+        't' => { value = '\t'.to_int().to_int64(); self.advance() }
+        'r' => { value = '\r'.to_int().to_int64(); self.advance() }
+        '\\' => { value = '\\'.to_int().to_int64(); self.advance() }
+        '\'' => { value = '\''.to_int().to_int64(); self.advance() }
+        '"' => { value = '"'.to_int().to_int64(); self.advance() }
         'x' => {
           self.advance()
           value = 0
           while true {
             let c = self.peek()
             if c >= '0' && c <= '9' {
-              value = value * 16 + (c.to_int() - '0'.to_int())
+              value = value * 16 + (c.to_int() - '0'.to_int()).to_int64()
             } else if c >= 'a' && c <= 'f' {
-              value = value * 16 + (c.to_int() - 'a'.to_int() + 10)
+              value = value * 16 + (c.to_int() - 'a'.to_int() + 10).to_int64()
             } else if c >= 'A' && c <= 'F' {
-              value = value * 16 + (c.to_int() - 'A'.to_int() + 10)
+              value = value * 16 + (c.to_int() - 'A'.to_int() + 10).to_int64()
             } else {
               break
             }
             self.advance()
           }
         }
-        _ => { value = next.to_int(); self.advance() }
+        _ => { value = next.to_int().to_int64(); self.advance() }
       }
     }
   } else {
-    value = ch.to_int()
+    value = ch.to_int().to_int64()
     self.advance()
   }
   if self.peek() != '\'' {

@@ -5,13 +5,14 @@ pub struct Parser {
   typedefs : Map[String, Type]
   anonymous_structs : Array[StructDecl]
   mut anon_counter : Int
-  enum_constants : Map[String, Int]
+  enum_constants : Map[String, Int64]
   globals : Array[(Type, String)]
+  mut current_func_name : String
 }
 
 ///|
 pub fn Parser::new(lexer : Lexer) -> Parser {
-  let p = { lexer, token: EOF, typedefs: {}, anonymous_structs: [], anon_counter: 0, enum_constants: {}, globals: [] }
+  let p = { lexer, token: EOF, typedefs: {}, anonymous_structs: [], anon_counter: 0, enum_constants: {}, globals: [], current_func_name: "" }
   p.advance()
   p
 }

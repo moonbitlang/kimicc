@@ -11,6 +11,40 @@ fn Parser::skip_brace_initializer(self : Parser) -> Unit {
   }
 }
 
+///| Parse expressions inside a brace initializer: { expr1, expr2, ... }
+fn Parser::parse_brace_init_exprs(self : Parser) -> Array[Expr] {
+  let exprs = []
+  self.expect(LBrace)
+  while self.token != RBrace && self.token != EOF {
+    if self.token == LBrace {
+      // Nested initializer: skip for now, treat as zero
+      self.skip_brace_initializer()
+      exprs.push(Expr::Number(0))
+    } else if self.token == LBracket || self.token == Dot {
+      // Designated initializer ([index] = val or .field = val): skip rest
+      self.skip_remaining_brace_initializer()
+      break
+    } else {
+      exprs.push(self.parse_assign())
+    }
+    if self.token == Comma {
+      self.advance()
+    }
+  }
+  self.expect(RBrace)
+  exprs
+}
+
+///| Skip tokens until matching RBrace at current depth (does not consume RBrace)
+fn Parser::skip_remaining_brace_initializer(self : Parser) -> Unit {
+  let mut depth = 1
+  while depth > 0 && self.token != EOF {
+    self.advance()
+    if self.token == LBrace { depth += 1 }
+    else if self.token == RBrace { depth -= 1 }
+  }
+}
+
 ///|
 fn Parser::parse_stmt(self : Parser) -> Stmt {
   // Skip __extension__ before statements
@@ -195,7 +229,7 @@ fn Parser::parse_switch_stmt(self : Parser) -> Stmt {
   let cases = []
   let mut current_stmts = []
   let mut current_value = None
-  fn flush_case(value : Int?, stmts : Array[Stmt]) -> Unit {
+  fn flush_case(value : Int64?, stmts : Array[Stmt]) -> Unit {
     if stmts.length() > 0 || value.is_some() {
       cases.push((value, Compound(stmts)))
     }
@@ -206,12 +240,12 @@ fn Parser::parse_switch_stmt(self : Parser) -> Stmt {
         if name.starts_with("case_") {
           flush_case(current_value, current_stmts)
           current_stmts = []
-          let mut case_value = 0
+          let mut case_value : Int64 = 0
           let mut negative = false
           for i = 5; i < name.length(); i = i + 1 {
             let ch = name[i]
             if ch >= '0' && ch <= '9' {
-              case_value = case_value * 10 + (ch.to_int() - '0'.to_int())
+              case_value = case_value * 10 + (ch.to_int() - '0'.to_int()).to_int64()
             } else if ch == '-' && i == 5 {
               negative = true
             }
@@ -292,7 +326,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
     self.advance()
     return ExprStmt(Expr::Number(0))
   }
-  let decls = []
+  let stmts = []
   // Parse first declarator
   let decl = self.parse_declarator(spec.base_type)
   // Local function prototype inside a function body: int foo(void);
@@ -300,40 +334,88 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
     self.expect(Semicolon)
     return ExprStmt(Expr::Number(0))
   }
-  let init = if self.token == Assign {
+  // Handle initializer
+  let ty = if self.token == Assign {
     self.advance()
     if self.token == LBrace {
-      self.skip_brace_initializer()
-      Some(Expr::Number(0))
+      // For struct/union types, skip the brace initializer entirely
+      // (we don't support struct field initializers yet)
+      let is_struct = match decl.ty {
+        Struct(_) | Union(_) => true
+        _ => false
+      }
+      if is_struct {
+        self.skip_brace_initializer()
+        stmts.push(VarDecl(decl.ty, decl.name, Some(Expr::Number(0))))
+        decl.ty
+      } else {
+        let init_exprs = self.parse_brace_init_exprs()
+        let init_count = init_exprs.length()
+        // Update array type if size was inferred
+        let ty = match decl.ty {
+          Array(elem_ty, 0) => Array(elem_ty, init_count)
+          other => other
+        }
+        stmts.push(VarDecl(ty, decl.name, None))
+        for i = 0; i < init_count; i = i + 1 {
+          stmts.push(ExprStmt(Expr::Assign(
+            Expr::ArrayAccess(Expr::Var(decl.name), Expr::Number(i.to_int64())),
+            init_exprs[i]
+          )))
+        }
+        ty
+      }
     } else {
-      Some(self.parse_assign())
+      let expr = self.parse_assign()
+      stmts.push(VarDecl(decl.ty, decl.name, Some(expr)))
+      decl.ty
     }
   } else {
-    None
+    stmts.push(VarDecl(decl.ty, decl.name, None))
+    decl.ty
   }
-  decls.push(VarDecl(decl.ty, decl.name, init))
   // Parse additional variables: int a, *b, c[8], (*fp)(void);
   while self.token == Comma {
     self.advance()
     let extra_decl = self.parse_declarator(spec.base_type)
-    let extra_init = if self.token == Assign {
+    if self.token == Assign {
       self.advance()
       if self.token == LBrace {
-        self.skip_brace_initializer()
-        Some(Expr::Number(0))
+        let is_struct = match extra_decl.ty {
+          Struct(_) | Union(_) => true
+          _ => false
+        }
+        if is_struct {
+          self.skip_brace_initializer()
+          stmts.push(VarDecl(extra_decl.ty, extra_decl.name, Some(Expr::Number(0))))
+        } else {
+          let init_exprs = self.parse_brace_init_exprs()
+          let init_count = init_exprs.length()
+          let extra_ty = match extra_decl.ty {
+            Array(elem_ty, 0) => Array(elem_ty, init_count)
+            other => other
+          }
+          stmts.push(VarDecl(extra_ty, extra_decl.name, None))
+          for i = 0; i < init_count; i = i + 1 {
+            stmts.push(ExprStmt(Expr::Assign(
+              Expr::ArrayAccess(Expr::Var(extra_decl.name), Expr::Number(i.to_int64())),
+              init_exprs[i]
+            )))
+          }
+        }
       } else {
-        Some(self.parse_assign())
+        let expr = self.parse_assign()
+        stmts.push(VarDecl(extra_decl.ty, extra_decl.name, Some(expr)))
       }
     } else {
-      None
+      stmts.push(VarDecl(extra_decl.ty, extra_decl.name, None))
     }
-    decls.push(VarDecl(extra_decl.ty, extra_decl.name, extra_init))
   }
   self.expect(Semicolon)
-  if decls.length() == 1 {
-    decls[0]
+  if stmts.length() == 1 {
+    stmts[0]
   } else {
-    Compound(decls)
+    Compound(stmts)
   }
 }
 

@@ -511,6 +511,12 @@ fn Parser::parse_primary(self : Parser) -> Expr {
           self.expect(RParen)
           Call(Var(name), args)
         }
+      } else if name == "__func__" || name == "__FUNCTION__" {
+        if self.current_func_name != "" {
+          String(self.current_func_name)
+        } else {
+          Var(name)
+        }
       } else if self.enum_constants.contains(name) {
         Number(self.enum_constants[name])
       } else {
@@ -522,6 +528,15 @@ fn Parser::parse_primary(self : Parser) -> Expr {
       let expr = self.parse_expr()
       self.expect(RParen)
       expr
+    }
+    And => {
+      // GCC extension: computed goto &&label
+      self.advance()
+      match self.token {
+        Ident(_) => self.advance()
+        _ => ()
+      }
+      Number(0)
     }
     _ => abort("Unexpected token in primary: " + self.token.to_string())
   }

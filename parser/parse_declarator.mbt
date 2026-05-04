@@ -196,6 +196,7 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
 ///|
 fn Parser::parse_struct_type_specifier(self : Parser) -> Type {
   self.expect(Struct)
+  self.skip_attributes()
   match self.token {
     Ident(n) => {
       self.advance()
@@ -225,6 +226,7 @@ fn Parser::parse_struct_type_specifier(self : Parser) -> Type {
 ///|
 fn Parser::parse_union_type_specifier(self : Parser) -> Type {
   self.expect(Union)
+  self.skip_attributes()
   match self.token {
     Ident(n) => {
       self.advance()
@@ -266,7 +268,7 @@ fn Parser::parse_enum_type_specifier(self : Parser) -> Type {
   self.skip_attributes()
   if self.token == LBrace {
     self.expect(LBrace)
-    let mut next_value = 0
+    let mut next_value : Int64 = 0
     while self.token != RBrace {
       self.skip_attributes()
       match self.token {
@@ -308,7 +310,7 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] {
     let bit_width = if self.token == Colon {
       self.advance()
       match fold_const(self.parse_assign()) {
-        Some(n) => Some(n)
+        Some(n) => Some(n.to_int())
         None => abort("Bit-field width must be a constant integer")
       }
     } else {
@@ -323,7 +325,7 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] {
       let extra_bit_width = if self.token == Colon {
         self.advance()
         match fold_const(self.parse_assign()) {
-          Some(n) => Some(n)
+          Some(n) => Some(n.to_int())
           None => abort("Bit-field width must be a constant integer")
         }
       } else {
@@ -444,7 +446,7 @@ fn Parser::parse_declarator_suffixes(
           let size_expr = self.parse_assign()
           self.expect(RBracket)
           match fold_const(size_expr) {
-            Some(n) => n
+            Some(n) => n.to_int()
             None => 0
           }
         }
@@ -496,7 +498,7 @@ fn Parser::parse_abstract_declarator_suffixes(
           let size_expr = self.parse_assign()
           self.expect(RBracket)
           match fold_const(size_expr) {
-            Some(n) => n
+            Some(n) => n.to_int()
             None => 0
           }
         }

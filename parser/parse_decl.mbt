@@ -29,12 +29,14 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       }
     }
     self.skip_attributes()
+    self.current_func_name = decl.name
     let body = if self.token == LBrace {
       Some(self.parse_compound_stmt())
     } else {
       self.expect(Semicolon)
       None
     }
+    self.current_func_name = ""
     let ret_ty = match decl.func_ret_ty {
       Some(rt) => rt
       None => spec.base_type

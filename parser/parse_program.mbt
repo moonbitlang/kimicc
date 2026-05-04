@@ -143,7 +143,7 @@ fn Parser::parse_enum(self : Parser) -> Unit {
     _ => ()
   }
   self.expect(LBrace)
-  let mut next_value = 0
+  let mut next_value : Int64 = 0
   while self.token != RBrace {
     self.skip_attributes()
     let name = match self.token {
