@@ -4,30 +4,34 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
   // Parse first declarator
   let decl = self.parse_declarator(base_ty)
   if decl.name != "" {
+    let mut init : GlobalInit? = None
     if self.token == Assign {
       self.advance()
       if self.token == LBrace {
-        self.skip_brace_initializer()
+        let init_exprs = self.parse_brace_init_exprs()
+        init = Some(GlobalInit::Array(init_exprs))
       } else {
-        let _ = self.parse_expr()
+        init = Some(GlobalInit::Scalar(self.parse_expr()))
       }
     }
-    self.globals.push((decl.ty, decl.name))
+    self.globals.push({ ty: decl.ty, name: decl.name, init })
   }
   // Additional variables separated by comma
   while self.token == Comma {
     self.advance()
     let extra = self.parse_declarator(base_ty)
     if extra.name != "" {
+      let mut extra_init : GlobalInit? = None
       if self.token == Assign {
         self.advance()
         if self.token == LBrace {
-          self.skip_brace_initializer()
+          let init_exprs = self.parse_brace_init_exprs()
+          extra_init = Some(GlobalInit::Array(init_exprs))
         } else {
-          let _ = self.parse_expr()
+          extra_init = Some(GlobalInit::Scalar(self.parse_expr()))
         }
       }
-      self.globals.push((extra.ty, extra.name))
+      self.globals.push({ ty: extra.ty, name: extra.name, init: extra_init })
     }
   }
   self.expect(Semicolon)

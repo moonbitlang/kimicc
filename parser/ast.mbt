@@ -193,8 +193,21 @@ pub(all) struct FuncDecl {
 } derive(Eq)
 
 ///|
+pub(all) enum GlobalInit {
+  Scalar(Expr)
+  Array(Array[Expr])
+} derive(Eq)
+
+///|
+pub(all) struct GlobalDecl {
+  ty : Type
+  name : String
+  init : GlobalInit?
+} derive(Eq)
+
+///|
 pub(all) struct Program {
   structs : Array[StructDecl]
-  globals : Array[(Type, String)]
+  globals : Array[GlobalDecl]
   decls : Array[FuncDecl]
 }

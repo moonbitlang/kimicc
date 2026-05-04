@@ -12,7 +12,7 @@ pub struct Codegen {
   strings : Array[String]
   mut break_label : String?
   mut continue_label : String?
-  globals : Map[String, @parser.Type]
+  globals : Map[String, @parser.GlobalDecl]
   mut emitted_labels : Map[String, String]
 }
 
@@ -53,6 +53,60 @@ pub fn Codegen::new() -> Codegen {
 }
 
 ///|
+fn Codegen::emit_global_scalar(
+  self : Codegen,
+  ty : @parser.Type,
+  expr : @parser.Expr
+) -> Unit {
+  match expr {
+    Number(n) => {
+      match ty {
+        Bool | SChar | UChar => self.emit("\t.byte\t" + n.to_string())
+        SShort | UShort => self.emit("\t.short\t" + n.to_string())
+        SInt | UInt | Float => self.emit("\t.long\t" + n.to_string())
+        _ => self.emit("\t.quad\t" + n.to_string())
+      }
+    }
+    String(s) => {
+      let idx = self.strings.length()
+      self.strings.push(s)
+      self.emit("\t.quad\t_str" + idx.to_string())
+    }
+    _ => {
+      // Non-constant expression: emit zero placeholder
+      let size = self.type_size(ty)
+      self.emit("\t.space\t" + size.to_string())
+    }
+  }
+}
+
+///|
+fn Codegen::emit_global_array(
+  self : Codegen,
+  ty : @parser.Type,
+  exprs : Array[@parser.Expr]
+) -> Unit {
+  match ty {
+    Array(elem_ty, n) => {
+      for i = 0; i < exprs.length(); i = i + 1 {
+        self.emit_global_scalar(elem_ty, exprs[i])
+      }
+      // Pad remaining elements with zeros
+      let elem_size = self.type_size(elem_ty)
+      let pad_count = n - exprs.length()
+      if pad_count > 0 {
+        self.emit("\t.space\t" + (pad_count * elem_size).to_string())
+      }
+    }
+    _ => {
+      // Should not happen: array init for non-array type
+      let size = self.type_size(ty)
+      self.emit("\t.space\t" + size.to_string())
+    }
+  }
+}
+
+///|
 pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   self.output.write_string(
     "\t.section\t__TEXT,__text,regular,pure_instructions\n",
@@ -68,16 +122,38 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   }
   // Record global variables
   for g in prog.globals {
-    self.globals[g.1] = g.0
+    self.globals[g.name] = g
   }
   for decl in prog.decls {
     self.gen_func(decl)
   }
+  // Emit initialized global variables
+  let mut has_data = false
+  for name, g in self.globals {
+    if g.init.is_some() {
+      if not(has_data) {
+        self.emit("	.section	__DATA,__data")
+        has_data = true
+      }
+      self.emit("	.globl	_" + name)
+      self.emit("	.p2align	3")
+      self.emit("_" + name + ":")
+      match g.init {
+        Some(Scalar(expr)) => self.emit_global_scalar(g.ty, expr)
+        Some(Array(exprs)) => self.emit_global_array(g.ty, exprs)
+        None => ()
+      }
+    }
+  }
   // Emit uninitialized global variables
-  if self.globals.length() > 0 {
-    self.emit("	.section	__DATA,__bss")
-    for name, ty in self.globals {
-      let size = self.type_size(ty)
+  let mut has_bss = false
+  for name, g in self.globals {
+    if g.init.is_none() {
+      if not(has_bss) {
+        self.emit("	.section	__DATA,__bss")
+        has_bss = true
+      }
+      let size = self.type_size(g.ty)
       self.emit("	.globl	_" + name)
       self.emit("	.p2align	3")
       self.emit("_" + name + ":")
@@ -864,7 +940,7 @@ fn Codegen::type_of(
       if self.var_types.contains(name) {
         self.var_types[name]
       } else if self.globals.contains(name) {
-        self.globals[name]
+        self.globals[name].ty
       } else if self.func_rets.contains(name) {
         Pointer(Void) // Function pointer type
       } else {
@@ -970,7 +1046,7 @@ fn Codegen::gen_expr(
           }
         }
       } else if self.globals.contains(name) {
-        let ty = self.globals[name]
+        let ty = self.globals[name].ty
         self.emit("\tadrp\tx9, _" + name + "@PAGE")
         self.emit("\tadd\tx9, x9, _" + name + "@PAGEOFF")
         match ty {

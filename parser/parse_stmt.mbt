@@ -353,7 +353,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
         let init_count = init_exprs.length()
         // Update array type if size was inferred
         let ty = match decl.ty {
-          Array(elem_ty, 0) => Array(elem_ty, init_count)
+          Array(elem_ty, 0) => Type::Array(elem_ty, init_count)
           other => other
         }
         stmts.push(VarDecl(ty, decl.name, None))
@@ -392,7 +392,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
           let init_exprs = self.parse_brace_init_exprs()
           let init_count = init_exprs.length()
           let extra_ty = match extra_decl.ty {
-            Array(elem_ty, 0) => Array(elem_ty, init_count)
+            Array(elem_ty, 0) => Type::Array(elem_ty, init_count)
             other => other
           }
           stmts.push(VarDecl(extra_ty, extra_decl.name, None))

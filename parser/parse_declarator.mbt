@@ -530,7 +530,7 @@ fn Parser::parse_abstract_declarator_suffixes(
 fn push_array_inside(ty : Type, size : Int) -> Type {
   match ty {
     Pointer(inner) => Pointer(push_array_inside(inner, size))
-    _ => Array(ty, size)
+    _ => Type::Array(ty, size)
   }
 }
 

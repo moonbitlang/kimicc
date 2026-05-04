@@ -6,7 +6,7 @@ pub struct Parser {
   anonymous_structs : Array[StructDecl]
   mut anon_counter : Int
   enum_constants : Map[String, Int64]
-  globals : Array[(Type, String)]
+  globals : Array[GlobalDecl]
   mut current_func_name : String
 }
 

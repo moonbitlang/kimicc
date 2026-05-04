@@ -995,14 +995,14 @@ async test "string literal indexing" {
 }
 
 ///|
-async test "global array explicit size zero-initialized" {
+async test "global array explicit size initialized" {
   let source =
     #|int global_arr[3] = {5, 10, 15};
     #|int main() {
     #|  return global_arr[0] + global_arr[1] + global_arr[2];
     #|}
   let exit_code = run_source_async(source)
-  inspect(exit_code, content="0")
+  inspect(exit_code, content="30")
 }
 
 ///|
@@ -1604,4 +1604,39 @@ async test "unsigned char array" {
     #|}
   let exit_code = run_source_async(source)
   inspect(exit_code, content="6")
+}
+
+///|
+async test "global scalar initializer" {
+  let source =
+    #|int x = 42;
+    #|int main() {
+    #|  return x;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "global string pointer initializer" {
+  let source =
+    #|char *msg = "hi";
+    #|int main() {
+    #|  return msg[0];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="104")
+}
+
+///|
+async test "global mixed initialized and uninitialized" {
+  let source =
+    #|int a = 7;
+    #|int b;
+    #|int c = 3;
+    #|int main() {
+    #|  return a + c;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="10")
 }

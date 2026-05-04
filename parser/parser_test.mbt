@@ -668,8 +668,12 @@ test "parse global array initializer inferred size" {
   let prog = @parser.parse(source)
   inspect(prog.globals.length(), content="1")
   let g = prog.globals[0]
-  inspect(g.0, content="Array(SInt, 3)")
-  inspect(g.1, content="arr")
+  inspect(g.ty, content="Array(SInt, 3)")
+  inspect(g.name, content="arr")
+  match g.init {
+    Some(Array(exprs)) => inspect(exprs.length(), content="3")
+    _ => fail("Expected array initializer")
+  }
 }
 
 ///|
