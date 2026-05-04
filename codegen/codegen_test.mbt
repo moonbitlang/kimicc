@@ -72,3 +72,20 @@ test "generate negative large constant" {
   inspect(assembly.contains("ldr\tx9, =1640562687"), content="true")
   inspect(assembly.contains("neg\tx9, x9"), content="true")
 }
+
+///|
+test "generate switch statement" {
+  let source = "int main() { int x = 2; switch (x) { case 1: return 10; case 2: return 20; default: return 0; } }"
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  // No label in the assembly should contain a space
+  let lines = assembly.split("\n")
+  for line in lines {
+    let s = line.to_string()
+    // Labels end with ':'
+    if s.ends_with(":") && s.contains(" ") {
+      abort("Label contains space: " + s)
+    }
+  }
+}

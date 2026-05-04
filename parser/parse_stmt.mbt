@@ -47,7 +47,7 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
       }
       self.expect(Colon)
       let stmt = self.parse_stmt()
-      Label("case " + value.to_string(), stmt)
+      Label("case_" + value.to_string(), stmt)
     }
     Default => {
       self.advance()
@@ -203,7 +203,7 @@ fn Parser::parse_switch_stmt(self : Parser) -> Stmt {
   for stmt in stmts {
     match stmt {
       Label(name, body) => {
-        if name.starts_with("case ") {
+        if name.starts_with("case_") {
           flush_case(current_value, current_stmts)
           current_stmts = []
           let mut case_value = 0
