@@ -1266,3 +1266,77 @@ async test "NULL pointer comparison" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="0")
 }
+
+///|
+async test "variable shadowing different types" {
+  let source =
+    #|int main() {
+    #|  int x = 10;
+    #|  {
+    #|    char x = 5;
+    #|    if (x != 5) return 1;
+    #|  }
+    #|  return x;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="10")
+}
+
+///|
+async test "array of pointers" {
+  let source =
+    #|int main() {
+    #|  int a = 1, b = 2, c = 3;
+    #|  int *arr[] = {&a, &b, &c};
+    #|  return *arr[0] + *arr[1] + *arr[2];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="6")
+}
+
+///|
+async test "pointer to array" {
+  let source =
+    #|int main() {
+    #|  int arr[3] = {10, 20, 30};
+    #|  int (*p)[3] = &arr;
+    #|  return (*p)[1];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="20")
+}
+
+///|
+async test "comma operator expression" {
+  let source =
+    #|int main() {
+    #|  int x;
+    #|  x = (1, 2, 3);
+    #|  return x;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="3")
+}
+
+///|
+async test "nested ternary" {
+  let source =
+    #|int main() {
+    #|  int a = 1, b = 2, c = 3;
+    #|  return a > b ? 10 : (b > c ? 20 : 30);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="30")
+}
+
+///|
+async test "unsigned comparison" {
+  let source =
+    #|int main() {
+    #|  unsigned int a = 5;
+    #|  unsigned int b = 10;
+    #|  return a < b ? 1 : 0;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="1")
+}

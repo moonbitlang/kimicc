@@ -687,3 +687,14 @@ test "parse computed goto label address" {
     _ => fail("Expected compound body")
   }
 }
+
+///|
+test "parse __func__ builtin" {
+  let source = "int main() { return __func__[0]; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound([Return(Some(ArrayAccess(String("main"), Number(0))))])) => ()
+    _ => fail("Expected __func__ as string literal")
+  }
+}
