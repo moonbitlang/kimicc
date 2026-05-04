@@ -1025,6 +1025,173 @@ fn Codegen::type_of(
 }
 
 ///|
+fn Codegen::emit_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int
+) -> Bool {
+  match name {
+    "__builtin_expect" => {
+      // __builtin_expect(exp, c) -> just return exp
+      if args.length() > 0 {
+        self.gen_expr(args[0], frame_size)
+      } else {
+        self.emit("\tmov\tx9, #0")
+      }
+      true
+    }
+    "__builtin_unreachable" => {
+      self.emit("\tbrk\t#0x1")
+      true
+    }
+    "__builtin_trap" => {
+      self.emit("\tbrk\t#0x1")
+      true
+    }
+    "__builtin_assume" => {
+      // No-op
+      self.emit("\tmov\tx9, #0")
+      true
+    }
+    "__builtin_clz" | "__builtin_clzl" => {
+      if args.length() > 0 {
+        self.gen_expr(args[0], frame_size)
+        self.emit("\tclz\tw9, w9")
+      } else {
+        self.emit("\tmov\tx9, #0")
+      }
+      true
+    }
+    "__builtin_clzll" => {
+      if args.length() > 0 {
+        self.gen_expr(args[0], frame_size)
+        self.emit("\tclz\tx9, x9")
+      } else {
+        self.emit("\tmov\tx9, #0")
+      }
+      true
+    }
+    "__builtin_ctz" | "__builtin_ctzl" => {
+      if args.length() > 0 {
+        self.gen_expr(args[0], frame_size)
+        self.emit("\trbit\tw9, w9")
+        self.emit("\tclz\tw9, w9")
+      } else {
+        self.emit("\tmov\tx9, #0")
+      }
+      true
+    }
+    "__builtin_ctzll" => {
+      if args.length() > 0 {
+        self.gen_expr(args[0], frame_size)
+        self.emit("\trbit\tx9, x9")
+        self.emit("\tclz\tx9, x9")
+      } else {
+        self.emit("\tmov\tx9, #0")
+      }
+      true
+    }
+    "__builtin_bswap32" => {
+      if args.length() > 0 {
+        self.gen_expr(args[0], frame_size)
+        self.emit("\trev\tw9, w9")
+      } else {
+        self.emit("\tmov\tx9, #0")
+      }
+      true
+    }
+    "__builtin_bswap64" => {
+      if args.length() > 0 {
+        self.gen_expr(args[0], frame_size)
+        self.emit("\trev\tx9, x9")
+      } else {
+        self.emit("\tmov\tx9, #0")
+      }
+      true
+    }
+    "__builtin_popcount" | "__builtin_popcountl" | "__builtin_popcountll" => {
+      if args.length() > 0 {
+        self.gen_expr(args[0], frame_size)
+        // ARM64 doesn't have scalar popcount; use a software fallback
+        // Store arg, call stub
+        self.emit("\tstr\tx9, [sp, #-16]!")
+        self.emit("\tbl\t___popcountdi2")
+        self.emit("\tadd\tsp, sp, #16")
+      } else {
+        self.emit("\tmov\tx9, #0")
+      }
+      true
+    }
+    "__builtin_memcpy" => {
+      if args.length() >= 3 {
+        for i = 0; i < 3; i = i + 1 {
+          self.gen_expr(args[i], frame_size)
+          self.emit("\tmov\tx" + i.to_string() + ", x9")
+        }
+        self.emit("\tbl\t_memcpy")
+      }
+      self.emit("\tmov\tx9, x0")
+      true
+    }
+    "__builtin_memset" => {
+      if args.length() >= 3 {
+        for i = 0; i < 3; i = i + 1 {
+          self.gen_expr(args[i], frame_size)
+          self.emit("\tmov\tx" + i.to_string() + ", x9")
+        }
+        self.emit("\tbl\t_memset")
+      }
+      self.emit("\tmov\tx9, x0")
+      true
+    }
+    "__builtin_memmove" => {
+      if args.length() >= 3 {
+        for i = 0; i < 3; i = i + 1 {
+          self.gen_expr(args[i], frame_size)
+          self.emit("\tmov\tx" + i.to_string() + ", x9")
+        }
+        self.emit("\tbl\t_memmove")
+      }
+      self.emit("\tmov\tx9, x0")
+      true
+    }
+    "__builtin_strlen" => {
+      if args.length() > 0 {
+        self.gen_expr(args[0], frame_size)
+        self.emit("\tmov\tx0, x9")
+        self.emit("\tbl\t_strlen")
+      }
+      self.emit("\tmov\tx9, x0")
+      true
+    }
+    "__builtin_strcmp" => {
+      if args.length() >= 2 {
+        for i = 0; i < 2; i = i + 1 {
+          self.gen_expr(args[i], frame_size)
+          self.emit("\tmov\tx" + i.to_string() + ", x9")
+        }
+        self.emit("\tbl\t_strcmp")
+      }
+      self.emit("\tmov\tx9, x0")
+      true
+    }
+    "__builtin_strcpy" => {
+      if args.length() >= 2 {
+        for i = 0; i < 2; i = i + 1 {
+          self.gen_expr(args[i], frame_size)
+          self.emit("\tmov\tx" + i.to_string() + ", x9")
+        }
+        self.emit("\tbl\t_strcpy")
+      }
+      self.emit("\tmov\tx9, x0")
+      true
+    }
+    _ => false
+  }
+}
+
+///|
 fn Codegen::gen_expr(
   self : Codegen,
   expr : @parser.Expr,
@@ -1264,29 +1431,36 @@ fn Codegen::gen_expr(
       self.emit("\tcset\tx9, eq")
     }
     Call(func, args) => {
-      for i = 0; i < args.length(); i = i + 1 {
-        self.gen_expr(args[i], frame_size)
-        let reg = "x" + i.to_string()
-        self.emit("\tmov\t" + reg + ", x9")
+      // Try builtin dispatch first
+      let is_builtin = match func {
+        Var(name) => self.emit_builtin_call(name, args, frame_size)
+        _ => false
       }
-      match func {
-        Var(name) => {
-          if self.local_offsets.contains(name) || self.globals.contains(name) {
-            // Function pointer variable: load and call indirectly
+      if not(is_builtin) {
+        for i = 0; i < args.length(); i = i + 1 {
+          self.gen_expr(args[i], frame_size)
+          let reg = "x" + i.to_string()
+          self.emit("\tmov\t" + reg + ", x9")
+        }
+        match func {
+          Var(name) => {
+            if self.local_offsets.contains(name) || self.globals.contains(name) {
+              // Function pointer variable: load and call indirectly
+              self.gen_expr(func, frame_size)
+              self.emit("\tmov\tx15, x9")
+              self.emit("\tblr\tx15")
+            } else {
+              self.emit("\tbl\t_" + name)
+            }
+          }
+          _ => {
             self.gen_expr(func, frame_size)
             self.emit("\tmov\tx15, x9")
             self.emit("\tblr\tx15")
-          } else {
-            self.emit("\tbl\t_" + name)
           }
         }
-        _ => {
-          self.gen_expr(func, frame_size)
-          self.emit("\tmov\tx15, x9")
-          self.emit("\tblr\tx15")
-        }
+        self.emit("\tmov\tx9, x0")
       }
-      self.emit("\tmov\tx9, x0")
     }
     MemberAccess(obj, field) => {
       let obj_ty = self.type_of(obj, frame_size)

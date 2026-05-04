@@ -1674,3 +1674,57 @@ async test "function pointer array call" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="5")
 }
+
+///|
+async test "__builtin_expect" {
+  let source =
+    #|int main() {
+    #|  int x = __builtin_expect(42, 42);
+    #|  return x;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "__builtin_clz" {
+  let source =
+    #|int main() {
+    #|  return __builtin_clz(1);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="31")
+}
+
+///|
+async test "__builtin_ctz" {
+  let source =
+    #|int main() {
+    #|  return __builtin_ctz(8);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="3")
+}
+
+///|
+async test "__builtin_bswap32" {
+  let source =
+    #|int main() {
+    #|  return __builtin_bswap32(0x01020304);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="1")
+}
+
+///|
+async test "__builtin_memcpy" {
+  let source =
+    #|int main() {
+    #|  int src[] = {1, 2, 3};
+    #|  int dst[3];
+    #|  __builtin_memcpy(dst, src, 12);
+    #|  return dst[0] + dst[1] + dst[2];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="6")
+}
