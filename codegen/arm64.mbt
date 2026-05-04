@@ -13,6 +13,7 @@ pub struct Codegen {
   mut break_label : String?
   mut continue_label : String?
   globals : Map[String, @parser.Type]
+  mut emitted_labels : Map[String, String]
 }
 
 ///|
@@ -47,6 +48,7 @@ pub fn Codegen::new() -> Codegen {
     break_label: None,
     continue_label: None,
     globals: {},
+    emitted_labels: {},
   }
 }
 
@@ -107,6 +109,95 @@ fn Codegen::new_label(self : Codegen) -> String {
 }
 
 ///|
+// Check if a value fits in ARM64 movz/movn immediate encoding.
+fn fits_mov_imm(n : Int) -> Bool {
+  let shifts = [0, 16, 32, 48]
+  if n >= 0 {
+    for shift in shifts {
+      let imm16 = n >> shift
+      if imm16 << shift == n && imm16 <= 65535 {
+        return true
+      }
+    }
+  } else {
+    // movn: n = -(imm16 << shift) - 1  =>  -n - 1 = imm16 << shift
+    let m = -n - 1
+    for shift in shifts {
+      let imm16 = m >> shift
+      if imm16 << shift == m && imm16 <= 65535 {
+        return true
+      }
+    }
+  }
+  false
+}
+
+///|
+// Emit instruction(s) to load a 32-bit signed constant into a 64-bit register.
+// Uses mov/movn when possible, otherwise movz + movk sequence.
+fn Codegen::emit_load_int(self : Codegen, reg : String, n : Int) -> Unit {
+  if fits_mov_imm(n) {
+    self.emit("\tmov\t" + reg + ", #" + n.to_string())
+    return
+  }
+  // Decompose into 16-bit chunks. For negative values we need sign-extension.
+  let low = n & 0xFFFF
+  let high = (n >> 16) & 0xFFFF
+  if n >= 0 {
+    // Zero-extended 32-bit value in 64-bit register
+    self.emit("\tmovz\t" + reg + ", #" + low.to_string())
+    if high != 0 {
+      self.emit("\tmovk\t" + reg + ", #" + high.to_string() + ", lsl #16")
+    }
+  } else {
+    // Sign-extended 32-bit value: 0xFFFFFFFFnnnnnnnn
+    self.emit("\tmovz\t" + reg + ", #" + low.to_string())
+    self.emit("\tmovk\t" + reg + ", #" + high.to_string() + ", lsl #16")
+    self.emit("\tmovk\t" + reg + ", #65535, lsl #32")
+    self.emit("\tmovk\t" + reg + ", #65535, lsl #48")
+  }
+}
+
+///|
+// Sanitize a label name for assembler output.
+fn sanitize_label(name : String) -> String {
+  let buf = StringBuilder::new()
+  for ch in name {
+    match ch {
+      '-' | '*' | ' ' | '.' | '@' | '$' | '#' => buf.write_char('_')
+      _ => buf.write_char(ch)
+    }
+  }
+  buf.to_string()
+}
+
+///|
+// Get or create the assembly label name for an AST label.
+// Case/default labels get unique anonymous labels (they are never goto targets).
+// Regular labels are scoped to the function and sanitized.
+fn Codegen::label_ref(self : Codegen, name : String) -> String {
+  if name == "default" || name.starts_with("case_") {
+    // Case/default labels are never goto targets; each gets a fresh unique label
+    self.new_label()
+  } else {
+    // Regular label: scoped to function, sanitized
+    "_" + self.func_name + "_label_" + sanitize_label(name)
+  }
+}
+
+///|
+// Check if an integer fits in ARM64 cmp immediate encoding.
+// Valid: 0..4095 or k*4096 where 1<=k<=4095 (and negatives via cmn).
+fn fits_cmp_imm(n : Int) -> Bool {
+  if n < 0 {
+    let m = -n
+    m <= 4095 || (m % 4096 == 0 && m <= 16773120)
+  } else {
+    n <= 4095 || (n % 4096 == 0 && n <= 16773120)
+  }
+}
+
+///|
 fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
   match ty {
     Int => 8
@@ -156,6 +247,7 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
       self.local_offsets = {}
       self.var_types = {}
       self.stack_size = 0
+      self.emitted_labels = {}
       self.func_name = decl.name
       // Allocate space for params
       for i = 0; i < decl.params.length(); i = i + 1 {
@@ -397,7 +489,12 @@ fn Codegen::gen_stmt(
         case_labels.push(label)
         match c.0 {
           Some(n) => {
-            self.emit("\tcmp\tx9, #" + n.to_string())
+            if fits_cmp_imm(n) {
+              self.emit("\tcmp\tx9, #" + n.to_string())
+            } else {
+              self.emit_load_int("x10", n)
+              self.emit("\tcmp\tx9, x10")
+            }
             self.emit("\tb.eq\t" + label)
           }
           None => () // default handled after all cases
@@ -422,10 +519,10 @@ fn Codegen::gen_stmt(
       self.break_label = old_break
     }
     Goto(name) => {
-      self.emit("\tb\t_" + self.func_name + "_label_" + name)
+      self.emit("\tb\t" + self.label_ref(name))
     }
     Label(name, stmt) => {
-      self.emit("_" + self.func_name + "_label_" + name + ":")
+      self.emit(self.label_ref(name) + ":")
       self.gen_stmt(stmt, frame_size)
     }
     VarDecl(ty, name, init) => {
@@ -533,7 +630,7 @@ fn Codegen::gen_expr(
   frame_size : Int,
 ) -> Unit {
   match expr {
-    Number(n) => self.emit("\tldr\tx9, =" + n.to_string())
+    Number(n) => self.emit_load_int("x9", n)
     String(s) => {
       let idx = self.strings.length()
       self.strings.push(s)
@@ -697,12 +794,12 @@ fn Codegen::gen_expr(
     }
     Sizeof(ty) => {
       let size = self.type_size(ty)
-      self.emit("\tldr\tx9, =" + size.to_string())
+      self.emit_load_int("x9", size)
     }
     SizeofExpr(expr) => {
       let ty = self.type_of(expr, frame_size)
       let size = self.type_size(ty)
-      self.emit("\tldr\tx9, =" + size.to_string())
+      self.emit_load_int("x9", size)
     }
     Cast(ty, expr) => {
       self.gen_expr(expr, frame_size)
