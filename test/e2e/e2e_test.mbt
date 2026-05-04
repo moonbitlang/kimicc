@@ -525,3 +525,110 @@ async test "signed bit-field sign extension" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="0")
 }
+
+///|
+async test "array initializer with inferred size" {
+  let source =
+    #|int main() {
+    #|  int arr[] = {10, 20, 30};
+    #|  return arr[0] + arr[1] + arr[2];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="60")
+}
+
+///|
+async test "array initializer with explicit size" {
+  let source =
+    #|int main() {
+    #|  int arr[5] = {1, 2, 3};
+    #|  return arr[0] + arr[1] * 2 + arr[2] * 4;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="17")
+}
+
+///|
+async test "array initializer with expressions" {
+  let source =
+    #|int add(int a, int b) { return a + b; }
+    #|int main() {
+    #|  int arr[] = {1 + 1, add(2, 2), 5 * 1};
+    #|  return arr[0] + arr[1] + arr[2];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="11")
+}
+
+///|
+async test "array initializer and pointer arithmetic" {
+  let source =
+    #|int main() {
+    #|  int arr[] = {10, 20, 30, 40, 50};
+    #|  int *p = arr;
+    #|  return p[0] + *(p + 2) + p[4];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="90")
+}
+
+///|
+async test "array initializer in loop" {
+  let source =
+    #|int main() {
+    #|  int arr[] = {3, 1, 4, 1, 5};
+    #|  int sum = 0;
+    #|  for (int i = 0; i < 5; i = i + 1) {
+    #|    sum = sum + arr[i];
+    #|  }
+    #|  return sum;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="14")
+}
+
+///|
+async test "bubble sort with array initializer" {
+  let source =
+    #|void swap(int *a, int *b) {
+    #|  int t = *a; *a = *b; *b = t;
+    #|}
+    #|void bubble_sort(int arr[], int n) {
+    #|  for (int i = 0; i < n - 1; i = i + 1) {
+    #|    for (int j = 0; j < n - i - 1; j = j + 1) {
+    #|      if (arr[j] > arr[j + 1]) {
+    #|        swap(&arr[j], &arr[j + 1]);
+    #|      }
+    #|    }
+    #|  }
+    #|}
+    #|int main() {
+    #|  int arr[] = {5, 2, 8, 1, 3};
+    #|  bubble_sort(arr, 5);
+    #|  return arr[0] + arr[1]*10 + arr[2]*100 + arr[3]*1000 + arr[4]*10000;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="73")
+}
+
+///|
+async test "array initializer with char literals" {
+  let source =
+    #|int main() {
+    #|  int arr[] = {'a', 'b', 'c'};
+    #|  return arr[0] - 'a' + arr[1] - 'b' + arr[2] - 'c';
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
+
+///|
+async test "multiple variables with array initializer" {
+  let source =
+    #|int main() {
+    #|  int a = 1, b[] = {2, 3}, c = 4;
+    #|  return a + b[0] + b[1] + c;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="10")
+}
