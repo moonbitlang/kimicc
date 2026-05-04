@@ -65,7 +65,7 @@ fn fold_const(expr : Expr) -> Int? {
       }
     Unary("~", e) =>
       match fold_const(e) {
-        Some(x) => Some(-x - 1)
+        Some(x) => Some(x.lnot())
         _ => None
       }
     Unary("!", e) =>

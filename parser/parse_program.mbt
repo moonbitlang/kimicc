@@ -1,29 +1,9 @@
 ///|
 // Parse variable declarations after a struct/union definition: struct Foo { ... } *ptr, arr[8];
 fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
-  // First variable declarator
-  let mut ty = base_ty
-  while self.token == Star {
-    self.advance()
-    ty = Pointer(ty)
-  }
-  if self.token is Ident(name) {
-    self.advance()
-    while self.token == LBracket {
-      self.advance()
-      if self.token == RBracket {
-        self.advance()
-        ty = Array(ty, 0)
-      } else {
-        let size_expr = self.parse_assign()
-        self.expect(RBracket)
-        let size = match fold_const(size_expr) {
-          Some(n) => n
-          None => 0
-        }
-        ty = Array(ty, size)
-      }
-    }
+  // Parse first declarator
+  let decl = self.parse_declarator(base_ty)
+  if decl.name != "" {
     if self.token == Assign {
       self.advance()
       if self.token == LBrace {
@@ -32,42 +12,22 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
         let _ = self.parse_expr()
       }
     }
-    self.globals.push((ty, name))
-    // Additional variables separated by comma
-    while self.token == Comma {
-      self.advance()
-      let mut vty = base_ty
-      while self.token == Star {
+    self.globals.push((decl.ty, decl.name))
+  }
+  // Additional variables separated by comma
+  while self.token == Comma {
+    self.advance()
+    let extra = self.parse_declarator(base_ty)
+    if extra.name != "" {
+      if self.token == Assign {
         self.advance()
-        vty = Pointer(vty)
-      }
-      if self.token is Ident(vname) {
-        self.advance()
-        while self.token == LBracket {
-          self.advance()
-          if self.token == RBracket {
-            self.advance()
-            vty = Array(vty, 0)
-          } else {
-            let size_expr = self.parse_assign()
-            self.expect(RBracket)
-            let size = match fold_const(size_expr) {
-              Some(n) => n
-              None => 0
-            }
-            vty = Array(vty, size)
-          }
+        if self.token == LBrace {
+          self.skip_brace_initializer()
+        } else {
+          let _ = self.parse_expr()
         }
-        if self.token == Assign {
-          self.advance()
-          if self.token == LBrace {
-            self.skip_brace_initializer()
-          } else {
-            let _ = self.parse_expr()
-          }
-        }
-        self.globals.push((vty, vname))
       }
+      self.globals.push((extra.ty, extra.name))
     }
   }
   self.expect(Semicolon)
@@ -96,39 +56,7 @@ fn Parser::parse_program(self : Parser) -> Program {
           if self.token == LBrace {
             // Struct/union definition
             self.expect(LBrace)
-            let fields = []
-            while self.token != RBrace {
-              self.skip_attributes()
-              self.skip_qualifiers()
-              let first_field = self.parse_param()
-              // Skip bit-field width if present
-              if self.token == Colon {
-                self.advance()
-                let _ = self.parse_assign()
-              }
-              fields.push(first_field)
-              // Handle comma-separated fields
-              while self.token == Comma {
-                self.advance()
-                self.skip_qualifiers()
-                let mut vty = base_type(first_field.ty)
-                while self.token == Star {
-                  self.advance()
-                  vty = Pointer(vty)
-                }
-                let fname = match self.token {
-                  Ident(n) => { self.advance(); n }
-                  _ => ""
-                }
-                let f = self.parse_type_suffixes(vty, fname)
-                if self.token == Colon {
-                  self.advance()
-                  let _ = self.parse_assign()
-                }
-                fields.push(f)
-              }
-              self.expect(Semicolon)
-            }
+            let fields = self.parse_struct_body()
             self.expect(RBrace)
             self.skip_attributes()
             // Handle struct definition followed by variable declarations: struct Foo { ... } *ptr;
@@ -183,155 +111,24 @@ fn Parser::parse_program(self : Parser) -> Program {
 }
 
 ///|
-fn Parser::parse_struct_decl(self : Parser) -> StructDecl {
-  self.advance() // struct/union
-  let name = match self.token {
-    Ident(n) => {
-      self.advance()
-      n
-    }
-    _ => abort("Expected struct/union name")
-  }
-  self.expect(LBrace)
-  let fields = []
-  while self.token != RBrace {
-    self.skip_attributes()
-    self.skip_qualifiers()
-    let first_field = self.parse_param()
-    if self.token == Colon {
-      self.advance()
-      let _ = self.parse_assign()
-    }
-    fields.push(first_field)
-    while self.token == Comma {
-      self.advance()
-      self.skip_qualifiers()
-      let mut vty = base_type(first_field.ty)
-      while self.token == Star {
-        self.advance()
-        vty = Pointer(vty)
-      }
-      let name = match self.token {
-        Ident(n) => { self.advance(); n }
-        _ => ""
-      }
-      let f = self.parse_type_suffixes(vty, name)
-      if self.token == Colon {
-        self.advance()
-        let _ = self.parse_assign()
-      }
-      fields.push(f)
-    }
-    self.expect(Semicolon)
-  }
-  self.expect(RBrace)
-  self.expect(Semicolon)
-  { name, fields }
-}
-
-///|
 fn Parser::parse_typedef(self : Parser) -> Unit {
   self.expect(Typedef)
   self.skip_attributes()
   self.skip_qualifiers()
-  let base_ty = self.parse_type()
+  let spec = self.parse_decl_specifiers()
   self.skip_attributes()
-  // Parse first typedef name
-  let mut name = ""
-  let mut ty = base_ty
-  // Handle function pointer typedef: typedef int (*name)(...); or typedef int (^name)(...);
-  if self.token == LParen {
-    self.expect(LParen)
-    // Consume all * and qualifiers for multiple indirection: (**name)
-    while self.token == Star || self.token == BitXor {
-      self.advance()
-      self.skip_qualifiers()
-    }
-    let fname = match self.token {
-      Ident(n) => { self.advance(); n }
-      RParen => ""
-      _ => abort("Expected function pointer name in typedef")
-    }
-    self.expect(RParen)
-    if self.token == LParen {
-      self.expect(LParen)
-      let mut depth = 1
-      while depth > 0 && self.token != EOF {
-        if self.token == LParen { depth += 1 }
-        else if self.token == RParen { depth -= 1 }
-        if depth > 0 { self.advance() } else { self.advance(); break }
-      }
-    }
-    name = fname
-  } else {
-    let n = match self.token {
-      Ident(name) => { self.advance(); name }
-      _ => abort("Expected typedef name")
-    }
-    // Handle function type typedef without (*): typedef void *name(...);
-    if self.token == LParen {
-      self.expect(LParen)
-      let mut depth = 1
-      while depth > 0 && self.token != EOF {
-        if self.token == LParen { depth += 1 }
-        else if self.token == RParen { depth -= 1 }
-        if depth > 0 { self.advance() } else { self.advance(); break }
-      }
-    }
-    name = n
-  }
-  // Handle typedef with array suffix: typedef int foo[10]; or typedef int foo[];
-  if self.token == LBracket {
-    self.advance()
-    let size = if self.token == RBracket {
-      self.advance()
-      0
-    } else {
-      let size_expr = self.parse_assign()
-      self.expect(RBracket)
-      match fold_const(size_expr) {
-        Some(n) => n
-        None => 0
-      }
-    }
-    ty = Array(base_ty, size)
-  }
+  // Parse first typedef declarator
+  let decl = self.parse_declarator(spec.base_type)
   self.skip_attributes()
-  self.typedefs[name] = ty
+  self.typedefs[decl.name] = decl.ty
   // Handle comma-separated typedef names: typedef int a, b, c;
   while self.token == Comma {
     self.advance()
     self.skip_attributes()
     self.skip_qualifiers()
-    // Additional names may have pointer stars
-    let mut extra_ty = base_ty
-    while self.token == Star {
-      self.advance()
-      self.skip_qualifiers()
-      extra_ty = Pointer(extra_ty)
-    }
-    let extra_name = match self.token {
-      Ident(n) => { self.advance(); n }
-      _ => abort("Expected typedef name after comma")
-    }
-    // Handle array suffix for additional names
-    if self.token == LBracket {
-      self.advance()
-      let size = if self.token == RBracket {
-        self.advance()
-        0
-      } else {
-        let size_expr = self.parse_assign()
-        self.expect(RBracket)
-        match fold_const(size_expr) {
-          Some(n) => n
-          None => 0
-        }
-      }
-      extra_ty = Array(extra_ty, size)
-    }
+    let extra_decl = self.parse_declarator(spec.base_type)
     self.skip_attributes()
-    self.typedefs[extra_name] = extra_ty
+    self.typedefs[extra_decl.name] = extra_decl.ty
   }
   self.expect(Semicolon)
 }

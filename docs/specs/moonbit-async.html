@@ -1,0 +1,1053 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Async programming support &#8212; MoonBit v0.9.1 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/sphinx-book-theme.css?v=a3416100" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../_static/documentation_options.js?v=e49c06df"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=a56c686a"></script>
+    <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'language/async-experimental';</script>
+    <link rel="icon" href="../_static/favicon.ico"/>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Formal Verification" href="verification.html" />
+    <link rel="prev" title="Foreign Function Interface (FFI)" href="ffi.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <script async type="text/javascript" src="/_/static/javascript/readthedocs-addons.js"></script><meta name="readthedocs-project-slug" content="moonbit-docs" /><meta name="readthedocs-version-slug" content="latest" /><meta name="readthedocs-resolver-filename" content="/language/async-experimental.html" /><meta name="readthedocs-http-status" content="200" /></head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../_static/logo.png" class="logo__image only-light" alt=""/>
+    <script>document.write(`<img src="../_static/logo.png" class="logo__image only-dark" alt=""/>`);</script>
+  
+  
+    <p class="title logo__title">MoonBit 月兔</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <ul class="current nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../tutorial/index.html">Tutorial</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tutorial/tour.html">A Tour of MoonBit for Beginners</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorial/cli-quickstart.html">Native CLI Quickstart</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorial/fullstack-one-project.html">Fullstack in One MoonBit Project</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">MoonBit Language</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fundamentals.html">Fundamentals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="methods.html">Method and Trait</a></li>
+<li class="toctree-l2"><a class="reference internal" href="derive.html">Deriving traits</a></li>
+<li class="toctree-l2"><a class="reference internal" href="error-handling.html">Error handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html">Managing Projects with Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tests.html">Writing Tests</a></li>
+<li class="toctree-l2"><a class="reference internal" href="benchmarks.html">Writing Benchmarks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="docs.html">Comments and Documentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="attributes.html">Attribute</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ffi.html">Foreign Function Interface (FFI)</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">Async programming support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="verification.html">Formal Verification</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="error_codes/index.html">Error Codes Index</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0001.html">E0001</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0002.html">E0002</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0003.html">E0003</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0004.html">E0004</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0005.html">E0005</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0006.html">E0006</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0007.html">E0007</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0008.html">E0008</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0009.html">E0009</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0010.html">E0010</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0011.html">E0011</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0012.html">E0012</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0013.html">E0013</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0014.html">E0014</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0015.html">E0015</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0016.html">E0016</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0017.html">E0017</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0018.html">E0018</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0019.html">E0019</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0020.html">E0020</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0021.html">E0021</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0022.html">E0022</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0023.html">E0023</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0024.html">E0024</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0025.html">E0025</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0026.html">E0026</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0027.html">E0027</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0028.html">E0028</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0029.html">E0029</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0030.html">E0030</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0031.html">E0031</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0032.html">E0032</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0033.html">E0033</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0034.html">E0034</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0035.html">E0035</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0036.html">E0036</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0037.html">E0037</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0038.html">E0038</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0039.html">E0039</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0040.html">E0040</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0041.html">E0041</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0042.html">E0042</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0043.html">E0043</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0044.html">E0044</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0045.html">E0045</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0046.html">E0046</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0047.html">E0047</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0049.html">E0049</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0050.html">E0050</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0051.html">E0051</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0052.html">E0052</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0053.html">E0053</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0054.html">E0054</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0055.html">E0055</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0056.html">E0056</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0057.html">E0057</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0058.html">E0058</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0059.html">E0059</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0060.html">E0060</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0061.html">E0061</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0062.html">E0062</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0063.html">E0063</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0064.html">E0064</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0065.html">E0065</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0066.html">E0066</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0067.html">E0067</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0068.html">E0068</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0069.html">E0069</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E1000.html">E1000</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E1001.html">E1001</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3001.html">E3001</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3002.html">E3002</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3003.html">E3003</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3004.html">E3004</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3005.html">E3005</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3006.html">E3006</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3007.html">E3007</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3008.html">E3008</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3009.html">E3009</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3010.html">E3010</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3011.html">E3011</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3012.html">E3012</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3014.html">E3014</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3016.html">E3016</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3017.html">E3017</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3018.html">E3018</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3019.html">E3019</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3020.html">E3020</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3021.html">E3021</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3022.html">E3022</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3023.html">E3023</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3024.html">E3024</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3100.html">E3100</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3700.html">E3700</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3800.html">E3800</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3801.html">E3801</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4000.html">E4000</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4001.html">E4001</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4002.html">E4002</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4003.html">E4003</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4004.html">E4004</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4005.html">E4005</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4006.html">E4006</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4008.html">E4008</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4010.html">E4010</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4011.html">E4011</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4012.html">E4012</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4013.html">E4013</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4014.html">E4014</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4015.html">E4015</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4016.html">E4016</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4017.html">E4017</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4018.html">E4018</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4019.html">E4019</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4020.html">E4020</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4021.html">E4021</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4022.html">E4022</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4023.html">E4023</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4024.html">E4024</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4027.html">E4027</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4028.html">E4028</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4029.html">E4029</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4031.html">E4031</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4032.html">E4032</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4033.html">E4033</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4034.html">E4034</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4036.html">E4036</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4037.html">E4037</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4038.html">E4038</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4039.html">E4039</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4040.html">E4040</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4041.html">E4041</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4042.html">E4042</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4043.html">E4043</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4044.html">E4044</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4046.html">E4046</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4047.html">E4047</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4048.html">E4048</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4049.html">E4049</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4050.html">E4050</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4051.html">E4051</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4052.html">E4052</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4053.html">E4053</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4054.html">E4054</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4055.html">E4055</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4056.html">E4056</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4057.html">E4057</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4059.html">E4059</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4061.html">E4061</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4063.html">E4063</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4064.html">E4064</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4065.html">E4065</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4066.html">E4066</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4067.html">E4067</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4068.html">E4068</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4069.html">E4069</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4070.html">E4070</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4071.html">E4071</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4073.html">E4073</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4074.html">E4074</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4077.html">E4077</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4078.html">E4078</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4080.html">E4080</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4081.html">E4081</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4082.html">E4082</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4084.html">E4084</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4085.html">E4085</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4086.html">E4086</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4087.html">E4087</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4089.html">E4089</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4091.html">E4091</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4092.html">E4092</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4093.html">E4093</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4094.html">E4094</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4095.html">E4095</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4096.html">E4096</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4099.html">E4099</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4100.html">E4100</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4101.html">E4101</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4102.html">E4102</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4104.html">E4104</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4106.html">E4106</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4107.html">E4107</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4108.html">E4108</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4109.html">E4109</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4110.html">E4110</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4111.html">E4111</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4112.html">E4112</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4113.html">E4113</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4114.html">E4114</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4115.html">E4115</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4116.html">E4116</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4117.html">E4117</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4118.html">E4118</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4119.html">E4119</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4120.html">E4120</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4121.html">E4121</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4122.html">E4122</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4124.html">E4124</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4127.html">E4127</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4128.html">E4128</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4130.html">E4130</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4131.html">E4131</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4132.html">E4132</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4133.html">E4133</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4135.html">E4135</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4136.html">E4136</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4137.html">E4137</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4138.html">E4138</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4139.html">E4139</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4140.html">E4140</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4141.html">E4141</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4142.html">E4142</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4143.html">E4143</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4144.html">E4144</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4145.html">E4145</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4146.html">E4146</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4147.html">E4147</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4148.html">E4148</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4149.html">E4149</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4151.html">E4151</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4153.html">E4153</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4154.html">E4154</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4155.html">E4155</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4156.html">E4156</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4157.html">E4157</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4158.html">E4158</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4159.html">E4159</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4160.html">E4160</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4161.html">E4161</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4162.html">E4162</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4163.html">E4163</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4164.html">E4164</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4165.html">E4165</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4167.html">E4167</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4168.html">E4168</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4171.html">E4171</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4172.html">E4172</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4173.html">E4173</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4174.html">E4174</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4175.html">E4175</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4176.html">E4176</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4177.html">E4177</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4180.html">E4180</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4181.html">E4181</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4182.html">E4182</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4183.html">E4183</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4184.html">E4184</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4185.html">E4185</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4186.html">E4186</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4187.html">E4187</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4188.html">E4188</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4189.html">E4189</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4190.html">E4190</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4191.html">E4191</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4192.html">E4192</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4193.html">E4193</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4194.html">E4194</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4195.html">E4195</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4196.html">E4196</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4197.html">E4197</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4198.html">E4198</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4199.html">E4199</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4200.html">E4200</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4201.html">E4201</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4202.html">E4202</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4203.html">E4203</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4204.html">E4204</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4205.html">E4205</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4206.html">E4206</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4207.html">E4207</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4208.html">E4208</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4209.html">E4209</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4210.html">E4210</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../toolchain/index.html">Toolchains</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../toolchain/moon/index.html">Moon Build System</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/tutorial.html">MoonBit's Build System Tutorial</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/script-mode.html">Running <code class="docutils literal notranslate"><span class="pre">.mbtx</span></code> Scripts</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/package-manage-tour.html">Use and publish packages</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/workspace.html">Workspace Support</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/commands.html">Command-Line Help for <code class="docutils literal notranslate"><span class="pre">moon</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/module.html">Module Configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/package.html">Package Configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/coverage.html">Measuring code coverage</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2"><a class="reference internal" href="../toolchain/moonide/index.html">MoonBit Agent IDE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../toolchain/vscode/index.html">MoonBit VSCode Plugin</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../toolchain/wasm/index.html">WebAssembly Integration</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/wasm/component-model-tutorial.html">MoonBit for Component Model</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../example/index.html">Examples</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../example/sudoku/index.html">Sudoku Solver</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../example/lambda/index.html">Lambda calculus</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../example/gmachine/index.html">G-Machine</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../example/gmachine/gmachine-1.html">G-Machine 1</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example/gmachine/gmachine-2.html">G-Machine 2</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example/gmachine/gmachine-3.html">G-Machine 3</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../example/myers-diff/index.html">Myers Diff</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../example/myers-diff/myers-diff.html">Myers diff</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example/myers-diff/myers-diff2.html">Myers diff 2</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example/myers-diff/myers-diff3.html">Myers diff 3</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../example/segment-tree/index.html">Segment Tree</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../example/segment-tree/segment-tree.html">Segment Trees (Part 1)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example/segment-tree/segment-tree2.html">Segment Trees (Part 2)</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/moonbitlang/moonbit-docs/blob/main/next/language/async-experimental.md?plain=1" target="_blank"
+   class="btn btn-sm btn-source-file-button dropdown-item"
+   title="Show source"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-code"></i>
+  </span>
+<span class="btn__text-container">Show source</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/moonbitlang/moonbit-docs/edit/main/next/language/async-experimental.md" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/moonbitlang/moonbit-docs/issues/new?title=Issue%20on%20page%20%2Flanguage/async-experimental.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../_sources/language/async-experimental.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Async programming support</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#getting-started">Getting started</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#async-function">Async function</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#structured-concurrency-and-task-group">Structured concurrency and task group</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#cancellation-makes-asynchronous-program-modular">Cancellation makes asynchronous program modular</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#interacting-with-the-world">Interacting with the world</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#javascript-support">JavaScript support</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="async-programming-support">
+<h1>Async programming support<a class="headerlink" href="#async-programming-support" title="Link to this heading">#</a></h1>
+<p>MoonBit adopts a coroutine based approach to async programming which is similar to <a class="reference external" href="https://kotlinlang.org/docs/coroutines-overview.html">Kotlin</a>.
+Asynchronous programming in MoonBit consists of two parts: compiler support for <code class="docutils literal notranslate"><span class="pre">async</span></code> functions, and the official async runtime <code class="docutils literal notranslate"><span class="pre">moonbitlang/async</span></code>.
+Currently, <code class="docutils literal notranslate"><span class="pre">moonbitlang/async</span></code> supports native backend best, has limit support for JavaScript backend, and does not support WebAssembly backend yet.
+The API of <code class="docutils literal notranslate"><span class="pre">moonbitlang/async</span></code> is not considered stable, and may change in the future.</p>
+<!-- We highly appreciate any feedback or experiment with current design. -->
+<section id="getting-started">
+<h2>Getting started<a class="headerlink" href="#getting-started" title="Link to this heading">#</a></h2>
+<p>To use <code class="docutils literal notranslate"><span class="pre">moonbitlang/async</span></code> for asynchronous programming,
+you should first run <code class="docutils literal notranslate"><span class="pre">moon</span> <span class="pre">add</span> <span class="pre">moonbitlang/async&#64;0.17.0</span></code> in your project
+to add <code class="docutils literal notranslate"><span class="pre">moonbitlang/async</span></code> as a dependency of your project.
+You may also want to set <code class="docutils literal notranslate"><span class="pre">&quot;preferred-target&quot;:</span> <span class="pre">&quot;native&quot;</span></code> in <code class="docutils literal notranslate"><span class="pre">moon.mod.json</span></code>.
+Now, import <code class="docutils literal notranslate"><span class="pre">moonbitlang/async</span></code> and other packages in the <code class="docutils literal notranslate"><span class="pre">moonbitlang/async</span></code> library in <code class="docutils literal notranslate"><span class="pre">moon.pkg</span></code>,
+and the asynchronous programming API should be available in your packages.
+If you want a workflow-first example, see the <a class="reference internal" href="../tutorial/cli-quickstart.html"><span class="std std-doc">Native CLI Quickstart</span></a>.</p>
+<p>The list of packages in <code class="docutils literal notranslate"><span class="pre">moonbitlang/async</span></code> and their detailed documentation
+can be found on <a class="reference external" href="https://mooncakes.io/docs/moonbitlang/async">mooncakes.io</a>,
+and some useful <a class="reference external" href="https://github.com/moonbitlang/async/tree/main/examples">examples</a> on the GitHub repo of <code class="docutils literal notranslate"><span class="pre">moonbitlang/async</span></code>.
+This article will introduce some of the basic concept of <code class="docutils literal notranslate"><span class="pre">moonbitlang/async</span></code> and some of the most important API.</p>
+</section>
+<section id="async-function">
+<h2>Async function<a class="headerlink" href="#async-function" title="Link to this heading">#</a></h2>
+<p>Async functions are declared with the <code class="docutils literal notranslate"><span class="pre">async</span></code> keyword.
+They implicitly <a class="reference internal" href="error-handling.html#throwing-errors"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">raise</span></code></span></a> errors
+and need to declare <code class="docutils literal notranslate"><span class="pre">noraise</span></code> explicitly if otherwise.</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">async</span><span class="w"> </span><span class="kd">fn</span><span class="w"> </span><span class="nf">my_async_function</span><span class="p">()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">String</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="p">(</span><span class="nv">response</span><span class="p">,</span><span class="w"> </span><span class="nv">body</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nn">@http.</span><span class="nf">get</span><span class="p">(</span><span class="s">&quot;</span><span class="s2">https://www.moonbitlang.com</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="w">  </span><span class="k">guard</span><span class="w"> </span><span class="nv">response</span><span class="p">.</span><span class="nv">code</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="p">(</span><span class="mi">200</span><span class="p">..</span><span class="o">&lt;</span><span class="mi">300</span><span class="p">)</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nf">fail</span><span class="p">(</span><span class="s">&quot;</span><span class="s2">server responded with </span><span class="se">\{</span><span class="nv">response</span><span class="p">.</span><span class="nv">code</span><span class="se">}</span><span class="s2"> </span><span class="se">\{</span><span class="nv">response</span><span class="p">.</span><span class="nv">reason</span><span class="se">}</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="w">  </span><span class="nv">body</span><span class="p">.</span><span class="nf">text</span><span class="p">()</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Since MoonBit is a statically typed language, the compiler will track its
+asyncness, so you can just call async functions like normal functions, the
+MoonBit IDE will highlight the async function call with a different style.
+If you open the above code snippet with the MoonBit IDE,
+you should see the <code class="docutils literal notranslate"><span class="pre">&#64;http.get</span></code> function rendered in italic style with an underline.</p>
+<p>Async functions can only be called inside async functions.
+Calling <code class="docutils literal notranslate"><span class="pre">async</span></code> function will result in the caller being blocked
+and waiting for the callee to return, similar to <code class="docutils literal notranslate"><span class="pre">await</span></code> in many other languages.</p>
+<p>MoonBit has first-class support for asynchronous programming.
+You can use <code class="docutils literal notranslate"><span class="pre">async</span> <span class="pre">fn</span> <span class="pre">main</span></code> to declare an asynchronous program entry,
+or use <code class="docutils literal notranslate"><span class="pre">async</span> <span class="pre">test</span></code> to write test for asynchronous code.
+Asynchronous tests are automatically run in parallel by default.
+Notice that you must import <code class="docutils literal notranslate"><span class="pre">moonbitlang/async</span></code> in your package to use <code class="docutils literal notranslate"><span class="pre">async</span> <span class="pre">fn</span> <span class="pre">main</span></code> and <code class="docutils literal notranslate"><span class="pre">async</span> <span class="pre">test</span></code>.</p>
+</section>
+<section id="structured-concurrency-and-task-group">
+<h2>Structured concurrency and task group<a class="headerlink" href="#structured-concurrency-and-task-group" title="Link to this heading">#</a></h2>
+<p>If an asynchronous program only call async function directly (i.e. <code class="docutils literal notranslate"><span class="pre">await</span></code>),
+then the control flow of the program is linear,
+and the program is no different from a normal, synchronous programming.
+The fundamental difference between asynchronous program and synchronous program
+is the ability to spawn multiple tasks and let them run in parallel.
+This ability also brings the new challenge of how to manage tasks robustly,
+as the control flow of programs become much more complex due to concurrent tasks.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">moonbitlang/async</span></code> library adapts the <em>structured concurrency</em> paradigm
+to solve the task management problem and improve robustness of async program.
+In <code class="docutils literal notranslate"><span class="pre">moonbitlang/async</span></code>, spawning new task can only be done inside a <em>task group</em>,
+while task groups can only be created via the <code class="docutils literal notranslate"><span class="pre">&#64;async.with_task_group</span></code> function:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">async</span><span class="w"> </span><span class="kd">fn</span><span class="p">[</span><span class="nb">Result</span><span class="p">]</span><span class="w"> </span><span class="nf">with_task_group</span><span class="p">(</span>
+<span class="w">  </span><span class="nv">f</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kd">async</span><span class="w"> </span><span class="p">(</span><span class="nn">@async.</span><span class="nc">TaskGroup</span><span class="p">[</span><span class="nb">Result</span><span class="p">])</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Result</span><span class="p">,</span>
+<span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Result</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">with_task_group</span></code> function creates a new task group,
+spawn a new task inside the task group,
+and run <code class="docutils literal notranslate"><span class="pre">f</span></code> inside the new task with the group itself as argument.
+<code class="docutils literal notranslate"><span class="pre">f</span></code> can then use the group to spawn more new tasks, using various methods such as <code class="docutils literal notranslate"><span class="pre">spawn_bg</span></code>:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="c1">/// Spawn a new task in the group and let it run in the background</span>
+<span class="kd">fn</span><span class="p">[</span><span class="nb">Result</span><span class="p">]</span><span class="w"> </span><span class="nn">@async.</span><span class="nc">TaskGroup</span><span class="p">::</span><span class="nf">spawn_bg</span><span class="p">(</span>
+<span class="w">  </span><span class="nv">group</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">TaskGroup</span><span class="p">[</span><span class="nb">Result</span><span class="p">],</span>
+<span class="w">  </span><span class="nv">f</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kd">async</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Unit</span><span class="p">,</span>
+<span class="w">  </span><span class="ow">...</span>
+<span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Unit</span>
+</pre></div>
+</div>
+<p>The magic of structured concurrency lies in the following rule for <code class="docutils literal notranslate"><span class="pre">with_task_group</span></code>:</p>
+<blockquote>
+<div><p><code class="docutils literal notranslate"><span class="pre">with_task_group</span></code> will only return after all tasks inside the group has terminated</p>
+</div></blockquote>
+<p><code class="docutils literal notranslate"><span class="pre">with_task_group</span></code> will ensure the above property in all conditions.
+Normaly, <code class="docutils literal notranslate"><span class="pre">with_task_group</span></code> will just wait for tasks to complete normally.
+If <code class="docutils literal notranslate"><span class="pre">with_task_group</span></code> need to terminate immediately for some reasons, such as fatal error
+(by default, <code class="docutils literal notranslate"><span class="pre">with_task_group</span></code> will fail immediately if any of its child task fails,
+so that no error can be silently ignored),
+it will cancel all child tasks properly, and wait for their cleanup operations to complete.
+Altogether, the rule of <code class="docutils literal notranslate"><span class="pre">with_task_group</span></code> ensures that
+<em>orphan tasks</em> (i.e. unused tasks that are still running because the program forget to cancel it)
+can never exist in <code class="docutils literal notranslate"><span class="pre">moonbitlang/async</span></code>.</p>
+<p>Here's a simple example of using <code class="docutils literal notranslate"><span class="pre">with_task_group</span></code> to create multiple tasks and let them run in parallel:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">async</span><span class="w"> </span><span class="k">test</span><span class="w"> </span><span class="s">&quot;</span><span class="s2">with_task_group</span><span class="s">&quot;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nv">log</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[]</span>
+<span class="w">  </span><span class="nn">@async.</span><span class="nf">with_task_group</span><span class="p">(</span><span class="nv">group</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nv">group</span><span class="p">.</span><span class="nf">spawn_bg</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="k">for</span><span class="w"> </span><span class="nc">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">..</span><span class="o">&lt;</span><span class="mi">3</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nv">log</span><span class="p">.</span><span class="nf">push</span><span class="p">(</span><span class="s">&quot;</span><span class="s2">task #1 tick</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="w">        </span><span class="nn">@async.</span><span class="nf">sleep</span><span class="p">(</span><span class="mi">200</span><span class="p">)</span><span class="w"> </span><span class="c1">// sleep for 200ms</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">    </span><span class="p">})</span>
+<span class="w">    </span><span class="nv">group</span><span class="p">.</span><span class="nf">spawn_bg</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nn">@async.</span><span class="nf">sleep</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span>
+<span class="w">      </span><span class="k">for</span><span class="w"> </span><span class="nc">_</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="p">..</span><span class="o">&lt;</span><span class="mi">3</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nv">log</span><span class="p">.</span><span class="nf">push</span><span class="p">(</span><span class="s">&quot;</span><span class="s2">task #2 tick</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="w">        </span><span class="nn">@async.</span><span class="nf">sleep</span><span class="p">(</span><span class="mi">200</span><span class="p">)</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">    </span><span class="p">})</span>
+<span class="w">  </span><span class="p">})</span>
+<span class="w">  </span><span class="nf">json_inspect</span><span class="p">(</span><span class="nv">log</span><span class="p">,</span><span class="w"> </span><span class="nv">content</span><span class="p">=[</span>
+<span class="w">    </span><span class="s">&quot;</span><span class="s2">task #1 tick</span><span class="s">&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;</span><span class="s2">task #2 tick</span><span class="s">&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;</span><span class="s2">task #1 tick</span><span class="s">&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;</span><span class="s2">task #2 tick</span><span class="s">&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;</span><span class="s2">task #1 tick</span><span class="s">&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="s">&quot;</span><span class="s2">task #2 tick</span><span class="s">&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="p">])</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">with_task_group</span></code> is a very powerful construct.
+It can be used to simulate many async control flow operation.
+For example, here's a function that run an async function with a timeout:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">async</span><span class="w"> </span><span class="kd">fn</span><span class="w"> </span><span class="nf">with_timeout</span><span class="p">(</span><span class="nv">timeout</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">,</span><span class="w"> </span><span class="nv">f</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="kd">async</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Unit</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Unit</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nn">@async.</span><span class="nf">with_task_group</span><span class="p">(</span><span class="nv">group</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nv">group</span><span class="p">.</span><span class="nf">spawn_bg</span><span class="p">(</span><span class="nv">no_wait</span><span class="p">=</span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nn">@async.</span><span class="nf">sleep</span><span class="p">(</span><span class="nv">timeout</span><span class="p">)</span>
+<span class="w">      </span><span class="k">raise</span><span class="w"> </span><span class="nc">Failure</span><span class="p">::</span><span class="nf">Failure</span><span class="p">(</span><span class="s">&quot;</span><span class="s2">timeout!</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="w">    </span><span class="p">})</span>
+<span class="w">    </span><span class="nf">f</span><span class="p">()</span>
+<span class="w">  </span><span class="p">})</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The code itself is very simple, but the semantic of <code class="docutils literal notranslate"><span class="pre">with_task_group</span></code> ensures that this simple function will work properly in every corner case:</p>
+<ul class="simple">
+<li><p>if <code class="docutils literal notranslate"><span class="pre">f</span></code> return successfully before the timeout,
+since the sleep task is spawned with <code class="docutils literal notranslate"><span class="pre">no_wait=true</span></code>, <code class="docutils literal notranslate"><span class="pre">with_task_group</span></code> will not wait for the sleep task.
+To protect its rule, <code class="docutils literal notranslate"><span class="pre">with_task_group</span></code> will cancel the sleep task immediately.
+So <code class="docutils literal notranslate"><span class="pre">with_timeout(..,</span> <span class="pre">f)</span></code> will return immediately after <code class="docutils literal notranslate"><span class="pre">f</span></code> returns, without unnecessary delay.</p></li>
+<li><p>if <code class="docutils literal notranslate"><span class="pre">f</span></code> fails, the error will propagate to the whole <code class="docutils literal notranslate"><span class="pre">with_task_group</span></code>.
+The sleep task will again get cancelled automatically in this case.</p></li>
+<li><p>if <code class="docutils literal notranslate"><span class="pre">f</span></code> is still running when the timeout expires,
+the sleep task will raise a fatal timeout error, aborting the whole group.
+<code class="docutils literal notranslate"><span class="pre">f</span></code> will also get cancelled automatically in this case.</p></li>
+</ul>
+</section>
+<section id="cancellation-makes-asynchronous-program-modular">
+<h2>Cancellation makes asynchronous program modular<a class="headerlink" href="#cancellation-makes-asynchronous-program-modular" title="Link to this heading">#</a></h2>
+<p>In the previous section, &quot;cancellation&quot; has been mentioned multiple times.
+Indeed, cancellation is a very important part in asynchronous programming.
+In <code class="docutils literal notranslate"><span class="pre">moonbitlang/async</span></code>, every asynchronous operation is cancellable by default, including <code class="docutils literal notranslate"><span class="pre">with_task_group</span></code>.
+So when you compose these basic asynchronous operations into bigger program,
+no matter how complex your program is, it is automatically cancellable.</p>
+<p>When a piece of asynchronous code is cancelled,
+the cancellation signal is represented as an error raised at the point where the code previously blocked.
+So there is no need to handle cancellation specially:
+the cancellation signal will automically propagate through the program,
+triggering cleanup operations in <code class="docutils literal notranslate"><span class="pre">defer</span></code> and error handlers.</p>
+<p>The ability to cancel arbitrary async code makes async programs highly modular in MoonBit.
+The <code class="docutils literal notranslate"><span class="pre">moonbitlang/async</span></code> package provides many useful combinators that perform
+timeout limit, automatic retry, etc. for async program,
+they all rely on the cancellation mechanism to work properly.
+For example, the following program try to make a HTTP request with a timeout,
+and allow at most three retry attempts:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">async</span><span class="w"> </span><span class="kd">fn</span><span class="w"> </span><span class="nf">make_request</span><span class="p">()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">String</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nn">@async.</span><span class="nf">retry</span><span class="p">(</span><span class="nc">Immediate</span><span class="p">,</span><span class="w"> </span><span class="nv">max_retry</span><span class="p">=</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nn">@async.</span><span class="nf">with_timeout</span><span class="p">(</span><span class="mi">1000</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="kd">let</span><span class="w"> </span><span class="p">(</span><span class="nv">response</span><span class="p">,</span><span class="w"> </span><span class="nv">body</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nn">@http.</span><span class="nf">get</span><span class="p">(</span><span class="s">&quot;</span><span class="s2">https://www.moonbitlang.com</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="w">      </span><span class="k">guard</span><span class="w"> </span><span class="nv">response</span><span class="p">.</span><span class="nv">code</span><span class="w"> </span><span class="k">is</span><span class="w"> </span><span class="p">(</span><span class="mi">200</span><span class="p">..</span><span class="o">&lt;</span><span class="mi">300</span><span class="p">)</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nf">fail</span><span class="p">(</span><span class="s">&quot;</span><span class="s2">the HTTP request is not successful</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">      </span><span class="nv">body</span><span class="p">.</span><span class="nf">text</span><span class="p">()</span>
+<span class="w">    </span><span class="p">})</span>
+<span class="w">  </span><span class="p">})</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="interacting-with-the-world">
+<h2>Interacting with the world<a class="headerlink" href="#interacting-with-the-world" title="Link to this heading">#</a></h2>
+<p>In addition to asynchronous programming primitives,
+<code class="docutils literal notranslate"><span class="pre">moonbitlang/async</span></code> also provides an event loop for performing async IO operations,
+as well as a rich set of IO operations,
+including <code class="docutils literal notranslate"><span class="pre">http</span></code>/<code class="docutils literal notranslate"><span class="pre">https</span></code>, file IO, socket IO and process spawning,
+with <a class="reference external" href="https://www.moonbitlang.com/blog/moonbit-async#performance-comparison">decent performance</a>.
+You can find a complete list of supported operations and their documentation at <a class="reference external" href="https://mooncakes.io/docs/moonbitlang/async">mooncakes.io</a>,
+and simple examples at <a class="reference external" href="https://github.com/moonbitlang/async/tree/main/examples">the GitHub repo</a>.
+here's a quick taste of some of the most common features:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">async</span><span class="w"> </span><span class="kd">fn</span><span class="w"> </span><span class="nf">download_file</span><span class="p">(</span><span class="nv">url</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">String</span><span class="p">,</span><span class="w"> </span><span class="nv">file_name</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">String</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Unit</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="c1">// perform the transfer lazily to save memory</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="p">(</span><span class="nc">_response</span><span class="p">,</span><span class="w"> </span><span class="nv">body</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nn">@http.</span><span class="nf">get_stream</span><span class="p">(</span><span class="nv">url</span><span class="p">)</span>
+<span class="w">  </span><span class="nv">defer</span><span class="w"> </span><span class="nv">body</span><span class="p">.</span><span class="nf">close</span><span class="p">()</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nv">out_file</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nn">@fs.</span><span class="nf">create</span><span class="p">(</span><span class="nv">file_name</span><span class="p">,</span><span class="w"> </span><span class="nv">permission</span><span class="p">=</span><span class="mo">0o644</span><span class="p">)</span>
+<span class="w">  </span><span class="nv">defer</span><span class="w"> </span><span class="nv">out_file</span><span class="p">.</span><span class="nf">close</span><span class="p">()</span>
+<span class="w">  </span><span class="nv">out_file</span><span class="p">.</span><span class="nf">write_reader</span><span class="p">(</span><span class="nv">body</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="javascript-support">
+<h2>JavaScript support<a class="headerlink" href="#javascript-support" title="Link to this heading">#</a></h2>
+<p>Although <code class="docutils literal notranslate"><span class="pre">moonbitlang/async</span></code> supports native backend best,
+it also has basic support for JavaScript backend:</p>
+<ul class="simple">
+<li><p>all IO independent API, such as task group and timeout, are available</p></li>
+<li><p>IO related API are not available, because not all JavaScript environment (for example browsers) support them</p></li>
+<li><p>the <code class="docutils literal notranslate"><span class="pre">moonbitlang/async/js_async</span></code> provides support for integration with JavaScript promise,
+including waiting for an external JavaScript promise and exporting a MoonBit <code class="docutils literal notranslate"><span class="pre">async</span></code> function as a JavaScript promise.
+This allows interaction with native asynchronous operations of the JavaScript host.</p></li>
+</ul>
+<p>See <a class="reference external" href="https://mooncakes.io/docs/moonbitlang/async/js_async">the mooncakes.io page for <code class="docutils literal notranslate"><span class="pre">moonbitlang/async/js_async</span></code></a> fore more details.</p>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="ffi.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Foreign Function Interface (FFI)</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="verification.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Formal Verification</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#getting-started">Getting started</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#async-function">Async function</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#structured-concurrency-and-task-group">Structured concurrency and task group</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#cancellation-makes-asynchronous-program-modular">Cancellation makes asynchronous program modular</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#interacting-with-the-world">Interacting with the world</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#javascript-support">JavaScript support</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By International Digital Economy Academy
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, International Digital Economy Academy.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

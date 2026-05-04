@@ -1,0 +1,1444 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Formal Verification &#8212; MoonBit v0.9.1 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/sphinx-book-theme.css?v=a3416100" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../_static/documentation_options.js?v=e49c06df"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=a56c686a"></script>
+    <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'language/verification';</script>
+    <link rel="icon" href="../_static/favicon.ico"/>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Error Codes Index" href="error_codes/index.html" />
+    <link rel="prev" title="Async programming support" href="async-experimental.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <script async type="text/javascript" src="/_/static/javascript/readthedocs-addons.js"></script><meta name="readthedocs-project-slug" content="moonbit-docs" /><meta name="readthedocs-version-slug" content="latest" /><meta name="readthedocs-resolver-filename" content="/language/verification.html" /><meta name="readthedocs-http-status" content="200" /></head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../_static/logo.png" class="logo__image only-light" alt=""/>
+    <script>document.write(`<img src="../_static/logo.png" class="logo__image only-dark" alt=""/>`);</script>
+  
+  
+    <p class="title logo__title">MoonBit 月兔</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <ul class="current nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../tutorial/index.html">Tutorial</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tutorial/tour.html">A Tour of MoonBit for Beginners</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorial/cli-quickstart.html">Native CLI Quickstart</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorial/fullstack-one-project.html">Fullstack in One MoonBit Project</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">MoonBit Language</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fundamentals.html">Fundamentals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="methods.html">Method and Trait</a></li>
+<li class="toctree-l2"><a class="reference internal" href="derive.html">Deriving traits</a></li>
+<li class="toctree-l2"><a class="reference internal" href="error-handling.html">Error handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html">Managing Projects with Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tests.html">Writing Tests</a></li>
+<li class="toctree-l2"><a class="reference internal" href="benchmarks.html">Writing Benchmarks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="docs.html">Comments and Documentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="attributes.html">Attribute</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ffi.html">Foreign Function Interface (FFI)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="async-experimental.html">Async programming support</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">Formal Verification</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="error_codes/index.html">Error Codes Index</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0001.html">E0001</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0002.html">E0002</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0003.html">E0003</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0004.html">E0004</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0005.html">E0005</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0006.html">E0006</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0007.html">E0007</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0008.html">E0008</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0009.html">E0009</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0010.html">E0010</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0011.html">E0011</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0012.html">E0012</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0013.html">E0013</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0014.html">E0014</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0015.html">E0015</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0016.html">E0016</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0017.html">E0017</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0018.html">E0018</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0019.html">E0019</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0020.html">E0020</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0021.html">E0021</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0022.html">E0022</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0023.html">E0023</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0024.html">E0024</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0025.html">E0025</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0026.html">E0026</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0027.html">E0027</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0028.html">E0028</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0029.html">E0029</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0030.html">E0030</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0031.html">E0031</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0032.html">E0032</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0033.html">E0033</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0034.html">E0034</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0035.html">E0035</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0036.html">E0036</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0037.html">E0037</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0038.html">E0038</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0039.html">E0039</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0040.html">E0040</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0041.html">E0041</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0042.html">E0042</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0043.html">E0043</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0044.html">E0044</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0045.html">E0045</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0046.html">E0046</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0047.html">E0047</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0049.html">E0049</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0050.html">E0050</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0051.html">E0051</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0052.html">E0052</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0053.html">E0053</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0054.html">E0054</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0055.html">E0055</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0056.html">E0056</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0057.html">E0057</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0058.html">E0058</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0059.html">E0059</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0060.html">E0060</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0061.html">E0061</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0062.html">E0062</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0063.html">E0063</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0064.html">E0064</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0065.html">E0065</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0066.html">E0066</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0067.html">E0067</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0068.html">E0068</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0069.html">E0069</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E1000.html">E1000</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E1001.html">E1001</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3001.html">E3001</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3002.html">E3002</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3003.html">E3003</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3004.html">E3004</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3005.html">E3005</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3006.html">E3006</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3007.html">E3007</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3008.html">E3008</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3009.html">E3009</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3010.html">E3010</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3011.html">E3011</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3012.html">E3012</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3014.html">E3014</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3016.html">E3016</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3017.html">E3017</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3018.html">E3018</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3019.html">E3019</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3020.html">E3020</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3021.html">E3021</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3022.html">E3022</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3023.html">E3023</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3024.html">E3024</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3100.html">E3100</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3700.html">E3700</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3800.html">E3800</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3801.html">E3801</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4000.html">E4000</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4001.html">E4001</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4002.html">E4002</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4003.html">E4003</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4004.html">E4004</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4005.html">E4005</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4006.html">E4006</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4008.html">E4008</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4010.html">E4010</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4011.html">E4011</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4012.html">E4012</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4013.html">E4013</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4014.html">E4014</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4015.html">E4015</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4016.html">E4016</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4017.html">E4017</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4018.html">E4018</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4019.html">E4019</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4020.html">E4020</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4021.html">E4021</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4022.html">E4022</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4023.html">E4023</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4024.html">E4024</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4027.html">E4027</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4028.html">E4028</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4029.html">E4029</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4031.html">E4031</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4032.html">E4032</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4033.html">E4033</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4034.html">E4034</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4036.html">E4036</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4037.html">E4037</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4038.html">E4038</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4039.html">E4039</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4040.html">E4040</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4041.html">E4041</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4042.html">E4042</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4043.html">E4043</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4044.html">E4044</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4046.html">E4046</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4047.html">E4047</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4048.html">E4048</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4049.html">E4049</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4050.html">E4050</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4051.html">E4051</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4052.html">E4052</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4053.html">E4053</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4054.html">E4054</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4055.html">E4055</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4056.html">E4056</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4057.html">E4057</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4059.html">E4059</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4061.html">E4061</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4063.html">E4063</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4064.html">E4064</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4065.html">E4065</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4066.html">E4066</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4067.html">E4067</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4068.html">E4068</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4069.html">E4069</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4070.html">E4070</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4071.html">E4071</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4073.html">E4073</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4074.html">E4074</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4077.html">E4077</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4078.html">E4078</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4080.html">E4080</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4081.html">E4081</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4082.html">E4082</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4084.html">E4084</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4085.html">E4085</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4086.html">E4086</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4087.html">E4087</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4089.html">E4089</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4091.html">E4091</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4092.html">E4092</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4093.html">E4093</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4094.html">E4094</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4095.html">E4095</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4096.html">E4096</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4099.html">E4099</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4100.html">E4100</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4101.html">E4101</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4102.html">E4102</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4104.html">E4104</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4106.html">E4106</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4107.html">E4107</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4108.html">E4108</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4109.html">E4109</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4110.html">E4110</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4111.html">E4111</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4112.html">E4112</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4113.html">E4113</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4114.html">E4114</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4115.html">E4115</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4116.html">E4116</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4117.html">E4117</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4118.html">E4118</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4119.html">E4119</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4120.html">E4120</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4121.html">E4121</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4122.html">E4122</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4124.html">E4124</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4127.html">E4127</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4128.html">E4128</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4130.html">E4130</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4131.html">E4131</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4132.html">E4132</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4133.html">E4133</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4135.html">E4135</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4136.html">E4136</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4137.html">E4137</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4138.html">E4138</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4139.html">E4139</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4140.html">E4140</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4141.html">E4141</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4142.html">E4142</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4143.html">E4143</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4144.html">E4144</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4145.html">E4145</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4146.html">E4146</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4147.html">E4147</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4148.html">E4148</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4149.html">E4149</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4151.html">E4151</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4153.html">E4153</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4154.html">E4154</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4155.html">E4155</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4156.html">E4156</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4157.html">E4157</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4158.html">E4158</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4159.html">E4159</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4160.html">E4160</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4161.html">E4161</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4162.html">E4162</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4163.html">E4163</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4164.html">E4164</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4165.html">E4165</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4167.html">E4167</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4168.html">E4168</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4171.html">E4171</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4172.html">E4172</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4173.html">E4173</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4174.html">E4174</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4175.html">E4175</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4176.html">E4176</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4177.html">E4177</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4180.html">E4180</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4181.html">E4181</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4182.html">E4182</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4183.html">E4183</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4184.html">E4184</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4185.html">E4185</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4186.html">E4186</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4187.html">E4187</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4188.html">E4188</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4189.html">E4189</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4190.html">E4190</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4191.html">E4191</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4192.html">E4192</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4193.html">E4193</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4194.html">E4194</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4195.html">E4195</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4196.html">E4196</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4197.html">E4197</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4198.html">E4198</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4199.html">E4199</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4200.html">E4200</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4201.html">E4201</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4202.html">E4202</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4203.html">E4203</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4204.html">E4204</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4205.html">E4205</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4206.html">E4206</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4207.html">E4207</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4208.html">E4208</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4209.html">E4209</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4210.html">E4210</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../toolchain/index.html">Toolchains</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../toolchain/moon/index.html">Moon Build System</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/tutorial.html">MoonBit's Build System Tutorial</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/script-mode.html">Running <code class="docutils literal notranslate"><span class="pre">.mbtx</span></code> Scripts</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/package-manage-tour.html">Use and publish packages</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/workspace.html">Workspace Support</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/commands.html">Command-Line Help for <code class="docutils literal notranslate"><span class="pre">moon</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/module.html">Module Configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/package.html">Package Configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/coverage.html">Measuring code coverage</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2"><a class="reference internal" href="../toolchain/moonide/index.html">MoonBit Agent IDE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../toolchain/vscode/index.html">MoonBit VSCode Plugin</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../toolchain/wasm/index.html">WebAssembly Integration</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/wasm/component-model-tutorial.html">MoonBit for Component Model</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../example/index.html">Examples</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../example/sudoku/index.html">Sudoku Solver</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../example/lambda/index.html">Lambda calculus</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../example/gmachine/index.html">G-Machine</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../example/gmachine/gmachine-1.html">G-Machine 1</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example/gmachine/gmachine-2.html">G-Machine 2</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example/gmachine/gmachine-3.html">G-Machine 3</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../example/myers-diff/index.html">Myers Diff</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../example/myers-diff/myers-diff.html">Myers diff</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example/myers-diff/myers-diff2.html">Myers diff 2</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example/myers-diff/myers-diff3.html">Myers diff 3</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../example/segment-tree/index.html">Segment Tree</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../example/segment-tree/segment-tree.html">Segment Trees (Part 1)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example/segment-tree/segment-tree2.html">Segment Trees (Part 2)</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/moonbitlang/moonbit-docs/blob/main/next/language/verification.md?plain=1" target="_blank"
+   class="btn btn-sm btn-source-file-button dropdown-item"
+   title="Show source"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-code"></i>
+  </span>
+<span class="btn__text-container">Show source</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/moonbitlang/moonbit-docs/edit/main/next/language/verification.md" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/moonbitlang/moonbit-docs/issues/new?title=Issue%20on%20page%20%2Flanguage/verification.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../_sources/language/verification.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Formal Verification</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#overview-example-binary-search">Overview Example: Binary Search</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#setup">Setup</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#environment-setup">Environment Setup</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#why3">Why3</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#external-solvers">External Solvers</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#enabling-proofs-in-a-package">Enabling Proofs in a Package</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#structure-of-verified-code">Structure of Verified Code</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#source-layout">Source Layout</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#program-side-and-logic-side">Program Side and Logic Side</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#writing-specifications-and-proofs">Writing Specifications and Proofs</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#contracts-in-mbt">Contracts in <code class="docutils literal notranslate"><span class="pre">.mbt</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#proof-specific-annotations">Proof-Specific Annotations</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#proof-pure"><code class="docutils literal notranslate"><span class="pre">#proof_pure</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#proof-decrease"><code class="docutils literal notranslate"><span class="pre">proof_decrease</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#proof-axiomatized"><code class="docutils literal notranslate"><span class="pre">proof_axiomatized</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#predicates-and-lemmas-in-mbtp">Predicates and Lemmas in <code class="docutils literal notranslate"><span class="pre">.mbtp</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#loop-invariants">Loop Invariants</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#model-based-verification">Model-Based Verification</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#recommended-style">Recommended Style</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#running-verification">Running Verification</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-moon-prove-checks">What <code class="docutils literal notranslate"><span class="pre">moon</span> <span class="pre">prove</span></code> Checks</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#running-the-verifier">Running the Verifier</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#trust-model-and-limitations">Trust Model and Limitations</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#trusted-assumptions">Trusted Assumptions</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#current-status">Current Status</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#preferred-verification-style">Preferred Verification Style</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#further-reading">Further Reading</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="formal-verification">
+<h1>Formal Verification<a class="headerlink" href="#formal-verification" title="Link to this heading">#</a></h1>
+<p>MoonBit has experimental support for formal verification through <code class="docutils literal notranslate"><span class="pre">moon</span> <span class="pre">prove</span></code>.
+It lets you write executable MoonBit code, state logical properties about that
+code, and discharge the generated proof obligations with the SMT solvers.</p>
+<p>At a high level, the workflow looks like this:</p>
+<ol class="arabic simple">
+<li><p>Write executable code in <code class="docutils literal notranslate"><span class="pre">.mbt</span></code> files.</p></li>
+<li><p>Write predicates, logical helper functions, and lemmas in <code class="docutils literal notranslate"><span class="pre">.mbtp</span></code> files.</p></li>
+<li><p>Enable proof mode in the package.</p></li>
+<li><p>Run <code class="docutils literal notranslate"><span class="pre">moon</span> <span class="pre">prove</span></code>.</p></li>
+</ol>
+<section id="overview-example-binary-search">
+<h2>Overview Example: Binary Search<a class="headerlink" href="#overview-example-binary-search" title="Link to this heading">#</a></h2>
+<p>The following package gives a compact overview of how verification in MoonBit
+fits together. It shows:</p>
+<ul class="simple">
+<li><p>package-level proof enablement</p></li>
+<li><p>logic-side predicates in <code class="docutils literal notranslate"><span class="pre">.mbtp</span></code></p></li>
+<li><p>a program-side function in <code class="docutils literal notranslate"><span class="pre">.mbt</span></code></p></li>
+<li><p>preconditions and postconditions</p></li>
+<li><p>loop invariants and <code class="docutils literal notranslate"><span class="pre">proof_yield</span></code></p></li>
+<li><p>local <code class="docutils literal notranslate"><span class="pre">proof_assert</span></code> steps</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">proof_reasoning</span></code> as a proof-oriented explanation of the loop</p></li>
+</ul>
+<p>First, enable proofs for the package:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="nf">options</span><span class="p">(</span>
+<span class="w">  </span><span class="s">&quot;</span><span class="s2">proof-enabled</span><span class="s">&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Then define the logic-side specification in <code class="docutils literal notranslate"><span class="pre">.mbtp</span></code>:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="nv">predicate</span><span class="w"> </span><span class="nf">in_bounds</span><span class="p">(</span><span class="nv">xs</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">FixedArray</span><span class="p">[</span><span class="nb">Int</span><span class="p">],</span><span class="w"> </span><span class="nv">i</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="p">(</span><span class="mi">0</span><span class="w"> </span><span class="o">&lt;</span><span class="p">=</span><span class="w"> </span><span class="nv">i</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="p">(</span><span class="nv">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nv">xs</span><span class="p">.</span><span class="nf">length</span><span class="p">())</span>
+<span class="p">}</span>
+
+<span class="nv">predicate</span><span class="w"> </span><span class="nf">sorted</span><span class="p">(</span><span class="nv">xs</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">FixedArray</span><span class="p">[</span><span class="nb">Int</span><span class="p">])</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="err">∀</span><span class="w"> </span><span class="nv">i</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">,</span><span class="w"> </span><span class="err">∀</span><span class="w"> </span><span class="nv">j</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">,</span>
+<span class="w">    </span><span class="nf">in_bounds</span><span class="p">(</span><span class="nv">xs</span><span class="p">,</span><span class="w"> </span><span class="nv">i</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nf">in_bounds</span><span class="p">(</span><span class="nv">xs</span><span class="p">,</span><span class="w"> </span><span class="nv">j</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="p">(</span><span class="nv">i</span><span class="w"> </span><span class="o">&lt;</span><span class="p">=</span><span class="w"> </span><span class="nv">j</span><span class="p">)</span><span class="w"> </span><span class="err">→</span>
+<span class="w">      </span><span class="nv">xs</span><span class="p">[</span><span class="nv">i</span><span class="p">]</span><span class="w"> </span><span class="o">&lt;</span><span class="p">=</span><span class="w"> </span><span class="nv">xs</span><span class="p">[</span><span class="nv">j</span><span class="p">]</span>
+<span class="p">}</span>
+
+<span class="nv">predicate</span><span class="w"> </span><span class="nf">binary_search_ok</span><span class="p">(</span><span class="nv">xs</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">FixedArray</span><span class="p">[</span><span class="nb">Int</span><span class="p">],</span><span class="w"> </span><span class="nv">key</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">,</span><span class="w"> </span><span class="nv">result</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Option</span><span class="p">[</span><span class="nb">Int</span><span class="p">])</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">match</span><span class="w"> </span><span class="nv">result</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nc">None</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="err">∀</span><span class="w"> </span><span class="nv">i</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">,</span><span class="w"> </span><span class="nf">in_bounds</span><span class="p">(</span><span class="nv">xs</span><span class="p">,</span><span class="w"> </span><span class="nv">i</span><span class="p">)</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="nv">xs</span><span class="p">[</span><span class="nv">i</span><span class="p">]</span><span class="w"> </span><span class="p">!=</span><span class="w"> </span><span class="nv">key</span>
+<span class="w">    </span><span class="nc">Some</span><span class="p">(</span><span class="nv">result</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nf">in_bounds</span><span class="p">(</span><span class="nv">xs</span><span class="p">,</span><span class="w"> </span><span class="nv">result</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nv">xs</span><span class="p">[</span><span class="nv">result</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nv">key</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Finally, implement the executable function in <code class="docutils literal notranslate"><span class="pre">.mbt</span></code>:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="k">pub</span><span class="w"> </span><span class="kd">fn</span><span class="w"> </span><span class="nf">binary_search</span><span class="p">(</span>
+<span class="w">  </span><span class="nv">xs</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">FixedArray</span><span class="p">[</span><span class="nb">Int</span><span class="p">],</span>
+<span class="w">  </span><span class="nv">key</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">,</span>
+<span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Int</span><span class="p">?</span><span class="w"> </span><span class="nv">where</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nv">proof_require</span><span class="p">:</span><span class="w"> </span><span class="nf">sorted</span><span class="p">(</span><span class="nv">xs</span><span class="p">),</span>
+<span class="w">  </span><span class="nv">proof_ensure</span><span class="p">:</span><span class="w"> </span><span class="nv">result</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nf">binary_search_ok</span><span class="p">(</span><span class="nv">xs</span><span class="p">,</span><span class="w"> </span><span class="nv">key</span><span class="p">,</span><span class="w"> </span><span class="nv">result</span><span class="p">),</span>
+<span class="p">}</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="nv">i</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="nv">j</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nv">xs</span><span class="p">.</span><span class="nf">length</span><span class="p">();</span><span class="w"> </span><span class="nv">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nv">j</span><span class="p">;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="nv">h</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nv">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="nv">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nv">i</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">2</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nv">xs</span><span class="p">[</span><span class="nv">h</span><span class="p">]</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nv">key</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nv">proof_assert</span><span class="w"> </span><span class="err">∀</span><span class="w"> </span><span class="nv">idx</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">,</span>
+<span class="w">        </span><span class="p">(</span><span class="mi">0</span><span class="w"> </span><span class="o">&lt;</span><span class="p">=</span><span class="w"> </span><span class="nv">idx</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="p">(</span><span class="nv">idx</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nv">h</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="nv">xs</span><span class="p">[</span><span class="nv">idx</span><span class="p">]</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nv">key</span>
+<span class="w">      </span><span class="k">continue</span><span class="w"> </span><span class="nv">h</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nv">j</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="nv">key</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nv">xs</span><span class="p">[</span><span class="nv">h</span><span class="p">]</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nv">proof_assert</span><span class="w"> </span><span class="err">∀</span><span class="w"> </span><span class="nv">idx</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">,</span>
+<span class="w">        </span><span class="p">(</span><span class="nv">h</span><span class="w"> </span><span class="o">&lt;</span><span class="p">=</span><span class="w"> </span><span class="nv">idx</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="p">(</span><span class="nv">idx</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nv">xs</span><span class="p">.</span><span class="nf">length</span><span class="p">())</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="nv">key</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nv">xs</span><span class="p">[</span><span class="nv">idx</span><span class="p">]</span>
+<span class="w">      </span><span class="k">continue</span><span class="w"> </span><span class="nv">i</span><span class="p">,</span><span class="w"> </span><span class="nv">h</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nv">proof_assert</span><span class="w"> </span><span class="nv">xs</span><span class="p">[</span><span class="nv">h</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nv">key</span>
+<span class="w">      </span><span class="k">break</span><span class="w"> </span><span class="nc">Some</span><span class="p">(</span><span class="nv">h</span><span class="p">)</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span><span class="w"> </span><span class="nv">nobreak</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nc">None</span>
+<span class="w">  </span><span class="p">}</span><span class="w"> </span><span class="nv">where</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nv">proof_invariant</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&lt;</span><span class="p">=</span><span class="w"> </span><span class="nv">i</span><span class="p">,</span>
+<span class="w">    </span><span class="nv">proof_invariant</span><span class="p">:</span><span class="w"> </span><span class="nv">i</span><span class="w"> </span><span class="o">&lt;</span><span class="p">=</span><span class="w"> </span><span class="nv">j</span><span class="p">,</span>
+<span class="w">    </span><span class="nv">proof_invariant</span><span class="p">:</span><span class="w"> </span><span class="nv">j</span><span class="w"> </span><span class="o">&lt;</span><span class="p">=</span><span class="w"> </span><span class="nv">xs</span><span class="p">.</span><span class="nf">length</span><span class="p">(),</span>
+<span class="w">    </span><span class="nv">proof_invariant</span><span class="p">:</span><span class="w"> </span><span class="err">∀</span><span class="w"> </span><span class="nv">idx</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="mi">0</span><span class="w"> </span><span class="o">&lt;</span><span class="p">=</span><span class="w"> </span><span class="nv">idx</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="p">(</span><span class="nv">idx</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nv">i</span><span class="p">)</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="nv">xs</span><span class="p">[</span><span class="nv">idx</span><span class="p">]</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nv">key</span><span class="p">,</span>
+<span class="w">    </span><span class="nv">proof_invariant</span><span class="p">:</span><span class="w"> </span><span class="err">∀</span><span class="w"> </span><span class="nv">idx</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="nv">j</span><span class="w"> </span><span class="o">&lt;</span><span class="p">=</span><span class="w"> </span><span class="nv">idx</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="p">(</span><span class="nv">idx</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nv">xs</span><span class="p">.</span><span class="nf">length</span><span class="p">())</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="nv">key</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nv">xs</span><span class="p">[</span><span class="nv">idx</span><span class="p">],</span>
+<span class="w">    </span><span class="nv">proof_yield</span><span class="p">:</span><span class="w"> </span><span class="nv">res</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nf">binary_search_ok</span><span class="p">(</span><span class="nv">xs</span><span class="p">,</span><span class="w"> </span><span class="nv">key</span><span class="p">,</span><span class="w"> </span><span class="nv">res</span><span class="p">),</span>
+<span class="w">    </span><span class="nv">proof_reasoning</span><span class="p">:</span><span class="w"> </span><span class="p">(</span>
+<span class="w">      </span><span class="cp">#| The loop maintains a candidate window `[i, j)`.</span>
+<span class="w">      </span><span class="cp">#| Every index before `i` is known to hold a value `&lt; key`, and every</span>
+<span class="w">      </span><span class="cp">#| index from `j` onward is known to hold a value `&gt; key`.</span>
+<span class="w">      </span><span class="cp">#|</span>
+<span class="w">      </span><span class="cp">#| At midpoint `h` there are three cases:</span>
+<span class="w">      </span><span class="cp">#|   - `xs[h] &lt; key`: move the left boundary to `h + 1`</span>
+<span class="w">      </span><span class="cp">#|   - `key &lt; xs[h]`: move the right boundary to `h`</span>
+<span class="w">      </span><span class="cp">#|   - otherwise, the element at `h` is equal to `key`</span>
+<span class="w">      </span><span class="cp">#|</span>
+<span class="w">      </span><span class="cp">#| If the loop exits normally, the exclusion invariants cover the whole</span>
+<span class="w">      </span><span class="cp">#| array, so no index can contain `key`.</span>
+<span class="w">    </span><span class="p">),</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>This example already shows the main structure of verified MoonBit code:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">sorted</span></code> and <code class="docutils literal notranslate"><span class="pre">binary_search_ok</span></code> are logic-side predicates</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">binary_search</span></code> is executable program-side code</p></li>
+<li><p>the <code class="docutils literal notranslate"><span class="pre">where</span> <span class="pre">{</span> <span class="pre">...</span> <span class="pre">}</span></code> block attaches logic-side contracts to the function</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">proof_assert</span></code> records local facts that help the prover</p></li>
+<li><p>the loop invariants describe the shrinking search window</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">proof_reasoning</span></code> records the proof idea in structured prose</p></li>
+</ul>
+<p>The rest of this page explains these pieces in more detail and introduces
+additional features such as <code class="docutils literal notranslate"><span class="pre">#proof_pure</span></code>, <code class="docutils literal notranslate"><span class="pre">proof_decrease</span></code>,
+<code class="docutils literal notranslate"><span class="pre">proof_axiomatized</span></code>, model-based verification, and the trusted surface.</p>
+</section>
+<section id="setup">
+<h2>Setup<a class="headerlink" href="#setup" title="Link to this heading">#</a></h2>
+<section id="environment-setup">
+<h3>Environment Setup<a class="headerlink" href="#environment-setup" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">moon</span> <span class="pre">prove</span></code> relies on the external Why3 verification toolchain. MoonBit lowers
+proof-enabled packages to Why3, and Why3 then dispatches proof obligations to
+one or more external solvers.</p>
+</section>
+<section id="why3">
+<h3>Why3<a class="headerlink" href="#why3" title="Link to this heading">#</a></h3>
+<p>Why3 is required to run formal verification in MoonBit.</p>
+<ul class="simple">
+<li><p>It is recommended to install Why3 through <code class="docutils literal notranslate"><span class="pre">opam</span></code>.</p></li>
+<li><p>The recommended pinned version is <code class="docutils literal notranslate"><span class="pre">1.7.2</span></code>.</p></li>
+</ul>
+<p>Using <code class="docutils literal notranslate"><span class="pre">opam</span></code> makes it easier to keep Why3 aligned with the version expected by
+the current MoonBit proof pipeline.</p>
+</section>
+<section id="external-solvers">
+<h3>External Solvers<a class="headerlink" href="#external-solvers" title="Link to this heading">#</a></h3>
+<p>At least one external solver must also be installed.</p>
+<p>MoonBit currently supports:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">z3</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cvc5</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">alt-ergo</span></code></p></li>
+</ul>
+<p>Installing more than one solver can improve prover coverage, but a working setup
+only requires one of them to be available.</p>
+</section>
+<section id="enabling-proofs-in-a-package">
+<h3>Enabling Proofs in a Package<a class="headerlink" href="#enabling-proofs-in-a-package" title="Link to this heading">#</a></h3>
+<p>Proof support is enabled per package in <code class="docutils literal notranslate"><span class="pre">moon.pkg</span></code>, as shown in the overview
+example above.</p>
+<p>Once enabled, the package can contain both ordinary MoonBit source files and
+proof-oriented <code class="docutils literal notranslate"><span class="pre">.mbtp</span></code> files. Proof enablement is package-local: if multiple
+packages in a module carry proofs, each of those packages must enable it.</p>
+</section>
+</section>
+<section id="structure-of-verified-code">
+<h2>Structure of Verified Code<a class="headerlink" href="#structure-of-verified-code" title="Link to this heading">#</a></h2>
+<section id="source-layout">
+<h3>Source Layout<a class="headerlink" href="#source-layout" title="Link to this heading">#</a></h3>
+<p>Verification-oriented packages usually split into two layers:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">.mbt</span></code>: executable code, contracts, loop invariants, and local proof steps</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">.mbtp</span></code>: predicates, abstract models, invariants, and lemmas</p></li>
+</ul>
+<p>That split keeps runtime code readable while making proof structure explicit.
+In the <a class="reference internal" href="#overview-example-binary-search">binary search overview</a>, the predicates live in <code class="docutils literal notranslate"><span class="pre">.mbtp</span></code> and the
+executable search function lives in <code class="docutils literal notranslate"><span class="pre">.mbt</span></code>.</p>
+</section>
+<section id="program-side-and-logic-side">
+<h3>Program Side and Logic Side<a class="headerlink" href="#program-side-and-logic-side" title="Link to this heading">#</a></h3>
+<p>MoonBit verification has a clear distinction between the program side and the
+logic side.</p>
+<ul class="simple">
+<li><p>The program side is executable MoonBit code.</p></li>
+<li><p>The logic side is used for specifications and proofs, and may not correspond
+to runtime code at all.</p></li>
+</ul>
+<p>Definitions in <code class="docutils literal notranslate"><span class="pre">.mbt</span></code> files are on the program side. Definitions in <code class="docutils literal notranslate"><span class="pre">.mbtp</span></code>
+files are on the logic side.</p>
+<p>This distinction is important because program-side definitions and logic-side
+definitions are separated:</p>
+<ul class="simple">
+<li><p>program-side definitions are executable and can be called by ordinary MoonBit
+code</p></li>
+<li><p>logic-side definitions are used by specifications and proofs</p></li>
+<li><p>logic-side definitions in <code class="docutils literal notranslate"><span class="pre">.mbtp</span></code> are not ordinary runtime functions</p></li>
+<li><p>program-side code does not call logic-side definitions as part of execution</p></li>
+<li><p>logic-side specifications do not in general call arbitrary program-side
+definitions</p></li>
+</ul>
+<p>This separation is the reason verified packages often have both:</p>
+<ul class="simple">
+<li><p>program-side helper functions used by execution</p></li>
+<li><p>logic-side predicates or model functions used by contracts</p></li>
+</ul>
+<p>When one definition needs to be visible from both sides, <code class="docutils literal notranslate"><span class="pre">#proof_pure</span></code> is the
+mechanism for doing that.</p>
+<p>Within a <code class="docutils literal notranslate"><span class="pre">.mbt</span></code> file, contracts and proof annotations are the places where
+logic-side reasoning appears inside program code. In particular:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">proof_require</span></code> and <code class="docutils literal notranslate"><span class="pre">proof_ensure</span></code> are logic-side specifications attached to
+program functions</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">proof_assert</span></code> states a logical fact that must be proved at that point</p></li>
+<li><p>loop annotations such as <code class="docutils literal notranslate"><span class="pre">proof_invariant</span></code>, <code class="docutils literal notranslate"><span class="pre">proof_yield</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">proof_reasoning</span></code> are logic-side statements about executable loops</p></li>
+</ul>
+</section>
+</section>
+<section id="writing-specifications-and-proofs">
+<h2>Writing Specifications and Proofs<a class="headerlink" href="#writing-specifications-and-proofs" title="Link to this heading">#</a></h2>
+<section id="contracts-in-mbt">
+<h3>Contracts in <code class="docutils literal notranslate"><span class="pre">.mbt</span></code><a class="headerlink" href="#contracts-in-mbt" title="Link to this heading">#</a></h3>
+<p>MoonBit uses <code class="docutils literal notranslate"><span class="pre">where</span> <span class="pre">{</span> <span class="pre">...</span> <span class="pre">}</span></code> clauses for function contracts. In the binary
+search overview, the function contract appears directly on the program-side
+definition:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">proof_require</span></code> states a precondition.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">proof_ensure</span></code> states a postcondition.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">result</span></code> refers to the function result.</p></li>
+</ul>
+<p>Inside executable code, <code class="docutils literal notranslate"><span class="pre">proof_assert</span></code> can be used to record intermediate facts
+that help the prover connect the implementation to the specification.</p>
+<p>This is often the point where program-side implementation facts are connected to
+logic-side predicates and postconditions.</p>
+</section>
+<section id="proof-specific-annotations">
+<h3>Proof-Specific Annotations<a class="headerlink" href="#proof-specific-annotations" title="Link to this heading">#</a></h3>
+<p>Besides <code class="docutils literal notranslate"><span class="pre">proof_require</span></code>, <code class="docutils literal notranslate"><span class="pre">proof_ensure</span></code>, and <code class="docutils literal notranslate"><span class="pre">proof_assert</span></code>, MoonBit also has
+proof-specific annotations that control how definitions are treated by the proof
+pipeline.</p>
+</section>
+<section id="proof-pure">
+<h3><code class="docutils literal notranslate"><span class="pre">#proof_pure</span></code><a class="headerlink" href="#proof-pure" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">#proof_pure</span></code> marks a function as pure from the verifier's point of view. This
+is useful for helper functions that compute logical quantities used in
+predicates and postconditions, while still being visible on the program side.</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="cp">#proof_pure</span>
+<span class="kd">fn</span><span class="w"> </span><span class="nf">height</span><span class="p">(</span><span class="nv">t</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">Tree</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Int</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">match</span><span class="w"> </span><span class="nv">t</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nc">Empty</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">    </span><span class="nc">Node</span><span class="p">(</span><span class="nc">_</span><span class="p">,</span><span class="w"> </span><span class="nc">_</span><span class="p">,</span><span class="w"> </span><span class="nc">_</span><span class="p">,</span><span class="w"> </span><span class="nv">h</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nv">h</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The same helper can then be used in a specification:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="nv">predicate</span><span class="w"> </span><span class="nf">cached_height_ok</span><span class="p">(</span><span class="nv">t</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">Tree</span><span class="p">,</span><span class="w"> </span><span class="nv">result</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nv">result</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nf">height</span><span class="p">(</span><span class="nv">t</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The rationale for <code class="docutils literal notranslate"><span class="pre">#proof_pure</span></code> is that some computations naturally belong on
+both sides. A helper such as <code class="docutils literal notranslate"><span class="pre">height</span></code> on a tree can be useful in executable
+code, but specifications may also want to talk about the same quantity.</p>
+<p>Without <code class="docutils literal notranslate"><span class="pre">#proof_pure</span></code>, this typically means:</p>
+<ul class="simple">
+<li><p>writing one program-side definition for execution</p></li>
+<li><p>writing a second logic-side definition for specifications</p></li>
+<li><p>proving that the two definitions are equivalent before using them</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">#proof_pure</span></code> avoids that duplication by allowing one side-effect-free MoonBit
+definition to be shared across program code and proof-oriented logic.</p>
+<p>In larger verified packages, <code class="docutils literal notranslate"><span class="pre">#proof_pure</span></code> is commonly used for helpers such as
+structural measures like height, ranking functions, summaries, and other
+proof-facing computations that should behave like mathematical functions.</p>
+<p>At the moment, <code class="docutils literal notranslate"><span class="pre">#proof_pure</span></code> helpers are best treated as pure specification
+helpers rather than fully contracted verified functions. In particular, support
+for attaching ordinary verification contracts directly to <code class="docutils literal notranslate"><span class="pre">#proof_pure</span></code>
+definitions is still limited.</p>
+</section>
+<section id="proof-decrease">
+<h3><code class="docutils literal notranslate"><span class="pre">proof_decrease</span></code><a class="headerlink" href="#proof-decrease" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">proof_decrease</span></code> supplies a termination measure for recursive definitions.</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="k">pub</span><span class="w"> </span><span class="kd">fn</span><span class="w"> </span><span class="nf">countdown</span><span class="p">(</span><span class="nv">n</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Int</span><span class="w"> </span><span class="nv">where</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nv">proof_decrease</span><span class="p">:</span><span class="w"> </span><span class="nv">n</span><span class="p">,</span>
+<span class="w">  </span><span class="nv">proof_require</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&lt;</span><span class="p">=</span><span class="w"> </span><span class="nv">n</span><span class="p">,</span>
+<span class="w">  </span><span class="nv">proof_ensure</span><span class="p">:</span><span class="w"> </span><span class="nv">result</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&lt;</span><span class="p">=</span><span class="w"> </span><span class="nv">result</span><span class="p">,</span>
+<span class="p">}</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="nv">n</span><span class="w"> </span><span class="o">&lt;</span><span class="p">=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="mi">0</span>
+<span class="w">  </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nf">countdown</span><span class="p">(</span><span class="nv">n</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>This annotation is especially important when structural recursion or a numeric
+measure is not obvious to the prover from the function body alone.</p>
+</section>
+<section id="proof-axiomatized">
+<h3><code class="docutils literal notranslate"><span class="pre">proof_axiomatized</span></code><a class="headerlink" href="#proof-axiomatized" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">proof_axiomatized</span></code> marks a contracted function or lemma as assumed rather than
+proved.</p>
+<p>This is useful when a definition should be available to later proofs, but its
+implementation or proof is intentionally left outside the current verification
+boundary.</p>
+<p>In practice, <code class="docutils literal notranslate"><span class="pre">proof_axiomatized</span></code> should be used sparingly:</p>
+<ul class="simple">
+<li><p>on a function, it means the verifier assumes the stated contract</p></li>
+<li><p>on a lemma, it means the verifier assumes the stated conclusion</p></li>
+</ul>
+<p>For example:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="k">pub</span><span class="w"> </span><span class="kd">fn</span><span class="w"> </span><span class="nf">assumed_nonnegative</span><span class="p">(</span><span class="nv">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Int</span><span class="w"> </span><span class="nv">where</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nv">proof_axiomatized</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nv">proof_require</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&lt;</span><span class="p">=</span><span class="w"> </span><span class="nv">x</span><span class="p">,</span>
+<span class="w">  </span><span class="nv">proof_ensure</span><span class="p">:</span><span class="w"> </span><span class="nv">result</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&lt;</span><span class="p">=</span><span class="w"> </span><span class="nv">result</span><span class="p">,</span>
+<span class="p">}</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nv">x</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>This kind of declaration can be useful as a temporary bridge while a proof is
+still being developed, or when the trusted boundary is intentional and explicit.
+The important point is that <code class="docutils literal notranslate"><span class="pre">moon</span> <span class="pre">prove</span></code> will use the contract as an
+assumption, rather than proving it from the function body.</p>
+<p>Because these assumptions are not discharged by <code class="docutils literal notranslate"><span class="pre">moon</span> <span class="pre">prove</span></code>, they become part
+of the trusted surface of the verified package.</p>
+</section>
+<section id="predicates-and-lemmas-in-mbtp">
+<h3>Predicates and Lemmas in <code class="docutils literal notranslate"><span class="pre">.mbtp</span></code><a class="headerlink" href="#predicates-and-lemmas-in-mbtp" title="Link to this heading">#</a></h3>
+<p>Logical properties live in <code class="docutils literal notranslate"><span class="pre">.mbtp</span></code> files. In the <a class="reference internal" href="#overview-example-binary-search">binary search overview</a>, the
+logic side defines:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">in_bounds</span></code> as a basic indexing predicate</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sorted</span></code> as the precondition on the input array</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">binary_search_ok</span></code> as the postcondition relating the result to the array and
+the key</p></li>
+</ul>
+<p>For example, predicates in <code class="docutils literal notranslate"><span class="pre">.mbtp</span></code> can define the logical vocabulary used by
+contracts:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="nv">predicate</span><span class="w"> </span><span class="nf">in_bounds</span><span class="p">(</span><span class="nv">xs</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">FixedArray</span><span class="p">[</span><span class="nb">Int</span><span class="p">],</span><span class="w"> </span><span class="nv">i</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="p">(</span><span class="mi">0</span><span class="w"> </span><span class="o">&lt;</span><span class="p">=</span><span class="w"> </span><span class="nv">i</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="p">(</span><span class="nv">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nv">xs</span><span class="p">.</span><span class="nf">length</span><span class="p">())</span>
+<span class="p">}</span>
+
+<span class="nv">predicate</span><span class="w"> </span><span class="nf">sorted</span><span class="p">(</span><span class="nv">xs</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">FixedArray</span><span class="p">[</span><span class="nb">Int</span><span class="p">])</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="err">∀</span><span class="w"> </span><span class="nv">i</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">,</span><span class="w"> </span><span class="err">∀</span><span class="w"> </span><span class="nv">j</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">,</span>
+<span class="w">    </span><span class="nf">in_bounds</span><span class="p">(</span><span class="nv">xs</span><span class="p">,</span><span class="w"> </span><span class="nv">i</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nf">in_bounds</span><span class="p">(</span><span class="nv">xs</span><span class="p">,</span><span class="w"> </span><span class="nv">j</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="p">(</span><span class="nv">i</span><span class="w"> </span><span class="o">&lt;</span><span class="p">=</span><span class="w"> </span><span class="nv">j</span><span class="p">)</span><span class="w"> </span><span class="err">→</span>
+<span class="w">      </span><span class="nv">xs</span><span class="p">[</span><span class="nv">i</span><span class="p">]</span><span class="w"> </span><span class="o">&lt;</span><span class="p">=</span><span class="w"> </span><span class="nv">xs</span><span class="p">[</span><span class="nv">j</span><span class="p">]</span>
+<span class="p">}</span>
+
+<span class="nv">predicate</span><span class="w"> </span><span class="nf">binary_search_ok</span><span class="p">(</span><span class="nv">xs</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">FixedArray</span><span class="p">[</span><span class="nb">Int</span><span class="p">],</span><span class="w"> </span><span class="nv">key</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">,</span><span class="w"> </span><span class="nv">result</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Option</span><span class="p">[</span><span class="nb">Int</span><span class="p">])</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">match</span><span class="w"> </span><span class="nv">result</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nc">None</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="err">∀</span><span class="w"> </span><span class="nv">i</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">,</span><span class="w"> </span><span class="nf">in_bounds</span><span class="p">(</span><span class="nv">xs</span><span class="p">,</span><span class="w"> </span><span class="nv">i</span><span class="p">)</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="nv">xs</span><span class="p">[</span><span class="nv">i</span><span class="p">]</span><span class="w"> </span><span class="p">!=</span><span class="w"> </span><span class="nv">key</span>
+<span class="w">    </span><span class="nc">Some</span><span class="p">(</span><span class="nv">result</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nf">in_bounds</span><span class="p">(</span><span class="nv">xs</span><span class="p">,</span><span class="w"> </span><span class="nv">result</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nv">xs</span><span class="p">[</span><span class="nv">result</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nv">key</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>For larger verified packages, <code class="docutils literal notranslate"><span class="pre">.mbtp</span></code> also holds:</p>
+<ul class="simple">
+<li><p>abstract model functions such as <code class="docutils literal notranslate"><span class="pre">model(x)</span></code></p></li>
+<li><p>representation invariants such as <code class="docutils literal notranslate"><span class="pre">bridge_inv(x)</span></code> or <code class="docutils literal notranslate"><span class="pre">sparse_array_inv(x)</span></code></p></li>
+<li><p>named postconditions such as <code class="docutils literal notranslate"><span class="pre">deposit_post(...)</span></code></p></li>
+<li><p>reusable lemmas</p></li>
+</ul>
+<p>Lemmas are proof-only declarations that capture reusable facts. Small lemmas may
+have an empty body when the prover can discharge them directly, while larger
+lemmas can use recursive proof structure:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="nv">lemma</span><span class="w"> </span><span class="nf">height_nonneg_lemma</span><span class="p">(</span><span class="nv">t</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">Tree</span><span class="p">)</span><span class="w"> </span><span class="nv">where</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nv">proof_decrease</span><span class="p">:</span><span class="w"> </span><span class="nv">t</span><span class="p">,</span>
+<span class="w">  </span><span class="nv">proof_require</span><span class="p">:</span><span class="w"> </span><span class="nf">avl_inv</span><span class="p">(</span><span class="nv">t</span><span class="p">),</span>
+<span class="w">  </span><span class="nv">proof_ensure</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&lt;</span><span class="p">=</span><span class="w"> </span><span class="nf">height</span><span class="p">(</span><span class="nv">t</span><span class="p">),</span>
+<span class="p">}</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">match</span><span class="w"> </span><span class="nv">t</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nc">Empty</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">()</span>
+<span class="w">    </span><span class="nc">Node</span><span class="p">(</span><span class="nv">l</span><span class="p">,</span><span class="w"> </span><span class="nc">_x</span><span class="p">,</span><span class="w"> </span><span class="nv">r</span><span class="p">,</span><span class="w"> </span><span class="nc">_h</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nf">height_nonneg_lemma</span><span class="p">(</span><span class="nv">l</span><span class="p">)</span>
+<span class="w">      </span><span class="nf">height_nonneg_lemma</span><span class="p">(</span><span class="nv">r</span><span class="p">)</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>In this example, <code class="docutils literal notranslate"><span class="pre">avl_inv</span></code> is a representation invariant for an AVL tree, and
+the lemma proves <code class="docutils literal notranslate"><span class="pre">height(t)</span></code> is nonnegative by structural recursion on <code class="docutils literal notranslate"><span class="pre">t</span></code>.</p>
+<p>Lemma bodies vary with the amount of proof guidance the solver needs:</p>
+<ul class="simple">
+<li><p>some lemmas have an empty body because the verifier can discharge them directly</p></li>
+<li><p>some lemmas use a sequence of <code class="docutils literal notranslate"><span class="pre">proof_assert</span></code> steps to expose intermediate facts</p></li>
+<li><p>recursive lemmas can also call other lemmas, including themselves on smaller inputs</p></li>
+</ul>
+</section>
+<section id="loop-invariants">
+<h3>Loop Invariants<a class="headerlink" href="#loop-invariants" title="Link to this heading">#</a></h3>
+<p>Loops are verified with proof-specific clauses in the loop's <code class="docutils literal notranslate"><span class="pre">where</span> <span class="pre">{</span> <span class="pre">...</span> <span class="pre">}</span></code>
+block. In the <a class="reference internal" href="#overview-example-binary-search">binary search overview</a>, the loop invariants state that:</p>
+<ul class="simple">
+<li><p>the current search window is always a valid slice <code class="docutils literal notranslate"><span class="pre">[i,</span> <span class="pre">j)</span></code></p></li>
+<li><p>every index before <code class="docutils literal notranslate"><span class="pre">i</span></code> contains a value <code class="docutils literal notranslate"><span class="pre">&lt;</span> <span class="pre">key</span></code></p></li>
+<li><p>every index from <code class="docutils literal notranslate"><span class="pre">j</span></code> onward contains a value <code class="docutils literal notranslate"><span class="pre">&gt;</span> <span class="pre">key</span></code></p></li>
+</ul>
+<p>The most common loop proof annotations are:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">proof_invariant</span></code>: facts that must hold at every iteration boundary</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">proof_yield</span></code>: facts that must hold for values yielded by <code class="docutils literal notranslate"><span class="pre">break</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">proof_reasoning</span></code>: a proof-oriented explanation of why the loop is correct</p></li>
+</ul>
+<p>In practice, good loop invariants describe the current search window, prefix, or
+processed region rather than the entire algorithm all at once.</p>
+</section>
+<section id="model-based-verification">
+<h3>Model-Based Verification<a class="headerlink" href="#model-based-verification" title="Link to this heading">#</a></h3>
+<p>For data structures and stateful systems, the most useful pattern is often:</p>
+<ol class="arabic simple">
+<li><p>define an abstract model,</p></li>
+<li><p>define a representation invariant,</p></li>
+<li><p>specify each operation against the abstract model.</p></li>
+</ol>
+<p>An AVL tree is a representative example of this style:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">fn</span><span class="w"> </span><span class="nc">Tree</span><span class="p">::</span><span class="nf">model</span><span class="p">(</span><span class="k">self</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">Tree</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nc">Fset</span><span class="p">[</span><span class="nb">Int</span><span class="p">]</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">match</span><span class="w"> </span><span class="k">self</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nc">Empty</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nc">Fset</span><span class="p">::</span><span class="nf">empty</span><span class="p">()</span>
+<span class="w">    </span><span class="nc">Node</span><span class="p">(</span><span class="nv">l</span><span class="p">,</span><span class="w"> </span><span class="nv">x</span><span class="p">,</span><span class="w"> </span><span class="nv">r</span><span class="p">,</span><span class="w"> </span><span class="nc">_</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nv">l</span><span class="p">.</span><span class="nf">model</span><span class="p">().</span><span class="nf">union</span><span class="p">(</span><span class="nv">r</span><span class="p">.</span><span class="nf">model</span><span class="p">()).</span><span class="nf">add</span><span class="p">(</span><span class="nv">x</span><span class="p">)</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="nv">predicate</span><span class="w"> </span><span class="nf">avl_inv</span><span class="p">(</span><span class="nv">t</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">Tree</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">match</span><span class="w"> </span><span class="nv">t</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nc">Empty</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="kc">true</span>
+<span class="w">    </span><span class="nc">Node</span><span class="p">(</span><span class="nv">l</span><span class="p">,</span><span class="w"> </span><span class="nv">x</span><span class="p">,</span><span class="w"> </span><span class="nv">r</span><span class="p">,</span><span class="w"> </span><span class="nv">h</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span>
+<span class="w">      </span><span class="nf">avl_inv</span><span class="p">(</span><span class="nv">l</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">      </span><span class="nf">avl_inv</span><span class="p">(</span><span class="nv">r</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">      </span><span class="p">(</span><span class="err">∀</span><span class="w"> </span><span class="nv">y</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">,</span><span class="w"> </span><span class="nv">l</span><span class="p">.</span><span class="nf">model</span><span class="p">().</span><span class="nf">mem</span><span class="p">(</span><span class="nv">y</span><span class="p">)</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="nv">y</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nv">x</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">      </span><span class="p">(</span><span class="err">∀</span><span class="w"> </span><span class="nv">y</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">,</span><span class="w"> </span><span class="nv">r</span><span class="p">.</span><span class="nf">model</span><span class="p">().</span><span class="nf">mem</span><span class="p">(</span><span class="nv">y</span><span class="p">)</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="nv">x</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nv">y</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">      </span><span class="nv">h</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nf">max2</span><span class="p">(</span><span class="nf">height</span><span class="p">(</span><span class="nv">l</span><span class="p">),</span><span class="w"> </span><span class="nf">height</span><span class="p">(</span><span class="nv">r</span><span class="p">))</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">      </span><span class="o">-</span><span class="mi">1</span><span class="w"> </span><span class="o">&lt;</span><span class="p">=</span><span class="w"> </span><span class="nf">height</span><span class="p">(</span><span class="nv">l</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nf">height</span><span class="p">(</span><span class="nv">r</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">      </span><span class="nf">height</span><span class="p">(</span><span class="nv">l</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nf">height</span><span class="p">(</span><span class="nv">r</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;</span><span class="p">=</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Here:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">model()</span></code> maps a concrete tree to its abstract finite-set view</p></li>
+<li><p>the quantified conditions inline the ordering constraints over that abstract
+model</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">avl_inv</span></code> ties together recursive well-formedness, search-tree ordering, and
+cached-height correctness</p></li>
+</ul>
+<p>This style scales much better than writing large inline boolean formulas in each
+contract. Each operation can be specified in terms of the abstract model and
+the invariant, and the implementation can then prove local facts until the
+named postcondition follows.</p>
+</section>
+<section id="recommended-style">
+<h3>Recommended Style<a class="headerlink" href="#recommended-style" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>Keep executable logic in <code class="docutils literal notranslate"><span class="pre">.mbt</span></code> and proof logic in <code class="docutils literal notranslate"><span class="pre">.mbtp</span></code>.</p></li>
+<li><p>Treat the program side and the logic side as distinct layers with a narrow
+bridge between them.</p></li>
+<li><p>Prefer named predicates over large inline formulas.</p></li>
+<li><p>Use small, stable invariants and postconditions such as <code class="docutils literal notranslate"><span class="pre">*_inv</span></code> and <code class="docutils literal notranslate"><span class="pre">*_post</span></code>.</p></li>
+<li><p>Add <code class="docutils literal notranslate"><span class="pre">proof_assert</span></code> after important construction steps, branches, and loop
+updates when the prover needs help.</p></li>
+<li><p>Start with simple algorithmic proofs, then move to model-based verification
+for data structures and protocols.</p></li>
+<li><p>Be deliberate about recursive helpers: <code class="docutils literal notranslate"><span class="pre">#proof_pure</span></code> and <code class="docutils literal notranslate"><span class="pre">proof_decrease</span></code>
+often determine whether a proof remains maintainable.</p></li>
+</ul>
+</section>
+</section>
+<section id="running-verification">
+<h2>Running Verification<a class="headerlink" href="#running-verification" title="Link to this heading">#</a></h2>
+<section id="what-moon-prove-checks">
+<h3>What <code class="docutils literal notranslate"><span class="pre">moon</span> <span class="pre">prove</span></code> Checks<a class="headerlink" href="#what-moon-prove-checks" title="Link to this heading">#</a></h3>
+<p>Running <code class="docutils literal notranslate"><span class="pre">moon</span> <span class="pre">prove</span></code> asks the verifier to prove obligations such as:</p>
+<ul class="simple">
+<li><p>function preconditions imply the function body is safe to execute</p></li>
+<li><p>postconditions hold on every return path</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">proof_assert</span></code> statements are valid</p></li>
+<li><p>loop invariants hold initially and are preserved</p></li>
+<li><p>loop termination measures decrease when the loop form supports them</p></li>
+<li><p>bounds checks and similar safety properties required by the proof</p></li>
+</ul>
+</section>
+<section id="running-the-verifier">
+<h3>Running the Verifier<a class="headerlink" href="#running-the-verifier" title="Link to this heading">#</a></h3>
+<p>From a module root, run:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>moon<span class="w"> </span>prove
+</pre></div>
+</div>
+<p>This tries to prove the proof-enabled packages in the current module.</p>
+<p>To prove a single package, pass its path:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>moon<span class="w"> </span>prove<span class="w"> </span>path/to/package
+</pre></div>
+</div>
+<p>In this targeted mode, MoonBit tries to prove only the selected package. Its
+dependencies are assumed rather than reproved as part of the same command.</p>
+<p>MoonBit lowers the proof-enabled package to Why3 and invokes the configured
+provers on the generated verification conditions.</p>
+<p><code class="docutils literal notranslate"><span class="pre">moon</span> <span class="pre">check</span></code> and <code class="docutils literal notranslate"><span class="pre">moon</span> <span class="pre">prove</span></code> serve different purposes here. <code class="docutils literal notranslate"><span class="pre">moon</span> <span class="pre">check</span></code>
+validates the package as MoonBit code, while <code class="docutils literal notranslate"><span class="pre">moon</span> <span class="pre">prove</span></code> tries to discharge
+its proof obligations.</p>
+</section>
+</section>
+<section id="trust-model-and-limitations">
+<h2>Trust Model and Limitations<a class="headerlink" href="#trust-model-and-limitations" title="Link to this heading">#</a></h2>
+<section id="trusted-assumptions">
+<h3>Trusted Assumptions<a class="headerlink" href="#trusted-assumptions" title="Link to this heading">#</a></h3>
+<p>Like any verification system, MoonBit's proof story has a trusted surface: some
+facts are assumed by the frontend and backend rather than proved inside user
+code.</p>
+<p>This trusted surface also includes any user-written item marked
+<code class="docutils literal notranslate"><span class="pre">proof_axiomatized</span></code>.</p>
+<p>The main trusted assumptions today are:</p>
+<ul class="simple">
+<li><p>verification reasons about mathematical integers rather than machine integers</p></li>
+<li><p>any item marked <code class="docutils literal notranslate"><span class="pre">proof_axiomatized</span></code> is assumed rather than proved</p></li>
+</ul>
+<p>For integers, this means proof obligations are checked in an unbounded integer
+model. As a result:</p>
+<ul class="simple">
+<li><p>arithmetic proofs do not currently model runtime overflow</p></li>
+<li><p>a program can be correct in the proof model and still need explicit range
+discipline in execution</p></li>
+<li><p>machine-integer verification is planned, but is not the current default</p></li>
+</ul>
+</section>
+<section id="current-status">
+<h3>Current Status<a class="headerlink" href="#current-status" title="Link to this heading">#</a></h3>
+<p>Formal verification in MoonBit is still experimental. The surface syntax,
+prover integration, and proof ergonomics are actively evolving, so it is best
+to treat this as an advanced feature for packages that benefit from strong,
+machine-checked guarantees.</p>
+</section>
+<section id="preferred-verification-style">
+<h3>Preferred Verification Style<a class="headerlink" href="#preferred-verification-style" title="Link to this heading">#</a></h3>
+<p>MoonBit's current verifier works best with a functional proof style and
+model-based specifications.</p>
+<p>Imperative features such as local mutation and in-place <code class="docutils literal notranslate"><span class="pre">FixedArray</span></code> updates are
+supported, but their verified use is more limited:</p>
+<ul class="simple">
+<li><p>mutable state is expected to remain local</p></li>
+<li><p>escaping uses of <code class="docutils literal notranslate"><span class="pre">FixedArray</span></code> are currently not supported</p></li>
+<li><p>when both formulations are available, functional-style programs are preferred</p></li>
+</ul>
+</section>
+</section>
+<section id="further-reading">
+<h2>Further Reading<a class="headerlink" href="#further-reading" title="Link to this heading">#</a></h2>
+<p>For additional verified programs and reusable proof-oriented libraries, see the
+<a class="reference external" href="https://github.com/moonbit-community/verified"><code class="docutils literal notranslate"><span class="pre">moonbit-community/verified</span></code></a>
+repository.</p>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="async-experimental.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Async programming support</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="error_codes/index.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Error Codes Index</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#overview-example-binary-search">Overview Example: Binary Search</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#setup">Setup</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#environment-setup">Environment Setup</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#why3">Why3</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#external-solvers">External Solvers</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#enabling-proofs-in-a-package">Enabling Proofs in a Package</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#structure-of-verified-code">Structure of Verified Code</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#source-layout">Source Layout</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#program-side-and-logic-side">Program Side and Logic Side</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#writing-specifications-and-proofs">Writing Specifications and Proofs</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#contracts-in-mbt">Contracts in <code class="docutils literal notranslate"><span class="pre">.mbt</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#proof-specific-annotations">Proof-Specific Annotations</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#proof-pure"><code class="docutils literal notranslate"><span class="pre">#proof_pure</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#proof-decrease"><code class="docutils literal notranslate"><span class="pre">proof_decrease</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#proof-axiomatized"><code class="docutils literal notranslate"><span class="pre">proof_axiomatized</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#predicates-and-lemmas-in-mbtp">Predicates and Lemmas in <code class="docutils literal notranslate"><span class="pre">.mbtp</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#loop-invariants">Loop Invariants</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#model-based-verification">Model-Based Verification</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#recommended-style">Recommended Style</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#running-verification">Running Verification</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-moon-prove-checks">What <code class="docutils literal notranslate"><span class="pre">moon</span> <span class="pre">prove</span></code> Checks</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#running-the-verifier">Running the Verifier</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#trust-model-and-limitations">Trust Model and Limitations</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#trusted-assumptions">Trusted Assumptions</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#current-status">Current Status</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#preferred-verification-style">Preferred Verification Style</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#further-reading">Further Reading</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By International Digital Economy Academy
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, International Digital Economy Academy.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

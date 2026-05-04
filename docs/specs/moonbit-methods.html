@@ -1,0 +1,1444 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Method and Trait &#8212; MoonBit v0.9.1 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/sphinx-book-theme.css?v=a3416100" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../_static/documentation_options.js?v=e49c06df"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=a56c686a"></script>
+    <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'language/methods';</script>
+    <link rel="icon" href="../_static/favicon.ico"/>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Deriving traits" href="derive.html" />
+    <link rel="prev" title="Fundamentals" href="fundamentals.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <script async type="text/javascript" src="/_/static/javascript/readthedocs-addons.js"></script><meta name="readthedocs-project-slug" content="moonbit-docs" /><meta name="readthedocs-version-slug" content="latest" /><meta name="readthedocs-resolver-filename" content="/language/methods.html" /><meta name="readthedocs-http-status" content="200" /></head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../_static/logo.png" class="logo__image only-light" alt=""/>
+    <script>document.write(`<img src="../_static/logo.png" class="logo__image only-dark" alt=""/>`);</script>
+  
+  
+    <p class="title logo__title">MoonBit 月兔</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <ul class="current nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../tutorial/index.html">Tutorial</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tutorial/tour.html">A Tour of MoonBit for Beginners</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorial/cli-quickstart.html">Native CLI Quickstart</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorial/fullstack-one-project.html">Fullstack in One MoonBit Project</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">MoonBit Language</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fundamentals.html">Fundamentals</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">Method and Trait</a></li>
+<li class="toctree-l2"><a class="reference internal" href="derive.html">Deriving traits</a></li>
+<li class="toctree-l2"><a class="reference internal" href="error-handling.html">Error handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html">Managing Projects with Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tests.html">Writing Tests</a></li>
+<li class="toctree-l2"><a class="reference internal" href="benchmarks.html">Writing Benchmarks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="docs.html">Comments and Documentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="attributes.html">Attribute</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ffi.html">Foreign Function Interface (FFI)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="async-experimental.html">Async programming support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="verification.html">Formal Verification</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="error_codes/index.html">Error Codes Index</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0001.html">E0001</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0002.html">E0002</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0003.html">E0003</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0004.html">E0004</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0005.html">E0005</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0006.html">E0006</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0007.html">E0007</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0008.html">E0008</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0009.html">E0009</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0010.html">E0010</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0011.html">E0011</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0012.html">E0012</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0013.html">E0013</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0014.html">E0014</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0015.html">E0015</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0016.html">E0016</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0017.html">E0017</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0018.html">E0018</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0019.html">E0019</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0020.html">E0020</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0021.html">E0021</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0022.html">E0022</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0023.html">E0023</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0024.html">E0024</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0025.html">E0025</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0026.html">E0026</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0027.html">E0027</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0028.html">E0028</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0029.html">E0029</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0030.html">E0030</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0031.html">E0031</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0032.html">E0032</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0033.html">E0033</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0034.html">E0034</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0035.html">E0035</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0036.html">E0036</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0037.html">E0037</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0038.html">E0038</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0039.html">E0039</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0040.html">E0040</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0041.html">E0041</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0042.html">E0042</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0043.html">E0043</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0044.html">E0044</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0045.html">E0045</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0046.html">E0046</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0047.html">E0047</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0049.html">E0049</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0050.html">E0050</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0051.html">E0051</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0052.html">E0052</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0053.html">E0053</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0054.html">E0054</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0055.html">E0055</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0056.html">E0056</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0057.html">E0057</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0058.html">E0058</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0059.html">E0059</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0060.html">E0060</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0061.html">E0061</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0062.html">E0062</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0063.html">E0063</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0064.html">E0064</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0065.html">E0065</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0066.html">E0066</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0067.html">E0067</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0068.html">E0068</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0069.html">E0069</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E1000.html">E1000</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E1001.html">E1001</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3001.html">E3001</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3002.html">E3002</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3003.html">E3003</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3004.html">E3004</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3005.html">E3005</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3006.html">E3006</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3007.html">E3007</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3008.html">E3008</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3009.html">E3009</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3010.html">E3010</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3011.html">E3011</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3012.html">E3012</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3014.html">E3014</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3016.html">E3016</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3017.html">E3017</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3018.html">E3018</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3019.html">E3019</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3020.html">E3020</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3021.html">E3021</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3022.html">E3022</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3023.html">E3023</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3024.html">E3024</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3100.html">E3100</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3700.html">E3700</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3800.html">E3800</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3801.html">E3801</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4000.html">E4000</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4001.html">E4001</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4002.html">E4002</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4003.html">E4003</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4004.html">E4004</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4005.html">E4005</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4006.html">E4006</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4008.html">E4008</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4010.html">E4010</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4011.html">E4011</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4012.html">E4012</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4013.html">E4013</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4014.html">E4014</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4015.html">E4015</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4016.html">E4016</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4017.html">E4017</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4018.html">E4018</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4019.html">E4019</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4020.html">E4020</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4021.html">E4021</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4022.html">E4022</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4023.html">E4023</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4024.html">E4024</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4027.html">E4027</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4028.html">E4028</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4029.html">E4029</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4031.html">E4031</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4032.html">E4032</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4033.html">E4033</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4034.html">E4034</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4036.html">E4036</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4037.html">E4037</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4038.html">E4038</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4039.html">E4039</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4040.html">E4040</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4041.html">E4041</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4042.html">E4042</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4043.html">E4043</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4044.html">E4044</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4046.html">E4046</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4047.html">E4047</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4048.html">E4048</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4049.html">E4049</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4050.html">E4050</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4051.html">E4051</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4052.html">E4052</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4053.html">E4053</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4054.html">E4054</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4055.html">E4055</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4056.html">E4056</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4057.html">E4057</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4059.html">E4059</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4061.html">E4061</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4063.html">E4063</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4064.html">E4064</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4065.html">E4065</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4066.html">E4066</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4067.html">E4067</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4068.html">E4068</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4069.html">E4069</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4070.html">E4070</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4071.html">E4071</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4073.html">E4073</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4074.html">E4074</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4077.html">E4077</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4078.html">E4078</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4080.html">E4080</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4081.html">E4081</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4082.html">E4082</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4084.html">E4084</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4085.html">E4085</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4086.html">E4086</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4087.html">E4087</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4089.html">E4089</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4091.html">E4091</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4092.html">E4092</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4093.html">E4093</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4094.html">E4094</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4095.html">E4095</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4096.html">E4096</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4099.html">E4099</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4100.html">E4100</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4101.html">E4101</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4102.html">E4102</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4104.html">E4104</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4106.html">E4106</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4107.html">E4107</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4108.html">E4108</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4109.html">E4109</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4110.html">E4110</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4111.html">E4111</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4112.html">E4112</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4113.html">E4113</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4114.html">E4114</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4115.html">E4115</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4116.html">E4116</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4117.html">E4117</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4118.html">E4118</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4119.html">E4119</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4120.html">E4120</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4121.html">E4121</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4122.html">E4122</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4124.html">E4124</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4127.html">E4127</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4128.html">E4128</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4130.html">E4130</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4131.html">E4131</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4132.html">E4132</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4133.html">E4133</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4135.html">E4135</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4136.html">E4136</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4137.html">E4137</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4138.html">E4138</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4139.html">E4139</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4140.html">E4140</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4141.html">E4141</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4142.html">E4142</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4143.html">E4143</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4144.html">E4144</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4145.html">E4145</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4146.html">E4146</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4147.html">E4147</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4148.html">E4148</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4149.html">E4149</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4151.html">E4151</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4153.html">E4153</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4154.html">E4154</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4155.html">E4155</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4156.html">E4156</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4157.html">E4157</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4158.html">E4158</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4159.html">E4159</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4160.html">E4160</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4161.html">E4161</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4162.html">E4162</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4163.html">E4163</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4164.html">E4164</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4165.html">E4165</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4167.html">E4167</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4168.html">E4168</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4171.html">E4171</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4172.html">E4172</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4173.html">E4173</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4174.html">E4174</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4175.html">E4175</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4176.html">E4176</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4177.html">E4177</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4180.html">E4180</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4181.html">E4181</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4182.html">E4182</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4183.html">E4183</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4184.html">E4184</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4185.html">E4185</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4186.html">E4186</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4187.html">E4187</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4188.html">E4188</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4189.html">E4189</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4190.html">E4190</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4191.html">E4191</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4192.html">E4192</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4193.html">E4193</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4194.html">E4194</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4195.html">E4195</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4196.html">E4196</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4197.html">E4197</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4198.html">E4198</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4199.html">E4199</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4200.html">E4200</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4201.html">E4201</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4202.html">E4202</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4203.html">E4203</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4204.html">E4204</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4205.html">E4205</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4206.html">E4206</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4207.html">E4207</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4208.html">E4208</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4209.html">E4209</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4210.html">E4210</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../toolchain/index.html">Toolchains</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../toolchain/moon/index.html">Moon Build System</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/tutorial.html">MoonBit's Build System Tutorial</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/script-mode.html">Running <code class="docutils literal notranslate"><span class="pre">.mbtx</span></code> Scripts</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/package-manage-tour.html">Use and publish packages</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/workspace.html">Workspace Support</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/commands.html">Command-Line Help for <code class="docutils literal notranslate"><span class="pre">moon</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/module.html">Module Configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/package.html">Package Configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/coverage.html">Measuring code coverage</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2"><a class="reference internal" href="../toolchain/moonide/index.html">MoonBit Agent IDE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../toolchain/vscode/index.html">MoonBit VSCode Plugin</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../toolchain/wasm/index.html">WebAssembly Integration</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/wasm/component-model-tutorial.html">MoonBit for Component Model</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../example/index.html">Examples</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../example/sudoku/index.html">Sudoku Solver</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../example/lambda/index.html">Lambda calculus</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../example/gmachine/index.html">G-Machine</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../example/gmachine/gmachine-1.html">G-Machine 1</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example/gmachine/gmachine-2.html">G-Machine 2</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example/gmachine/gmachine-3.html">G-Machine 3</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../example/myers-diff/index.html">Myers Diff</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../example/myers-diff/myers-diff.html">Myers diff</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example/myers-diff/myers-diff2.html">Myers diff 2</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example/myers-diff/myers-diff3.html">Myers diff 3</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../example/segment-tree/index.html">Segment Tree</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../example/segment-tree/segment-tree.html">Segment Trees (Part 1)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example/segment-tree/segment-tree2.html">Segment Trees (Part 2)</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/moonbitlang/moonbit-docs/blob/main/next/language/methods.md?plain=1" target="_blank"
+   class="btn btn-sm btn-source-file-button dropdown-item"
+   title="Show source"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-code"></i>
+  </span>
+<span class="btn__text-container">Show source</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/moonbitlang/moonbit-docs/edit/main/next/language/methods.md" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/moonbitlang/moonbit-docs/issues/new?title=Issue%20on%20page%20%2Flanguage/methods.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../_sources/language/methods.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Method and Trait</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#method-system">Method system</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#local-method">Local method</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#alias-methods-as-functions">Alias methods as functions</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#operator-overloading">Operator Overloading</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#trait-system">Trait system</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#extending-traits">Extending traits</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#implementing-traits">Implementing traits</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#using-traits">Using traits</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#invoke-trait-methods-directly">Invoke trait methods directly</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#trait-objects">Trait objects</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#builtin-traits">Builtin traits</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#deriving-builtin-traits">Deriving builtin traits</a></li>
+</ul>
+</li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="method-and-trait">
+<h1>Method and Trait<a class="headerlink" href="#method-and-trait" title="Link to this heading">#</a></h1>
+<section id="method-system">
+<h2>Method system<a class="headerlink" href="#method-system" title="Link to this heading">#</a></h2>
+<p>MoonBit supports methods in a different way from traditional object-oriented languages. A method in MoonBit is just a toplevel function associated with a type constructor.
+To define a method, prepend <code class="docutils literal notranslate"><span class="pre">SelfTypeName::</span></code> in front of the function name, such as <code class="docutils literal notranslate"><span class="pre">fn</span> <span class="pre">SelfTypeName::method_name(...)</span></code>, and the method belongs to <code class="docutils literal notranslate"><span class="pre">SelfTypeName</span></code>.
+Within the signature of the method declaration, you can use <code class="docutils literal notranslate"><span class="pre">Self</span></code> to refer to <code class="docutils literal notranslate"><span class="pre">SelfTypeName</span></code>.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Currently, there is a shorthand syntax for defining methods.
+When the name of the first parameter is <code class="docutils literal notranslate"><span class="pre">self</span></code>, a function declaration will be considered a method for the type of <code class="docutils literal notranslate"><span class="pre">self</span></code>.
+This syntax may be deprecated in the future, and we do not recommend using it in new code.</p>
+<div class="top-level highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">fn</span><span class="w"> </span><span class="nf">method_name</span><span class="p">(</span><span class="k">self</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">SelfType</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Unit</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="ow">...</span><span class="w"> </span><span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">enum</span><span class="w"> </span><span class="nc">List</span><span class="p">[</span><span class="nc">X</span><span class="p">]</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nc">Nil</span>
+<span class="w">  </span><span class="nc">Cons</span><span class="p">(</span><span class="nc">X</span><span class="p">,</span><span class="w"> </span><span class="nc">List</span><span class="p">[</span><span class="nc">X</span><span class="p">])</span>
+<span class="p">}</span>
+
+<span class="c1">///|</span>
+<span class="kd">fn</span><span class="p">[</span><span class="nc">X</span><span class="p">]</span><span class="w"> </span><span class="nc">List</span><span class="p">::</span><span class="nf">length</span><span class="p">(</span><span class="nv">xs</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">List</span><span class="p">[</span><span class="nc">X</span><span class="p">])</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Int</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="ow">...</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>To call a method, you can either invoke using qualified syntax <code class="docutils literal notranslate"><span class="pre">T::method_name(..)</span></code>, or using dot syntax where the first argument is the type of <code class="docutils literal notranslate"><span class="pre">T</span></code>:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">let</span><span class="w"> </span><span class="nv">l</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">List</span><span class="p">[</span><span class="nb">Int</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nc">Nil</span>
+<span class="nf">println</span><span class="p">(</span><span class="nv">l</span><span class="p">.</span><span class="nf">length</span><span class="p">())</span>
+<span class="nf">println</span><span class="p">(</span><span class="nc">List</span><span class="p">::</span><span class="nf">length</span><span class="p">(</span><span class="nv">l</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>When the first parameter of a method is also the type it belongs to, methods can be called using dot syntax <code class="docutils literal notranslate"><span class="pre">x.method(...)</span></code>. MoonBit automatically finds the correct method based on the type of <code class="docutils literal notranslate"><span class="pre">x</span></code>, there is no need to write the type name and even the package name of the method:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="k">pub</span><span class="p">(</span><span class="nv">all</span><span class="p">)</span><span class="w"> </span><span class="kd">enum</span><span class="w"> </span><span class="nc">List</span><span class="p">[</span><span class="nc">X</span><span class="p">]</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nc">Nil</span>
+<span class="w">  </span><span class="nc">Cons</span><span class="p">(</span><span class="nc">X</span><span class="p">,</span><span class="w"> </span><span class="nc">List</span><span class="p">[</span><span class="nc">X</span><span class="p">])</span>
+<span class="p">}</span>
+
+<span class="k">pub</span><span class="w"> </span><span class="kd">fn</span><span class="p">[</span><span class="nc">X</span><span class="p">]</span><span class="w"> </span><span class="nc">List</span><span class="p">::</span><span class="nf">concat</span><span class="p">(</span><span class="nv">list</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">List</span><span class="p">[</span><span class="nc">List</span><span class="p">[</span><span class="nc">X</span><span class="p">]])</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nc">List</span><span class="p">[</span><span class="nc">X</span><span class="p">]</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="ow">...</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<div class="literal-block-wrapper docutils container" id="id1">
+<div class="code-block-caption"><span class="caption-text">using package with alias list</span><a class="headerlink" href="#id1" title="Link to this code">#</a></div>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="c1">// assume `xs` is a list of lists, all the following two lines are equivalent</span>
+<span class="kd">let</span><span class="w"> </span><span class="nc">_</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nv">xs</span><span class="p">.</span><span class="nf">concat</span><span class="p">()</span>
+<span class="kd">let</span><span class="w"> </span><span class="nc">_</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nn">@list.</span><span class="nc">List</span><span class="p">::</span><span class="nf">concat</span><span class="p">(</span><span class="nv">xs</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<p>Unlike regular functions, methods defined using the <code class="docutils literal notranslate"><span class="pre">TypeName::method_name</span></code> syntax support overloading:
+different types can define methods of the same name, because each method lives in a different name space:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">struct</span><span class="w"> </span><span class="nc">T1</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nv">x1</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span>
+<span class="p">}</span>
+
+<span class="kd">fn</span><span class="w"> </span><span class="nc">T1</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nc">T1</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="nv">x1</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kd">struct</span><span class="w"> </span><span class="nc">T2</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nv">x2</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span>
+<span class="p">}</span>
+
+<span class="kd">fn</span><span class="w"> </span><span class="nc">T2</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nc">T2</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="nv">x2</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="k">test</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nv">t1</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nc">T1</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nv">t2</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nc">T2</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span>
+
+<span class="p">}</span>
+</pre></div>
+</div>
+<section id="local-method">
+<h3>Local method<a class="headerlink" href="#local-method" title="Link to this heading">#</a></h3>
+<p>To ensure single source of truth in method resolution and avoid ambiguity,
+<a class="reference internal" href="packages.html#trait-implementations"><span class="std std-ref">methods can only be defined in the same package as its type</span></a>.
+However, there is one exception to this rule: MoonBit allows defining <em>private</em> methods for foreign types locally.
+These local methods can override methods from the type's own package (MoonBit will emit a warning in this case),
+and provide extension/complementary to upstream API:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">fn</span><span class="w"> </span><span class="nb">Int</span><span class="p">::</span><span class="nf">my_int_method</span><span class="p">(</span><span class="k">self</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Int</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">self</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">self</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="k">self</span>
+<span class="p">}</span>
+
+<span class="k">test</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">assert_eq</span><span class="p">((</span><span class="mi">6</span><span class="p">).</span><span class="nf">my_int_method</span><span class="p">(),</span><span class="w"> </span><span class="mi">42</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="alias-methods-as-functions">
+<h3>Alias methods as functions<a class="headerlink" href="#alias-methods-as-functions" title="Link to this heading">#</a></h3>
+<p>MoonBit allows calling methods with alternative names via alias.</p>
+<p>The method alias will create a method with the corresponding name.
+You can also choose to create a function with the corresponding name.
+The visibility can also be controlled.</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="cp">#alias(m)</span>
+<span class="cp">#alias(n, visibility=&quot;priv&quot;)</span>
+<span class="cp">#as_free_fn(m)</span>
+<span class="cp">#as_free_fn(n, visibility=&quot;pub&quot;)</span>
+<span class="kd">fn</span><span class="w"> </span><span class="nc">List</span><span class="p">::</span><span class="nf">f</span><span class="p">()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Bool</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kc">true</span>
+<span class="p">}</span>
+<span class="k">test</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">assert_eq</span><span class="p">(</span><span class="nc">List</span><span class="p">::</span><span class="nf">f</span><span class="p">(),</span><span class="w"> </span><span class="nc">List</span><span class="p">::</span><span class="nf">m</span><span class="p">())</span>
+<span class="w">  </span><span class="nf">assert_eq</span><span class="p">(</span><span class="nc">List</span><span class="p">::</span><span class="nf">m</span><span class="p">(),</span><span class="w"> </span><span class="nf">m</span><span class="p">())</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="operator-overloading">
+<h2>Operator Overloading<a class="headerlink" href="#operator-overloading" title="Link to this heading">#</a></h2>
+<p>MoonBit supports overloading infix operators of builtin operators via several builtin traits. For example:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">struct</span><span class="w"> </span><span class="nc">T</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nv">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span>
+<span class="p">}</span>
+
+<span class="kd">impl</span><span class="w"> </span><span class="nc">Add</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nc">T</span><span class="w"> </span><span class="kd">with</span><span class="w"> </span><span class="nf">add</span><span class="p">(</span><span class="k">self</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">T</span><span class="p">,</span><span class="w"> </span><span class="nv">other</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">T</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nc">T</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="nv">x</span><span class="p">:</span><span class="w"> </span><span class="k">self</span><span class="p">.</span><span class="nv">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nv">other</span><span class="p">.</span><span class="nv">x</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="k">test</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nv">a</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nv">x</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nv">b</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nv">x</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="nf">assert_eq</span><span class="p">((</span><span class="nv">a</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nv">b</span><span class="p">).</span><span class="nv">x</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Other operators are overloaded via methods with annotations, for example <code class="docutils literal notranslate"><span class="pre">_[_]</span></code> and <code class="docutils literal notranslate"><span class="pre">_[_]=_</span></code>:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">struct</span><span class="w"> </span><span class="nc">Coord</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">mut</span><span class="w"> </span><span class="nv">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span>
+<span class="w">  </span><span class="kd">mut</span><span class="w"> </span><span class="nv">y</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span>
+<span class="p">}</span>
+
+<span class="cp">#alias(&quot;_[_]&quot;)</span>
+<span class="kd">fn</span><span class="w"> </span><span class="nc">Coord</span><span class="p">::</span><span class="nf">get</span><span class="p">(</span><span class="nv">coord</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="k">Self</span><span class="p">,</span><span class="w"> </span><span class="nv">key</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">String</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Int</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">match</span><span class="w"> </span><span class="nv">key</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="s">&quot;</span><span class="s2">x</span><span class="s">&quot;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nv">coord</span><span class="p">.</span><span class="nv">x</span>
+<span class="w">    </span><span class="s">&quot;</span><span class="s2">y</span><span class="s">&quot;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nv">coord</span><span class="p">.</span><span class="nv">y</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="cp">#alias(&quot;_[_]=_&quot;)</span>
+<span class="kd">fn</span><span class="w"> </span><span class="nc">Coord</span><span class="p">::</span><span class="nf">set</span><span class="p">(</span><span class="nv">coord</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="k">Self</span><span class="p">,</span><span class="w"> </span><span class="nv">key</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">String</span><span class="p">,</span><span class="w"> </span><span class="nv">val</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Unit</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">match</span><span class="w"> </span><span class="nv">key</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="s">&quot;</span><span class="s2">x</span><span class="s">&quot;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nv">coord</span><span class="p">.</span><span class="nv">x</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nv">val</span>
+<span class="w">    </span><span class="s">&quot;</span><span class="s2">y</span><span class="s">&quot;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nv">coord</span><span class="p">.</span><span class="nv">y</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nv">val</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">fn</span><span class="w"> </span><span class="nv">main</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nv">c</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nv">x</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nv">y</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="nf">println</span><span class="p">(</span><span class="s">&quot;</span><span class="s2">{x: </span><span class="se">\{</span><span class="nv">c</span><span class="p">.</span><span class="nv">x</span><span class="se">}</span><span class="s2">, y: </span><span class="se">\{</span><span class="nv">c</span><span class="p">.</span><span class="nv">y</span><span class="se">}</span><span class="s2">}</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="w">  </span><span class="nf">println</span><span class="p">(</span><span class="nv">c</span><span class="p">[</span><span class="s">&quot;</span><span class="s2">y</span><span class="s">&quot;</span><span class="p">])</span>
+<span class="w">  </span><span class="nv">c</span><span class="p">[</span><span class="s">&quot;</span><span class="s2">x</span><span class="s">&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">23</span>
+<span class="w">  </span><span class="nf">println</span><span class="p">(</span><span class="s">&quot;</span><span class="s2">{x: </span><span class="se">\{</span><span class="nv">c</span><span class="p">.</span><span class="nv">x</span><span class="se">}</span><span class="s2">, y: </span><span class="se">\{</span><span class="nv">c</span><span class="p">.</span><span class="nv">y</span><span class="se">}</span><span class="s2">}</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="w">  </span><span class="nf">println</span><span class="p">(</span><span class="nv">c</span><span class="p">[</span><span class="s">&quot;</span><span class="s2">x</span><span class="s">&quot;</span><span class="p">])</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<div class="literal-block-wrapper docutils container" id="id2">
+<div class="code-block-caption"><span class="caption-text">Output</span><a class="headerlink" href="#id2" title="Link to this code">#</a></div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="n">x</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="mi">2</span><span class="p">}</span>
+<span class="mi">2</span>
+<span class="p">{</span><span class="n">x</span><span class="p">:</span> <span class="mi">23</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="mi">2</span><span class="p">}</span>
+<span class="mi">23</span>
+</pre></div>
+</div>
+</div>
+<p>Currently, the following operators can be overloaded:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Operator Name</p></th>
+<th class="head"><p>overloading mechanism</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">+</span></code></p></td>
+<td><p>trait <code class="docutils literal notranslate"><span class="pre">Add</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">-</span></code></p></td>
+<td><p>trait <code class="docutils literal notranslate"><span class="pre">Sub</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">*</span></code></p></td>
+<td><p>trait <code class="docutils literal notranslate"><span class="pre">Mul</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/</span></code></p></td>
+<td><p>trait <code class="docutils literal notranslate"><span class="pre">Div</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">%</span></code></p></td>
+<td><p>trait <code class="docutils literal notranslate"><span class="pre">Mod</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">==</span></code></p></td>
+<td><p>trait <code class="docutils literal notranslate"><span class="pre">Eq</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">&lt;&lt;</span></code></p></td>
+<td><p>trait <code class="docutils literal notranslate"><span class="pre">Shl</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">&gt;&gt;</span></code></p></td>
+<td><p>trait <code class="docutils literal notranslate"><span class="pre">Shr</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">-</span></code> (unary)</p></td>
+<td><p>trait <code class="docutils literal notranslate"><span class="pre">Neg</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">_[_]</span></code> (get item)</p></td>
+<td><p>method + alias <code class="docutils literal notranslate"><span class="pre">_[_]</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">_[_]</span> <span class="pre">=</span> <span class="pre">_</span></code> (set item)</p></td>
+<td><p>method + alias <code class="docutils literal notranslate"><span class="pre">_[_]=_</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">_[_:_]</span></code> (view)</p></td>
+<td><p>method + alias <code class="docutils literal notranslate"><span class="pre">_[_:_]</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">&amp;</span></code></p></td>
+<td><p>trait <code class="docutils literal notranslate"><span class="pre">BitAnd</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">|</span></code></p></td>
+<td><p>trait <code class="docutils literal notranslate"><span class="pre">BitOr</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">^</span></code></p></td>
+<td><p>trait <code class="docutils literal notranslate"><span class="pre">BitXOr</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>When overloading <code class="docutils literal notranslate"><span class="pre">_[_]</span></code>/<code class="docutils literal notranslate"><span class="pre">_[_]</span> <span class="pre">=</span> <span class="pre">_</span></code>/<code class="docutils literal notranslate"><span class="pre">_[_:_]</span></code>, the method must have a correcnt signature:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">_[_]</span></code> should have signature <code class="docutils literal notranslate"><span class="pre">(Self,</span> <span class="pre">Index)</span> <span class="pre">-&gt;</span> <span class="pre">Result</span></code>, used as <code class="docutils literal notranslate"><span class="pre">let</span> <span class="pre">result</span> <span class="pre">=</span> <span class="pre">self[index]</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_[_]=_</span></code> should have signature <code class="docutils literal notranslate"><span class="pre">(Self,</span> <span class="pre">Index,</span> <span class="pre">Value)</span> <span class="pre">-&gt;</span> <span class="pre">Unit</span></code>, used as <code class="docutils literal notranslate"><span class="pre">self[index]</span> <span class="pre">=</span> <span class="pre">value</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_[_:_]</span></code> should have signature <code class="docutils literal notranslate"><span class="pre">(Self,</span> <span class="pre">start?</span> <span class="pre">:</span> <span class="pre">Index,</span> <span class="pre">end?</span> <span class="pre">:</span> <span class="pre">Index)</span> <span class="pre">-&gt;</span> <span class="pre">Result</span></code>, used as <code class="docutils literal notranslate"><span class="pre">let</span> <span class="pre">result</span> <span class="pre">=</span> <span class="pre">self[start:end]</span></code></p></li>
+</ul>
+<p>By implementing <code class="docutils literal notranslate"><span class="pre">_[_:_]</span></code> method, you can create a view for a user-defined type. Here is an example:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">struct</span><span class="w"> </span><span class="nc">DataView</span><span class="p">(</span><span class="nb">String</span><span class="p">)</span>
+
+<span class="kd">struct</span><span class="w"> </span><span class="nc">Data</span><span class="w"> </span><span class="p">{}</span>
+
+<span class="cp">#alias(&quot;_[_:_]&quot;)</span>
+<span class="kd">fn</span><span class="w"> </span><span class="nc">Data</span><span class="p">::</span><span class="nf">as_view</span><span class="p">(</span><span class="nc">_self</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">Data</span><span class="p">,</span><span class="w"> </span><span class="nv">start</span><span class="p">?</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="nv">end</span><span class="p">?</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nc">DataView</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="s">&quot;</span><span class="s2">[</span><span class="se">\{</span><span class="nv">start</span><span class="se">}</span><span class="s2">, </span><span class="se">\{</span><span class="nv">end</span><span class="p">.</span><span class="nf">unwrap_or</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span><span class="se">}</span><span class="s2">)</span><span class="s">&quot;</span>
+<span class="p">}</span>
+
+<span class="k">test</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nv">data</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nc">Data</span><span class="p">::{</span><span class="w">  </span><span class="p">}</span>
+<span class="w">  </span><span class="nf">inspect</span><span class="p">(</span><span class="nv">data</span><span class="p">[:].</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="nv">content</span><span class="p">=</span><span class="s">&quot;</span><span class="s2">[0, 100)</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="w">  </span><span class="nf">inspect</span><span class="p">(</span><span class="nv">data</span><span class="p">[</span><span class="mi">2</span><span class="p">:].</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="nv">content</span><span class="p">=</span><span class="s">&quot;</span><span class="s2">[2, 100)</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="w">  </span><span class="nf">inspect</span><span class="p">(</span><span class="nv">data</span><span class="p">[:</span><span class="mi">5</span><span class="p">].</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="nv">content</span><span class="p">=</span><span class="s">&quot;</span><span class="s2">[0, 5)</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="w">  </span><span class="nf">inspect</span><span class="p">(</span><span class="nv">data</span><span class="p">[</span><span class="mi">2</span><span class="p">:</span><span class="mi">5</span><span class="p">].</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="nv">content</span><span class="p">=</span><span class="s">&quot;</span><span class="s2">[2, 5)</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="trait-system">
+<h2>Trait system<a class="headerlink" href="#trait-system" title="Link to this heading">#</a></h2>
+<p>MoonBit provides a trait system for overloading/ad-hoc polymorphism. Traits declare a list of operations, which must be supplied when a type wants to implement the trait. Traits can be declared as follows:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="k">pub</span><span class="p">(</span><span class="nv">open</span><span class="p">)</span><span class="w"> </span><span class="kd">trait</span><span class="w"> </span><span class="nc">I</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">method_</span><span class="p">(</span><span class="nb">Int</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Int</span>
+<span class="w">  </span><span class="nf">method_with_label</span><span class="p">(</span><span class="nb">Int</span><span class="p">,</span><span class="w"> </span><span class="nv">label</span><span class="p">~</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Int</span>
+<span class="w">  </span><span class="c1">//! method_with_label(Int, label?: Int) -&gt; Int</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>In the body of a trait definition, a special type <code class="docutils literal notranslate"><span class="pre">Self</span></code> is used to refer to the type that implements the trait.</p>
+<section id="extending-traits">
+<h3>Extending traits<a class="headerlink" href="#extending-traits" title="Link to this heading">#</a></h3>
+<p>A trait can depend on other traits, for example:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="k">pub</span><span class="p">(</span><span class="nv">open</span><span class="p">)</span><span class="w"> </span><span class="kd">trait</span><span class="w"> </span><span class="nc">Position</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">pos</span><span class="p">(</span><span class="k">Self</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="p">(</span><span class="nb">Int</span><span class="p">,</span><span class="w"> </span><span class="nb">Int</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="k">pub</span><span class="p">(</span><span class="nv">open</span><span class="p">)</span><span class="w"> </span><span class="kd">trait</span><span class="w"> </span><span class="nc">Draw</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">draw</span><span class="p">(</span><span class="k">Self</span><span class="p">,</span><span class="w"> </span><span class="nb">Int</span><span class="p">,</span><span class="w"> </span><span class="nb">Int</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Unit</span>
+<span class="p">}</span>
+
+<span class="k">pub</span><span class="p">(</span><span class="nv">open</span><span class="p">)</span><span class="w"> </span><span class="kd">trait</span><span class="w"> </span><span class="nc">Object</span><span class="p">:</span><span class="w"> </span><span class="nc">Position</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nc">Draw</span><span class="w"> </span><span class="p">{}</span>
+</pre></div>
+</div>
+</section>
+<section id="implementing-traits">
+<h3>Implementing traits<a class="headerlink" href="#implementing-traits" title="Link to this heading">#</a></h3>
+<p>To implement a trait, a type must explicitly provide all the methods required by the trait
+using the syntax <code class="docutils literal notranslate"><span class="pre">impl</span> <span class="pre">Trait</span> <span class="pre">for</span> <span class="pre">Type</span> <span class="pre">with</span> <span class="pre">method_name(...)</span> <span class="pre">{</span> <span class="pre">...</span> <span class="pre">}</span></code>. For example:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="k">pub</span><span class="p">(</span><span class="nv">open</span><span class="p">)</span><span class="w"> </span><span class="kd">trait</span><span class="w"> </span><span class="nc">MyShow</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">to_string</span><span class="p">(</span><span class="k">Self</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">String</span>
+<span class="p">}</span>
+
+<span class="kd">struct</span><span class="w"> </span><span class="nc">MyType</span><span class="w"> </span><span class="p">{}</span>
+
+<span class="k">pub</span><span class="w"> </span><span class="kd">impl</span><span class="w"> </span><span class="nc">MyShow</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nc">MyType</span><span class="w"> </span><span class="kd">with</span><span class="w"> </span><span class="nf">to_string</span><span class="p">(</span><span class="k">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="ow">...</span>
+<span class="p">}</span>
+
+<span class="kd">struct</span><span class="w"> </span><span class="nc">MyContainer</span><span class="p">[</span><span class="nc">_</span><span class="p">]</span><span class="w"> </span><span class="p">{}</span>
+
+<span class="c1">/// trait implementation with type parameters.</span>
+<span class="c1">/// `[X : Show]` means the type parameter `X` must implement `Show`,</span>
+<span class="c1">/// this will be covered later.</span>
+<span class="k">pub</span><span class="w"> </span><span class="kd">impl</span><span class="p">[</span><span class="nc">X</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">MyShow</span><span class="p">]</span><span class="w"> </span><span class="nc">MyShow</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nc">MyContainer</span><span class="p">[</span><span class="nc">X</span><span class="p">]</span><span class="w"> </span><span class="kd">with</span><span class="w"> </span><span class="nf">to_string</span><span class="p">(</span><span class="k">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="ow">...</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Type annotation can be omitted for trait <code class="docutils literal notranslate"><span class="pre">impl</span></code>: MoonBit will automatically infer the type based on the signature of <code class="docutils literal notranslate"><span class="pre">Trait::method</span></code> and the self type.</p>
+<p>The author of the trait can also define <strong>default implementations</strong> for some methods in the trait, for example:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="k">pub</span><span class="p">(</span><span class="nv">open</span><span class="p">)</span><span class="w"> </span><span class="kd">trait</span><span class="w"> </span><span class="nc">J</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">f</span><span class="p">(</span><span class="k">Self</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Unit</span>
+<span class="w">  </span><span class="nf">f_twice</span><span class="p">(</span><span class="k">Self</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Unit</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nc">_</span>
+<span class="p">}</span>
+
+<span class="kd">impl</span><span class="w"> </span><span class="nc">J</span><span class="w"> </span><span class="kd">with</span><span class="w"> </span><span class="nf">f_twice</span><span class="p">(</span><span class="k">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">self</span><span class="p">.</span><span class="nf">f</span><span class="p">()</span>
+<span class="w">  </span><span class="k">self</span><span class="p">.</span><span class="nf">f</span><span class="p">()</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Note that in addition to the actual default implementation <code class="docutils literal notranslate"><span class="pre">impl</span> <span class="pre">J</span> <span class="pre">with</span> <span class="pre">f_twice</span></code>,
+a mark <code class="docutils literal notranslate"><span class="pre">=</span> <span class="pre">_</span></code> is also required in the declaration of <code class="docutils literal notranslate"><span class="pre">f_twice</span></code> in <code class="docutils literal notranslate"><span class="pre">J</span></code>.
+The <code class="docutils literal notranslate"><span class="pre">=</span> <span class="pre">_</span></code> mark is an indicator that this method has default implementation,
+it enhances readability by allowing readers to know which methods have default implementation at first glance.</p>
+<p>Implementers of trait <code class="docutils literal notranslate"><span class="pre">J</span></code> don't have to provide an implementation for <code class="docutils literal notranslate"><span class="pre">f_twice</span></code>: to implement <code class="docutils literal notranslate"><span class="pre">J</span></code>, only <code class="docutils literal notranslate"><span class="pre">f</span></code> is necessary.
+They can always override the default implementation with an explicit <code class="docutils literal notranslate"><span class="pre">impl</span> <span class="pre">J</span> <span class="pre">for</span> <span class="pre">Type</span> <span class="pre">with</span> <span class="pre">f_twice</span></code>, if desired, though.</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">impl</span><span class="w"> </span><span class="nc">J</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nb">Int</span><span class="w"> </span><span class="kd">with</span><span class="w"> </span><span class="nf">f</span><span class="p">(</span><span class="k">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">println</span><span class="p">(</span><span class="k">self</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="kd">impl</span><span class="w"> </span><span class="nc">J</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nb">String</span><span class="w"> </span><span class="kd">with</span><span class="w"> </span><span class="nf">f</span><span class="p">(</span><span class="k">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">println</span><span class="p">(</span><span class="k">self</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="kd">impl</span><span class="w"> </span><span class="nc">J</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nb">String</span><span class="w"> </span><span class="kd">with</span><span class="w"> </span><span class="nf">f_twice</span><span class="p">(</span><span class="k">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">println</span><span class="p">(</span><span class="k">self</span><span class="p">)</span>
+<span class="w">  </span><span class="nf">println</span><span class="p">(</span><span class="k">self</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>To implement the sub trait, one will have to implement the super traits,
+and the methods defined in the sub trait. For example:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">impl</span><span class="w"> </span><span class="nc">Position</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nc">Point</span><span class="w"> </span><span class="kd">with</span><span class="w"> </span><span class="nf">pos</span><span class="p">(</span><span class="k">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="p">(</span><span class="k">self</span><span class="p">.</span><span class="nv">x</span><span class="p">,</span><span class="w"> </span><span class="k">self</span><span class="p">.</span><span class="nv">y</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="kd">impl</span><span class="w"> </span><span class="nc">Draw</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nc">Point</span><span class="w"> </span><span class="kd">with</span><span class="w"> </span><span class="nf">draw</span><span class="p">(</span><span class="k">self</span><span class="p">,</span><span class="w"> </span><span class="nv">x</span><span class="p">,</span><span class="w"> </span><span class="nv">y</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="p">()</span>
+<span class="p">}</span>
+
+<span class="kd">impl</span><span class="w"> </span><span class="nc">Object</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nc">Point</span>
+
+<span class="k">pub</span><span class="w"> </span><span class="kd">fn</span><span class="p">[</span><span class="nc">O</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">Object</span><span class="p">]</span><span class="w"> </span><span class="nf">draw_object</span><span class="p">(</span><span class="nv">obj</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">O</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Unit</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="p">(</span><span class="nv">x</span><span class="p">,</span><span class="w"> </span><span class="nv">y</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nv">obj</span><span class="p">.</span><span class="nf">pos</span><span class="p">()</span>
+<span class="w">  </span><span class="nv">obj</span><span class="p">.</span><span class="nf">draw</span><span class="p">(</span><span class="nv">x</span><span class="p">,</span><span class="w"> </span><span class="nv">y</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="k">test</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nv">p</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nc">Point</span><span class="p">::{</span><span class="w"> </span><span class="nv">x</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nv">y</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="nf">draw_object</span><span class="p">(</span><span class="nv">p</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>For traits where all methods have default implementation,
+it is still necessary to explicitly implement them,
+in order to support features such as <a class="reference internal" href="packages.html#traits"><span class="std std-ref">abstract trait</span></a>.
+For this purpose, MoonBit provides the syntax <code class="docutils literal notranslate"><span class="pre">impl</span> <span class="pre">Trait</span> <span class="pre">for</span> <span class="pre">Type</span></code> (i.e. without the method part).
+<code class="docutils literal notranslate"><span class="pre">impl</span> <span class="pre">Trait</span> <span class="pre">for</span> <span class="pre">Type</span></code> ensures that <code class="docutils literal notranslate"><span class="pre">Type</span></code> implements <code class="docutils literal notranslate"><span class="pre">Trait</span></code>,
+MoonBit will automatically check if every method in <code class="docutils literal notranslate"><span class="pre">Trait</span></code> has corresponding implementation (custom or default).</p>
+<p>In addition to handling traits where every methods has a default implementation,
+the <code class="docutils literal notranslate"><span class="pre">impl</span> <span class="pre">Trait</span> <span class="pre">for</span> <span class="pre">Type</span></code> can also serve as documentation, or a TODO mark before filling actual implementation.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Currently, an empty trait without any method is implemented automatically.</p>
+</div>
+</section>
+<section id="using-traits">
+<h3>Using traits<a class="headerlink" href="#using-traits" title="Link to this heading">#</a></h3>
+<p>When declaring a generic function, the type parameters can be annotated with the traits they should implement, allowing the definition of constrained generic functions. For example:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">fn</span><span class="p">[</span><span class="nc">X</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Eq</span><span class="p">]</span><span class="w"> </span><span class="nf">contains</span><span class="p">(</span><span class="nv">xs</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Array</span><span class="p">[</span><span class="nc">X</span><span class="p">],</span><span class="w"> </span><span class="nv">elem</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">X</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Bool</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="nv">x</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="nv">xs</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nv">x</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nv">elem</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="kc">true</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span><span class="w"> </span><span class="nv">nobreak</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kc">false</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Without the <code class="docutils literal notranslate"><span class="pre">Eq</span></code> requirement, the expression <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">==</span> <span class="pre">elem</span></code> in <code class="docutils literal notranslate"><span class="pre">contains</span></code> will result in a type error. Now, the function <code class="docutils literal notranslate"><span class="pre">contains</span></code> can be called with any type that implements <code class="docutils literal notranslate"><span class="pre">Eq</span></code>, for example:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">struct</span><span class="w"> </span><span class="nc">Point</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nv">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span>
+<span class="w">  </span><span class="nv">y</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span>
+<span class="p">}</span>
+
+<span class="kd">impl</span><span class="w"> </span><span class="nb">Eq</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nc">Point</span><span class="w"> </span><span class="kd">with</span><span class="w"> </span><span class="nf">equal</span><span class="p">(</span><span class="nv">p1</span><span class="p">,</span><span class="w"> </span><span class="nv">p2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nv">p1</span><span class="p">.</span><span class="nv">x</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nv">p2</span><span class="p">.</span><span class="nv">x</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nv">p1</span><span class="p">.</span><span class="nv">y</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nv">p2</span><span class="p">.</span><span class="nv">y</span>
+<span class="p">}</span>
+
+<span class="k">test</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">assert_false</span><span class="p">(</span><span class="nf">contains</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">],</span><span class="w"> </span><span class="mi">4</span><span class="p">))</span>
+<span class="w">  </span><span class="nf">assert_true</span><span class="p">(</span><span class="nf">contains</span><span class="p">([</span><span class="mi">1</span><span class="p">.</span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">.</span><span class="mi">25</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">.</span><span class="mi">375</span><span class="p">],</span><span class="w"> </span><span class="mi">2</span><span class="p">.</span><span class="mi">25</span><span class="p">))</span>
+<span class="w">  </span><span class="nf">assert_false</span><span class="p">(</span><span class="nf">contains</span><span class="p">([{</span><span class="w"> </span><span class="nv">x</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="nv">y</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="p">}],</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nv">x</span><span class="p">:</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="nv">y</span><span class="p">:</span><span class="w"> </span><span class="mi">9</span><span class="w"> </span><span class="p">}))</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<section id="invoke-trait-methods-directly">
+<h4>Invoke trait methods directly<a class="headerlink" href="#invoke-trait-methods-directly" title="Link to this heading">#</a></h4>
+<p>Methods of a trait can be called directly via <code class="docutils literal notranslate"><span class="pre">Trait::method</span></code>. MoonBit will infer the type of <code class="docutils literal notranslate"><span class="pre">Self</span></code> and check if <code class="docutils literal notranslate"><span class="pre">Self</span></code> indeed implements <code class="docutils literal notranslate"><span class="pre">Trait</span></code>, for example:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="k">test</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">assert_eq</span><span class="p">(</span><span class="nb">Show</span><span class="p">::</span><span class="nf">to_string</span><span class="p">(</span><span class="mi">42</span><span class="p">),</span><span class="w"> </span><span class="s">&quot;</span><span class="s2">42</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="w">  </span><span class="nf">assert_eq</span><span class="p">(</span><span class="nb">Compare</span><span class="p">::</span><span class="nf">compare</span><span class="p">(</span><span class="mi">1</span><span class="p">.</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">.</span><span class="mi">5</span><span class="p">),</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Trait implementations can also be invoked via dot syntax, with the following restrictions:</p>
+<ol class="arabic simple">
+<li><p>if a regular method is present, the regular method is always favored when using dot syntax</p></li>
+<li><p>only trait implementations that are located in the package of the self type can be invoked via dot syntax</p>
+<ul class="simple">
+<li><p>if there are multiple trait methods (from different traits) with the same name available, an ambiguity error is reported</p></li>
+</ul>
+</li>
+</ol>
+<p>The above rules ensures that MoonBit's dot syntax enjoys good property while being flexible.
+For example, adding a new dependency never break existing code with dot syntax due to ambiguity.
+These rules also make name resolution of MoonBit extremely simple:
+the method called via dot syntax must always come from current package or the package of the type!</p>
+<p>Here's an example of calling trait <code class="docutils literal notranslate"><span class="pre">impl</span></code> with dot syntax:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">struct</span><span class="w"> </span><span class="nc">MyCustomType</span><span class="w"> </span><span class="p">{}</span>
+
+<span class="k">pub</span><span class="w"> </span><span class="kd">impl</span><span class="w"> </span><span class="nb">Show</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nc">MyCustomType</span><span class="w"> </span><span class="kd">with</span><span class="w"> </span><span class="nf">output</span><span class="p">(</span><span class="k">self</span><span class="p">,</span><span class="w"> </span><span class="nv">logger</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="ow">...</span>
+<span class="p">}</span>
+
+<span class="kd">fn</span><span class="w"> </span><span class="nf">f</span><span class="p">()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Unit</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nv">x</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nc">MyCustomType</span><span class="p">::{</span><span class="w">  </span><span class="p">}</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nc">_</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nv">x</span><span class="p">.</span><span class="nf">to_string</span><span class="p">()</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+<section id="trait-objects">
+<h2>Trait objects<a class="headerlink" href="#trait-objects" title="Link to this heading">#</a></h2>
+<p>MoonBit supports runtime polymorphism via trait objects.
+If <code class="docutils literal notranslate"><span class="pre">t</span></code> is of type <code class="docutils literal notranslate"><span class="pre">T</span></code>, which implements trait <code class="docutils literal notranslate"><span class="pre">I</span></code>,
+one can pack the methods of <code class="docutils literal notranslate"><span class="pre">T</span></code> that implements <code class="docutils literal notranslate"><span class="pre">I</span></code>, together with <code class="docutils literal notranslate"><span class="pre">t</span></code>,
+into a runtime object via <code class="docutils literal notranslate"><span class="pre">t</span> <span class="pre">as</span> <span class="pre">&amp;I</span></code>.
+When the expected type of an expression is known to be a trait object type, <code class="docutils literal notranslate"><span class="pre">as</span> <span class="pre">&amp;I</span></code> can be omitted.
+Trait object erases the concrete type of a value,
+so objects created from different concrete types can be put in the same data structure and handled uniformly:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="k">pub</span><span class="p">(</span><span class="nv">open</span><span class="p">)</span><span class="w"> </span><span class="kd">trait</span><span class="w"> </span><span class="nc">Animal</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">speak</span><span class="p">(</span><span class="k">Self</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">String</span>
+<span class="p">}</span>
+
+<span class="kd">struct</span><span class="w"> </span><span class="nc">Duck</span><span class="p">(</span><span class="nb">String</span><span class="p">)</span>
+
+<span class="kd">fn</span><span class="w"> </span><span class="nc">Duck</span><span class="p">::</span><span class="nf">make</span><span class="p">(</span><span class="nv">name</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">String</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nc">Duck</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nc">Duck</span><span class="p">(</span><span class="nv">name</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="kd">impl</span><span class="w"> </span><span class="nc">Animal</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nc">Duck</span><span class="w"> </span><span class="kd">with</span><span class="w"> </span><span class="nf">speak</span><span class="p">(</span><span class="k">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="s">&quot;</span><span class="se">\{</span><span class="k">self</span><span class="p">.</span><span class="mi">0</span><span class="se">}</span><span class="s2">: quack!</span><span class="s">&quot;</span>
+<span class="p">}</span>
+
+<span class="kd">struct</span><span class="w"> </span><span class="nc">Fox</span><span class="p">(</span><span class="nb">String</span><span class="p">)</span>
+
+<span class="kd">fn</span><span class="w"> </span><span class="nc">Fox</span><span class="p">::</span><span class="nf">make</span><span class="p">(</span><span class="nv">name</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">String</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nc">Fox</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nc">Fox</span><span class="p">(</span><span class="nv">name</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="kd">impl</span><span class="w"> </span><span class="nc">Animal</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nc">Fox</span><span class="w"> </span><span class="kd">with</span><span class="w"> </span><span class="nf">speak</span><span class="p">(</span><span class="nc">_self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="s">&quot;</span><span class="s2">What does the fox say?</span><span class="s">&quot;</span>
+<span class="p">}</span>
+
+<span class="k">test</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nv">duck1</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nc">Duck</span><span class="p">::</span><span class="nf">make</span><span class="p">(</span><span class="s">&quot;</span><span class="s2">duck1</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nv">duck2</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nc">Duck</span><span class="p">::</span><span class="nf">make</span><span class="p">(</span><span class="s">&quot;</span><span class="s2">duck2</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nv">fox1</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nc">Fox</span><span class="p">::</span><span class="nf">make</span><span class="p">(</span><span class="s">&quot;</span><span class="s2">fox1</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nv">animals</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Array</span><span class="p">[</span><span class="o">&amp;</span><span class="nc">Animal</span><span class="p">]</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="nv">duck1</span><span class="p">,</span><span class="w"> </span><span class="nv">duck2</span><span class="p">,</span><span class="w"> </span><span class="nv">fox1</span><span class="p">]</span>
+<span class="w">  </span><span class="nf">inspect</span><span class="p">(</span>
+<span class="w">    </span><span class="nv">animals</span><span class="p">.</span><span class="nf">map</span><span class="p">(</span><span class="kd">fn</span><span class="p">(</span><span class="nv">animal</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nv">animal</span><span class="p">.</span><span class="nf">speak</span><span class="p">()</span><span class="w"> </span><span class="p">}),</span>
+<span class="w">    </span><span class="nv">content</span><span class="p">=(</span>
+<span class="w">      </span><span class="cp">#|[&quot;duck1: quack!&quot;, &quot;duck2: quack!&quot;, &quot;What does the fox say?&quot;]</span>
+<span class="w">    </span><span class="p">),</span>
+<span class="w">  </span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Not all traits can be used to create objects.
+&quot;object-safe&quot; traits' methods must satisfy the following conditions:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Self</span></code> must be the first parameter of a method</p></li>
+<li><p>There must be only one occurrence of <code class="docutils literal notranslate"><span class="pre">Self</span></code> in the type of the method (i.e. the first parameter)</p></li>
+</ul>
+<p>Users can define new methods for trait objects, just like defining new methods for structs and enums:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="k">pub</span><span class="p">(</span><span class="nv">open</span><span class="p">)</span><span class="w"> </span><span class="kd">trait</span><span class="w"> </span><span class="nc">Logger</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">write_string</span><span class="p">(</span><span class="k">Self</span><span class="p">,</span><span class="w"> </span><span class="nb">String</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Unit</span>
+<span class="p">}</span>
+
+<span class="k">pub</span><span class="p">(</span><span class="nv">open</span><span class="p">)</span><span class="w"> </span><span class="kd">trait</span><span class="w"> </span><span class="nc">CanLog</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">log</span><span class="p">(</span><span class="k">Self</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="nc">Logger</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Unit</span>
+<span class="p">}</span>
+
+<span class="kd">fn</span><span class="p">[</span><span class="nc">Obj</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">CanLog</span><span class="p">]</span><span class="w"> </span><span class="o">&amp;</span><span class="nc">Logger</span><span class="p">::</span><span class="nf">write_object</span><span class="p">(</span><span class="k">self</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="o">&amp;</span><span class="nc">Logger</span><span class="p">,</span><span class="w"> </span><span class="nv">obj</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">Obj</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Unit</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nv">obj</span><span class="p">.</span><span class="nf">log</span><span class="p">(</span><span class="k">self</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="c1">/// use the new method to simplify code</span>
+<span class="k">pub</span><span class="w"> </span><span class="kd">impl</span><span class="p">[</span><span class="nc">A</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">CanLog</span><span class="p">,</span><span class="w"> </span><span class="nc">B</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">CanLog</span><span class="p">]</span><span class="w"> </span><span class="nc">CanLog</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="nc">A</span><span class="p">,</span><span class="w"> </span><span class="nc">B</span><span class="p">)</span><span class="w"> </span><span class="kd">with</span><span class="w"> </span><span class="nf">log</span><span class="p">(</span><span class="k">self</span><span class="p">,</span><span class="w"> </span><span class="nv">logger</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="p">(</span><span class="nv">a</span><span class="p">,</span><span class="w"> </span><span class="nv">b</span><span class="p">)</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="k">self</span>
+<span class="w">  </span><span class="nv">logger</span>
+<span class="w">  </span><span class="p">..</span><span class="nf">write_string</span><span class="p">(</span><span class="s">&quot;</span><span class="s2">(</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="w">  </span><span class="p">..</span><span class="nf">write_object</span><span class="p">(</span><span class="nv">a</span><span class="p">)</span>
+<span class="w">  </span><span class="p">..</span><span class="nf">write_string</span><span class="p">(</span><span class="s">&quot;</span><span class="s2">, </span><span class="s">&quot;</span><span class="p">)</span>
+<span class="w">  </span><span class="p">..</span><span class="nf">write_object</span><span class="p">(</span><span class="nv">b</span><span class="p">)</span>
+<span class="w">  </span><span class="p">.</span><span class="nf">write_string</span><span class="p">(</span><span class="s">&quot;</span><span class="s2">)</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="builtin-traits">
+<h2>Builtin traits<a class="headerlink" href="#builtin-traits" title="Link to this heading">#</a></h2>
+<p>MoonBit provides the following useful builtin traits:</p>
+<!-- MANUAL CHECK https://github.com/moonbitlang/core/blob/80cf250d22a5d5eff4a2a1b9a6720026f2fe8e38/builtin/traits.mbt -->
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">trait</span><span class="w"> </span><span class="nb">Eq</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">op_equal</span><span class="p">(</span><span class="k">Self</span><span class="p">,</span><span class="w"> </span><span class="k">Self</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Bool</span>
+<span class="p">}</span>
+
+<span class="kd">trait</span><span class="w"> </span><span class="nb">Compare</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Eq</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="c1">// `0` for equal, `-1` for smaller, `1` for greater</span>
+<span class="w">  </span><span class="nf">compare</span><span class="p">(</span><span class="k">Self</span><span class="p">,</span><span class="w"> </span><span class="k">Self</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Int</span>
+<span class="p">}</span>
+
+<span class="kd">trait</span><span class="w"> </span><span class="nb">Hash</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">hash_combine</span><span class="p">(</span><span class="k">Self</span><span class="p">,</span><span class="w"> </span><span class="nc">Hasher</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Unit</span><span class="w"> </span><span class="c1">// to be implemented</span>
+<span class="w">  </span><span class="nf">hash</span><span class="p">(</span><span class="k">Self</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Int</span><span class="w"> </span><span class="c1">// has default implementation</span>
+<span class="p">}</span>
+
+<span class="kd">trait</span><span class="w"> </span><span class="nb">Show</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">output</span><span class="p">(</span><span class="k">Self</span><span class="p">,</span><span class="w"> </span><span class="nc">Logger</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Unit</span><span class="w"> </span><span class="c1">// to be implemented</span>
+<span class="w">  </span><span class="nf">to_string</span><span class="p">(</span><span class="k">Self</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">String</span><span class="w"> </span><span class="c1">// has default implementation</span>
+<span class="p">}</span>
+
+<span class="kd">trait</span><span class="w"> </span><span class="nb">Default</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">default</span><span class="p">()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="k">Self</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<section id="deriving-builtin-traits">
+<h3>Deriving builtin traits<a class="headerlink" href="#deriving-builtin-traits" title="Link to this heading">#</a></h3>
+<p>MoonBit can automatically derive implementations for some builtin traits:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">struct</span><span class="w"> </span><span class="nc">T</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nv">a</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span>
+<span class="w">  </span><span class="nv">b</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span>
+<span class="p">}</span><span class="w"> </span><span class="kd">derive</span><span class="p">(</span><span class="nb">Eq</span><span class="p">,</span><span class="w"> </span><span class="nb">Compare</span><span class="p">,</span><span class="w"> </span><span class="nc">Debug</span><span class="p">,</span><span class="w"> </span><span class="nb">Default</span><span class="p">)</span>
+
+<span class="k">test</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nv">t1</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nc">T</span><span class="p">::</span><span class="nf">default</span><span class="p">()</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nv">t2</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nc">T</span><span class="p">::{</span><span class="w"> </span><span class="nv">a</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nv">b</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="nf">debug_inspect</span><span class="p">(</span><span class="nv">t1</span><span class="p">,</span><span class="w"> </span><span class="nv">content</span><span class="p">=</span><span class="s">&quot;</span><span class="s2">{ a: 0, b: 0 }</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="w">  </span><span class="nf">debug_inspect</span><span class="p">(</span><span class="nv">t2</span><span class="p">,</span><span class="w"> </span><span class="nv">content</span><span class="p">=</span><span class="s">&quot;</span><span class="s2">{ a: 1, b: 1 }</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="w">  </span><span class="nf">assert_false</span><span class="p">(</span><span class="nv">t1</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nv">t2</span><span class="p">)</span>
+<span class="w">  </span><span class="nf">assert_true</span><span class="p">(</span><span class="nv">t1</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nv">t2</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>See <a class="reference internal" href="derive.html"><span class="std std-doc">Deriving</span></a> for more information about deriving traits.</p>
+</section>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="fundamentals.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Fundamentals</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="derive.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Deriving traits</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#method-system">Method system</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#local-method">Local method</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#alias-methods-as-functions">Alias methods as functions</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#operator-overloading">Operator Overloading</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#trait-system">Trait system</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#extending-traits">Extending traits</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#implementing-traits">Implementing traits</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#using-traits">Using traits</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#invoke-trait-methods-directly">Invoke trait methods directly</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#trait-objects">Trait objects</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#builtin-traits">Builtin traits</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#deriving-builtin-traits">Deriving builtin traits</a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By International Digital Economy Academy
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, International Digital Economy Academy.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

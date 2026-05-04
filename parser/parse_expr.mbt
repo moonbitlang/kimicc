@@ -336,7 +336,7 @@ fn Parser::parse_unary(self : Parser) -> Expr {
           _ => false
         }
         if is_type {
-          let ty = self.parse_type()
+          let ty = self.parse_type_name()
           if self.token == RParen {
             self.advance()
             Sizeof(ty)
@@ -372,8 +372,7 @@ fn Parser::parse_unary(self : Parser) -> Expr {
         _ => false
       }
       if is_cast {
-        // It's a cast
-        let ty = self.parse_type()
+        let ty = self.parse_type_name()
         if self.token == RParen {
           self.advance() // past )
           if self.token == LBrace {
@@ -383,32 +382,8 @@ fn Parser::parse_unary(self : Parser) -> Expr {
           } else {
             self.apply_postfix(Cast(ty, self.parse_unary()))
           }
-        } else if self.token == LParen {
-          // Function pointer type cast: (void (*)(void*, int))p
-          self.expect(LParen)
-          // Consume all * and qualifiers for multiple indirection
-          while self.token == Star || self.token == BitXor {
-            self.advance()
-            self.skip_qualifiers()
-          }
-          while self.token == Ident("_Nullable") || self.token == Ident("_Nonnull") ||
-                self.token == Ident("_Null_unspecified") || self.token == Const ||
-                self.token == Restrict || self.token == Volatile {
-            self.advance()
-          }
-          self.expect(RParen)
-          self.expect(LParen)
-          let mut depth = 1
-          while depth > 0 && self.token != EOF {
-            if self.token == LParen { depth += 1 }
-            else if self.token == RParen { depth -= 1 }
-            if depth > 0 { self.advance() } else { self.advance(); break }
-          }
-          self.skip_attributes()
-          self.expect(RParen)
-          self.apply_postfix(Cast(Pointer(Void), self.parse_unary()))
         } else {
-          // Not a cast after all, restore and parse as parenthesized expr
+          // Not a valid cast, restore and parse as parenthesized expr
           self.lexer.pos = saved_pos
           self.token = saved_token
           self.advance() // past (
@@ -548,12 +523,6 @@ fn Parser::parse_primary(self : Parser) -> Expr {
       self.expect(RParen)
       expr
     }
-    _ => {
-      // Debug: print context before abort
-      let pos = self.lexer.pos
-      let near = self.lexer.input[pos:pos+30].to_string()
-      println("PARSE ERROR: token=" + self.token.to_string() + " pos=" + pos.to_string() + " near=[" + near + "]")
-      abort("Unexpected token in primary: " + self.token.to_string())
-    }
+    _ => abort("Unexpected token in primary: " + self.token.to_string())
   }
 }

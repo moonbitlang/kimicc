@@ -1,0 +1,1218 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Managing Projects with Packages &#8212; MoonBit v0.9.1 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/sphinx-book-theme.css?v=a3416100" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../_static/documentation_options.js?v=e49c06df"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=a56c686a"></script>
+    <script src="../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'language/packages';</script>
+    <link rel="icon" href="../_static/favicon.ico"/>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Writing Tests" href="tests.html" />
+    <link rel="prev" title="Error handling" href="error-handling.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <script async type="text/javascript" src="/_/static/javascript/readthedocs-addons.js"></script><meta name="readthedocs-project-slug" content="moonbit-docs" /><meta name="readthedocs-version-slug" content="latest" /><meta name="readthedocs-resolver-filename" content="/language/packages.html" /><meta name="readthedocs-http-status" content="200" /></head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../_static/logo.png" class="logo__image only-light" alt=""/>
+    <script>document.write(`<img src="../_static/logo.png" class="logo__image only-dark" alt=""/>`);</script>
+  
+  
+    <p class="title logo__title">MoonBit 月兔</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <ul class="current nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../tutorial/index.html">Tutorial</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../tutorial/tour.html">A Tour of MoonBit for Beginners</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorial/cli-quickstart.html">Native CLI Quickstart</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tutorial/fullstack-one-project.html">Fullstack in One MoonBit Project</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">MoonBit Language</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fundamentals.html">Fundamentals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="methods.html">Method and Trait</a></li>
+<li class="toctree-l2"><a class="reference internal" href="derive.html">Deriving traits</a></li>
+<li class="toctree-l2"><a class="reference internal" href="error-handling.html">Error handling</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">Managing Projects with Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tests.html">Writing Tests</a></li>
+<li class="toctree-l2"><a class="reference internal" href="benchmarks.html">Writing Benchmarks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="docs.html">Comments and Documentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="attributes.html">Attribute</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ffi.html">Foreign Function Interface (FFI)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="async-experimental.html">Async programming support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="verification.html">Formal Verification</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="error_codes/index.html">Error Codes Index</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0001.html">E0001</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0002.html">E0002</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0003.html">E0003</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0004.html">E0004</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0005.html">E0005</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0006.html">E0006</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0007.html">E0007</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0008.html">E0008</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0009.html">E0009</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0010.html">E0010</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0011.html">E0011</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0012.html">E0012</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0013.html">E0013</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0014.html">E0014</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0015.html">E0015</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0016.html">E0016</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0017.html">E0017</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0018.html">E0018</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0019.html">E0019</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0020.html">E0020</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0021.html">E0021</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0022.html">E0022</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0023.html">E0023</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0024.html">E0024</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0025.html">E0025</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0026.html">E0026</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0027.html">E0027</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0028.html">E0028</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0029.html">E0029</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0030.html">E0030</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0031.html">E0031</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0032.html">E0032</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0033.html">E0033</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0034.html">E0034</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0035.html">E0035</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0036.html">E0036</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0037.html">E0037</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0038.html">E0038</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0039.html">E0039</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0040.html">E0040</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0041.html">E0041</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0042.html">E0042</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0043.html">E0043</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0044.html">E0044</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0045.html">E0045</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0046.html">E0046</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0047.html">E0047</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0049.html">E0049</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0050.html">E0050</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0051.html">E0051</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0052.html">E0052</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0053.html">E0053</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0054.html">E0054</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0055.html">E0055</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0056.html">E0056</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0057.html">E0057</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0058.html">E0058</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0059.html">E0059</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0060.html">E0060</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0061.html">E0061</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0062.html">E0062</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0063.html">E0063</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0064.html">E0064</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0065.html">E0065</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0066.html">E0066</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0067.html">E0067</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0068.html">E0068</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E0069.html">E0069</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E1000.html">E1000</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E1001.html">E1001</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3001.html">E3001</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3002.html">E3002</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3003.html">E3003</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3004.html">E3004</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3005.html">E3005</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3006.html">E3006</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3007.html">E3007</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3008.html">E3008</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3009.html">E3009</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3010.html">E3010</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3011.html">E3011</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3012.html">E3012</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3014.html">E3014</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3016.html">E3016</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3017.html">E3017</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3018.html">E3018</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3019.html">E3019</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3020.html">E3020</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3021.html">E3021</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3022.html">E3022</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3023.html">E3023</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3024.html">E3024</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3100.html">E3100</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3700.html">E3700</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3800.html">E3800</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E3801.html">E3801</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4000.html">E4000</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4001.html">E4001</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4002.html">E4002</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4003.html">E4003</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4004.html">E4004</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4005.html">E4005</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4006.html">E4006</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4008.html">E4008</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4010.html">E4010</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4011.html">E4011</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4012.html">E4012</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4013.html">E4013</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4014.html">E4014</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4015.html">E4015</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4016.html">E4016</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4017.html">E4017</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4018.html">E4018</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4019.html">E4019</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4020.html">E4020</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4021.html">E4021</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4022.html">E4022</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4023.html">E4023</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4024.html">E4024</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4027.html">E4027</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4028.html">E4028</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4029.html">E4029</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4031.html">E4031</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4032.html">E4032</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4033.html">E4033</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4034.html">E4034</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4036.html">E4036</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4037.html">E4037</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4038.html">E4038</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4039.html">E4039</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4040.html">E4040</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4041.html">E4041</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4042.html">E4042</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4043.html">E4043</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4044.html">E4044</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4046.html">E4046</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4047.html">E4047</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4048.html">E4048</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4049.html">E4049</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4050.html">E4050</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4051.html">E4051</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4052.html">E4052</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4053.html">E4053</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4054.html">E4054</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4055.html">E4055</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4056.html">E4056</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4057.html">E4057</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4059.html">E4059</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4061.html">E4061</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4063.html">E4063</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4064.html">E4064</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4065.html">E4065</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4066.html">E4066</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4067.html">E4067</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4068.html">E4068</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4069.html">E4069</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4070.html">E4070</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4071.html">E4071</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4073.html">E4073</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4074.html">E4074</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4077.html">E4077</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4078.html">E4078</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4080.html">E4080</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4081.html">E4081</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4082.html">E4082</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4084.html">E4084</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4085.html">E4085</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4086.html">E4086</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4087.html">E4087</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4089.html">E4089</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4091.html">E4091</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4092.html">E4092</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4093.html">E4093</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4094.html">E4094</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4095.html">E4095</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4096.html">E4096</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4099.html">E4099</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4100.html">E4100</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4101.html">E4101</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4102.html">E4102</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4104.html">E4104</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4106.html">E4106</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4107.html">E4107</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4108.html">E4108</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4109.html">E4109</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4110.html">E4110</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4111.html">E4111</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4112.html">E4112</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4113.html">E4113</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4114.html">E4114</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4115.html">E4115</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4116.html">E4116</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4117.html">E4117</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4118.html">E4118</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4119.html">E4119</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4120.html">E4120</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4121.html">E4121</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4122.html">E4122</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4124.html">E4124</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4127.html">E4127</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4128.html">E4128</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4130.html">E4130</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4131.html">E4131</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4132.html">E4132</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4133.html">E4133</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4135.html">E4135</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4136.html">E4136</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4137.html">E4137</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4138.html">E4138</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4139.html">E4139</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4140.html">E4140</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4141.html">E4141</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4142.html">E4142</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4143.html">E4143</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4144.html">E4144</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4145.html">E4145</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4146.html">E4146</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4147.html">E4147</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4148.html">E4148</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4149.html">E4149</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4151.html">E4151</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4153.html">E4153</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4154.html">E4154</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4155.html">E4155</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4156.html">E4156</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4157.html">E4157</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4158.html">E4158</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4159.html">E4159</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4160.html">E4160</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4161.html">E4161</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4162.html">E4162</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4163.html">E4163</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4164.html">E4164</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4165.html">E4165</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4167.html">E4167</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4168.html">E4168</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4171.html">E4171</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4172.html">E4172</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4173.html">E4173</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4174.html">E4174</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4175.html">E4175</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4176.html">E4176</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4177.html">E4177</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4180.html">E4180</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4181.html">E4181</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4182.html">E4182</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4183.html">E4183</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4184.html">E4184</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4185.html">E4185</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4186.html">E4186</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4187.html">E4187</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4188.html">E4188</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4189.html">E4189</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4190.html">E4190</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4191.html">E4191</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4192.html">E4192</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4193.html">E4193</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4194.html">E4194</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4195.html">E4195</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4196.html">E4196</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4197.html">E4197</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4198.html">E4198</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4199.html">E4199</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4200.html">E4200</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4201.html">E4201</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4202.html">E4202</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4203.html">E4203</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4204.html">E4204</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4205.html">E4205</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4206.html">E4206</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4207.html">E4207</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4208.html">E4208</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4209.html">E4209</a></li>
+<li class="toctree-l3"><a class="reference internal" href="error_codes/E4210.html">E4210</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../toolchain/index.html">Toolchains</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../toolchain/moon/index.html">Moon Build System</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/tutorial.html">MoonBit's Build System Tutorial</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/script-mode.html">Running <code class="docutils literal notranslate"><span class="pre">.mbtx</span></code> Scripts</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/package-manage-tour.html">Use and publish packages</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/workspace.html">Workspace Support</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/commands.html">Command-Line Help for <code class="docutils literal notranslate"><span class="pre">moon</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/module.html">Module Configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/package.html">Package Configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/moon/coverage.html">Measuring code coverage</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2"><a class="reference internal" href="../toolchain/moonide/index.html">MoonBit Agent IDE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../toolchain/vscode/index.html">MoonBit VSCode Plugin</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../toolchain/wasm/index.html">WebAssembly Integration</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../toolchain/wasm/component-model-tutorial.html">MoonBit for Component Model</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../example/index.html">Examples</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../example/sudoku/index.html">Sudoku Solver</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../example/lambda/index.html">Lambda calculus</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../example/gmachine/index.html">G-Machine</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../example/gmachine/gmachine-1.html">G-Machine 1</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example/gmachine/gmachine-2.html">G-Machine 2</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example/gmachine/gmachine-3.html">G-Machine 3</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../example/myers-diff/index.html">Myers Diff</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../example/myers-diff/myers-diff.html">Myers diff</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example/myers-diff/myers-diff2.html">Myers diff 2</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example/myers-diff/myers-diff3.html">Myers diff 3</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../example/segment-tree/index.html">Segment Tree</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../example/segment-tree/segment-tree.html">Segment Trees (Part 1)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example/segment-tree/segment-tree2.html">Segment Trees (Part 2)</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/moonbitlang/moonbit-docs/blob/main/next/language/packages.md?plain=1" target="_blank"
+   class="btn btn-sm btn-source-file-button dropdown-item"
+   title="Show source"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-code"></i>
+  </span>
+<span class="btn__text-container">Show source</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/moonbitlang/moonbit-docs/edit/main/next/language/packages.md" target="_blank"
+   class="btn btn-sm btn-source-edit-button dropdown-item"
+   title="Suggest edit"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-pencil-alt"></i>
+  </span>
+<span class="btn__text-container">Suggest edit</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/moonbitlang/moonbit-docs/issues/new?title=Issue%20on%20page%20%2Flanguage/packages.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../_sources/language/packages.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Managing Projects with Packages</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#packages-and-modules">Packages and modules</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#prelude-and-builtin-names">Prelude and builtin names</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#internal-packages">Internal Packages</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#using">Using</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#access-control">Access Control</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#aliases">Aliases</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#types">Types</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#traits">Traits</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#trait-implementations">Trait Implementations</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#virtual-packages">Virtual Packages</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#defining-a-virtual-package">Defining a virtual package</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#implementing-a-virtual-package">Implementing a virtual package</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#using-a-virtual-package">Using a virtual package</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#overriding-a-virtual-package">Overriding a virtual package</a></li>
+</ul>
+</li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="managing-projects-with-packages">
+<h1>Managing Projects with Packages<a class="headerlink" href="#managing-projects-with-packages" title="Link to this heading">#</a></h1>
+<p>When developing projects at large scale, the project usually needs to be divided into smaller modular unit that depends on each other.
+More often, it involves using other people's work: most noticeably is the <a class="reference external" href="https://github.com/moonbitlang/core">core</a>, the standard library of MoonBit.</p>
+<section id="packages-and-modules">
+<h2>Packages and modules<a class="headerlink" href="#packages-and-modules" title="Link to this heading">#</a></h2>
+<p>In MoonBit, the most important unit for code organization is a package, which consists of a number of source code files and a single package configuration file (<code class="docutils literal notranslate"><span class="pre">moon.pkg</span></code>, or the legacy <code class="docutils literal notranslate"><span class="pre">moon.pkg.json</span></code> format).
+A package can either be a <code class="docutils literal notranslate"><span class="pre">main</span></code> package, consisting a <code class="docutils literal notranslate"><span class="pre">main</span></code> function, or a package that serves as a library, identified by the <a class="reference internal" href="../toolchain/moon/package.html#is-main"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">is-main</span></code></span></a> field.</p>
+<p>A project, corresponding to a module, consists of multiple packages and a single <code class="docutils literal notranslate"><span class="pre">moon.mod.json</span></code> configuration file.</p>
+<p>A module is identified by the <a class="reference internal" href="../toolchain/moon/module.html#name"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">name</span></code></span></a> field, which usually consists of two parts, separated by <code class="docutils literal notranslate"><span class="pre">/</span></code>: <code class="docutils literal notranslate"><span class="pre">user-name/project-name</span></code>.
+A package is identified by the relative path to the source root defined by the <a class="reference internal" href="../toolchain/moon/module.html#source-directory"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">source</span></code></span></a> field. The full identifier would be <code class="docutils literal notranslate"><span class="pre">user-name/project-name/path-to-pkg</span></code>.</p>
+<p>When using things from another package, the dependency between modules should first be declared inside the <code class="docutils literal notranslate"><span class="pre">moon.mod.json</span></code> by the <a class="reference internal" href="../toolchain/moon/module.html#dependency-management"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">deps</span></code></span></a> field.
+The dependency between packages should then be declared in the package file (<code class="docutils literal notranslate"><span class="pre">moon.pkg</span></code>, or legacy <code class="docutils literal notranslate"><span class="pre">moon.pkg.json</span></code>) by the <a class="reference internal" href="../toolchain/moon/package.html#import"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">import</span></code></span></a> field.
+Most core packages follow the same rule: if you use <code class="docutils literal notranslate"><span class="pre">&#64;json</span></code>, <code class="docutils literal notranslate"><span class="pre">&#64;test</span></code>, or other
+ordinary core aliases, add the corresponding <code class="docutils literal notranslate"><span class="pre">moonbitlang/core/...</span></code> package to
+<code class="docutils literal notranslate"><span class="pre">import</span></code> to avoid <code class="docutils literal notranslate"><span class="pre">core_package_not_imported</span></code> warnings.</p>
+<p id="default-alias">The <strong>default alias</strong> of a package is the last part of the identifier split by <code class="docutils literal notranslate"><span class="pre">/</span></code>.
+One can use <code class="docutils literal notranslate"><span class="pre">&#64;pkg_alias</span></code> to access the imported entities, where <code class="docutils literal notranslate"><span class="pre">pkg_alias</span></code> is either the full identifier or the default alias.
+A custom alias may also be defined with the <a class="reference internal" href="../toolchain/moon/package.html#import"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">import</span></code></span></a> field.</p>
+<p>In <code class="docutils literal notranslate"><span class="pre">moon.pkg</span></code>, a custom alias is written as:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>import {
+  &quot;moonbit-community/language/packages/pkgA&quot;,
+  &quot;moonbit-community/language/packages/pkgC&quot; @c,
+  &quot;moonbitlang/core/builtin&quot;,
+}
+</pre></div>
+</div>
+<div class="literal-block-wrapper docutils container" id="id1">
+<div class="code-block-caption"><span class="caption-text">pkgB/top.mbt</span><a class="headerlink" href="#id1" title="Link to this code">#</a></div>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="c1">///|</span>
+<span class="k">pub</span><span class="w"> </span><span class="kd">fn</span><span class="w"> </span><span class="nf">add1</span><span class="p">(</span><span class="nv">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Int</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nn">@moonbitlang/core/builtin.</span><span class="nc">Add</span><span class="p">::</span><span class="nf">add</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="nn">@c.</span><span class="nf">incr</span><span class="p">(</span><span class="nn">@pkgA.</span><span class="nf">incr</span><span class="p">(</span><span class="nv">x</span><span class="p">)))</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<section id="prelude-and-builtin-names">
+<h3>Prelude and builtin names<a class="headerlink" href="#prelude-and-builtin-names" title="Link to this heading">#</a></h3>
+<p>If <code class="docutils literal notranslate"><span class="pre">&#64;pkg.</span></code> is omitted, MoonBit resolves an unqualified name in the current
+package and the prelude. A local definition with the same name therefore
+shadows the prelude definition.</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">fn</span><span class="w"> </span><span class="nf">println</span><span class="p">(</span><span class="nv">msg</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">String</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">String</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="s">&quot;</span><span class="s2">log: </span><span class="se">\{</span><span class="nv">msg</span><span class="se">}</span><span class="s">&quot;</span>
+<span class="p">}</span>
+
+<span class="c1">///|</span>
+<span class="kd">fn</span><span class="w"> </span><span class="nf">shadowed_println</span><span class="p">()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">String</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">println</span><span class="p">(</span><span class="s">&quot;</span><span class="s2">hello</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="c1">///|</span>
+<span class="kd">fn</span><span class="w"> </span><span class="nf">builtin_answer</span><span class="p">()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Int</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nv">answer</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">42</span>
+<span class="w">  </span><span class="nv">answer</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">prelude</span></code> is a special package: it is available by default, and names exposed
+through it participate in normal unqualified name resolution without an
+explicit <code class="docutils literal notranslate"><span class="pre">import</span></code>.</p>
+<p>Compiler builtins are a separate category. Types such as <code class="docutils literal notranslate"><span class="pre">Int</span></code> are built into
+the language itself, not imported from any package, so there is no
+<code class="docutils literal notranslate"><span class="pre">&#64;builtin.Int</span></code>. The same distinction applies to other compiler-known names such
+as <code class="docutils literal notranslate"><span class="pre">String</span></code>, <code class="docutils literal notranslate"><span class="pre">Bool</span></code>, and <code class="docutils literal notranslate"><span class="pre">Unit</span></code>.</p>
+</section>
+<section id="internal-packages">
+<h3>Internal Packages<a class="headerlink" href="#internal-packages" title="Link to this heading">#</a></h3>
+<p>You can define internal packages that are only available for certain packages.</p>
+<p>Code in <code class="docutils literal notranslate"><span class="pre">a/b/c/internal/x/y/z</span></code> are only available to packages <code class="docutils literal notranslate"><span class="pre">a/b/c</span></code> and <code class="docutils literal notranslate"><span class="pre">a/b/c/**</span></code>.</p>
+</section>
+<section id="using">
+<h3>Using<a class="headerlink" href="#using" title="Link to this heading">#</a></h3>
+<p>You can use <code class="docutils literal notranslate"><span class="pre">using</span></code> syntax to import symbols defined in another package.</p>
+<div class="literal-block-wrapper docutils container" id="id2">
+<div class="code-block-caption"><span class="caption-text">pkgC/top.mbt</span><a class="headerlink" href="#id2" title="Link to this code">#</a></div>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="c1">///|</span>
+<span class="k">pub</span><span class="w"> </span><span class="nv">using</span><span class="w"> </span><span class="nn">@pkgA</span><span class="w"> </span><span class="p">{</span><span class="nv">incr</span><span class="p">,</span><span class="w"> </span><span class="kd">trait</span><span class="w"> </span><span class="nc">Trait</span><span class="p">,</span><span class="w"> </span><span class="kd">type</span><span class="w"> </span><span class="nc">Type</span><span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<p>By having <code class="docutils literal notranslate"><span class="pre">pub</span></code> modifier, it is considered as reexportation.</p>
+</section>
+</section>
+<section id="access-control">
+<h2>Access Control<a class="headerlink" href="#access-control" title="Link to this heading">#</a></h2>
+<p>MoonBit features a comprehensive access control system that governs which parts of your code are accessible from other packages.
+This system helps maintain encapsulation, information hiding, and clear API boundaries.
+The visibility modifiers apply to functions, variables, types, and traits, allowing fine-grained control over how your code can be used by others.</p>
+<section id="functions">
+<h3>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h3>
+<p>By default, all function definitions and variable bindings are <em>invisible</em> to other packages.
+You can use the <code class="docutils literal notranslate"><span class="pre">pub</span></code> modifier before toplevel <code class="docutils literal notranslate"><span class="pre">let</span></code>/<code class="docutils literal notranslate"><span class="pre">fn</span></code> to make them public.</p>
+</section>
+<section id="aliases">
+<h3>Aliases<a class="headerlink" href="#aliases" title="Link to this heading">#</a></h3>
+<p>By default, <a class="reference internal" href="fundamentals.html#function-alias"><span class="std std-ref">function alias</span></a> and
+<a class="reference internal" href="methods.html#alias-methods-as-functions"><span class="std std-ref">method alias</span></a> follow the
+visibility of the original definition, while
+<a class="reference internal" href="fundamentals.html#type-alias"><span class="std std-ref">type alias</span></a>, <a class="reference internal" href="#using">using</a> are <em>invisible</em> to other
+packages.</p>
+<p>You can add the <code class="docutils literal notranslate"><span class="pre">pub</span></code> modifier before the definition or fill in the <code class="docutils literal notranslate"><span class="pre">visibility</span></code>
+field within the annotation.</p>
+</section>
+<section id="types">
+<h3>Types<a class="headerlink" href="#types" title="Link to this heading">#</a></h3>
+<p>There are four different kinds of visibility for types in MoonBit:</p>
+<ul>
+<li><p>Private type: declared with <code class="docutils literal notranslate"><span class="pre">priv</span></code>, completely invisible to the outside world</p></li>
+<li><p>Abstract type: which is the default visibility for types.</p>
+<p>Only the name of an abstract type is visible outside, the internal representation of the
+type is hidden. Making abstract type by default is a design choice to encourage
+encapsulation and information hiding.</p>
+</li>
+<li><p>Readonly types, declared with <code class="docutils literal notranslate"><span class="pre">pub</span></code>.</p>
+<p>The internal representation of readonly types are visible outside,
+but users can only read the values of these types from outside, construction and mutation are not allowed.</p>
+</li>
+<li><p>Fully public types, declared with <code class="docutils literal notranslate"><span class="pre">pub(all)</span></code>.</p>
+<p>The outside world can freely construct, read values of these types and modify them if possible.</p>
+</li>
+</ul>
+<p>In addition to the visibility of the type itself, the fields of a public <code class="docutils literal notranslate"><span class="pre">struct</span></code> can be annotated with <code class="docutils literal notranslate"><span class="pre">priv</span></code>,
+which will hide the field from the outside world completely.
+Note that <code class="docutils literal notranslate"><span class="pre">struct</span></code>s with private fields cannot be constructed directly outside,
+but you can update the public fields using the functional struct update syntax.</p>
+<p>Readonly types is a very useful feature, inspired by <a class="reference external" href="https://ocaml.org/manual/5.3/privatetypes.html">private types</a> in OCaml.
+In short, values of <code class="docutils literal notranslate"><span class="pre">pub</span></code> types can be destructed by pattern matching and the dot syntax, but
+cannot be constructed or mutated in other packages.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>There is no restriction within the same package where <code class="docutils literal notranslate"><span class="pre">pub</span></code> types are defined.</p>
+</div>
+<!-- MANUAL CHECK -->
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="c1">// Package A</span>
+<span class="k">pub</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="nc">RO</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nv">field</span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span>
+<span class="p">}</span>
+<span class="k">test</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nv">r</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nv">field</span><span class="p">:</span><span class="w"> </span><span class="mi">4</span><span class="w"> </span><span class="p">}</span><span class="w">       </span><span class="c1">// OK</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nv">r</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">..</span><span class="nv">r</span><span class="p">,</span><span class="w"> </span><span class="nv">field</span><span class="p">:</span><span class="w"> </span><span class="mi">8</span><span class="w"> </span><span class="p">}</span><span class="w">  </span><span class="c1">// OK</span>
+<span class="p">}</span>
+
+<span class="c1">// Package B</span>
+<span class="kd">fn</span><span class="w"> </span><span class="nf">println</span><span class="p">(</span><span class="nv">r</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">RO</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Unit</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">println</span><span class="p">(</span><span class="s">&quot;</span><span class="s2">{ field: </span><span class="s">&quot;</span><span class="p">)</span>
+<span class="w">  </span><span class="nf">println</span><span class="p">(</span><span class="nv">r</span><span class="p">.</span><span class="nv">field</span><span class="p">)</span><span class="w">  </span><span class="c1">// OK</span>
+<span class="w">  </span><span class="nf">println</span><span class="p">(</span><span class="s">&quot;</span><span class="s2"> }</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="p">}</span>
+<span class="k">test</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nv">r</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">RO</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nv">field</span><span class="p">:</span><span class="w"> </span><span class="mi">4</span><span class="w"> </span><span class="p">}</span><span class="w">  </span><span class="c1">// ERROR: Cannot create values of the public read-only type RO!</span>
+<span class="w">  </span><span class="kd">let</span><span class="w"> </span><span class="nv">r</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">..</span><span class="nv">r</span><span class="p">,</span><span class="w"> </span><span class="nv">field</span><span class="p">:</span><span class="w"> </span><span class="mi">8</span><span class="w"> </span><span class="p">}</span><span class="w">  </span><span class="c1">// ERROR: Cannot mutate a public read-only field!</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Access control in MoonBit adheres to the principle that a <code class="docutils literal notranslate"><span class="pre">pub</span></code> type, function, or variable cannot be defined in terms of a private type. This is because the private type may not be accessible everywhere that the <code class="docutils literal notranslate"><span class="pre">pub</span></code> entity is used. MoonBit incorporates sanity checks to prevent the occurrence of use cases that violate this principle.</p>
+<!-- MANUAL CHECK -->
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="k">pub</span><span class="p">(</span><span class="nv">all</span><span class="p">)</span><span class="w"> </span><span class="kd">type</span><span class="w"> </span><span class="nc">T1</span>
+<span class="k">pub</span><span class="p">(</span><span class="nv">all</span><span class="p">)</span><span class="w"> </span><span class="kd">type</span><span class="w"> </span><span class="nc">T2</span>
+<span class="k">priv</span><span class="w"> </span><span class="kd">type</span><span class="w"> </span><span class="nc">T3</span>
+
+<span class="k">pub</span><span class="p">(</span><span class="nv">all</span><span class="p">)</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="nc">S</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nv">x</span><span class="p">:</span><span class="w"> </span><span class="nc">T1</span><span class="w">  </span><span class="c1">// OK</span>
+<span class="w">  </span><span class="nv">y</span><span class="p">:</span><span class="w"> </span><span class="nc">T2</span><span class="w">  </span><span class="c1">// OK</span>
+<span class="w">  </span><span class="nv">z</span><span class="p">:</span><span class="w"> </span><span class="nc">T3</span><span class="w">  </span><span class="c1">// ERROR: public field has private type `T3`!</span>
+<span class="p">}</span>
+
+<span class="c1">// ERROR: public function has private parameter type `T3`!</span>
+<span class="k">pub</span><span class="w"> </span><span class="kd">fn</span><span class="w"> </span><span class="nf">f1</span><span class="p">(</span><span class="nc">_x</span><span class="p">:</span><span class="w"> </span><span class="nc">T3</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nc">T1</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="ow">...</span><span class="w"> </span><span class="p">}</span>
+<span class="c1">// ERROR: public function has private return type `T3`!</span>
+<span class="k">pub</span><span class="w"> </span><span class="kd">fn</span><span class="w"> </span><span class="nf">f2</span><span class="p">(</span><span class="nc">_x</span><span class="p">:</span><span class="w"> </span><span class="nc">T1</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nc">T3</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="ow">...</span><span class="w"> </span><span class="p">}</span>
+<span class="c1">// OK</span>
+<span class="k">pub</span><span class="w"> </span><span class="kd">fn</span><span class="w"> </span><span class="nf">f3</span><span class="p">(</span><span class="nc">_x</span><span class="p">:</span><span class="w"> </span><span class="nc">T1</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nc">T1</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="ow">...</span><span class="w"> </span><span class="p">}</span>
+
+<span class="k">pub</span><span class="w"> </span><span class="kd">let</span><span class="w"> </span><span class="nv">a</span><span class="p">:</span><span class="w"> </span><span class="nc">T3</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="ow">...</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1">// ERROR: public variable has private type `T3`!</span>
+</pre></div>
+</div>
+</section>
+<section id="traits">
+<h3>Traits<a class="headerlink" href="#traits" title="Link to this heading">#</a></h3>
+<p>There are four visibility for traits, just like <code class="docutils literal notranslate"><span class="pre">struct</span></code> and <code class="docutils literal notranslate"><span class="pre">enum</span></code>: private, abstract, readonly and fully public.</p>
+<ul class="simple">
+<li><p>Private traits are declared with <code class="docutils literal notranslate"><span class="pre">priv</span> <span class="pre">trait</span></code>, and they are completely invisible from outside.</p></li>
+<li><p>Abstract trait is the default visibility. Only the name of the trait is visible from outside, and the methods in the trait are not exposed.</p></li>
+<li><p>Readonly traits are declared with <code class="docutils literal notranslate"><span class="pre">pub</span> <span class="pre">trait</span></code>, their methods can be invoked from outside, but only the current package can add new implementation for readonly traits.</p></li>
+<li><p>Fully public traits are declared with <code class="docutils literal notranslate"><span class="pre">pub(open)</span> <span class="pre">trait</span></code>, they are open to new implementations outside current package, and their methods can be freely used.</p></li>
+</ul>
+<p>Abstract and readonly traits are sealed, because only the package defining the trait can implement them.
+Implementing a sealed (abstract or readonly) trait outside its package result in compiler error.</p>
+<section id="trait-implementations">
+<h4>Trait Implementations<a class="headerlink" href="#trait-implementations" title="Link to this heading">#</a></h4>
+<p>Implementations have independent visibility, just like functions. The type will not be considered having fulfillled the trait outside current package unless the implementation is <code class="docutils literal notranslate"><span class="pre">pub</span></code>.</p>
+<p>To make the trait system coherent (i.e. there is a globally unique implementation for every <code class="docutils literal notranslate"><span class="pre">Type:</span> <span class="pre">Trait</span></code> pair),
+and prevent third-party packages from modifying behavior of existing programs by accident,
+MoonBit employs the following restrictions on who can define methods/implement traits for types:</p>
+<ul class="simple">
+<li><p><em>only the package that defines a type can define methods for it</em>. So one cannot define new methods or override old methods for builtin and foreign types.</p>
+<ul>
+<li><p>there is an exception to this rule: <a class="reference internal" href="methods.html#local-method"><span class="std std-ref">local methods</span></a>. Local methods are always private though, so they do not break coherence properties of MoonBit's type system</p></li>
+</ul>
+</li>
+<li><p><em>only the package of the type or the package of the trait can define an implementation</em>.
+For example, only <code class="docutils literal notranslate"><span class="pre">&#64;pkg1</span></code> and <code class="docutils literal notranslate"><span class="pre">&#64;pkg2</span></code> are allowed to write <code class="docutils literal notranslate"><span class="pre">impl</span> <span class="pre">&#64;pkg1.Trait</span> <span class="pre">for</span> <span class="pre">&#64;pkg2.Type</span></code>.</p></li>
+</ul>
+<p>The second rule above allows one to add new functionality to a foreign type by defining a new trait and implementing it.
+This makes MoonBit's trait &amp; method system flexible while enjoying good coherence property.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Currently, an empty trait is implemented automatically.</p>
+</div>
+<p>Here's an example of abstract trait:</p>
+<!-- MANUAL CHECK -->
+<div class="top-level highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">trait</span><span class="w"> </span><span class="nc">Number</span><span class="w"> </span><span class="p">{</span>
+<span class="w"> </span><span class="ow">op_add</span><span class="p">(</span><span class="k">Self</span><span class="p">,</span><span class="w"> </span><span class="k">Self</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="k">Self</span>
+<span class="w"> </span><span class="ow">op_sub</span><span class="p">(</span><span class="k">Self</span><span class="p">,</span><span class="w"> </span><span class="k">Self</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="k">Self</span>
+<span class="p">}</span>
+
+<span class="kd">fn</span><span class="p">[</span><span class="nc">N</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">Number</span><span class="p">]</span><span class="w"> </span><span class="nf">add</span><span class="p">(</span><span class="nv">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">N</span><span class="p">,</span><span class="w"> </span><span class="nv">y</span><span class="p">:</span><span class="w"> </span><span class="nc">N</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nc">N</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nc">Number</span><span class="p">::</span><span class="nf">op_add</span><span class="p">(</span><span class="nv">x</span><span class="p">,</span><span class="w"> </span><span class="nv">y</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="kd">fn</span><span class="p">[</span><span class="nc">N</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">Number</span><span class="p">]</span><span class="w"> </span><span class="nf">sub</span><span class="p">(</span><span class="nv">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">N</span><span class="p">,</span><span class="w"> </span><span class="nv">y</span><span class="p">:</span><span class="w"> </span><span class="nc">N</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nc">N</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nc">Number</span><span class="p">::</span><span class="nf">op_sub</span><span class="p">(</span><span class="nv">x</span><span class="p">,</span><span class="w"> </span><span class="nv">y</span><span class="p">)</span>
+<span class="p">}</span>
+
+<span class="kd">impl</span><span class="w"> </span><span class="nc">Number</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nb">Int</span><span class="w"> </span><span class="kd">with</span><span class="w"> </span><span class="ow">op_add</span><span class="p">(</span><span class="nv">x</span><span class="p">,</span><span class="w"> </span><span class="nv">y</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nv">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nv">y</span><span class="w"> </span><span class="p">}</span>
+<span class="kd">impl</span><span class="w"> </span><span class="nc">Number</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nb">Int</span><span class="w"> </span><span class="kd">with</span><span class="w"> </span><span class="ow">op_sub</span><span class="p">(</span><span class="nv">x</span><span class="p">,</span><span class="w"> </span><span class="nv">y</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nv">x</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nv">y</span><span class="w"> </span><span class="p">}</span>
+
+<span class="kd">impl</span><span class="w"> </span><span class="nc">Number</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nb">Double</span><span class="w"> </span><span class="kd">with</span><span class="w"> </span><span class="ow">op_add</span><span class="p">(</span><span class="nv">x</span><span class="p">,</span><span class="w"> </span><span class="nv">y</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nv">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nv">y</span><span class="w"> </span><span class="p">}</span>
+<span class="kd">impl</span><span class="w"> </span><span class="nc">Number</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nb">Double</span><span class="w"> </span><span class="kd">with</span><span class="w"> </span><span class="ow">op_sub</span><span class="p">(</span><span class="nv">x</span><span class="p">,</span><span class="w"> </span><span class="nv">y</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nv">x</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nv">y</span><span class="w"> </span><span class="p">}</span>
+</pre></div>
+</div>
+<p>From outside this package, users can only see the following:</p>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="kd">trait</span><span class="w"> </span><span class="nc">Number</span>
+
+<span class="kd">fn</span><span class="p">[</span><span class="nc">N</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">Number</span><span class="p">]</span><span class="w"> </span><span class="ow">op_add</span><span class="p">(</span><span class="nv">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">N</span><span class="p">,</span><span class="w"> </span><span class="nv">y</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">N</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nc">N</span>
+<span class="kd">fn</span><span class="p">[</span><span class="nc">N</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">Number</span><span class="p">]</span><span class="w"> </span><span class="ow">op_sub</span><span class="p">(</span><span class="nv">x</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">N</span><span class="p">,</span><span class="w"> </span><span class="nv">y</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nc">N</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nc">N</span>
+
+<span class="kd">impl</span><span class="w"> </span><span class="nc">Number</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nb">Int</span>
+<span class="kd">impl</span><span class="w"> </span><span class="nc">Number</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nb">Double</span>
+</pre></div>
+</div>
+<p>The author of <code class="docutils literal notranslate"><span class="pre">Number</span></code> can make use of the fact that only <code class="docutils literal notranslate"><span class="pre">Int</span></code> and <code class="docutils literal notranslate"><span class="pre">Double</span></code> can ever implement <code class="docutils literal notranslate"><span class="pre">Number</span></code>,
+because new implementations are not allowed outside.</p>
+</section>
+</section>
+</section>
+<section id="virtual-packages">
+<h2>Virtual Packages<a class="headerlink" href="#virtual-packages" title="Link to this heading">#</a></h2>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Virtual package is an experimental feature. There may be bugs and undefined behaviors.</p>
+</div>
+<p>You can define virtual packages, which serves as an interface. They can be replaced by specific implementations at build time. Currently virtual packages can only contain plain functions.</p>
+<p>Virtual packages can be useful when swapping different implementations while keeping the code untouched.</p>
+<section id="defining-a-virtual-package">
+<h3>Defining a virtual package<a class="headerlink" href="#defining-a-virtual-package" title="Link to this heading">#</a></h3>
+<p>You need to declare it to be a virtual package and define its interface in a MoonBit interface file.</p>
+<p>Within <code class="docutils literal notranslate"><span class="pre">moon.pkg</span></code>, you will need to add field <a class="reference internal" href="../toolchain/moon/package.html#declarations"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">virtual</span></code></span></a> :</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>options(
+  &quot;virtual&quot;: { &quot;has-default&quot;: true },
+)
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">has-default</span></code> indicates whether the virtual package has a default implementation.</p>
+<p>Within the package, you will need to add an interface file <code class="docutils literal notranslate"><span class="pre">pkg.mbti</span></code>:</p>
+<div class="literal-block-wrapper docutils container" id="id3">
+<div class="code-block-caption"><span class="caption-text">/src/packages/virtual/pkg.mbti</span><a class="headerlink" href="#id3" title="Link to this code">#</a></div>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="nv">package</span><span class="w"> </span><span class="s">&quot;</span><span class="s2">moonbit-community/language/packages/virtual</span><span class="s">&quot;</span>
+
+<span class="kd">fn</span><span class="w"> </span><span class="nf">log</span><span class="p">(</span><span class="nb">String</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Unit</span>
+</pre></div>
+</div>
+</div>
+<p>The first line of the interface file need to be <code class="docutils literal notranslate"><span class="pre">package</span> <span class="pre">&quot;full-package-name&quot;</span></code>. Then comes the declarations.
+The <code class="docutils literal notranslate"><span class="pre">pub</span></code> keyword for <a class="reference internal" href="#access-control">access control</a> and the function parameter names should be omitted.</p>
+<div class="admonition hint">
+<p class="admonition-title">Hint</p>
+<p>If you are uncertain about how to define the interface, you can create a normal package, define the functions you need using <a class="reference internal" href="fundamentals.html#todo-syntax"><span class="std std-ref">TODO syntax</span></a>, and use <code class="docutils literal notranslate"><span class="pre">moon</span> <span class="pre">info</span></code> to help you generate the interface.</p>
+</div>
+</section>
+<section id="implementing-a-virtual-package">
+<h3>Implementing a virtual package<a class="headerlink" href="#implementing-a-virtual-package" title="Link to this heading">#</a></h3>
+<p>A virtual package can have a default implementation. By defining <a class="reference internal" href="../toolchain/moon/package.html#declarations"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">virtual.has-default</span></code></span></a> as <code class="docutils literal notranslate"><span class="pre">true</span></code>, you can implement the code as usual within the same package.</p>
+<div class="literal-block-wrapper docutils container" id="id4">
+<div class="code-block-caption"><span class="caption-text">/src/packages/virtual/top.mbt</span><a class="headerlink" href="#id4" title="Link to this code">#</a></div>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="c1">///|</span>
+<span class="k">pub</span><span class="w"> </span><span class="kd">fn</span><span class="w"> </span><span class="nf">log</span><span class="p">(</span><span class="nv">s</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">String</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Unit</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">println</span><span class="p">(</span><span class="nv">s</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<p>A virtual package can also be implemented by a third party. By defining <a class="reference internal" href="../toolchain/moon/package.html#implementations"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">implements</span></code></span></a> as the target package's full name, the compiler can warn you about the missing implementations or the mismatched implementations.</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>options(
+  implement: &quot;moonbit-community/language/packages/virtual&quot;,
+)
+</pre></div>
+</div>
+<div class="literal-block-wrapper docutils container" id="id5">
+<div class="code-block-caption"><span class="caption-text">/src/packages/implement/top.mbt</span><a class="headerlink" href="#id5" title="Link to this code">#</a></div>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="c1">///|</span>
+<span class="k">pub</span><span class="w"> </span><span class="kd">fn</span><span class="w"> </span><span class="nf">log</span><span class="p">(</span><span class="nv">string</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="nb">String</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Unit</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nf">ignore</span><span class="p">(</span><span class="nv">string</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+</section>
+<section id="using-a-virtual-package">
+<h3>Using a virtual package<a class="headerlink" href="#using-a-virtual-package" title="Link to this heading">#</a></h3>
+<p>To use a virtual package, it's the same as other packages: define <a class="reference internal" href="../toolchain/moon/package.html#import"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">import</span></code></span></a> field in the package where you want to use it.</p>
+</section>
+<section id="overriding-a-virtual-package">
+<h3>Overriding a virtual package<a class="headerlink" href="#overriding-a-virtual-package" title="Link to this heading">#</a></h3>
+<p>If a virtual package has a default implementation and that is your choice, there's no extra configurations.</p>
+<p>Otherwise, you may define the <a class="reference internal" href="../toolchain/moon/package.html#overriding-implementations"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">overrides</span></code></span></a> field by providing an array of implementations that you would like to use.</p>
+<div class="literal-block-wrapper docutils container" id="id6">
+<div class="code-block-caption"><span class="caption-text">/src/packages/use_implement/moon.pkg</span><a class="headerlink" href="#id6" title="Link to this code">#</a></div>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>import {
+  &quot;moonbit-community/language/packages/virtual&quot;,
+}
+
+options(
+  &quot;is-main&quot;: true,
+  overrides: [ &quot;moonbit-community/language/packages/implement&quot; ],
+)
+</pre></div>
+</div>
+</div>
+<p>You should reference the virtual package when using the entities.</p>
+<div class="literal-block-wrapper docutils container" id="id7">
+<div class="code-block-caption"><span class="caption-text">/src/packages/use_implement/top.mbt</span><a class="headerlink" href="#id7" title="Link to this code">#</a></div>
+<div class="highlight-moonbit notranslate"><div class="highlight"><pre><span></span><span class="c1">///|</span>
+<span class="kd">fn</span><span class="w"> </span><span class="nv">main</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nn">@virtual.</span><span class="nf">log</span><span class="p">(</span><span class="s">&quot;</span><span class="s2">Hello</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+</section>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="error-handling.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Error handling</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="tests.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Writing Tests</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#packages-and-modules">Packages and modules</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#prelude-and-builtin-names">Prelude and builtin names</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#internal-packages">Internal Packages</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#using">Using</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#access-control">Access Control</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#aliases">Aliases</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#types">Types</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#traits">Traits</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#trait-implementations">Trait Implementations</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#virtual-packages">Virtual Packages</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#defining-a-virtual-package">Defining a virtual package</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#implementing-a-virtual-package">Implementing a virtual package</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#using-a-virtual-package">Using a virtual package</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#overriding-a-virtual-package">Overriding a virtual package</a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By International Digital Economy Academy
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, International Digital Economy Academy.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

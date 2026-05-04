@@ -79,13 +79,7 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
         self.parse_expr_stmt()
       }
     }
-    _ => {
-      let pos = self.lexer.pos
-      let near_end = @math.minimum(pos + 40, self.lexer.input.length())
-      let near = self.lexer.input[pos:near_end].to_string()
-      println("parse_stmt fallback: token=" + self.token.to_string() + " near=[" + near + "]")
-      self.parse_expr_stmt()
-    }
+    _ => self.parse_expr_stmt()
   }
 }
 
@@ -213,15 +207,16 @@ fn Parser::parse_switch_stmt(self : Parser) -> Stmt {
           flush_case(current_value, current_stmts)
           current_stmts = []
           let mut case_value = 0
+          let mut negative = false
           for i = 5; i < name.length(); i = i + 1 {
             let ch = name[i]
             if ch >= '0' && ch <= '9' {
               case_value = case_value * 10 + (ch.to_int() - '0'.to_int())
             } else if ch == '-' && i == 5 {
-              // Negative number - skip for now, handle in next char
-              continue
+              negative = true
             }
           }
+          if negative { case_value = -case_value }
           current_value = Some(case_value)
           // The body of the case label is the first statement of the case
           current_stmts.push(body)
@@ -291,55 +286,17 @@ fn Parser::parse_compound_stmt(self : Parser) -> Stmt {
 
 ///|
 fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
-  let pos = self.lexer.pos
-  let near_end = @math.minimum(pos + 40, self.lexer.input.length())
-  let near = self.lexer.input[pos:near_end].to_string()
-  println("parse_var_decl_stmt: token=" + self.token.to_string() + " near=[" + near + "]")
-  let base_ty = self.parse_type()
+  let spec = self.parse_decl_specifiers()
   // Local struct/union/enum definition without variable: struct Foo { ... };
   if self.token == Semicolon {
     self.advance()
     return ExprStmt(Expr::Number(0))
   }
   let decls = []
-  // Parse first variable
-  let mut final_ty = base_ty
-  let name = if self.token == LParen {
-    // Function pointer declaration: int (*name)(...);
-    let (fty, fname) = self.parse_func_ptr_decl()
-    final_ty = fty
-    fname
-  } else {
-    match self.token {
-      Ident(n) => { self.advance(); n }
-      _ => abort("Expected variable name")
-    }
-  }
-  while self.token == LBracket {
-    self.advance()
-    if self.token == RBracket {
-      self.advance()
-      final_ty = Array(final_ty, 0)
-    } else {
-      let size_expr = self.parse_assign()
-      self.expect(RBracket)
-      let size = match fold_const(size_expr) {
-        Some(n) => n
-        None => 0
-      }
-      final_ty = Array(final_ty, size)
-    }
-  }
-  // Local function declaration inside a function body: int foo(void);
-  if self.token == LParen {
-    let mut depth = 1
-    self.advance()
-    while depth > 0 && self.token != EOF {
-      if self.token == LParen { depth += 1 }
-      else if self.token == RParen { depth -= 1 }
-      if depth > 0 { self.advance() } else { self.advance(); break }
-    }
-    self.skip_attributes()
+  // Parse first declarator
+  let decl = self.parse_declarator(spec.base_type)
+  // Local function prototype inside a function body: int foo(void);
+  if decl.is_func_decl && self.token == Semicolon {
     self.expect(Semicolon)
     return ExprStmt(Expr::Number(0))
   }
@@ -354,42 +311,12 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
   } else {
     None
   }
-  decls.push(VarDecl(final_ty, name, init))
+  decls.push(VarDecl(decl.ty, decl.name, init))
   // Parse additional variables: int a, *b, c[8], (*fp)(void);
   while self.token == Comma {
     self.advance()
-    let mut vty = base_ty
-    let vname = if self.token == LParen {
-      let (fty, fname) = self.parse_func_ptr_decl()
-      vty = fty
-      fname
-    } else {
-      while self.token == Star {
-        self.advance()
-        vty = Pointer(vty)
-      }
-      match self.token {
-        Ident(n) => { self.advance(); n }
-        _ => abort("Expected variable name")
-      }
-    }
-    let mut vfinal_ty = vty
-    while self.token == LBracket {
-      self.advance()
-      if self.token == RBracket {
-        self.advance()
-        vfinal_ty = Array(vfinal_ty, 0)
-      } else {
-        let size_expr = self.parse_assign()
-        self.expect(RBracket)
-        let size = match fold_const(size_expr) {
-          Some(n) => n
-          None => 0
-        }
-        vfinal_ty = Array(vfinal_ty, size)
-      }
-    }
-    let vinit = if self.token == Assign {
+    let extra_decl = self.parse_declarator(spec.base_type)
+    let extra_init = if self.token == Assign {
       self.advance()
       if self.token == LBrace {
         self.skip_brace_initializer()
@@ -400,7 +327,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
     } else {
       None
     }
-    decls.push(VarDecl(vfinal_ty, vname, vinit))
+    decls.push(VarDecl(extra_decl.ty, extra_decl.name, extra_init))
   }
   self.expect(Semicolon)
   if decls.length() == 1 {
@@ -413,10 +340,6 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
 ///|
 fn Parser::parse_expr_stmt(self : Parser) -> Stmt {
   let expr = self.parse_expr()
-  let pos = self.lexer.pos
-  let near_end = @math.minimum(pos + 40, self.lexer.input.length())
-  let near = self.lexer.input[pos:near_end].to_string()
-  println("parse_expr_stmt: token=" + self.token.to_string() + " near=[" + near + "]")
   self.expect(Semicolon)
   ExprStmt(expr)
 }
