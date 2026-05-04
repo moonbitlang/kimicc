@@ -811,3 +811,58 @@ async test "array initializer with all same values" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="20")
 }
+
+///|
+async test "__func__ in function" {
+  let source =
+    #|const char *get_name() {
+    #|  return __func__;
+    #|}
+    #|int main() {
+    #|  const char *name = get_name();
+    #|  return name[0] == 'g' && name[1] == 'e' && name[2] == 't' ? 0 : 1;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
+
+///|
+async test "bit-field cross byte boundary" {
+  let source =
+    #|struct S { unsigned int a:4; unsigned int b:4; unsigned int c:4; };
+    #|int main() {
+    #|  struct S s;
+    #|  s.a = 7; s.b = 12; s.c = 3;
+    #|  return s.a + s.b + s.c;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="22")
+}
+
+///|
+async test "nested struct access" {
+  let source =
+    #|struct Inner { int x; int y; };
+    #|struct Outer { struct Inner i; int z; };
+    #|int main() {
+    #|  struct Outer o;
+    #|  o.i.x = 1;
+    #|  o.i.y = 2;
+    #|  o.z = 3;
+    #|  return o.i.x + o.i.y + o.z;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="6")
+}
+
+///|
+async test "computed goto compiles" {
+  let source =
+    #|int main() {
+    #|  void *tab[] = { &&L1, &&L2 };
+    #|  goto *tab[0];
+    #|L1:
+    #|  return 1;
+    #|L2:
+    #|  return 2;
+}
