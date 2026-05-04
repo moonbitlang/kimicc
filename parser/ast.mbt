@@ -150,6 +150,7 @@ pub(all) enum Expr {
   PostfixInc(Expr)
   PostfixDec(Expr)
   Ternary(Expr, Expr, Expr)
+  LabelAddr(String)
 } derive(Eq)
 
 ///|
@@ -168,6 +169,7 @@ pub(all) enum Stmt {
   Label(String, Stmt)
   For(Stmt?, Expr, Expr?, Stmt)
   DoWhile(Expr, Stmt)
+  ComputedGoto(Expr)
 } derive(Eq)
 
 ///|

@@ -532,11 +532,11 @@ fn Parser::parse_primary(self : Parser) -> Expr {
     And => {
       // GCC extension: computed goto &&label
       self.advance()
-      match self.token {
-        Ident(_) => self.advance()
-        _ => ()
+      let label_name = match self.token {
+        Ident(name) => { self.advance(); name }
+        _ => ""
       }
-      Number(0)
+      LabelAddr(label_name)
     }
     _ => abort("Unexpected token in primary: " + self.token.to_string())
   }

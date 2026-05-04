@@ -746,6 +746,7 @@ fn Codegen::collect_locals(self : Codegen, stmt : @parser.Stmt) -> Unit {
     VarDecl(ty, name, _) => {
       let _ = self.alloc_local(name, ty)
     }
+    ComputedGoto(_) => ()
     _ => ()
   }
 }
@@ -910,6 +911,10 @@ fn Codegen::gen_stmt(
     Goto(name) => {
       self.emit("\tb\t" + self.label_ref(name))
     }
+    ComputedGoto(expr) => {
+      self.gen_expr(expr, frame_size)
+      self.emit("\tbr\tx9")
+    }
     Label(name, stmt) => {
       self.emit(self.label_ref(name) + ":")
       self.gen_stmt(stmt, frame_size)
@@ -1009,6 +1014,7 @@ fn Codegen::type_of(
     PostfixInc(e) => self.type_of(e, frame_size)
     PostfixDec(e) => self.type_of(e, frame_size)
     Ternary(_, then_, _) => self.type_of(then_, frame_size)
+    LabelAddr(_) => Pointer(Void)
     // CommaExpr is not in the AST, comma expressions are flattened into nested Binary(",", ...)
     Cast(ty, _) => ty
     _ => {
@@ -1493,6 +1499,10 @@ fn Codegen::gen_expr(
         _ => self.emit("\tmov\tx9, x10")
       }
     }
+    LabelAddr(name) => {
+      let label = self.label_ref(name)
+      self.emit("\tadr\tx9, " + label)
+    }
     _ => {
       println("WARN: Unknown expression")
       self.emit("\tmov\tx9, #0")
@@ -1563,6 +1573,10 @@ fn Codegen::gen_addr(
     Call(_, _) => {
       // Function call result used as address (e.g., compound literal or GCC extension)
       self.gen_expr(expr, frame_size)
+    }
+    LabelAddr(name) => {
+      let label = self.label_ref(name)
+      self.emit("\tadr\tx9, " + label)
     }
     _ => {
       println("WARN: Cannot take address of expression")

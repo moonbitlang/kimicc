@@ -118,5 +118,6 @@ fn type_of_expr(expr : Expr) -> Type {
     PostfixInc(_) => SInt
     PostfixDec(_) => SInt
     Ternary(_, a, _) => type_of_expr(a)
+    LabelAddr(_) => Pointer(Void)
   }
 }

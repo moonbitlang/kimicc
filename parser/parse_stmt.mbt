@@ -283,9 +283,10 @@ fn Parser::parse_goto_stmt(self : Parser) -> Stmt {
   self.advance() // goto
   if self.token == Star {
     // Computed goto: goto *expr;
-    let _ = self.parse_expr()
+    self.advance() // consume *
+    let expr = self.parse_expr()
     self.expect(Semicolon)
-    return Goto("*computed*")
+    return ComputedGoto(expr)
   }
   let name = match self.token {
     Ident(n) => { self.advance(); n }

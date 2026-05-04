@@ -856,7 +856,7 @@ async test "nested struct access" {
 }
 
 ///|
-async test "computed goto compiles" {
+async test "computed goto execution" {
   let source =
     #|int main() {
     #|  void *tab[] = { &&L1, &&L2 };
@@ -865,6 +865,9 @@ async test "computed goto compiles" {
     #|  return 1;
     #|L2:
     #|  return 2;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="1")
 }
 
 ///|
@@ -1639,4 +1642,22 @@ async test "global mixed initialized and uninitialized" {
     #|}
   let exit_code = run_source_async(source)
   inspect(exit_code, content="10")
+}
+
+///|
+async test "computed goto with dynamic index" {
+  let source =
+    #|int main() {
+    #|  void *tab[] = { &&L1, &&L2, &&L3 };
+    #|  int i = 1;
+    #|  goto *tab[i];
+    #|L1:
+    #|  return 10;
+    #|L2:
+    #|  return 20;
+    #|L3:
+    #|  return 30;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="20")
 }

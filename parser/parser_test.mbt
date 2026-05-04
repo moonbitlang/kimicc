@@ -684,8 +684,8 @@ test "parse computed goto label address" {
   match decl.body {
     Some(Compound(stmts)) => {
       match stmts[0] {
-        VarDecl(Pointer(Void), "p", Some(Number(0))) => ()
-        _ => fail("Expected VarDecl with computed goto placeholder")
+        VarDecl(Pointer(Void), "p", Some(LabelAddr("label"))) => ()
+        _ => fail("Expected VarDecl with LabelAddr")
       }
     }
     _ => fail("Expected compound body")
