@@ -61,13 +61,18 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
 
 ///|
 fn Parser::parse_global_var_tail(self : Parser, spec : DeclSpec, decl : DeclaratorResult) -> Unit {
-  let ty = decl.ty
+  let mut ty = decl.ty
   let name = decl.name
   // Skip initializer for first variable
   if self.token == Assign {
     self.advance()
     if self.token == LBrace {
-      self.skip_balanced_braces()
+      let init_exprs = self.parse_brace_init_exprs()
+      let init_count = init_exprs.length()
+      ty = match ty {
+        Array(elem_ty, 0) => Array(elem_ty, init_count)
+        other => other
+      }
     } else {
       let _ = self.parse_expr()
     }
@@ -77,11 +82,16 @@ fn Parser::parse_global_var_tail(self : Parser, spec : DeclSpec, decl : Declarat
   while self.token == Comma {
     self.advance()
     let extra_decl = self.parse_declarator(spec.base_type)
-    let extra_ty = extra_decl.ty
+    let mut extra_ty = extra_decl.ty
     if self.token == Assign {
       self.advance()
       if self.token == LBrace {
-        self.skip_balanced_braces()
+        let init_exprs = self.parse_brace_init_exprs()
+        let init_count = init_exprs.length()
+        extra_ty = match extra_ty {
+          Array(elem_ty, 0) => Array(elem_ty, init_count)
+          other => other
+        }
       } else {
         let _ = self.parse_expr()
       }

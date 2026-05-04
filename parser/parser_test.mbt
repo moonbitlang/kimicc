@@ -619,3 +619,45 @@ test "parse multiple vars one with array initializer" {
     _ => fail("Expected compound body")
   }
 }
+
+///|
+test "parse array initializer inferred size" {
+  let source = "int main(){int arr[]={1,2,3}; return 0;}"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound(stmts)) => {
+      match stmts[0] {
+        Compound(inner) => {
+          match inner[0] {
+            VarDecl(Array(SInt, 3), "arr", None) => ()
+            _ => fail("Expected VarDecl with Array(SInt, 3)")
+          }
+        }
+        _ => fail("Expected Compound from array init lowering")
+      }
+    }
+    _ => fail("Expected compound body")
+  }
+}
+
+///|
+test "parse array initializer explicit size" {
+  let source = "int main(){int arr[5]={1,2}; return 0;}"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound(stmts)) => {
+      match stmts[0] {
+        Compound(inner) => {
+          match inner[0] {
+            VarDecl(Array(SInt, 5), "arr", None) => ()
+            _ => fail("Expected VarDecl with Array(SInt, 5)")
+          }
+        }
+        _ => fail("Expected Compound from array init lowering")
+      }
+    }
+    _ => fail("Expected compound body")
+  }
+}

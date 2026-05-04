@@ -866,3 +866,38 @@ async test "computed goto compiles" {
     #|L2:
     #|  return 2;
 }
+
+///|
+async test "sizeof array type" {
+  let source =
+    #|int main() {
+    #|  int arr[10];
+    #|  return sizeof(arr);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="40")
+}
+
+///|
+async test "array decays to pointer in function call" {
+  let source =
+    #|int first(int *p) { return p[0]; }
+    #|int main() {
+    #|  int arr[] = {7, 8, 9};
+    #|  return first(arr);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="7")
+}
+
+///|
+async test "global array with skipped initializer compiles" {
+  let source =
+    #|int global_arr[] = {1, 2, 3};
+    #|int main() {
+    #|  global_arr[0] = 5;
+    #|  return global_arr[0];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="5")
+}
