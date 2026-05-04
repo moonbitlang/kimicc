@@ -726,3 +726,88 @@ async test "array initializer reverse traversal" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="15")
 }
+
+///|
+async test "array of pointers with initializer" {
+  let source =
+    #|int main() {
+    #|  int a = 10, b = 20, c = 30;
+    #|  int *arr[] = {&a, &b, &c};
+    #|  return *arr[0] + *arr[1] + *arr[2];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="60")
+}
+
+///|
+async test "2D array explicit assignment" {
+  let source =
+    #|int main() {
+    #|  int arr[2][3];
+    #|  arr[0][0] = 1; arr[0][1] = 2; arr[0][2] = 3;
+    #|  arr[1][0] = 4; arr[1][1] = 5; arr[1][2] = 6;
+    #|  return arr[0][0] + arr[1][2];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="7")
+}
+
+///|
+async test "array in ternary expression" {
+  let source =
+    #|int main() {
+    #|  int arr[] = {5, 10};
+    #|  return arr[0] > arr[1] ? arr[0] : arr[1];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="10")
+}
+
+///|
+async test "array in conditional" {
+  let source =
+    #|int main() {
+    #|  int arr[] = {3, 1, 4};
+    #|  if (arr[0] > arr[1]) {
+    #|    return arr[2];
+    #|  }
+    #|  return 0;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="4")
+}
+
+///|
+async test "global array declaration compile only" {
+  let source =
+    #|int global_arr[5];
+    #|int main() {
+    #|  global_arr[0] = 7;
+    #|  return global_arr[0];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="7")
+}
+
+///|
+async test "empty array initializer" {
+  let source =
+    #|int main() {
+    #|  int arr[3] = {};
+    #|  arr[0] = 1;
+    #|  return arr[0];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="1")
+}
+
+///|
+async test "array initializer with all same values" {
+  let source =
+    #|int main() {
+    #|  int arr[] = {5, 5, 5, 5};
+    #|  return arr[0] + arr[1] + arr[2] + arr[3];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="20")
+}
