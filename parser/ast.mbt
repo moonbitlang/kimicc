@@ -159,6 +159,7 @@ pub(all) enum Stmt {
   If(Expr, Stmt, Stmt?)
   While(Expr, Stmt)
   Compound(Array[Stmt])
+  StmtList(Array[Stmt])
   VarDecl(Type, String, Expr?)
   Break
   Continue

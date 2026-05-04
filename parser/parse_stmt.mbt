@@ -415,7 +415,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
   if stmts.length() == 1 {
     stmts[0]
   } else {
-    Compound(stmts)
+    StmtList(stmts)
   }
 }
 

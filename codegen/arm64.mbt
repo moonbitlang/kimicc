@@ -561,6 +561,19 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
         let reg = "x" + i.to_string()
         self.emit_store_local(reg, offset, frame_size)
       }
+      // Reset local state so gen_stmt allocates locals fresh
+      let param_offsets : Map[String, Int] = {}
+      let param_types : Map[String, @parser.Type] = {}
+      let mut param_stack_end = 0
+      for i = 0; i < decl.params.length(); i = i + 1 {
+        let p = decl.params[i]
+        param_offsets[p.name] = self.local_offsets[p.name]
+        param_types[p.name] = self.var_types[p.name]
+        param_stack_end = @math.maximum(param_stack_end, self.local_offsets[p.name] + self.type_size(p.ty))
+      }
+      self.local_offsets = param_offsets
+      self.var_types = param_types
+      self.stack_size = param_stack_end
       self.gen_stmt(body, frame_size)
       // Default return
       self.emit("\tmov\tx0, #0")
@@ -613,10 +626,6 @@ fn Codegen::alloc_local(
   name : String,
   ty : @parser.Type,
 ) -> Int {
-  if self.local_offsets.contains(name) {
-    self.var_types[name] = ty
-    return self.local_offsets[name]
-  }
   let size = self.type_size(ty)
   let aligned_size = (size + 7) / 8 * 8
   let offset = self.stack_size
@@ -630,6 +639,10 @@ fn Codegen::alloc_local(
 fn Codegen::collect_locals(self : Codegen, stmt : @parser.Stmt) -> Unit {
   match stmt {
     Compound(stmts) =>
+      for s in stmts {
+        self.collect_locals(s)
+      }
+    StmtList(stmts) =>
       for s in stmts {
         self.collect_locals(s)
       }
@@ -668,7 +681,16 @@ fn Codegen::gen_stmt(
   frame_size : Int,
 ) -> Unit {
   match stmt {
-    Compound(stmts) =>
+    Compound(stmts) => {
+      let saved_offsets = self.local_offsets.copy()
+      let saved_types = self.var_types.copy()
+      for s in stmts {
+        self.gen_stmt(s, frame_size)
+      }
+      self.local_offsets = saved_offsets
+      self.var_types = saved_types
+    }
+    StmtList(stmts) =>
       for s in stmts {
         self.gen_stmt(s, frame_size)
       }

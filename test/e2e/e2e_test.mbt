@@ -901,3 +901,55 @@ async test "global array with skipped initializer compiles" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="5")
 }
+
+///|
+async test "array initializer with variable expressions" {
+  let source =
+    #|int main() {
+    #|  int a = 3;
+    #|  int b = 4;
+    #|  int arr[] = {a, b, a + b};
+    #|  return arr[2];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="7")
+}
+
+///|
+async test "shadowed array with initializer" {
+  let source =
+    #|int main() {
+    #|  int arr[] = {1, 2, 3};
+    #|  {
+    #|    int arr[] = {10, 20};
+    #|    if (arr[0] != 10) return 1;
+    #|    if (arr[1] != 20) return 2;
+    #|  }
+    #|  return arr[0] + arr[1] + arr[2];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="6")
+}
+
+///|
+async test "char array initializer" {
+  let source =
+    #|int main() {
+    #|  char arr[] = {1, 2, 3};
+    #|  return arr[0] + arr[1] + arr[2];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="6")
+}
+
+///|
+async test "pointer arithmetic with array initializer" {
+  let source =
+    #|int main() {
+    #|  int arr[] = {10, 20, 30, 40};
+    #|  int *p = arr + 2;
+    #|  return *p;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="30")
+}
