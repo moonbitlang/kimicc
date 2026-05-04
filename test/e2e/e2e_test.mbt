@@ -1537,3 +1537,71 @@ async test "character literal as int" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="65")
 }
+
+///|
+async test "function modifies array via decay" {
+  let source =
+    #|void set(int *a, int i, int v) {
+    #|  a[i] = v;
+    #|}
+    #|int main() {
+    #|  int arr[3] = {0, 0, 0};
+    #|  set(arr, 1, 99);
+    #|  return arr[1];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="99")
+}
+
+///|
+async test "nested struct" {
+  let source =
+    #|struct Inner { int x; };
+    #|struct Outer { struct Inner i; int y; };
+    #|int main() {
+    #|  struct Outer o;
+    #|  o.i.x = 7;
+    #|  o.y = 8;
+    #|  return o.i.x + o.y;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="15")
+}
+
+///|
+async test "for loop with compound body" {
+  let source =
+    #|int main() {
+    #|  int sum = 0;
+    #|  for (int i = 0; i < 3; i = i + 1) {
+    #|    sum = sum + i;
+    #|    sum = sum + 1;
+    #|  }
+    #|  return sum;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="6")
+}
+
+///|
+async test "sizeof pointer vs array" {
+  let source =
+    #|int main() {
+    #|  int arr[5];
+    #|  int *p = arr;
+    #|  return sizeof(p) + 1;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="9")
+}
+
+///|
+async test "unsigned char array" {
+  let source =
+    #|int main() {
+    #|  unsigned char arr[] = {1, 2, 3};
+    #|  return arr[0] + arr[1] + arr[2];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="6")
+}
