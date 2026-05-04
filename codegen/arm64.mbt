@@ -422,10 +422,10 @@ fn Codegen::gen_stmt(
       self.break_label = old_break
     }
     Goto(name) => {
-      self.emit("\tb\t_label_" + name)
+      self.emit("\tb\t_" + self.func_name + "_label_" + name)
     }
     Label(name, stmt) => {
-      self.emit("_label_" + name + ":")
+      self.emit("_" + self.func_name + "_label_" + name + ":")
       self.gen_stmt(stmt, frame_size)
     }
     VarDecl(ty, name, init) => {

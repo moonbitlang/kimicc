@@ -89,3 +89,27 @@ test "generate switch statement" {
     }
   }
 }
+
+///|
+test "goto labels are scoped per function" {
+  let source =
+    #|int foo() {
+    #|  goto fail;
+    #|fail:
+    #|  return 1;
+    #|}
+    #|int bar() {
+    #|  goto fail;
+    #|fail:
+    #|  return 2;
+    #|}
+    #|int main() { return foo() + bar(); }
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  // Each function's fail label should be prefixed with function name
+  inspect(assembly.contains("_foo_label_fail:"), content="true")
+  inspect(assembly.contains("_bar_label_fail:"), content="true")
+  // Must not have a global unqualified _label_fail
+  inspect(assembly.contains("\n_label_fail:"), content="false")
+}
