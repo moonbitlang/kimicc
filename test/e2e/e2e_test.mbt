@@ -953,3 +953,54 @@ async test "pointer arithmetic with array initializer" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="30")
 }
+
+///|
+async test "enum in switch case" {
+  let source =
+    #|enum Color { RED, GREEN, BLUE };
+    #|int main() {
+    #|  enum Color c = GREEN;
+    #|  switch (c) {
+    #|    case RED: return 1;
+    #|    case GREEN: return 2;
+    #|    case BLUE: return 3;
+    #|    default: return 0;
+    #|  }
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="2")
+}
+
+///|
+async test "ternary operator" {
+  let source =
+    #|int main() {
+    #|  int a = 5;
+    #|  int b = 10;
+    #|  return a > b ? 1 : 2;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="2")
+}
+
+///|
+async test "string literal indexing" {
+  let source =
+    #|int main() {
+    #|  char *s = "hello";
+    #|  return s[0] + s[4];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="215")
+}
+
+///|
+async test "global array explicit size zero-initialized" {
+  let source =
+    #|int global_arr[3] = {5, 10, 15};
+    #|int main() {
+    #|  return global_arr[0] + global_arr[1] + global_arr[2];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
