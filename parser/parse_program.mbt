@@ -14,7 +14,7 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
         init = Some(GlobalInit::Scalar(self.parse_expr()))
       }
     }
-    self.globals.push({ ty: decl.ty, name: decl.name, init })
+    self.globals.push({ ty: resolve_var_type(decl), name: decl.name, init })
   }
   // Additional variables separated by comma
   while self.token == Comma {
@@ -31,7 +31,7 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
           extra_init = Some(GlobalInit::Scalar(self.parse_expr()))
         }
       }
-      self.globals.push({ ty: extra.ty, name: extra.name, init: extra_init })
+      self.globals.push({ ty: resolve_var_type(extra), name: extra.name, init: extra_init })
     }
   }
   self.expect(Semicolon)

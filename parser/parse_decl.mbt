@@ -60,8 +60,19 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
 }
 
 ///|
+///|
+fn resolve_var_type(decl : DeclaratorResult) -> Type {
+  // For function pointer variables like int (*fp)(int), decl.ty is Pointer(Void)
+  // but func_ret_ty holds the actual wrapped type (e.g., Pointer(SInt)).
+  match decl.func_ret_ty {
+    Some(rt) => rt
+    None => decl.ty
+  }
+}
+
+///|
 fn Parser::parse_global_var_tail(self : Parser, spec : DeclSpec, decl : DeclaratorResult) -> Unit {
-  let mut ty = decl.ty
+  let mut ty = resolve_var_type(decl)
   let name = decl.name
   let mut init : GlobalInit? = None
   // Parse initializer for first variable
@@ -84,7 +95,7 @@ fn Parser::parse_global_var_tail(self : Parser, spec : DeclSpec, decl : Declarat
   while self.token == Comma {
     self.advance()
     let extra_decl = self.parse_declarator(spec.base_type)
-    let mut extra_ty = extra_decl.ty
+    let mut extra_ty = resolve_var_type(extra_decl)
     let mut extra_init : GlobalInit? = None
     if self.token == Assign {
       self.advance()

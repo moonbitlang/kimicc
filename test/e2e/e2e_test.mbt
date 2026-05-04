@@ -1661,3 +1661,16 @@ async test "computed goto with dynamic index" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="20")
 }
+
+///|
+async test "function pointer array call" {
+  let source =
+    #|int add(int a, int b) { return a + b; }
+    #|int sub(int a, int b) { return a - b; }
+    #|int main() {
+    #|  int (*ops[])(int, int) = {add, sub};
+    #|  return ops[0](3, 2);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="5")
+}

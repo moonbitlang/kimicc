@@ -330,6 +330,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
   let stmts = []
   // Parse first declarator
   let decl = self.parse_declarator(spec.base_type)
+  let decl_ty = resolve_var_type(decl)
   // Local function prototype inside a function body: int foo(void);
   if decl.is_func_decl && self.token == Semicolon {
     self.expect(Semicolon)
@@ -341,19 +342,19 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
     if self.token == LBrace {
       // For struct/union types, skip the brace initializer entirely
       // (we don't support struct field initializers yet)
-      let is_struct = match decl.ty {
+      let is_struct = match decl_ty {
         Struct(_) | Union(_) => true
         _ => false
       }
       if is_struct {
         self.skip_brace_initializer()
-        stmts.push(VarDecl(decl.ty, decl.name, Some(Expr::Number(0))))
-        decl.ty
+        stmts.push(VarDecl(decl_ty, decl.name, Some(Expr::Number(0))))
+        decl_ty
       } else {
         let init_exprs = self.parse_brace_init_exprs()
         let init_count = init_exprs.length()
         // Update array type if size was inferred
-        let ty = match decl.ty {
+        let ty = match decl_ty {
           Array(elem_ty, 0) => Type::Array(elem_ty, init_count)
           other => other
         }
@@ -368,31 +369,32 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
       }
     } else {
       let expr = self.parse_assign()
-      stmts.push(VarDecl(decl.ty, decl.name, Some(expr)))
-      decl.ty
+      stmts.push(VarDecl(decl_ty, decl.name, Some(expr)))
+      decl_ty
     }
   } else {
-    stmts.push(VarDecl(decl.ty, decl.name, None))
-    decl.ty
+    stmts.push(VarDecl(decl_ty, decl.name, None))
+    decl_ty
   }
   // Parse additional variables: int a, *b, c[8], (*fp)(void);
   while self.token == Comma {
     self.advance()
     let extra_decl = self.parse_declarator(spec.base_type)
+    let extra_decl_ty = resolve_var_type(extra_decl)
     if self.token == Assign {
       self.advance()
       if self.token == LBrace {
-        let is_struct = match extra_decl.ty {
+        let is_struct = match extra_decl_ty {
           Struct(_) | Union(_) => true
           _ => false
         }
         if is_struct {
           self.skip_brace_initializer()
-          stmts.push(VarDecl(extra_decl.ty, extra_decl.name, Some(Expr::Number(0))))
+          stmts.push(VarDecl(extra_decl_ty, extra_decl.name, Some(Expr::Number(0))))
         } else {
           let init_exprs = self.parse_brace_init_exprs()
           let init_count = init_exprs.length()
-          let extra_ty = match extra_decl.ty {
+          let extra_ty = match extra_decl_ty {
             Array(elem_ty, 0) => Type::Array(elem_ty, init_count)
             other => other
           }
@@ -406,10 +408,10 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
         }
       } else {
         let expr = self.parse_assign()
-        stmts.push(VarDecl(extra_decl.ty, extra_decl.name, Some(expr)))
+        stmts.push(VarDecl(extra_decl_ty, extra_decl.name, Some(expr)))
       }
     } else {
-      stmts.push(VarDecl(extra_decl.ty, extra_decl.name, None))
+      stmts.push(VarDecl(extra_decl_ty, extra_decl.name, None))
     }
   }
   self.expect(Semicolon)
