@@ -1004,3 +1004,101 @@ async test "global array explicit size zero-initialized" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="0")
 }
+
+///|
+async test "cast to char and back" {
+  let source =
+    #|int main() {
+    #|  int x = 300;
+    #|  char c = (char)x;
+    #|  return (int)c;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="44")
+}
+
+///|
+async test "sizeof expression" {
+  let source =
+    #|int main() {
+    #|  int arr[10];
+    #|  return sizeof(arr) / sizeof(arr[0]);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="10")
+}
+
+///|
+async test "prefix increment" {
+  let source =
+    #|int main() {
+    #|  int x = 5;
+    #|  return ++x;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="6")
+}
+
+///|
+async test "postfix increment" {
+  let source =
+    #|int main() {
+    #|  int x = 5;
+    #|  int y = x++;
+    #|  return y + x;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="11")
+}
+
+///|
+async test "do-while loop" {
+  let source =
+    #|int main() {
+    #|  int i = 0;
+    #|  do {
+    #|    i = i + 1;
+    #|  } while (i < 5);
+    #|  return i;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="5")
+}
+
+///|
+async test "nested if-else" {
+  let source =
+    #|int main() {
+    #|  int x = 3;
+    #|  if (x == 1) return 1;
+    #|  else if (x == 2) return 2;
+    #|  else if (x == 3) return 3;
+    #|  else return 4;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="3")
+}
+
+///|
+async test "bitwise operators" {
+  let source =
+    #|int main() {
+    #|  int a = 5;
+    #|  int b = 3;
+    #|  return (a & b) | (a ^ b);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="7")
+}
+
+///|
+async test "logical operators short circuit" {
+  let source =
+    #|int main() {
+    #|  int x = 0;
+    #|  if (0 && (x = 1)) return 1;
+    #|  return x;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
