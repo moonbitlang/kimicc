@@ -1409,3 +1409,72 @@ async test "signed right shift" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="6")
 }
+
+///|
+async test "array of structs" {
+  let source =
+    #|struct Point { int x; int y; };
+    #|int main() {
+    #|  struct Point pts[2];
+    #|  pts[0].x = 1; pts[0].y = 2;
+    #|  pts[1].x = 3; pts[1].y = 4;
+    #|  return pts[0].x + pts[1].y;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="5")
+}
+
+///|
+async test "struct pointer member access" {
+  let source =
+    #|struct Point { int x; int y; };
+    #|int main() {
+    #|  struct Point p;
+    #|  struct Point *pp = &p;
+    #|  pp->x = 7;
+    #|  pp->y = 8;
+    #|  return pp->x + pp->y;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="15")
+}
+
+///|
+async test "typedef usage" {
+  let source =
+    #|typedef int MyInt;
+    #|typedef struct { int a; } S;
+    #|int main() {
+    #|  MyInt x = 5;
+    #|  S s;
+    #|  s.a = 10;
+    #|  return x + s.a;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="15")
+}
+
+///|
+async test "early return" {
+  let source =
+    #|int main() {
+    #|  if (1) return 77;
+    #|  return 0;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="77")
+}
+
+///|
+async test "recursive factorial" {
+  let source =
+    #|int fact(int n) {
+    #|  if (n <= 1) return 1;
+    #|  return n * fact(n - 1);
+    #|}
+    #|int main() {
+    #|  return fact(5);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="120")
+}
