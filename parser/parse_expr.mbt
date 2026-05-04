@@ -482,6 +482,10 @@ fn Parser::parse_primary(self : Parser) -> Expr {
       self.advance()
       Number(n)
     }
+    FloatLiteral(v) => {
+      self.advance()
+      FloatLiteral(v)
+    }
     String(s) => {
       self.advance()
       String(s)

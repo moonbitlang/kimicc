@@ -439,6 +439,10 @@ fn Parser::parse_declarator_suffixes(
     match self.token {
       LBracket => {
         self.advance()
+        // Skip C99 array parameter qualifiers: static, const, restrict, volatile
+        while self.token == Static || self.token == Const || self.token == Restrict || self.token == Volatile {
+          self.advance()
+        }
         let size = if self.token == RBracket {
           self.advance()
           0
@@ -491,6 +495,10 @@ fn Parser::parse_abstract_declarator_suffixes(
     match self.token {
       LBracket => {
         self.advance()
+        // Skip C99 array parameter qualifiers: static, const, restrict, volatile
+        while self.token == Static || self.token == Const || self.token == Restrict || self.token == Volatile {
+          self.advance()
+        }
         let size = if self.token == RBracket {
           self.advance()
           0

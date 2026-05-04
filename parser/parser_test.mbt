@@ -702,3 +702,65 @@ test "parse __func__ builtin" {
     _ => fail("Expected __func__ as string literal")
   }
 }
+
+
+
+
+
+
+test "check ast for array init locals" {
+  let source =
+    #|int main() {
+    #|    char buf[16];
+    #|    char *p;
+    #|    char src[] = "abcd";
+    #|    char dst[8];
+    #|    char buf2[8];
+    #|    char buf3[6];
+    #|    return 0;
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(Compound(stmts)) => {
+      for i = 0; i < stmts.length(); i = i + 1 {
+        match stmts[i] {
+          StmtList(inner) => {
+            println("StmtList[" + i.to_string() + "] len=" + inner.length().to_string())
+            for j = 0; j < inner.length(); j = j + 1 {
+              match inner[j] {
+                VarDecl(ty, name, _) => println("  VarDecl: " + name)
+                ExprStmt(_) => println("  ExprStmt")
+                _ => println("  other")
+              }
+            }
+          }
+          VarDecl(ty, name, _) => println("VarDecl: " + name)
+          _ => println("Stmt[" + i.to_string() + "]: other")
+        }
+      }
+    }
+    _ => fail("Not compound")
+  }
+}
+
+///|
+test "parse variadic function declaration" {
+  let source = "int printf(const char *fmt, ...);"
+  let prog = @parser.parse(source)
+  inspect(prog.decls.length(), content="1")
+  let decl = prog.decls[0]
+  inspect(decl.name, content="printf")
+  inspect(decl.variadic, content="true")
+  inspect(decl.params.length(), content="1")
+  inspect(decl.params[0].name, content="fmt")
+}
+
+///|
+test "parse non-variadic function declaration" {
+  let source = "int puts(const char *s);"
+  let prog = @parser.parse(source)
+  inspect(prog.decls.length(), content="1")
+  let decl = prog.decls[0]
+  inspect(decl.variadic, content="false")
+  inspect(decl.params.length(), content="1")
+}

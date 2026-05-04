@@ -3,6 +3,7 @@ pub(all) enum Token {
   EOF
   Ident(String)
   Number(Int64)
+  FloatLiteral(Double)
   String(String)
   Int
   Void
@@ -93,6 +94,7 @@ impl Show for Token with to_string(self) {
     EOF => "EOF"
     Ident(s) => "Ident(" + s + ")"
     Number(n) => "Number(" + n.to_string() + ")"
+    FloatLiteral(v) => "FloatLiteral(" + v.to_string() + ")"
     String(s) => "String(" + s + ")"
     Int => "int"
     Void => "void"
@@ -312,6 +314,7 @@ pub fn Lexer::next_token(self : Lexer) -> Token {
         }
       } else if is_digit(self.peek()) {
         // Float literal starting with .: .5, .5e10
+        let fstart = self.pos - 1
         while is_digit(self.peek()) {
           self.advance()
         }
@@ -327,7 +330,13 @@ pub fn Lexer::next_token(self : Lexer) -> Token {
         if self.peek() == 'f' || self.peek() == 'F' || self.peek() == 'l' || self.peek() == 'L' {
           self.advance()
         }
-        Number(0)
+        let fs = self.input[fstart:self.pos]
+        let v = try {
+          @strconv.parse_double(fs)
+        } catch {
+          _ => 0.0
+        }
+        FloatLiteral(v)
       } else {
         Dot
       }
@@ -507,6 +516,31 @@ fn Lexer::skip_whitespace(self : Lexer) -> Unit {
 }
 
 ///|
+fn hex_float_pow2(exp : Int) -> Double {
+  if exp > 1023 {
+    return @double.infinity
+  }
+  if exp < -1074 {
+    return 0.0
+  }
+  let mut result = 1.0
+  let mut e = exp
+  let mut base = 2.0
+  if e < 0 {
+    e = -e
+    base = 0.5
+  }
+  while e > 0 {
+    if e.land(1) == 1 {
+      result = result * base
+    }
+    base = base * base
+    e = e.lsr(1)
+  }
+  result
+}
+
+///|
 fn Lexer::read_number(self : Lexer) -> Token {
   let start = self.pos
   // Check for hex prefix 0x or 0X
@@ -516,6 +550,70 @@ fn Lexer::read_number(self : Lexer) -> Token {
     let hex_start = self.pos
     while is_hex_digit(self.peek()) {
       self.advance()
+    }
+    // Check for hex float literal: 0x1.fp10 or 0x1p10
+    let is_hex_float = self.peek() == '.' || self.peek() == 'p' || self.peek() == 'P'
+    if is_hex_float {
+      // Parse hex float
+      let mut int_part = 0.0
+      let hex_int_str = self.input[hex_start:self.pos]
+      for i = 0; i < hex_int_str.length(); i = i + 1 {
+        let ch = hex_int_str[i]
+        let digit = if ch >= '0' && ch <= '9' {
+          ch.to_int() - '0'.to_int()
+        } else if ch >= 'a' && ch <= 'f' {
+          ch.to_int() - 'a'.to_int() + 10
+        } else {
+          ch.to_int() - 'A'.to_int() + 10
+        }
+        int_part = int_part * 16.0 + digit.to_double()
+      }
+      let mut frac_part = 0.0
+      let mut frac_div = 1.0
+      if self.peek() == '.' {
+        self.advance()
+        while is_hex_digit(self.peek()) {
+          let ch = self.peek()
+          let digit = if ch >= '0' && ch <= '9' {
+            ch.to_int() - '0'.to_int()
+          } else if ch >= 'a' && ch <= 'f' {
+            ch.to_int() - 'a'.to_int() + 10
+          } else {
+            ch.to_int() - 'A'.to_int() + 10
+          }
+          frac_part = frac_part * 16.0 + digit.to_double()
+          frac_div = frac_div * 16.0
+          self.advance()
+        }
+      }
+      let mut exp = 0
+      if self.peek() == 'p' || self.peek() == 'P' {
+        self.advance()
+        let mut neg = false
+        if self.peek() == '-' {
+          neg = true
+          self.advance()
+        } else if self.peek() == '+' {
+          self.advance()
+        }
+        while is_digit(self.peek()) {
+          exp = exp * 10 + (self.peek().to_int() - '0'.to_int())
+          self.advance()
+        }
+        if neg {
+          exp = -exp
+        }
+      }
+      let mut mantissa = int_part
+      if frac_div > 1.0 {
+        mantissa = mantissa + frac_part / frac_div
+      }
+      let v = mantissa * hex_float_pow2(exp)
+      // Skip float suffix
+      if self.peek() == 'f' || self.peek() == 'F' || self.peek() == 'l' || self.peek() == 'L' {
+        self.advance()
+      }
+      return FloatLiteral(v)
     }
     let s = self.input[hex_start:self.pos]
     let mut n = 0L
@@ -576,7 +674,13 @@ fn Lexer::read_number(self : Lexer) -> Token {
     if self.peek() == 'f' || self.peek() == 'F' || self.peek() == 'l' || self.peek() == 'L' {
       self.advance()
     }
-    return Number(0)
+    let fs = self.input[start:self.pos]
+    let v = try {
+      @strconv.parse_double(fs)
+    } catch {
+      _ => 0.0
+    }
+    return FloatLiteral(v)
   }
   // Skip integer suffixes: u, U, l, L, ll, LL, ul, UL, lu, LU, ull, ULL, llu, LLU
   if self.peek() == 'u' || self.peek() == 'U' {

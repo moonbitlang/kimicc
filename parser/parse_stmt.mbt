@@ -90,6 +90,26 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
       Label("default", stmt)
     }
     Ident(name) => {
+      // Handle GCC inline assembly: asm volatile ("..." ::: "memory");
+      if name == "asm" || name == "__asm__" || name == "__asm" {
+        self.advance()
+        // Skip optional volatile, goto, etc.
+        while self.token == Volatile || self.token == Ident("__volatile__") || self.token == Ident("goto") {
+          self.advance()
+        }
+        // Skip the asm body in parentheses
+        if self.token == LParen {
+          let mut depth = 1
+          self.advance()
+          while depth > 0 && self.token != EOF {
+            if self.token == LParen { depth += 1 }
+            else if self.token == RParen { depth -= 1 }
+            if depth > 0 { self.advance() } else { self.advance(); break }
+          }
+        }
+        self.expect(Semicolon)
+        return ExprStmt(Expr::Number(0))
+      }
       // Check if this is a label: name:
       let saved_pos = self.lexer.pos
       let saved_token = self.token
@@ -214,6 +234,28 @@ fn Parser::parse_continue_stmt(self : Parser) -> Stmt {
 }
 
 ///|
+fn extract_case_value(name : String) -> Int64? {
+  if name == "default" {
+    return None
+  }
+  if not(name.starts_with("case_")) {
+    return None
+  }
+  let mut case_value : Int64 = 0
+  let mut negative = false
+  for i = 5; i < name.length(); i = i + 1 {
+    let ch = name[i]
+    if ch >= '0' && ch <= '9' {
+      case_value = case_value * 10 + (ch.to_int() - '0'.to_int()).to_int64()
+    } else if ch == '-' && i == 5 {
+      negative = true
+    }
+  }
+  if negative { case_value = -case_value }
+  Some(case_value)
+}
+
+///|
 fn Parser::parse_switch_stmt(self : Parser) -> Stmt {
   self.advance() // switch
   self.expect(LParen)
@@ -235,36 +277,36 @@ fn Parser::parse_switch_stmt(self : Parser) -> Stmt {
     }
   }
   for stmt in stmts {
-    match stmt {
-      Label(name, body) => {
-        if name.starts_with("case_") {
-          flush_case(current_value, current_stmts)
-          current_stmts = []
-          let mut case_value : Int64 = 0
-          let mut negative = false
-          for i = 5; i < name.length(); i = i + 1 {
-            let ch = name[i]
-            if ch >= '0' && ch <= '9' {
-              case_value = case_value * 10 + (ch.to_int() - '0'.to_int()).to_int64()
-            } else if ch == '-' && i == 5 {
-              negative = true
+    let mut current_stmt = stmt
+    while true {
+      match current_stmt {
+        Label(name, body) => {
+          match extract_case_value(name) {
+            Some(value) => {
+              flush_case(current_value, current_stmts)
+              current_stmts = []
+              current_value = Some(value)
+              current_stmt = body
+            }
+            None => {
+              if name == "default" {
+                flush_case(current_value, current_stmts)
+                current_stmts = []
+                current_value = None
+                current_stmt = body
+              } else {
+                // Regular label inside a case
+                current_stmts.push(current_stmt)
+                break
+              }
             }
           }
-          if negative { case_value = -case_value }
-          current_value = Some(case_value)
-          // The body of the case label is the first statement of the case
-          current_stmts.push(body)
-        } else if name == "default" {
-          flush_case(current_value, current_stmts)
-          current_stmts = []
-          current_value = None
-          current_stmts.push(body)
-        } else {
-          // Regular label inside a case
-          current_stmts.push(stmt)
+        }
+        _ => {
+          current_stmts.push(current_stmt)
+          break
         }
       }
-      _ => current_stmts.push(stmt)
     }
   }
   flush_case(current_value, current_stmts)
@@ -369,8 +411,31 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
       }
     } else {
       let expr = self.parse_assign()
-      stmts.push(VarDecl(decl_ty, decl.name, Some(expr)))
-      decl_ty
+      // Handle string literal initializer for char arrays: char s[] = "abc"
+      match (decl_ty, expr) {
+        (Array(elem_ty, 0), Expr::String(s)) => {
+          let len = s.length()
+          let arr_ty = Type::Array(elem_ty, len + 1) // +1 for null terminator
+          stmts.push(VarDecl(arr_ty, decl.name, None))
+          for i = 0; i < len; i = i + 1 {
+            let ch = s[i]
+            stmts.push(ExprStmt(Expr::Assign(
+              Expr::ArrayAccess(Expr::Var(decl.name), Expr::Number(i.to_int64())),
+              Expr::Number(ch.to_int().to_int64())
+            )))
+          }
+          // Null terminator
+          stmts.push(ExprStmt(Expr::Assign(
+            Expr::ArrayAccess(Expr::Var(decl.name), Expr::Number(len.to_int64())),
+            Expr::Number(0)
+          )))
+          arr_ty
+        }
+        _ => {
+          stmts.push(VarDecl(decl_ty, decl.name, Some(expr)))
+          decl_ty
+        }
+      }
     }
   } else {
     stmts.push(VarDecl(decl_ty, decl.name, None))
@@ -408,7 +473,27 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
         }
       } else {
         let expr = self.parse_assign()
-        stmts.push(VarDecl(extra_decl_ty, extra_decl.name, Some(expr)))
+        match (extra_decl_ty, expr) {
+          (Array(elem_ty, 0), Expr::String(s)) => {
+            let len = s.length()
+            let arr_ty = Type::Array(elem_ty, len + 1)
+            stmts.push(VarDecl(arr_ty, extra_decl.name, None))
+            for i = 0; i < len; i = i + 1 {
+              let ch = s[i]
+              stmts.push(ExprStmt(Expr::Assign(
+                Expr::ArrayAccess(Expr::Var(extra_decl.name), Expr::Number(i.to_int64())),
+                Expr::Number(ch.to_int().to_int64())
+              )))
+            }
+            stmts.push(ExprStmt(Expr::Assign(
+              Expr::ArrayAccess(Expr::Var(extra_decl.name), Expr::Number(len.to_int64())),
+              Expr::Number(0)
+            )))
+          }
+          _ => {
+            stmts.push(VarDecl(extra_decl_ty, extra_decl.name, Some(expr)))
+          }
+        }
       }
     } else {
       stmts.push(VarDecl(extra_decl_ty, extra_decl.name, None))

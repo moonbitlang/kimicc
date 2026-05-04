@@ -100,6 +100,7 @@ fn basic_type_size(ty : Type) -> Int {
 fn type_of_expr(expr : Expr) -> Type {
   match expr {
     Number(_) => SInt
+    FloatLiteral(_) => Double
     String(_) => Pointer(SChar)
     Var(_) => SInt // unknown, assume int
     Binary(_, _, _) => SInt

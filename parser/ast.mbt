@@ -132,6 +132,7 @@ pub fn Type::align(self : Type) -> Int {
 ///|
 pub(all) enum Expr {
   Number(Int64)
+  FloatLiteral(Double)
   String(String)
   Var(String)
   Binary(String, Expr, Expr)
@@ -191,6 +192,7 @@ pub(all) struct FuncDecl {
   ret : Type
   name : String
   params : Array[Param]
+  variadic : Bool
   body : Stmt?
 } derive(Eq)
 

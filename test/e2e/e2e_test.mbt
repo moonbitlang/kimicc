@@ -14,10 +14,20 @@ fn compile(source : String) -> String {
 }
 
 ///|
+fn source_id(source : String) -> String {
+  let mut h = 0
+  for ch in source {
+    h = h * 31 + ch.to_int()
+  }
+  h.to_string()
+}
+
+///|
 fn run_source(source : String) -> Int {
   let assembly = compile(source)
-  let asm_path = "/tmp/kimicc_test.s"
-  let bin_path = "/tmp/kimicc_test"
+  let id = source_id(source)
+  let asm_path = "/tmp/kimicc_test_" + id + ".s"
+  let bin_path = "/tmp/kimicc_test_" + id
   let _ = moonbit_write_file(
     @utf8.encode(asm_path),
     @utf8.encode(assembly),
@@ -1727,4 +1737,381 @@ async test "__builtin_memcpy" {
     #|}
   let exit_code = run_source_async(source)
   inspect(exit_code, content="6")
+}
+
+///|
+async test "switch fallthrough with negative enum cases" {
+  let source =
+    #|enum { A = -7, B = -8, C = 0 };
+    #|int f(int x) {
+    #|    switch (x) {
+    #|    case C:
+    #|    case A:
+    #|    case B:
+    #|        return 1;
+    #|    default:
+    #|        return 0;
+    #|    }
+    #|}
+    #|int main() {
+    #|    if (f(0) != 1) return 1;
+    #|    if (f(-7) != 1) return 2;
+    #|    if (f(-8) != 1) return 3;
+    #|    if (f(42) != 0) return 4;
+    #|    return 0;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
+
+
+///|
+async test "variadic snprintf with integer" {
+  let source =
+    #|int snprintf(char *buf, unsigned long n, const char *fmt, ...);
+    #|int main() {
+    #|  char buf[32];
+    #|  int r = snprintf(buf, 32, "val=%d", 42);
+    #|  return r;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="6")
+}
+
+///|
+async test "variadic snprintf with string" {
+  let source =
+    #|int snprintf(char *buf, unsigned long n, const char *fmt, ...);
+    #|int main() {
+    #|  char buf[32];
+    #|  int r = snprintf(buf, 32, "hi %s", "there");
+    #|  return r;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="8")
+}
+
+///|
+async test "variadic snprintf with multiple args" {
+  let source =
+    #|int snprintf(char *buf, unsigned long n, const char *fmt, ...);
+    #|int main() {
+    #|  char buf[64];
+    #|  int r = snprintf(buf, 64, "%d %s %d", 1, "two", 3);
+    #|  return r;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="7")
+}
+
+///|
+async test "variadic snprintf buffer contents integer" {
+  let source =
+    #|int snprintf(char *buf, unsigned long n, const char *fmt, ...);
+    #|int main() {
+    #|  char buf[32];
+    #|  snprintf(buf, 32, "val=%d", 42);
+    #|  return buf[0]; // 'v' = 118
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="118")
+}
+
+///|
+async test "variadic snprintf buffer contents string" {
+  let source =
+    #|int snprintf(char *buf, unsigned long n, const char *fmt, ...);
+    #|int main() {
+    #|  char buf[32];
+    #|  snprintf(buf, 32, "hi %s", "there");
+    #|  return buf[3]; // 't' = 116
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="116")
+}
+
+///|
+test "variadic snprintf with no variadic args" {
+  let source =
+    #|int snprintf(char *buf, unsigned long n, const char *fmt, ...);
+    #|int main() {
+    #|  char buf[32];
+    #|  int r = snprintf(buf, 32, "hello");
+    #|  return r;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="5")
+}
+
+///|
+async test "variadic snprintf with hex" {
+  let source =
+    #|int snprintf(char *buf, unsigned long n, const char *fmt, ...);
+    #|int main() {
+    #|  char buf[32];
+    #|  int r = snprintf(buf, 32, "0x%x", 255);
+    #|  return r;
+    #|}
+  let exit_code = run_source_async(source)
+  // "0xff" is 4 chars
+  inspect(exit_code, content="4")
+}
+
+///|
+test "variadic snprintf with pointer" {
+  let source =
+    #|int snprintf(char *buf, unsigned long n, const char *fmt, ...);
+    #|int main() {
+    #|  char buf[64];
+    #|  int x = 42;
+    #|  int r = snprintf(buf, 64, "%p", &x);
+    #|  return r;
+    #|}
+  let exit_code = run_source_async(source)
+  // macOS %p prints without leading zeros: "0x" + 9 hex digits = 11
+  inspect(exit_code, content="11")
+}
+
+///|
+async test "variadic snprintf with double" {
+  let source =
+    #|int snprintf(char *buf, unsigned long n, const char *fmt, ...);
+    #|int strcmp(const char *s1, const char *s2);
+    #|int main() {
+    #|  char buf[64];
+    #|  snprintf(buf, 64, "%.2f", 3.14);
+    #|  if (strcmp(buf, "3.14") == 0) return 0;
+    #|  return 1;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
+
+///|
+async test "variadic snprintf with mixed int and double" {
+  let source =
+    #|int snprintf(char *buf, unsigned long n, const char *fmt, ...);
+    #|int strcmp(const char *s1, const char *s2);
+    #|int main() {
+    #|  char buf[64];
+    #|  snprintf(buf, 64, "int=%d double=%.2f", 42, 3.14);
+    #|  if (strcmp(buf, "int=42 double=3.14") == 0) return 0;
+    #|  return 1;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
+
+///|
+async test "hex float literal" {
+  let source =
+    #|int main() {
+    #|    double d = 0x1p10;
+    #|    if (d == 1024.0) return 0;
+    #|    return 1;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
+
+///|
+async test "hex float literal large exponent" {
+  let source =
+    #|int main() {
+    #|    double d = 0x1p1008;
+    #|    // 2^1008 overflows double to infinity
+    #|    if (d > 1e300) return 0;
+    #|    return 1;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
+
+///|
+async test "__builtin_alloca basic" {
+  let source =
+    #|int main() {
+    #|  int *p = __builtin_alloca(16);
+    #|  p[0] = 42;
+    #|  p[1] = 43;
+    #|  p[2] = 44;
+    #|  p[3] = 45;
+    #|  return p[0] + p[1] + p[2] + p[3];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="174")
+}
+
+///|
+async test "__builtin_alloca with variable size" {
+  let source =
+    #|int main() {
+    #|  int n = 4;
+    #|  int *p = __builtin_alloca(n * 8);
+    #|  p[0] = 1;
+    #|  p[1] = 2;
+    #|  p[2] = 3;
+    #|  p[3] = 4;
+    #|  return p[0] + p[1] + p[2] + p[3];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="10")
+}
+
+///|
+async test "__builtin_constant_p" {
+  let source =
+    #|int main() {
+    #|  int x = 42;
+    #|  return __builtin_constant_p(x);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
+
+///|
+async test "__builtin_object_size" {
+  let source =
+    #|int main() {
+    #|  int x;
+    #|  return (int)__builtin_object_size(&x, 0);
+    #|}
+  let exit_code = run_source_async(source)
+  // __builtin_object_size returns -1 (SIZE_MAX) as stub; exit code is 255
+  inspect(exit_code, content="255")
+}
+
+///|
+async test "__builtin___memcpy_chk" {
+  let source =
+    #|int main() {
+    #|  int src[] = {1, 2, 3};
+    #|  int dst[3];
+    #|  __builtin___memcpy_chk(dst, src, 12, 12);
+    #|  return dst[0] + dst[1] + dst[2];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="6")
+}
+
+///|
+async test "__builtin___memset_chk" {
+  let source =
+    #|int main() {
+    #|  char buf[4];
+    #|  __builtin___memset_chk(buf, 7, 4, 4);
+    #|  return buf[0] + buf[1] + buf[2] + buf[3];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="28")
+}
+
+///|
+async test "__builtin___strcpy_chk" {
+  let source =
+    #|int main() {
+    #|  char dst[16];
+    #|  __builtin___strcpy_chk(dst, "hi", 16);
+    #|  return dst[0] + dst[1];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="209")
+}
+
+///|
+async test "double literal return compiles" {
+  let source =
+    #|double get_pi() { return 3.14; }
+    #|int main() { return 0; }
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
+
+///|
+async test "double local variable compiles" {
+  let source =
+    #|double get_val() {
+    #|  double x = 2.5;
+    #|  return x;
+    #|}
+    #|int main() { return 0; }
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
+
+///|
+async test "float literal return compiles" {
+  let source =
+    #|float get_val() { return 1.5; }
+    #|int main() { return 0; }
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
+
+///|
+async test "double parameter and return" {
+  let source =
+    #|double foo(int a, double b, int c, double d) { return d; }
+    #|int main() { return 0; }
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
+
+///|
+async test "float parameter and return" {
+  let source =
+    #|float foo(int a, float b) { return b; }
+    #|int main() { return 0; }
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
+
+///|
+async test "double arithmetic compiles" {
+  let source =
+    #|double add(double a, double b) { return a + b; }
+    #|double sub(double a, double b) { return a - b; }
+    #|double mul(double a, double b) { return a * b; }
+    #|double div(double a, double b) { return a / b; }
+    #|double neg(double a) { return -a; }
+    #|int main() { return 0; }
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
+
+///|
+async test "double comparisons compiles" {
+  let source =
+    #|int eq(double a, double b) { return a == b; }
+    #|int lt(double a, double b) { return a < b; }
+    #|int gt(double a, double b) { return a > b; }
+    #|int main() { return 0; }
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
+
+///|
+async test "double casts compiles" {
+  let source =
+    #|int d2i(double a) { return (int)a; }
+    #|double i2d(int a) { return (double)a; }
+    #|float d2f(double a) { return (float)a; }
+    #|double f2d(float a) { return (double)a; }
+    #|int main() { return 0; }
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
+
+///|
+async test "fp builtins compiles" {
+  let source =
+    #|double test_fabs(double a) { return __builtin_fabs(a); }
+    #|float test_fabsf(float a) { return __builtin_fabsf(a); }
+    #|double test_nan() { return __builtin_nan(""); }
+    #|float test_nanf() { return __builtin_nanf(""); }
+    #|double test_inf() { return __builtin_huge_val(); }
+    #|float test_inff() { return __builtin_huge_valf(); }
+    #|int main() { return 0; }
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
 }

@@ -16,11 +16,17 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
     if self.token == Semicolon {
       self.advance()
     }
-    return { ret: Void, name: "", params: [], body: None }
+    return { ret: Void, name: "", params: [], variadic: false, body: None }
   }
   // Function declaration or definition
   if decl.is_func_decl {
     let params = decl.func_params.unwrap()
+    // Detect variadic function and filter out the "..." parameter
+    let mut variadic = false
+    if params.length() > 0 && params[params.length() - 1].name == "..." {
+      variadic = true
+      let _ = params.pop()
+    }
     // Apply array-to-pointer decay for function parameters
     for i = 0; i < params.length(); i = i + 1 {
       match params[i].ty {
@@ -41,13 +47,13 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       Some(rt) => rt
       None => spec.base_type
     }
-    return { ret: ret_ty, name: decl.name, params, body }
+    return { ret: ret_ty, name: decl.name, params, variadic, body }
   }
   // Variable declaration (including function pointer variables)
   if self.token == Semicolon || self.token == Assign || self.token == Comma ||
      self.token == LBracket {
     self.parse_global_var_tail(spec, decl)
-    return { ret: Void, name: "", params: [], body: None }
+    return { ret: Void, name: "", params: [], variadic: false, body: None }
   }
   // Skip anything else to next semicolon
   while self.token != Semicolon && self.token != EOF {
@@ -56,7 +62,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
   if self.token == Semicolon {
     self.advance()
   }
-  { ret: Void, name: "", params: [], body: None }
+  { ret: Void, name: "", params: [], variadic: false, body: None }
 }
 
 ///|
