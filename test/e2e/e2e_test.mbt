@@ -1340,3 +1340,72 @@ async test "unsigned comparison" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="1")
 }
+
+///|
+async test "array index with expression" {
+  let source =
+    #|int main() {
+    #|  int arr[] = {10, 20, 30, 40, 50};
+    #|  int i = 2;
+    #|  return arr[i + 1];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="40")
+}
+
+///|
+async test "while with break" {
+  let source =
+    #|int main() {
+    #|  int i = 0;
+    #|  while (1) {
+    #|    i = i + 1;
+    #|    if (i == 5) break;
+    #|  }
+    #|  return i;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="5")
+}
+
+///|
+async test "goto forward and backward" {
+  let source =
+    #|int main() {
+    #|  int x = 0;
+    #|  goto forward;
+    #|backward:
+    #|  return x;
+    #|forward:
+    #|  x = 42;
+    #|  goto backward;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "switch with default" {
+  let source =
+    #|int main() {
+    #|  int x = 7;
+    #|  switch (x) {
+    #|    case 1: return 1;
+    #|    case 2: return 2;
+    #|    default: return 99;
+    #|  }
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="99")
+}
+
+///|
+async test "signed right shift" {
+  let source =
+    #|int main() {
+    #|  int x = -16;
+    #|  return (x >> 2) + 10;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="6")
+}
