@@ -533,7 +533,7 @@ fn Codegen::gen_expr(
   frame_size : Int,
 ) -> Unit {
   match expr {
-    Number(n) => self.emit("\tmov\tx9, #" + n.to_string())
+    Number(n) => self.emit("\tldr\tx9, =" + n.to_string())
     String(s) => {
       let idx = self.strings.length()
       self.strings.push(s)
@@ -697,12 +697,12 @@ fn Codegen::gen_expr(
     }
     Sizeof(ty) => {
       let size = self.type_size(ty)
-      self.emit("\tmov\tx9, #" + size.to_string())
+      self.emit("\tldr\tx9, =" + size.to_string())
     }
     SizeofExpr(expr) => {
       let ty = self.type_of(expr, frame_size)
       let size = self.type_size(ty)
-      self.emit("\tmov\tx9, #" + size.to_string())
+      self.emit("\tldr\tx9, =" + size.to_string())
     }
     Cast(ty, expr) => {
       self.gen_expr(expr, frame_size)

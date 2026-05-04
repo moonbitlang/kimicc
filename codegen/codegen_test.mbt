@@ -12,7 +12,7 @@ test "generate simple function" {
     #|_main:
     #|	stp	x29, x30, [sp, #-16]!
     #|	mov	x29, sp
-    #|	mov	x9, #42
+    #|	ldr	x9, =42
     #|	mov	x0, x9
     #|	b	_main_ret
     #|	mov	x0, #0
@@ -50,4 +50,25 @@ test "generate while loop" {
   let codegen = @codegen.Codegen::new()
   let assembly = codegen.generate(prog)
   inspect(assembly.contains(":"), content="true")
+}
+
+///|
+test "generate large constant" {
+  let source = "int main() { return 1114111; }"
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  // Should use ldr pseudo-instruction for large constants
+  inspect(assembly.contains("ldr\tx9, =1114111"), content="true")
+}
+
+///|
+test "generate negative large constant" {
+  let source = "int main() { return -1640562687; }"
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  // Parsed as Unary("-", Number(1640562687)) → ldr then neg
+  inspect(assembly.contains("ldr\tx9, =1640562687"), content="true")
+  inspect(assembly.contains("neg\tx9, x9"), content="true")
 }
