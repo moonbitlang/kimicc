@@ -200,11 +200,13 @@ fn fits_cmp_imm(n : Int) -> Bool {
 ///|
 fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
   match ty {
-    Int => 8
     Void => 0
-    Char => 1
-    Pointer(_) => 8
+    Bool | SChar | UChar => 1
+    SShort | UShort => 2
+    SInt | UInt | Float => 4
+    SLong | ULong | SLongLong | ULongLong | Double | Pointer(_) => 8
     Array(elem, n) => self.type_size(elem) * n
+    Atomic(ty) => self.type_size(ty)
     Struct(name) => {
       if not(self.struct_layouts.contains(name)) {
         if self.struct_decls.contains(name) {
@@ -221,6 +223,73 @@ fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
       }
       total
     }
+    Union(name) => {
+      if not(self.struct_layouts.contains(name)) {
+        if self.struct_decls.contains(name) {
+          self.compute_struct_layout(self.struct_decls[name])
+        } else {
+          // Forward-declared opaque union: assume pointer size
+          return 8
+        }
+      }
+      let fields = self.struct_layouts[name]
+      let mut max_size = 0
+      for field in fields {
+        if field.3 > max_size {
+          max_size = field.3
+        }
+      }
+      max_size
+    }
+  }
+}
+
+///|
+fn Codegen::type_align(self : Codegen, ty : @parser.Type) -> Int {
+  match ty {
+    Void => 1
+    Bool | SChar | UChar => 1
+    SShort | UShort => 2
+    SInt | UInt | Float => 4
+    SLong | ULong | SLongLong | ULongLong | Double | Pointer(_) => 8
+    Array(elem, _) => self.type_align(elem)
+    Atomic(ty) => self.type_align(ty)
+    Struct(name) => {
+      if not(self.struct_layouts.contains(name)) {
+        if self.struct_decls.contains(name) {
+          self.compute_struct_layout(self.struct_decls[name])
+        } else {
+          return 8
+        }
+      }
+      let fields = self.struct_layouts[name]
+      let mut max_align = 1
+      for field in fields {
+        let field_align = self.type_align(field.1)
+        if field_align > max_align {
+          max_align = field_align
+        }
+      }
+      max_align
+    }
+    Union(name) => {
+      if not(self.struct_layouts.contains(name)) {
+        if self.struct_decls.contains(name) {
+          self.compute_struct_layout(self.struct_decls[name])
+        } else {
+          return 8
+        }
+      }
+      let fields = self.struct_layouts[name]
+      let mut max_align = 1
+      for field in fields {
+        let field_align = self.type_align(field.1)
+        if field_align > max_align {
+          max_align = field_align
+        }
+      }
+      max_align
+    }
   }
 }
 
@@ -233,6 +302,9 @@ fn Codegen::compute_struct_layout(
   let layout = []
   for field in decl.fields {
     let size = self.type_size(field.ty)
+    let align = self.type_align(field.ty)
+    let padding = (align - offset % align) % align
+    offset += padding
     layout.push((field.name, field.ty, offset, size))
     offset += size
   }
@@ -545,8 +617,8 @@ fn Codegen::type_of(
   frame_size : Int,
 ) -> @parser.Type {
   match expr {
-    Number(_) => Int
-    String(_) => Pointer(Char)
+    Number(_) => SInt
+    String(_) => Pointer(SChar)
     Var(name) => {
       if self.var_types.contains(name) {
         self.var_types[name]
@@ -556,25 +628,26 @@ fn Codegen::type_of(
         Pointer(Void) // Function pointer type
       } else {
         println("WARN: Unknown variable type: " + name)
-        Int
+        SInt
       }
     }
-    Binary(_, _, _) => Int
-    Unary("-", _) => Int
-    Unary("!", _) => Int
-    Unary("~", _) => Int
+    Binary(_, _, _) => SInt
+    Unary("-", _) => SInt
+    Unary("!", _) => SInt
+    Unary("~", _) => SInt
     Call(func, _) => match func {
       Var(name) => self.func_rets[name]
-      _ => Int
+      _ => SInt
     }
     Assign(_, rhs) => self.type_of(rhs, frame_size)
     MemberAccess(obj, field) => {
       let obj_ty = self.type_of(obj, frame_size)
       let struct_name = match obj_ty {
         Struct(n) => n
+        Union(n) => n
         _ => {
           println("WARN: Member access on non-struct type: " + obj_ty.to_string())
-          return Int
+          return SInt
         }
       }
       if self.struct_layouts.contains(struct_name) {
@@ -586,7 +659,7 @@ fn Codegen::type_of(
         }
       }
       println("WARN: Unknown field '" + field + "' in struct '" + struct_name + "'")
-      Int
+      SInt
     }
     Deref(ptr) =>
       match self.type_of(ptr, frame_size) {
@@ -594,7 +667,7 @@ fn Codegen::type_of(
         Array(elem, _) => elem
         _ => {
           println("WARN: Deref of non-pointer")
-          Int
+          SInt
         }
       }
     AddrOf(e) => Pointer(self.type_of(e, frame_size))
@@ -604,11 +677,11 @@ fn Codegen::type_of(
         Pointer(elem) => elem
         _ => {
           println("WARN: Array access on non-array")
-          Int
+          SInt
         }
       }
-    Sizeof(_) => Int
-    SizeofExpr(_) => Int
+    Sizeof(_) => SInt
+    SizeofExpr(_) => SInt
     PrefixInc(e) => self.type_of(e, frame_size)
     PrefixDec(e) => self.type_of(e, frame_size)
     PostfixInc(e) => self.type_of(e, frame_size)
@@ -618,7 +691,7 @@ fn Codegen::type_of(
     Cast(ty, _) => ty
     _ => {
       println("WARN: Unknown expression type")
-      Int
+      SInt
     }
   }
 }
@@ -643,7 +716,7 @@ fn Codegen::gen_expr(
         let ty = self.var_types[name]
         let offset = self.local_offsets[name]
         match ty {
-          Array(_, _) | Struct(_) =>
+          Array(_, _) | Struct(_) | Union(_) =>
             self.emit_local_addr(offset, frame_size)
           _ => self.emit_load_local("x9", offset, frame_size)
         }
@@ -652,7 +725,7 @@ fn Codegen::gen_expr(
         self.emit("\tadrp\tx9, _" + name + "@PAGE")
         self.emit("\tadd\tx9, x9, _" + name + "@PAGEOFF")
         match ty {
-          Array(_, _) | Struct(_) => ()
+          Array(_, _) | Struct(_) | Union(_) => ()
           _ => self.emit("\tldr\tx9, [x9]")
         }
       } else if self.func_rets.contains(name) {
@@ -804,12 +877,32 @@ fn Codegen::gen_expr(
     Cast(ty, expr) => {
       self.gen_expr(expr, frame_size)
       match ty {
-        Char => {
-          // Truncate to 8 bits and sign-extend
+        SChar => {
+          // Sign-extend byte
           self.emit("\tsxtb\tx9, w9")
         }
+        UChar => {
+          // Zero-extend byte
+          self.emit("\tand\tx9, x9, #0xFF")
+        }
+        SShort => {
+          // Sign-extend halfword
+          self.emit("\tsxth\tx9, w9")
+        }
+        UShort => {
+          // Zero-extend halfword
+          self.emit("\tand\tx9, x9, #0xFFFF")
+        }
+        SInt => {
+          // Sign-extend word
+          self.emit("\tsxtw\tx9, w9")
+        }
+        UInt => {
+          // Already zero-extended in 64-bit register, no-op for now
+          ()
+        }
         _ => {
-          // int, pointer, struct, array, void: no-op
+          // pointer, struct, array, void, long, long long, bool, float, double: no-op
           ()
         }
       }
@@ -883,6 +976,7 @@ fn Codegen::gen_addr(
       let obj_ty = self.type_of(obj, frame_size)
       let struct_name = match obj_ty {
         Struct(n) => n
+        Union(n) => n
         _ => {
           println("WARN: gen_addr MemberAccess on non-struct: " + obj_ty.to_string())
           return

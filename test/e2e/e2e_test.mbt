@@ -267,7 +267,7 @@ async test "run sizeof fixture" {
     #|  return sizeof(x) + sizeof(int);
     #|}
   let exit_code = run_source_async(source)
-  inspect(exit_code, content="16")
+  inspect(exit_code, content="8")
 }
 
 ///|

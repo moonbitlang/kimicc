@@ -21,7 +21,7 @@ priv struct DeclaratorResult {
 ///|
 fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
   let spec : DeclSpec = {
-    base_type: Int,
+    base_type: SInt,
     is_typedef: false,
     is_static: false,
     is_extern: false,
@@ -33,17 +33,15 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
   let mut has_void = false
   let mut has_char = false
   let mut has_short = false
-  let mut has_int = false
-  let mut has_long = false
+  let mut long_count = 0
   let mut has_float = false
   let mut has_double = false
-  let mut has_signed = false
   let mut has_unsigned = false
   let mut has_bool = false
   let mut has_struct = false
-  let mut struct_result = Type::Int
+  let mut struct_result = Type::SInt
   let mut has_typedef_name = false
-  let mut typedef_type = Type::Int
+  let mut typedef_type = Type::SInt
   let mut saw_primitive = false
   let mut saw_typedef_name = false
   while true {
@@ -83,11 +81,19 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
         Void => { has_void = true; self.advance(); saw_primitive = true; consumed = true }
         Char => { has_char = true; self.advance(); saw_primitive = true; consumed = true }
         Short => { has_short = true; self.advance(); saw_primitive = true; consumed = true }
-        Int => { has_int = true; self.advance(); saw_primitive = true; consumed = true }
-        Long => { has_long = true; self.advance(); saw_primitive = true; consumed = true }
+        Int => { self.advance(); saw_primitive = true; consumed = true }
+        Long => {
+          long_count += 1
+          if long_count > 2 {
+            abort("Too many long specifiers")
+          }
+          self.advance()
+          saw_primitive = true
+          consumed = true
+        }
         Float => { has_float = true; self.advance(); saw_primitive = true; consumed = true }
         Double => { has_double = true; self.advance(); saw_primitive = true; consumed = true }
-        Signed => { has_signed = true; self.advance(); saw_primitive = true; consumed = true }
+        Signed => { self.advance(); saw_primitive = true; consumed = true }
         Unsigned => { has_unsigned = true; self.advance(); saw_primitive = true; consumed = true }
         Bool => { has_bool = true; self.advance(); saw_primitive = true; consumed = true }
         Struct => {
@@ -115,16 +121,14 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
               let _ = self.parse_type_name()
               self.expect(RParen)
             }
-            has_int = true
             saw_primitive = true
             consumed = true
           } else if name == "__builtin_va_list" {
-            spec.base_type = Pointer(Char)
+            spec.base_type = Pointer(SChar)
             self.advance()
             saw_primitive = true
             consumed = true
           } else if name == "__uint128_t" || name == "__int128" || name == "_Float16" {
-            has_int = true
             self.advance()
             saw_primitive = true
             consumed = true
@@ -150,13 +154,41 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
   } else if has_void {
     spec.base_type = Void
   } else if has_bool {
-    spec.base_type = Char
+    spec.base_type = Bool
+  } else if has_float {
+    spec.base_type = Float
+  } else if has_double {
+    spec.base_type = Double
   } else if has_char {
-    spec.base_type = Char
-  } else if has_float || has_double {
-    spec.base_type = Int
+    if has_unsigned {
+      spec.base_type = UChar
+    } else {
+      spec.base_type = SChar
+    }
+  } else if has_short {
+    if has_unsigned {
+      spec.base_type = UShort
+    } else {
+      spec.base_type = SShort
+    }
+  } else if long_count == 2 {
+    if has_unsigned {
+      spec.base_type = ULongLong
+    } else {
+      spec.base_type = SLongLong
+    }
+  } else if long_count == 1 {
+    if has_unsigned {
+      spec.base_type = ULong
+    } else {
+      spec.base_type = SLong
+    }
   } else {
-    spec.base_type = Int
+    if has_unsigned {
+      spec.base_type = UInt
+    } else {
+      spec.base_type = SInt
+    }
   }
   spec
 }
@@ -201,9 +233,9 @@ fn Parser::parse_union_type_specifier(self : Parser) -> Type {
         let fields = self.parse_struct_body()
         self.expect(RBrace)
         self.anonymous_structs.push({ name: n, fields })
-        Type::Struct(n)
+        Type::Union(n)
       } else {
-        Type::Struct(n)
+        Type::Union(n)
       }
     }
     LBrace => {
@@ -213,7 +245,7 @@ fn Parser::parse_union_type_specifier(self : Parser) -> Type {
       let name = "__anon_union_" + self.anon_counter.to_string()
       self.anon_counter += 1
       self.anonymous_structs.push({ name, fields })
-      Type::Struct(name)
+      Type::Union(name)
     }
     _ => abort("Expected union name or {\n")
   }
@@ -262,7 +294,7 @@ fn Parser::parse_enum_type_specifier(self : Parser) -> Type {
     }
     self.expect(RBrace)
   }
-  Type::Int
+  Type::SInt
 }
 
 ///|

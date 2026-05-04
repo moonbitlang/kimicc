@@ -84,36 +84,39 @@ fn fold_const(expr : Expr) -> Int? {
 ///|
 fn basic_type_size(ty : Type) -> Int {
   match ty {
-    Int => 8
-    Char => 1
     Void => 0
-    Pointer(_) => 8
+    Bool | SChar | UChar => 1
+    SShort | UShort => 2
+    SInt | UInt | Float => 4
+    SLong | ULong | SLongLong | ULongLong | Double | Pointer(_) => 8
     Array(elem, n) => basic_type_size(elem) * n
     Struct(_) => 8 // unknown struct size, assume pointer-sized
+    Union(_) => 8 // unknown union size, assume pointer-sized
+    Atomic(inner) => basic_type_size(inner)
   }
 }
 
 ///|
 fn type_of_expr(expr : Expr) -> Type {
   match expr {
-    Number(_) => Int
-    String(_) => Pointer(Char)
-    Var(_) => Int // unknown, assume int
-    Binary(_, _, _) => Int
-    Unary(_, _) => Int
-    Call(_, _) => Int
+    Number(_) => SInt
+    String(_) => Pointer(SChar)
+    Var(_) => SInt // unknown, assume int
+    Binary(_, _, _) => SInt
+    Unary(_, _) => SInt
+    Call(_, _) => SInt
     Assign(_, rhs) => type_of_expr(rhs)
-    MemberAccess(_, _) => Int
-    Deref(_) => Int
-    AddrOf(_) => Pointer(Int)
-    ArrayAccess(_, _) => Int
-    Sizeof(_) => Int
-    SizeofExpr(_) => Int
+    MemberAccess(_, _) => SInt
+    Deref(_) => SInt
+    AddrOf(_) => Pointer(SInt)
+    ArrayAccess(_, _) => SInt
+    Sizeof(_) => SInt
+    SizeofExpr(_) => SInt
     Cast(ty, _) => ty
-    PrefixInc(_) => Int
-    PrefixDec(_) => Int
-    PostfixInc(_) => Int
-    PostfixDec(_) => Int
+    PrefixInc(_) => SInt
+    PrefixDec(_) => SInt
+    PostfixInc(_) => SInt
+    PostfixDec(_) => SInt
     Ternary(_, a, _) => type_of_expr(a)
   }
 }

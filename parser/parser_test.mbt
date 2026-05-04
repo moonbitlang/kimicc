@@ -5,7 +5,7 @@ test "parse simple function" {
   inspect(prog.decls.length(), content="1")
   let decl = prog.decls[0]
   inspect(decl.name, content="main")
-  inspect(decl.ret, content="Int")
+  inspect(decl.ret, content="SInt")
   inspect(decl.params.length(), content="0")
 }
 
@@ -30,7 +30,7 @@ test "parse variable declaration" {
     Some(Compound(stmts)) => {
       inspect(stmts.length(), content="2")
       match stmts[0] {
-        VarDecl(Int, "x", Some(Number(10))) => ()
+        VarDecl(SInt, "x", Some(Number(10))) => ()
         _ => fail("Expected VarDecl")
       }
     }
@@ -96,7 +96,7 @@ test "parse sizeof expr" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([VarDecl(Int, "x", None), Return(Some(SizeofExpr(Var("x"))))])) =>
+    Some(Compound([VarDecl(SInt, "x", None), Return(Some(SizeofExpr(Var("x"))))])) =>
       ()
     _ => fail("Expected sizeof expr")
   }
@@ -122,8 +122,8 @@ test "parse ternary" {
     Some(
       Compound(
         [
-          VarDecl(Int, "x", Some(Number(1))),
-          VarDecl(Int, "y", Some(Number(2))),
+          VarDecl(SInt, "x", Some(Number(1))),
+          VarDecl(SInt, "y", Some(Number(2))),
           Return(Some(Ternary(Binary(">", Var("x"), Number(0)), Var("y"), Number(0)))),
         ]
       )
@@ -138,7 +138,7 @@ test "parse do while" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([VarDecl(Int, "i", Some(Number(0))), DoWhile(_, _), Return(Some(Var("i")))])) =>
+    Some(Compound([VarDecl(SInt, "i", Some(Number(0))), DoWhile(_, _), Return(Some(Var("i")))])) =>
       ()
     _ => fail("Expected do-while")
   }
@@ -175,7 +175,7 @@ test "parse goto and label" {
     Some(
       Compound(
         [
-          VarDecl(Int, "x", Some(Number(0))),
+          VarDecl(SInt, "x", Some(Number(0))),
           Goto("end"),
           ExprStmt(Assign(Var("x"), Number(1))),
           Label("end", Return(Some(Var("x")))),
@@ -233,7 +233,7 @@ test "parse cast" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([Return(Some(Cast(Char, Number(256))))])) => ()
+    Some(Compound([Return(Some(Cast(SChar, Number(256))))])) => ()
     _ => fail("Expected cast expression")
   }
 }
@@ -244,7 +244,7 @@ test "parse prefix increment" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([VarDecl(Int, "x", Some(Number(5))), Return(Some(PrefixInc(Var("x"))))])) =>
+    Some(Compound([VarDecl(SInt, "x", Some(Number(5))), Return(Some(PrefixInc(Var("x"))))])) =>
       ()
     _ => fail("Expected prefix increment")
   }
@@ -256,7 +256,7 @@ test "parse postfix increment" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([VarDecl(Int, "x", Some(Number(5))), Return(Some(PostfixInc(Var("x"))))])) =>
+    Some(Compound([VarDecl(SInt, "x", Some(Number(5))), Return(Some(PostfixInc(Var("x"))))])) =>
       ()
     _ => fail("Expected postfix increment")
   }
@@ -294,12 +294,12 @@ test "parse for loop" {
       inspect(stmts.length(), content="3")
       // Stmt 1: var decl s=0
       match stmts[0] {
-        VarDecl(Int, "s", Some(Number(0))) => ()
+        VarDecl(SInt, "s", Some(Number(0))) => ()
         _ => fail("Expected s declaration")
       }
       // Stmt 2: for loop as native For node
       match stmts[1] {
-        For(Some(VarDecl(Int, "i", Some(Number(0)))), _, Some(_), _) => ()
+        For(Some(VarDecl(SInt, "i", Some(Number(0)))), _, Some(_), _) => ()
         _ => fail("Expected For AST node")
       }
     }
@@ -316,7 +316,7 @@ test "parse assignment" {
     Some(
       Compound(
         [
-          VarDecl(Int, "x", None),
+          VarDecl(SInt, "x", None),
           ExprStmt(Assign(Var("x"), Number(5))),
           Return(Some(Var("x"))),
         ]
@@ -395,7 +395,7 @@ test "parse sizeof type" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([Return(Some(Sizeof(Int)))])) => ()
+    Some(Compound([Return(Some(Sizeof(SInt)))])) => ()
     _ => fail("Expected sizeof type")
   }
 }
@@ -457,7 +457,7 @@ test "parse array declaration and access" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([VarDecl(Array(Int, 5), "a", None), ExprStmt(Assign(ArrayAccess(Var("a"), Number(2)), Number(42))), Return(Some(ArrayAccess(Var("a"), Number(2))))])) =>
+    Some(Compound([VarDecl(Array(SInt, 5), "a", None), ExprStmt(Assign(ArrayAccess(Var("a"), Number(2)), Number(42))), Return(Some(ArrayAccess(Var("a"), Number(2))))])) =>
       ()
     _ => fail("Expected array decl and access")
   }
@@ -495,7 +495,7 @@ test "parse string literal" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([VarDecl(Pointer(Char), "s", Some(String("hello"))), Return(Some(Number(0)))])) =>
+    Some(Compound([VarDecl(Pointer(SChar), "s", Some(String("hello"))), Return(Some(Number(0)))])) =>
       ()
     _ => fail("Expected string literal")
   }
@@ -507,7 +507,7 @@ test "parse adjacent string concatenation" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([VarDecl(Pointer(Char), "s", Some(String("hello"))), Return(Some(Number(0)))])) =>
+    Some(Compound([VarDecl(Pointer(SChar), "s", Some(String("hello"))), Return(Some(Number(0)))])) =>
       ()
     _ => fail("Expected concatenated string literal")
   }

@@ -1,22 +1,131 @@
 ///|
 pub(all) enum Type {
-  Int
   Void
-  Char
+  Bool
+  SChar
+  UChar
+  SShort
+  UShort
+  SInt
+  UInt
+  SLong
+  ULong
+  SLongLong
+  ULongLong
+  Float
+  Double
   Struct(String)
+  Union(String)
   Pointer(Type)
   Array(Type, Int)
+  Atomic(Type)
 } derive(Eq)
 
 ///|
 pub impl Show for Type with to_string(self) {
   match self {
-    Int => "Int"
     Void => "Void"
-    Char => "Char"
+    Bool => "Bool"
+    SChar => "SChar"
+    UChar => "UChar"
+    SShort => "SShort"
+    UShort => "UShort"
+    SInt => "SInt"
+    UInt => "UInt"
+    SLong => "SLong"
+    ULong => "ULong"
+    SLongLong => "SLongLong"
+    ULongLong => "ULongLong"
+    Float => "Float"
+    Double => "Double"
     Struct(name) => "Struct(" + name + ")"
+    Union(name) => "Union(" + name + ")"
     Pointer(ty) => "Pointer(" + ty.to_string() + ")"
     Array(ty, n) => "Array(" + ty.to_string() + ", " + n.to_string() + ")"
+    Atomic(ty) => "Atomic(" + ty.to_string() + ")"
+  }
+}
+
+///|
+// Helper: check if type is any integer type (signed or unsigned)
+pub fn Type::is_integer(self : Type) -> Bool {
+  match self {
+    SChar | UChar | SShort | UShort | SInt | UInt | SLong | ULong | SLongLong |
+    ULongLong => true
+    _ => false
+  }
+}
+
+///|
+// Helper: check if type is a signed integer type
+pub fn Type::is_signed(self : Type) -> Bool {
+  match self {
+    SChar | SShort | SInt | SLong | SLongLong => true
+    _ => false
+  }
+}
+
+///|
+// Helper: check if type is a floating-point type
+pub fn Type::is_floating(self : Type) -> Bool {
+  match self {
+    Float | Double => true
+    _ => false
+  }
+}
+
+///|
+// Helper: get the unsigned variant of a signed integer type
+pub fn Type::to_unsigned(self : Type) -> Type {
+  match self {
+    SChar => UChar
+    SShort => UShort
+    SInt => UInt
+    SLong => ULong
+    SLongLong => ULongLong
+    _ => self
+  }
+}
+
+///|
+// Helper: get the size in bytes for a type (ARM64 macOS ABI)
+pub fn Type::size(self : Type) -> Int {
+  match self {
+    Void => 0
+    Bool | SChar | UChar => 1
+    SShort | UShort => 2
+    SInt | UInt | Float => 4
+    SLong | ULong | SLongLong | ULongLong | Double | Pointer(_) => 8
+    Struct(name) => {
+      // Forward reference: we can't compute struct size without the decl.
+      // Callers should use codegen's type_size which has struct_decls.
+      abort("Cannot compute struct size without struct_decls: " + name)
+    }
+    Union(name) => {
+      abort("Cannot compute union size without struct_decls: " + name)
+    }
+    Array(elem, n) => elem.size() * n
+    Atomic(ty) => ty.size()
+  }
+}
+
+///|
+// Helper: get the alignment in bytes for a type (ARM64 macOS ABI)
+pub fn Type::align(self : Type) -> Int {
+  match self {
+    Void => 1
+    Bool | SChar | UChar => 1
+    SShort | UShort => 2
+    SInt | UInt | Float => 4
+    SLong | ULong | SLongLong | ULongLong | Double | Pointer(_) => 8
+    Struct(name) => {
+      abort("Cannot compute struct alignment without struct_decls: " + name)
+    }
+    Union(name) => {
+      abort("Cannot compute union alignment without struct_decls: " + name)
+    }
+    Array(elem, _) => elem.align()
+    Atomic(ty) => ty.align()
   }
 }
 
