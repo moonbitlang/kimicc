@@ -101,34 +101,4 @@ fn Parser::parse_param(self : Parser) -> Param {
   { ty: decl.ty, name: decl.name }
 }
 
-///|
-fn base_type(ty : Type) -> Type {
-  match ty {
-    Pointer(t) => base_type(t)
-    Array(t, _) => base_type(t)
-    _ => ty
-  }
-}
 
-///|
-fn Parser::parse_type_suffixes(self : Parser, ty : Type, name : String) -> Param {
-  // Handle array suffixes: [n][m]...
-  let mut final_ty = ty
-  while self.token == LBracket {
-    self.advance()
-    if self.token == RBracket {
-      self.advance()
-      final_ty = Array(final_ty, 0)
-    } else {
-      let size_expr = self.parse_assign()
-      self.expect(RBracket)
-      let size = match fold_const(size_expr) {
-        Some(n) => n
-        None => 0 // unknown constant expression
-      }
-      final_ty = Array(final_ty, size)
-    }
-  }
-  self.skip_attributes()
-  { ty: final_ty, name }
-}

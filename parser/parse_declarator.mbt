@@ -112,7 +112,7 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
             self.advance()
             if self.token == LParen {
               self.advance()
-              let _ = self.parse_type()
+              let _ = self.parse_type_name()
               self.expect(RParen)
             }
             has_int = true
@@ -229,7 +229,7 @@ fn Parser::parse_enum_type_specifier(self : Parser) -> Type {
   }
   if self.token == Colon {
     self.advance()
-    let _ = self.parse_type()
+    let _ = self.parse_type_name()
   }
   self.skip_attributes()
   if self.token == LBrace {
@@ -271,30 +271,23 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] {
   while self.token != RBrace {
     self.skip_attributes()
     self.skip_qualifiers()
-    let first_field = self.parse_param()
+    let spec = self.parse_decl_specifiers()
+    let decl = self.parse_declarator(spec.base_type)
     if self.token == Colon {
       self.advance()
       let _ = self.parse_assign()
     }
-    fields.push(first_field)
+    fields.push({ ty: decl.ty, name: decl.name })
     while self.token == Comma {
       self.advance()
+      self.skip_attributes()
       self.skip_qualifiers()
-      let mut vty = base_type(first_field.ty)
-      while self.token == Star {
-        self.advance()
-        vty = Pointer(vty)
-      }
-      let fname = match self.token {
-        Ident(n) => { self.advance(); n }
-        _ => ""
-      }
-      let f = self.parse_type_suffixes(vty, fname)
+      let extra = self.parse_declarator(spec.base_type)
       if self.token == Colon {
         self.advance()
         let _ = self.parse_assign()
       }
-      fields.push(f)
+      fields.push({ ty: extra.ty, name: extra.name })
     }
     self.expect(Semicolon)
   }
