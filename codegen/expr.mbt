@@ -97,7 +97,11 @@ fn Codegen::type_of(
     PrefixDec(e) => self.type_of(e, frame_size)
     PostfixInc(e) => self.type_of(e, frame_size)
     PostfixDec(e) => self.type_of(e, frame_size)
-    Ternary(_, then_, _) => self.type_of(then_, frame_size)
+    Ternary(_, then_, else_) =>
+      ternary_result_type(
+        self.type_of(then_, frame_size),
+        self.type_of(else_, frame_size),
+      )
     LabelAddr(_) => Pointer(Void)
     VaArg(_, ty) => ty
     OffsetOf(_, _) => SInt
@@ -105,6 +109,18 @@ fn Codegen::type_of(
     Cast(ty, _) => ty
     Array(_) => SInt
     _ => SInt
+  }
+}
+
+///|
+fn ternary_result_type(
+  then_ty : @parser.Type,
+  else_ty : @parser.Type,
+) -> @parser.Type {
+  match (then_ty, else_ty) {
+    (Array(elem, _), _) => Pointer(elem)
+    (_, Array(elem, _)) => Pointer(elem)
+    _ => then_ty
   }
 }
 

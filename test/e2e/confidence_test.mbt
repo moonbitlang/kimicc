@@ -604,3 +604,29 @@ async test "e2e builtin memcpy preserves args before nested size call" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")
 }
+
+///|
+async test "e2e ternary array operands decay before indexing" {
+  let source =
+    #|typedef struct Cell Cell;
+    #|struct Cell { int value; };
+    #|
+    #|int pick(int grow) {
+    #|  Cell a = {11};
+    #|  Cell b = {22};
+    #|  Cell *ap_new[2];
+    #|  Cell *ap_old[1];
+    #|  int n_new = grow ? 2 : 1;
+    #|  int n_old = 1;
+    #|  ap_new[0] = &a;
+    #|  ap_new[1] = &b;
+    #|  ap_old[0] = &b;
+    #|  return (n_new > n_old ? ap_new : ap_old)[n_old - 1]->value;
+    #|}
+    #|
+    #|int main(void) {
+    #|  return pick(1) == 11 && pick(0) == 22 ? 0 : 1;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
