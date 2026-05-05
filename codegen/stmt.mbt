@@ -181,7 +181,7 @@ fn Codegen::gen_stmt(
             }
             (Struct(_) | Union(_), rhs) => {
               // Struct/union initialization from another struct: use memcpy
-              self.gen_addr(rhs, frame_size)
+              self.gen_aggregate_addr(rhs, frame_size)
               self.emit("\tstr\tx9, [sp, #-16]!")
               self.emit_local_addr(offset, frame_size)
               self.emit("\tstr\tx9, [sp, #-16]!")

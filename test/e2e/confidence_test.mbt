@@ -630,3 +630,31 @@ async test "e2e ternary array operands decay before indexing" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="0")
 }
+
+///|
+async test "e2e struct ternary assignment copies selected operand" {
+  let source =
+    #|struct Token {
+    #|  char *z;
+    #|  int n;
+    #|};
+    #|
+    #|int zero(void) {
+    #|  return 0;
+    #|}
+    #|
+    #|int main(void) {
+    #|  struct Token a;
+    #|  struct Token b;
+    #|  struct Token out;
+    #|  a.z = "alpha";
+    #|  a.n = 40;
+    #|  b.z = "beta";
+    #|  b.n = 1;
+    #|  zero();
+    #|  out = (b.n == 0 ? b : a);
+    #|  return out.n + out.z[0] - 'a';
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="40")
+}

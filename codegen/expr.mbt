@@ -885,7 +885,7 @@ fn Codegen::gen_expr(
         match lhs_ty {
           Struct(_) | Union(_) => {
             // Struct/union assignment: use memcpy via addresses
-            self.gen_addr(rhs, frame_size)
+            self.gen_aggregate_addr(rhs, frame_size)
             self.emit("\tstr\tx9, [sp, #-16]!")
             self.gen_addr(lhs, frame_size)
             self.emit("\tstr\tx9, [sp, #-16]!")
@@ -1322,7 +1322,7 @@ fn Codegen::gen_expr(
               Struct(_) | Union(_) => {
                 let size = self.type_size(arg_types[i])
                 if size > 8 && size <= 16 {
-                  self.gen_expr(args[i], frame_size)
+                  self.gen_aggregate_addr(args[i], frame_size)
                   self.emit("\tldr\tx10, [x9]")
                   self.emit(
                     "\tstr\tx10, [sp, #" +
@@ -1337,7 +1337,7 @@ fn Codegen::gen_expr(
                   )
                   slot_idx += 2
                 } else {
-                  self.gen_expr(args[i], frame_size)
+                  self.gen_aggregate_addr(args[i], frame_size)
                   self.emit(
                     "\tstr\tx9, [sp, #" +
                     (backup_offset + slot_idx * 8).to_string() +
@@ -1533,7 +1533,7 @@ fn Codegen::gen_expr(
                 let size = self.type_size(arg_types[i])
                 if size > 8 && size <= 16 {
                   // Composite type: load contents from address in x9 into two slots
-                  self.gen_expr(args[i], frame_size)
+                  self.gen_aggregate_addr(args[i], frame_size)
                   self.emit("\tldr\tx10, [x9]")
                   self.emit(
                     "\tstr\tx10, [sp, #" + (slot_idx * 8).to_string() + "]",
@@ -1546,7 +1546,7 @@ fn Codegen::gen_expr(
                   )
                   slot_idx += 2
                 } else {
-                  self.gen_expr(args[i], frame_size)
+                  self.gen_aggregate_addr(args[i], frame_size)
                   self.emit(
                     "\tstr\tx9, [sp, #" + (slot_idx * 8).to_string() + "]",
                   )
@@ -2087,6 +2087,33 @@ fn Codegen::gen_expr(
       self.emit_load_int("x9", offset.to_int64())
     }
     _ => self.emit("\tmov\tx9, #0")
+  }
+}
+
+///|
+fn Codegen::gen_aggregate_addr(
+  self : Codegen,
+  expr : @parser.Expr,
+  frame_size : Int,
+) -> Unit {
+  match expr {
+    Ternary(cond, then_expr, else_expr) => {
+      let else_label = self.new_label()
+      let end_label = self.new_label()
+      self.gen_expr(cond, frame_size)
+      self.emit("\tcbz\tx9, " + else_label)
+      self.gen_aggregate_addr(then_expr, frame_size)
+      self.emit("\tb\t" + end_label)
+      self.emit(else_label + ":")
+      self.gen_aggregate_addr(else_expr, frame_size)
+      self.emit(end_label + ":")
+    }
+    Binary(",", left, right) => {
+      self.gen_expr(left, frame_size)
+      self.gen_aggregate_addr(right, frame_size)
+    }
+    Assign(_, _) => self.gen_expr(expr, frame_size)
+    _ => self.gen_addr(expr, frame_size)
   }
 }
 

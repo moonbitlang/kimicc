@@ -45,8 +45,8 @@ Passing kimicc SQLite e2e tests:
   indexes, constraints, transactions, `insert ... select`, updates, ordered
   selects, and aggregate queries.
 - Manually link SQLite's public Tcl `testfixture` with kimicc's SQLite object
-  and pass public `test/select1.test` through `test/select9.test` with 0
-  errors across 37299 tests.
+  and pass public `test/select1.test` through `test/selectH.test` with 0
+  errors across 37796 tests.
 
 This is useful smoke coverage, not a claim that SQLite passes its test suite.
 
@@ -120,6 +120,8 @@ amalgamation fixture and focused e2e regressions in version control.
 | Passed | Public SQLite Tcl `select2.test` | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/test/select2.test` after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The kimicc-built SQLite testfixture now passes `select2.test`: 0 errors out of 21 tests. This covers nested SELECTs, large insert batches, btree page balancing, index creation, and indexed lookup checks. |
 | Passed | Public SQLite Tcl `select3.test` through `select5.test` | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/test/select3.test`; same for `select4.test` and `select5.test` after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The kimicc-built SQLite testfixture passes `select3.test` (0/91 errors), `select4.test` (0/124 errors), and `select5.test` (0/35 errors). No new compiler failure class was exposed in this batch. |
 | Passed | Public SQLite Tcl `select6.test` through `select9.test` | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/test/select6.test`; same for `select7.test`, `select8.test`, and `select9.test` after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The kimicc-built SQLite testfixture passes `select6.test` (0/88 errors), `select7.test` (0/27 errors), `select8.test` (0/4 errors), and `select9.test` (0/36717 errors). No new compiler failure class was exposed in this batch. |
+| Fixed | Aggregate conditional operator source addresses | `moon test test/e2e --target native --filter 'e2e struct ternary assignment copies selected operand'` | Public `selectC.test` crashed in `selectC-2.1` while preparing a trigger. The reduced parser action was `Token out = cond ? a : b` expressed as a struct assignment: kimicc asked `gen_addr` for the conditional expression, got no fresh address, and then copied 16 bytes from a stale call result. Aggregate copy sources now use `gen_aggregate_addr`, which selects the correct branch address for ternary aggregate expressions and is shared by struct/union assignments, local aggregate initializers, and aggregate call arguments. |
+| Passed | Public SQLite Tcl `selectA.test` through `selectH.test` | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/test/selectA.test`; same for `selectB.test` through `selectH.test` after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The kimicc-built SQLite testfixture passes `selectA.test` (0/231 errors), `selectB.test` (0/171 errors), `selectC.test` (0/30 errors), `selectD.test` (0/32 errors), `selectE.test` (0/8 errors), `selectF.test` (0/3 errors), `selectG.test` (0/4 errors), and `selectH.test` (0/18 errors). |
 
 ## Execution Plan
 
