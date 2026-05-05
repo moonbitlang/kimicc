@@ -364,7 +364,7 @@ fn Parser::parse_enum_type_specifier(self : Parser) -> Type {
           let value = if self.token == Assign {
             self.advance()
             let expr = self.parse_assign()
-            match fold_const(expr) {
+            match self.fold_const(expr) {
               Some(n) => n
               None => next_value
             }
@@ -395,7 +395,7 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] {
     let decl = self.parse_declarator(spec.base_type)
     let bit_width = if self.token == Colon {
       self.advance()
-      match fold_const(self.parse_assign()) {
+      match self.fold_const(self.parse_assign()) {
         Some(n) => Some(n.to_int())
         None => abort("Bit-field width must be a constant integer")
       }
@@ -410,7 +410,7 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] {
       let extra = self.parse_declarator(spec.base_type)
       let extra_bit_width = if self.token == Colon {
         self.advance()
-        match fold_const(self.parse_assign()) {
+        match self.fold_const(self.parse_assign()) {
           Some(n) => Some(n.to_int())
           None => abort("Bit-field width must be a constant integer")
         }
@@ -550,7 +550,7 @@ fn Parser::parse_declarator_suffixes(
         } else {
           let size_expr = self.parse_assign()
           self.expect(RBracket)
-          match fold_const(size_expr) {
+          match self.fold_const(size_expr) {
             Some(n) => n.to_int()
             None => 0
           }
@@ -609,7 +609,7 @@ fn Parser::parse_abstract_declarator_suffixes(
         } else {
           let size_expr = self.parse_assign()
           self.expect(RBracket)
-          match fold_const(size_expr) {
+          match self.fold_const(size_expr) {
             Some(n) => n.to_int()
             None => 0
           }

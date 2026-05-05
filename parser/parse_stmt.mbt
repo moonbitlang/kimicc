@@ -116,7 +116,7 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
     Case => {
       self.advance()
       let expr = self.parse_assign()
-      let value = match fold_const(expr) {
+      let value = match self.fold_const(expr) {
         Some(n) => n
         None =>
           match expr {

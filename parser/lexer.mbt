@@ -761,6 +761,94 @@ fn Lexer::read_ident(self : Lexer) -> Token {
 }
 
 ///|
+fn hex_digit_value(ch : Char) -> Int? {
+  if ch >= '0' && ch <= '9' {
+    Some(ch.to_int() - '0'.to_int())
+  } else if ch >= 'a' && ch <= 'f' {
+    Some(ch.to_int() - 'a'.to_int() + 10)
+  } else if ch >= 'A' && ch <= 'F' {
+    Some(ch.to_int() - 'A'.to_int() + 10)
+  } else {
+    None
+  }
+}
+
+///|
+fn Lexer::read_escape_value(self : Lexer) -> Int64 {
+  let next = self.peek()
+  if next >= '0' && next <= '7' {
+    let mut value = 0
+    let mut count = 0
+    while count < 3 && self.peek() >= '0' && self.peek() <= '7' {
+      value = value * 8 + (self.peek().to_int() - '0'.to_int())
+      self.advance()
+      count += 1
+    }
+    return value.to_int64()
+  }
+  match next {
+    'n' => {
+      self.advance()
+      '\n'.to_int().to_int64()
+    }
+    't' => {
+      self.advance()
+      '\t'.to_int().to_int64()
+    }
+    'r' => {
+      self.advance()
+      '\r'.to_int().to_int64()
+    }
+    'a' => {
+      self.advance()
+      7L
+    }
+    'b' => {
+      self.advance()
+      8L
+    }
+    'f' => {
+      self.advance()
+      12L
+    }
+    'v' => {
+      self.advance()
+      11L
+    }
+    '\\' => {
+      self.advance()
+      '\\'.to_int().to_int64()
+    }
+    '\'' => {
+      self.advance()
+      '\''.to_int().to_int64()
+    }
+    '"' => {
+      self.advance()
+      '"'.to_int().to_int64()
+    }
+    'x' => {
+      self.advance()
+      let mut value = 0
+      while true {
+        match hex_digit_value(self.peek()) {
+          Some(digit) => {
+            value = value * 16 + digit
+            self.advance()
+          }
+          None => break
+        }
+      }
+      value.to_int64()
+    }
+    _ => {
+      self.advance()
+      next.to_int().to_int64()
+    }
+  }
+}
+
+///|
 fn Lexer::read_string(self : Lexer) -> Token {
   self.advance() // skip opening "
   let buf = StringBuilder::new()
@@ -768,33 +856,8 @@ fn Lexer::read_string(self : Lexer) -> Token {
     let ch = self.peek()
     if ch == '\\' {
       self.advance()
-      let next = self.peek()
-      match next {
-        'n' => {
-          buf.write_char('\n')
-          self.advance()
-        }
-        't' => {
-          buf.write_char('\t')
-          self.advance()
-        }
-        '\\' => {
-          buf.write_char('\\')
-          self.advance()
-        }
-        '"' => {
-          buf.write_char('"')
-          self.advance()
-        }
-        '0' => {
-          buf.write_char('\u0000')
-          self.advance()
-        }
-        _ => {
-          buf.write_char(next)
-          self.advance()
-        }
-      }
+      let value = self.read_escape_value()
+      buf.write_char(value.to_int().unsafe_to_char())
     } else {
       buf.write_char(ch)
       self.advance()
@@ -814,65 +877,7 @@ fn Lexer::read_char(self : Lexer) -> Token {
   let mut value : Int64 = 0
   if ch == '\\' {
     self.advance()
-    let next = self.peek()
-    if next >= '0' && next <= '7' {
-      // Octal escape: \0, \01, \012
-      value = 0
-      let mut count = 0
-      while count < 3 && self.peek() >= '0' && self.peek() <= '7' {
-        value = value * 8 + (self.peek().to_int() - '0'.to_int()).to_int64()
-        self.advance()
-        count += 1
-      }
-    } else {
-      match next {
-        'n' => {
-          value = '\n'.to_int().to_int64()
-          self.advance()
-        }
-        't' => {
-          value = '\t'.to_int().to_int64()
-          self.advance()
-        }
-        'r' => {
-          value = '\r'.to_int().to_int64()
-          self.advance()
-        }
-        '\\' => {
-          value = '\\'.to_int().to_int64()
-          self.advance()
-        }
-        '\'' => {
-          value = '\''.to_int().to_int64()
-          self.advance()
-        }
-        '"' => {
-          value = '"'.to_int().to_int64()
-          self.advance()
-        }
-        'x' => {
-          self.advance()
-          value = 0
-          while true {
-            let c = self.peek()
-            if c >= '0' && c <= '9' {
-              value = value * 16 + (c.to_int() - '0'.to_int()).to_int64()
-            } else if c >= 'a' && c <= 'f' {
-              value = value * 16 + (c.to_int() - 'a'.to_int() + 10).to_int64()
-            } else if c >= 'A' && c <= 'F' {
-              value = value * 16 + (c.to_int() - 'A'.to_int() + 10).to_int64()
-            } else {
-              break
-            }
-            self.advance()
-          }
-        }
-        _ => {
-          value = next.to_int().to_int64()
-          self.advance()
-        }
-      }
-    }
+    value = self.read_escape_value()
   } else {
     value = ch.to_int().to_int64()
     self.advance()

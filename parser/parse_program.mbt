@@ -166,7 +166,7 @@ fn Parser::parse_enum(self : Parser) -> Unit {
     let value = if self.token == Assign {
       self.advance()
       let expr = self.parse_assign()
-      match fold_const(expr) {
+      match self.fold_const(expr) {
         Some(n) => n
         None => next_value
       }

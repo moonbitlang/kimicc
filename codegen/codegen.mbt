@@ -41,6 +41,131 @@ fn escape_string(s : String) -> String {
 }
 
 ///|
+fn reloc_with_offset(base : String, offset : Int) -> String {
+  if offset == 0 {
+    base
+  } else if offset > 0 {
+    base + "+" + offset.to_string()
+  } else {
+    base + offset.to_string()
+  }
+}
+
+///|
+fn Codegen::global_expr_type(
+  self : Codegen,
+  expr : @parser.Expr,
+) -> @parser.Type {
+  match expr {
+    Var(name) =>
+      if self.globals.contains(name) {
+        self.globals[name].ty
+      } else {
+        Pointer(Void)
+      }
+    Cast(ty, _) => ty
+    AddrOf(e) => Pointer(self.global_expr_type(e))
+    ArrayAccess(base, _) =>
+      match self.global_expr_type(base) {
+        Array(elem, _) | Pointer(elem) => elem
+        _ => SInt
+      }
+    MemberAccess(obj, field) =>
+      match self.global_expr_type(obj) {
+        Struct(name) | Union(name) =>
+          match self.find_field_layout(name, field) {
+            Some((_, ty, _, _, _, _)) => ty
+            None => SInt
+          }
+        Pointer(Struct(name)) | Pointer(Union(name)) =>
+          match self.find_field_layout(name, field) {
+            Some((_, ty, _, _, _, _)) => ty
+            None => SInt
+          }
+        _ => SInt
+      }
+    _ => SInt
+  }
+}
+
+///|
+fn Codegen::global_lvalue_reloc(
+  self : Codegen,
+  expr : @parser.Expr,
+) -> (String, Int)? {
+  match expr {
+    Var(name) => Some(("_" + name, 0))
+    ArrayAccess(base, index) =>
+      match self.global_lvalue_reloc(base) {
+        Some((label, base_offset)) => {
+          let elem_size = match self.global_expr_type(base) {
+            Array(elem, _) | Pointer(elem) => self.type_size(elem)
+            _ => 1
+          }
+          match @parser.fold_const(index) {
+            Some(i) => Some((label, base_offset + i.to_int() * elem_size))
+            None => None
+          }
+        }
+        None => None
+      }
+    MemberAccess(obj, field) =>
+      match self.global_lvalue_reloc(obj) {
+        Some((label, base_offset)) =>
+          match self.global_expr_type(obj) {
+            Struct(name)
+            | Union(name)
+            | Pointer(Struct(name))
+            | Pointer(Union(name)) =>
+              match self.find_field_layout(name, field) {
+                Some((_, _, field_offset, _, _, _)) =>
+                  Some((label, base_offset + field_offset))
+                None => None
+              }
+            _ => None
+          }
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
+fn Codegen::global_address_reloc(
+  self : Codegen,
+  expr : @parser.Expr,
+) -> String? {
+  match expr {
+    Cast(_, e) => self.global_address_reloc(e)
+    AddrOf(e) =>
+      match self.global_lvalue_reloc(e) {
+        Some((label, offset)) => Some(reloc_with_offset(label, offset))
+        None => None
+      }
+    Var(name) => Some("_" + name)
+    Binary("+", base, offset_expr) =>
+      match (self.global_address_reloc(base), @parser.fold_const(offset_expr)) {
+        (Some(label), Some(offset)) =>
+          Some(reloc_with_offset(label, offset.to_int()))
+        _ =>
+          match
+            (self.global_address_reloc(offset_expr), @parser.fold_const(base)) {
+            (Some(label), Some(offset)) =>
+              Some(reloc_with_offset(label, offset.to_int()))
+            _ => None
+          }
+      }
+    Binary("-", base, offset_expr) =>
+      match (self.global_address_reloc(base), @parser.fold_const(offset_expr)) {
+        (Some(label), Some(offset)) =>
+          Some(reloc_with_offset(label, -offset.to_int()))
+        _ => None
+      }
+    _ => None
+  }
+}
+
+///|
 pub fn Codegen::new() -> Codegen {
   {
     output: StringBuilder::new(),
@@ -71,6 +196,17 @@ fn Codegen::emit_global_scalar(
   ty : @parser.Type,
   expr : @parser.Expr,
 ) -> Unit {
+  match ty {
+    Pointer(_) =>
+      match self.global_address_reloc(expr) {
+        Some(reloc) => {
+          self.emit("\t.quad\t" + reloc)
+          return
+        }
+        None => ()
+      }
+    _ => ()
+  }
   // Try constant-fold the expression first
   let folded_expr = match @parser.fold_const(expr) {
     Some(n) => @parser.Expr::Number(n)

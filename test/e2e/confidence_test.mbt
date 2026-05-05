@@ -161,6 +161,50 @@ async test "e2e bitfields pack after byte fields like clang" {
 }
 
 ///|
+async test "e2e local array sized by struct tail constant" {
+  let source =
+    #|struct ParseLike {
+    #|  int header;
+    #|  long aligned;
+    #|  char tail[17];
+    #|};
+    #|int main() {
+    #|  char save[sizeof(struct ParseLike) - __builtin_offsetof(struct ParseLike, tail)];
+    #|  save[0] = 40;
+    #|  save[16] = 2;
+    #|  return save[0] + save[16];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e global pointer initialized to array element" {
+  let source =
+    #|unsigned char table[4] = {1, 40, 9, 2};
+    #|unsigned char *p = &table[1];
+    #|int main() {
+    #|  return p[0] + p[2];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e string literal octal escapes" {
+  let source =
+    #|int main() {
+    #|  char *s = "\100\040\040";
+    #|  if (s[0] != 64) return 1;
+    #|  if (s[1] != 32) return 2;
+    #|  if (s[2] != 32) return 3;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e builtin string call preserves earlier args" {
   let source =
     #|char *right_arg() {
