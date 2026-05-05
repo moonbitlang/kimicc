@@ -481,6 +481,27 @@ fn Codegen::emit_builtin_lib_call(
 }
 
 ///|
+fn Codegen::emit_lowered_builtin_call(
+  self : Codegen,
+  target : String,
+  args : Array[@parser.Expr],
+  fixed_indexes : Array[Int],
+  rest_start : Int,
+  frame_size : Int,
+) -> Unit {
+  let lowered_args = []
+  for index in fixed_indexes {
+    if index < args.length() {
+      lowered_args.push(args[index])
+    }
+  }
+  for i = rest_start; i < args.length(); i = i + 1 {
+    lowered_args.push(args[i])
+  }
+  self.gen_expr(Call(Var(target), lowered_args), frame_size)
+}
+
+///|
 fn Codegen::emit_builtin_call(
   self : Codegen,
   name : String,
@@ -678,6 +699,72 @@ fn Codegen::emit_builtin_call(
         self.emit_builtin_lib_call("_strcat", args, 2, frame_size)
       }
       self.emit("\tmov\tx9, x0")
+      true
+    }
+    "__builtin___strncpy_chk" => {
+      self.emit_lowered_builtin_call(
+        "strncpy",
+        args,
+        [0, 1, 2],
+        args.length(),
+        frame_size,
+      )
+      true
+    }
+    "__builtin___strncat_chk" => {
+      self.emit_lowered_builtin_call(
+        "strncat",
+        args,
+        [0, 1, 2],
+        args.length(),
+        frame_size,
+      )
+      true
+    }
+    "__builtin___snprintf_chk" => {
+      self.emit_lowered_builtin_call("snprintf", args, [0, 1, 4], 5, frame_size)
+      true
+    }
+    "__builtin___vsnprintf_chk" => {
+      self.emit_lowered_builtin_call(
+        "vsnprintf",
+        args,
+        [0, 1, 4, 5],
+        args.length(),
+        frame_size,
+      )
+      true
+    }
+    "__builtin___sprintf_chk" => {
+      self.emit_lowered_builtin_call("sprintf", args, [0, 3], 4, frame_size)
+      true
+    }
+    "__builtin___vsprintf_chk" => {
+      self.emit_lowered_builtin_call(
+        "vsprintf",
+        args,
+        [0, 3, 4],
+        args.length(),
+        frame_size,
+      )
+      true
+    }
+    "__builtin___printf_chk" => {
+      self.emit_lowered_builtin_call("printf", args, [1], 2, frame_size)
+      true
+    }
+    "__builtin___fprintf_chk" => {
+      self.emit_lowered_builtin_call("fprintf", args, [0, 2], 3, frame_size)
+      true
+    }
+    "__builtin___vfprintf_chk" => {
+      self.emit_lowered_builtin_call(
+        "vfprintf",
+        args,
+        [0, 2, 3],
+        args.length(),
+        frame_size,
+      )
       true
     }
     "__builtin_fabs" => {

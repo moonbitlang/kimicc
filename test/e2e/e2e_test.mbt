@@ -414,6 +414,43 @@ async test "__attribute without trailing underscores" {
 }
 
 ///|
+async test "fortified libc builtins lower to unchecked calls" {
+  let source =
+    #|typedef unsigned long size_t;
+    #|typedef __builtin_va_list va_list;
+    #|extern int strcmp(const char *, const char *);
+    #|extern int __builtin___snprintf_chk(char *, size_t, int, size_t, const char *, ...);
+    #|extern int __builtin___sprintf_chk(char *, int, size_t, const char *, ...);
+    #|extern char *__builtin___strncpy_chk(char *, const char *, size_t, size_t);
+    #|extern int __builtin___vsnprintf_chk(char *, size_t, int, size_t, const char *, va_list);
+    #|
+    #|static int format_into(char *buf, const char *fmt, ...) {
+    #|  int n;
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, fmt);
+    #|  n = __builtin___vsnprintf_chk(buf, 32, 0, (size_t)-1, fmt, ap);
+    #|  __builtin_va_end(ap);
+    #|  return n;
+    #|}
+    #|
+    #|int main() {
+    #|  char buf[32];
+    #|  int n = __builtin___snprintf_chk(buf, sizeof(buf), 0, (size_t)-1, "%s-%d", "ok", 7);
+    #|  if (n != 4 || strcmp(buf, "ok-7") != 0) return 1;
+    #|  n = __builtin___sprintf_chk(buf, 0, (size_t)-1, "%s", "xy");
+    #|  if (n != 2 || strcmp(buf, "xy") != 0) return 2;
+    #|  __builtin___strncpy_chk(buf, "abcd", 3, (size_t)-1);
+    #|  buf[3] = 0;
+    #|  if (strcmp(buf, "abc") != 0) return 3;
+    #|  n = format_into(buf, "%s%d", "z", 5);
+    #|  if (n != 2 || strcmp(buf, "z5") != 0) return 4;
+    #|  return 0;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
+
+///|
 async test "parse quickjs preprocessed" {
   let data = @fs.read_file("/tmp/quickjs_preprocessed.c")
   let source = data.text()
