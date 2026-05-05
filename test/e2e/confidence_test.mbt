@@ -935,3 +935,19 @@ async test "e2e va_arg signed int sign-extends into long long" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")
 }
+
+///|
+async test "e2e static local pointer array initializes cast string" {
+  let source =
+    #|typedef unsigned char u8;
+    #|
+    #|int main(void) {
+    #|  static unsigned char * const azOne[] = { (u8*)" " };
+    #|  if (azOne[0] == 0) return 1;
+    #|  if (azOne[0][0] != 32) return 2;
+    #|  if (azOne[0][1] != 0) return 3;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}

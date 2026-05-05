@@ -452,6 +452,7 @@ fn Codegen::emit_global_scalar(
     Var(name) =>
       // Function pointer or address of global in initializer
       self.emit("\t.quad\t_" + name)
+    Cast(_, e) => self.emit_global_scalar(ty, e)
     Array(nested) =>
       // Nested brace initializer: emit as array/struct
       self.emit_global_array(ty, nested)
