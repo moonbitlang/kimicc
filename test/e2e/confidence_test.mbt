@@ -951,3 +951,36 @@ async test "e2e static local pointer array initializes cast string" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")
 }
+
+///|
+async test "e2e direct double return is read from fp register" {
+  let source =
+    #|double add_half(double x) {
+    #|  return x + 0.5;
+    #|}
+    #|
+    #|int main(void) {
+    #|  double y = add_half(41.5);
+    #|  if (y != 42.0) return 1;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e function pointer double return is read from fp register" {
+  let source =
+    #|double add_half(double x) {
+    #|  return x + 0.5;
+    #|}
+    #|
+    #|int main(void) {
+    #|  double (*fp)(double) = add_half;
+    #|  double y = fp(41.5);
+    #|  if (y != 42.0) return 1;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}

@@ -56,20 +56,7 @@ fn Codegen::type_of(
     Unary("!", _) => SInt
     Unary("~", operand) =>
       unary_integer_result_type(self.type_of(operand, frame_size))
-    Call(func, _) =>
-      match func {
-        Var(name) =>
-          if self.func_rets.contains(name) {
-            self.func_rets[name]
-          } else {
-            SInt
-          }
-        _ =>
-          match self.type_of(func, frame_size) {
-            FuncPtr(ret, _, _) => ret
-            _ => SInt
-          }
-      }
+    Call(func, _) => self.call_return_type(func, frame_size)
     Assign(_, rhs) => self.type_of(rhs, frame_size)
     MemberAccess(obj, field) => {
       let obj_ty = self.type_of(obj, frame_size)
@@ -262,6 +249,31 @@ fn Codegen::emit_call_arg_conversion(
   if actual != expected {
     self.emit_numeric_conversion(actual, expected)
     self.emit_scalar_conversion_to(expected)
+  }
+}
+
+///|
+fn Codegen::call_return_type(
+  self : Codegen,
+  func : @parser.Expr,
+  frame_size : Int,
+) -> @parser.Type {
+  match self.type_of(func, frame_size) {
+    FuncPtr(ret, _, _) => ret
+    _ =>
+      match func {
+        Var(name) => self.func_rets.get_or_default(name, SInt)
+        _ => SInt
+      }
+  }
+}
+
+///|
+fn Codegen::emit_call_result(self : Codegen, ret_ty : @parser.Type) -> Unit {
+  match ret_ty {
+    Float => self.emit("\tfmov\tw9, s0")
+    Double => self.emit("\tfmov\tx9, d0")
+    _ => self.emit("\tmov\tx9, x0")
   }
 }
 
@@ -1644,7 +1656,7 @@ fn Codegen::gen_expr(
           if total_stack > 0 {
             self.emit("\tadd\tsp, sp, #" + total_stack.to_string())
           }
-          self.emit("\tmov\tx9, x0")
+          self.emit_call_result(self.call_return_type(func, frame_size))
         } else {
           // Non-variadic calls: evaluate args and save to stack first
           // to prevent nested calls from clobbering register arguments
@@ -1904,16 +1916,7 @@ fn Codegen::gen_expr(
           if aligned_stack_arg > 0 {
             self.emit("\tadd\tsp, sp, #" + aligned_stack_arg.to_string())
           }
-          // Move return value to x9 (raw bits for FP)
-          let ret_ty = match func {
-            Var(name) => self.func_rets.get_or_default(name, SInt)
-            _ => SInt
-          }
-          match ret_ty {
-            Float => self.emit("\tfmov\tw9, s0")
-            Double => self.emit("\tfmov\tx9, d0")
-            _ => self.emit("\tmov\tx9, x0")
-          }
+          self.emit_call_result(self.call_return_type(func, frame_size))
         }
       }
     }
