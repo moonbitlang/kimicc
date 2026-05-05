@@ -406,11 +406,29 @@ async test "ternary with comma operator" {
 }
 
 ///|
-async test "parse sqlite3 preprocessed" {
-  let data = @fs.read_file("/tmp/sqlite3_preprocessed.c")
+async test "sqlite fixture preprocesses and assembles" {
+  let preprocessed_path = "/tmp/kimicc_sqlite3_preprocessed.c"
+  let asm_path = "/tmp/kimicc_sqlite3.s"
+  let obj_path = "/tmp/kimicc_sqlite3.o"
+  let pp_rc = moonbit_system(
+    @utf8.encode(
+      "clang -E test/fixtures/sqlite/sqlite3.c -o " + preprocessed_path,
+    ),
+  )
+  if pp_rc != 0 {
+    abort("SQLite preprocess failed with code: " + pp_rc.to_string())
+  }
+  let data = @fs.read_file(preprocessed_path)
   let source = data.text()
   let assembly = compile(source)
   assert_true(assembly.contains("_sqlite3_open:"))
+  let _ = moonbit_write_file(@utf8.encode(asm_path), @utf8.encode(assembly))
+  let asm_rc = moonbit_system(
+    @utf8.encode("clang -c -o " + obj_path + " " + asm_path),
+  )
+  if asm_rc != 0 {
+    abort("SQLite assemble failed with code: " + asm_rc.to_string())
+  }
 }
 
 ///|
