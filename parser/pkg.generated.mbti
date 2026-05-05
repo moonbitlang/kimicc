@@ -79,6 +79,7 @@ pub struct Parser {
   globals : Array[GlobalDecl]
   mut current_func_name : String
   mut static_locals : Map[String, String]
+  mut case_label_counter : Int
 }
 pub fn Parser::new(Lexer) -> Self
 
@@ -98,7 +99,7 @@ pub(all) enum Stmt {
   VarDecl(Type, String, Expr?)
   Break
   Continue
-  Switch(Expr, Stmt?, Array[(Int64?, Stmt)])
+  Switch(Expr, Stmt, Array[(Int64?, String)])
   Goto(String)
   Label(String, Stmt)
   For(Stmt?, Expr, Expr?, Stmt)

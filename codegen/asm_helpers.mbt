@@ -148,15 +148,23 @@ fn is_numeric_case_label(name : String) -> Bool {
 }
 
 ///|
-// Case/default labels get unique anonymous labels (they are never goto targets).
-// Regular labels are scoped to the function and sanitized.
+// Case/default labels and regular labels both need stable assembly labels:
+// switch dispatch may reference a case label before its statement is emitted.
 fn Codegen::label_ref(self : Codegen, name : String) -> String {
-  if name == "default" || is_numeric_case_label(name) {
-    // Case/default labels are never goto targets; each gets a fresh unique label
-    self.new_label()
-  } else {
-    // Regular label: scoped to function, sanitized
-    "_" + self.func_name + "_label_" + sanitize_label(name)
+  match self.emitted_labels.get(name) {
+    Some(label) => label
+    None => {
+      let label = if name == "default" ||
+        is_numeric_case_label(name) ||
+        name.starts_with("__kimicc_case_") ||
+        name.starts_with("__kimicc_default_") {
+        self.new_label()
+      } else {
+        "_" + self.func_name + "_label_" + sanitize_label(name)
+      }
+      self.emitted_labels[name] = label
+      label
+    }
   }
 }
 

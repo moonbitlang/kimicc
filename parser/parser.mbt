@@ -10,6 +10,7 @@ pub struct Parser {
   globals : Array[GlobalDecl]
   mut current_func_name : String
   mut static_locals : Map[String, String]
+  mut case_label_counter : Int
 }
 
 ///|
@@ -25,6 +26,7 @@ pub fn Parser::new(lexer : Lexer) -> Parser {
     globals: [],
     current_func_name: "",
     static_locals: {},
+    case_label_counter: 0,
   }
   p.advance()
   p

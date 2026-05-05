@@ -42,3 +42,42 @@ async test "sqlite object supports basic api smoke" {
   }
   assert_true(result.output.contains("basic-api-ok"))
 }
+
+///|
+async test "sqlite object prepares and steps simple select" {
+  let driver =
+    #|#include "sqlite3.h"
+    #|#include <stdio.h>
+    #|
+    #|int main(void) {
+    #|  sqlite3 *db = 0;
+    #|  sqlite3_stmt *stmt = 0;
+    #|  int rc = sqlite3_open(":memory:", &db);
+    #|  if (rc != SQLITE_OK) {
+    #|    printf("open rc=%d err=%s\n", rc, db ? sqlite3_errmsg(db) : "null");
+    #|    return 1;
+    #|  }
+    #|  rc = sqlite3_prepare_v2(db, "select 1;", -1, &stmt, 0);
+    #|  if (rc != SQLITE_OK) {
+    #|    printf("prepare rc=%d err=%s\n", rc, sqlite3_errmsg(db));
+    #|    sqlite3_close(db);
+    #|    return 2;
+    #|  }
+    #|  rc = sqlite3_step(stmt);
+    #|  if (rc != SQLITE_ROW) {
+    #|    printf("step rc=%d\n", rc);
+    #|    sqlite3_finalize(stmt);
+    #|    sqlite3_close(db);
+    #|    return 3;
+    #|  }
+    #|  printf("select-value=%d\n", sqlite3_column_int(stmt, 0));
+    #|  sqlite3_finalize(stmt);
+    #|  sqlite3_close(db);
+    #|  return 0;
+    #|}
+  let result = run_driver_with_sqlite_object(driver, "sqlite_prepare_step")
+  if result.code != 0 {
+    abort("SQLite prepare/step failed:\n" + result.output)
+  }
+  assert_true(result.output.contains("select-value=1"))
+}

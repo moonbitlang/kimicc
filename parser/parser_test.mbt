@@ -216,22 +216,19 @@ test "parse switch" {
     Some(Compound(stmts)) => {
       inspect(stmts.length(), content="4")
       match stmts[2] {
-        Switch(_, prelude, cases) => {
-          assert_true(prelude is None)
+        Switch(_, body, cases) => {
+          assert_true(body is Compound(_))
           inspect(cases.length(), content="3")
           match cases[0] {
-            (Some(1), StmtList([ExprStmt(Assign(Var("r"), Number(10))), Break])) =>
-              ()
+            (Some(1), _) => ()
             _ => fail("Expected case 1")
           }
           match cases[1] {
-            (Some(2), StmtList([ExprStmt(Assign(Var("r"), Number(20))), Break])) =>
-              ()
+            (Some(2), _) => ()
             _ => fail("Expected case 2")
           }
           match cases[2] {
-            (None, StmtList([ExprStmt(Assign(Var("r"), Number(30))), Break])) =>
-              ()
+            (None, _) => ()
             _ => fail("Expected default")
           }
         }

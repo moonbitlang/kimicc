@@ -131,13 +131,15 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
       }
       self.expect(Colon)
       let stmt = self.parse_stmt()
-      Label("case_" + value.to_string(), stmt)
+      let label = self.fresh_case_label(value)
+      Label(label, stmt)
     }
     Default => {
       self.advance()
       self.expect(Colon)
       let stmt = self.parse_stmt()
-      Label("default", stmt)
+      let label = self.fresh_default_label()
+      Label(label, stmt)
     }
     Ident(name) => {
       // Handle GCC inline assembly: asm volatile ("..." ::: "memory");
@@ -327,26 +329,88 @@ fn Parser::parse_continue_stmt(self : Parser) -> Stmt {
 
 ///|
 fn extract_case_value(name : String) -> Int64? {
-  if name == "default" {
-    return None
-  }
-  if not(name.starts_with("case_")) {
+  let prefix_len = if name.starts_with("__kimicc_case_") {
+    "__kimicc_case_".length()
+  } else if name.starts_with("case_") {
+    5
+  } else {
     return None
   }
   let mut case_value : Int64 = 0
   let mut negative = false
-  for i = 5; i < name.length(); i = i + 1 {
+  let mut saw_digit = false
+  for i = prefix_len; i < name.length(); i = i + 1 {
     let ch = name[i]
     if ch >= '0' && ch <= '9' {
+      saw_digit = true
       case_value = case_value * 10 + (ch.to_int() - '0'.to_int()).to_int64()
-    } else if ch == '-' && i == 5 {
+    } else if ch == '-' && i == prefix_len {
       negative = true
+    } else if saw_digit {
+      break
     }
   }
   if negative {
     case_value = -case_value
   }
   Some(case_value)
+}
+
+///|
+fn is_default_label(name : String) -> Bool {
+  name == "default" || name.starts_with("__kimicc_default_")
+}
+
+///|
+fn Parser::fresh_case_label(self : Parser, value : Int64) -> String {
+  let label = "__kimicc_case_" +
+    value.to_string() +
+    "_" +
+    self.case_label_counter.to_string()
+  self.case_label_counter += 1
+  label
+}
+
+///|
+fn Parser::fresh_default_label(self : Parser) -> String {
+  let label = "__kimicc_default_" + self.case_label_counter.to_string()
+  self.case_label_counter += 1
+  label
+}
+
+///|
+fn collect_switch_cases(stmt : Stmt, cases : Array[(Int64?, String)]) -> Unit {
+  match stmt {
+    Label(name, body) => {
+      match extract_case_value(name) {
+        Some(value) => cases.push((Some(value), name))
+        None => if is_default_label(name) { cases.push((None, name)) }
+      }
+      collect_switch_cases(body, cases)
+    }
+    Compound(stmts) | StmtList(stmts) =>
+      for s in stmts {
+        collect_switch_cases(s, cases)
+      }
+    If(_, then_, else_) => {
+      collect_switch_cases(then_, cases)
+      match else_ {
+        Some(s) => collect_switch_cases(s, cases)
+        None => ()
+      }
+    }
+    While(_, body) | DoWhile(_, body) => collect_switch_cases(body, cases)
+    For(init, _, _, body) => {
+      match init {
+        Some(s) => collect_switch_cases(s, cases)
+        None => ()
+      }
+      collect_switch_cases(body, cases)
+    }
+    // A nested switch owns its own case/default labels.
+    Switch(_, _, _) => ()
+    _ => ()
+  }
 }
 
 ///|
@@ -361,64 +425,10 @@ fn Parser::parse_switch_stmt(self : Parser) -> Stmt {
     stmts.push(self.parse_stmt())
   }
   self.expect(RBrace)
-  // Post-process statements to group by case/default labels
-  let mut prelude = None
+  let body = Compound(stmts)
   let cases = []
-  let mut current_stmts = []
-  let mut current_value = None
-  let mut seen_case = false
-  fn flush_case(value : Int64?, stmts : Array[Stmt]) -> Unit {
-    if stmts.length() > 0 || value.is_some() {
-      cases.push((value, StmtList(stmts)))
-    }
-  }
-  for stmt in stmts {
-    let mut current_stmt = stmt
-    while true {
-      match current_stmt {
-        Label(name, body) =>
-          match extract_case_value(name) {
-            Some(value) => {
-              if seen_case {
-                flush_case(current_value, current_stmts)
-              } else if current_stmts.length() > 0 {
-                prelude = Some(StmtList(current_stmts))
-              }
-              current_stmts = []
-              current_value = Some(value)
-              seen_case = true
-              current_stmt = body
-            }
-            None =>
-              if name == "default" {
-                if seen_case {
-                  flush_case(current_value, current_stmts)
-                } else if current_stmts.length() > 0 {
-                  prelude = Some(StmtList(current_stmts))
-                }
-                current_stmts = []
-                current_value = None
-                seen_case = true
-                current_stmt = body
-              } else {
-                // Regular label inside a case
-                current_stmts.push(current_stmt)
-                break
-              }
-          }
-        _ => {
-          current_stmts.push(current_stmt)
-          break
-        }
-      }
-    }
-  }
-  if seen_case {
-    flush_case(current_value, current_stmts)
-  } else if current_stmts.length() > 0 {
-    prelude = Some(StmtList(current_stmts))
-  }
-  Switch(expr, prelude, cases)
+  collect_switch_cases(body, cases)
+  Switch(expr, body, cases)
 }
 
 ///|

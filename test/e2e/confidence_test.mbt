@@ -102,6 +102,31 @@ async test "e2e switch pre-case declarations are not default" {
 }
 
 ///|
+async test "e2e switch dispatch reaches nested case labels" {
+  let source =
+    #|int run(int x) {
+    #|  switch (x) {
+    #|    case 1: {
+    #|      int scratch;
+    #|      if (x == 99) return 99;
+    #|    case 2:
+    #|      scratch = 40;
+    #|      return scratch + 2;
+    #|    }
+    #|    default:
+    #|      return 7;
+    #|  }
+    #|}
+    #|int main() {
+    #|  if (run(3) != 7) return 1;
+    #|  if (run(1) != 42) return 2;
+    #|  return run(2);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e bitfields pack after byte fields like clang" {
   let source =
     #|typedef unsigned int Pgno;

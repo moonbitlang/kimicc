@@ -172,7 +172,7 @@ pub(all) enum Stmt {
   VarDecl(Type, String, Expr?)
   Break
   Continue
-  Switch(Expr, Stmt?, Array[(Int64?, Stmt)])
+  Switch(Expr, Stmt, Array[(Int64?, String)])
   Goto(String)
   Label(String, Stmt)
   For(Stmt?, Expr, Expr?, Stmt)
