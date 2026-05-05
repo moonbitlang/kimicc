@@ -50,8 +50,16 @@ pub impl Show for Type with to_string(self) {
 // Helper: check if type is any integer type (signed or unsigned)
 pub fn Type::is_integer(self : Type) -> Bool {
   match self {
-    SChar | UChar | SShort | UShort | SInt | UInt | SLong | ULong | SLongLong |
-    ULongLong => true
+    SChar
+    | UChar
+    | SShort
+    | UShort
+    | SInt
+    | UInt
+    | SLong
+    | ULong
+    | SLongLong
+    | ULongLong => true
     _ => false
   }
 }
@@ -96,14 +104,12 @@ pub fn Type::size(self : Type) -> Int {
     SShort | UShort => 2
     SInt | UInt | Float => 4
     SLong | ULong | SLongLong | ULongLong | Double | Pointer(_) => 8
-    Struct(name) => {
+    Struct(name) =>
       // Forward reference: we can't compute struct size without the decl.
       // Callers should use codegen's type_size which has struct_decls.
       abort("Cannot compute struct size without struct_decls: " + name)
-    }
-    Union(name) => {
+    Union(name) =>
       abort("Cannot compute union size without struct_decls: " + name)
-    }
     Array(elem, n) => elem.size() * n
     Atomic(ty) => ty.size()
   }
@@ -118,12 +124,10 @@ pub fn Type::align(self : Type) -> Int {
     SShort | UShort => 2
     SInt | UInt | Float => 4
     SLong | ULong | SLongLong | ULongLong | Double | Pointer(_) => 8
-    Struct(name) => {
+    Struct(name) =>
       abort("Cannot compute struct alignment without struct_decls: " + name)
-    }
-    Union(name) => {
+    Union(name) =>
       abort("Cannot compute union alignment without struct_decls: " + name)
-    }
     Array(elem, _) => elem.align()
     Atomic(ty) => ty.align()
   }
@@ -152,6 +156,9 @@ pub(all) enum Expr {
   PostfixDec(Expr)
   Ternary(Expr, Expr, Expr)
   LabelAddr(String)
+  VaArg(Expr, Type)
+  OffsetOf(Type, String)
+  Array(Array[Expr])
 } derive(Eq)
 
 ///|

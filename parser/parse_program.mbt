@@ -8,7 +8,7 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
     if self.token == Assign {
       self.advance()
       if self.token == LBrace {
-        let init_exprs = self.parse_brace_init_exprs()
+        let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
         init = Some(GlobalInit::Array(init_exprs))
       } else {
         init = Some(GlobalInit::Scalar(self.parse_expr()))
@@ -25,13 +25,17 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
       if self.token == Assign {
         self.advance()
         if self.token == LBrace {
-          let init_exprs = self.parse_brace_init_exprs()
+          let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
           extra_init = Some(GlobalInit::Array(init_exprs))
         } else {
           extra_init = Some(GlobalInit::Scalar(self.parse_expr()))
         }
       }
-      self.globals.push({ ty: resolve_var_type(extra), name: extra.name, init: extra_init })
+      self.globals.push({
+        ty: resolve_var_type(extra),
+        name: extra.name,
+        init: extra_init,
+      })
     }
   }
   self.expect(Semicolon)
@@ -71,6 +75,7 @@ fn Parser::parse_program(self : Parser) -> Program {
               self.expect(Semicolon)
             }
             structs.push({ name, fields, is_union })
+            self.struct_decls[name] = { name, fields, is_union }
           } else if self.token == Semicolon {
             // Forward struct declaration: struct Foo;
             self.advance()
@@ -151,7 +156,10 @@ fn Parser::parse_enum(self : Parser) -> Unit {
   while self.token != RBrace {
     self.skip_attributes()
     let name = match self.token {
-      Ident(n) => { self.advance(); n }
+      Ident(n) => {
+        self.advance()
+        n
+      }
       _ => abort("Expected enum constant name")
     }
     self.skip_attributes()

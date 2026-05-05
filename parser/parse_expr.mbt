@@ -331,7 +331,22 @@ fn Parser::parse_unary(self : Parser) -> Expr {
         self.advance() // past (
         // Try to parse as type
         let is_type = match self.token {
-          Int | Void | Char | Struct | Union | Signed | Unsigned | Short | Long | Float | Double | Bool | Enum | Const | Restrict | Volatile => true
+          Int
+          | Void
+          | Char
+          | Struct
+          | Union
+          | Signed
+          | Unsigned
+          | Short
+          | Long
+          | Float
+          | Double
+          | Bool
+          | Enum
+          | Const
+          | Restrict
+          | Volatile => true
           Ident(name) => self.typedefs.contains(name)
           _ => false
         }
@@ -364,7 +379,25 @@ fn Parser::parse_unary(self : Parser) -> Expr {
       self.advance() // past (
       // Try to parse as type
       let is_cast = match self.token {
-        Int | Void | Char | Struct | Union | Signed | Unsigned | Short | Long | Float | Double | Bool | Enum | Const | Restrict | Volatile | Static | Extern | Inline => true
+        Int
+        | Void
+        | Char
+        | Struct
+        | Union
+        | Signed
+        | Unsigned
+        | Short
+        | Long
+        | Float
+        | Double
+        | Bool
+        | Enum
+        | Const
+        | Restrict
+        | Volatile
+        | Static
+        | Extern
+        | Inline => true
         Ident("_Float16") => true
         Ident("__int128") => true
         Ident("_Atomic") => true
@@ -420,7 +453,8 @@ fn Parser::apply_postfix(self : Parser, expr_ : Expr) -> Expr {
             self.advance()
             expr = MemberAccess(expr, name)
           }
-          _ => abort("Expected field name after ., got " + self.token.to_string())
+          _ =>
+            abort("Expected field name after ., got " + self.token.to_string())
         }
       }
       Arrow => {
@@ -492,17 +526,36 @@ fn Parser::parse_primary(self : Parser) -> Expr {
     }
     Ident(name) => {
       self.advance()
+      let resolved_name = if self.static_locals.contains(name) {
+        self.static_locals[name]
+      } else {
+        name
+      }
       if self.token == LParen {
         self.advance()
-        if name == "__builtin_va_arg" || name == "__builtin_offsetof" {
-          // Skip __builtin_va_arg(ap, type) or __builtin_offsetof(type, field) and return dummy value
-          let mut depth = 1
-          while depth > 0 && self.token != EOF {
-            if self.token == LParen { depth += 1 }
-            else if self.token == RParen { depth -= 1 }
-            if depth > 0 { self.advance() } else { self.advance(); break }
+        if name == "__builtin_va_arg" {
+          // Parse __builtin_va_arg(ap, type)
+          let ap_expr = self.parse_assign()
+          self.expect(Comma)
+          let ty = self.parse_type_name()
+          self.expect(RParen)
+          VaArg(ap_expr, ty)
+        } else if name == "__builtin_offsetof" {
+          // Parse __builtin_offsetof(type, field)
+          let ty = self.parse_type_name()
+          self.expect(Comma)
+          let field_name = match self.token {
+            Ident(n) => {
+              self.advance()
+              n
+            }
+            _ => {
+              self.advance()
+              ""
+            }
           }
-          Number(0)
+          self.expect(RParen)
+          OffsetOf(ty, field_name)
         } else {
           let args = []
           if self.token != RParen {
@@ -513,18 +566,18 @@ fn Parser::parse_primary(self : Parser) -> Expr {
             }
           }
           self.expect(RParen)
-          Call(Var(name), args)
+          Call(Var(resolved_name), args)
         }
       } else if name == "__func__" || name == "__FUNCTION__" {
         if self.current_func_name != "" {
           String(self.current_func_name)
         } else {
-          Var(name)
+          Var(resolved_name)
         }
       } else if self.enum_constants.contains(name) {
         Number(self.enum_constants[name])
       } else {
-        Var(name)
+        Var(resolved_name)
       }
     }
     LParen => {
@@ -537,7 +590,10 @@ fn Parser::parse_primary(self : Parser) -> Expr {
       // GCC extension: computed goto &&label
       self.advance()
       let label_name = match self.token {
-        Ident(name) => { self.advance(); name }
+        Ident(name) => {
+          self.advance()
+          name
+        }
         _ => ""
       }
       LabelAddr(label_name)

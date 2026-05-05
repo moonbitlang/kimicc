@@ -96,8 +96,9 @@ test "parse sizeof expr" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([VarDecl(SInt, "x", None), Return(Some(SizeofExpr(Var("x"))))])) =>
-      ()
+    Some(
+      Compound([VarDecl(SInt, "x", None), Return(Some(SizeofExpr(Var("x"))))])
+    ) => ()
     _ => fail("Expected sizeof expr")
   }
 }
@@ -124,7 +125,9 @@ test "parse ternary" {
         [
           VarDecl(SInt, "x", Some(Number(1))),
           VarDecl(SInt, "y", Some(Number(2))),
-          Return(Some(Ternary(Binary(">", Var("x"), Number(0)), Var("y"), Number(0)))),
+          Return(
+            Some(Ternary(Binary(">", Var("x"), Number(0)), Var("y"), Number(0)))
+          ),
         ]
       )
     ) => ()
@@ -138,8 +141,15 @@ test "parse do while" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([VarDecl(SInt, "i", Some(Number(0))), DoWhile(_, _), Return(Some(Var("i")))])) =>
-      ()
+    Some(
+      Compound(
+        [
+          VarDecl(SInt, "i", Some(Number(0))),
+          DoWhile(_, _),
+          Return(Some(Var("i"))),
+        ]
+      )
+    ) => ()
     _ => fail("Expected do-while")
   }
 }
@@ -188,17 +198,18 @@ test "parse goto and label" {
 
 ///|
 test "parse switch" {
-  let source = #|int main() {
-  #|  int x = 2;
-  #|  int r = 0;
-  #|  switch (x) {
-  #|    case 1: r = 10; break;
-  #|    case 2: r = 20; break;
-  #|    default: r = 30; break;
-  #|  }
-  #|  return r;
-  #|}
-  
+  let source =
+    #|int main() {
+    #|  int x = 2;
+    #|  int r = 0;
+    #|  switch (x) {
+    #|    case 1: r = 10; break;
+    #|    case 2: r = 20; break;
+    #|    default: r = 30; break;
+    #|  }
+    #|  return r;
+    #|}
+
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
@@ -208,15 +219,18 @@ test "parse switch" {
         Switch(_, cases) => {
           inspect(cases.length(), content="3")
           match cases[0] {
-            (Some(1), Compound([ExprStmt(Assign(Var("r"), Number(10))), Break])) => ()
+            (Some(1), StmtList([ExprStmt(Assign(Var("r"), Number(10))), Break])) =>
+              ()
             _ => fail("Expected case 1")
           }
           match cases[1] {
-            (Some(2), Compound([ExprStmt(Assign(Var("r"), Number(20))), Break])) => ()
+            (Some(2), StmtList([ExprStmt(Assign(Var("r"), Number(20))), Break])) =>
+              ()
             _ => fail("Expected case 2")
           }
           match cases[2] {
-            (None, Compound([ExprStmt(Assign(Var("r"), Number(30))), Break])) => ()
+            (None, StmtList([ExprStmt(Assign(Var("r"), Number(30))), Break])) =>
+              ()
             _ => fail("Expected default")
           }
         }
@@ -244,8 +258,11 @@ test "parse prefix increment" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([VarDecl(SInt, "x", Some(Number(5))), Return(Some(PrefixInc(Var("x"))))])) =>
-      ()
+    Some(
+      Compound(
+        [VarDecl(SInt, "x", Some(Number(5))), Return(Some(PrefixInc(Var("x"))))]
+      )
+    ) => ()
     _ => fail("Expected prefix increment")
   }
 }
@@ -256,8 +273,14 @@ test "parse postfix increment" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([VarDecl(SInt, "x", Some(Number(5))), Return(Some(PostfixInc(Var("x"))))])) =>
-      ()
+    Some(
+      Compound(
+        [
+          VarDecl(SInt, "x", Some(Number(5))),
+          Return(Some(PostfixInc(Var("x")))),
+        ]
+      )
+    ) => ()
     _ => fail("Expected postfix increment")
   }
 }
@@ -354,8 +377,23 @@ test "parse logical operators" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([_, _, Return(Some(Binary("||", Binary("&&", Var("a"), Var("b")), Unary("!", Var("a")))))])) =>
-      ()
+    Some(
+      Compound(
+        [
+          _,
+          _,
+          Return(
+            Some(
+              Binary(
+                "||",
+                Binary("&&", Var("a"), Var("b")),
+                Unary("!", Var("a"))
+              )
+            )
+          ),
+        ]
+      )
+    ) => ()
     _ => fail("Expected logical operators")
   }
 }
@@ -384,7 +422,7 @@ test "parse nested loops with break" {
     #|  }
     #|  return x;
     #|}
-  
+
   let prog = @parser.parse(source)
   inspect(prog.decls.length(), content="1")
 }
@@ -410,7 +448,7 @@ test "parse struct definition and member access" {
     #|  p.y = 20;
     #|  return p.x + p.y;
     #|}
-  
+
   let prog = @parser.parse(source)
   inspect(prog.decls.length(), content="1")
   inspect(prog.structs.length(), content="1")
@@ -437,16 +475,16 @@ test "parse pointer to struct member access" {
     #|  n.next = &n;
     #|  return n.next->val;
     #|}
-  
+
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound(stmts)) => {
+    Some(Compound(stmts)) =>
       match stmts[3] {
-        Return(Some(MemberAccess(Deref(MemberAccess(Var("n"), "next")), "val"))) => ()
+        Return(Some(MemberAccess(Deref(MemberAccess(Var("n"), "next")), "val"))) =>
+          ()
         _ => fail("Expected arrow member access")
       }
-    }
     _ => fail("Expected compound body")
   }
 }
@@ -457,8 +495,15 @@ test "parse array declaration and access" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([VarDecl(Array(SInt, 5), "a", None), ExprStmt(Assign(ArrayAccess(Var("a"), Number(2)), Number(42))), Return(Some(ArrayAccess(Var("a"), Number(2))))])) =>
-      ()
+    Some(
+      Compound(
+        [
+          VarDecl(Array(SInt, 5), "a", None),
+          ExprStmt(Assign(ArrayAccess(Var("a"), Number(2)), Number(42))),
+          Return(Some(ArrayAccess(Var("a"), Number(2)))),
+        ]
+      )
+    ) => ()
     _ => fail("Expected array decl and access")
   }
 }
@@ -481,7 +526,7 @@ test "parse multiple functions" {
     #|int add(int a, int b) { return a + b; }
     #|int mul(int a, int b) { return a * b; }
     #|int main() { return add(2, 3) + mul(4, 5); }
-  
+
   let prog = @parser.parse(source)
   inspect(prog.decls.length(), content="3")
   inspect(prog.decls[0].name, content="add")
@@ -495,8 +540,14 @@ test "parse string literal" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([VarDecl(Pointer(SChar), "s", Some(String("hello"))), Return(Some(Number(0)))])) =>
-      ()
+    Some(
+      Compound(
+        [
+          VarDecl(Pointer(SChar), "s", Some(String("hello"))),
+          Return(Some(Number(0))),
+        ]
+      )
+    ) => ()
     _ => fail("Expected string literal")
   }
 }
@@ -507,8 +558,14 @@ test "parse adjacent string concatenation" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([VarDecl(Pointer(SChar), "s", Some(String("hello"))), Return(Some(Number(0)))])) =>
-      ()
+    Some(
+      Compound(
+        [
+          VarDecl(Pointer(SChar), "s", Some(String("hello"))),
+          Return(Some(Number(0))),
+        ]
+      )
+    ) => ()
     _ => fail("Expected concatenated string literal")
   }
 }
@@ -522,7 +579,7 @@ test "parse comments" {
     #|     comment */
     #|  return 42;
     #|}
-  
+
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
@@ -547,15 +604,18 @@ test "parse array initializer infers size" {
             _ => fail("Expected Array(SInt, 3) var decl")
           }
           match inner[1] {
-            ExprStmt(Assign(ArrayAccess(Var("arr"), Number(0)), Number(1))) => ()
+            ExprStmt(Assign(ArrayAccess(Var("arr"), Number(0)), Number(1))) =>
+              ()
             _ => fail("Expected arr[0]=1")
           }
           match inner[2] {
-            ExprStmt(Assign(ArrayAccess(Var("arr"), Number(1)), Number(2))) => ()
+            ExprStmt(Assign(ArrayAccess(Var("arr"), Number(1)), Number(2))) =>
+              ()
             _ => fail("Expected arr[1]=2")
           }
           match inner[3] {
-            ExprStmt(Assign(ArrayAccess(Var("arr"), Number(2)), Number(3))) => ()
+            ExprStmt(Assign(ArrayAccess(Var("arr"), Number(2)), Number(3))) =>
+              ()
             _ => fail("Expected arr[2]=3")
           }
         }
@@ -572,17 +632,20 @@ test "parse array initializer with expression element" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound(outer)) => {
+    Some(Compound(outer)) =>
       match outer[0] {
-        StmtList(inner) => {
+        StmtList(inner) =>
           match inner[1] {
-            ExprStmt(Assign(ArrayAccess(Var("arr"), Number(0)), Binary("+", Number(1), Number(1)))) => ()
+            ExprStmt(
+              Assign(
+                ArrayAccess(Var("arr"), Number(0)),
+                Binary("+", Number(1), Number(1))
+              )
+            ) => ()
             _ => fail("Expected arr[0]=1+1")
           }
-        }
         _ => fail("Expected inner StmtList")
       }
-    }
     _ => fail("Expected compound body")
   }
 }
@@ -593,7 +656,7 @@ test "parse multiple vars one with array initializer" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound(outer)) => {
+    Some(Compound(outer)) =>
       match outer[0] {
         StmtList(inner) => {
           match inner[0] {
@@ -615,7 +678,6 @@ test "parse multiple vars one with array initializer" {
         }
         _ => fail("Expected inner compound")
       }
-    }
     _ => fail("Expected compound body")
   }
 }
@@ -626,17 +688,15 @@ test "parse array initializer inferred size" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound(stmts)) => {
+    Some(Compound(stmts)) =>
       match stmts[0] {
-        StmtList(inner) => {
+        StmtList(inner) =>
           match inner[0] {
             VarDecl(Array(SInt, 3), "arr", None) => ()
             _ => fail("Expected VarDecl with Array(SInt, 3)")
           }
-        }
         _ => fail("Expected StmtList from array init lowering")
       }
-    }
     _ => fail("Expected compound body")
   }
 }
@@ -647,17 +707,15 @@ test "parse array initializer explicit size" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound(stmts)) => {
+    Some(Compound(stmts)) =>
       match stmts[0] {
-        StmtList(inner) => {
+        StmtList(inner) =>
           match inner[0] {
             VarDecl(Array(SInt, 5), "arr", None) => ()
             _ => fail("Expected VarDecl with Array(SInt, 5)")
           }
-        }
         _ => fail("Expected StmtList from array init lowering")
       }
-    }
     _ => fail("Expected compound body")
   }
 }
@@ -682,12 +740,11 @@ test "parse computed goto label address" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound(stmts)) => {
+    Some(Compound(stmts)) =>
       match stmts[0] {
         VarDecl(Pointer(Void), "p", Some(LabelAddr("label"))) => ()
         _ => fail("Expected VarDecl with LabelAddr")
       }
-    }
     _ => fail("Expected compound body")
   }
 }
@@ -703,11 +760,7 @@ test "parse __func__ builtin" {
   }
 }
 
-
-
-
-
-
+///|
 test "check ast for array init locals" {
   let source =
     #|int main() {
@@ -721,11 +774,16 @@ test "check ast for array init locals" {
     #|}
   let prog = @parser.parse(source)
   match prog.decls[0].body {
-    Some(Compound(stmts)) => {
+    Some(Compound(stmts)) =>
       for i = 0; i < stmts.length(); i = i + 1 {
         match stmts[i] {
           StmtList(inner) => {
-            println("StmtList[" + i.to_string() + "] len=" + inner.length().to_string())
+            println(
+              "StmtList[" +
+              i.to_string() +
+              "] len=" +
+              inner.length().to_string(),
+            )
             for j = 0; j < inner.length(); j = j + 1 {
               match inner[j] {
                 VarDecl(ty, name, _) => println("  VarDecl: " + name)
@@ -738,7 +796,6 @@ test "check ast for array init locals" {
           _ => println("Stmt[" + i.to_string() + "]: other")
         }
       }
-    }
     _ => fail("Not compound")
   }
 }

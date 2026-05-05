@@ -1,5 +1,5 @@
 ///|
-fn fold_const(expr : Expr) -> Int64? {
+pub fn fold_const(expr : Expr) -> Int64? {
   match expr {
     Number(n) => Some(n)
     Binary("+", a, b) =>
@@ -52,6 +52,46 @@ fn fold_const(expr : Expr) -> Int64? {
         (Some(x), Some(y)) => Some(x >> y.to_int())
         _ => None
       }
+    Binary("==", a, b) =>
+      match (fold_const(a), fold_const(b)) {
+        (Some(x), Some(y)) => Some(if x == y { 1L } else { 0L })
+        _ => None
+      }
+    Binary("!=", a, b) =>
+      match (fold_const(a), fold_const(b)) {
+        (Some(x), Some(y)) => Some(if x != y { 1L } else { 0L })
+        _ => None
+      }
+    Binary("<", a, b) =>
+      match (fold_const(a), fold_const(b)) {
+        (Some(x), Some(y)) => Some(if x < y { 1L } else { 0L })
+        _ => None
+      }
+    Binary(">", a, b) =>
+      match (fold_const(a), fold_const(b)) {
+        (Some(x), Some(y)) => Some(if x > y { 1L } else { 0L })
+        _ => None
+      }
+    Binary("<=", a, b) =>
+      match (fold_const(a), fold_const(b)) {
+        (Some(x), Some(y)) => Some(if x <= y { 1L } else { 0L })
+        _ => None
+      }
+    Binary(">=", a, b) =>
+      match (fold_const(a), fold_const(b)) {
+        (Some(x), Some(y)) => Some(if x >= y { 1L } else { 0L })
+        _ => None
+      }
+    Binary("&&", a, b) =>
+      match (fold_const(a), fold_const(b)) {
+        (Some(x), Some(y)) => Some(if x != 0L && y != 0L { 1L } else { 0L })
+        _ => None
+      }
+    Binary("||", a, b) =>
+      match (fold_const(a), fold_const(b)) {
+        (Some(x), Some(y)) => Some(if x != 0L || y != 0L { 1L } else { 0L })
+        _ => None
+      }
     Ternary(cond, a, b) =>
       match fold_const(cond) {
         Some(0L) => fold_const(b)
@@ -77,6 +117,7 @@ fn fold_const(expr : Expr) -> Int64? {
     Cast(_, e) => fold_const(e)
     Sizeof(ty) => Some(basic_type_size(ty).to_int64())
     SizeofExpr(e) => Some(basic_type_size(type_of_expr(e)).to_int64())
+    Array(_) => None
     _ => None
   }
 }
@@ -120,5 +161,8 @@ fn type_of_expr(expr : Expr) -> Type {
     PostfixDec(_) => SInt
     Ternary(_, a, _) => type_of_expr(a)
     LabelAddr(_) => Pointer(Void)
+    VaArg(_, ty) => ty
+    OffsetOf(_, _) => SInt
+    Array(_) => SInt
   }
 }

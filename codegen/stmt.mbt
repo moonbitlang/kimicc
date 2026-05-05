@@ -107,18 +107,16 @@ fn Codegen::gen_stmt(
       self.break_label = old_break
       self.continue_label = old_continue
     }
-    Break => {
+    Break =>
       match self.break_label {
         Some(label) => self.emit("\tb\t" + label)
         None => abort("break outside of loop or switch")
       }
-    }
-    Continue => {
+    Continue =>
       match self.continue_label {
         Some(label) => self.emit("\tb\t" + label)
         None => abort("continue outside of loop")
       }
-    }
     Switch(expr, cases) => {
       let end_label = self.new_label()
       let old_break = self.break_label
@@ -160,9 +158,7 @@ fn Codegen::gen_stmt(
       self.emit(end_label + ":")
       self.break_label = old_break
     }
-    Goto(name) => {
-      self.emit("\tb\t" + self.label_ref(name))
-    }
+    Goto(name) => self.emit("\tb\t" + self.label_ref(name))
     ComputedGoto(expr) => {
       self.gen_expr(expr, frame_size)
       self.emit("\tbr\tx9")
@@ -176,13 +172,39 @@ fn Codegen::gen_stmt(
     VarDecl(ty, name, init) => {
       let offset = self.alloc_local(name, ty)
       match init {
-        Some(expr) => {
-          self.gen_expr(expr, frame_size)
-          match ty {
-            Float => self.emit_store_local("w9", offset, frame_size)
-            _ => self.emit_store_local("x9", offset, frame_size)
+        Some(expr) =>
+          match (ty, expr) {
+            (Struct(_) | Union(_) | Array(_, _), Number(0)) => {
+              // Zero-initialize aggregate types properly
+              let size = self.type_size(ty)
+              self.emit_local_addr(offset, frame_size)
+              self.emit("\tmov\tx0, x9")
+              self.emit("\tmov\tx1, #0")
+              self.emit_load_int("x2", size.to_int64())
+              self.emit("\tbl\t_memset")
+            }
+            (Struct(_) | Union(_), rhs) => {
+              // Struct/union initialization from another struct: use memcpy
+              self.gen_addr(rhs, frame_size)
+              self.emit("\tstr\tx9, [sp, #-16]!")
+              self.emit_local_addr(offset, frame_size)
+              self.emit("\tstr\tx9, [sp, #-16]!")
+              self.emit("\tmov\tx0, x9")
+              self.emit("\tldr\tx1, [sp, #16]")
+              let size = self.type_size(ty)
+              self.emit_load_int("x2", size.to_int64())
+              self.emit("\tbl\t_memcpy")
+              self.emit("\tadd\tsp, sp, #32")
+              self.emit("\tmov\tx9, x0")
+            }
+            _ => {
+              self.gen_expr(expr, frame_size)
+              match ty {
+                Float => self.emit_store_local("w9", offset, frame_size)
+                _ => self.emit_store_local("x9", offset, frame_size)
+              }
+            }
           }
-        }
         None => ()
       }
     }

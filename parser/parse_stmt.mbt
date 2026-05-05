@@ -4,22 +4,40 @@ fn Parser::skip_brace_initializer(self : Parser) -> Unit {
     let mut depth = 1
     self.advance()
     while depth > 0 && self.token != EOF {
-      if self.token == LBrace { depth += 1 }
-      else if self.token == RBrace { depth -= 1 }
-      if depth > 0 { self.advance() } else { self.advance(); break }
+      if self.token == LBrace {
+        depth += 1
+      } else if self.token == RBrace {
+        depth -= 1
+      }
+      if depth > 0 {
+        self.advance()
+      } else {
+        self.advance()
+        break
+      }
     }
   }
 }
 
-///| Parse expressions inside a brace initializer: { expr1, expr2, ... }
-fn Parser::parse_brace_init_exprs(self : Parser) -> Array[Expr] {
+///|
+/// Parse expressions inside a brace initializer: { expr1, expr2, ... }
+fn Parser::parse_brace_init_exprs(
+  self : Parser,
+  flatten_nested? : Bool = false,
+) -> Array[Expr] {
   let exprs = []
   self.expect(LBrace)
   while self.token != RBrace && self.token != EOF {
     if self.token == LBrace {
-      // Nested initializer: skip for now, treat as zero
-      self.skip_brace_initializer()
-      exprs.push(Expr::Number(0))
+      if flatten_nested {
+        // Recursively parse nested brace initializer and wrap as Expr::Array
+        let nested = self.parse_brace_init_exprs(flatten_nested=true)
+        exprs.push(Expr::Array(nested))
+      } else {
+        // Nested initializer: skip for now, treat as zero
+        self.skip_brace_initializer()
+        exprs.push(Expr::Number(0))
+      }
     } else if self.token == LBracket || self.token == Dot {
       // Designated initializer ([index] = val or .field = val): skip rest
       self.skip_remaining_brace_initializer()
@@ -35,13 +53,17 @@ fn Parser::parse_brace_init_exprs(self : Parser) -> Array[Expr] {
   exprs
 }
 
-///| Skip tokens until matching RBrace at current depth (does not consume RBrace)
+///|
+/// Skip tokens until matching RBrace at current depth (does not consume RBrace)
 fn Parser::skip_remaining_brace_initializer(self : Parser) -> Unit {
   let mut depth = 1
   while depth > 0 && self.token != EOF {
     self.advance()
-    if self.token == LBrace { depth += 1 }
-    else if self.token == RBrace { depth -= 1 }
+    if self.token == LBrace {
+      depth += 1
+    } else if self.token == RBrace {
+      depth -= 1
+    }
   }
 }
 
@@ -62,22 +84,50 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
     Goto => self.parse_goto_stmt()
     Return => self.parse_return_stmt()
     LBrace => self.parse_compound_stmt()
-    Semicolon => { self.advance(); ExprStmt(Expr::Number(0)) }
-    Int | Void | Char | Struct | Union | Signed | Unsigned | Short | Long | Float | Double | Bool | Enum | Const | Restrict | Volatile | Extern | Static | Inline | Register | Auto => self.parse_var_decl_stmt()
-    Typedef => { self.parse_typedef(); ExprStmt(Expr::Number(0)) }
+    Semicolon => {
+      self.advance()
+      ExprStmt(Expr::Number(0))
+    }
+    Int
+    | Void
+    | Char
+    | Struct
+    | Union
+    | Signed
+    | Unsigned
+    | Short
+    | Long
+    | Float
+    | Double
+    | Bool
+    | Enum
+    | Const
+    | Restrict
+    | Volatile
+    | Extern
+    | Static
+    | Inline
+    | Register
+    | Auto => self.parse_var_decl_stmt()
+    Typedef => {
+      self.parse_typedef()
+      ExprStmt(Expr::Number(0))
+    }
     Case => {
       self.advance()
       let expr = self.parse_assign()
       let value = match fold_const(expr) {
         Some(n) => n
-        None => match expr {
-          Var(name) => if self.enum_constants.contains(name) {
-            self.enum_constants[name]
-          } else {
-            0
+        None =>
+          match expr {
+            Var(name) =>
+              if self.enum_constants.contains(name) {
+                self.enum_constants[name]
+              } else {
+                0
+              }
+            _ => 0
           }
-          _ => 0
-        }
       }
       self.expect(Colon)
       let stmt = self.parse_stmt()
@@ -94,7 +144,9 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
       if name == "asm" || name == "__asm__" || name == "__asm" {
         self.advance()
         // Skip optional volatile, goto, etc.
-        while self.token == Volatile || self.token == Ident("__volatile__") || self.token == Ident("goto") {
+        while self.token == Volatile ||
+              self.token == Ident("__volatile__") ||
+              self.token == Ident("goto") {
           self.advance()
         }
         // Skip the asm body in parentheses
@@ -102,9 +154,40 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
           let mut depth = 1
           self.advance()
           while depth > 0 && self.token != EOF {
-            if self.token == LParen { depth += 1 }
-            else if self.token == RParen { depth -= 1 }
-            if depth > 0 { self.advance() } else { self.advance(); break }
+            if self.token == LParen {
+              depth += 1
+            } else if self.token == RParen {
+              depth -= 1
+            }
+            if depth > 0 {
+              self.advance()
+            } else {
+              self.advance()
+              break
+            }
+          }
+        }
+        self.expect(Semicolon)
+        return ExprStmt(Expr::Number(0))
+      }
+      // Handle __attribute__((...)); as a no-op statement
+      if name == "__attribute__" || name == "__attribute" {
+        self.advance()
+        if self.token == LParen {
+          let mut depth = 1
+          self.advance()
+          while depth > 0 && self.token != EOF {
+            if self.token == LParen {
+              depth += 1
+            } else if self.token == RParen {
+              depth -= 1
+            }
+            if depth > 0 {
+              self.advance()
+            } else {
+              self.advance()
+              break
+            }
           }
         }
         self.expect(Semicolon)
@@ -143,6 +226,7 @@ fn Parser::parse_if_stmt(self : Parser) -> Stmt {
   self.expect(LParen)
   let cond = self.parse_expr()
   if self.token != RParen {
+
   }
   self.expect(RParen)
   let then_ = self.parse_stmt()
@@ -173,13 +257,25 @@ fn Parser::parse_for_stmt(self : Parser) -> Stmt {
   let init = if self.token == Semicolon {
     self.advance()
     None
-  } else if self.token == Int || self.token == Void || self.token == Char ||
-            self.token == Struct || self.token == Union || self.token == Signed ||
-            self.token == Unsigned || self.token == Short || self.token == Long ||
-            self.token == Float || self.token == Double || self.token == Bool ||
-            self.token == Enum || self.token == Const || self.token == Restrict ||
-            self.token == Volatile || self.token == Extern || self.token == Static ||
-            self.token == Inline {
+  } else if self.token == Int ||
+    self.token == Void ||
+    self.token == Char ||
+    self.token == Struct ||
+    self.token == Union ||
+    self.token == Signed ||
+    self.token == Unsigned ||
+    self.token == Short ||
+    self.token == Long ||
+    self.token == Float ||
+    self.token == Double ||
+    self.token == Bool ||
+    self.token == Enum ||
+    self.token == Const ||
+    self.token == Restrict ||
+    self.token == Volatile ||
+    self.token == Extern ||
+    self.token == Static ||
+    self.token == Inline {
     Some(self.parse_var_decl_stmt())
   } else {
     let is_typedef = match self.token {
@@ -204,11 +300,7 @@ fn Parser::parse_for_stmt(self : Parser) -> Stmt {
     expr
   }
   // Parse update
-  let update = if self.token == RParen {
-    None
-  } else {
-    Some(self.parse_expr())
-  }
+  let update = if self.token == RParen { None } else { Some(self.parse_expr()) }
   self.expect(RParen)
   let body = self.parse_stmt()
   For(init, cond, update, body)
@@ -251,7 +343,9 @@ fn extract_case_value(name : String) -> Int64? {
       negative = true
     }
   }
-  if negative { case_value = -case_value }
+  if negative {
+    case_value = -case_value
+  }
   Some(case_value)
 }
 
@@ -273,14 +367,14 @@ fn Parser::parse_switch_stmt(self : Parser) -> Stmt {
   let mut current_value = None
   fn flush_case(value : Int64?, stmts : Array[Stmt]) -> Unit {
     if stmts.length() > 0 || value.is_some() {
-      cases.push((value, Compound(stmts)))
+      cases.push((value, StmtList(stmts)))
     }
   }
   for stmt in stmts {
     let mut current_stmt = stmt
     while true {
       match current_stmt {
-        Label(name, body) => {
+        Label(name, body) =>
           match extract_case_value(name) {
             Some(value) => {
               flush_case(current_value, current_stmts)
@@ -288,7 +382,7 @@ fn Parser::parse_switch_stmt(self : Parser) -> Stmt {
               current_value = Some(value)
               current_stmt = body
             }
-            None => {
+            None =>
               if name == "default" {
                 flush_case(current_value, current_stmts)
                 current_stmts = []
@@ -299,9 +393,7 @@ fn Parser::parse_switch_stmt(self : Parser) -> Stmt {
                 current_stmts.push(current_stmt)
                 break
               }
-            }
           }
-        }
         _ => {
           current_stmts.push(current_stmt)
           break
@@ -331,7 +423,10 @@ fn Parser::parse_goto_stmt(self : Parser) -> Stmt {
     return ComputedGoto(expr)
   }
   let name = match self.token {
-    Ident(n) => { self.advance(); n }
+    Ident(n) => {
+      self.advance()
+      n
+    }
     _ => abort("Expected label name after goto")
   }
   self.expect(Semicolon)
@@ -362,6 +457,56 @@ fn Parser::parse_compound_stmt(self : Parser) -> Stmt {
 }
 
 ///|
+/// Helper to register a function-local static variable as a global.
+/// Returns the mangled global name and adds the mapping to static_locals.
+fn Parser::register_static_local(self : Parser, name : String) -> String {
+  let mangled = if self.current_func_name == "" {
+    name
+  } else {
+    "_" + self.current_func_name + "_" + name
+  }
+  self.static_locals[name] = mangled
+  mangled
+}
+
+///|
+/// Helper to parse an initializer into GlobalInit for static locals.
+fn Parser::parse_static_initializer(
+  self : Parser,
+  ty : Type,
+) -> (Type, GlobalInit?) {
+  if self.token == Assign {
+    self.advance()
+    if self.token == LBrace {
+      let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
+      let init_count = init_exprs.length()
+      let final_ty = match ty {
+        Array(elem_ty, 0) => Type::Array(elem_ty, init_count)
+        other => other
+      }
+      (final_ty, Some(GlobalInit::Array(init_exprs)))
+    } else {
+      let expr = self.parse_assign()
+      match (ty, expr) {
+        (Array(elem_ty, 0), Expr::String(s)) => {
+          let len = s.length()
+          let arr_ty = Type::Array(elem_ty, len + 1)
+          let init_exprs = Array::make(len + 1, Expr::Number(0))
+          for i = 0; i < len; i = i + 1 {
+            init_exprs[i] = Expr::Number(s[i].to_int().to_int64())
+          }
+          init_exprs[len] = Expr::Number(0)
+          (arr_ty, Some(GlobalInit::Array(init_exprs)))
+        }
+        _ => (ty, Some(GlobalInit::Scalar(expr)))
+      }
+    }
+  } else {
+    (ty, None)
+  }
+}
+
+///|
 fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
   let spec = self.parse_decl_specifiers()
   // Local struct/union/enum definition without variable: struct Foo { ... };
@@ -378,6 +523,42 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
     self.expect(Semicolon)
     return ExprStmt(Expr::Number(0))
   }
+  // Handle static / extern locals: promote to globals
+  if spec.is_static || spec.is_extern {
+    let mangled = if spec.is_static {
+      self.register_static_local(decl.name)
+    } else {
+      // extern local: refers to an external global with the same name
+      self.static_locals[decl.name] = decl.name
+      decl.name
+    }
+    let (final_ty, init) = self.parse_static_initializer(decl_ty)
+    if spec.is_static {
+      self.globals.push({ ty: final_ty, name: mangled, init })
+    }
+    // Parse additional static/extern variables
+    while self.token == Comma {
+      self.advance()
+      let extra_decl = self.parse_declarator(spec.base_type)
+      let extra_decl_ty = resolve_var_type(extra_decl)
+      let extra_mangled = if spec.is_static {
+        self.register_static_local(extra_decl.name)
+      } else {
+        self.static_locals[extra_decl.name] = extra_decl.name
+        extra_decl.name
+      }
+      let (extra_ty, extra_init) = self.parse_static_initializer(extra_decl_ty)
+      if spec.is_static {
+        self.globals.push({
+          ty: extra_ty,
+          name: extra_mangled,
+          init: extra_init,
+        })
+      }
+    }
+    self.expect(Semicolon)
+    return ExprStmt(Expr::Number(0))
+  }
   // Handle initializer
   let ty = if self.token == Assign {
     self.advance()
@@ -389,11 +570,34 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
         _ => false
       }
       if is_struct {
-        self.skip_brace_initializer()
-        stmts.push(VarDecl(decl_ty, decl.name, Some(Expr::Number(0))))
+        // Parse brace initializer expressions and create field assignments
+        let init_exprs = self.parse_brace_init_exprs()
+        let init_count = init_exprs.length()
+        stmts.push(VarDecl(decl_ty, decl.name, None))
+        // Look up struct fields
+        let struct_name = match decl_ty {
+          Struct(n) => n
+          Union(n) => n
+          _ => ""
+        }
+        let fields = if self.struct_decls.contains(struct_name) {
+          self.struct_decls[struct_name].fields
+        } else {
+          []
+        }
+        for i = 0; i < init_count && i < fields.length(); i = i + 1 {
+          stmts.push(
+            ExprStmt(
+              Expr::Assign(
+                Expr::MemberAccess(Expr::Var(decl.name), fields[i].name),
+                init_exprs[i],
+              ),
+            ),
+          )
+        }
         decl_ty
       } else {
-        let init_exprs = self.parse_brace_init_exprs()
+        let init_exprs = self.parse_brace_init_exprs(flatten_nested=false)
         let init_count = init_exprs.length()
         // Update array type if size was inferred
         let ty = match decl_ty {
@@ -402,10 +606,17 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
         }
         stmts.push(VarDecl(ty, decl.name, None))
         for i = 0; i < init_count; i = i + 1 {
-          stmts.push(ExprStmt(Expr::Assign(
-            Expr::ArrayAccess(Expr::Var(decl.name), Expr::Number(i.to_int64())),
-            init_exprs[i]
-          )))
+          stmts.push(
+            ExprStmt(
+              Expr::Assign(
+                Expr::ArrayAccess(
+                  Expr::Var(decl.name),
+                  Expr::Number(i.to_int64()),
+                ),
+                init_exprs[i],
+              ),
+            ),
+          )
         }
         ty
       }
@@ -419,16 +630,30 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
           stmts.push(VarDecl(arr_ty, decl.name, None))
           for i = 0; i < len; i = i + 1 {
             let ch = s[i]
-            stmts.push(ExprStmt(Expr::Assign(
-              Expr::ArrayAccess(Expr::Var(decl.name), Expr::Number(i.to_int64())),
-              Expr::Number(ch.to_int().to_int64())
-            )))
+            stmts.push(
+              ExprStmt(
+                Expr::Assign(
+                  Expr::ArrayAccess(
+                    Expr::Var(decl.name),
+                    Expr::Number(i.to_int64()),
+                  ),
+                  Expr::Number(ch.to_int().to_int64()),
+                ),
+              ),
+            )
           }
           // Null terminator
-          stmts.push(ExprStmt(Expr::Assign(
-            Expr::ArrayAccess(Expr::Var(decl.name), Expr::Number(len.to_int64())),
-            Expr::Number(0)
-          )))
+          stmts.push(
+            ExprStmt(
+              Expr::Assign(
+                Expr::ArrayAccess(
+                  Expr::Var(decl.name),
+                  Expr::Number(len.to_int64()),
+                ),
+                Expr::Number(0),
+              ),
+            ),
+          )
           arr_ty
         }
         _ => {
@@ -455,9 +680,11 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
         }
         if is_struct {
           self.skip_brace_initializer()
-          stmts.push(VarDecl(extra_decl_ty, extra_decl.name, Some(Expr::Number(0))))
+          stmts.push(
+            VarDecl(extra_decl_ty, extra_decl.name, Some(Expr::Number(0))),
+          )
         } else {
-          let init_exprs = self.parse_brace_init_exprs()
+          let init_exprs = self.parse_brace_init_exprs(flatten_nested=false)
           let init_count = init_exprs.length()
           let extra_ty = match extra_decl_ty {
             Array(elem_ty, 0) => Type::Array(elem_ty, init_count)
@@ -465,10 +692,17 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
           }
           stmts.push(VarDecl(extra_ty, extra_decl.name, None))
           for i = 0; i < init_count; i = i + 1 {
-            stmts.push(ExprStmt(Expr::Assign(
-              Expr::ArrayAccess(Expr::Var(extra_decl.name), Expr::Number(i.to_int64())),
-              init_exprs[i]
-            )))
+            stmts.push(
+              ExprStmt(
+                Expr::Assign(
+                  Expr::ArrayAccess(
+                    Expr::Var(extra_decl.name),
+                    Expr::Number(i.to_int64()),
+                  ),
+                  init_exprs[i],
+                ),
+              ),
+            )
           }
         }
       } else {
@@ -480,19 +714,31 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
             stmts.push(VarDecl(arr_ty, extra_decl.name, None))
             for i = 0; i < len; i = i + 1 {
               let ch = s[i]
-              stmts.push(ExprStmt(Expr::Assign(
-                Expr::ArrayAccess(Expr::Var(extra_decl.name), Expr::Number(i.to_int64())),
-                Expr::Number(ch.to_int().to_int64())
-              )))
+              stmts.push(
+                ExprStmt(
+                  Expr::Assign(
+                    Expr::ArrayAccess(
+                      Expr::Var(extra_decl.name),
+                      Expr::Number(i.to_int64()),
+                    ),
+                    Expr::Number(ch.to_int().to_int64()),
+                  ),
+                ),
+              )
             }
-            stmts.push(ExprStmt(Expr::Assign(
-              Expr::ArrayAccess(Expr::Var(extra_decl.name), Expr::Number(len.to_int64())),
-              Expr::Number(0)
-            )))
+            stmts.push(
+              ExprStmt(
+                Expr::Assign(
+                  Expr::ArrayAccess(
+                    Expr::Var(extra_decl.name),
+                    Expr::Number(len.to_int64()),
+                  ),
+                  Expr::Number(0),
+                ),
+              ),
+            )
           }
-          _ => {
-            stmts.push(VarDecl(extra_decl_ty, extra_decl.name, Some(expr)))
-          }
+          _ => stmts.push(VarDecl(extra_decl_ty, extra_decl.name, Some(expr)))
         }
       }
     } else {

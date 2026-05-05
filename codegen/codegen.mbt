@@ -6,10 +6,14 @@ pub struct Codegen {
   mut var_types : Map[String, @parser.Type]
   mut stack_size : Int
   mut func_name : String
+  mut func_params : Array[@parser.Param]
   func_rets : Map[String, @parser.Type]
   func_variadic : Map[String, Bool]
   func_param_counts : Map[String, Int]
-  struct_layouts : Map[String, Array[(String, @parser.Type, Int, Int, Int, Int)]]
+  struct_layouts : Map[
+    String,
+    Array[(String, @parser.Type, Int, Int, Int, Int)],
+  ]
   struct_decls : Map[String, @parser.StructDecl]
   strings : Array[String]
   mut break_label : String?
@@ -45,6 +49,7 @@ pub fn Codegen::new() -> Codegen {
     var_types: {},
     stack_size: 0,
     func_name: "",
+    func_params: [],
     func_rets: {},
     func_variadic: {},
     func_param_counts: {},
@@ -64,28 +69,52 @@ pub fn Codegen::new() -> Codegen {
 fn Codegen::emit_global_scalar(
   self : Codegen,
   ty : @parser.Type,
-  expr : @parser.Expr
+  expr : @parser.Expr,
 ) -> Unit {
-  match expr {
-    Number(n) => {
+  // Try constant-fold the expression first
+  let folded_expr = match @parser.fold_const(expr) {
+    Some(n) => @parser.Expr::Number(n)
+    None => expr
+  }
+  match folded_expr {
+    Number(n) =>
       match ty {
         Bool | SChar | UChar => self.emit("\t.byte\t" + n.to_string())
         SShort | UShort => self.emit("\t.short\t" + n.to_string())
         SInt | UInt | Float => self.emit("\t.long\t" + n.to_string())
+        Struct(_) | Union(_) | Array(_, _) => {
+          // Zero-initialize aggregate type
+          let size = self.type_size(ty)
+          self.emit("\t.space\t" + size.to_string())
+        }
         _ => self.emit("\t.quad\t" + n.to_string())
       }
-    }
-    FloatLiteral(v) => {
+    FloatLiteral(v) =>
       match ty {
         Float => self.emit("\t.single\t" + v.to_string())
         _ => self.emit("\t.double\t" + v.to_string())
       }
-    }
-    String(s) => {
-      let idx = self.strings.length()
-      self.strings.push(s)
-      self.emit("\t.quad\t_str" + idx.to_string())
-    }
+    String(s) =>
+      match ty {
+        Array(SChar, n) | Array(UChar, n) => {
+          self.emit("\t.asciz\t\"" + escape_string(s) + "\"")
+          let pad = n - s.length() - 1
+          if pad > 0 {
+            self.emit("\t.space\t" + pad.to_string())
+          }
+        }
+        _ => {
+          let idx = self.strings.length()
+          self.strings.push(s)
+          self.emit("\t.quad\t_str" + idx.to_string())
+        }
+      }
+    Var(name) =>
+      // Function pointer or address of global in initializer
+      self.emit("\t.quad\t_" + name)
+    Array(nested) =>
+      // Nested brace initializer: emit as array/struct
+      self.emit_global_array(ty, nested)
     _ => {
       // Non-constant expression: emit zero placeholder
       let size = self.type_size(ty)
@@ -98,18 +127,56 @@ fn Codegen::emit_global_scalar(
 fn Codegen::emit_global_array(
   self : Codegen,
   ty : @parser.Type,
-  exprs : Array[@parser.Expr]
+  exprs : Array[@parser.Expr],
 ) -> Unit {
   match ty {
     Array(elem_ty, n) => {
       for i = 0; i < exprs.length(); i = i + 1 {
-        self.emit_global_scalar(elem_ty, exprs[i])
+        match exprs[i] {
+          Array(nested) => self.emit_global_array(elem_ty, nested)
+          _ => self.emit_global_scalar(elem_ty, exprs[i])
+        }
       }
       // Pad remaining elements with zeros
       let elem_size = self.type_size(elem_ty)
       let pad_count = n - exprs.length()
       if pad_count > 0 {
         self.emit("\t.space\t" + (pad_count * elem_size).to_string())
+      }
+    }
+    Struct(name) => {
+      // Struct initializer: emit each expression with the corresponding field type
+      // Use struct layout to insert proper padding between fields
+      let layout = if self.struct_layouts.contains(name) {
+        self.struct_layouts[name]
+      } else {
+        []
+      }
+      let mut emitted = 0
+      for i = 0; i < exprs.length() && i < layout.length(); i = i + 1 {
+        let field_offset = layout[i].2
+        let field_size = layout[i].3
+        // Emit padding to reach the correct field offset
+        if field_offset > emitted {
+          self.emit("\t.space\t" + (field_offset - emitted).to_string())
+        }
+        self.emit_global_scalar(layout[i].1, exprs[i])
+        emitted = field_offset + field_size
+      }
+      // Pad remaining space with zeros
+      let total_size = self.type_size(ty)
+      if total_size > emitted {
+        self.emit("\t.space\t" + (total_size - emitted).to_string())
+      }
+    }
+    Union(_) => {
+      // Union initializer: emit first expression, pad rest
+      if exprs.length() > 0 {
+        self.emit_global_scalar(SLongLong, exprs[0])
+      }
+      let total_size = self.type_size(ty)
+      if total_size > 8 {
+        self.emit("\t.space\t" + (total_size - 8).to_string())
       }
     }
     _ => {
@@ -126,15 +193,21 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
     "\t.section\t__TEXT,__text,regular,pure_instructions\n",
   )
   self.output.write_string("\t.build_version macos, 14, 0\n")
-  // Precompute struct layouts
+  // Register all struct/union declarations first (to handle forward refs)
+  for sdecl in prog.structs {
+    self.struct_decls[sdecl.name] = sdecl
+  }
+  // Then compute layouts in a second pass
   for sdecl in prog.structs {
     self.compute_struct_layout(sdecl)
   }
   // Precompute function return types, variadic flags, and param counts
+  let mut func_count = 0
   for decl in prog.decls {
     self.func_rets[decl.name] = decl.ret
     self.func_variadic[decl.name] = decl.variadic
     self.func_param_counts[decl.name] = decl.params.length()
+    func_count += 1
   }
   // Record global variables
   for g in prog.globals {

@@ -46,8 +46,9 @@ fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
       let fields = self.struct_layouts[name]
       let mut max_size = 0
       for field in fields {
-        if field.3 > max_size {
-          max_size = field.3
+        let fs = self.type_size(field.1)
+        if fs > max_size {
+          max_size = fs
         }
       }
       max_size
@@ -116,7 +117,7 @@ fn Codegen::is_anon_type(self : Codegen, ty : @parser.Type) -> Bool {
 fn Codegen::flatten_anon_fields(
   self : Codegen,
   ty : @parser.Type,
-  base_offset : Int
+  base_offset : Int,
 ) -> Array[(String, @parser.Type, Int, Int, Int, Int)] {
   let name = match ty {
     Struct(n) | Union(n) => n
@@ -151,6 +152,11 @@ fn Codegen::compute_struct_layout(
   if decl.is_union {
     self.compute_union_layout(decl)
     return
+  }
+  if decl.name == "Expr" {
+    for i = 0; i < decl.fields.length(); i = i + 1 {
+      let f = decl.fields[i]
+    }
   }
   let mut offset = 0
   let layout = []
@@ -191,7 +197,8 @@ fn Codegen::compute_struct_layout(
         let container_align = self.type_align(field.ty)
         if w == 0 {
           // Zero-width bit-field: force alignment to next container boundary
-          let padding = (container_align - offset % container_align) % container_align
+          let padding = (container_align - offset % container_align) %
+            container_align
           offset += padding
           current_container_size = 0
           current_container_offset = 0
@@ -202,7 +209,8 @@ fn Codegen::compute_struct_layout(
           if current_container_size == 0 ||
             current_container_size != container_size ||
             current_bit_offset + w > current_container_size * 8 {
-            let padding = (container_align - offset % container_align) % container_align
+            let padding = (container_align - offset % container_align) %
+              container_align
             offset += padding
             current_container_offset = offset
             current_container_size = container_size
@@ -210,7 +218,14 @@ fn Codegen::compute_struct_layout(
             offset += container_size
           }
           layout.push(
-            (field.name, field.ty, current_container_offset, container_size, current_bit_offset, w),
+            (
+              field.name,
+              field.ty,
+              current_container_offset,
+              container_size,
+              current_bit_offset,
+              w,
+            ),
           )
           current_bit_offset += w
         }
@@ -218,6 +233,11 @@ fn Codegen::compute_struct_layout(
     }
   }
   self.struct_layouts[decl.name] = layout
+  if decl.name == "Expr" || decl.name == "Parse" {
+    for f in layout {
+
+    }
+  }
 }
 
 ///|
@@ -236,16 +256,13 @@ fn Codegen::compute_union_layout(
     }
     let size = self.type_size(field.ty)
     match field.bit_width {
-      None => {
-        layout.push((field.name, field.ty, 0, size, 0, 0))
-      }
-      Some(w) => {
+      None => layout.push((field.name, field.ty, 0, size, 0, 0))
+      Some(w) =>
         if w == 0 {
           // Zero-width bit-field in union: no effect
         } else {
           layout.push((field.name, field.ty, 0, size, 0, w))
         }
-      }
     }
   }
   self.struct_layouts[decl.name] = layout
@@ -255,7 +272,7 @@ fn Codegen::compute_union_layout(
 fn Codegen::find_field_layout(
   self : Codegen,
   struct_name : String,
-  field : String
+  field : String,
 ) -> (String, @parser.Type, Int, Int, Int, Int)? {
   if not(self.struct_layouts.contains(struct_name)) {
     return None

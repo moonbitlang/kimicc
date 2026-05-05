@@ -8,8 +8,8 @@ import {
   "moonbitlang/async/stdio",
 }
 
-options(
-  "native-stub": ["stub.c"],
-)
-
 supported_targets = "+native"
+
+options(
+  "native-stub": [ "stub.c" ],
+)

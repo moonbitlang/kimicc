@@ -10,6 +10,7 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
       self.defined_labels = {}
       self.fp_literals = []
       self.func_name = decl.name
+      self.func_params = decl.params
       // Allocate space for params
       for i = 0; i < decl.params.length(); i = i + 1 {
         let _ = self.alloc_local(decl.params[i].name, decl.params[i].ty)
@@ -31,6 +32,7 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
         }
       }
       // Store params
+      // AAPCS64: args 1-8 in x0-x7 (or v0-v7 for FP), args 9+ on stack
       let mut int_idx = 0
       let mut fp_idx = 0
       for i = 0; i < decl.params.length(); i = i + 1 {
@@ -38,18 +40,77 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
         let offset = self.local_offsets[p.name]
         match p.ty {
           Float => {
-            let reg = "s" + fp_idx.to_string()
-            self.emit_store_local(reg, offset, frame_size)
+            if fp_idx < 8 {
+              let reg = "s" + fp_idx.to_string()
+              self.emit_store_local(reg, offset, frame_size)
+            } else {
+              let stack_off = 16 + (fp_idx - 8) * 8
+              self.emit("\tldr\ts9, [x29, #" + stack_off.to_string() + "]")
+              self.emit_store_local("s9", offset, frame_size)
+            }
             fp_idx += 1
           }
           Double => {
-            let reg = "d" + fp_idx.to_string()
-            self.emit_store_local(reg, offset, frame_size)
+            if fp_idx < 8 {
+              let reg = "d" + fp_idx.to_string()
+              self.emit_store_local(reg, offset, frame_size)
+            } else {
+              let stack_off = 16 + (fp_idx - 8) * 8
+              self.emit("\tldr\td9, [x29, #" + stack_off.to_string() + "]")
+              self.emit_store_local("d9", offset, frame_size)
+            }
             fp_idx += 1
           }
+          Struct(_) | Union(_) => {
+            let size = self.type_size(p.ty)
+            if size > 8 && size <= 16 {
+              // Composite type passed in two consecutive X registers or on stack
+              if int_idx < 7 {
+                self.emit_store_local(
+                  "x" + int_idx.to_string(),
+                  offset,
+                  frame_size,
+                )
+                self.emit_store_local(
+                  "x" + (int_idx + 1).to_string(),
+                  offset + 8,
+                  frame_size,
+                )
+              } else if int_idx == 7 {
+                self.emit_store_local("x7", offset, frame_size)
+                self.emit("\tldr\tx9, [x29, #16]")
+                self.emit_store_local("x9", offset + 8, frame_size)
+              } else {
+                let stack_off = 16 + (int_idx - 8) * 8
+                self.emit("\tldr\tx9, [x29, #" + stack_off.to_string() + "]")
+                self.emit_store_local("x9", offset, frame_size)
+                self.emit(
+                  "\tldr\tx9, [x29, #" + (stack_off + 8).to_string() + "]",
+                )
+                self.emit_store_local("x9", offset + 8, frame_size)
+              }
+              int_idx += 2
+            } else {
+              if int_idx < 8 {
+                let reg = "x" + int_idx.to_string()
+                self.emit_store_local(reg, offset, frame_size)
+              } else {
+                let stack_off = 16 + (int_idx - 8) * 8
+                self.emit("\tldr\tx9, [x29, #" + stack_off.to_string() + "]")
+                self.emit_store_local("x9", offset, frame_size)
+              }
+              int_idx += 1
+            }
+          }
           _ => {
-            let reg = "x" + int_idx.to_string()
-            self.emit_store_local(reg, offset, frame_size)
+            if int_idx < 8 {
+              let reg = "x" + int_idx.to_string()
+              self.emit_store_local(reg, offset, frame_size)
+            } else {
+              let stack_off = 16 + (int_idx - 8) * 8
+              self.emit("\tldr\tx9, [x29, #" + stack_off.to_string() + "]")
+              self.emit_store_local("x9", offset, frame_size)
+            }
             int_idx += 1
           }
         }
@@ -62,7 +123,11 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
         let p = decl.params[i]
         param_offsets[p.name] = self.local_offsets[p.name]
         param_types[p.name] = self.var_types[p.name]
-        param_stack_end = @math.maximum(param_stack_end, self.local_offsets[p.name] + self.type_size(p.ty))
+        let param_size = (self.type_size(p.ty) + 7) / 8 * 8
+        param_stack_end = @math.maximum(
+          param_stack_end,
+          self.local_offsets[p.name] + param_size,
+        )
       }
       self.local_offsets = param_offsets
       self.var_types = param_types
@@ -102,7 +167,12 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
 }
 
 ///|
-fn Codegen::emit_load_local(self : Codegen, dst_reg : String, offset : Int, frame_size : Int) -> Unit {
+fn Codegen::emit_load_local(
+  self : Codegen,
+  dst_reg : String,
+  offset : Int,
+  frame_size : Int,
+) -> Unit {
   let off = offset - frame_size
   if off >= -256 && off <= 255 {
     self.emit("\tldr\t" + dst_reg + ", [x29, #" + off.to_string() + "]")
@@ -113,7 +183,12 @@ fn Codegen::emit_load_local(self : Codegen, dst_reg : String, offset : Int, fram
 }
 
 ///|
-fn Codegen::emit_store_local(self : Codegen, src_reg : String, offset : Int, frame_size : Int) -> Unit {
+fn Codegen::emit_store_local(
+  self : Codegen,
+  src_reg : String,
+  offset : Int,
+  frame_size : Int,
+) -> Unit {
   let off = offset - frame_size
   if off >= -256 && off <= 255 {
     self.emit("\tstr\t" + src_reg + ", [x29, #" + off.to_string() + "]")
@@ -124,7 +199,11 @@ fn Codegen::emit_store_local(self : Codegen, src_reg : String, offset : Int, fra
 }
 
 ///|
-fn Codegen::emit_local_addr(self : Codegen, offset : Int, frame_size : Int) -> Unit {
+fn Codegen::emit_local_addr(
+  self : Codegen,
+  offset : Int,
+  frame_size : Int,
+) -> Unit {
   let off = offset - frame_size
   if off >= -256 && off <= 255 {
     self.emit("\tadd\tx9, x29, #" + off.to_string())

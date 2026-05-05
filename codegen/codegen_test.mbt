@@ -103,6 +103,7 @@ test "goto labels are scoped per function" {
   inspect(assembly.contains("\n_label_fail:"), content="false")
 }
 
+///|
 test "collect locals with array init" {
   let source =
     #|int main() {
@@ -170,7 +171,7 @@ test "generate mixed int double args in call" {
   let codegen = @codegen.Codegen::new()
   let assembly = codegen.generate(prog)
   // Caller should pass int in x0, double in d0
-  inspect(assembly.contains("mov\tx0, x9"), content="true")
+  inspect(assembly.contains("ldr\tx0, [sp, #0]"), content="true")
   inspect(assembly.contains("fmov\td0, x9"), content="true")
   // After call, should move return from d0
   inspect(assembly.contains("fmov\tx9, d0"), content="true")

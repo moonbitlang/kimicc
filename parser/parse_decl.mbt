@@ -27,15 +27,29 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       variadic = true
       let _ = params.pop()
     }
+    // Filter out void parameters: int foo(void) -> no params
+    let filtered_params = []
+    for i = 0; i < params.length(); i = i + 1 {
+      if params[i].ty != Void {
+        filtered_params.push(params[i])
+      }
+    }
+    let params = filtered_params
     // Apply array-to-pointer decay for function parameters
     for i = 0; i < params.length(); i = i + 1 {
       match params[i].ty {
-        Array(elem, _) => params[i] = { ty: Pointer(elem), name: params[i].name, bit_width: None }
+        Array(elem, _) =>
+          params[i] = {
+            ty: Pointer(elem),
+            name: params[i].name,
+            bit_width: None,
+          }
         _ => ()
       }
     }
     self.skip_attributes()
     self.current_func_name = decl.name
+    self.static_locals = {}
     let body = if self.token == LBrace {
       Some(self.parse_compound_stmt())
     } else {
@@ -43,6 +57,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       None
     }
     self.current_func_name = ""
+    self.static_locals = {}
     let ret_ty = match decl.func_ret_ty {
       Some(rt) => rt
       None => spec.base_type
@@ -50,8 +65,10 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
     return { ret: ret_ty, name: decl.name, params, variadic, body }
   }
   // Variable declaration (including function pointer variables)
-  if self.token == Semicolon || self.token == Assign || self.token == Comma ||
-     self.token == LBracket {
+  if self.token == Semicolon ||
+    self.token == Assign ||
+    self.token == Comma ||
+    self.token == LBracket {
     self.parse_global_var_tail(spec, decl)
     return { ret: Void, name: "", params: [], variadic: false, body: None }
   }
@@ -66,6 +83,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
 }
 
 ///|
+
 ///|
 fn resolve_var_type(decl : DeclaratorResult) -> Type {
   // For function pointer variables like int (*fp)(int), decl.ty is Pointer(Void)
@@ -77,7 +95,11 @@ fn resolve_var_type(decl : DeclaratorResult) -> Type {
 }
 
 ///|
-fn Parser::parse_global_var_tail(self : Parser, spec : DeclSpec, decl : DeclaratorResult) -> Unit {
+fn Parser::parse_global_var_tail(
+  self : Parser,
+  spec : DeclSpec,
+  decl : DeclaratorResult,
+) -> Unit {
   let mut ty = resolve_var_type(decl)
   let name = decl.name
   let mut init : GlobalInit? = None
@@ -85,7 +107,7 @@ fn Parser::parse_global_var_tail(self : Parser, spec : DeclSpec, decl : Declarat
   if self.token == Assign {
     self.advance()
     if self.token == LBrace {
-      let init_exprs = self.parse_brace_init_exprs()
+      let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
       let init_count = init_exprs.length()
       ty = match ty {
         Array(elem_ty, 0) => Type::Array(elem_ty, init_count)
@@ -93,7 +115,19 @@ fn Parser::parse_global_var_tail(self : Parser, spec : DeclSpec, decl : Declarat
       }
       init = Some(GlobalInit::Array(init_exprs))
     } else {
-      init = Some(GlobalInit::Scalar(self.parse_expr()))
+      let expr = self.parse_expr()
+      match (ty, expr) {
+        (Array(elem_ty, 0), Expr::String(s)) => {
+          ty = Type::Array(elem_ty, s.length() + 1)
+          let char_exprs = Array::make(s.length() + 1, Expr::Number(0))
+          for i = 0; i < s.length(); i = i + 1 {
+            char_exprs[i] = Expr::Number(s[i].to_int().to_int64())
+          }
+          char_exprs[s.length()] = Expr::Number(0)
+          init = Some(GlobalInit::Array(char_exprs))
+        }
+        _ => init = Some(GlobalInit::Scalar(expr))
+      }
     }
   }
   self.globals.push({ ty, name, init })
@@ -106,7 +140,7 @@ fn Parser::parse_global_var_tail(self : Parser, spec : DeclSpec, decl : Declarat
     if self.token == Assign {
       self.advance()
       if self.token == LBrace {
-        let init_exprs = self.parse_brace_init_exprs()
+        let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
         let init_count = init_exprs.length()
         extra_ty = match extra_ty {
           Array(elem_ty, 0) => Type::Array(elem_ty, init_count)
@@ -114,7 +148,19 @@ fn Parser::parse_global_var_tail(self : Parser, spec : DeclSpec, decl : Declarat
         }
         extra_init = Some(GlobalInit::Array(init_exprs))
       } else {
-        extra_init = Some(GlobalInit::Scalar(self.parse_expr()))
+        let expr = self.parse_expr()
+        match (extra_ty, expr) {
+          (Array(elem_ty, 0), Expr::String(s)) => {
+            extra_ty = Type::Array(elem_ty, s.length() + 1)
+            let char_exprs = Array::make(s.length() + 1, Expr::Number(0))
+            for i = 0; i < s.length(); i = i + 1 {
+              char_exprs[i] = Expr::Number(s[i].to_int().to_int64())
+            }
+            char_exprs[s.length()] = Expr::Number(0)
+            extra_init = Some(GlobalInit::Array(char_exprs))
+          }
+          _ => extra_init = Some(GlobalInit::Scalar(expr))
+        }
       }
     }
     self.globals.push({ ty: extra_ty, name: extra_decl.name, init: extra_init })
@@ -133,5 +179,3 @@ fn Parser::parse_param(self : Parser) -> Param {
   self.skip_attributes()
   { ty: decl.ty, name: decl.name, bit_width: None }
 }
-
-

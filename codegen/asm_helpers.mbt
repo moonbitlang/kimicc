@@ -83,7 +83,7 @@ fn Codegen::emit_load_typed(
   self : Codegen,
   reg : String,
   addr_reg : String,
-  ty : @parser.Type
+  ty : @parser.Type,
 ) -> Unit {
   match ty {
     Bool | UChar => self.emit("\tldrb\t" + w_reg(reg) + ", [" + addr_reg + "]")
@@ -112,12 +112,15 @@ fn Codegen::emit_store_typed(
   self : Codegen,
   value_reg : String,
   addr_reg : String,
-  ty : @parser.Type
+  ty : @parser.Type,
 ) -> Unit {
   match ty {
-    Bool | SChar | UChar => self.emit("\tstrb\t" + w_reg(value_reg) + ", [" + addr_reg + "]")
-    SShort | UShort => self.emit("\tstrh\t" + w_reg(value_reg) + ", [" + addr_reg + "]")
-    SInt | UInt | Float => self.emit("\tstr\t" + w_reg(value_reg) + ", [" + addr_reg + "]")
+    Bool | SChar | UChar =>
+      self.emit("\tstrb\t" + w_reg(value_reg) + ", [" + addr_reg + "]")
+    SShort | UShort =>
+      self.emit("\tstrh\t" + w_reg(value_reg) + ", [" + addr_reg + "]")
+    SInt | UInt | Float =>
+      self.emit("\tstr\t" + w_reg(value_reg) + ", [" + addr_reg + "]")
     Atomic(inner) => self.emit_store_typed(value_reg, addr_reg, inner)
     _ => self.emit("\tstr\t" + value_reg + ", [" + addr_reg + "]")
   }
@@ -125,6 +128,7 @@ fn Codegen::emit_store_typed(
 
 ///|
 // Get or create the assembly label name for an AST label.
+
 ///|
 fn is_digit_char(ch : UInt16) -> Bool {
   ch >= '0'.to_int().to_uint16() && ch <= '9'.to_int().to_uint16()

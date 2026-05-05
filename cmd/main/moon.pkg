@@ -7,5 +7,5 @@ import {
 
 options(
   "is-main": true,
-  "native-stub": ["stub.c"],
+  "native-stub": [ "stub.c" ],
 )

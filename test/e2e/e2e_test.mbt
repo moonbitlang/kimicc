@@ -28,11 +28,10 @@ fn run_source(source : String) -> Int {
   let id = source_id(source)
   let asm_path = "/tmp/kimicc_test_" + id + ".s"
   let bin_path = "/tmp/kimicc_test_" + id
-  let _ = moonbit_write_file(
-    @utf8.encode(asm_path),
-    @utf8.encode(assembly),
+  let _ = moonbit_write_file(@utf8.encode(asm_path), @utf8.encode(assembly))
+  let link_rc = moonbit_system(
+    @utf8.encode("clang -o " + bin_path + " " + asm_path),
   )
-  let link_rc = moonbit_system(@utf8.encode("clang -o " + bin_path + " " + asm_path))
   if link_rc != 0 {
     abort("Link failed with code: " + link_rc.to_string())
   }
@@ -1764,7 +1763,6 @@ async test "switch fallthrough with negative enum cases" {
   inspect(exit_code, content="0")
 }
 
-
 ///|
 async test "variadic snprintf with integer" {
   let source =
@@ -1831,7 +1829,7 @@ async test "variadic snprintf buffer contents string" {
 }
 
 ///|
-test "variadic snprintf with no variadic args" {
+async test "variadic snprintf with no variadic args" {
   let source =
     #|int snprintf(char *buf, unsigned long n, const char *fmt, ...);
     #|int main() {
@@ -1858,7 +1856,7 @@ async test "variadic snprintf with hex" {
 }
 
 ///|
-test "variadic snprintf with pointer" {
+async test "variadic snprintf with pointer" {
   let source =
     #|int snprintf(char *buf, unsigned long n, const char *fmt, ...);
     #|int main() {

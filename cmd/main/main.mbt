@@ -17,10 +17,7 @@ fn read_file(path : String) -> String? {
 
 ///|
 fn write_file(path : String, content : String) -> Bool {
-  let rc = moonbit_write_file(
-    @utf8.encode(path),
-    @utf8.encode(content),
-  )
+  let rc = moonbit_write_file(@utf8.encode(path), @utf8.encode(content))
   rc == 0
 }
 
@@ -30,7 +27,9 @@ fn main {
     "kimicc",
     flags=[@argparse.FlagArg("version", short='v', long="version")],
     options=[
-      @argparse.OptionArg("output", short='o', long="output", default_values=["-"]),
+      @argparse.OptionArg("output", short='o', long="output", default_values=[
+        "-",
+      ]),
     ],
     positionals=[@argparse.PositionArg("input")],
     about="A simple C compiler",
@@ -59,12 +58,7 @@ fn main {
     }
   }
   let output_path = match matches.values.get("output") {
-    Some(arr) =>
-      if arr.length() > 0 {
-        arr[0]
-      } else {
-        "-"
-      }
+    Some(arr) => if arr.length() > 0 { arr[0] } else { "-" }
     None => "-"
   }
   let source = match read_file(input_path) {
@@ -79,9 +73,7 @@ fn main {
   let assembly = codegen.generate(prog)
   if output_path == "-" {
     println(assembly)
-  } else {
-    if !write_file(output_path, assembly) {
-      println("error: cannot write file: " + output_path)
-    }
+  } else if !write_file(output_path, assembly) {
+    println("error: cannot write file: " + output_path)
   }
 }

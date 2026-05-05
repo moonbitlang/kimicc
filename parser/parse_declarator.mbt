@@ -44,44 +44,102 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
   let mut typedef_type = Type::SInt
   let mut saw_primitive = false
   let mut saw_typedef_name = false
+  let mut has_va_list = false
   while true {
     self.skip_attributes()
     let mut consumed = false
     // Storage class specifiers
     if not(consumed) {
       match self.token {
-        Typedef => { spec.is_typedef = true; self.advance(); consumed = true }
-        Extern => { spec.is_extern = true; self.advance(); consumed = true }
-        Static => { spec.is_static = true; self.advance(); consumed = true }
-        Auto => { spec.is_auto = true; self.advance(); consumed = true }
-        Register => { spec.is_register = true; self.advance(); consumed = true }
+        Typedef => {
+          spec.is_typedef = true
+          self.advance()
+          consumed = true
+        }
+        Extern => {
+          spec.is_extern = true
+          self.advance()
+          consumed = true
+        }
+        Static => {
+          spec.is_static = true
+          self.advance()
+          consumed = true
+        }
+        Auto => {
+          spec.is_auto = true
+          self.advance()
+          consumed = true
+        }
+        Register => {
+          spec.is_register = true
+          self.advance()
+          consumed = true
+        }
         _ => ()
       }
     }
     // Function specifier
     if not(consumed) && self.token == Inline {
-      spec.is_inline = true; self.advance(); consumed = true
+      spec.is_inline = true
+      self.advance()
+      consumed = true
     }
     // Type qualifiers and GCC attributes
     if not(consumed) {
       match self.token {
-        Const | Restrict | Volatile => { self.advance(); consumed = true }
-        Ident("__extension__") | Ident("__inline") | Ident("__inline__") |
-        Ident("__restrict") | Ident("__restrict__") | Ident("__signed") |
-        Ident("__signed__") | Ident("__unsigned") | Ident("__unsigned__") |
-        Ident("__volatile") | Ident("__volatile__") | Ident("__const") |
-        Ident("__const__") | Ident("_Nullable") | Ident("_Nonnull") |
-        Ident("_Null_unspecified") => { self.advance(); consumed = true }
+        Const | Restrict | Volatile => {
+          self.advance()
+          consumed = true
+        }
+        Ident("__extension__")
+        | Ident("__inline")
+        | Ident("__inline__")
+        | Ident("__restrict")
+        | Ident("__restrict__")
+        | Ident("__signed")
+        | Ident("__signed__")
+        | Ident("__unsigned")
+        | Ident("__unsigned__")
+        | Ident("__volatile")
+        | Ident("__volatile__")
+        | Ident("__const")
+        | Ident("__const__")
+        | Ident("_Nullable")
+        | Ident("_Nonnull")
+        | Ident("_Null_unspecified") => {
+          self.advance()
+          consumed = true
+        }
         _ => ()
       }
     }
     // Primitive type specifiers (can be combined: long long, unsigned int, etc.)
     if not(consumed) {
       match self.token {
-        Void => { has_void = true; self.advance(); saw_primitive = true; consumed = true }
-        Char => { has_char = true; self.advance(); saw_primitive = true; consumed = true }
-        Short => { has_short = true; self.advance(); saw_primitive = true; consumed = true }
-        Int => { self.advance(); saw_primitive = true; consumed = true }
+        Void => {
+          has_void = true
+          self.advance()
+          saw_primitive = true
+          consumed = true
+        }
+        Char => {
+          has_char = true
+          self.advance()
+          saw_primitive = true
+          consumed = true
+        }
+        Short => {
+          has_short = true
+          self.advance()
+          saw_primitive = true
+          consumed = true
+        }
+        Int => {
+          self.advance()
+          saw_primitive = true
+          consumed = true
+        }
         Long => {
           long_count += 1
           if long_count > 2 {
@@ -91,11 +149,35 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
           saw_primitive = true
           consumed = true
         }
-        Float => { has_float = true; self.advance(); saw_primitive = true; consumed = true }
-        Double => { has_double = true; self.advance(); saw_primitive = true; consumed = true }
-        Signed => { self.advance(); saw_primitive = true; consumed = true }
-        Unsigned => { has_unsigned = true; self.advance(); saw_primitive = true; consumed = true }
-        Bool => { has_bool = true; self.advance(); saw_primitive = true; consumed = true }
+        Float => {
+          has_float = true
+          self.advance()
+          saw_primitive = true
+          consumed = true
+        }
+        Double => {
+          has_double = true
+          self.advance()
+          saw_primitive = true
+          consumed = true
+        }
+        Signed => {
+          self.advance()
+          saw_primitive = true
+          consumed = true
+        }
+        Unsigned => {
+          has_unsigned = true
+          self.advance()
+          saw_primitive = true
+          consumed = true
+        }
+        Bool => {
+          has_bool = true
+          self.advance()
+          saw_primitive = true
+          consumed = true
+        }
         Struct => {
           has_struct = true
           struct_result = self.parse_struct_type_specifier()
@@ -113,7 +195,7 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
           saw_primitive = true
           consumed = true
         }
-        Ident(name) => {
+        Ident(name) =>
           if name == "_Atomic" {
             self.advance()
             if self.token == LParen {
@@ -125,21 +207,25 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
             consumed = true
           } else if name == "__builtin_va_list" {
             spec.base_type = Pointer(SChar)
+            has_va_list = true
             self.advance()
             saw_primitive = true
             consumed = true
-          } else if name == "__uint128_t" || name == "__int128" || name == "_Float16" {
+          } else if name == "__uint128_t" ||
+            name == "__int128" ||
+            name == "_Float16" {
             self.advance()
             saw_primitive = true
             consumed = true
-          } else if not(saw_primitive) && not(saw_typedef_name) && self.typedefs.contains(name) {
+          } else if not(saw_primitive) &&
+            not(saw_typedef_name) &&
+            self.typedefs.contains(name) {
             has_typedef_name = true
             typedef_type = self.typedefs[name]
             self.advance()
             saw_typedef_name = true
             consumed = true
           }
-        }
         _ => ()
       }
     }
@@ -151,6 +237,8 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     spec.base_type = struct_result
   } else if has_typedef_name {
     spec.base_type = typedef_type
+  } else if has_va_list {
+    // base_type already set to Pointer(SChar)
   } else if has_void {
     spec.base_type = Void
   } else if has_bool {
@@ -183,12 +271,10 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     } else {
       spec.base_type = SLong
     }
+  } else if has_unsigned {
+    spec.base_type = UInt
   } else {
-    if has_unsigned {
-      spec.base_type = UInt
-    } else {
-      spec.base_type = SInt
-    }
+    spec.base_type = SInt
   }
   spec
 }
@@ -361,7 +447,10 @@ fn Parser::parse_abstract_declarator(self : Parser, base_ty : Type) -> Type {
 }
 
 ///|
-fn Parser::parse_direct_declarator(self : Parser, base_ty : Type) -> DeclaratorResult {
+fn Parser::parse_direct_declarator(
+  self : Parser,
+  base_ty : Type,
+) -> DeclaratorResult {
   self.skip_attributes()
   match self.token {
     Ident(name) => {
@@ -380,10 +469,13 @@ fn Parser::parse_direct_declarator(self : Parser, base_ty : Type) -> DeclaratorR
 }
 
 ///|
-fn Parser::parse_direct_abstract_declarator(self : Parser, base_ty : Type) -> Type {
+fn Parser::parse_direct_abstract_declarator(
+  self : Parser,
+  base_ty : Type,
+) -> Type {
   self.skip_attributes()
   match self.token {
-    LParen => {
+    LParen =>
       if self.is_parenthesized_abstract_declarator() {
         self.advance()
         let inner_ty = self.parse_abstract_declarator(base_ty)
@@ -392,7 +484,6 @@ fn Parser::parse_direct_abstract_declarator(self : Parser, base_ty : Type) -> Ty
       } else {
         self.parse_abstract_declarator_suffixes(base_ty, false)
       }
-    }
     _ => self.parse_abstract_declarator_suffixes(base_ty, false)
   }
 }
@@ -406,7 +497,9 @@ fn Parser::is_parenthesized_abstract_declarator(self : Parser) -> Bool {
   let saved_pos = self.lexer.pos
   let saved_token = self.token
   self.advance() // past (
-  let result = self.token == Star || self.token == BitXor || self.token == LParen
+  let result = self.token == Star ||
+    self.token == BitXor ||
+    self.token == LParen
   self.lexer.pos = saved_pos
   self.token = saved_token
   result
@@ -415,10 +508,15 @@ fn Parser::is_parenthesized_abstract_declarator(self : Parser) -> Bool {
 ///|
 fn DeclaratorResult::set_func_info(
   self : DeclaratorResult,
-  inner : DeclaratorResult
+  inner : DeclaratorResult,
 ) -> DeclaratorResult {
   if inner.func_params.is_some() {
-    { ..self, func_params: inner.func_params, func_ret_ty: inner.func_ret_ty, is_func_decl: inner.is_func_decl }
+    {
+      ..self,
+      func_params: inner.func_params,
+      func_ret_ty: inner.func_ret_ty,
+      is_func_decl: inner.is_func_decl,
+    }
   } else {
     self
   }
@@ -429,7 +527,7 @@ fn Parser::parse_declarator_suffixes(
   self : Parser,
   base_ty : Type,
   name : String,
-  push_mode : Bool
+  push_mode : Bool,
 ) -> DeclaratorResult {
   let mut ty = base_ty
   let mut func_params : Array[Param]? = None
@@ -440,7 +538,10 @@ fn Parser::parse_declarator_suffixes(
       LBracket => {
         self.advance()
         // Skip C99 array parameter qualifiers: static, const, restrict, volatile
-        while self.token == Static || self.token == Const || self.token == Restrict || self.token == Volatile {
+        while self.token == Static ||
+              self.token == Const ||
+              self.token == Restrict ||
+              self.token == Volatile {
           self.advance()
         }
         let size = if self.token == RBracket {
@@ -488,7 +589,7 @@ fn Parser::parse_declarator_suffixes(
 fn Parser::parse_abstract_declarator_suffixes(
   self : Parser,
   ty : Type,
-  push_mode : Bool
+  push_mode : Bool,
 ) -> Type {
   let mut result = ty
   while true {
@@ -496,7 +597,10 @@ fn Parser::parse_abstract_declarator_suffixes(
       LBracket => {
         self.advance()
         // Skip C99 array parameter qualifiers: static, const, restrict, volatile
-        while self.token == Static || self.token == Const || self.token == Restrict || self.token == Volatile {
+        while self.token == Static ||
+              self.token == Const ||
+              self.token == Restrict ||
+              self.token == Volatile {
           self.advance()
         }
         let size = if self.token == RBracket {
