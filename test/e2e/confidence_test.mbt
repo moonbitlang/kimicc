@@ -567,6 +567,24 @@ async test "e2e switch dispatch reaches nested case labels" {
 }
 
 ///|
+async test "e2e unsigned int switch matches negative case bits" {
+  let source =
+    #|int run(unsigned int tag) {
+    #|  switch (tag) {
+    #|    case -7:
+    #|      return 42;
+    #|    default:
+    #|      return 1;
+    #|  }
+    #|}
+    #|int main() {
+    #|  return run(0 - 7);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e bitfields pack after byte fields like clang" {
   let source =
     #|typedef unsigned int Pgno;

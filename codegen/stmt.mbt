@@ -1,4 +1,35 @@
 ///|
+fn switch_control_type(ty : @parser.Type) -> @parser.Type {
+  match ty {
+    Atomic(inner) => switch_control_type(inner)
+    Bool | SChar | UChar | SShort | UShort => SInt
+    _ => ty
+  }
+}
+
+///|
+fn Codegen::emit_switch_case_compare(
+  self : Codegen,
+  case_value : Int64,
+  control_ty : @parser.Type,
+) -> Unit {
+  match control_ty {
+    SInt | UInt => {
+      let case32 = case_value & 0xFFFFFFFFL
+      self.emit_load_int("x10", case32)
+      self.emit("\tcmp\tw9, w10")
+    }
+    _ =>
+      if fits_cmp_imm(case_value) {
+        self.emit("\tcmp\tx9, #" + case_value.to_string())
+      } else {
+        self.emit_load_int("x10", case_value)
+        self.emit("\tcmp\tx9, x10")
+      }
+  }
+}
+
+///|
 fn Codegen::gen_stmt(
   self : Codegen,
   stmt : @parser.Stmt,
@@ -123,17 +154,14 @@ fn Codegen::gen_stmt(
       let end_label = self.new_label()
       let old_break = self.break_label
       self.break_label = Some(end_label)
+      let control_ty = switch_control_type(self.type_of(expr, frame_size))
       self.gen_expr(expr, frame_size)
+      self.emit_scalar_conversion_to(control_ty)
       // Generate comparison and branch for each case
       for c in cases {
         match c.0 {
           Some(n) => {
-            if fits_cmp_imm(n) {
-              self.emit("\tcmp\tx9, #" + n.to_string())
-            } else {
-              self.emit_load_int("x10", n)
-              self.emit("\tcmp\tx9, x10")
-            }
+            self.emit_switch_case_compare(n, control_ty)
             self.emit("\tb.eq\t" + self.label_ref(c.1))
           }
           None => () // default handled after all cases
