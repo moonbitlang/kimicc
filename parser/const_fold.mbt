@@ -555,6 +555,30 @@ fn Parser::const_offset_of(self : Parser, ty : Type, field : String) -> Int? {
 }
 
 ///|
+fn Parser::const_member_type(self : Parser, ty : Type, field : String) -> Type? {
+  let name = match ty {
+    Struct(n) | Union(n) => n
+    Pointer(Struct(n)) | Pointer(Union(n)) => n
+    _ => return None
+  }
+  if !self.struct_decls.contains(name) {
+    return None
+  }
+  let decl = self.struct_decls[name]
+  let layout = if decl.is_union {
+    self.const_union_layout(decl)
+  } else {
+    self.const_struct_layout(decl)
+  }
+  for item in layout {
+    if item.0 == field {
+      return Some(item.1)
+    }
+  }
+  None
+}
+
+///|
 fn type_of_expr(expr : Expr) -> Type {
   match expr {
     Number(_) => SInt
@@ -605,6 +629,11 @@ fn Parser::const_expr_type(self : Parser, expr : Expr) -> Type {
       match self.const_expr_type(e) {
         Pointer(elem) | Array(elem, _) => elem
         _ => SInt
+      }
+    MemberAccess(obj, field) =>
+      match self.const_member_type(self.const_expr_type(obj), field) {
+        Some(ty) => ty
+        None => SInt
       }
     String(s) => Array(SChar, s.length() + 1)
     FloatLiteral(_) => Double

@@ -614,6 +614,30 @@ async test "e2e local array bound uses sizeof global array" {
 }
 
 ///|
+async test "e2e local array bound uses sizeof struct pointer array field" {
+  let source =
+    #|struct PagerLike {
+    #|  int flags;
+    #|  char dbFileVers[16];
+    #|};
+    #|
+    #|int read_version(struct PagerLike *p) {
+    #|  char dbFileVers[sizeof(p->dbFileVers)];
+    #|  if (sizeof(dbFileVers) != 16) return 1;
+    #|  dbFileVers[0] = 40;
+    #|  dbFileVers[15] = 2;
+    #|  return dbFileVers[0] + dbFileVers[15];
+    #|}
+    #|
+    #|int main(void) {
+    #|  struct PagerLike pager;
+    #|  return read_version(&pager);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e global pointer initialized to array element" {
   let source =
     #|unsigned char table[4] = {1, 40, 9, 2};
