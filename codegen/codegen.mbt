@@ -136,6 +136,140 @@ fn Codegen::global_expr_type(
 }
 
 ///|
+fn Codegen::fold_const(self : Codegen, expr : @parser.Expr) -> Int64? {
+  match expr {
+    Number(n) => Some(n)
+    Binary("+", a, b) =>
+      match (self.fold_const(a), self.fold_const(b)) {
+        (Some(x), Some(y)) => Some(x + y)
+        _ => None
+      }
+    Binary("-", a, b) =>
+      match (self.fold_const(a), self.fold_const(b)) {
+        (Some(x), Some(y)) => Some(x - y)
+        _ => None
+      }
+    Binary("*", a, b) =>
+      match (self.fold_const(a), self.fold_const(b)) {
+        (Some(x), Some(y)) => Some(x * y)
+        _ => None
+      }
+    Binary("/", a, b) =>
+      match (self.fold_const(a), self.fold_const(b)) {
+        (Some(_), Some(0L)) => None
+        (Some(x), Some(y)) => Some(x / y)
+        _ => None
+      }
+    Binary("%", a, b) =>
+      match (self.fold_const(a), self.fold_const(b)) {
+        (Some(_), Some(0L)) => None
+        (Some(x), Some(y)) => Some(x % y)
+        _ => None
+      }
+    Binary("|", a, b) =>
+      match (self.fold_const(a), self.fold_const(b)) {
+        (Some(x), Some(y)) => Some(x | y)
+        _ => None
+      }
+    Binary("&", a, b) =>
+      match (self.fold_const(a), self.fold_const(b)) {
+        (Some(x), Some(y)) => Some(x & y)
+        _ => None
+      }
+    Binary("^", a, b) =>
+      match (self.fold_const(a), self.fold_const(b)) {
+        (Some(x), Some(y)) => Some(x ^ y)
+        _ => None
+      }
+    Binary("<<", a, b) =>
+      match (self.fold_const(a), self.fold_const(b)) {
+        (Some(x), Some(y)) => Some(x << y.to_int())
+        _ => None
+      }
+    Binary(">>", a, b) =>
+      match (self.fold_const(a), self.fold_const(b)) {
+        (Some(x), Some(y)) => Some(x >> y.to_int())
+        _ => None
+      }
+    Binary("==", a, b) =>
+      match (self.fold_const(a), self.fold_const(b)) {
+        (Some(x), Some(y)) => Some(if x == y { 1L } else { 0L })
+        _ => None
+      }
+    Binary("!=", a, b) =>
+      match (self.fold_const(a), self.fold_const(b)) {
+        (Some(x), Some(y)) => Some(if x != y { 1L } else { 0L })
+        _ => None
+      }
+    Binary("<", a, b) =>
+      match (self.fold_const(a), self.fold_const(b)) {
+        (Some(x), Some(y)) => Some(if x < y { 1L } else { 0L })
+        _ => None
+      }
+    Binary(">", a, b) =>
+      match (self.fold_const(a), self.fold_const(b)) {
+        (Some(x), Some(y)) => Some(if x > y { 1L } else { 0L })
+        _ => None
+      }
+    Binary("<=", a, b) =>
+      match (self.fold_const(a), self.fold_const(b)) {
+        (Some(x), Some(y)) => Some(if x <= y { 1L } else { 0L })
+        _ => None
+      }
+    Binary(">=", a, b) =>
+      match (self.fold_const(a), self.fold_const(b)) {
+        (Some(x), Some(y)) => Some(if x >= y { 1L } else { 0L })
+        _ => None
+      }
+    Binary("&&", a, b) =>
+      match (self.fold_const(a), self.fold_const(b)) {
+        (Some(x), Some(y)) => Some(if x != 0L && y != 0L { 1L } else { 0L })
+        _ => None
+      }
+    Binary("||", a, b) =>
+      match (self.fold_const(a), self.fold_const(b)) {
+        (Some(x), Some(y)) => Some(if x != 0L || y != 0L { 1L } else { 0L })
+        _ => None
+      }
+    Ternary(cond, a, b) =>
+      match self.fold_const(cond) {
+        Some(0L) => self.fold_const(b)
+        Some(_) => self.fold_const(a)
+        None => None
+      }
+    Unary("-", e) =>
+      match self.fold_const(e) {
+        Some(x) => Some(-x)
+        _ => None
+      }
+    Unary("~", e) =>
+      match self.fold_const(e) {
+        Some(x) => Some(x.lnot())
+        _ => None
+      }
+    Unary("!", e) =>
+      match self.fold_const(e) {
+        Some(0L) => Some(1L)
+        Some(_) => Some(0L)
+        _ => None
+      }
+    Cast(_, e) => self.fold_const(e)
+    Sizeof(ty) => Some(self.type_size(ty).to_int64())
+    SizeofExpr(e) => Some(self.type_size(self.global_expr_type(e)).to_int64())
+    OffsetOf(ty, field) =>
+      match ty {
+        Struct(name) | Union(name) =>
+          match self.find_field_layout(name, field) {
+            Some((_, _, offset, _, _, _)) => Some(offset.to_int64())
+            None => None
+          }
+        _ => None
+      }
+    _ => None
+  }
+}
+
+///|
 fn Codegen::global_lvalue_reloc(
   self : Codegen,
   expr : @parser.Expr,
@@ -149,7 +283,7 @@ fn Codegen::global_lvalue_reloc(
             Array(elem, _) | Pointer(elem) => self.type_size(elem)
             _ => 1
           }
-          match @parser.fold_const(index) {
+          match self.fold_const(index) {
             Some(i) => Some((label, base_offset + i.to_int() * elem_size))
             None => None
           }
@@ -191,19 +325,19 @@ fn Codegen::global_address_reloc(
       }
     Var(name) => Some("_" + name)
     Binary("+", base, offset_expr) =>
-      match (self.global_address_reloc(base), @parser.fold_const(offset_expr)) {
+      match (self.global_address_reloc(base), self.fold_const(offset_expr)) {
         (Some(label), Some(offset)) =>
           Some(reloc_with_offset(label, offset.to_int()))
         _ =>
           match
-            (self.global_address_reloc(offset_expr), @parser.fold_const(base)) {
+            (self.global_address_reloc(offset_expr), self.fold_const(base)) {
             (Some(label), Some(offset)) =>
               Some(reloc_with_offset(label, offset.to_int()))
             _ => None
           }
       }
     Binary("-", base, offset_expr) =>
-      match (self.global_address_reloc(base), @parser.fold_const(offset_expr)) {
+      match (self.global_address_reloc(base), self.fold_const(offset_expr)) {
         (Some(label), Some(offset)) =>
           Some(reloc_with_offset(label, -offset.to_int()))
         _ => None
@@ -255,7 +389,7 @@ fn Codegen::emit_global_scalar(
     _ => ()
   }
   // Try constant-fold the expression first
-  let folded_expr = match @parser.fold_const(expr) {
+  let folded_expr = match self.fold_const(expr) {
     Some(n) => @parser.Expr::Number(n)
     None => expr
   }

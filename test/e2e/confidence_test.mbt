@@ -92,6 +92,50 @@ async test "e2e local array of structs with nested initializer" {
 }
 
 ///|
+async test "e2e static aggregate initializer folds sizeof typedef struct" {
+  let source =
+    #|typedef struct File File;
+    #|struct File {
+    #|  void *pMethod;
+    #|  void *pVfs;
+    #|  void *pInode;
+    #|  int h;
+    #|  unsigned char eFileLock;
+    #|  unsigned short ctrlFlags;
+    #|  int lastErrno;
+    #|  void *lockingContext;
+    #|  void *pPreallocatedUnused;
+    #|  const char *zPath;
+    #|  void *pShm;
+    #|  int szChunk;
+    #|  long mmapSize;
+    #|  long mmapSizeActual;
+    #|  long mmapSizeMax;
+    #|  void *pMapRegion;
+    #|  int sectorSize;
+    #|  int deviceCharacteristics;
+    #|};
+    #|struct Vfs {
+    #|  int iVersion;
+    #|  int szOsFile;
+    #|  int mxPathname;
+    #|  void *pNext;
+    #|  const char *zName;
+    #|};
+    #|int main(void) {
+    #|  static struct Vfs aVfs[] = {
+    #|    { 3, sizeof(File), 512, 0, "unix" },
+    #|  };
+    #|  if (aVfs[0].szOsFile != sizeof(File)) {
+    #|    return 1;
+    #|  }
+    #|  return aVfs[0].szOsFile > 100 ? 42 : 2;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e file scope static symbols have internal linkage" {
   let left =
     #|static int shared = 40;
