@@ -80,3 +80,37 @@ async test "e2e switch default before later case" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")
 }
+
+///|
+async test "e2e bitfields pack after byte fields like clang" {
+  let source =
+    #|typedef unsigned int Pgno;
+    #|struct InitInfo {
+    #|  Pgno newTnum;
+    #|  unsigned char iDb;
+    #|  unsigned char busy;
+    #|  unsigned orphanTrigger : 1;
+    #|  unsigned imposterTable : 1;
+    #|  unsigned reopenMemdb : 1;
+    #|  const char **azInit;
+    #|};
+    #|int main() {
+    #|  struct InitInfo x = {0};
+    #|  x.newTnum = 1;
+    #|  x.iDb = 2;
+    #|  x.busy = 3;
+    #|  x.orphanTrigger = 1;
+    #|  x.imposterTable = 0;
+    #|  x.reopenMemdb = 1;
+    #|  x.azInit = (const char**)0x12345678;
+    #|  if (sizeof(struct InitInfo) != 16) return 1;
+    #|  if (__builtin_offsetof(struct InitInfo, azInit) != 8) return 2;
+    #|  if (x.newTnum != 1 || x.iDb != 2 || x.busy != 3) return 3;
+    #|  if (x.orphanTrigger != 1 || x.imposterTable != 0) return 4;
+    #|  if (x.reopenMemdb != 1) return 5;
+    #|  if (x.azInit != (const char**)0x12345678) return 6;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}

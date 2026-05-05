@@ -71,14 +71,9 @@ fn run_command_checked(cmd : String, context : String) -> Unit {
 }
 
 ///|
-async fn run_command_capture(
-  cmd : String,
-  tag : String,
-) -> CommandResult {
+async fn run_command_capture(cmd : String, tag : String) -> CommandResult {
   let output_path = temp_file_path(tag, cmd, ".out")
-  let rc = moonbit_system(
-    @utf8.encode(cmd + " > " + output_path + " 2>&1"),
-  )
+  let rc = moonbit_system(@utf8.encode(cmd + " > " + output_path + " 2>&1"))
   let data = @fs.read_file(output_path)
   { code: rc, output: data.text() }
 }
@@ -110,8 +105,7 @@ async fn preprocess_c_file(path : String, tag : String) -> String {
 ///|
 async fn compile_sqlite_fixture_object() -> String {
   let source = preprocess_c_file(
-    "test/fixtures/sqlite/sqlite3.c",
-    "sqlite3_preprocessed",
+    "test/fixtures/sqlite/sqlite3.c", "sqlite3_preprocessed",
   )
   let assembly = compile(source)
   assert_true(assembly.contains("_sqlite3_open:"))

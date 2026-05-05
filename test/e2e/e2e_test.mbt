@@ -1,3 +1,4 @@
+///|
 async test "run hello fixture" {
   let source =
     #|int main() {

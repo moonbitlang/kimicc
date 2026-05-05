@@ -162,6 +162,7 @@ fn Codegen::compute_struct_layout(
   let layout = []
   // Bit-field packing state
   let mut current_container_size = 0
+  let mut current_container_align = 0
   let mut current_container_offset = 0
   let mut current_bit_offset = 0
   for field in decl.fields {
@@ -175,6 +176,7 @@ fn Codegen::compute_struct_layout(
       }
       offset += self.type_size(field.ty)
       current_container_size = 0
+      current_container_align = 0
       current_container_offset = 0
       current_bit_offset = 0
       continue
@@ -189,33 +191,44 @@ fn Codegen::compute_struct_layout(
         layout.push((field.name, field.ty, offset, size, 0, 0))
         offset += size
         current_container_size = 0
+        current_container_align = 0
         current_container_offset = 0
         current_bit_offset = 0
       }
       Some(w) => {
         let container_size = self.type_size(field.ty)
         let container_align = self.type_align(field.ty)
+        let container_bits = container_size * 8
         if w == 0 {
           // Zero-width bit-field: force alignment to next container boundary
           let padding = (container_align - offset % container_align) %
             container_align
           offset += padding
           current_container_size = 0
+          current_container_align = 0
           current_container_offset = 0
           current_bit_offset = 0
           // Don't add a layout entry for zero-width bit-fields
         } else {
-          // Start new container if needed
-          if current_container_size == 0 ||
-            current_container_size != container_size ||
-            current_bit_offset + w > current_container_size * 8 {
-            let padding = (container_align - offset % container_align) %
+          let can_continue = current_container_size == container_size &&
+            current_container_align == container_align &&
+            current_bit_offset + w <= container_bits
+          if !can_continue {
+            let mut container_offset = offset /
+              container_align *
               container_align
-            offset += padding
-            current_container_offset = offset
+            let mut bit_offset = (offset - container_offset) * 8
+            if offset >= container_offset + container_size ||
+              bit_offset + w > container_bits {
+              let padding = (container_align - offset % container_align) %
+                container_align
+              container_offset = offset + padding
+              bit_offset = 0
+            }
+            current_container_offset = container_offset
             current_container_size = container_size
-            current_bit_offset = 0
-            offset += container_size
+            current_container_align = container_align
+            current_bit_offset = bit_offset
           }
           layout.push(
             (
@@ -228,6 +241,11 @@ fn Codegen::compute_struct_layout(
             ),
           )
           current_bit_offset += w
+          let end_offset = current_container_offset +
+            (current_bit_offset + 7) / 8
+          if end_offset > offset {
+            offset = end_offset
+          }
         }
       }
     }
