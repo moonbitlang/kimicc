@@ -956,6 +956,7 @@ fn Codegen::gen_expr(
         (left_ty.is_floating() || right_ty.is_floating())
       let is_double = is_fp && (left_ty == Double || right_ty == Double)
       let is_unsigned_int = uses_unsigned_integer_op(left_ty, right_ty)
+      let is_unsigned_cmp = is_unsigned_int || is_ptr_diff
       self.gen_expr(left, frame_size)
       self.emit("\tstr\tx9, [sp, #-16]!")
       self.gen_expr(right, frame_size)
@@ -1101,7 +1102,7 @@ fn Codegen::gen_expr(
             self.emit("\tcset\tx9, mi")
           } else {
             self.emit("\tcmp\tx9, x10")
-            if is_unsigned_int {
+            if is_unsigned_cmp {
               self.emit("\tcset\tx9, lo")
             } else {
               self.emit("\tcset\tx9, lt")
@@ -1121,7 +1122,7 @@ fn Codegen::gen_expr(
             self.emit("\tcset\tx9, ls")
           } else {
             self.emit("\tcmp\tx9, x10")
-            if is_unsigned_int {
+            if is_unsigned_cmp {
               self.emit("\tcset\tx9, ls")
             } else {
               self.emit("\tcset\tx9, le")
@@ -1141,7 +1142,7 @@ fn Codegen::gen_expr(
             self.emit("\tcset\tx9, gt")
           } else {
             self.emit("\tcmp\tx9, x10")
-            if is_unsigned_int {
+            if is_unsigned_cmp {
               self.emit("\tcset\tx9, hi")
             } else {
               self.emit("\tcset\tx9, gt")
@@ -1161,7 +1162,7 @@ fn Codegen::gen_expr(
             self.emit("\tcset\tx9, ge")
           } else {
             self.emit("\tcmp\tx9, x10")
-            if is_unsigned_int {
+            if is_unsigned_cmp {
               self.emit("\tcset\tx9, hs")
             } else {
               self.emit("\tcset\tx9, ge")

@@ -658,3 +658,31 @@ async test "e2e struct ternary assignment copies selected operand" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="40")
 }
+
+///|
+async test "e2e pointer less-than uses unsigned address ordering" {
+  let source =
+    #|typedef unsigned char u8;
+    #|
+    #|int utf8_len(const char *zIn, int nByte) {
+    #|  int r = 0;
+    #|  const u8 *z = (const u8*)zIn;
+    #|  const u8 *zTerm;
+    #|  if (nByte >= 0) {
+    #|    zTerm = &z[nByte];
+    #|  } else {
+    #|    zTerm = (const u8*)(-1);
+    #|  }
+    #|  while (*z != 0 && z < zTerm) {
+    #|    z++;
+    #|    r++;
+    #|  }
+    #|  return r;
+    #|}
+    #|
+    #|int main(void) {
+    #|  return utf8_len("x", -1) == 1 ? 42 : 1;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
