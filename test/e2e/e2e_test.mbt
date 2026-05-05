@@ -433,6 +433,19 @@ async test "struct trailing padding" {
 }
 
 ///|
+async test "large struct field offset materializes address" {
+  let source =
+    #|struct S { char pad[4320]; long value; };
+    #|int main() {
+    #|  struct S s;
+    #|  s.value = 37;
+    #|  return s.value == 37 ? 0 : 1;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
+
+///|
 async test "bit-field read" {
   let source =
     #|struct S { unsigned int a:3; unsigned int b:4; };

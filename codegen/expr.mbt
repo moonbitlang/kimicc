@@ -2740,7 +2740,7 @@ fn Codegen::gen_addr(
           }
         }
         if field_offset != 0 {
-          self.emit("\tadd\tx9, x9, #" + field_offset.to_string())
+          self.emit_add_offset_to_x9(field_offset)
         }
       }
     }
