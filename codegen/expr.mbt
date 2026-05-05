@@ -191,6 +191,27 @@ fn Codegen::emit_numeric_conversion(
 }
 
 ///|
+fn Codegen::emit_scalar_conversion_to(
+  self : Codegen,
+  ty : @parser.Type,
+) -> Unit {
+  match ty {
+    Bool => {
+      self.emit("\tcmp\tx9, #0")
+      self.emit("\tcset\tx9, ne")
+    }
+    SChar => self.emit("\tsxtb\tx9, w9")
+    UChar => self.emit("\tand\tx9, x9, #0xFF")
+    SShort => self.emit("\tsxth\tx9, w9")
+    UShort => self.emit("\tand\tx9, x9, #0xFFFF")
+    SInt => self.emit("\tsxtw\tx9, w9")
+    UInt => self.emit("\tand\tx9, x9, #0xFFFFFFFF")
+    Atomic(inner) => self.emit_scalar_conversion_to(inner)
+    _ => ()
+  }
+}
+
+///|
 fn unary_integer_result_type(ty : @parser.Type) -> @parser.Type {
   match ty {
     Bool | SChar | UChar | SShort | UShort => SInt
@@ -959,6 +980,7 @@ fn Codegen::gen_expr(
           _ => {
             self.gen_expr(rhs, frame_size)
             self.emit_numeric_conversion(self.type_of(rhs, frame_size), lhs_ty)
+            self.emit_scalar_conversion_to(lhs_ty)
             self.emit("\tstr\tx9, [sp, #-16]!")
             self.gen_addr(lhs, frame_size)
             self.emit("\tmov\tx10, x9")
@@ -1902,30 +1924,7 @@ fn Codegen::gen_expr(
       self.gen_expr(expr, frame_size)
       let expr_ty = self.type_of(expr, frame_size)
       self.emit_numeric_conversion(expr_ty, ty)
-      // Integer truncation/sign-extension
-      match ty {
-        SChar =>
-          // Sign-extend byte
-          self.emit("\tsxtb\tx9, w9")
-        UChar =>
-          // Zero-extend byte
-          self.emit("\tand\tx9, x9, #0xFF")
-        SShort =>
-          // Sign-extend halfword
-          self.emit("\tsxth\tx9, w9")
-        UShort =>
-          // Zero-extend halfword
-          self.emit("\tand\tx9, x9, #0xFFFF")
-        SInt =>
-          // Sign-extend word
-          self.emit("\tsxtw\tx9, w9")
-        UInt =>
-          // Already zero-extended in 64-bit register, no-op for now
-          ()
-        _ =>
-          // pointer, struct, array, void, long, long long, bool: no-op
-          ()
-      }
+      self.emit_scalar_conversion_to(ty)
     }
     Ternary(cond, then_expr, else_expr) => {
       let else_label = self.new_label()
@@ -1952,12 +1951,8 @@ fn Codegen::gen_expr(
         self.emit("\tadd\tx11, x10, #1")
       }
       self.emit_store_typed("x11", "x9", ty)
-      match ty {
-        SChar => self.emit("\tsxtb\tx9, w11")
-        SShort => self.emit("\tsxth\tx9, w11")
-        SInt => self.emit("\tsxtw\tx9, w11")
-        _ => self.emit("\tmov\tx9, x11")
-      }
+      self.emit("\tmov\tx9, x11")
+      self.emit_scalar_conversion_to(ty)
     }
     PrefixDec(expr) => {
       self.gen_addr(expr, frame_size)
@@ -1973,12 +1968,8 @@ fn Codegen::gen_expr(
         self.emit("\tsub\tx11, x10, #1")
       }
       self.emit_store_typed("x11", "x9", ty)
-      match ty {
-        SChar => self.emit("\tsxtb\tx9, w11")
-        SShort => self.emit("\tsxth\tx9, w11")
-        SInt => self.emit("\tsxtw\tx9, w11")
-        _ => self.emit("\tmov\tx9, x11")
-      }
+      self.emit("\tmov\tx9, x11")
+      self.emit_scalar_conversion_to(ty)
     }
     PostfixInc(expr) => {
       self.gen_addr(expr, frame_size)

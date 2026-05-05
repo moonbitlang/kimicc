@@ -780,3 +780,32 @@ async test "e2e hex escape string literal preserves raw bytes" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")
 }
+
+///|
+async test "e2e prefix increment returns truncated unsigned scalar" {
+  let source =
+    #|int main(void) {
+    #|  unsigned char lo = 255;
+    #|  unsigned char hi = 0;
+    #|  unsigned short s = 65535;
+    #|  unsigned int u = 0;
+    #|  unsigned char assigned = 0;
+    #|
+    #|  u = u - 1;
+    #|  if (++lo != 0) return 1;
+    #|  if (lo != 0) return 2;
+    #|  if (++s != 0) return 3;
+    #|  if (s != 0) return 4;
+    #|  if (++u != 0) return 5;
+    #|  if (u != 0) return 6;
+    #|  if ((assigned = 256) != 0) return 7;
+    #|  if (assigned != 0) return 8;
+    #|
+    #|  lo = 255;
+    #|  if (++lo == 0) hi++;
+    #|  if (hi != 1) return 9;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}

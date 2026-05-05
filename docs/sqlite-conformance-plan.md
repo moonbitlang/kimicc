@@ -52,6 +52,8 @@ Passing kimicc SQLite e2e tests:
   across 121 tests.
 - Pass SQLite's public `ext/fts5/test/fts5aa.test` with 0 errors across 1427
   tests.
+- Pass SQLite's public `ext/fts5/test/fts5origintext4.test` with 0 errors
+  across 6 tests.
 
 This is useful smoke coverage, not a claim that SQLite passes its test suite.
 
@@ -134,6 +136,9 @@ amalgamation fixture and focused e2e regressions in version control.
 | Passed | Public SQLite Tcl `fts5contentless.test` | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/ext/fts5/test/fts5contentless.test` from an isolated temporary working directory after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The kimicc-built SQLite testfixture now passes `fts5contentless.test`: 0 errors out of 121 tests. The clean clang-linked baseline also passes 0/121. |
 | Fixed | Mixed integer/floating arithmetic conversions | `moon test test/e2e --target native --filter 'e2e mixed int double arithmetic promotes operands'` | Public `fts5aa.test` rank-score failures minimized to SQLite FTS5 BM25's `1 - b + b * D / pData->avgdl` denominator. kimicc typed the expression as floating-point but moved raw integer bits into FP registers without converting mixed integer operands, so `1 - b` behaved as `0 - b` and the denominator collapsed. Binary FP operations now convert each operand to the common FP type before arithmetic/comparison, and scalar local init/assignment/return paths convert to the destination type before storing or returning. |
 | Passed | Public SQLite Tcl `fts5aa.test` | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/ext/fts5/test/fts5aa.test` from an isolated temporary working directory after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The kimicc-built SQLite testfixture now passes `fts5aa.test`: 0 errors out of 1427 tests. The direct BM25 probe for `SELECT bm25(n1), format('%g',bm25(n1)) FROM n1 WHERE n1 MATCH 'a+b+c+d'` now matches clang at `-1e-06`. |
+| Fixed | Scalar conversion results for narrow unsigned integers | `moon test test/e2e --target native --filter 'e2e prefix increment returns truncated unsigned scalar'` | Public `fts5origintext4.test` corrupted a B-tree page during a large FTS5 insert. The minimized pattern was SQLite's page-header carry update `if( (++data[pPage->hdrOffset+4])==0 ) data[pPage->hdrOffset+3]++`: kimicc stored the low byte as `0` but left the prefix-increment expression value as `256`, skipping the high-byte carry. Cast, assignment, return, local initialization, and prefix inc/dec results now normalize to the destination scalar type. |
+| Passed | Public SQLite Tcl `fts5origintext4.test` | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/ext/fts5/test/fts5origintext4.test` from an isolated temporary working directory after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The kimicc-built SQLite testfixture now passes `fts5origintext4.test`: 0 errors out of 6 tests. A rerun of `veryquick.test` now gets past the prior FTS5 corruption and next exposes the `intck1`/`intck2` cluster. |
+| Open | SQLite intck intentional corruption detection | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/test/veryquick.test` | Current broader run fails in `intck1-2.4.*`, `intck1-3.3.*`, and `intck2-1.1.*`/`2.2.*`/`3.2.*`: expected missing/surplus index-entry reports are `[]` under kimicc. The later `table imp already exists` is follow-on state after earlier `intck2` failures. Next step is to run `ext/intck/intck1.test` and `ext/intck/intck2.test` individually against kimicc and clang, then minimize the first mismatch. |
 
 ## Execution Plan
 
