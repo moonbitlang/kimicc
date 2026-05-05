@@ -200,6 +200,7 @@ pub(all) struct FuncDecl {
   name : String
   params : Array[Param]
   variadic : Bool
+  is_static : Bool
   body : Stmt?
 } derive(Eq)
 
@@ -214,6 +215,8 @@ pub(all) struct GlobalDecl {
   ty : Type
   name : String
   init : GlobalInit?
+  is_static : Bool
+  is_extern : Bool
 } derive(Eq)
 
 ///|

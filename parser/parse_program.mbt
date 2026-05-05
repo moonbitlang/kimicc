@@ -14,7 +14,13 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
         init = Some(GlobalInit::Scalar(self.parse_expr()))
       }
     }
-    self.globals.push({ ty: resolve_var_type(decl), name: decl.name, init })
+    self.globals.push({
+      ty: resolve_var_type(decl),
+      name: decl.name,
+      init,
+      is_static: false,
+      is_extern: false,
+    })
   }
   // Additional variables separated by comma
   while self.token == Comma {
@@ -35,6 +41,8 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
         ty: resolve_var_type(extra),
         name: extra.name,
         init: extra_init,
+        is_static: false,
+        is_extern: false,
       })
     }
   }
@@ -47,12 +55,6 @@ fn Parser::parse_program(self : Parser) -> Program {
   let decls = []
   while self.token != EOF {
     self.skip_attributes()
-    self.skip_qualifiers()
-    while self.token == Inline {
-      self.advance()
-      self.skip_attributes()
-      self.skip_qualifiers()
-    }
     if self.token == Struct || self.token == Union {
       // Peek ahead to distinguish struct/union definition from function declaration
       let saved_pos = self.lexer.pos

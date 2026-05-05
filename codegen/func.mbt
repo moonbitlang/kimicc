@@ -18,7 +18,9 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
       // Collect locals and compute offsets
       self.collect_locals(body)
       let frame_size = (self.stack_size + 15) / 16 * 16
-      self.emit("\t.globl\t_" + decl.name)
+      if !decl.is_static {
+        self.emit("\t.globl\t_" + decl.name)
+      }
       self.emit("\t.p2align\t2")
       self.emit("_" + decl.name + ":")
       self.emit("\tstp\tx29, x30, [sp, #-16]!")

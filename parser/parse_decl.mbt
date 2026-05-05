@@ -16,7 +16,14 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
     if self.token == Semicolon {
       self.advance()
     }
-    return { ret: Void, name: "", params: [], variadic: false, body: None }
+    return {
+      ret: Void,
+      name: "",
+      params: [],
+      variadic: false,
+      is_static: false,
+      body: None,
+    }
   }
   // Function declaration or definition
   if decl.is_func_decl {
@@ -62,7 +69,14 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       Some(rt) => rt
       None => spec.base_type
     }
-    return { ret: ret_ty, name: decl.name, params, variadic, body }
+    return {
+      ret: ret_ty,
+      name: decl.name,
+      params,
+      variadic,
+      is_static: spec.is_static,
+      body,
+    }
   }
   // Variable declaration (including function pointer variables)
   if self.token == Semicolon ||
@@ -70,7 +84,14 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
     self.token == Comma ||
     self.token == LBracket {
     self.parse_global_var_tail(spec, decl)
-    return { ret: Void, name: "", params: [], variadic: false, body: None }
+    return {
+      ret: Void,
+      name: "",
+      params: [],
+      variadic: false,
+      is_static: false,
+      body: None,
+    }
   }
   // Skip anything else to next semicolon
   while self.token != Semicolon && self.token != EOF {
@@ -79,7 +100,14 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
   if self.token == Semicolon {
     self.advance()
   }
-  { ret: Void, name: "", params: [], variadic: false, body: None }
+  {
+    ret: Void,
+    name: "",
+    params: [],
+    variadic: false,
+    is_static: false,
+    body: None,
+  }
 }
 
 ///|
@@ -130,7 +158,13 @@ fn Parser::parse_global_var_tail(
       }
     }
   }
-  self.globals.push({ ty, name, init })
+  self.globals.push({
+    ty,
+    name,
+    init,
+    is_static: spec.is_static,
+    is_extern: spec.is_extern,
+  })
   // Handle additional variables separated by comma
   while self.token == Comma {
     self.advance()
@@ -163,7 +197,13 @@ fn Parser::parse_global_var_tail(
         }
       }
     }
-    self.globals.push({ ty: extra_ty, name: extra_decl.name, init: extra_init })
+    self.globals.push({
+      ty: extra_ty,
+      name: extra_decl.name,
+      init: extra_init,
+      is_static: spec.is_static,
+      is_extern: spec.is_extern,
+    })
   }
   self.expect(Semicolon)
 }

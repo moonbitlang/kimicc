@@ -86,7 +86,8 @@ amalgamation fixture and focused e2e regressions in version control.
 - [x] Add a small SQL-script runner before trying the full upstream test suite.
 - [x] Run the first broader batch with both clang-built SQLite and kimicc-built
   SQLite to separate harness bugs from compiler bugs.
-- [ ] Add a public SQLite Tcl `testfixture` harness mode.
+- [x] Link a public SQLite Tcl `testfixture` binary with kimicc's SQLite object.
+- [ ] Add a public SQLite Tcl `testfixture` harness mode to MoonBit tests.
 - [ ] Run the first upstream public Tcl batch through the `testfixture` harness.
 - [ ] For every failure class, record the command, output, generated assembly or
   object paths, clang-vs-kimicc behavior, minimized C or SQL repro, status, and
@@ -100,7 +101,9 @@ amalgamation fixture and focused e2e regressions in version control.
 | Status | Area | Repro | Notes |
 | --- | --- | --- | --- |
 | Passed | SQL script differential harness | `moon test test/e2e --target native --filter 'sqlite object matches clang baseline for SQL script runner'` | clang-built and kimicc-built SQLite objects produced identical output. |
-| Open | Public SQLite Tcl tests | Not wired yet | Next task is building a `testfixture` mode that can link kimicc's SQLite object. |
+| Fixed | File-scope static linkage | `moon test test/e2e --target native --filter 'e2e file scope static symbols have internal linkage'` | Top-level `static` functions and globals now emit local symbols, fixing duplicate-symbol link failures such as SQLite's `aSyscall`. |
+| Fixed | Extern and tentative global declarations | `moon test test/e2e --target native --filter 'e2e extern globals do not allocate storage'`; `moon test test/e2e --target native --filter 'e2e tentative global followed by initialized definition emits once'` | `extern` declarations no longer allocate storage, and later initialized definitions replace earlier extern/tentative declarations before codegen emits globals. |
+| Open | Public SQLite Tcl runtime | `./testfixture /tmp/kimicc_tcl_sqlite_smoke.test` after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The kimicc SQLite object now assembles and links into `testfixture`, but `sqlite3 db :memory:` exits with 138/SIGBUS before Tcl reports a test failure. |
 
 ## Execution Plan
 

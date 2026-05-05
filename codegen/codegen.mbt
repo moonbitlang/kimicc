@@ -52,6 +52,53 @@ fn reloc_with_offset(base : String, offset : Int) -> String {
 }
 
 ///|
+fn global_has_init(g : @parser.GlobalDecl) -> Bool {
+  match g.init {
+    Some(_) => true
+    None => false
+  }
+}
+
+///|
+fn should_replace_global_decl(
+  old : @parser.GlobalDecl,
+  next : @parser.GlobalDecl,
+) -> Bool {
+  if next.is_extern && !global_has_init(next) {
+    false
+  } else if !global_has_init(old) && global_has_init(next) {
+    true
+  } else if old.is_extern && !next.is_extern {
+    true
+  } else if global_has_init(old) && !global_has_init(next) {
+    false
+  } else {
+    global_has_init(next)
+  }
+}
+
+///|
+fn merge_global_decls(
+  globals : Array[@parser.GlobalDecl],
+) -> Array[@parser.GlobalDecl] {
+  let merged : Array[@parser.GlobalDecl] = []
+  for g in globals {
+    let mut found = -1
+    for i = 0; i < merged.length(); i = i + 1 {
+      if merged[i].name == g.name {
+        found = i
+      }
+    }
+    if found < 0 {
+      merged.push(g)
+    } else if should_replace_global_decl(merged[found], g) {
+      merged[found] = g
+    }
+  }
+  merged
+}
+
+///|
 fn Codegen::global_expr_type(
   self : Codegen,
   expr : @parser.Expr,
@@ -345,8 +392,9 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
     self.func_param_counts[decl.name] = decl.params.length()
     func_count += 1
   }
+  let globals = merge_global_decls(prog.globals)
   // Record global variables
-  for g in prog.globals {
+  for g in globals {
     self.globals[g.name] = g
   }
   for decl in prog.decls {
@@ -354,15 +402,17 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   }
   // Emit initialized global variables
   let mut has_data = false
-  for name, g in self.globals {
+  for g in globals {
     if g.init.is_some() {
       if not(has_data) {
         self.emit("	.section	__DATA,__data")
         has_data = true
       }
-      self.emit("	.globl	_" + name)
+      if !g.is_static {
+        self.emit("	.globl	_" + g.name)
+      }
       self.emit("	.p2align	3")
-      self.emit("_" + name + ":")
+      self.emit("_" + g.name + ":")
       match g.init {
         Some(Scalar(expr)) => self.emit_global_scalar(g.ty, expr)
         Some(Array(exprs)) => self.emit_global_array(g.ty, exprs)
@@ -372,16 +422,18 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   }
   // Emit uninitialized global variables
   let mut has_bss = false
-  for name, g in self.globals {
-    if g.init.is_none() {
+  for g in globals {
+    if g.init.is_none() && !g.is_extern {
       if not(has_bss) {
         self.emit("	.section	__DATA,__bss")
         has_bss = true
       }
       let size = self.type_size(g.ty)
-      self.emit("	.globl	_" + name)
+      if !g.is_static {
+        self.emit("	.globl	_" + g.name)
+      }
       self.emit("	.p2align	3")
-      self.emit("_" + name + ":")
+      self.emit("_" + g.name + ":")
       self.emit("	.space	" + size.to_string())
     }
   }

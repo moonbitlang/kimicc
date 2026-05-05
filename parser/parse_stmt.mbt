@@ -560,7 +560,13 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
     }
     let (final_ty, init) = self.parse_static_initializer(decl_ty)
     if spec.is_static {
-      self.globals.push({ ty: final_ty, name: mangled, init })
+      self.globals.push({
+        ty: final_ty,
+        name: mangled,
+        init,
+        is_static: true,
+        is_extern: false,
+      })
     }
     // Parse additional static/extern variables
     while self.token == Comma {
@@ -579,6 +585,8 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
           ty: extra_ty,
           name: extra_mangled,
           init: extra_init,
+          is_static: true,
+          is_extern: false,
         })
       }
     }

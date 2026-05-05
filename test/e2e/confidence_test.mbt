@@ -36,6 +36,86 @@ async test "e2e function local static persists" {
 }
 
 ///|
+async test "e2e file scope static symbols have internal linkage" {
+  let left =
+    #|static int shared = 40;
+    #|static int helper(void) {
+    #|  return shared;
+    #|}
+    #|int left(void) {
+    #|  return helper();
+    #|}
+  let right =
+    #|extern int left(void);
+    #|static int shared = 2;
+    #|static int helper(void) {
+    #|  return shared;
+    #|}
+    #|int main(void) {
+    #|  return left() + helper();
+    #|}
+  let left_obj = compile_source_to_object_path(left, "static_internal_left")
+  let right_obj = compile_source_to_object_path(right, "static_internal_right")
+  let bin_path = temp_file_path("static_internal_linkage", left + right, "")
+  run_command_checked(
+    "clang -o " + bin_path + " " + left_obj + " " + right_obj,
+    "link static internal linkage",
+  )
+  let result = run_command_capture(bin_path, "static_internal_linkage")
+  inspect(result.code, content="42")
+}
+
+///|
+async test "e2e extern globals do not allocate storage" {
+  let def =
+    #|int shared = 40;
+  let user =
+    #|extern int shared;
+    #|int main(void) {
+    #|  return shared + 2;
+    #|}
+  let def_obj = compile_source_to_object_path(def, "extern_global_def")
+  let use_obj = compile_source_to_object_path(user, "extern_global_use")
+  let bin_path = temp_file_path("extern_global_linkage", def + user, "")
+  run_command_checked(
+    "clang -o " + bin_path + " " + def_obj + " " + use_obj,
+    "link extern global linkage",
+  )
+  let result = run_command_capture(bin_path, "extern_global_linkage")
+  inspect(result.code, content="42")
+}
+
+///|
+async test "e2e extern declaration followed by definition emits storage" {
+  let source =
+    #|extern int shared;
+    #|int read_shared(void) {
+    #|  return shared;
+    #|}
+    #|int shared = 42;
+    #|int main(void) {
+    #|  return read_shared();
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e tentative global followed by initialized definition emits once" {
+  let source =
+    #|int shared;
+    #|int read_shared(void) {
+    #|  return shared;
+    #|}
+    #|int shared = 42;
+    #|int main(void) {
+    #|  return read_shared();
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e global nested aggregate initializer" {
   let source =
     #|struct Point {
