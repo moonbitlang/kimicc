@@ -114,3 +114,40 @@ async test "e2e bitfields pack after byte fields like clang" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")
 }
+
+///|
+async test "e2e builtin string call preserves earlier args" {
+  let source =
+    #|char *right_arg() {
+    #|  return "b";
+    #|}
+    #|int main() {
+    #|  return __builtin_strcmp("a", right_arg()) < 0 ? 42 : 1;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e builtin memcpy preserves args before nested size call" {
+  let source =
+    #|int copy_len() {
+    #|  return 4;
+    #|}
+    #|int main() {
+    #|  char src[4];
+    #|  char dst[4];
+    #|  src[0] = 10;
+    #|  src[1] = 11;
+    #|  src[2] = 12;
+    #|  src[3] = 9;
+    #|  dst[0] = 0;
+    #|  dst[1] = 0;
+    #|  dst[2] = 0;
+    #|  dst[3] = 0;
+    #|  __builtin_memcpy(dst, src, copy_len());
+    #|  return dst[0] + dst[1] + dst[2] + dst[3];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}

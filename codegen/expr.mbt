@@ -102,6 +102,33 @@ fn Codegen::type_of(
 }
 
 ///|
+fn Codegen::emit_builtin_lib_call(
+  self : Codegen,
+  target : String,
+  args : Array[@parser.Expr],
+  arg_count : Int,
+  frame_size : Int,
+) -> Unit {
+  let save_size = (arg_count * 8 + 15) / 16 * 16
+  if save_size > 0 {
+    self.emit("\tsub\tsp, sp, #" + save_size.to_string())
+  }
+  for i = 0; i < arg_count; i = i + 1 {
+    self.gen_expr(args[i], frame_size)
+    self.emit("\tstr\tx9, [sp, #" + (i * 8).to_string() + "]")
+  }
+  for i = 0; i < arg_count; i = i + 1 {
+    self.emit(
+      "\tldr\tx" + i.to_string() + ", [sp, #" + (i * 8).to_string() + "]",
+    )
+  }
+  if save_size > 0 {
+    self.emit("\tadd\tsp, sp, #" + save_size.to_string())
+  }
+  self.emit("\tbl\t" + target)
+}
+
+///|
 fn Codegen::emit_builtin_call(
   self : Codegen,
   name : String,
@@ -202,33 +229,21 @@ fn Codegen::emit_builtin_call(
     }
     "__builtin_memcpy" => {
       if args.length() >= 3 {
-        for i = 0; i < 3; i = i + 1 {
-          self.gen_expr(args[i], frame_size)
-          self.emit("\tmov\tx" + i.to_string() + ", x9")
-        }
-        self.emit("\tbl\t_memcpy")
+        self.emit_builtin_lib_call("_memcpy", args, 3, frame_size)
       }
       self.emit("\tmov\tx9, x0")
       true
     }
     "__builtin_memset" => {
       if args.length() >= 3 {
-        for i = 0; i < 3; i = i + 1 {
-          self.gen_expr(args[i], frame_size)
-          self.emit("\tmov\tx" + i.to_string() + ", x9")
-        }
-        self.emit("\tbl\t_memset")
+        self.emit_builtin_lib_call("_memset", args, 3, frame_size)
       }
       self.emit("\tmov\tx9, x0")
       true
     }
     "__builtin_memmove" => {
       if args.length() >= 3 {
-        for i = 0; i < 3; i = i + 1 {
-          self.gen_expr(args[i], frame_size)
-          self.emit("\tmov\tx" + i.to_string() + ", x9")
-        }
-        self.emit("\tbl\t_memmove")
+        self.emit_builtin_lib_call("_memmove", args, 3, frame_size)
       }
       self.emit("\tmov\tx9, x0")
       true
@@ -244,22 +259,14 @@ fn Codegen::emit_builtin_call(
     }
     "__builtin_strcmp" => {
       if args.length() >= 2 {
-        for i = 0; i < 2; i = i + 1 {
-          self.gen_expr(args[i], frame_size)
-          self.emit("\tmov\tx" + i.to_string() + ", x9")
-        }
-        self.emit("\tbl\t_strcmp")
+        self.emit_builtin_lib_call("_strcmp", args, 2, frame_size)
       }
       self.emit("\tmov\tx9, x0")
       true
     }
     "__builtin_strcpy" => {
       if args.length() >= 2 {
-        for i = 0; i < 2; i = i + 1 {
-          self.gen_expr(args[i], frame_size)
-          self.emit("\tmov\tx" + i.to_string() + ", x9")
-        }
-        self.emit("\tbl\t_strcpy")
+        self.emit_builtin_lib_call("_strcpy", args, 2, frame_size)
       }
       self.emit("\tmov\tx9, x0")
       true
@@ -288,55 +295,35 @@ fn Codegen::emit_builtin_call(
     // Fortified function stubs: fall back to unchecked versions
     "__builtin___memcpy_chk" => {
       if args.length() >= 3 {
-        for i = 0; i < 3; i = i + 1 {
-          self.gen_expr(args[i], frame_size)
-          self.emit("\tmov\tx" + i.to_string() + ", x9")
-        }
-        self.emit("\tbl\t_memcpy")
+        self.emit_builtin_lib_call("_memcpy", args, 3, frame_size)
       }
       self.emit("\tmov\tx9, x0")
       true
     }
     "__builtin___memset_chk" => {
       if args.length() >= 3 {
-        for i = 0; i < 3; i = i + 1 {
-          self.gen_expr(args[i], frame_size)
-          self.emit("\tmov\tx" + i.to_string() + ", x9")
-        }
-        self.emit("\tbl\t_memset")
+        self.emit_builtin_lib_call("_memset", args, 3, frame_size)
       }
       self.emit("\tmov\tx9, x0")
       true
     }
     "__builtin___memmove_chk" => {
       if args.length() >= 3 {
-        for i = 0; i < 3; i = i + 1 {
-          self.gen_expr(args[i], frame_size)
-          self.emit("\tmov\tx" + i.to_string() + ", x9")
-        }
-        self.emit("\tbl\t_memmove")
+        self.emit_builtin_lib_call("_memmove", args, 3, frame_size)
       }
       self.emit("\tmov\tx9, x0")
       true
     }
     "__builtin___strcpy_chk" => {
       if args.length() >= 2 {
-        for i = 0; i < 2; i = i + 1 {
-          self.gen_expr(args[i], frame_size)
-          self.emit("\tmov\tx" + i.to_string() + ", x9")
-        }
-        self.emit("\tbl\t_strcpy")
+        self.emit_builtin_lib_call("_strcpy", args, 2, frame_size)
       }
       self.emit("\tmov\tx9, x0")
       true
     }
     "__builtin___strcat_chk" => {
       if args.length() >= 2 {
-        for i = 0; i < 2; i = i + 1 {
-          self.gen_expr(args[i], frame_size)
-          self.emit("\tmov\tx" + i.to_string() + ", x9")
-        }
-        self.emit("\tbl\t_strcat")
+        self.emit_builtin_lib_call("_strcat", args, 2, frame_size)
       }
       self.emit("\tmov\tx9, x0")
       true
@@ -519,11 +506,7 @@ fn Codegen::emit_builtin_call(
     "__builtin___strlcpy_chk" => {
       // __builtin___strlcpy_chk(dst, src, len, objsize) -> strlcpy(dst, src, len)
       if args.length() >= 3 {
-        for i = 0; i < 3; i = i + 1 {
-          self.gen_expr(args[i], frame_size)
-          self.emit("\tmov\tx" + i.to_string() + ", x9")
-        }
-        self.emit("\tbl\t_strlcpy")
+        self.emit_builtin_lib_call("_strlcpy", args, 3, frame_size)
       }
       self.emit("\tmov\tx9, x0")
       true
@@ -531,11 +514,7 @@ fn Codegen::emit_builtin_call(
     "__builtin___strlcat_chk" => {
       // __builtin___strlcat_chk(dst, src, len, objsize) -> strlcat(dst, src, len)
       if args.length() >= 3 {
-        for i = 0; i < 3; i = i + 1 {
-          self.gen_expr(args[i], frame_size)
-          self.emit("\tmov\tx" + i.to_string() + ", x9")
-        }
-        self.emit("\tbl\t_strlcat")
+        self.emit_builtin_lib_call("_strlcat", args, 3, frame_size)
       }
       self.emit("\tmov\tx9, x0")
       true
