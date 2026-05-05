@@ -16,6 +16,7 @@ pub(all) enum Type {
   Double
   Struct(String)
   Union(String)
+  FuncPtr(Type, Int, Bool)
   Pointer(Type)
   Array(Type, Int)
   Atomic(Type)
@@ -40,6 +41,14 @@ pub impl Show for Type with to_string(self) {
     Double => "Double"
     Struct(name) => "Struct(" + name + ")"
     Union(name) => "Union(" + name + ")"
+    FuncPtr(ret, count, variadic) =>
+      "FuncPtr(" +
+      ret.to_string() +
+      ", " +
+      count.to_string() +
+      ", " +
+      variadic.to_string() +
+      ")"
     Pointer(ty) => "Pointer(" + ty.to_string() + ")"
     Array(ty, n) => "Array(" + ty.to_string() + ", " + n.to_string() + ")"
     Atomic(ty) => "Atomic(" + ty.to_string() + ")"
@@ -103,7 +112,13 @@ pub fn Type::size(self : Type) -> Int {
     Bool | SChar | UChar => 1
     SShort | UShort => 2
     SInt | UInt | Float => 4
-    SLong | ULong | SLongLong | ULongLong | Double | Pointer(_) => 8
+    SLong
+    | ULong
+    | SLongLong
+    | ULongLong
+    | Double
+    | Pointer(_)
+    | FuncPtr(_, _, _) => 8
     Struct(name) =>
       // Forward reference: we can't compute struct size without the decl.
       // Callers should use codegen's type_size which has struct_decls.
@@ -123,7 +138,13 @@ pub fn Type::align(self : Type) -> Int {
     Bool | SChar | UChar => 1
     SShort | UShort => 2
     SInt | UInt | Float => 4
-    SLong | ULong | SLongLong | ULongLong | Double | Pointer(_) => 8
+    SLong
+    | ULong
+    | SLongLong
+    | ULongLong
+    | Double
+    | Pointer(_)
+    | FuncPtr(_, _, _) => 8
     Struct(name) =>
       abort("Cannot compute struct alignment without struct_decls: " + name)
     Union(name) =>

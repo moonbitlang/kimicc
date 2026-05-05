@@ -136,6 +136,65 @@ async test "e2e static aggregate initializer folds sizeof typedef struct" {
 }
 
 ///|
+async test "e2e global function pointer typedef cast initializer" {
+  let source =
+    #|typedef int (*syscall_ptr)(void);
+    #|int answer(void) {
+    #|  return 42;
+    #|}
+    #|static struct Entry {
+    #|  const char *name;
+    #|  syscall_ptr current;
+    #|} table[] = {
+    #|  { "answer", (syscall_ptr)answer },
+    #|};
+    #|int main(void) {
+    #|  return table[0].current();
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e struct field pointer to function pointer stores full address" {
+  let source =
+    #|struct AutoExt {
+    #|  unsigned int nExt;
+    #|  int (**aExt)(int);
+    #|};
+    #|int answer(int x) {
+    #|  return x + 1;
+    #|}
+    #|int main(void) {
+    #|  int (*storage[1])(int);
+    #|  struct AutoExt wsd;
+    #|  wsd.nExt = 0;
+    #|  wsd.aExt = storage;
+    #|  wsd.aExt[wsd.nExt] = (int (*)(int))answer;
+    #|  wsd.nExt++;
+    #|  return wsd.aExt[0](41);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e function pointer returning pointer preserves return type" {
+  let source =
+    #|void *pick(void *p) {
+    #|  return p;
+    #|}
+    #|int main(void) {
+    #|  int value = 42;
+    #|  void *(*fp)(void *) = pick;
+    #|  int *result = (int *)fp(&value);
+    #|  return *result;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e file scope static symbols have internal linkage" {
   let left =
     #|static int shared = 40;

@@ -29,9 +29,8 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
   if decl.is_func_decl {
     let params = decl.func_params.unwrap()
     // Detect variadic function and filter out the "..." parameter
-    let mut variadic = false
-    if params.length() > 0 && params[params.length() - 1].name == "..." {
-      variadic = true
+    let (_, variadic) = function_param_info(params)
+    if variadic {
       let _ = params.pop()
     }
     // Filter out void parameters: int foo(void) -> no params
@@ -114,11 +113,15 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
 
 ///|
 fn resolve_var_type(decl : DeclaratorResult) -> Type {
-  // For function pointer variables like int (*fp)(int), decl.ty is Pointer(Void)
-  // but func_ret_ty holds the actual wrapped type (e.g., Pointer(SInt)).
-  match decl.func_ret_ty {
-    Some(rt) => rt
-    None => decl.ty
+  // Older declarator paths still use func_ret_ty for wrapped pointer/array
+  // declarators. Function pointers keep their call metadata directly in ty.
+  if type_contains_func_ptr(decl.ty) {
+    decl.ty
+  } else {
+    match decl.func_ret_ty {
+      Some(rt) => rt
+      None => decl.ty
+    }
   }
 }
 

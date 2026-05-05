@@ -378,7 +378,7 @@ fn Codegen::emit_global_scalar(
   expr : @parser.Expr,
 ) -> Unit {
   match ty {
-    Pointer(_) =>
+    Pointer(_) | FuncPtr(_, _, _) =>
       match self.global_address_reloc(expr) {
         Some(reloc) => {
           self.emit("\t.quad\t" + reloc)

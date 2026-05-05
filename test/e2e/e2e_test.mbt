@@ -1854,6 +1854,27 @@ async test "variadic snprintf with mixed int and double" {
 }
 
 ///|
+async test "variadic function pointer cast passes unnamed args on stack" {
+  let source =
+    #|int snprintf(char *buf, unsigned long n, const char *fmt, ...);
+    #|int strcmp(const char *s1, const char *s2);
+    #|int main() {
+    #|  char buf[32];
+    #|  int r = ((int (*)(char *, unsigned long, const char *, ...))snprintf)(
+    #|    buf,
+    #|    32,
+    #|    "v=%d",
+    #|    42
+    #|  );
+    #|  if (r != 4) return 1;
+    #|  if (strcmp(buf, "v=42") != 0) return 2;
+    #|  return 0;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
+
+///|
 async test "hex float literal" {
   let source =
     #|int main() {

@@ -222,6 +222,7 @@ pub(all) enum Type {
   Double
   Struct(String)
   Union(String)
+  FuncPtr(Type, Int, Bool)
   Pointer(Type)
   Array(Type, Int)
   Atomic(Type)

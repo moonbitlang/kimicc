@@ -13,9 +13,16 @@ priv struct DeclSpec {
 priv struct DeclaratorResult {
   ty : Type
   name : String
+  ptr_depth : Int
   func_params : Array[Param]?
   func_ret_ty : Type?
   is_func_decl : Bool
+}
+
+///|
+priv struct AbstractDeclaratorResult {
+  ty : Type
+  ptr_depth : Int
 }
 
 ///|
@@ -439,19 +446,92 @@ fn Parser::parse_declarator(self : Parser, base_ty : Type) -> DeclaratorResult {
   if self.token == Star || self.token == BitXor {
     self.advance()
     self.skip_qualifiers()
-    return self.parse_declarator(Pointer(base_ty))
+    let decl = self.parse_declarator(Pointer(base_ty))
+    return { ..decl, ptr_depth: decl.ptr_depth + 1 }
   }
   self.parse_direct_declarator(base_ty)
 }
 
 ///|
 fn Parser::parse_abstract_declarator(self : Parser, base_ty : Type) -> Type {
+  self.parse_abstract_declarator_result(base_ty).ty
+}
+
+///|
+fn Parser::parse_abstract_declarator_result(
+  self : Parser,
+  base_ty : Type,
+) -> AbstractDeclaratorResult {
   if self.token == Star || self.token == BitXor {
     self.advance()
     self.skip_qualifiers()
-    return self.parse_abstract_declarator(Pointer(base_ty))
+    let decl = self.parse_abstract_declarator_result(Pointer(base_ty))
+    return { ..decl, ptr_depth: decl.ptr_depth + 1 }
   }
-  self.parse_direct_abstract_declarator(base_ty)
+  self.parse_direct_abstract_declarator_result(base_ty)
+}
+
+///|
+fn function_param_info(params : Array[Param]) -> (Int, Bool) {
+  if params.length() > 0 && params[params.length() - 1].name == "..." {
+    (params.length() - 1, true)
+  } else {
+    (params.length(), false)
+  }
+}
+
+///|
+fn make_function_pointer_type(
+  ty : Type,
+  push_mode : Bool,
+  ptr_depth : Int,
+  named_count : Int,
+  variadic : Bool,
+) -> Type {
+  if push_mode {
+    return push_function_pointer_inside(ty, ptr_depth, named_count, variadic)
+  }
+  FuncPtr(ty, named_count, variadic)
+}
+
+///|
+fn push_function_pointer_inside(
+  ty : Type,
+  ptr_depth : Int,
+  named_count : Int,
+  variadic : Bool,
+) -> Type {
+  match ty {
+    Array(inner, size) =>
+      Array(
+        push_function_pointer_inside(inner, ptr_depth, named_count, variadic),
+        size,
+      )
+    Pointer(ret) =>
+      if ptr_depth <= 1 {
+        FuncPtr(ret, named_count, variadic)
+      } else {
+        Pointer(
+          push_function_pointer_inside(
+            ret,
+            ptr_depth - 1,
+            named_count,
+            variadic,
+          ),
+        )
+      }
+    _ => FuncPtr(ty, named_count, variadic)
+  }
+}
+
+///|
+fn type_contains_func_ptr(ty : Type) -> Bool {
+  match ty {
+    FuncPtr(_, _, _) => true
+    Pointer(inner) | Array(inner, _) | Atomic(inner) =>
+      type_contains_func_ptr(inner)
+    _ => false
+  }
 }
 
 ///|
@@ -463,36 +543,55 @@ fn Parser::parse_direct_declarator(
   match self.token {
     Ident(name) => {
       self.advance()
-      self.parse_declarator_suffixes(base_ty, name, false)
+      self.parse_declarator_suffixes(base_ty, name, false, 0)
     }
     LParen => {
       self.advance()
       let inner = self.parse_declarator(base_ty)
       self.expect(RParen)
-      let outer = self.parse_declarator_suffixes(inner.ty, inner.name, true)
+      let outer = self.parse_declarator_suffixes(
+        inner.ty,
+        inner.name,
+        true,
+        inner.ptr_depth,
+      )
       outer.set_func_info(inner)
     }
-    _ => self.parse_declarator_suffixes(base_ty, "", false)
+    _ => self.parse_declarator_suffixes(base_ty, "", false, 0)
   }
 }
 
 ///|
-fn Parser::parse_direct_abstract_declarator(
+fn Parser::parse_direct_abstract_declarator_result(
   self : Parser,
   base_ty : Type,
-) -> Type {
+) -> AbstractDeclaratorResult {
   self.skip_attributes()
   match self.token {
     LParen =>
       if self.is_parenthesized_abstract_declarator() {
         self.advance()
-        let inner_ty = self.parse_abstract_declarator(base_ty)
+        let inner = self.parse_abstract_declarator_result(base_ty)
         self.expect(RParen)
-        self.parse_abstract_declarator_suffixes(inner_ty, true)
+        {
+          ty: self.parse_abstract_declarator_suffixes(
+            inner.ty,
+            true,
+            inner.ptr_depth,
+          ),
+          ptr_depth: inner.ptr_depth,
+        }
       } else {
-        self.parse_abstract_declarator_suffixes(base_ty, false)
+        {
+          ty: self.parse_abstract_declarator_suffixes(base_ty, false, 0),
+          ptr_depth: 0,
+        }
       }
-    _ => self.parse_abstract_declarator_suffixes(base_ty, false)
+    _ =>
+      {
+        ty: self.parse_abstract_declarator_suffixes(base_ty, false, 0),
+        ptr_depth: 0,
+      }
   }
 }
 
@@ -536,6 +635,7 @@ fn Parser::parse_declarator_suffixes(
   base_ty : Type,
   name : String,
   push_mode : Bool,
+  ptr_depth : Int,
 ) -> DeclaratorResult {
   let mut ty = base_ty
   let mut func_params : Array[Param]? = None
@@ -580,9 +680,12 @@ fn Parser::parse_declarator_suffixes(
           }
         }
         self.expect(RParen)
+        let (named_count, variadic) = function_param_info(params)
         func_ret_ty = Some(ty)
         func_params = Some(params)
-        ty = Pointer(Void)
+        ty = make_function_pointer_type(
+          ty, push_mode, ptr_depth, named_count, variadic,
+        )
         if !push_mode {
           is_func_decl = true
         }
@@ -590,7 +693,7 @@ fn Parser::parse_declarator_suffixes(
       _ => break
     }
   }
-  { ty, name, func_params, func_ret_ty, is_func_decl }
+  { ty, name, ptr_depth, func_params, func_ret_ty, is_func_decl }
 }
 
 ///|
@@ -598,6 +701,7 @@ fn Parser::parse_abstract_declarator_suffixes(
   self : Parser,
   ty : Type,
   push_mode : Bool,
+  ptr_depth : Int,
 ) -> Type {
   let mut result = ty
   while true {
@@ -630,15 +734,19 @@ fn Parser::parse_abstract_declarator_suffixes(
       }
       LParen => {
         self.advance()
+        let params : Array[Param] = []
         if self.token != RParen {
-          let _ = self.parse_param()
+          params.push(self.parse_param())
           while self.token == Comma {
             self.advance()
-            let _ = self.parse_param()
+            params.push(self.parse_param())
           }
         }
         self.expect(RParen)
-        result = Pointer(Void)
+        let (named_count, variadic) = function_param_info(params)
+        result = make_function_pointer_type(
+          result, push_mode, ptr_depth, named_count, variadic,
+        )
       }
       _ => break
     }

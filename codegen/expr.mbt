@@ -48,7 +48,11 @@ fn Codegen::type_of(
           } else {
             SInt
           }
-        _ => SInt
+        _ =>
+          match self.type_of(func, frame_size) {
+            FuncPtr(ret, _, _) => ret
+            _ => SInt
+          }
       }
     Assign(_, rhs) => self.type_of(rhs, frame_size)
     MemberAccess(obj, field) => {
@@ -71,6 +75,7 @@ fn Codegen::type_of(
     Deref(ptr) =>
       match self.type_of(ptr, frame_size) {
         Pointer(ty) => ty
+        FuncPtr(ret, count, variadic) => FuncPtr(ret, count, variadic)
         Array(elem, _) => elem
         _ => SInt
       }
@@ -1044,49 +1049,62 @@ fn Codegen::gen_expr(
       }
       if not(is_builtin) {
         // Check if callee is variadic
-        let named_count = match func {
-          Var(name) =>
-            if self.func_param_counts.contains(name) {
-              self.func_param_counts[name]
-            } else {
-              // Known external variadic functions
-              match name {
-                "printf" | "vprintf" | "scanf" | "fscanf" | "sscanf" => 1
-                "fprintf" | "vfprintf" | "sprintf" | "vsprintf" => 2
-                "snprintf" | "vsnprintf" => 3
-                "___snprintf_chk" => 5
-                "open" | "fcntl" | "ioctl" => 2
-                _ => 0
-              }
-            }
-          _ => 0
+        let callee_ty = self.type_of(func, frame_size)
+        let typed_variadic_count = match callee_ty {
+          FuncPtr(_, count, true) => Some(count)
+          _ => None
         }
-        let is_variadic = match func {
-          Var(name) =>
-            if self.func_variadic.get_or_default(name, false) {
-              true
-            } else {
-              // Known external variadic functions
-              match name {
-                "printf"
-                | "vprintf"
-                | "fprintf"
-                | "vfprintf"
-                | "sprintf"
-                | "vsprintf"
-                | "snprintf"
-                | "vsnprintf"
-                | "scanf"
-                | "fscanf"
-                | "sscanf"
-                | "___snprintf_chk"
-                | "open"
-                | "fcntl"
-                | "ioctl" => true
-                _ => false
-              }
+        let named_count = match typed_variadic_count {
+          Some(count) => count
+          None =>
+            match func {
+              Var(name) =>
+                if self.func_param_counts.contains(name) {
+                  self.func_param_counts[name]
+                } else {
+                  // Known external variadic functions
+                  match name {
+                    "printf" | "vprintf" | "scanf" | "fscanf" | "sscanf" => 1
+                    "fprintf" | "vfprintf" | "sprintf" | "vsprintf" => 2
+                    "snprintf" | "vsnprintf" => 3
+                    "___snprintf_chk" => 5
+                    "open" | "fcntl" | "ioctl" => 2
+                    _ => 0
+                  }
+                }
+              _ => 0
             }
-          _ => false
+        }
+        let is_variadic = match typed_variadic_count {
+          Some(_) => true
+          None =>
+            match func {
+              Var(name) =>
+                if self.func_variadic.get_or_default(name, false) {
+                  true
+                } else {
+                  // Known external variadic functions
+                  match name {
+                    "printf"
+                    | "vprintf"
+                    | "fprintf"
+                    | "vfprintf"
+                    | "sprintf"
+                    | "vsprintf"
+                    | "snprintf"
+                    | "vsnprintf"
+                    | "scanf"
+                    | "fscanf"
+                    | "sscanf"
+                    | "___snprintf_chk"
+                    | "open"
+                    | "fcntl"
+                    | "ioctl" => true
+                    _ => false
+                  }
+                }
+              _ => false
+            }
         }
         if is_variadic {
           // AAPCS64 variadic calls: all args passed in x0-x7/v0-v7 as usual,
