@@ -928,7 +928,7 @@ fn Codegen::gen_expr(
               _ => ""
             }
             match self.find_field_layout(struct_name, field) {
-              Some((_, _, _, size, bit_offset, bit_width)) => {
+              Some((_, field_ty, _, size, bit_offset, bit_width)) => {
                 // Load container
                 match size {
                   1 => self.emit("\tldrb\tw11, [x10]")
@@ -945,6 +945,7 @@ fn Codegen::gen_expr(
                 // Insert new value
                 self.emit_load_int("x12", mask.to_int64())
                 self.emit("\tand\tx9, x9, x12")
+                self.emit("\tstr\tx9, [sp, #-16]!")
                 self.emit("\tlsl\tx9, x9, #" + bit_offset.to_string())
                 self.emit("\torr\tx11, x11, x9")
                 // Store container back
@@ -953,6 +954,12 @@ fn Codegen::gen_expr(
                   2 => self.emit("\tstrh\tw11, [x10]")
                   4 => self.emit("\tstr\tw11, [x10]")
                   _ => self.emit("\tstr\tx11, [x10]")
+                }
+                self.emit("\tldr\tx9, [sp], #16")
+                if field_ty.is_signed() {
+                  let shift = 64 - bit_width
+                  self.emit("\tlsl\tx9, x9, #" + shift.to_string())
+                  self.emit("\tasr\tx9, x9, #" + shift.to_string())
                 }
               }
               None => ()

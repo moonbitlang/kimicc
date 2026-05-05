@@ -809,3 +809,32 @@ async test "e2e prefix increment returns truncated unsigned scalar" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")
 }
+
+///|
+async test "e2e nested bit-field assignment returns assigned value" {
+  let source =
+    #|struct Init {
+    #|  unsigned int newTnum;
+    #|  unsigned char iDb;
+    #|  unsigned char busy;
+    #|  unsigned orphanTrigger : 1;
+    #|  unsigned imposterTable : 1;
+    #|  unsigned reopenMemdb : 1;
+    #|};
+    #|
+    #|int main(void) {
+    #|  struct Init init;
+    #|  init.newTnum = 0;
+    #|  init.iDb = 0;
+    #|  init.busy = 0;
+    #|  init.orphanTrigger = 0;
+    #|  init.imposterTable = 0;
+    #|  init.reopenMemdb = 0;
+    #|  init.busy = init.imposterTable = 1;
+    #|  if (init.imposterTable != 1) return 1;
+    #|  if (init.busy != 1) return 2;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
