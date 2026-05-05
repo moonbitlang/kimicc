@@ -718,3 +718,19 @@ async test "e2e nested struct field initializer in local array" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")
 }
+
+///|
+async test "e2e hex escape string literal preserves raw bytes" {
+  let source =
+    #|int main(void) {
+    #|  unsigned char *p = (unsigned char*)"\xFF\x00\x00\x01";
+    #|  if (p[0] != 255) return 1;
+    #|  if (p[1] != 0) return 2;
+    #|  if (p[2] != 0) return 3;
+    #|  if (p[3] != 1) return 4;
+    #|  if (p[4] != 0) return 5;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}

@@ -48,8 +48,11 @@ Passing kimicc SQLite e2e tests:
   and pass public `test/select1.test` through `test/selectH.test` with 0
   errors across 37796 tests.
 - Pass SQLite's public `ext/expert/expert1.test` with 0 errors across 75 tests.
-- `test/veryquick.test` currently reaches the FTS5 batch and then fails with
-  malformed inverted-index checks before aborting in `fts5contentless.test`.
+- Pass SQLite's public `ext/fts5/test/fts5contentless.test` with 0 errors
+  across 121 tests.
+- The malformed FTS5 index cluster is fixed. The next sampled FTS5 blocker is
+  `ext/fts5/test/fts5aa.test`, where six `16.2` rank-score checks differ from
+  clang.
 
 This is useful smoke coverage, not a claim that SQLite passes its test suite.
 
@@ -128,7 +131,9 @@ amalgamation fixture and focused e2e regressions in version control.
 | Fixed | Pointer relational comparisons against sentinel addresses | `moon test test/e2e --target native --filter 'e2e pointer less-than uses unsigned address ordering'` | Public `veryquick.test` first failed in `ext/expert/expert1.test` with `ESCAPE expression must be a single character`. This minimized to SQLite's `sqlite3Utf8CharLen("x", -1)`: `zTerm = (const u8*)(-1)` relies on unsigned address ordering for `z < zTerm`, but kimicc emitted signed `lt`. Pointer relational comparisons now use unsigned condition codes, matching clang on ARM64 macOS. This fixes the expert ESCAPE failure and all ESCAPE failures in `e_expr.test`. |
 | Fixed | Nested struct field initializers inside local arrays | `moon test test/e2e --target native --filter 'e2e nested struct field initializer in local array'` | Public `veryquick.test` crashed in `ext/expert/expert1.test` after `expert1-2.19.0` while FTS5 called a tokenizer function pointer. The minimized source was SQLite's `struct BuiltinTokenizer aBuiltin[] = { { "unicode61", {fts5UnicodeCreate, ...} } }`: kimicc assigned the nested struct field from the stale string-pointer register instead of lowering the nested brace list recursively. Local struct/union field initializers now recurse into nested aggregate brace lists. |
 | Passed | Public SQLite Tcl `expert1.test` | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/ext/expert/expert1.test` after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The kimicc-built SQLite testfixture now passes `expert1.test`: 0 errors out of 75 tests. This clears the previous FTS5 tokenizer SIGBUS. |
-| Open | Public SQLite Tcl `veryquick.test` FTS5 index corruption | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/test/veryquick.test` after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The run now reaches FTS5 and exits with code 1 after many `database disk image is malformed` / `malformed inverted index for FTS5 table main.t1` checks, finally aborting in `fts5contentless.test` around `db eval {SELECT rowid FROM ft($v)}`. Earlier examples include `fts5aa-full-2.4`, `fts5aux-13.1`, `fts5blob-1.1.3`, and `fts5contentless-3.2.2` where expected `00000000FF000001000000` became `00000000C3BF0053000000`. Clang-linked baseline still needs to be rerun for the exact failing script before minimizing this failure class. |
+| Fixed | Raw byte string literal emission | `moon test test/e2e --target native --filter 'e2e hex escape string literal preserves raw bytes'` | Public FTS5 malformed-index failures minimized to `FTS5_STRUCTURE_V2`, the string literal `"\xFF\x00\x00\x01"`. kimicc emitted `0xFF` as UTF-8 `C3 BF`, then placed embedded-NUL string literals in Darwin's `__TEXT,__cstring,cstring_literals` section. String emission now uses fixed octal byte escapes and pools string literals in `__TEXT,__const`, matching clang for embedded NUL bytes. |
+| Passed | Public SQLite Tcl `fts5contentless.test` | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/ext/fts5/test/fts5contentless.test` from an isolated temporary working directory after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The kimicc-built SQLite testfixture now passes `fts5contentless.test`: 0 errors out of 121 tests. The clean clang-linked baseline also passes 0/121. |
+| Open | Public SQLite Tcl `fts5aa.test` rank-score mismatch | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/ext/fts5/test/fts5aa.test` from an isolated temporary working directory after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The malformed-index failures in this file are gone, but kimicc still reports 6 failures in the `16.2` cases: expected `0 {{} -1e-06 {}}`, got `0 {{} -2.2e-06 {}}` for full/col/none and origintext variants. The clang-linked baseline passes `fts5aa.test` with 0 errors out of 1427 tests. This is the next failure class to minimize. |
 
 ## Execution Plan
 

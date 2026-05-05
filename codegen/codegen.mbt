@@ -25,16 +25,37 @@ pub struct Codegen {
 }
 
 ///|
+fn octal_digit_char(d : Int) -> Char {
+  match d {
+    0 => '0'
+    1 => '1'
+    2 => '2'
+    3 => '3'
+    4 => '4'
+    5 => '5'
+    6 => '6'
+    _ => '7'
+  }
+}
+
+///|
+fn write_octal_escape(buf : StringBuilder, value : Int) -> Unit {
+  let byte = value % 256
+  buf.write_char('\\')
+  buf.write_char(octal_digit_char(byte / 64))
+  buf.write_char(octal_digit_char(byte / 8 % 8))
+  buf.write_char(octal_digit_char(byte % 8))
+}
+
+///|
 fn escape_string(s : String) -> String {
   let buf = StringBuilder::new()
   for ch in s {
-    match ch {
-      '\n' => buf.write_string("\\n")
-      '\t' => buf.write_string("\\t")
-      '\\' => buf.write_string("\\\\")
-      '"' => buf.write_string("\\\"")
-      '\u0000' => buf.write_string("\\0")
-      _ => buf.write_char(ch)
+    let value = ch.to_int()
+    if value < 0x20 || value >= 0x7f || ch == '\\' || ch == '"' {
+      write_octal_escape(buf, value)
+    } else {
+      buf.write_char(ch)
     }
   }
   buf.to_string()
@@ -573,7 +594,7 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   }
   // Emit string literals
   if self.strings.length() > 0 {
-    self.emit("	.section	__TEXT,__cstring,cstring_literals")
+    self.emit("	.section	__TEXT,__const")
     for i = 0; i < self.strings.length(); i = i + 1 {
       self.emit("_str" + i.to_string() + ":")
       self.emit("	.asciz	\"" + escape_string(self.strings[i]) + "\"")
