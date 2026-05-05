@@ -2141,7 +2141,21 @@ fn Codegen::gen_expr(
           self.emit("\tstr\tx9, [x10]")
           self.emit("\tldr\tx9, [sp], #16") // restore value
         }
-        SInt | UInt => {
+        SInt => {
+          self.emit("\tldr\tw9, [x9]")
+          self.emit("\tsxtw\tx9, w9")
+          // Advance ap by align_up(4, 8) = 8
+          self.emit("\tstr\tx9, [sp, #-16]!") // save value
+          self.gen_expr(ap_expr, frame_size)
+          self.emit("\tadd\tx9, x9, #8")
+          self.emit("\tstr\tx9, [sp, #-16]!") // save advanced ap
+          self.gen_addr(ap_expr, frame_size)
+          self.emit("\tmov\tx10, x9")
+          self.emit("\tldr\tx9, [sp], #16") // restore advanced ap
+          self.emit("\tstr\tx9, [x10]")
+          self.emit("\tldr\tx9, [sp], #16") // restore value
+        }
+        UInt => {
           self.emit("\tldr\tw9, [x9]")
           // Advance ap by align_up(4, 8) = 8
           self.emit("\tstr\tx9, [sp, #-16]!") // save value

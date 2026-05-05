@@ -911,3 +911,27 @@ async test "e2e prototype converts float argument to double parameter" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")
 }
+
+///|
+async test "e2e va_arg signed int sign-extends into long long" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|
+    #|int read_signed(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  long long prefix = __builtin_va_arg(ap, long long);
+    #|  long long value = __builtin_va_arg(ap, int);
+    #|  __builtin_va_end(ap);
+    #|  if (prefix != 1) return 1;
+    #|  if (value != -1074) return 2;
+    #|  return 42;
+    #|}
+    #|
+    #|int main(void) {
+    #|  int e = 1;
+    #|  return read_signed(0, 1LL, e - 1075);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
