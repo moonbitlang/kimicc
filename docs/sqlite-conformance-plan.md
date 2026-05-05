@@ -42,14 +42,41 @@ Passing kimicc SQLite e2e tests:
 
 This is useful smoke coverage, not a claim that SQLite passes its test suite.
 
+## Upstream Public Test Source
+
+Use the official SQLite Fossil tarball for the exact check-in embedded in the
+fixture:
+
+```text
+https://www.sqlite.org/src/tarball/sqlite-src-3049001.tar.gz?r=873d4e274b4988d260ba8354a9718324a1c26187a4ab4c1cc0227c03d0f10e70
+```
+
+Inspection result:
+
+- Archive SHA-256: `d63fa87b18edd5881f764d2100695abcccdd0e370526d4a9d918be0232ee16eb`
+- Extracted `VERSION`: `3.49.1`
+- Extracted `manifest.uuid`: `873d4e274b4988d260ba8354a9718324a1c26187a4ab4c1cc0227c03d0f10e70`
+- Archive entries: `2272`
+- Public Tcl test scripts: `1159` under `test/*.test`, plus `145` under
+  extension test directories.
+- Public runner: `test/testrunner.tcl`. Its default binary mode runs the
+  `veryquick` set with `./testfixture $TESTDIR/testrunner.tcl`; `full` runs all
+  Tcl scripts, and `all` runs full plus selected permutations.
+
+Do not vendor this whole source tree by default yet. It is large and the current
+routine MoonBit tests should remain hermetic and fast. Instead, make broader
+SQLite conformance an explicit harness mode that accepts a checked-out or
+cached source tree via environment variable, while the repo keeps the small
+amalgamation fixture and focused e2e regressions in version control.
+
 ## Todo
 
 - [x] Clean slate: native build/test has no compilation errors.
 - [x] Vendor a SQLite amalgamation fixture.
 - [x] Add async MoonBit compile-link-run e2e tests around the SQLite object.
 - [x] Fix compiler issues exposed by the first SQLite smoke tests.
-- [ ] Identify the exact public SQLite test source that matches the fixture.
-- [ ] Decide whether to vendor the matching public test tree or fetch it into a
+- [x] Identify the exact public SQLite test source that matches the fixture.
+- [x] Decide whether to vendor the matching public test tree or fetch it into a
   cache during explicit SQLite conformance runs.
 - [ ] Add a MoonBit harness entry point for broader SQLite tests.
 - [ ] Add a small SQL-script runner before trying the full upstream test suite.
