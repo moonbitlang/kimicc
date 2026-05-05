@@ -173,9 +173,7 @@ fn Codegen::compute_struct_layout(
   let mut offset = 0
   let layout = []
   // Bit-field packing state
-  let mut current_container_size = 0
-  let mut current_container_align = 0
-  let mut current_container_offset = 0
+  let mut in_bitfield_run = false
   let mut current_bit_offset = 0
   for field in decl.fields {
     // Anonymous struct/union member: flatten its fields into parent
@@ -187,9 +185,7 @@ fn Codegen::compute_struct_layout(
         layout.push(f)
       }
       offset += self.type_size(field.ty)
-      current_container_size = 0
-      current_container_align = 0
-      current_container_offset = 0
+      in_bitfield_run = false
       current_bit_offset = 0
       continue
     }
@@ -202,9 +198,7 @@ fn Codegen::compute_struct_layout(
         offset += padding
         layout.push((field.name, field.ty, offset, size, 0, 0))
         offset += size
-        current_container_size = 0
-        current_container_align = 0
-        current_container_offset = 0
+        in_bitfield_run = false
         current_bit_offset = 0
       }
       Some(w) => {
@@ -216,45 +210,41 @@ fn Codegen::compute_struct_layout(
           let padding = (container_align - offset % container_align) %
             container_align
           offset += padding
-          current_container_size = 0
-          current_container_align = 0
-          current_container_offset = 0
+          in_bitfield_run = false
           current_bit_offset = 0
           // Don't add a layout entry for zero-width bit-fields
         } else {
-          let can_continue = current_container_size == container_size &&
-            current_container_align == container_align &&
-            current_bit_offset + w <= container_bits
+          let mut container_offset = current_bit_offset /
+            (container_align * 8) *
+            container_align
+          let mut field_bit_offset = current_bit_offset - container_offset * 8
+          let can_continue = in_bitfield_run &&
+            field_bit_offset + w <= container_bits
           if !can_continue {
-            let mut container_offset = offset /
-              container_align *
-              container_align
-            let mut bit_offset = (offset - container_offset) * 8
+            container_offset = offset / container_align * container_align
+            field_bit_offset = (offset - container_offset) * 8
             if offset >= container_offset + container_size ||
-              bit_offset + w > container_bits {
+              field_bit_offset + w > container_bits {
               let padding = (container_align - offset % container_align) %
                 container_align
               container_offset = offset + padding
-              bit_offset = 0
+              field_bit_offset = 0
             }
-            current_container_offset = container_offset
-            current_container_size = container_size
-            current_container_align = container_align
-            current_bit_offset = bit_offset
+            current_bit_offset = container_offset * 8 + field_bit_offset
           }
           layout.push(
             (
               field.name,
               field.ty,
-              current_container_offset,
+              container_offset,
               container_size,
-              current_bit_offset,
+              field_bit_offset,
               w,
             ),
           )
-          current_bit_offset += w
-          let end_offset = current_container_offset +
-            (current_bit_offset + 7) / 8
+          in_bitfield_run = true
+          current_bit_offset = current_bit_offset + w
+          let end_offset = (current_bit_offset + 7) / 8
           if end_offset > offset {
             offset = end_offset
           }

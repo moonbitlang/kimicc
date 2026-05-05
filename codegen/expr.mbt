@@ -111,6 +111,8 @@ fn Codegen::type_of(
     Array(_) => SInt
     CompoundLiteral(ty, _, _) => ty
     DesignatedField(_, e) => self.type_of(e, frame_size)
+    DesignatedIndex(_, e) => self.type_of(e, frame_size)
+    DesignatedRange(_, _, e) => self.type_of(e, frame_size)
     _ => SInt
   }
 }
@@ -331,17 +333,49 @@ fn signed_type_for_rank(rank : Int) -> @parser.Type {
 }
 
 ///|
+fn integer_width_bits(ty : @parser.Type) -> Int {
+  match ty {
+    Bool | SChar | UChar => 8
+    SShort | UShort => 16
+    SInt | UInt => 32
+    SLong | ULong | SLongLong | ULongLong => 64
+    _ => 0
+  }
+}
+
+///|
 fn integer_common_type(
   lhs_ty : @parser.Type,
   rhs_ty : @parser.Type,
 ) -> @parser.Type {
+  let lhs_ty = unary_integer_result_type(lhs_ty)
+  let rhs_ty = unary_integer_result_type(rhs_ty)
+  if lhs_ty == rhs_ty {
+    return lhs_ty
+  }
+  let lhs_unsigned = is_unsigned_integer_type(lhs_ty)
+  let rhs_unsigned = is_unsigned_integer_type(rhs_ty)
   let lhs_rank = integer_rank(lhs_ty)
   let rhs_rank = integer_rank(rhs_ty)
-  let rank = if lhs_rank > rhs_rank { lhs_rank } else { rhs_rank }
-  if is_unsigned_integer_type(lhs_ty) || is_unsigned_integer_type(rhs_ty) {
-    unsigned_type_for_rank(rank)
+  if lhs_unsigned == rhs_unsigned {
+    let rank = if lhs_rank > rhs_rank { lhs_rank } else { rhs_rank }
+    if lhs_unsigned {
+      unsigned_type_for_rank(rank)
+    } else {
+      signed_type_for_rank(rank)
+    }
   } else {
-    signed_type_for_rank(rank)
+    let unsigned_ty = if lhs_unsigned { lhs_ty } else { rhs_ty }
+    let signed_ty = if lhs_unsigned { rhs_ty } else { lhs_ty }
+    let unsigned_rank = integer_rank(unsigned_ty)
+    let signed_rank = integer_rank(signed_ty)
+    if unsigned_rank >= signed_rank {
+      unsigned_ty
+    } else if integer_width_bits(signed_ty) > integer_width_bits(unsigned_ty) {
+      signed_ty
+    } else {
+      unsigned_type_for_rank(signed_rank)
+    }
   }
 }
 
@@ -352,7 +386,24 @@ fn uses_unsigned_integer_op(
 ) -> Bool {
   lhs_ty.is_integer() &&
   rhs_ty.is_integer() &&
-  (is_unsigned_integer_type(lhs_ty) || is_unsigned_integer_type(rhs_ty))
+  is_unsigned_integer_type(integer_common_type(lhs_ty, rhs_ty))
+}
+
+///|
+fn Codegen::emit_integer_compare(
+  self : Codegen,
+  lhs_ty : @parser.Type,
+  rhs_ty : @parser.Type,
+  is_ptr_diff : Bool,
+) -> Unit {
+  if !is_ptr_diff &&
+    lhs_ty.is_integer() &&
+    rhs_ty.is_integer() &&
+    self.type_size(integer_common_type(lhs_ty, rhs_ty)) <= 4 {
+    self.emit("\tcmp\tw9, w10")
+  } else {
+    self.emit("\tcmp\tx9, x10")
+  }
 }
 
 ///|
@@ -926,6 +977,51 @@ fn is_aggregate_type(ty : @parser.Type) -> Bool {
 }
 
 ///|
+fn Codegen::is_register_aggregate(self : Codegen, ty : @parser.Type) -> Bool {
+  match ty {
+    Struct(_) | Union(_) => self.type_size(ty) <= 16
+    _ => false
+  }
+}
+
+///|
+fn Codegen::emit_save_register_aggregate(
+  self : Codegen,
+  ty : @parser.Type,
+) -> Unit {
+  self.emit("\tsub\tsp, sp, #16")
+  self.emit("\tstr\tx0, [sp]")
+  if self.type_size(ty) > 8 {
+    self.emit("\tstr\tx1, [sp, #8]")
+  }
+}
+
+///|
+fn Codegen::emit_store_saved_register_aggregate_at_x9(
+  self : Codegen,
+  ty : @parser.Type,
+) -> Unit {
+  self.emit("\tldr\tx10, [sp]")
+  self.emit("\tstr\tx10, [x9]")
+  if self.type_size(ty) > 8 {
+    self.emit("\tldr\tx10, [sp, #8]")
+    self.emit("\tstr\tx10, [x9, #8]")
+  }
+  self.emit("\tadd\tsp, sp, #16")
+}
+
+///|
+fn Codegen::emit_load_register_aggregate_from_x9(
+  self : Codegen,
+  ty : @parser.Type,
+) -> Unit {
+  self.emit("\tldr\tx0, [x9]")
+  if self.type_size(ty) > 8 {
+    self.emit("\tldr\tx1, [x9, #8]")
+  }
+}
+
+///|
 fn Codegen::emit_add_offset_to_x9(self : Codegen, offset : Int) -> Unit {
   if offset == 0 {
     return
@@ -976,6 +1072,8 @@ fn Codegen::emit_init_value_at_addr(
 ) -> Unit {
   let value = match init_expr {
     DesignatedField(_, e) => e
+    DesignatedIndex(_, e) => e
+    DesignatedRange(_, _, e) => e
     _ => init_expr
   }
   if is_aggregate_type(ty) {
@@ -987,6 +1085,14 @@ fn Codegen::emit_init_value_at_addr(
           CompoundLiteral(_, init_exprs, _) | Array(init_exprs) =>
             self.emit_init_aggregate_at_addr(ty, init_exprs, frame_size)
           Number(0) => ()
+          Call(_, _) if self.is_register_aggregate(ty) => {
+            self.emit("\tstr\tx9, [sp, #-16]!")
+            self.gen_expr(value, frame_size)
+            self.emit_save_register_aggregate(ty)
+            self.emit("\tldr\tx9, [sp, #16]")
+            self.emit_store_saved_register_aggregate_at_x9(ty)
+            self.emit("\tadd\tsp, sp, #16")
+          }
           _ => {
             self.emit("\tstr\tx9, [sp, #-16]!")
             self.gen_aggregate_addr(value, frame_size)
@@ -1073,11 +1179,35 @@ fn Codegen::emit_init_aggregate_at_addr(
     }
     Array(elem_ty, n) => {
       let elem_size = self.type_size(elem_ty)
-      let count = if init_exprs.length() < n { init_exprs.length() } else { n }
-      for i in 0..<count {
-        self.emit("\tldr\tx9, [sp]")
-        self.emit_add_offset_to_x9(i * elem_size)
-        self.emit_init_value_at_addr(elem_ty, init_exprs[i], frame_size)
+      let mut cursor = 0
+      for init_expr in init_exprs {
+        let mut start = cursor
+        let mut end = cursor
+        let value = match init_expr {
+          DesignatedIndex(index, e) => {
+            start = index.to_int()
+            end = start
+            cursor = start + 1
+            e
+          }
+          DesignatedRange(first, last, e) => {
+            start = first.to_int()
+            end = last.to_int()
+            cursor = end + 1
+            e
+          }
+          _ => {
+            cursor += 1
+            init_expr
+          }
+        }
+        for i = start; i <= end; i = i + 1 {
+          if i >= 0 && i < n {
+            self.emit("\tldr\tx9, [sp]")
+            self.emit_add_offset_to_x9(i * elem_size)
+            self.emit_init_value_at_addr(elem_ty, value, frame_size)
+          }
+        }
       }
     }
     _ => ()
@@ -1216,20 +1346,29 @@ fn Codegen::gen_expr(
       } else {
         let lhs_ty = self.type_of(lhs, frame_size)
         match lhs_ty {
-          Struct(_) | Union(_) => {
+          Struct(_) | Union(_) =>
             // Struct/union assignment: use memcpy via addresses
-            self.gen_aggregate_addr(rhs, frame_size)
-            self.emit("\tstr\tx9, [sp, #-16]!")
-            self.gen_addr(lhs, frame_size)
-            self.emit("\tstr\tx9, [sp, #-16]!")
-            self.emit("\tmov\tx0, x9")
-            self.emit("\tldr\tx1, [sp, #16]")
-            let size = self.type_size(lhs_ty)
-            self.emit_load_int("x2", size.to_int64())
-            self.emit("\tbl\t_memcpy")
-            self.emit("\tadd\tsp, sp, #32")
-            self.emit("\tmov\tx9, x0")
-          }
+            match rhs {
+              Call(_, _) if self.is_register_aggregate(lhs_ty) => {
+                self.gen_expr(rhs, frame_size)
+                self.emit_save_register_aggregate(lhs_ty)
+                self.gen_addr(lhs, frame_size)
+                self.emit_store_saved_register_aggregate_at_x9(lhs_ty)
+              }
+              _ => {
+                self.gen_aggregate_addr(rhs, frame_size)
+                self.emit("\tstr\tx9, [sp, #-16]!")
+                self.gen_addr(lhs, frame_size)
+                self.emit("\tstr\tx9, [sp, #-16]!")
+                self.emit("\tmov\tx0, x9")
+                self.emit("\tldr\tx1, [sp, #16]")
+                let size = self.type_size(lhs_ty)
+                self.emit_load_int("x2", size.to_int64())
+                self.emit("\tbl\t_memcpy")
+                self.emit("\tadd\tsp, sp, #32")
+                self.emit("\tmov\tx9, x0")
+              }
+            }
           _ => {
             self.gen_expr(rhs, frame_size)
             self.emit_numeric_conversion(self.type_of(rhs, frame_size), lhs_ty)
@@ -1437,7 +1576,7 @@ fn Codegen::gen_expr(
             }
             self.emit("\tcset\tx9, eq")
           } else {
-            self.emit("\tcmp\tx9, x10")
+            self.emit_integer_compare(left_ty, right_ty, is_ptr_diff)
             self.emit("\tcset\tx9, eq")
           }
         "!=" =>
@@ -1453,7 +1592,7 @@ fn Codegen::gen_expr(
             }
             self.emit("\tcset\tx9, ne")
           } else {
-            self.emit("\tcmp\tx9, x10")
+            self.emit_integer_compare(left_ty, right_ty, is_ptr_diff)
             self.emit("\tcset\tx9, ne")
           }
         "<" =>
@@ -1469,7 +1608,7 @@ fn Codegen::gen_expr(
             }
             self.emit("\tcset\tx9, mi")
           } else {
-            self.emit("\tcmp\tx9, x10")
+            self.emit_integer_compare(left_ty, right_ty, is_ptr_diff)
             if is_unsigned_cmp {
               self.emit("\tcset\tx9, lo")
             } else {
@@ -1489,7 +1628,7 @@ fn Codegen::gen_expr(
             }
             self.emit("\tcset\tx9, ls")
           } else {
-            self.emit("\tcmp\tx9, x10")
+            self.emit_integer_compare(left_ty, right_ty, is_ptr_diff)
             if is_unsigned_cmp {
               self.emit("\tcset\tx9, ls")
             } else {
@@ -1509,7 +1648,7 @@ fn Codegen::gen_expr(
             }
             self.emit("\tcset\tx9, gt")
           } else {
-            self.emit("\tcmp\tx9, x10")
+            self.emit_integer_compare(left_ty, right_ty, is_ptr_diff)
             if is_unsigned_cmp {
               self.emit("\tcset\tx9, hi")
             } else {
@@ -1529,7 +1668,7 @@ fn Codegen::gen_expr(
             }
             self.emit("\tcset\tx9, ge")
           } else {
-            self.emit("\tcmp\tx9, x10")
+            self.emit_integer_compare(left_ty, right_ty, is_ptr_diff)
             if is_unsigned_cmp {
               self.emit("\tcset\tx9, hs")
             } else {
@@ -1701,21 +1840,46 @@ fn Codegen::gen_expr(
             match arg_types[i] {
               Struct(_) | Union(_) => {
                 let size = self.type_size(arg_types[i])
-                if size > 8 && size <= 16 {
-                  self.gen_aggregate_addr(args[i], frame_size)
-                  self.emit("\tldr\tx10, [x9]")
-                  self.emit(
-                    "\tstr\tx10, [sp, #" +
-                    (backup_offset + slot_idx * 8).to_string() +
-                    "]",
-                  )
-                  self.emit("\tldr\tx10, [x9, #8]")
-                  self.emit(
-                    "\tstr\tx10, [sp, #" +
-                    (backup_offset + (slot_idx + 1) * 8).to_string() +
-                    "]",
-                  )
-                  slot_idx += 2
+                if size <= 16 {
+                  match args[i] {
+                    Call(_, _) => {
+                      self.gen_expr(args[i], frame_size)
+                      self.emit(
+                        "\tstr\tx0, [sp, #" +
+                        (backup_offset + slot_idx * 8).to_string() +
+                        "]",
+                      )
+                      if size > 8 {
+                        self.emit(
+                          "\tstr\tx1, [sp, #" +
+                          (backup_offset + (slot_idx + 1) * 8).to_string() +
+                          "]",
+                        )
+                      }
+                    }
+                    _ => {
+                      self.gen_aggregate_addr(args[i], frame_size)
+                      self.emit("\tldr\tx10, [x9]")
+                      self.emit(
+                        "\tstr\tx10, [sp, #" +
+                        (backup_offset + slot_idx * 8).to_string() +
+                        "]",
+                      )
+                      if size > 8 {
+                        self.emit("\tldr\tx10, [x9, #8]")
+                        self.emit(
+                          "\tstr\tx10, [sp, #" +
+                          (backup_offset + (slot_idx + 1) * 8).to_string() +
+                          "]",
+                        )
+                      }
+                    }
+                  }
+                  if size > 8 {
+                    slot_idx += 2
+                  } else {
+                    slot_idx += 1
+                  }
                 } else {
                   self.gen_aggregate_addr(args[i], frame_size)
                   self.emit(
@@ -1915,20 +2079,42 @@ fn Codegen::gen_expr(
             match arg_types[i] {
               Struct(_) | Union(_) => {
                 let size = self.type_size(arg_types[i])
-                if size > 8 && size <= 16 {
-                  // Composite type: load contents from address in x9 into two slots
-                  self.gen_aggregate_addr(args[i], frame_size)
-                  self.emit("\tldr\tx10, [x9]")
-                  self.emit(
-                    "\tstr\tx10, [sp, #" + (slot_idx * 8).to_string() + "]",
-                  )
-                  self.emit("\tldr\tx10, [x9, #8]")
-                  self.emit(
-                    "\tstr\tx10, [sp, #" +
-                    ((slot_idx + 1) * 8).to_string() +
-                    "]",
-                  )
-                  slot_idx += 2
+                if size <= 16 {
+                  match args[i] {
+                    Call(_, _) => {
+                      self.gen_expr(args[i], frame_size)
+                      self.emit(
+                        "\tstr\tx0, [sp, #" + (slot_idx * 8).to_string() + "]",
+                      )
+                      if size > 8 {
+                        self.emit(
+                          "\tstr\tx1, [sp, #" +
+                          ((slot_idx + 1) * 8).to_string() +
+                          "]",
+                        )
+                      }
+                    }
+                    _ => {
+                      self.gen_aggregate_addr(args[i], frame_size)
+                      self.emit("\tldr\tx10, [x9]")
+                      self.emit(
+                        "\tstr\tx10, [sp, #" + (slot_idx * 8).to_string() + "]",
+                      )
+                      if size > 8 {
+                        self.emit("\tldr\tx10, [x9, #8]")
+                        self.emit(
+                          "\tstr\tx10, [sp, #" +
+                          ((slot_idx + 1) * 8).to_string() +
+                          "]",
+                        )
+                      }
+                    }
+                  }
+                  if size > 8 {
+                    slot_idx += 2
+                  } else {
+                    slot_idx += 1
+                  }
                 } else {
                   self.gen_aggregate_addr(args[i], frame_size)
                   self.emit(
@@ -2409,6 +2595,8 @@ fn Codegen::gen_expr(
         self.emit("\tmov\tx9, #0")
       }
     DesignatedField(_, value) => self.gen_expr(value, frame_size)
+    DesignatedIndex(_, value) => self.gen_expr(value, frame_size)
+    DesignatedRange(_, _, value) => self.gen_expr(value, frame_size)
     _ => self.emit("\tmov\tx9, #0")
   }
 }
@@ -2435,6 +2623,8 @@ fn Codegen::gen_aggregate_addr(
       self.gen_expr(left, frame_size)
       self.gen_aggregate_addr(right, frame_size)
     }
+    Cast(ty, inner) if is_aggregate_type(ty) =>
+      self.gen_aggregate_addr(inner, frame_size)
     Assign(_, _) => self.gen_expr(expr, frame_size)
     CompoundLiteral(ty, init_exprs, id) => {
       let name = compound_literal_local_name(id)

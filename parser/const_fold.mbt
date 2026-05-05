@@ -118,6 +118,8 @@ pub fn fold_const(expr : Expr) -> Int64? {
     Sizeof(ty) => Some(basic_type_size(ty).to_int64())
     SizeofExpr(e) => Some(basic_type_size(type_of_expr(e)).to_int64())
     DesignatedField(_, e) => fold_const(e)
+    DesignatedIndex(_, e) => fold_const(e)
+    DesignatedRange(_, _, e) => fold_const(e)
     Array(_) => None
     CompoundLiteral(_, _, _) => None
     _ => None
@@ -250,6 +252,8 @@ fn Parser::fold_const(self : Parser, expr : Expr) -> Int64? {
         None => None
       }
     DesignatedField(_, e) => self.fold_const(e)
+    DesignatedIndex(_, e) => self.fold_const(e)
+    DesignatedRange(_, _, e) => self.fold_const(e)
     Array(_) => None
     CompoundLiteral(_, _, _) => None
     _ => None
@@ -425,9 +429,7 @@ fn Parser::const_struct_layout(
 ) -> Array[(String, Type, Int, Int, Int, Int)] {
   let layout = []
   let mut offset = 0
-  let mut current_container_size = 0
-  let mut current_container_align = 0
-  let mut current_container_offset = 0
+  let mut in_bitfield_run = false
   let mut current_bit_offset = 0
   for field in decl.fields {
     if field.name == "" && parser_is_anon_type(field.ty) {
@@ -437,9 +439,7 @@ fn Parser::const_struct_layout(
         layout.push(f)
       }
       offset += self.const_type_size(field.ty)
-      current_container_size = 0
-      current_container_align = 0
-      current_container_offset = 0
+      in_bitfield_run = false
       current_bit_offset = 0
       continue
     }
@@ -450,9 +450,7 @@ fn Parser::const_struct_layout(
         offset += (align - offset % align) % align
         layout.push((field.name, field.ty, offset, size, 0, 0))
         offset += size
-        current_container_size = 0
-        current_container_align = 0
-        current_container_offset = 0
+        in_bitfield_run = false
         current_bit_offset = 0
       }
       Some(width) => {
@@ -462,44 +460,40 @@ fn Parser::const_struct_layout(
         if width == 0 {
           offset += (container_align - offset % container_align) %
             container_align
-          current_container_size = 0
-          current_container_align = 0
-          current_container_offset = 0
+          in_bitfield_run = false
           current_bit_offset = 0
         } else {
-          let can_continue = current_container_size == container_size &&
-            current_container_align == container_align &&
-            current_bit_offset + width <= container_bits
+          let mut container_offset = current_bit_offset /
+            (container_align * 8) *
+            container_align
+          let mut field_bit_offset = current_bit_offset - container_offset * 8
+          let can_continue = in_bitfield_run &&
+            field_bit_offset + width <= container_bits
           if !can_continue {
-            let mut container_offset = offset /
-              container_align *
-              container_align
-            let mut bit_offset = (offset - container_offset) * 8
+            container_offset = offset / container_align * container_align
+            field_bit_offset = (offset - container_offset) * 8
             if offset >= container_offset + container_size ||
-              bit_offset + width > container_bits {
+              field_bit_offset + width > container_bits {
               let padding = (container_align - offset % container_align) %
                 container_align
               container_offset = offset + padding
-              bit_offset = 0
+              field_bit_offset = 0
             }
-            current_container_offset = container_offset
-            current_container_size = container_size
-            current_container_align = container_align
-            current_bit_offset = bit_offset
+            current_bit_offset = container_offset * 8 + field_bit_offset
           }
           layout.push(
             (
               field.name,
               field.ty,
-              current_container_offset,
+              container_offset,
               container_size,
-              current_bit_offset,
+              field_bit_offset,
               width,
             ),
           )
-          current_bit_offset += width
-          let end_offset = current_container_offset +
-            (current_bit_offset + 7) / 8
+          in_bitfield_run = true
+          current_bit_offset = current_bit_offset + width
+          let end_offset = (current_bit_offset + 7) / 8
           if end_offset > offset {
             offset = end_offset
           }
@@ -611,6 +605,8 @@ fn type_of_expr(expr : Expr) -> Type {
     Array(_) => SInt
     CompoundLiteral(ty, _, _) => ty
     DesignatedField(_, e) => type_of_expr(e)
+    DesignatedIndex(_, e) => type_of_expr(e)
+    DesignatedRange(_, _, e) => type_of_expr(e)
   }
 }
 
@@ -646,6 +642,8 @@ fn Parser::const_expr_type(self : Parser, expr : Expr) -> Type {
     Number(_) => SInt
     CompoundLiteral(ty, _, _) => ty
     DesignatedField(_, e) => self.const_expr_type(e)
+    DesignatedIndex(_, e) => self.const_expr_type(e)
+    DesignatedRange(_, _, e) => self.const_expr_type(e)
     Ternary(_, a, _) => self.const_expr_type(a)
     Assign(_, rhs) => self.const_expr_type(rhs)
     _ => type_of_expr(expr)

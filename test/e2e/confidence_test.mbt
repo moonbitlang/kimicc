@@ -585,6 +585,78 @@ async test "e2e unsigned int switch matches negative case bits" {
 }
 
 ///|
+async test "e2e unsigned int comparison matches negative constant bits" {
+  let source =
+    #|int is_object(unsigned int tag) {
+    #|  if (tag != -1) return 1;
+    #|  if (tag == -1) return 42;
+    #|  return 2;
+    #|}
+    #|int main() {
+    #|  return is_object((unsigned int)-1);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e unsigned int compares as signed long when promoted" {
+  let source =
+    #|int run(unsigned int u, long l) {
+    #|  if (l < u) return 42;
+    #|  return 1;
+    #|}
+    #|int main() {
+    #|  return run((unsigned int)(0 - 2), -1);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e sixteen byte struct return assign and pass by value" {
+  let source =
+    #|struct Value {
+    #|  void *ptr;
+    #|  long tag;
+    #|};
+    #|struct Box {
+    #|  struct Value field;
+    #|};
+    #|struct Value make_value(void *p, long tag) {
+    #|  struct Value v;
+    #|  v.ptr = p;
+    #|  v.tag = tag;
+    #|  return v;
+    #|}
+    #|struct Value make_literal(void *p, long tag) {
+    #|  return (struct Value){p, tag};
+    #|}
+    #|struct Value dup_value(struct Value v) {
+    #|  return (struct Value)v;
+    #|}
+    #|int check(struct Value v, void *p, long tag) {
+    #|  if (v.ptr != p) return 1;
+    #|  if (v.tag != tag) return 2;
+    #|  return 42;
+    #|}
+    #|int main() {
+    #|  int payload = 0;
+    #|  struct Value v;
+    #|  v = make_value(&payload, -1);
+    #|  if (check(v, &payload, -1) != 42) return 3;
+    #|  struct Box b;
+    #|  b.field = make_value(&payload, -7);
+    #|  if (check(b.field, &payload, -7) != 42) return 4;
+    #|  if (check(dup_value(v), &payload, -1) != 42) return 5;
+    #|  if (check(make_value(&payload, 5), &payload, 5) != 42) return 6;
+    #|  return check(make_literal(&payload, 9), &payload, 9);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e bitfields pack after byte fields like clang" {
   let source =
     #|typedef unsigned int Pgno;
@@ -612,6 +684,180 @@ async test "e2e bitfields pack after byte fields like clang" {
     #|  if (x.orphanTrigger != 1 || x.imposterTable != 0) return 4;
     #|  if (x.reopenMemdb != 1) return 5;
     #|  if (x.azInit != (const char**)0x12345678) return 6;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e mixed bitfield layout matches quickjs object header" {
+  let source =
+    #|typedef unsigned char uint8_t;
+    #|typedef unsigned short uint16_t;
+    #|typedef unsigned int uint32_t;
+    #|
+    #|struct list_head {
+    #|  struct list_head *prev;
+    #|  struct list_head *next;
+    #|};
+    #|
+    #|typedef enum {
+    #|  GC_OBJ_TYPE_JS_OBJECT,
+    #|  GC_OBJ_TYPE_FUNCTION_BYTECODE
+    #|} JSGCObjectTypeEnum;
+    #|
+    #|struct JSGCObjectHeader {
+    #|  int ref_count;
+    #|  JSGCObjectTypeEnum gc_obj_type : 4;
+    #|  uint8_t mark : 4;
+    #|  uint8_t dummy1;
+    #|  uint16_t dummy2;
+    #|  struct list_head link;
+    #|};
+    #|
+    #|struct JSObjectLike {
+    #|  union {
+    #|    struct JSGCObjectHeader header;
+    #|    struct {
+    #|      int __gc_ref_count;
+    #|      uint8_t __gc_mark;
+    #|      uint8_t extensible : 1;
+    #|      uint8_t free_mark : 1;
+    #|      uint8_t is_exotic : 1;
+    #|      uint8_t fast_array : 1;
+    #|      uint8_t is_constructor : 1;
+    #|      uint8_t has_immutable_prototype : 1;
+    #|      uint8_t tmp_mark : 1;
+    #|      uint8_t is_HTMLDDA : 1;
+    #|      uint16_t class_id;
+    #|    };
+    #|  };
+    #|  uint32_t weakref_count;
+    #|  void *shape;
+    #|  void *prop;
+    #|  void *opaque;
+    #|};
+    #|
+    #|union HeaderBytes {
+    #|  struct JSGCObjectHeader h;
+    #|  unsigned char bytes[24];
+    #|};
+    #|
+    #|int main(void) {
+    #|  union HeaderBytes u = {0};
+    #|  struct JSObjectLike obj = {0};
+    #|  int shape = 1;
+    #|  int prop = 2;
+    #|
+    #|  if (sizeof(struct JSGCObjectHeader) != 24) return 1;
+    #|  if (__builtin_offsetof(struct JSGCObjectHeader, dummy1) != 5) return 2;
+    #|  if (__builtin_offsetof(struct JSGCObjectHeader, dummy2) != 6) return 3;
+    #|  if (__builtin_offsetof(struct JSGCObjectHeader, link) != 8) return 4;
+    #|
+    #|  u.h.gc_obj_type = 5;
+    #|  u.h.mark = 10;
+    #|  u.h.dummy1 = 0x12;
+    #|  u.h.dummy2 = 0x3456;
+    #|  if (u.bytes[4] != 0xa5) return 5;
+    #|  if (u.bytes[5] != 0x12) return 6;
+    #|  if (u.bytes[6] != 0x56 || u.bytes[7] != 0x34) return 7;
+    #|
+    #|  if (sizeof(struct JSObjectLike) != 56) return 8;
+    #|  if (__builtin_offsetof(struct JSObjectLike, weakref_count) != 24) return 9;
+    #|  if (__builtin_offsetof(struct JSObjectLike, shape) != 32) return 10;
+    #|  if (__builtin_offsetof(struct JSObjectLike, prop) != 40) return 11;
+    #|  if (__builtin_offsetof(struct JSObjectLike, opaque) != 48) return 12;
+    #|  obj.shape = &shape;
+    #|  obj.prop = &prop;
+    #|  if (obj.shape != &shape) return 13;
+    #|  if (obj.prop != &prop) return 14;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e global designated union initializer in function list table" {
+  let source =
+    #|typedef unsigned char uint8_t;
+    #|typedef short int16_t;
+    #|
+    #|typedef struct Entry {
+    #|  const char *name;
+    #|  uint8_t prop_flags;
+    #|  uint8_t def_type;
+    #|  int16_t magic;
+    #|  union {
+    #|    struct {
+    #|      uint8_t length;
+    #|      uint8_t cproto;
+    #|      void *cfunc;
+    #|    } func;
+    #|    struct {
+    #|      const char *name;
+    #|      int base;
+    #|    } alias;
+    #|    const char *str;
+    #|    int i32;
+    #|    long i64;
+    #|    double f64;
+    #|  } u;
+    #|} Entry;
+    #|
+    #|static const Entry tab[] = {
+    #|  { "values", 3, 0, 7, .u = { .func = { 2, 9, (void*)0x12345678 } } },
+    #|  { "[Symbol.iterator]", 3, 9, 0, .u = { .alias = { "values", -1 } } },
+    #|};
+    #|
+    #|int main(void) {
+    #|  if (sizeof(Entry) != 32) return 1;
+    #|  if (tab[0].u.func.length != 2) return 2;
+    #|  if (tab[0].u.func.cproto != 9) return 3;
+    #|  if (tab[0].u.func.cfunc != (void*)0x12345678) return 4;
+    #|  if (tab[1].def_type != 9) return 5;
+    #|  if (tab[1].u.alias.name[0] != 'v') return 6;
+    #|  if (tab[1].u.alias.name[5] != 's') return 7;
+    #|  if (tab[1].u.alias.base != -1) return 8;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e global array designators emit class table entries" {
+  let source =
+    #|enum {
+    #|  JS_FUNC_NORMAL = 0,
+    #|  JS_FUNC_GENERATOR = 1,
+    #|  JS_FUNC_ASYNC = 2,
+    #|  JS_FUNC_ASYNC_GENERATOR = 3,
+    #|};
+    #|static const unsigned short func_kind_to_class_id[] = {
+    #|  [JS_FUNC_NORMAL] = 13,
+    #|  [JS_FUNC_GENERATOR] = 16,
+    #|  [JS_FUNC_ASYNC] = 20,
+    #|  [JS_FUNC_ASYNC_GENERATOR] = 21,
+    #|};
+    #|static const unsigned char range_table[] = {
+    #|  [0] = 3,
+    #|  9,
+    #|  [2 ... 4] = 7,
+    #|};
+    #|int main(void) {
+    #|  if (sizeof(func_kind_to_class_id) != 8) return 1;
+    #|  if (func_kind_to_class_id[0] != 13) return 2;
+    #|  if (func_kind_to_class_id[1] != 16) return 3;
+    #|  if (func_kind_to_class_id[2] != 20) return 4;
+    #|  if (func_kind_to_class_id[3] != 21) return 5;
+    #|  if (sizeof(range_table) != 5) return 6;
+    #|  if (range_table[0] != 3) return 7;
+    #|  if (range_table[1] != 9) return 8;
+    #|  if (range_table[2] != 7) return 9;
+    #|  if (range_table[3] != 7) return 10;
+    #|  if (range_table[4] != 7) return 11;
     #|  return 42;
     #|}
   let exit_code = run_source_async(source)

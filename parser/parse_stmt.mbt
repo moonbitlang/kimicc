@@ -38,10 +38,64 @@ fn Parser::parse_brace_init_exprs(
         self.skip_brace_initializer()
         exprs.push(Expr::Number(0))
       }
-    } else if self.token == LBracket || self.token == Dot {
-      // Designated initializer ([index] = val or .field = val): skip rest
-      self.skip_remaining_brace_initializer()
-      break
+    } else if self.token == Dot {
+      self.advance()
+      let fields = []
+      let field = match self.token {
+        Ident(name) => {
+          self.advance()
+          name
+        }
+        _ => abort("Expected field name in designated initializer")
+      }
+      fields.push(field)
+      while self.token == Dot {
+        self.advance()
+        match self.token {
+          Ident(name) => {
+            self.advance()
+            fields.push(name)
+          }
+          _ => abort("Expected field name in designated initializer")
+        }
+      }
+      self.expect(Assign)
+      let mut value = if self.token == LBrace {
+        Expr::Array(self.parse_brace_init_exprs(flatten_nested=true))
+      } else {
+        self.parse_assign()
+      }
+      for i = fields.length() - 1; i >= 0; i = i - 1 {
+        value = Expr::DesignatedField(fields[i], value)
+      }
+      exprs.push(value)
+    } else if self.token == LBracket {
+      self.advance()
+      let start = match self.fold_const(self.parse_assign()) {
+        Some(n) => n
+        None => 0L
+      }
+      let end = if self.token == Ellipsis {
+        self.advance()
+        match self.fold_const(self.parse_assign()) {
+          Some(n) => n
+          None => start
+        }
+      } else {
+        start
+      }
+      self.expect(RBracket)
+      self.expect(Assign)
+      let value = if self.token == LBrace {
+        Expr::Array(self.parse_brace_init_exprs(flatten_nested=true))
+      } else {
+        self.parse_assign()
+      }
+      if start == end {
+        exprs.push(Expr::DesignatedIndex(start, value))
+      } else {
+        exprs.push(Expr::DesignatedRange(start, end, value))
+      }
     } else {
       exprs.push(self.parse_assign())
     }
@@ -93,9 +147,32 @@ fn Parser::parse_compound_literal_init_exprs(self : Parser) -> Array[Expr] {
       }
       exprs.push(value)
     } else if self.token == LBracket {
-      // Array designators are still outside kimicc's initializer subset.
-      self.skip_remaining_brace_initializer()
-      break
+      self.advance()
+      let start = match self.fold_const(self.parse_assign()) {
+        Some(n) => n
+        None => 0L
+      }
+      let end = if self.token == Ellipsis {
+        self.advance()
+        match self.fold_const(self.parse_assign()) {
+          Some(n) => n
+          None => start
+        }
+      } else {
+        start
+      }
+      self.expect(RBracket)
+      self.expect(Assign)
+      let value = if self.token == LBrace {
+        Expr::Array(self.parse_compound_literal_init_exprs())
+      } else {
+        self.parse_assign()
+      }
+      if start == end {
+        exprs.push(Expr::DesignatedIndex(start, value))
+      } else {
+        exprs.push(Expr::DesignatedRange(start, end, value))
+      }
     } else {
       exprs.push(self.parse_assign())
     }
@@ -105,20 +182,6 @@ fn Parser::parse_compound_literal_init_exprs(self : Parser) -> Array[Expr] {
   }
   self.expect(RBrace)
   exprs
-}
-
-///|
-/// Skip tokens until matching RBrace at current depth (does not consume RBrace)
-fn Parser::skip_remaining_brace_initializer(self : Parser) -> Unit {
-  let mut depth = 1
-  while depth > 0 && self.token != EOF {
-    self.advance()
-    if self.token == LBrace {
-      depth += 1
-    } else if self.token == RBrace {
-      depth -= 1
-    }
-  }
 }
 
 ///|
@@ -552,6 +615,38 @@ fn Parser::register_static_local(self : Parser, name : String) -> String {
 }
 
 ///|
+fn initializer_element_count(init_exprs : Array[Expr]) -> Int {
+  let mut count = 0
+  let mut cursor = 0
+  for expr in init_exprs {
+    match expr {
+      DesignatedIndex(index, _) => {
+        let next = index.to_int() + 1
+        if next > count {
+          count = next
+        }
+        cursor = next
+      }
+      DesignatedRange(_, end, _) => {
+        let next = end.to_int() + 1
+        if next > count {
+          count = next
+        }
+        cursor = next
+      }
+      _ => {
+        let next = cursor + 1
+        if next > count {
+          count = next
+        }
+        cursor = next
+      }
+    }
+  }
+  count
+}
+
+///|
 /// Helper to parse an initializer into GlobalInit for static locals.
 fn Parser::parse_static_initializer(
   self : Parser,
@@ -561,7 +656,7 @@ fn Parser::parse_static_initializer(
     self.advance()
     if self.token == LBrace {
       let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
-      let init_count = init_exprs.length()
+      let init_count = initializer_element_count(init_exprs)
       let final_ty = match ty {
         Array(elem_ty, 0) => Type::Array(elem_ty, init_count)
         other => other
@@ -633,13 +728,36 @@ fn Parser::push_array_init_assignments(
     Array(elem, _) => elem
     _ => return
   }
-  for i = 0; i < init_exprs.length(); i = i + 1 {
-    let elem = Expr::ArrayAccess(Expr::Var(name), Expr::Number(i.to_int64()))
-    match (elem_ty, init_exprs[i]) {
-      (Struct(_) | Union(_), Expr::Array(field_exprs)) =>
-        self.push_struct_init_assignments(stmts, elem, elem_ty, field_exprs)
-      (Struct(_) | Union(_), Expr::Number(0)) => ()
-      _ => stmts.push(ExprStmt(Expr::Assign(elem, init_exprs[i])))
+  let mut cursor = 0
+  for init_expr in init_exprs {
+    let mut start = cursor
+    let mut end = cursor
+    let value = match init_expr {
+      DesignatedIndex(index, e) => {
+        start = index.to_int()
+        end = start
+        cursor = start + 1
+        e
+      }
+      DesignatedRange(first, last, e) => {
+        start = first.to_int()
+        end = last.to_int()
+        cursor = end + 1
+        e
+      }
+      _ => {
+        cursor += 1
+        init_expr
+      }
+    }
+    for i = start; i <= end; i = i + 1 {
+      let elem = Expr::ArrayAccess(Expr::Var(name), Expr::Number(i.to_int64()))
+      match (elem_ty, value) {
+        (Struct(_) | Union(_), Expr::Array(field_exprs)) =>
+          self.push_struct_init_assignments(stmts, elem, elem_ty, field_exprs)
+        (Struct(_) | Union(_), Expr::Number(0)) => ()
+        _ => stmts.push(ExprStmt(Expr::Assign(elem, value)))
+      }
     }
   }
 }
@@ -732,7 +850,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
         decl_ty
       } else {
         let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
-        let init_count = init_exprs.length()
+        let init_count = initializer_element_count(init_exprs)
         // Update array type if size was inferred
         let ty = match decl_ty {
           Array(elem_ty, 0) => Type::Array(elem_ty, init_count)
@@ -815,7 +933,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
           )
         } else {
           let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
-          let init_count = init_exprs.length()
+          let init_count = initializer_element_count(init_exprs)
           let extra_ty = match extra_decl_ty {
             Array(elem_ty, 0) => Type::Array(elem_ty, init_count)
             other => other

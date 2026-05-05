@@ -134,6 +134,8 @@ fn Codegen::global_expr_type(
       }
     CompoundLiteral(ty, _, _) => ty
     DesignatedField(_, e) => self.global_expr_type(e)
+    DesignatedIndex(_, e) => self.global_expr_type(e)
+    DesignatedRange(_, _, e) => self.global_expr_type(e)
     Cast(ty, _) => ty
     AddrOf(e) => Pointer(self.global_expr_type(e))
     ArrayAccess(base, _) =>
@@ -279,6 +281,8 @@ fn Codegen::fold_const(self : Codegen, expr : @parser.Expr) -> Int64? {
       }
     Cast(_, e) => self.fold_const(e)
     DesignatedField(_, e) => self.fold_const(e)
+    DesignatedIndex(_, e) => self.fold_const(e)
+    DesignatedRange(_, _, e) => self.fold_const(e)
     Sizeof(ty) => Some(self.type_size(ty).to_int64())
     SizeofExpr(e) => Some(self.type_size(self.global_expr_type(e)).to_int64())
     OffsetOf(ty, field) =>
@@ -457,6 +461,8 @@ fn Codegen::emit_global_scalar(
       self.emit("\t.quad\t_" + name)
     Cast(_, e) => self.emit_global_scalar(ty, e)
     DesignatedField(_, e) => self.emit_global_scalar(ty, e)
+    DesignatedIndex(_, e) => self.emit_global_scalar(ty, e)
+    DesignatedRange(_, _, e) => self.emit_global_scalar(ty, e)
     CompoundLiteral(_, exprs, _) => self.emit_global_array(ty, exprs)
     Array(nested) =>
       // Nested brace initializer: emit as array/struct
@@ -470,6 +476,20 @@ fn Codegen::emit_global_scalar(
 }
 
 ///|
+fn find_designated_initializer(
+  exprs : Array[@parser.Expr],
+  field_name : String,
+) -> @parser.Expr? {
+  for expr in exprs {
+    match expr {
+      DesignatedField(name, _) if name == field_name => return Some(expr)
+      _ => ()
+    }
+  }
+  None
+}
+
+///|
 fn Codegen::emit_global_array(
   self : Codegen,
   ty : @parser.Type,
@@ -477,15 +497,46 @@ fn Codegen::emit_global_array(
 ) -> Unit {
   match ty {
     Array(elem_ty, n) => {
-      for i = 0; i < exprs.length(); i = i + 1 {
-        match exprs[i] {
-          Array(nested) => self.emit_global_array(elem_ty, nested)
-          _ => self.emit_global_scalar(elem_ty, exprs[i])
+      let elem_size = self.type_size(elem_ty)
+      let mut emitted = 0
+      let mut cursor = 0
+      for expr in exprs {
+        let mut start = cursor
+        let mut end = cursor
+        let value = match expr {
+          DesignatedIndex(index, e) => {
+            start = index.to_int()
+            end = start
+            cursor = start + 1
+            e
+          }
+          DesignatedRange(first, last, e) => {
+            start = first.to_int()
+            end = last.to_int()
+            cursor = end + 1
+            e
+          }
+          _ => {
+            cursor += 1
+            expr
+          }
+        }
+        if start > emitted {
+          self.emit("\t.space\t" + ((start - emitted) * elem_size).to_string())
+          emitted = start
+        }
+        for i = start; i <= end; i = i + 1 {
+          if i >= emitted && i < n {
+            match value {
+              Array(nested) => self.emit_global_array(elem_ty, nested)
+              _ => self.emit_global_scalar(elem_ty, value)
+            }
+            emitted = i + 1
+          }
         }
       }
       // Pad remaining elements with zeros
-      let elem_size = self.type_size(elem_ty)
-      let pad_count = n - exprs.length()
+      let pad_count = n - emitted
       if pad_count > 0 {
         self.emit("\t.space\t" + (pad_count * elem_size).to_string())
       }
@@ -499,15 +550,41 @@ fn Codegen::emit_global_array(
         []
       }
       let mut emitted = 0
-      for i = 0; i < exprs.length() && i < layout.length(); i = i + 1 {
-        let field_offset = layout[i].2
-        let field_size = layout[i].3
-        // Emit padding to reach the correct field offset
-        if field_offset > emitted {
-          self.emit("\t.space\t" + (field_offset - emitted).to_string())
+      let mut positional = 0
+      for field in layout {
+        let field_name = field.0
+        let field_ty = field.1
+        let field_offset = field.2
+        let field_size = field.3
+        let bit_width = field.5
+        let init_expr = match find_designated_initializer(exprs, field_name) {
+          Some(expr) => Some(expr)
+          None => {
+            while positional < exprs.length() &&
+                  exprs[positional] is DesignatedField(_, _) {
+              positional = positional + 1
+            }
+            if positional < exprs.length() {
+              let expr = exprs[positional]
+              positional = positional + 1
+              Some(expr)
+            } else {
+              None
+            }
+          }
         }
-        self.emit_global_scalar(layout[i].1, exprs[i])
-        emitted = field_offset + field_size
+        match init_expr {
+          Some(expr) =>
+            if bit_width == 0 {
+              // Emit padding to reach the correct field offset
+              if field_offset > emitted {
+                self.emit("\t.space\t" + (field_offset - emitted).to_string())
+              }
+              self.emit_global_scalar(field_ty, expr)
+              emitted = field_offset + field_size
+            }
+          None => ()
+        }
       }
       // Pad remaining space with zeros
       let total_size = self.type_size(ty)
@@ -515,14 +592,35 @@ fn Codegen::emit_global_array(
         self.emit("\t.space\t" + (total_size - emitted).to_string())
       }
     }
-    Union(_) => {
-      // Union initializer: emit first expression, pad rest
+    Union(name) => {
+      let layout = if self.struct_layouts.contains(name) {
+        self.struct_layouts[name]
+      } else {
+        []
+      }
+      let mut emitted = 0
       if exprs.length() > 0 {
-        self.emit_global_scalar(SLongLong, exprs[0])
+        let init_expr = exprs[0]
+        let field = match init_expr {
+          DesignatedField(field_name, _) =>
+            self.find_field_layout(name, field_name)
+          _ => if layout.length() > 0 { Some(layout[0]) } else { None }
+        }
+        match field {
+          Some((_, field_ty, field_offset, field_size, _, bit_width)) =>
+            if bit_width == 0 {
+              if field_offset > 0 {
+                self.emit("\t.space\t" + field_offset.to_string())
+              }
+              self.emit_global_scalar(field_ty, init_expr)
+              emitted = field_offset + field_size
+            }
+          None => ()
+        }
       }
       let total_size = self.type_size(ty)
-      if total_size > 8 {
-        self.emit("\t.space\t" + (total_size - 8).to_string())
+      if total_size > emitted {
+        self.emit("\t.space\t" + (total_size - emitted).to_string())
       }
     }
     _ => {

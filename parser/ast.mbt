@@ -182,6 +182,8 @@ pub(all) enum Expr {
   Array(Array[Expr])
   CompoundLiteral(Type, Array[Expr], Int)
   DesignatedField(String, Expr)
+  DesignatedIndex(Int64, Expr)
+  DesignatedRange(Int64, Int64, Expr)
 } derive(Eq)
 
 ///|
