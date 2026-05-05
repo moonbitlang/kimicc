@@ -217,23 +217,42 @@ fn sqlite_testfixture_flags() -> String {
 }
 
 ///|
-async fn compile_sqlite_fixture_testfixture_object() -> String {
-  let source = preprocess_c_file_with_flags(
-    "test/fixtures/sqlite/sqlite3.c",
-    sqlite_testfixture_flags(),
-    "sqlite3_testfixture_preprocessed",
-  )
-  let assembly = compile(source)
-  assert_true(assembly.contains("_sqlite3_open:"))
-  assert_true(assembly.contains("_sqlite3Atoi64:"))
-  let asm_path = "/tmp/kimicc_sqlite3_testfixture.s"
-  let obj_path = "/tmp/kimicc_sqlite3_testfixture.o"
-  write_text_file(asm_path, assembly)
-  run_command_checked(
-    "clang -c -o " + shell_quote(obj_path) + " " + shell_quote(asm_path),
-    "assemble sqlite3 testfixture object",
-  )
-  obj_path
+async fn compile_sqlite_fixture_testfixture_object_with(
+  compiler : SQLiteObjectCompiler,
+) -> String {
+  match compiler {
+    Kimicc => {
+      let source = preprocess_c_file_with_flags(
+        "test/fixtures/sqlite/sqlite3.c",
+        sqlite_testfixture_flags(),
+        "sqlite3_testfixture_preprocessed",
+      )
+      let assembly = compile(source)
+      assert_true(assembly.contains("_sqlite3_open:"))
+      assert_true(assembly.contains("_sqlite3Atoi64:"))
+      let asm_path = "/tmp/kimicc_sqlite3_testfixture.s"
+      let obj_path = "/tmp/kimicc_sqlite3_testfixture.o"
+      write_text_file(asm_path, assembly)
+      run_command_checked(
+        "clang -c -o " + shell_quote(obj_path) + " " + shell_quote(asm_path),
+        "assemble sqlite3 testfixture object",
+      )
+      obj_path
+    }
+    Clang => {
+      let obj_path = "/tmp/clang_sqlite3_testfixture.o"
+      run_command_checked(
+        "clang -c " +
+        sqlite_testfixture_flags() +
+        " -o " +
+        shell_quote(obj_path) +
+        " " +
+        shell_quote("test/fixtures/sqlite/sqlite3.c"),
+        "compile clang sqlite3 testfixture object",
+      )
+      obj_path
+    }
+  }
 }
 
 ///|
@@ -261,14 +280,16 @@ fn sqlite_tcl_config_path() -> String {
 }
 
 ///|
-async fn build_sqlite_public_testfixture() -> String {
+async fn build_sqlite_public_testfixture_with(
+  compiler : SQLiteObjectCompiler,
+) -> String {
   let root = sqlite_public_source_root()
   let tcl_config = sqlite_tcl_config_path()
   if tcl_config == "" {
     abort("SQLite public Tcl testfixture requires tclConfig.sh")
   }
-  let object_path = compile_sqlite_fixture_testfixture_object()
-  let build_dir = "/tmp/kimicc_sqlite_testfixture_build"
+  let object_path = compile_sqlite_fixture_testfixture_object_with(compiler)
+  let build_dir = "/tmp/kimicc_sqlite_testfixture_build_" + compiler.tag()
   let configure_log = "/tmp/kimicc_sqlite_configure.out"
   let make_log = "/tmp/kimicc_sqlite_make_testfixture.out"
   run_command_checked(
@@ -314,29 +335,50 @@ async fn build_sqlite_public_testfixture() -> String {
 }
 
 ///|
-async fn run_sqlite_public_tcl_test(
-  test_path : String,
+async fn run_sqlite_public_tcl_batch_with(
+  test_paths : Array[String],
   tag : String,
+  compiler : SQLiteObjectCompiler,
 ) -> CommandResult {
   if !sqlite_public_tests_available() {
     return { code: 0, output: "sqlite-public-tests-skipped\n" }
   }
   let root = sqlite_public_source_root()
-  let testfixture = build_sqlite_public_testfixture()
-  let run_dir = temp_file_path(tag + "_work", test_path, "")
-  run_command_checked(
-    "rm -rf " + shell_quote(run_dir) + " && mkdir -p " + shell_quote(run_dir),
-    "prepare sqlite public tcl test work dir",
-  )
-  run_command_capture(
-    "cd " +
-    shell_quote(run_dir) +
-    " && " +
-    shell_quote(testfixture) +
-    " " +
-    shell_quote(root + "/" + test_path),
-    tag,
-  )
+  let testfixture = build_sqlite_public_testfixture_with(compiler)
+  let output = StringBuilder::new()
+  for test_path in test_paths {
+    let run_tag = tag + "_" + compiler.tag() + "_" + source_id(test_path)
+    let run_dir = temp_file_path(run_tag + "_work", test_path, "")
+    run_command_checked(
+      "rm -rf " + shell_quote(run_dir) + " && mkdir -p " + shell_quote(run_dir),
+      "prepare sqlite public tcl test work dir",
+    )
+    let result = run_command_capture(
+      "cd " +
+      shell_quote(run_dir) +
+      " && " +
+      shell_quote(testfixture) +
+      " " +
+      shell_quote(root + "/" + test_path),
+      run_tag,
+    )
+    output.write_string("### ")
+    output.write_string(test_path)
+    output.write_string("\n")
+    output.write_string(result.output)
+    if result.code != 0 {
+      return { code: result.code, output: output.to_string() }
+    }
+  }
+  { code: 0, output: output.to_string() }
+}
+
+///|
+async fn run_sqlite_public_tcl_batch(
+  test_paths : Array[String],
+  tag : String,
+) -> CommandResult {
+  run_sqlite_public_tcl_batch_with(test_paths, tag, Kimicc)
 }
 
 ///|

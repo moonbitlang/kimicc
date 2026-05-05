@@ -297,15 +297,24 @@ async test "sqlite object matches clang baseline for SQL script runner" {
 }
 
 ///|
-async test "sqlite public tcl select1 passes through testfixture harness" {
-  let result = run_sqlite_public_tcl_test(
-    "test/select1.test", "sqlite_public_tcl_select1",
+async test "sqlite public tcl select batch passes through testfixture harness" {
+  let result = run_sqlite_public_tcl_batch(
+    [
+      "test/select1.test", "test/select2.test", "test/select3.test", "test/select4.test",
+      "test/select5.test", "test/select6.test", "test/select7.test", "test/select8.test",
+      "test/select9.test", "test/selectA.test", "test/selectB.test", "test/selectC.test",
+      "test/selectD.test", "test/selectE.test", "test/selectF.test", "test/selectG.test",
+      "test/selectH.test",
+    ],
+    "sqlite_public_tcl_select_batch",
   )
   if result.code != 0 {
-    abort("SQLite public Tcl select1 failed:\n" + result.output)
+    abort("SQLite public Tcl select batch failed:\n" + result.output)
   }
   if result.output == "sqlite-public-tests-skipped\n" {
     return
   }
-  assert_true(result.output.contains("0 errors out of 192 tests"))
+  assert_true(result.output.contains("### test/selectH.test"))
+  assert_true(result.output.contains("0 errors out of 36717 tests"))
+  assert_true(result.output.contains("0 errors out of 18 tests"))
 }
