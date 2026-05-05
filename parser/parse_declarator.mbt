@@ -290,7 +290,9 @@ fn Parser::parse_struct_type_specifier(self : Parser) -> Type {
         self.expect(LBrace)
         let fields = self.parse_struct_body()
         self.expect(RBrace)
-        self.anonymous_structs.push({ name: n, fields, is_union: false })
+        let decl = { name: n, fields, is_union: false }
+        self.anonymous_structs.push(decl)
+        self.struct_decls[n] = decl
         Type::Struct(n)
       } else {
         Type::Struct(n)
@@ -302,7 +304,9 @@ fn Parser::parse_struct_type_specifier(self : Parser) -> Type {
       self.expect(RBrace)
       let name = "__anon_struct_" + self.anon_counter.to_string()
       self.anon_counter += 1
-      self.anonymous_structs.push({ name, fields, is_union: false })
+      let decl = { name, fields, is_union: false }
+      self.anonymous_structs.push(decl)
+      self.struct_decls[name] = decl
       Type::Struct(name)
     }
     _ => abort("Expected struct name or {\n")
@@ -320,7 +324,9 @@ fn Parser::parse_union_type_specifier(self : Parser) -> Type {
         self.expect(LBrace)
         let fields = self.parse_struct_body()
         self.expect(RBrace)
-        self.anonymous_structs.push({ name: n, fields, is_union: true })
+        let decl = { name: n, fields, is_union: true }
+        self.anonymous_structs.push(decl)
+        self.struct_decls[n] = decl
         Type::Union(n)
       } else {
         Type::Union(n)
@@ -332,7 +338,9 @@ fn Parser::parse_union_type_specifier(self : Parser) -> Type {
       self.expect(RBrace)
       let name = "__anon_union_" + self.anon_counter.to_string()
       self.anon_counter += 1
-      self.anonymous_structs.push({ name, fields, is_union: true })
+      let decl = { name, fields, is_union: true }
+      self.anonymous_structs.push(decl)
+      self.struct_decls[name] = decl
       Type::Union(name)
     }
     _ => abort("Expected union name or {\n")

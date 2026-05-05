@@ -533,6 +533,55 @@ fn Parser::parse_static_initializer(
 }
 
 ///|
+fn Parser::push_struct_init_assignments(
+  self : Parser,
+  stmts : Array[Stmt],
+  target : Expr,
+  ty : Type,
+  init_exprs : Array[Expr],
+) -> Unit {
+  let struct_name = match ty {
+    Struct(n) | Union(n) => n
+    _ => return
+  }
+  let fields = if self.struct_decls.contains(struct_name) {
+    self.struct_decls[struct_name].fields
+  } else {
+    []
+  }
+  for i = 0; i < init_exprs.length() && i < fields.length(); i = i + 1 {
+    stmts.push(
+      ExprStmt(
+        Expr::Assign(Expr::MemberAccess(target, fields[i].name), init_exprs[i]),
+      ),
+    )
+  }
+}
+
+///|
+fn Parser::push_array_init_assignments(
+  self : Parser,
+  stmts : Array[Stmt],
+  name : String,
+  ty : Type,
+  init_exprs : Array[Expr],
+) -> Unit {
+  let elem_ty = match ty {
+    Array(elem, _) => elem
+    _ => return
+  }
+  for i = 0; i < init_exprs.length(); i = i + 1 {
+    let elem = Expr::ArrayAccess(Expr::Var(name), Expr::Number(i.to_int64()))
+    match (elem_ty, init_exprs[i]) {
+      (Struct(_) | Union(_), Expr::Array(field_exprs)) =>
+        self.push_struct_init_assignments(stmts, elem, elem_ty, field_exprs)
+      (Struct(_) | Union(_), Expr::Number(0)) => ()
+      _ => stmts.push(ExprStmt(Expr::Assign(elem, init_exprs[i])))
+    }
+  }
+}
+
+///|
 fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
   let spec = self.parse_decl_specifiers()
   // Local struct/union/enum definition without variable: struct Foo { ... };
@@ -606,52 +655,24 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
       if is_struct {
         // Parse brace initializer expressions and create field assignments
         let init_exprs = self.parse_brace_init_exprs()
-        let init_count = init_exprs.length()
-        stmts.push(VarDecl(decl_ty, decl.name, None))
-        // Look up struct fields
-        let struct_name = match decl_ty {
-          Struct(n) => n
-          Union(n) => n
-          _ => ""
-        }
-        let fields = if self.struct_decls.contains(struct_name) {
-          self.struct_decls[struct_name].fields
-        } else {
-          []
-        }
-        for i = 0; i < init_count && i < fields.length(); i = i + 1 {
-          stmts.push(
-            ExprStmt(
-              Expr::Assign(
-                Expr::MemberAccess(Expr::Var(decl.name), fields[i].name),
-                init_exprs[i],
-              ),
-            ),
-          )
-        }
+        stmts.push(VarDecl(decl_ty, decl.name, Some(Expr::Number(0))))
+        self.push_struct_init_assignments(
+          stmts,
+          Expr::Var(decl.name),
+          decl_ty,
+          init_exprs,
+        )
         decl_ty
       } else {
-        let init_exprs = self.parse_brace_init_exprs(flatten_nested=false)
+        let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
         let init_count = init_exprs.length()
         // Update array type if size was inferred
         let ty = match decl_ty {
           Array(elem_ty, 0) => Type::Array(elem_ty, init_count)
           other => other
         }
-        stmts.push(VarDecl(ty, decl.name, None))
-        for i = 0; i < init_count; i = i + 1 {
-          stmts.push(
-            ExprStmt(
-              Expr::Assign(
-                Expr::ArrayAccess(
-                  Expr::Var(decl.name),
-                  Expr::Number(i.to_int64()),
-                ),
-                init_exprs[i],
-              ),
-            ),
-          )
-        }
+        stmts.push(VarDecl(ty, decl.name, Some(Expr::Number(0))))
+        self.push_array_init_assignments(stmts, decl.name, ty, init_exprs)
         ty
       }
     } else {
@@ -713,31 +734,30 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
           _ => false
         }
         if is_struct {
-          self.skip_brace_initializer()
           stmts.push(
             VarDecl(extra_decl_ty, extra_decl.name, Some(Expr::Number(0))),
           )
+          let init_exprs = self.parse_brace_init_exprs()
+          self.push_struct_init_assignments(
+            stmts,
+            Expr::Var(extra_decl.name),
+            extra_decl_ty,
+            init_exprs,
+          )
         } else {
-          let init_exprs = self.parse_brace_init_exprs(flatten_nested=false)
+          let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
           let init_count = init_exprs.length()
           let extra_ty = match extra_decl_ty {
             Array(elem_ty, 0) => Type::Array(elem_ty, init_count)
             other => other
           }
-          stmts.push(VarDecl(extra_ty, extra_decl.name, None))
-          for i = 0; i < init_count; i = i + 1 {
-            stmts.push(
-              ExprStmt(
-                Expr::Assign(
-                  Expr::ArrayAccess(
-                    Expr::Var(extra_decl.name),
-                    Expr::Number(i.to_int64()),
-                  ),
-                  init_exprs[i],
-                ),
-              ),
-            )
-          }
+          stmts.push(VarDecl(extra_ty, extra_decl.name, Some(Expr::Number(0))))
+          self.push_array_init_assignments(
+            stmts,
+            extra_decl.name,
+            extra_ty,
+            init_exprs,
+          )
         }
       } else {
         let expr = self.parse_assign()

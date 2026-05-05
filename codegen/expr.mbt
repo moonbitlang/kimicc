@@ -102,6 +102,20 @@ fn Codegen::type_of(
 }
 
 ///|
+fn Codegen::gen_callee_addr(
+  self : Codegen,
+  func : @parser.Expr,
+  frame_size : Int,
+) -> Unit {
+  match func {
+    // In call position, `(*fp)(...)` calls the function pointer value. It does
+    // not load from the function address as an ordinary object dereference.
+    Deref(ptr) => self.gen_expr(ptr, frame_size)
+    _ => self.gen_expr(func, frame_size)
+  }
+}
+
+///|
 fn Codegen::emit_builtin_lib_call(
   self : Codegen,
   target : String,
@@ -1265,14 +1279,14 @@ fn Codegen::gen_expr(
             Var(name) =>
               if self.local_offsets.contains(name) ||
                 self.globals.contains(name) {
-                self.gen_expr(func, frame_size)
+                self.gen_callee_addr(func, frame_size)
                 self.emit("\tmov\tx15, x9")
                 self.emit("\tblr\tx15")
               } else {
                 self.emit("\tbl\t_" + name)
               }
             _ => {
-              self.gen_expr(func, frame_size)
+              self.gen_callee_addr(func, frame_size)
               self.emit("\tmov\tx15, x9")
               self.emit("\tblr\tx15")
             }
@@ -1521,14 +1535,14 @@ fn Codegen::gen_expr(
             Var(name) =>
               if self.local_offsets.contains(name) ||
                 self.globals.contains(name) {
-                self.gen_expr(func, frame_size)
+                self.gen_callee_addr(func, frame_size)
                 self.emit("\tmov\tx15, x9")
                 self.emit("\tblr\tx15")
               } else {
                 self.emit("\tbl\t_" + name)
               }
             _ => {
-              self.gen_expr(func, frame_size)
+              self.gen_callee_addr(func, frame_size)
               self.emit("\tmov\tx15, x9")
               self.emit("\tblr\tx15")
             }

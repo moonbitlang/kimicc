@@ -598,7 +598,7 @@ test "parse array initializer infers size" {
         StmtList(inner) => {
           inspect(inner.length(), content="4")
           match inner[0] {
-            VarDecl(Array(SInt, 3), "arr", None) => ()
+            VarDecl(Array(SInt, 3), "arr", Some(Number(0))) => ()
             _ => fail("Expected Array(SInt, 3) var decl")
           }
           match inner[1] {
@@ -662,7 +662,7 @@ test "parse multiple vars one with array initializer" {
             _ => fail("Expected a=1")
           }
           match inner[1] {
-            VarDecl(Array(SInt, 1), "b", None) => ()
+            VarDecl(Array(SInt, 1), "b", Some(Number(0))) => ()
             _ => fail("Expected b array decl")
           }
           match inner[2] {
@@ -690,7 +690,7 @@ test "parse array initializer inferred size" {
       match stmts[0] {
         StmtList(inner) =>
           match inner[0] {
-            VarDecl(Array(SInt, 3), "arr", None) => ()
+            VarDecl(Array(SInt, 3), "arr", Some(Number(0))) => ()
             _ => fail("Expected VarDecl with Array(SInt, 3)")
           }
         _ => fail("Expected StmtList from array init lowering")
@@ -709,7 +709,7 @@ test "parse array initializer explicit size" {
       match stmts[0] {
         StmtList(inner) =>
           match inner[0] {
-            VarDecl(Array(SInt, 5), "arr", None) => ()
+            VarDecl(Array(SInt, 5), "arr", Some(Number(0))) => ()
             _ => fail("Expected VarDecl with Array(SInt, 5)")
           }
         _ => fail("Expected StmtList from array init lowering")

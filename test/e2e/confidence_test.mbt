@@ -36,6 +36,62 @@ async test "e2e function local static persists" {
 }
 
 ///|
+async test "e2e function pointer call through explicit dereference" {
+  let source =
+    #|int add(int a, int b) {
+    #|  return a + b;
+    #|}
+    #|int main(void) {
+    #|  int (*fp)(int, int) = add;
+    #|  return (*fp)(20, 22);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e function pointer returned from function then dereferenced" {
+  let source =
+    #|int hash(const void *p, int n) {
+    #|  return n + 40;
+    #|}
+    #|int (*pick(int key_class))(const void *, int) {
+    #|  return &hash;
+    #|}
+    #|int main(void) {
+    #|  int (*xHash)(const void *, int) = pick(1);
+    #|  return (*xHash)("hi", 2);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e local array of structs with nested initializer" {
+  let source =
+    #|int answer(void) {
+    #|  return 42;
+    #|}
+    #|int main(void) {
+    #|  struct Builtin {
+    #|    const char *zFunc;
+    #|    void *pUserData;
+    #|    int (*xFunc)(void);
+    #|    void (*xDestroy)(void *);
+    #|  } aBuiltin[] = {
+    #|    { "snippet", 0, answer, 0 },
+    #|    { "highlight", 0, answer, 0 },
+    #|  };
+    #|  if (aBuiltin[0].pUserData != 0) {
+    #|    return 1;
+    #|  }
+    #|  return aBuiltin[1].xFunc();
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e file scope static symbols have internal linkage" {
   let left =
     #|static int shared = 40;

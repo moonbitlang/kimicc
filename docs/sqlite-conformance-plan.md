@@ -34,6 +34,7 @@ Passing kimicc SQLite e2e tests:
 
 - Compile/preprocess/assemble the vendored `sqlite3.c` fixture.
 - Link kimicc's `sqlite3.o` with clang-built C drivers.
+- Link SQLite's public Tcl `testfixture` with kimicc's `sqlite3.o`.
 - Open an in-memory database and use basic APIs.
 - Prepare and step a simple `select 1`.
 - Create a table, insert rows, and read them back.
@@ -103,7 +104,9 @@ amalgamation fixture and focused e2e regressions in version control.
 | Passed | SQL script differential harness | `moon test test/e2e --target native --filter 'sqlite object matches clang baseline for SQL script runner'` | clang-built and kimicc-built SQLite objects produced identical output. |
 | Fixed | File-scope static linkage | `moon test test/e2e --target native --filter 'e2e file scope static symbols have internal linkage'` | Top-level `static` functions and globals now emit local symbols, fixing duplicate-symbol link failures such as SQLite's `aSyscall`. |
 | Fixed | Extern and tentative global declarations | `moon test test/e2e --target native --filter 'e2e extern globals do not allocate storage'`; `moon test test/e2e --target native --filter 'e2e tentative global followed by initialized definition emits once'` | `extern` declarations no longer allocate storage, and later initialized definitions replace earlier extern/tentative declarations before codegen emits globals. |
-| Open | Public SQLite Tcl runtime | `./testfixture /tmp/kimicc_tcl_sqlite_smoke.test` after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The kimicc SQLite object now assembles and links into `testfixture`, but `sqlite3 db :memory:` exits with 138/SIGBUS before Tcl reports a test failure. |
+| Fixed | Function pointer call through explicit dereference | `moon test test/e2e --target native --filter 'e2e function pointer call through explicit dereference'`; `moon test test/e2e --target native --filter 'e2e function pointer returned from function then dereferenced'` | Calls such as SQLite FTS3's `(*xHash)(pKey,nKey)` now branch to the function pointer value instead of loading through the function address. |
+| Fixed | Local arrays of structs with nested initializer lists | `moon test test/e2e --target native --filter 'e2e local array of structs with nested initializer'` | Local struct definitions are available to initializer lowering immediately, and local aggregate initializers are zero-filled before field/element assignments. This fixed SQLite startup misuse in FTS5 builtin registration. |
+| Open | Public SQLite Tcl `select1.test` runtime | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/test/select1.test` after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The test reaches `select1-1.1...` and then crashes in `sqlite3OsClose`: `sqlite3_file.pMethods` points at `__sqlite3_os_init_aVfs` instead of `_posixIoMethods`, so `xClose` resolves to `0x200`. Current investigation is focused on struct member assignment/layout around `unixFile.pMethod` and `pVfs`. |
 
 ## Execution Plan
 
