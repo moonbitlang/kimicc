@@ -838,3 +838,28 @@ async test "e2e nested bit-field assignment returns assigned value" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")
 }
+
+///|
+async test "e2e atomic array element access uses element width" {
+  let source =
+    #|typedef unsigned int u32;
+    #|
+    #|struct Info {
+    #|  u32 pad;
+    #|  u32 marks[5];
+    #|};
+    #|
+    #|int main(void) {
+    #|  struct Info info;
+    #|  info.pad = 0;
+    #|  info.marks[0] = 11;
+    #|  info.marks[1] = 22;
+    #|  if (__atomic_load_n(info.marks + 0, 0) != 11) return 1;
+    #|  if (__atomic_load_n(1 + info.marks, 0) != 22) return 2;
+    #|  __atomic_store_n(info.marks + 0, 33, 0);
+    #|  if (info.marks[0] != 33) return 3;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}

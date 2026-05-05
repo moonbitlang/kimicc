@@ -23,13 +23,27 @@ fn Codegen::type_of(
       let rhs_ty = self.type_of(rhs, frame_size)
       // Pointer arithmetic
       match (lhs_ty, rhs_ty) {
+        (Pointer(_), Pointer(_))
+        | (Array(_, _), Pointer(_))
+        | (Pointer(_), Array(_, _))
+        | (Array(_, _), Array(_, _)) => if op == "-" { return SLong }
         (Pointer(elem), _) =>
           // ptr + int → ptr, ptr - int → ptr
           if (op == "+" || op == "-") && rhs_ty.is_integer() {
             return Pointer(elem)
           }
+        (Array(elem, _), _) =>
+          // array + int follows normal array-to-pointer decay
+          if (op == "+" || op == "-") && rhs_ty.is_integer() {
+            return Pointer(elem)
+          }
         (_, Pointer(elem)) =>
           // int + ptr → ptr
+          if op == "+" && lhs_ty.is_integer() {
+            return Pointer(elem)
+          }
+        (_, Array(elem, _)) =>
+          // int + array follows normal array-to-pointer decay
           if op == "+" && lhs_ty.is_integer() {
             return Pointer(elem)
           }
@@ -687,6 +701,7 @@ fn Codegen::emit_builtin_call(
         let elem_ty = match ptr_ty {
           Pointer(t) => t
           Array(t, _) => t
+          Atomic(t) => t
           _ => SLongLong
         }
         match elem_ty {
@@ -709,6 +724,7 @@ fn Codegen::emit_builtin_call(
         let elem_ty = match ptr_ty {
           Pointer(t) => t
           Array(t, _) => t
+          Atomic(t) => t
           _ => SLongLong
         }
         self.gen_expr(args[1], frame_size)
@@ -1040,6 +1056,16 @@ fn Codegen::gen_expr(
         (Array(_, _), Array(_, _)) => true
         _ => false
       }
+      let scale_right = match (left_ty, right_ty) {
+        (Pointer(_), rhs_ty) | (Array(_, _), rhs_ty) =>
+          !is_ptr_diff && (op == "+" || op == "-") && rhs_ty.is_integer()
+        _ => false
+      }
+      let scale_left = match (left_ty, right_ty) {
+        (lhs_ty, Pointer(_)) | (lhs_ty, Array(_, _)) =>
+          !is_ptr_diff && op == "+" && lhs_ty.is_integer()
+        _ => false
+      }
       let is_ptr_op = ptr_scale > 1 || is_ptr_diff
       let is_fp = not(is_ptr_op) &&
         op != "," &&
@@ -1057,12 +1083,16 @@ fn Codegen::gen_expr(
       if is_fp {
         self.emit_numeric_conversion(right_ty, fp_ty)
       }
-      if ptr_scale > 1 && not(is_ptr_diff) {
+      if ptr_scale > 1 && scale_right {
         self.emit("\tmov\tx11, #" + ptr_scale.to_string())
         self.emit("\tmul\tx9, x9, x11")
       }
       self.emit("\tmov\tx10, x9")
       self.emit("\tldr\tx9, [sp], #16")
+      if ptr_scale > 1 && scale_left {
+        self.emit("\tmov\tx11, #" + ptr_scale.to_string())
+        self.emit("\tmul\tx9, x9, x11")
+      }
       match op {
         "+" =>
           if is_fp {
