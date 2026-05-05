@@ -362,9 +362,11 @@ fn Parser::parse_switch_stmt(self : Parser) -> Stmt {
   }
   self.expect(RBrace)
   // Post-process statements to group by case/default labels
+  let mut prelude = None
   let cases = []
   let mut current_stmts = []
   let mut current_value = None
+  let mut seen_case = false
   fn flush_case(value : Int64?, stmts : Array[Stmt]) -> Unit {
     if stmts.length() > 0 || value.is_some() {
       cases.push((value, StmtList(stmts)))
@@ -377,16 +379,26 @@ fn Parser::parse_switch_stmt(self : Parser) -> Stmt {
         Label(name, body) =>
           match extract_case_value(name) {
             Some(value) => {
-              flush_case(current_value, current_stmts)
+              if seen_case {
+                flush_case(current_value, current_stmts)
+              } else if current_stmts.length() > 0 {
+                prelude = Some(StmtList(current_stmts))
+              }
               current_stmts = []
               current_value = Some(value)
+              seen_case = true
               current_stmt = body
             }
             None =>
               if name == "default" {
-                flush_case(current_value, current_stmts)
+                if seen_case {
+                  flush_case(current_value, current_stmts)
+                } else if current_stmts.length() > 0 {
+                  prelude = Some(StmtList(current_stmts))
+                }
                 current_stmts = []
                 current_value = None
+                seen_case = true
                 current_stmt = body
               } else {
                 // Regular label inside a case
@@ -401,8 +413,12 @@ fn Parser::parse_switch_stmt(self : Parser) -> Stmt {
       }
     }
   }
-  flush_case(current_value, current_stmts)
-  Switch(expr, cases)
+  if seen_case {
+    flush_case(current_value, current_stmts)
+  } else if current_stmts.length() > 0 {
+    prelude = Some(StmtList(current_stmts))
+  }
+  Switch(expr, prelude, cases)
 }
 
 ///|

@@ -82,6 +82,26 @@ async test "e2e switch default before later case" {
 }
 
 ///|
+async test "e2e switch pre-case declarations are not default" {
+  let source =
+    #|int run(int x) {
+    #|  switch (x) {
+    #|    int scratch;
+    #|    case 3:
+    #|      scratch = 40;
+    #|      return scratch + 2;
+    #|  }
+    #|  return 7;
+    #|}
+    #|int main() {
+    #|  if (run(4) != 7) return 1;
+    #|  return run(3);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e bitfields pack after byte fields like clang" {
   let source =
     #|typedef unsigned int Pgno;

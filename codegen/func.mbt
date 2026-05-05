@@ -255,10 +255,15 @@ fn Codegen::collect_locals(self : Codegen, stmt : @parser.Stmt) -> Unit {
       self.collect_locals(body)
     }
     DoWhile(_, body) => self.collect_locals(body)
-    Switch(_, cases) =>
+    Switch(_, prelude, cases) => {
+      match prelude {
+        Some(s) => self.collect_locals(s)
+        None => ()
+      }
       for c in cases {
         self.collect_locals(c.1)
       }
+    }
     Label(_, s) => self.collect_locals(s)
     VarDecl(ty, name, _) => {
       let _ = self.alloc_local(name, ty)

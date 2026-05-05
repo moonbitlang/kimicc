@@ -216,7 +216,8 @@ test "parse switch" {
     Some(Compound(stmts)) => {
       inspect(stmts.length(), content="4")
       match stmts[2] {
-        Switch(_, cases) => {
+        Switch(_, prelude, cases) => {
+          assert_true(prelude is None)
           inspect(cases.length(), content="3")
           match cases[0] {
             (Some(1), StmtList([ExprStmt(Assign(Var("r"), Number(10))), Break])) =>

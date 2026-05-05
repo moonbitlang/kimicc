@@ -1,4 +1,21 @@
 ///|
+fn Codegen::bind_decl_locals_without_code(
+  self : Codegen,
+  stmt : @parser.Stmt,
+) -> Unit {
+  match stmt {
+    StmtList(stmts) =>
+      for s in stmts {
+        self.bind_decl_locals_without_code(s)
+      }
+    VarDecl(ty, name, _) => {
+      let _ = self.alloc_local(name, ty)
+    }
+    _ => ()
+  }
+}
+
+///|
 fn Codegen::gen_stmt(
   self : Codegen,
   stmt : @parser.Stmt,
@@ -117,11 +134,15 @@ fn Codegen::gen_stmt(
         Some(label) => self.emit("\tb\t" + label)
         None => abort("continue outside of loop")
       }
-    Switch(expr, cases) => {
+    Switch(expr, prelude, cases) => {
       let end_label = self.new_label()
       let old_break = self.break_label
       self.break_label = Some(end_label)
       self.gen_expr(expr, frame_size)
+      match prelude {
+        Some(s) => self.bind_decl_locals_without_code(s)
+        None => ()
+      }
       // Generate comparison and branch for each case
       let case_labels = []
       for c in cases {
