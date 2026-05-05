@@ -297,24 +297,26 @@ async test "sqlite object matches clang baseline for SQL script runner" {
 }
 
 ///|
-async test "sqlite public tcl select batch passes through testfixture harness" {
+async test "sqlite public tcl smoke batch passes through testfixture harness" {
   let result = run_sqlite_public_tcl_batch(
     [
       "test/select1.test", "test/select2.test", "test/select3.test", "test/select4.test",
       "test/select5.test", "test/select6.test", "test/select7.test", "test/select8.test",
       "test/select9.test", "test/selectA.test", "test/selectB.test", "test/selectC.test",
       "test/selectD.test", "test/selectE.test", "test/selectF.test", "test/selectG.test",
-      "test/selectH.test",
+      "test/selectH.test", "test/with6.test",
     ],
-    "sqlite_public_tcl_select_batch",
+    "sqlite_public_tcl_smoke_batch",
   )
   if result.code != 0 {
-    abort("SQLite public Tcl select batch failed:\n" + result.output)
+    abort("SQLite public Tcl smoke batch failed:\n" + result.output)
   }
   if result.output == "sqlite-public-tests-skipped\n" {
     return
   }
   assert_true(result.output.contains("### test/selectH.test"))
+  assert_true(result.output.contains("### test/with6.test"))
   assert_true(result.output.contains("0 errors out of 36717 tests"))
   assert_true(result.output.contains("0 errors out of 18 tests"))
+  assert_true(result.output.contains("with6-400... Ok"))
 }
