@@ -1,0 +1,40 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/kimicc/codegen"
+
+import {
+  "bobzhang/kimicc/parser",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct Codegen {
+  output : StringBuilder
+  mut label_counter : Int
+  mut local_offsets : Map[String, Int]
+  mut var_types : Map[String, @parser.Type]
+  mut stack_size : Int
+  mut func_name : String
+  mut func_params : Array[@parser.Param]
+  func_rets : Map[String, @parser.Type]
+  func_variadic : Map[String, Bool]
+  func_param_counts : Map[String, Int]
+  struct_layouts : Map[String, Array[(String, @parser.Type, Int, Int, Int, Int)]]
+  struct_decls : Map[String, @parser.StructDecl]
+  strings : Array[String]
+  mut break_label : String?
+  mut continue_label : String?
+  globals : Map[String, @parser.GlobalDecl]
+  mut emitted_labels : Map[String, String]
+  mut defined_labels : Map[String, Bool]
+  mut fp_literals : Array[Double]
+}
+pub fn Codegen::generate(Self, @parser.Program) -> String
+pub fn Codegen::new() -> Self
+
+// Type aliases
+
+// Traits
+

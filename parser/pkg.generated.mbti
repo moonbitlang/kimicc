@@ -1,0 +1,236 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/kimicc/parser"
+
+// Values
+pub fn fold_const(Expr) -> Int64?
+
+pub fn parse(String) -> Program
+
+// Errors
+
+// Types and methods
+pub(all) enum Expr {
+  Number(Int64)
+  FloatLiteral(Double)
+  String(String)
+  Var(String)
+  Binary(String, Expr, Expr)
+  Unary(String, Expr)
+  Call(Expr, Array[Expr])
+  Assign(Expr, Expr)
+  MemberAccess(Expr, String)
+  Deref(Expr)
+  AddrOf(Expr)
+  ArrayAccess(Expr, Expr)
+  Sizeof(Type)
+  SizeofExpr(Expr)
+  Cast(Type, Expr)
+  PrefixInc(Expr)
+  PrefixDec(Expr)
+  PostfixInc(Expr)
+  PostfixDec(Expr)
+  Ternary(Expr, Expr, Expr)
+  LabelAddr(String)
+  VaArg(Expr, Type)
+  OffsetOf(Type, String)
+  Array(Array[Expr])
+} derive(Eq)
+
+pub(all) struct FuncDecl {
+  ret : Type
+  name : String
+  params : Array[Param]
+  variadic : Bool
+  body : Stmt?
+} derive(Eq)
+
+pub(all) struct GlobalDecl {
+  ty : Type
+  name : String
+  init : GlobalInit?
+} derive(Eq)
+
+pub(all) enum GlobalInit {
+  Scalar(Expr)
+  Array(Array[Expr])
+} derive(Eq)
+
+pub struct Lexer {
+  input : String
+  mut pos : Int
+}
+pub fn Lexer::new(String) -> Self
+pub fn Lexer::next_token(Self) -> Token
+
+pub(all) struct Param {
+  ty : Type
+  name : String
+  bit_width : Int?
+} derive(Eq)
+
+pub struct Parser {
+  lexer : Lexer
+  mut token : Token
+  typedefs : Map[String, Type]
+  anonymous_structs : Array[StructDecl]
+  struct_decls : Map[String, StructDecl]
+  mut anon_counter : Int
+  enum_constants : Map[String, Int64]
+  globals : Array[GlobalDecl]
+  mut current_func_name : String
+  mut static_locals : Map[String, String]
+}
+pub fn Parser::new(Lexer) -> Self
+
+pub(all) struct Program {
+  structs : Array[StructDecl]
+  globals : Array[GlobalDecl]
+  decls : Array[FuncDecl]
+}
+
+pub(all) enum Stmt {
+  ExprStmt(Expr)
+  Return(Expr?)
+  If(Expr, Stmt, Stmt?)
+  While(Expr, Stmt)
+  Compound(Array[Stmt])
+  StmtList(Array[Stmt])
+  VarDecl(Type, String, Expr?)
+  Break
+  Continue
+  Switch(Expr, Array[(Int64?, Stmt)])
+  Goto(String)
+  Label(String, Stmt)
+  For(Stmt?, Expr, Expr?, Stmt)
+  DoWhile(Expr, Stmt)
+  ComputedGoto(Expr)
+} derive(Eq)
+
+pub(all) struct StructDecl {
+  name : String
+  fields : Array[Param]
+  is_union : Bool
+} derive(Eq)
+
+pub(all) enum Token {
+  EOF
+  Ident(String)
+  Number(Int64)
+  FloatLiteral(Double)
+  String(String)
+  Int
+  Void
+  Char
+  Struct
+  Union
+  Typedef
+  Const
+  Restrict
+  Extern
+  Static
+  Volatile
+  Signed
+  Unsigned
+  Short
+  Long
+  Float
+  Double
+  Bool
+  If
+  Else
+  While
+  Return
+  Sizeof
+  Inline
+  Register
+  Auto
+  For
+  Enum
+  Switch
+  Case
+  Default
+  Break
+  Goto
+  Continue
+  Do
+  Ellipsis
+  Plus
+  Minus
+  PlusPlus
+  MinusMinus
+  Star
+  Slash
+  Percent
+  Eq
+  Ne
+  Lt
+  Le
+  Gt
+  Ge
+  And
+  Or
+  BitOr
+  BitXor
+  LShift
+  RShift
+  BitNot
+  Not
+  Assign
+  PlusEq
+  MinusEq
+  StarEq
+  SlashEq
+  PercentEq
+  BitOrEq
+  AmpersandEq
+  BitXorEq
+  LShiftEq
+  RShiftEq
+  Semicolon
+  Comma
+  LParen
+  RParen
+  LBrace
+  RBrace
+  LBracket
+  RBracket
+  Dot
+  Arrow
+  Colon
+  Question
+  Ampersand
+} derive(Eq)
+
+pub(all) enum Type {
+  Void
+  Bool
+  SChar
+  UChar
+  SShort
+  UShort
+  SInt
+  UInt
+  SLong
+  ULong
+  SLongLong
+  ULongLong
+  Float
+  Double
+  Struct(String)
+  Union(String)
+  Pointer(Type)
+  Array(Type, Int)
+  Atomic(Type)
+} derive(Eq)
+pub fn Type::align(Self) -> Int
+pub fn Type::is_floating(Self) -> Bool
+pub fn Type::is_integer(Self) -> Bool
+pub fn Type::is_signed(Self) -> Bool
+pub fn Type::size(Self) -> Int
+pub fn Type::to_unsigned(Self) -> Self
+pub impl Show for Type
+
+// Type aliases
+
+// Traits
+
