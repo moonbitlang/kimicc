@@ -550,11 +550,18 @@ fn Parser::push_struct_init_assignments(
     []
   }
   for i = 0; i < init_exprs.length() && i < fields.length(); i = i + 1 {
-    stmts.push(
-      ExprStmt(
-        Expr::Assign(Expr::MemberAccess(target, fields[i].name), init_exprs[i]),
-      ),
-    )
+    let field_target = Expr::MemberAccess(target, fields[i].name)
+    match (fields[i].ty, init_exprs[i]) {
+      (Struct(_) | Union(_), Expr::Array(field_exprs)) =>
+        self.push_struct_init_assignments(
+          stmts,
+          field_target,
+          fields[i].ty,
+          field_exprs,
+        )
+      (Struct(_) | Union(_), Expr::Number(0)) => ()
+      _ => stmts.push(ExprStmt(Expr::Assign(field_target, init_exprs[i])))
+    }
   }
 }
 

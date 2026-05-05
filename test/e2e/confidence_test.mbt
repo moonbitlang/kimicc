@@ -686,3 +686,35 @@ async test "e2e pointer less-than uses unsigned address ordering" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")
 }
+
+///|
+async test "e2e nested struct field initializer in local array" {
+  let source =
+    #|struct Inner {
+    #|  int (*create)(void);
+    #|  int (*drop)(void);
+    #|  int (*scan)(void);
+    #|};
+    #|
+    #|struct Builtin {
+    #|  const char *name;
+    #|  struct Inner x;
+    #|};
+    #|
+    #|int create(void) { return 40; }
+    #|int drop(void) { return 1; }
+    #|int scan(void) { return 1; }
+    #|
+    #|int call_create(struct Inner *p) {
+    #|  return p->create();
+    #|}
+    #|
+    #|int main(void) {
+    #|  struct Builtin a[] = {
+    #|    { "unicode61", { create, drop, scan } },
+    #|  };
+    #|  return call_create(&a[0].x) + 2;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
