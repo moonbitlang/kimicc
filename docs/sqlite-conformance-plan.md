@@ -102,6 +102,14 @@ SQLite conformance an explicit harness mode that accepts a checked-out or
 cached source tree via environment variable, while the repo keeps the small
 amalgamation fixture and focused e2e regressions in version control.
 
+The broad `veryquick` comparison is available as an opt-in MoonBit e2e test:
+
+```bash
+KIMICC_SQLITE_CONFORMANCE=veryquick \
+  moon test test/e2e --target native \
+  --filter 'sqlite public veryquick residual failures match clang when enabled'
+```
+
 ## Todo
 
 - [x] Clean slate: native build/test has no compilation errors.
@@ -187,7 +195,7 @@ amalgamation fixture and focused e2e regressions in version control.
 | Fixed | Global array designators and range designators | `moon test test/e2e --target native --filter 'e2e global array designators emit class table entries'` | QuickJS's `func_kind_to_class_id[]` uses C99 array designators like `[JS_FUNC_NORMAL] = JS_CLASS_BYTECODE_FUNCTION`. kimicc skipped array designators, emitted an empty label, and read the following `_opcode_info` bytes as class IDs. The parser now preserves `DesignatedIndex` and `DesignatedRange`, infers unsized array length from the highest designated element, and global/local array initializer lowering writes holes as zero padding. |
 | Fixed | Member access on small aggregate call results | `moon test test/e2e --target native --filter 'e2e member access reads field from struct call result'` | QuickJS's cleanup crash minimized to `JS_VALUE_GET_OBJ(JS_DupValue(ctx, getter))`, which preprocesses to member access through a 16-byte `JSValue` returned in registers. kimicc treated the first return word as an address and loaded the JS object header, storing values such as `0x000c010000000002` into getter/setter pointer slots. Member-access codegen now materializes register-returned struct/union values before selecting nested fields. |
 | Passed | QuickJS reduced embed smoke | `/tmp/kimicc_quickjs_smoke/run_emscripten_noatomics/embed_smoke`, built from QuickJS 2025-09-13 with atomics/stack-check disabled and support files compiled by clang | The smoke preprocesses, compiles, assembles, links, evaluates `let x = 1 + 2; x`, prints `3`, frees the context/runtime, and exits with status `0`. Normal macOS QuickJS preprocessing still leaves compiler builtins such as fortified `snprintf`, C11 atomics, and `__builtin_frame_address`, so full unmodified QuickJS needs either builtin lowering or a sanitized preprocessor profile. |
-| Open | SQLite `veryquick.test` residual platform/Tcl expectation failures | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/test/veryquick.test` after relinking `/tmp/kimicc_sqlite3_testfixture.o`; kimicc output at `/tmp/kimicc_veryquick_after_math.out`; clang output at `/tmp/clang_veryquick_after_math.out` | The broad run now completes with `rc=1`: 24 errors out of 330516 tests. The same 24 failures occur with a clang-linked `testfixture` built with the same feature flags: `Inf` versus `inf` casing in `func`, `json101`, `json501`, and `literal`, plus the `types3-1.1` Tcl expectation mismatch (`text` versus `string text`). No kimicc-only cluster is currently known in `veryquick.test`. |
+| Open | SQLite `veryquick.test` residual platform/Tcl expectation failures | `KIMICC_SQLITE_CONFORMANCE=veryquick moon test test/e2e --target native --filter 'sqlite public veryquick residual failures match clang when enabled'`; kimicc output at `/tmp/kimicc_veryquick_after_math.out`; clang output at `/tmp/clang_veryquick_after_math.out` | The broad run now completes with `rc=1`: 24 errors out of 330516 tests. The same 24 failures occur with a clang-linked `testfixture` built with the same feature flags: `Inf` versus `inf` casing in `func`, `json101`, `json501`, and `literal`, plus the `types3-1.1` Tcl expectation mismatch (`text` versus `string text`). No kimicc-only cluster is currently known in `veryquick.test`. |
 
 ## Execution Plan
 

@@ -320,3 +320,72 @@ async test "sqlite public tcl smoke batch passes through testfixture harness" {
   assert_true(result.output.contains("0 errors out of 18 tests"))
   assert_true(result.output.contains("with6-400... Ok"))
 }
+
+///|
+fn assert_sqlite_veryquick_residuals(
+  output : String,
+  compiler : String,
+) -> Unit {
+  if !output.contains("24 errors out of 330516 tests") {
+    abort(
+      "SQLite " +
+      compiler +
+      " veryquick output missing residual summary:\n" +
+      output,
+    )
+  }
+  for
+    marker in [
+      "func-38.100", "func-39.120", "func-39.130", "func-39.140", "func-39.150",
+      "func-39.160", "func-39.170", "func-39.180", "func-39.190", "json101-20.2",
+      "json101-20.3", "json501-9.1", "json501-9.2", "json501-9.3", "literal-2.3.1",
+      "literal-2.3.2", "literal-2.3.3", "literal-2.4.1", "literal-2.4.2", "literal-2.4.3",
+      "literal-3.4.1", "literal-3.4.2", "literal-3.4.3", "types3-1.1",
+    ] {
+    if !output.contains(marker) {
+      abort(
+        "SQLite " +
+        compiler +
+        " veryquick residual output missing " +
+        marker +
+        ":\n" +
+        output,
+      )
+    }
+  }
+}
+
+///|
+async test "sqlite public veryquick residual failures match clang when enabled" {
+  if !sqlite_public_conformance_enabled("veryquick") {
+    return
+  }
+  let kimicc = run_sqlite_public_tcl_script_tail_with(
+    "test/veryquick.test",
+    "sqlite_public_veryquick",
+    Kimicc,
+    220,
+  )
+  if kimicc.output == "sqlite-public-tests-skipped\n" {
+    return
+  }
+  let clang = run_sqlite_public_tcl_script_tail_with(
+    "test/veryquick.test",
+    "sqlite_public_veryquick",
+    Clang,
+    220,
+  )
+  if kimicc.code != clang.code {
+    abort(
+      "SQLite veryquick exit code differs:\nkimicc:\n" +
+      kimicc.output +
+      "\nclang:\n" +
+      clang.output,
+    )
+  }
+  if kimicc.code == 0 {
+    return
+  }
+  assert_sqlite_veryquick_residuals(kimicc.output, "kimicc")
+  assert_sqlite_veryquick_residuals(clang.output, "clang")
+}

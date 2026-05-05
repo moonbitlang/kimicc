@@ -113,6 +113,33 @@ async fn run_command_capture(cmd : String, tag : String) -> CommandResult {
 }
 
 ///|
+async fn run_command_capture_tail(
+  cmd : String,
+  tag : String,
+  tail_lines : Int,
+) -> CommandResult {
+  let output_path = temp_file_path(tag, cmd, ".out")
+  let tail_path = output_path + ".tail"
+  let rc = moonbit_system(
+    @utf8.encode(
+      "( " +
+      cmd +
+      " ) > " +
+      shell_quote(output_path) +
+      " 2>&1; rc=$?; tail -n " +
+      tail_lines.to_string() +
+      " " +
+      shell_quote(output_path) +
+      " > " +
+      shell_quote(tail_path) +
+      "; exit $rc",
+    ),
+  )
+  let data = @fs.read_file(tail_path)
+  { code: rc, output: "full-output: " + output_path + "\n" + data.text() }
+}
+
+///|
 fn compile_source_to_object_path(source : String, tag : String) -> String {
   let asm_path = temp_file_path(tag, source, ".s")
   let obj_path = temp_file_path(tag, source, ".o")
@@ -281,6 +308,18 @@ fn sqlite_tcl_config_path() -> String {
 }
 
 ///|
+fn sqlite_public_conformance_enabled(suite : String) -> Bool {
+  moonbit_system(
+    @utf8.encode(
+      "test \"${KIMICC_SQLITE_CONFORMANCE:-}\" = " +
+      shell_quote(suite) +
+      " || test \"${KIMICC_SQLITE_CONFORMANCE:-}\" = all",
+    ),
+  ) ==
+  0
+}
+
+///|
 async fn build_sqlite_public_testfixture_with(
   compiler : SQLiteObjectCompiler,
 ) -> String {
@@ -380,6 +419,36 @@ async fn run_sqlite_public_tcl_batch(
   tag : String,
 ) -> CommandResult {
   run_sqlite_public_tcl_batch_with(test_paths, tag, Kimicc)
+}
+
+///|
+async fn run_sqlite_public_tcl_script_tail_with(
+  test_path : String,
+  tag : String,
+  compiler : SQLiteObjectCompiler,
+  tail_lines : Int,
+) -> CommandResult {
+  if !sqlite_public_tests_available() {
+    return { code: 0, output: "sqlite-public-tests-skipped\n" }
+  }
+  let root = sqlite_public_source_root()
+  let testfixture = build_sqlite_public_testfixture_with(compiler)
+  let run_tag = tag + "_" + compiler.tag() + "_" + source_id(test_path)
+  let run_dir = temp_file_path(run_tag + "_work", test_path, "")
+  run_command_checked(
+    "rm -rf " + shell_quote(run_dir) + " && mkdir -p " + shell_quote(run_dir),
+    "prepare sqlite public tcl test work dir",
+  )
+  run_command_capture_tail(
+    "cd " +
+    shell_quote(run_dir) +
+    " && " +
+    shell_quote(testfixture) +
+    " " +
+    shell_quote(root + "/" + test_path),
+    run_tag,
+    tail_lines,
+  )
 }
 
 ///|
