@@ -45,8 +45,8 @@ Passing kimicc SQLite e2e tests:
   indexes, constraints, transactions, `insert ... select`, updates, ordered
   selects, and aggregate queries.
 - Manually link SQLite's public Tcl `testfixture` with kimicc's SQLite object
-  and pass public `test/select1.test` with 0 errors out of 192 tests and
-  `test/select2.test` with 0 errors out of 21 tests.
+  and pass public `test/select1.test` through `test/select5.test` with 0
+  errors across 463 tests.
 
 This is useful smoke coverage, not a claim that SQLite passes its test suite.
 
@@ -118,6 +118,7 @@ amalgamation fixture and focused e2e regressions in version control.
 | Passed | Public SQLite Tcl `select1.test` | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/test/select1.test` after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The kimicc-built SQLite testfixture now passes `select1.test`: 0 errors out of 192 tests. The matching clang-built testfixture also passes, giving a clean first public Tcl batch for comparison. |
 | Fixed | Conditional operator with local array operands | `moon test test/e2e --target native --filter 'e2e ternary array operands decay before indexing'` | Public `select2.test` crashed in `select2-2.0.1` during `balance_nonroot`. The minimized source was SQLite's `(nNew>nOld ? apNew : apOld)[nOld-1]`: kimicc typed the ternary as an array lvalue, `gen_addr` emitted no address for it, and array indexing used the boolean condition as the base pointer. Ternary result typing now decays array branch operands to pointer values before indexing. |
 | Passed | Public SQLite Tcl `select2.test` | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/test/select2.test` after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The kimicc-built SQLite testfixture now passes `select2.test`: 0 errors out of 21 tests. This covers nested SELECTs, large insert batches, btree page balancing, index creation, and indexed lookup checks. |
+| Passed | Public SQLite Tcl `select3.test` through `select5.test` | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/test/select3.test`; same for `select4.test` and `select5.test` after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The kimicc-built SQLite testfixture passes `select3.test` (0/91 errors), `select4.test` (0/124 errors), and `select5.test` (0/35 errors). No new compiler failure class was exposed in this batch. |
 
 ## Execution Plan
 
