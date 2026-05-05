@@ -83,6 +83,43 @@ async test "sqlite object prepares and steps simple select" {
 }
 
 ///|
+async test "sqlite object creates file database with readable mode" {
+  let driver =
+    #|#include "sqlite3.h"
+    #|#include <stdio.h>
+    #|#include <sys/stat.h>
+    #|#include <unistd.h>
+    #|
+    #|int main(void) {
+    #|  sqlite3 *db = 0;
+    #|  struct stat st;
+    #|  const char *path = "/tmp/kimicc_sqlite_mode_e2e.db";
+    #|  mode_t old_mask = umask(0);
+    #|  unlink(path);
+    #|  int rc = sqlite3_open(path, &db);
+    #|  if (rc != SQLITE_OK) {
+    #|    printf("open rc=%d err=%s\n", rc, db ? sqlite3_errmsg(db) : "null");
+    #|    umask(old_mask);
+    #|    return 1;
+    #|  }
+    #|  sqlite3_close(db);
+    #|  umask(old_mask);
+    #|  if (stat(path, &st) != 0) {
+    #|    perror("stat");
+    #|    return 2;
+    #|  }
+    #|  printf("mode=%o\n", (int)(st.st_mode & 0777));
+    #|  unlink(path);
+    #|  return (st.st_mode & 0777) == 0644 ? 0 : 3;
+    #|}
+  let result = run_driver_with_sqlite_object(driver, "sqlite_file_mode")
+  if result.code != 0 {
+    abort("SQLite file mode smoke failed:\n" + result.output)
+  }
+  assert_true(result.output.contains("mode=644"))
+}
+
+///|
 async test "sqlite object creates inserts and reads rows" {
   let driver =
     #|#include "sqlite3.h"

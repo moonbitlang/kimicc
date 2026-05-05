@@ -44,6 +44,8 @@ Passing kimicc SQLite e2e tests:
   kimicc-built SQLite, then require identical output. This currently covers
   indexes, constraints, transactions, `insert ... select`, updates, ordered
   selects, and aggregate queries.
+- Manually link SQLite's public Tcl `testfixture` with kimicc's SQLite object
+  and pass public `test/select1.test` with 0 errors out of 192 tests.
 
 This is useful smoke coverage, not a claim that SQLite passes its test suite.
 
@@ -111,7 +113,8 @@ amalgamation fixture and focused e2e regressions in version control.
 | Fixed | Nested function-pointer declarators and pointer-to-function-pointer fields | `moon test test/e2e --target native --filter 'e2e struct field pointer to function pointer stores full address'`; `moon test test/e2e --target native --filter 'e2e function pointer returning pointer preserves return type'` | Declarators now distinguish `void *(*f)(void)` from `void (**f)(void)`. This preserves `Pointer(FuncPtr(...))` for SQLite's `wsdAutoext.aExt`, preventing 32-bit fallback stores that truncated auto-extension function addresses. |
 | Fixed | SQLite `sqlite3AtoF` unsigned arithmetic and 64-bit immediates | `moon test test/e2e --target native --filter 'e2e sqlite-style unsigned u64 atof threshold'` | SQLite's decimal parser depends on unsigned 64-bit division/comparison/right-shift semantics and on loading full-width 64-bit constants. kimicc now keeps unsigned integer result types for arithmetic where needed and emits all four 16-bit chunks for positive 64-bit immediates. |
 | Fixed | SQLite `sqlite3FpDecode` negated double to `u64` cast | `moon test test/e2e --target native --filter 'e2e sqlite-style fpdecode negated double cast'` | The public `select1.test` floating mismatches minimized to `v = rr[1]<0.0 ? (u64)rr[0]-(u64)(-rr[1]) : ...`; unary `-` was typed as `int`, so `(u64)(-rr[1])` kept raw double bits. Unary floating negation now preserves floating type, unary bit-not uses integer promotion, and unsigned integer to floating casts use unsigned conversion. `sqlite3_mprintf("%!.15g", 1.1)` and `sqlite3_column_text()` now format real values correctly. |
-| Open | Public SQLite Tcl `select1.test` database reopen after section 13 | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/test/select1.test` after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | After the floating fixes, the kimicc-built testfixture passes every assertion through `select1-13.1`, then aborts at `select1.test` line 1032 with `unable to open database file` while reopening `test.db`. A clang-built testfixture passes all 192 tests from the same build directory, so this is the next independent failure class to minimize. |
+| Fixed | Public SQLite Tcl `select1.test` database reopen after section 13 | `moon test test/e2e --target native --filter 'e2e octal integer literal preserves file mode value'`; `moon test test/e2e --target native --filter 'sqlite object creates file database with readable mode'` | The reopen failure minimized to C octal integer constants: kimicc parsed `0644` as decimal `644`, so SQLite created database files as mode `0204` after umask and could not reopen them. Leading-zero integer constants now parse as octal, and kimicc's SQLite object creates readable `0644` file databases. |
+| Passed | Public SQLite Tcl `select1.test` | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/test/select1.test` after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The kimicc-built SQLite testfixture now passes `select1.test`: 0 errors out of 192 tests. The matching clang-built testfixture also passes, giving a clean first public Tcl batch for comparison. |
 
 ## Execution Plan
 

@@ -304,6 +304,22 @@ async test "e2e sqlite-style fpdecode negated double cast" {
 }
 
 ///|
+async test "e2e octal integer literal preserves file mode value" {
+  let source =
+    #|typedef unsigned short mode_t;
+    #|int main(void) {
+    #|  mode_t m = 0;
+    #|  mode_t m2 = m ? m : 0644;
+    #|  if (m2 != 420) return 1;
+    #|  if (0777 != 511) return 2;
+    #|  if (010 == 10) return 3;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e file scope static symbols have internal linkage" {
   let left =
     #|static int shared = 40;

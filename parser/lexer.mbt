@@ -703,10 +703,14 @@ fn Lexer::read_number(self : Lexer) -> Token {
       self.advance()
     }
   }
+  let base = if s.length() > 1 && s[0] == '0' { 8L } else { 10L }
   let mut n = 0L
   for i = 0; i < s.length(); i = i + 1 {
     let ch = s[i]
-    n = n * 10L + (ch.to_int() - '0'.to_int()).to_int64()
+    if base == 8L && ch > '7' {
+      abort("Invalid octal digit")
+    }
+    n = n * base + (ch.to_int() - '0'.to_int()).to_int64()
   }
 
   Number(n)
