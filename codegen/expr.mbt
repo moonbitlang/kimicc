@@ -454,6 +454,23 @@ fn Codegen::gen_callee_addr(
 }
 
 ///|
+fn call_signature_expr(func : @parser.Expr) -> @parser.Expr {
+  match func {
+    Binary(",", _, right) => call_signature_expr(right)
+    _ => func
+  }
+}
+
+///|
+fn Codegen::uses_indirect_callee(self : Codegen, func : @parser.Expr) -> Bool {
+  match func {
+    Var(name) =>
+      self.local_offsets.contains(name) || self.globals.contains(name)
+    _ => true
+  }
+}
+
+///|
 fn Codegen::emit_builtin_lib_call(
   self : Codegen,
   target : String,
@@ -1878,7 +1895,8 @@ fn Codegen::gen_expr(
       }
       if not(is_builtin) {
         // Check if callee is variadic
-        let callee_ty = self.type_of(func, frame_size)
+        let signature_func = call_signature_expr(func)
+        let callee_ty = self.type_of(signature_func, frame_size)
         let typed_variadic_count = match callee_ty {
           FuncPtr(_, count, true) => Some(count)
           _ => None
@@ -1886,7 +1904,7 @@ fn Codegen::gen_expr(
         let named_count = match typed_variadic_count {
           Some(count) => count
           None =>
-            match func {
+            match signature_func {
               Var(name) =>
                 if self.func_param_counts.contains(name) {
                   self.func_param_counts[name]
@@ -1907,7 +1925,7 @@ fn Codegen::gen_expr(
         let is_variadic = match typed_variadic_count {
           Some(_) => true
           None =>
-            match func {
+            match signature_func {
               Var(name) =>
                 if self.func_variadic.get_or_default(name, false) {
                   true
@@ -1935,6 +1953,7 @@ fn Codegen::gen_expr(
               _ => false
             }
         }
+        let needs_indirect_callee = self.uses_indirect_callee(func)
         if is_variadic {
           // AAPCS64 variadic calls: all args passed in x0-x7/v0-v7 as usual,
           // plus caller must save x0-x7 to a 64-byte register save area on stack.
@@ -1947,7 +1966,7 @@ fn Codegen::gen_expr(
           for i = 0; i < args.length(); i = i + 1 {
             let actual_ty = self.type_of(args[i], frame_size)
             let arg_ty = self.declared_call_arg_type(
-              func,
+              signature_func,
               i,
               actual_ty,
               Some(named_count),
@@ -1993,7 +2012,9 @@ fn Codegen::gen_expr(
             64
           }
           let backup_offset = variadic_area
-          let total_stack = variadic_area + aligned_save
+          let callee_save_size = if needs_indirect_callee { 16 } else { 0 }
+          let callee_offset = variadic_area + aligned_save
+          let total_stack = variadic_area + aligned_save + callee_save_size
           if total_stack > 0 {
             self.emit("\tsub\tsp, sp, #" + total_stack.to_string())
           }
@@ -2064,6 +2085,10 @@ fn Codegen::gen_expr(
                 slot_idx += 1
               }
             }
+          }
+          if needs_indirect_callee {
+            self.gen_callee_addr(func, frame_size)
+            self.emit("\tstr\tx9, [sp, #" + callee_offset.to_string() + "]")
           }
           // Load ALL args into registers from backup slots
           int_idx = 0
@@ -2156,26 +2181,21 @@ fn Codegen::gen_expr(
             }
             src_slot += arg_slot_counts[i]
           }
-          match func {
-            Var(name) =>
-              if self.local_offsets.contains(name) ||
-                self.globals.contains(name) {
-                self.gen_callee_addr(func, frame_size)
-                self.emit("\tmov\tx15, x9")
-                self.emit("\tblr\tx15")
-              } else {
-                self.emit("\tbl\t_" + name)
-              }
-            _ => {
-              self.gen_callee_addr(func, frame_size)
-              self.emit("\tmov\tx15, x9")
-              self.emit("\tblr\tx15")
+          if needs_indirect_callee {
+            self.emit("\tldr\tx15, [sp, #" + callee_offset.to_string() + "]")
+            self.emit("\tblr\tx15")
+          } else {
+            match func {
+              Var(name) => self.emit("\tbl\t_" + name)
+              _ => ()
             }
           }
           if total_stack > 0 {
             self.emit("\tadd\tsp, sp, #" + total_stack.to_string())
           }
-          self.emit_call_result(self.call_return_type(func, frame_size))
+          self.emit_call_result(
+            self.call_return_type(signature_func, frame_size),
+          )
         } else {
           // Non-variadic calls: evaluate args and save to stack first
           // to prevent nested calls from clobbering register arguments
@@ -2187,7 +2207,12 @@ fn Codegen::gen_expr(
           let arg_slot_counts = []
           for i = 0; i < args.length(); i = i + 1 {
             let actual_ty = self.type_of(args[i], frame_size)
-            let arg_ty = self.declared_call_arg_type(func, i, actual_ty, None)
+            let arg_ty = self.declared_call_arg_type(
+              signature_func,
+              i,
+              actual_ty,
+              None,
+            )
             actual_arg_types.push(actual_ty)
             arg_types.push(arg_ty)
             match arg_ty {
@@ -2232,7 +2257,10 @@ fn Codegen::gen_expr(
             8
           let aligned_reg_save = (reg_save_size + 15) / 16 * 16
           let aligned_stack_arg = (stack_arg_size + 15) / 16 * 16
-          let total_stack = aligned_reg_save + aligned_stack_arg
+          let callee_save_size = if needs_indirect_callee { 16 } else { 0 }
+          let temp_area = aligned_reg_save + callee_save_size
+          let callee_offset = aligned_reg_save
+          let total_stack = temp_area + aligned_stack_arg
           if total_stack > 0 {
             self.emit("\tsub\tsp, sp, #" + total_stack.to_string())
           }
@@ -2296,6 +2324,10 @@ fn Codegen::gen_expr(
               }
             }
           }
+          if needs_indirect_callee {
+            self.gen_callee_addr(func, frame_size)
+            self.emit("\tstr\tx9, [sp, #" + callee_offset.to_string() + "]")
+          }
           // Load args from stack into correct registers / stack positions
           int_idx = 0
           fp_idx = 0
@@ -2311,7 +2343,7 @@ fn Codegen::gen_expr(
                   let reg = "s" + fp_idx.to_string()
                   self.emit("\tfmov\t" + reg + ", w9")
                 } else {
-                  let offset = aligned_reg_save + stack_idx * 8
+                  let offset = temp_area + stack_idx * 8
                   self.emit(
                     "\tldr\tw9, [sp, #" + (slot_idx * 8).to_string() + "]",
                   )
@@ -2329,7 +2361,7 @@ fn Codegen::gen_expr(
                   let reg = "d" + fp_idx.to_string()
                   self.emit("\tfmov\t" + reg + ", x9")
                 } else {
-                  let offset = aligned_reg_save + stack_idx * 8
+                  let offset = temp_area + stack_idx * 8
                   self.emit(
                     "\tldr\tx9, [sp, #" + (slot_idx * 8).to_string() + "]",
                   )
@@ -2362,7 +2394,7 @@ fn Codegen::gen_expr(
                     self.emit(
                       "\tldr\tx7, [sp, #" + (slot_idx * 8).to_string() + "]",
                     )
-                    let offset = aligned_reg_save + stack_idx * 8
+                    let offset = temp_area + stack_idx * 8
                     self.emit(
                       "\tldr\tx9, [sp, #" +
                       ((slot_idx + 1) * 8).to_string() +
@@ -2372,7 +2404,7 @@ fn Codegen::gen_expr(
                     stack_idx += 1
                   } else {
                     // Both halves on stack
-                    let offset = aligned_reg_save + stack_idx * 8
+                    let offset = temp_area + stack_idx * 8
                     self.emit(
                       "\tldr\tx9, [sp, #" + (slot_idx * 8).to_string() + "]",
                     )
@@ -2400,7 +2432,7 @@ fn Codegen::gen_expr(
                       "]",
                     )
                   } else {
-                    let offset = aligned_reg_save + stack_idx * 8
+                    let offset = temp_area + stack_idx * 8
                     self.emit(
                       "\tldr\tx9, [sp, #" + (slot_idx * 8).to_string() + "]",
                     )
@@ -2422,7 +2454,7 @@ fn Codegen::gen_expr(
                     "]",
                   )
                 } else {
-                  let offset = aligned_reg_save + stack_idx * 8
+                  let offset = temp_area + stack_idx * 8
                   self.emit(
                     "\tldr\tx9, [sp, #" + (slot_idx * 8).to_string() + "]",
                   )
@@ -2435,29 +2467,26 @@ fn Codegen::gen_expr(
             }
           }
           // Remove temporary save area so stack args are at [sp]
-          if aligned_reg_save > 0 {
-            self.emit("\tadd\tsp, sp, #" + aligned_reg_save.to_string())
+          if needs_indirect_callee {
+            self.emit("\tldr\tx15, [sp, #" + callee_offset.to_string() + "]")
           }
-          match func {
-            Var(name) =>
-              if self.local_offsets.contains(name) ||
-                self.globals.contains(name) {
-                self.gen_callee_addr(func, frame_size)
-                self.emit("\tmov\tx15, x9")
-                self.emit("\tblr\tx15")
-              } else {
-                self.emit("\tbl\t_" + name)
-              }
-            _ => {
-              self.gen_callee_addr(func, frame_size)
-              self.emit("\tmov\tx15, x9")
-              self.emit("\tblr\tx15")
+          if temp_area > 0 {
+            self.emit("\tadd\tsp, sp, #" + temp_area.to_string())
+          }
+          if needs_indirect_callee {
+            self.emit("\tblr\tx15")
+          } else {
+            match func {
+              Var(name) => self.emit("\tbl\t_" + name)
+              _ => ()
             }
           }
           if aligned_stack_arg > 0 {
             self.emit("\tadd\tsp, sp, #" + aligned_stack_arg.to_string())
           }
-          self.emit_call_result(self.call_return_type(func, frame_size))
+          self.emit_call_result(
+            self.call_return_type(signature_func, frame_size),
+          )
         }
       }
     }
@@ -2538,8 +2567,10 @@ fn Codegen::gen_expr(
       self.emit_load_int("x9", size.to_int64())
     }
     SizeofExpr(expr) => {
-      let ty = self.type_of(expr, frame_size)
-      let size = self.type_size(ty)
+      let size = match expr {
+        String(s) => s.length() + 1
+        _ => self.type_size(self.type_of(expr, frame_size))
+      }
       self.emit_load_int("x9", size.to_int64())
     }
     Cast(ty, expr) => {

@@ -451,6 +451,47 @@ async test "fortified libc builtins lower to unchecked calls" {
 }
 
 ///|
+async test "comma callee preserves arguments" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|int side_count;
+    #|
+    #|void side(void) {
+    #|  side_count = 9;
+    #|}
+    #|
+    #|int target(const char *fmt, ...) {
+    #|  va_list ap;
+    #|  int value;
+    #|  __builtin_va_start(ap, fmt);
+    #|  value = __builtin_va_arg(ap, int);
+    #|  __builtin_va_end(ap);
+    #|  if (side_count != 9) return 10;
+    #|  if (fmt[0] != 'o' || fmt[1] != 'k') return 11;
+    #|  return value == 33 ? 0 : 12;
+    #|}
+    #|
+    #|int main() {
+    #|  return (side(), target)("ok", 33);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
+
+///|
+async test "sizeof string literal includes nul terminator" {
+  let source =
+    #|int main() {
+    #|  char magic[sizeof "!<arch>\n" - 1];
+    #|  if (sizeof "!<arch>\n" != 9) return 1;
+    #|  if (sizeof(magic) != 8) return 2;
+    #|  return 0;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="0")
+}
+
+///|
 async test "parse quickjs preprocessed" {
   let data = @fs.read_file("/tmp/quickjs_preprocessed.c")
   let source = data.text()

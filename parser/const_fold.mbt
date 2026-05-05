@@ -116,6 +116,7 @@ pub fn fold_const(expr : Expr) -> Int64? {
       }
     Cast(_, e) => fold_const(e)
     Sizeof(ty) => Some(basic_type_size(ty).to_int64())
+    SizeofExpr(String(s)) => Some((s.length() + 1).to_int64())
     SizeofExpr(e) => Some(basic_type_size(type_of_expr(e)).to_int64())
     DesignatedField(_, e) => fold_const(e)
     DesignatedIndex(_, e) => fold_const(e)

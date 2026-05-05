@@ -132,6 +132,7 @@ fn Codegen::global_expr_type(
       } else {
         Pointer(Void)
       }
+    String(s) => Array(SChar, s.length() + 1)
     CompoundLiteral(ty, _, _) => ty
     DesignatedField(_, e) => self.global_expr_type(e)
     DesignatedIndex(_, e) => self.global_expr_type(e)
