@@ -26,6 +26,7 @@ fn Codegen::gen_stmt(
     Return(Some(expr)) => {
       self.gen_expr(expr, frame_size)
       let ret_ty = self.func_rets[self.func_name]
+      self.emit_numeric_conversion(self.type_of(expr, frame_size), ret_ty)
       match ret_ty {
         Float => self.emit("\tfmov\ts0, w9")
         Double => self.emit("\tfmov\td0, x9")
@@ -195,6 +196,7 @@ fn Codegen::gen_stmt(
             }
             _ => {
               self.gen_expr(expr, frame_size)
+              self.emit_numeric_conversion(self.type_of(expr, frame_size), ty)
               match ty {
                 Float => self.emit_store_local("w9", offset, frame_size)
                 _ => self.emit_store_local("x9", offset, frame_size)

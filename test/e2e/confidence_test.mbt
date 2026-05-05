@@ -304,6 +304,52 @@ async test "e2e sqlite-style fpdecode negated double cast" {
 }
 
 ///|
+async test "e2e mixed int double arithmetic promotes operands" {
+  let source =
+    #|typedef unsigned long size_t;
+    #|void *malloc(size_t n);
+    #|void *memset(void *p, int c, size_t n);
+    #|typedef struct Bm25Data Bm25Data;
+    #|struct Bm25Data {
+    #|  int nPhrase;
+    #|  double avgdl;
+    #|  double *aIDF;
+    #|  double *aFreq;
+    #|};
+    #|static int scaled(double v) {
+    #|  return (int)(v * 10000000.0 + 0.5);
+    #|}
+    #|int main(void) {
+    #|  const double k1 = 1.2;
+    #|  const double b = 0.75;
+    #|  Bm25Data *p = (Bm25Data*)malloc(sizeof(Bm25Data) + 2 * sizeof(double));
+    #|  memset(p, 0, sizeof(Bm25Data) + 2 * sizeof(double));
+    #|  p->nPhrase = 1;
+    #|  p->aIDF = (double*)&p[1];
+    #|  p->aFreq = &p->aIDF[p->nPhrase];
+    #|  p->avgdl = (double)4 / (double)1;
+    #|  p->aIDF[0] = 1e-6;
+    #|  p->aFreq[0] += 1.0;
+    #|  double D = (double)4;
+    #|  double den = p->aFreq[0] + k1 * (1 - b + b * D / p->avgdl);
+    #|  double score = p->aIDF[0] * (
+    #|      (p->aFreq[0] * (k1 + 1.0)) / den
+    #|  );
+    #|  if ((int)(den * 10.0 + 0.5) != 22) return 1;
+    #|  if (scaled(score) != 10) return 2;
+    #|  if ((int)((1 + b) * 100.0 + 0.5) != 175) return 3;
+    #|  if ((int)((2 * b) * 100.0 + 0.5) != 150) return 4;
+    #|  if ((int)((1 - b) * 100.0 + 0.5) != 25) return 5;
+    #|  double assigned = 1;
+    #|  assigned = assigned + 2;
+    #|  if ((int)(assigned * 10.0 + 0.5) != 30) return 6;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e octal integer literal preserves file mode value" {
   let source =
     #|typedef unsigned short mode_t;

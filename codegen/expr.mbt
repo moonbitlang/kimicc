@@ -133,6 +133,64 @@ fn is_unsigned_integer_type(ty : @parser.Type) -> Bool {
 }
 
 ///|
+fn Codegen::emit_numeric_conversion(
+  self : Codegen,
+  src : @parser.Type,
+  dst : @parser.Type,
+) -> Unit {
+  if src == dst {
+    return
+  }
+  match (src, dst) {
+    (src, Double) =>
+      if src.is_integer() {
+        if is_unsigned_integer_type(src) {
+          self.emit("\tucvtf\td9, x9")
+        } else {
+          self.emit("\tscvtf\td9, x9")
+        }
+        self.emit("\tfmov\tx9, d9")
+      } else if src == Float {
+        self.emit("\tfmov\ts9, w9")
+        self.emit("\tfcvt\td9, s9")
+        self.emit("\tfmov\tx9, d9")
+      }
+    (src, Float) =>
+      if src.is_integer() {
+        if is_unsigned_integer_type(src) {
+          self.emit("\tucvtf\ts9, x9")
+        } else {
+          self.emit("\tscvtf\ts9, x9")
+        }
+        self.emit("\tfmov\tw9, s9")
+      } else if src == Double {
+        self.emit("\tfmov\td9, x9")
+        self.emit("\tfcvt\ts9, d9")
+        self.emit("\tfmov\tw9, s9")
+      }
+    (Double, dst) =>
+      if dst.is_integer() {
+        self.emit("\tfmov\td9, x9")
+        if dst.is_signed() {
+          self.emit("\tfcvtzs\tx9, d9")
+        } else {
+          self.emit("\tfcvtzu\tx9, d9")
+        }
+      }
+    (Float, dst) =>
+      if dst.is_integer() {
+        self.emit("\tfmov\ts9, w9")
+        if dst.is_signed() {
+          self.emit("\tfcvtzs\tx9, s9")
+        } else {
+          self.emit("\tfcvtzu\tx9, s9")
+        }
+      }
+    _ => ()
+  }
+}
+
+///|
 fn unary_integer_result_type(ty : @parser.Type) -> @parser.Type {
   match ty {
     Bool | SChar | UChar | SShort | UShort => SInt
@@ -216,6 +274,7 @@ fn binary_result_type(
 ) -> @parser.Type {
   match op {
     "==" | "!=" | "<" | ">" | "<=" | ">=" | "&&" | "||" => SInt
+    "," => rhs_ty
     "<<" | ">>" => lhs_ty
     _ =>
       if lhs_ty.is_floating() || rhs_ty.is_floating() {
@@ -899,6 +958,7 @@ fn Codegen::gen_expr(
           }
           _ => {
             self.gen_expr(rhs, frame_size)
+            self.emit_numeric_conversion(self.type_of(rhs, frame_size), lhs_ty)
             self.emit("\tstr\tx9, [sp, #-16]!")
             self.gen_addr(lhs, frame_size)
             self.emit("\tmov\tx10, x9")
@@ -953,13 +1013,21 @@ fn Codegen::gen_expr(
       }
       let is_ptr_op = ptr_scale > 1 || is_ptr_diff
       let is_fp = not(is_ptr_op) &&
+        op != "," &&
         (left_ty.is_floating() || right_ty.is_floating())
       let is_double = is_fp && (left_ty == Double || right_ty == Double)
+      let fp_ty : @parser.Type = if is_double { Double } else { Float }
       let is_unsigned_int = uses_unsigned_integer_op(left_ty, right_ty)
       let is_unsigned_cmp = is_unsigned_int || is_ptr_diff
       self.gen_expr(left, frame_size)
+      if is_fp {
+        self.emit_numeric_conversion(left_ty, fp_ty)
+      }
       self.emit("\tstr\tx9, [sp, #-16]!")
       self.gen_expr(right, frame_size)
+      if is_fp {
+        self.emit_numeric_conversion(right_ty, fp_ty)
+      }
       if ptr_scale > 1 && not(is_ptr_diff) {
         self.emit("\tmov\tx11, #" + ptr_scale.to_string())
         self.emit("\tmul\tx9, x9, x11")
@@ -1833,57 +1901,7 @@ fn Codegen::gen_expr(
     Cast(ty, expr) => {
       self.gen_expr(expr, frame_size)
       let expr_ty = self.type_of(expr, frame_size)
-      // Handle FP conversions before integer truncation
-      match (expr_ty, ty) {
-        // Integer to Double
-        (src, Double) =>
-          if src.is_integer() {
-            if is_unsigned_integer_type(src) {
-              self.emit("\tucvtf\td9, x9")
-            } else {
-              self.emit("\tscvtf\td9, x9")
-            }
-            self.emit("\tfmov\tx9, d9")
-          } else if src == Float {
-            self.emit("\tfmov\ts9, w9")
-            self.emit("\tfcvt\td9, s9")
-            self.emit("\tfmov\tx9, d9")
-          }
-        // Integer to Float
-        (src, Float) =>
-          if src.is_integer() {
-            if is_unsigned_integer_type(src) {
-              self.emit("\tucvtf\ts9, x9")
-            } else {
-              self.emit("\tscvtf\ts9, x9")
-            }
-            self.emit("\tfmov\tw9, s9")
-          } else if src == Double {
-            self.emit("\tfmov\td9, x9")
-            self.emit("\tfcvt\ts9, d9")
-            self.emit("\tfmov\tw9, s9")
-          }
-        // Double/Float to integer
-        (Double, dst) =>
-          if dst.is_integer() {
-            self.emit("\tfmov\td9, x9")
-            if dst.is_signed() {
-              self.emit("\tfcvtzs\tx9, d9")
-            } else {
-              self.emit("\tfcvtzu\tx9, d9")
-            }
-          }
-        (Float, dst) =>
-          if dst.is_integer() {
-            self.emit("\tfmov\ts9, w9")
-            if dst.is_signed() {
-              self.emit("\tfcvtzs\tx9, s9")
-            } else {
-              self.emit("\tfcvtzu\tx9, s9")
-            }
-          }
-        _ => ()
-      }
+      self.emit_numeric_conversion(expr_ty, ty)
       // Integer truncation/sign-extension
       match ty {
         SChar =>

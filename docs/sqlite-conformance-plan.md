@@ -50,9 +50,8 @@ Passing kimicc SQLite e2e tests:
 - Pass SQLite's public `ext/expert/expert1.test` with 0 errors across 75 tests.
 - Pass SQLite's public `ext/fts5/test/fts5contentless.test` with 0 errors
   across 121 tests.
-- The malformed FTS5 index cluster is fixed. The next sampled FTS5 blocker is
-  `ext/fts5/test/fts5aa.test`, where six `16.2` rank-score checks differ from
-  clang.
+- Pass SQLite's public `ext/fts5/test/fts5aa.test` with 0 errors across 1427
+  tests.
 
 This is useful smoke coverage, not a claim that SQLite passes its test suite.
 
@@ -133,7 +132,8 @@ amalgamation fixture and focused e2e regressions in version control.
 | Passed | Public SQLite Tcl `expert1.test` | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/ext/expert/expert1.test` after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The kimicc-built SQLite testfixture now passes `expert1.test`: 0 errors out of 75 tests. This clears the previous FTS5 tokenizer SIGBUS. |
 | Fixed | Raw byte string literal emission | `moon test test/e2e --target native --filter 'e2e hex escape string literal preserves raw bytes'` | Public FTS5 malformed-index failures minimized to `FTS5_STRUCTURE_V2`, the string literal `"\xFF\x00\x00\x01"`. kimicc emitted `0xFF` as UTF-8 `C3 BF`, then placed embedded-NUL string literals in Darwin's `__TEXT,__cstring,cstring_literals` section. String emission now uses fixed octal byte escapes and pools string literals in `__TEXT,__const`, matching clang for embedded NUL bytes. |
 | Passed | Public SQLite Tcl `fts5contentless.test` | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/ext/fts5/test/fts5contentless.test` from an isolated temporary working directory after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The kimicc-built SQLite testfixture now passes `fts5contentless.test`: 0 errors out of 121 tests. The clean clang-linked baseline also passes 0/121. |
-| Open | Public SQLite Tcl `fts5aa.test` rank-score mismatch | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/ext/fts5/test/fts5aa.test` from an isolated temporary working directory after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The malformed-index failures in this file are gone, but kimicc still reports 6 failures in the `16.2` cases: expected `0 {{} -1e-06 {}}`, got `0 {{} -2.2e-06 {}}` for full/col/none and origintext variants. The clang-linked baseline passes `fts5aa.test` with 0 errors out of 1427 tests. This is the next failure class to minimize. |
+| Fixed | Mixed integer/floating arithmetic conversions | `moon test test/e2e --target native --filter 'e2e mixed int double arithmetic promotes operands'` | Public `fts5aa.test` rank-score failures minimized to SQLite FTS5 BM25's `1 - b + b * D / pData->avgdl` denominator. kimicc typed the expression as floating-point but moved raw integer bits into FP registers without converting mixed integer operands, so `1 - b` behaved as `0 - b` and the denominator collapsed. Binary FP operations now convert each operand to the common FP type before arithmetic/comparison, and scalar local init/assignment/return paths convert to the destination type before storing or returning. |
+| Passed | Public SQLite Tcl `fts5aa.test` | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/ext/fts5/test/fts5aa.test` from an isolated temporary working directory after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The kimicc-built SQLite testfixture now passes `fts5aa.test`: 0 errors out of 1427 tests. The direct BM25 probe for `SELECT bm25(n1), format('%g',bm25(n1)) FROM n1 WHERE n1 MATCH 'a+b+c+d'` now matches clang at `-1e-06`. |
 
 ## Execution Plan
 
