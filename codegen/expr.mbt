@@ -35,11 +35,13 @@ fn Codegen::type_of(
           }
         _ => ()
       }
-      SInt
+      binary_result_type(op, lhs_ty, rhs_ty)
     }
-    Unary("-", _) => SInt
+    Unary("-", operand) =>
+      unary_numeric_result_type(self.type_of(operand, frame_size))
     Unary("!", _) => SInt
-    Unary("~", _) => SInt
+    Unary("~", operand) =>
+      unary_integer_result_type(self.type_of(operand, frame_size))
     Call(func, _) =>
       match func {
         Var(name) =>
@@ -103,6 +105,114 @@ fn Codegen::type_of(
     Cast(ty, _) => ty
     Array(_) => SInt
     _ => SInt
+  }
+}
+
+///|
+fn is_unsigned_integer_type(ty : @parser.Type) -> Bool {
+  match ty {
+    UChar | UShort | UInt | ULong | ULongLong => true
+    _ => false
+  }
+}
+
+///|
+fn unary_integer_result_type(ty : @parser.Type) -> @parser.Type {
+  match ty {
+    Bool | SChar | UChar | SShort | UShort => SInt
+    _ => ty
+  }
+}
+
+///|
+fn unary_numeric_result_type(ty : @parser.Type) -> @parser.Type {
+  if ty.is_floating() {
+    ty
+  } else {
+    unary_integer_result_type(ty)
+  }
+}
+
+///|
+fn integer_rank(ty : @parser.Type) -> Int {
+  match ty {
+    Bool | SChar | UChar => 1
+    SShort | UShort => 2
+    SInt | UInt => 3
+    SLong | ULong => 4
+    SLongLong | ULongLong => 5
+    _ => 0
+  }
+}
+
+///|
+fn unsigned_type_for_rank(rank : Int) -> @parser.Type {
+  if rank >= 5 {
+    ULongLong
+  } else if rank == 4 {
+    ULong
+  } else {
+    UInt
+  }
+}
+
+///|
+fn signed_type_for_rank(rank : Int) -> @parser.Type {
+  if rank >= 5 {
+    SLongLong
+  } else if rank == 4 {
+    SLong
+  } else {
+    SInt
+  }
+}
+
+///|
+fn integer_common_type(
+  lhs_ty : @parser.Type,
+  rhs_ty : @parser.Type,
+) -> @parser.Type {
+  let lhs_rank = integer_rank(lhs_ty)
+  let rhs_rank = integer_rank(rhs_ty)
+  let rank = if lhs_rank > rhs_rank { lhs_rank } else { rhs_rank }
+  if is_unsigned_integer_type(lhs_ty) || is_unsigned_integer_type(rhs_ty) {
+    unsigned_type_for_rank(rank)
+  } else {
+    signed_type_for_rank(rank)
+  }
+}
+
+///|
+fn uses_unsigned_integer_op(
+  lhs_ty : @parser.Type,
+  rhs_ty : @parser.Type,
+) -> Bool {
+  lhs_ty.is_integer() &&
+  rhs_ty.is_integer() &&
+  (is_unsigned_integer_type(lhs_ty) || is_unsigned_integer_type(rhs_ty))
+}
+
+///|
+fn binary_result_type(
+  op : String,
+  lhs_ty : @parser.Type,
+  rhs_ty : @parser.Type,
+) -> @parser.Type {
+  match op {
+    "==" | "!=" | "<" | ">" | "<=" | ">=" | "&&" | "||" => SInt
+    "<<" | ">>" => lhs_ty
+    _ =>
+      if lhs_ty.is_floating() || rhs_ty.is_floating() {
+        if lhs_ty == Double || rhs_ty == Double {
+          Double
+        } else {
+          Float
+        }
+      } else if lhs_ty.is_integer() && rhs_ty.is_integer() {
+        integer_common_type(lhs_ty, rhs_ty)
+      } else {
+        SInt
+      }
   }
 }
 
@@ -829,6 +939,7 @@ fn Codegen::gen_expr(
       let is_fp = not(is_ptr_op) &&
         (left_ty.is_floating() || right_ty.is_floating())
       let is_double = is_fp && (left_ty == Double || right_ty == Double)
+      let is_unsigned_int = uses_unsigned_integer_op(left_ty, right_ty)
       self.gen_expr(left, frame_size)
       self.emit("\tstr\tx9, [sp, #-16]!")
       self.gen_expr(right, frame_size)
@@ -904,15 +1015,27 @@ fn Codegen::gen_expr(
               self.emit("\tfdiv\ts9, s9, s10")
               self.emit("\tfmov\tw9, s9")
             }
+          } else if is_unsigned_int {
+            self.emit("\tudiv\tx9, x9, x10")
           } else {
             self.emit("\tsdiv\tx9, x9, x10")
           }
-        "%" => self.emit("\tsdiv\tx11, x9, x10\n\tmsub\tx9, x11, x10, x9")
+        "%" =>
+          if is_unsigned_int {
+            self.emit("\tudiv\tx11, x9, x10\n\tmsub\tx9, x11, x10, x9")
+          } else {
+            self.emit("\tsdiv\tx11, x9, x10\n\tmsub\tx9, x11, x10, x9")
+          }
         "&" => self.emit("\tand\tx9, x9, x10")
         "|" => self.emit("\torr\tx9, x9, x10")
         "^" => self.emit("\teor\tx9, x9, x10")
         "<<" => self.emit("\tlsl\tx9, x9, x10")
-        ">>" => self.emit("\tasr\tx9, x9, x10")
+        ">>" =>
+          if is_unsigned_int {
+            self.emit("\tlsr\tx9, x9, x10")
+          } else {
+            self.emit("\tasr\tx9, x9, x10")
+          }
         "," =>
           // Result is the right operand (in x10)
           self.emit("\tmov\tx9, x10")
@@ -962,7 +1085,11 @@ fn Codegen::gen_expr(
             self.emit("\tcset\tx9, mi")
           } else {
             self.emit("\tcmp\tx9, x10")
-            self.emit("\tcset\tx9, lt")
+            if is_unsigned_int {
+              self.emit("\tcset\tx9, lo")
+            } else {
+              self.emit("\tcset\tx9, lt")
+            }
           }
         "<=" =>
           if is_fp {
@@ -978,7 +1105,11 @@ fn Codegen::gen_expr(
             self.emit("\tcset\tx9, ls")
           } else {
             self.emit("\tcmp\tx9, x10")
-            self.emit("\tcset\tx9, le")
+            if is_unsigned_int {
+              self.emit("\tcset\tx9, ls")
+            } else {
+              self.emit("\tcset\tx9, le")
+            }
           }
         ">" =>
           if is_fp {
@@ -994,7 +1125,11 @@ fn Codegen::gen_expr(
             self.emit("\tcset\tx9, gt")
           } else {
             self.emit("\tcmp\tx9, x10")
-            self.emit("\tcset\tx9, gt")
+            if is_unsigned_int {
+              self.emit("\tcset\tx9, hi")
+            } else {
+              self.emit("\tcset\tx9, gt")
+            }
           }
         ">=" =>
           if is_fp {
@@ -1010,7 +1145,11 @@ fn Codegen::gen_expr(
             self.emit("\tcset\tx9, ge")
           } else {
             self.emit("\tcmp\tx9, x10")
-            self.emit("\tcset\tx9, ge")
+            if is_unsigned_int {
+              self.emit("\tcset\tx9, hs")
+            } else {
+              self.emit("\tcset\tx9, ge")
+            }
           }
         _ => ()
       }
@@ -1682,7 +1821,11 @@ fn Codegen::gen_expr(
         // Integer to Double
         (src, Double) =>
           if src.is_integer() {
-            self.emit("\tscvtf\td9, x9")
+            if is_unsigned_integer_type(src) {
+              self.emit("\tucvtf\td9, x9")
+            } else {
+              self.emit("\tscvtf\td9, x9")
+            }
             self.emit("\tfmov\tx9, d9")
           } else if src == Float {
             self.emit("\tfmov\ts9, w9")
@@ -1692,7 +1835,11 @@ fn Codegen::gen_expr(
         // Integer to Float
         (src, Float) =>
           if src.is_integer() {
-            self.emit("\tscvtf\ts9, x9")
+            if is_unsigned_integer_type(src) {
+              self.emit("\tucvtf\ts9, x9")
+            } else {
+              self.emit("\tscvtf\ts9, x9")
+            }
             self.emit("\tfmov\tw9, s9")
           } else if src == Double {
             self.emit("\tfmov\td9, x9")

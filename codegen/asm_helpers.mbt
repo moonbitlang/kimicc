@@ -23,7 +23,7 @@ fn fits_mov_imm(n : Int64) -> Bool {
 }
 
 ///|
-// Emit instruction(s) to load a 32-bit signed constant into a 64-bit register.
+// Emit instruction(s) to load a 64-bit signed constant into a 64-bit register.
 // Uses mov/movn when possible, otherwise movz + movk sequence.
 fn Codegen::emit_load_int(self : Codegen, reg : String, n : Int64) -> Unit {
   if fits_mov_imm(n) {
@@ -31,20 +31,26 @@ fn Codegen::emit_load_int(self : Codegen, reg : String, n : Int64) -> Unit {
     return
   }
   // Decompose into 16-bit chunks. For negative values we need sign-extension.
-  let low = (n & 0xFFFFL).to_int()
-  let high = ((n >> 16) & 0xFFFFL).to_int()
+  let part0 = (n & 0xFFFFL).to_int()
+  let part1 = ((n >> 16) & 0xFFFFL).to_int()
+  let part2 = ((n >> 32) & 0xFFFFL).to_int()
+  let part3 = ((n >> 48) & 0xFFFFL).to_int()
   if n >= 0 {
-    // Zero-extended 32-bit value in 64-bit register
-    self.emit("\tmovz\t" + reg + ", #" + low.to_string())
-    if high != 0 {
-      self.emit("\tmovk\t" + reg + ", #" + high.to_string() + ", lsl #16")
+    self.emit("\tmovz\t" + reg + ", #" + part0.to_string())
+    if part1 != 0 {
+      self.emit("\tmovk\t" + reg + ", #" + part1.to_string() + ", lsl #16")
+    }
+    if part2 != 0 {
+      self.emit("\tmovk\t" + reg + ", #" + part2.to_string() + ", lsl #32")
+    }
+    if part3 != 0 {
+      self.emit("\tmovk\t" + reg + ", #" + part3.to_string() + ", lsl #48")
     }
   } else {
-    // Sign-extended 32-bit value: 0xFFFFFFFFnnnnnnnn
-    self.emit("\tmovz\t" + reg + ", #" + low.to_string())
-    self.emit("\tmovk\t" + reg + ", #" + high.to_string() + ", lsl #16")
-    self.emit("\tmovk\t" + reg + ", #65535, lsl #32")
-    self.emit("\tmovk\t" + reg + ", #65535, lsl #48")
+    self.emit("\tmovz\t" + reg + ", #" + part0.to_string())
+    self.emit("\tmovk\t" + reg + ", #" + part1.to_string() + ", lsl #16")
+    self.emit("\tmovk\t" + reg + ", #" + part2.to_string() + ", lsl #32")
+    self.emit("\tmovk\t" + reg + ", #" + part3.to_string() + ", lsl #48")
   }
 }
 

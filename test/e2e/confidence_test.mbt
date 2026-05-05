@@ -195,6 +195,115 @@ async test "e2e function pointer returning pointer preserves return type" {
 }
 
 ///|
+async test "e2e sqlite-style unsigned u64 atof threshold" {
+  let source =
+    #|typedef unsigned long long u64;
+    #|static int is_digit(char c) {
+    #|  return c >= '0' && c <= '9';
+    #|}
+    #|static double parse_decimal(const char *z, int n) {
+    #|  const char *zEnd = z + n;
+    #|  u64 s = 0;
+    #|  int e = 0;
+    #|  int d = 0;
+    #|  u64 limit = ((0xffffffff | (((u64)0xffffffff) << 32)) - 9) / 10;
+    #|  while (z < zEnd && is_digit(*z)) {
+    #|    s = s * 10 + (*z - '0');
+    #|    z++;
+    #|    if (s >= limit) {
+    #|      while (z < zEnd && is_digit(*z)) {
+    #|        z++;
+    #|        d++;
+    #|      }
+    #|    }
+    #|  }
+    #|  if (z < zEnd && *z == '.') {
+    #|    z++;
+    #|    while (z < zEnd && is_digit(*z)) {
+    #|      if (s < limit) {
+    #|        s = s * 10 + (*z - '0');
+    #|        d--;
+    #|      }
+    #|      z++;
+    #|    }
+    #|  }
+    #|  e = d;
+    #|  while (e < 0 && (s % 10) == 0) {
+    #|    s /= 10;
+    #|    e++;
+    #|  }
+    #|  double r = (double)s;
+    #|  while (e <= -1) {
+    #|    r = r * 0.1;
+    #|    e++;
+    #|  }
+    #|  while (e >= 1) {
+    #|    r = r * 10.0;
+    #|    e--;
+    #|  }
+    #|  return r;
+    #|}
+    #|int main(void) {
+    #|  double x = parse_decimal("123.45", 6);
+    #|  if (x < 123.44 || x > 123.46) return 1;
+    #|  double y = parse_decimal("1.1", 3);
+    #|  if (y < 1.09 || y > 1.11) return 2;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e sqlite-style fpdecode negated double cast" {
+  let source =
+    #|typedef unsigned long long u64;
+    #|void *memcpy(void *dst, const void *src, unsigned long n);
+    #|static void dekkerMul2(volatile double *x, double y, double yy) {
+    #|  volatile double tx, ty, p, q, c, cc;
+    #|  double hx, hy;
+    #|  u64 m;
+    #|  memcpy(&m, (void *)&x[0], 8);
+    #|  m &= 0xfffffffffc000000LL;
+    #|  memcpy(&hx, &m, 8);
+    #|  tx = x[0] - hx;
+    #|  memcpy(&m, &y, 8);
+    #|  m &= 0xfffffffffc000000LL;
+    #|  memcpy(&hy, &m, 8);
+    #|  ty = y - hy;
+    #|  p = hx * hy;
+    #|  q = hx * ty + tx * hy;
+    #|  c = p + q;
+    #|  cc = p - c + q + tx * ty;
+    #|  cc = x[0] * yy + x[1] * y + cc;
+    #|  x[0] = c + cc;
+    #|  x[1] = c - x[0];
+    #|  x[1] += cc;
+    #|}
+    #|int main(void) {
+    #|  double rr[2];
+    #|  int exp = 0;
+    #|  u64 v;
+    #|  rr[0] = 1.1;
+    #|  rr[1] = 0.0;
+    #|  while (rr[0] < 9.223372036854774784e+07) {
+    #|    exp -= 10;
+    #|    dekkerMul2(rr, 1.0e+10, 0.0);
+    #|  }
+    #|  while (rr[0] < 9.22337203685477478e+17) {
+    #|    exp -= 1;
+    #|    dekkerMul2(rr, 1.0e+01, 0.0);
+    #|  }
+    #|  v = rr[1] < 0.0 ? (u64)rr[0] - (u64)(-rr[1]) : (u64)rr[0] + (u64)rr[1];
+    #|  if (exp != -18) return 1;
+    #|  if (v < 1099999999999999000ULL || v > 1100000000000002000ULL) return 2;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e file scope static symbols have internal linkage" {
   let left =
     #|static int shared = 40;
