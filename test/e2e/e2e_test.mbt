@@ -1,49 +1,3 @@
-///|
-#borrow(path, content)
-extern "c" fn moonbit_write_file(path : Bytes, content : Bytes) -> Int = "moonbit_write_file"
-
-///|
-#borrow(cmd)
-extern "c" fn moonbit_system(cmd : Bytes) -> Int = "moonbit_system"
-
-///|
-fn compile(source : String) -> String {
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  codegen.generate(prog)
-}
-
-///|
-fn source_id(source : String) -> String {
-  let mut h = 0
-  for ch in source {
-    h = h * 31 + ch.to_int()
-  }
-  h.to_string()
-}
-
-///|
-fn run_source(source : String) -> Int {
-  let assembly = compile(source)
-  let id = source_id(source)
-  let asm_path = "/tmp/kimicc_test_" + id + ".s"
-  let bin_path = "/tmp/kimicc_test_" + id
-  let _ = moonbit_write_file(@utf8.encode(asm_path), @utf8.encode(assembly))
-  let link_rc = moonbit_system(
-    @utf8.encode("clang -o " + bin_path + " " + asm_path),
-  )
-  if link_rc != 0 {
-    abort("Link failed with code: " + link_rc.to_string())
-  }
-  moonbit_system(@utf8.encode(bin_path))
-}
-
-///|
-fn run_source_async(source : String) -> Int {
-  run_source(source)
-}
-
-///|
 async test "run hello fixture" {
   let source =
     #|int main() {
@@ -407,28 +361,8 @@ async test "ternary with comma operator" {
 
 ///|
 async test "sqlite fixture preprocesses and assembles" {
-  let preprocessed_path = "/tmp/kimicc_sqlite3_preprocessed.c"
-  let asm_path = "/tmp/kimicc_sqlite3.s"
-  let obj_path = "/tmp/kimicc_sqlite3.o"
-  let pp_rc = moonbit_system(
-    @utf8.encode(
-      "clang -E test/fixtures/sqlite/sqlite3.c -o " + preprocessed_path,
-    ),
-  )
-  if pp_rc != 0 {
-    abort("SQLite preprocess failed with code: " + pp_rc.to_string())
-  }
-  let data = @fs.read_file(preprocessed_path)
-  let source = data.text()
-  let assembly = compile(source)
-  assert_true(assembly.contains("_sqlite3_open:"))
-  let _ = moonbit_write_file(@utf8.encode(asm_path), @utf8.encode(assembly))
-  let asm_rc = moonbit_system(
-    @utf8.encode("clang -c -o " + obj_path + " " + asm_path),
-  )
-  if asm_rc != 0 {
-    abort("SQLite assemble failed with code: " + asm_rc.to_string())
-  }
+  let object_path = compile_sqlite_fixture_object()
+  assert_true(object_path.contains("sqlite3"))
 }
 
 ///|
