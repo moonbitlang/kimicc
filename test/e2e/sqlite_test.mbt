@@ -295,3 +295,17 @@ async test "sqlite object matches clang baseline for SQL script runner" {
   assert_true(result.output.contains("row|n=4|total=99|high=37"))
   assert_true(result.output.contains("script-ok"))
 }
+
+///|
+async test "sqlite public tcl select1 passes through testfixture harness" {
+  let result = run_sqlite_public_tcl_test(
+    "test/select1.test", "sqlite_public_tcl_select1",
+  )
+  if result.code != 0 {
+    abort("SQLite public Tcl select1 failed:\n" + result.output)
+  }
+  if result.output == "sqlite-public-tests-skipped\n" {
+    return
+  }
+  assert_true(result.output.contains("0 errors out of 192 tests"))
+}

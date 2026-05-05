@@ -47,6 +47,8 @@ Passing kimicc SQLite e2e tests:
 - Manually link SQLite's public Tcl `testfixture` with kimicc's SQLite object
   and pass public `test/select1.test` through `test/selectH.test` with 0
   errors across 37796 tests.
+- Build SQLite's public Tcl `testfixture` from a MoonBit async e2e harness and
+  pass public `test/select1.test` with 0 errors across 192 tests.
 - Pass SQLite's public `ext/expert/expert1.test` with 0 errors across 75 tests.
 - Pass SQLite's public `ext/fts5/test/fts5contentless.test` with 0 errors
   across 121 tests.
@@ -110,7 +112,7 @@ amalgamation fixture and focused e2e regressions in version control.
 - [x] Run the first broader batch with both clang-built SQLite and kimicc-built
   SQLite to separate harness bugs from compiler bugs.
 - [x] Link a public SQLite Tcl `testfixture` binary with kimicc's SQLite object.
-- [ ] Add a public SQLite Tcl `testfixture` harness mode to MoonBit tests.
+- [x] Add a public SQLite Tcl `testfixture` harness mode to MoonBit tests.
 - [x] Run the first upstream public Tcl batch through the `testfixture` harness.
 - [ ] For every failure class, record the command, output, generated assembly or
   object paths, clang-vs-kimicc behavior, minimized C or SQL repro, status, and
@@ -135,6 +137,7 @@ amalgamation fixture and focused e2e regressions in version control.
 | Fixed | SQLite `sqlite3FpDecode` negated double to `u64` cast | `moon test test/e2e --target native --filter 'e2e sqlite-style fpdecode negated double cast'` | The public `select1.test` floating mismatches minimized to `v = rr[1]<0.0 ? (u64)rr[0]-(u64)(-rr[1]) : ...`; unary `-` was typed as `int`, so `(u64)(-rr[1])` kept raw double bits. Unary floating negation now preserves floating type, unary bit-not uses integer promotion, and unsigned integer to floating casts use unsigned conversion. `sqlite3_mprintf("%!.15g", 1.1)` and `sqlite3_column_text()` now format real values correctly. |
 | Fixed | Public SQLite Tcl `select1.test` database reopen after section 13 | `moon test test/e2e --target native --filter 'e2e octal integer literal preserves file mode value'`; `moon test test/e2e --target native --filter 'sqlite object creates file database with readable mode'` | The reopen failure minimized to C octal integer constants: kimicc parsed `0644` as decimal `644`, so SQLite created database files as mode `0204` after umask and could not reopen them. Leading-zero integer constants now parse as octal, and kimicc's SQLite object creates readable `0644` file databases. |
 | Passed | Public SQLite Tcl `select1.test` | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/test/select1.test` after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The kimicc-built SQLite testfixture now passes `select1.test`: 0 errors out of 192 tests. The matching clang-built testfixture also passes, giving a clean first public Tcl batch for comparison. |
+| Passed | MoonBit public SQLite Tcl `testfixture` harness | `moon test test/e2e --target native --filter 'sqlite public tcl select1 passes through testfixture harness'` | The e2e harness compiles a `SQLITE_TEST`/testfixture-flavored SQLite object with kimicc, configures the matching public SQLite source tree from `/tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001`, links `testfixture` with clang-built test sources, and passes `test/select1.test` with 0 errors out of 192 tests. If the public source tree is not present locally, this harness returns a skip marker so routine tests stay portable. |
 | Fixed | Conditional operator with local array operands | `moon test test/e2e --target native --filter 'e2e ternary array operands decay before indexing'` | Public `select2.test` crashed in `select2-2.0.1` during `balance_nonroot`. The minimized source was SQLite's `(nNew>nOld ? apNew : apOld)[nOld-1]`: kimicc typed the ternary as an array lvalue, `gen_addr` emitted no address for it, and array indexing used the boolean condition as the base pointer. Ternary result typing now decays array branch operands to pointer values before indexing. |
 | Passed | Public SQLite Tcl `select2.test` | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/test/select2.test` after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The kimicc-built SQLite testfixture now passes `select2.test`: 0 errors out of 21 tests. This covers nested SELECTs, large insert batches, btree page balancing, index creation, and indexed lookup checks. |
 | Passed | Public SQLite Tcl `select3.test` through `select5.test` | `./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/test/select3.test`; same for `select4.test` and `select5.test` after linking `TESTFIXTURE_SRC1=/tmp/kimicc_sqlite3_testfixture.o` | The kimicc-built SQLite testfixture passes `select3.test` (0/91 errors), `select4.test` (0/124 errors), and `select5.test` (0/35 errors). No new compiler failure class was exposed in this batch. |

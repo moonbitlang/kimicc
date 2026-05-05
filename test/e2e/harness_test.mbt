@@ -77,6 +77,26 @@ fn write_text_file(path : String, content : String) -> Unit {
 }
 
 ///|
+fn shell_quote(value : String) -> String {
+  let buf = StringBuilder::new()
+  buf.write_string("'")
+  for ch in value {
+    if ch.to_int() == 39 {
+      buf.write_string("'\\''")
+    } else {
+      buf.write_char(ch)
+    }
+  }
+  buf.write_string("'")
+  buf.to_string()
+}
+
+///|
+fn path_exists(path : String) -> Bool {
+  moonbit_system(@utf8.encode("test -e " + shell_quote(path))) == 0
+}
+
+///|
 fn run_command_checked(cmd : String, context : String) -> Unit {
   let rc = moonbit_system(@utf8.encode(cmd))
   if rc != 0 {
@@ -110,6 +130,26 @@ async fn preprocess_c_file(path : String, tag : String) -> String {
   let preprocessed_path = temp_file_path(tag, path, ".i")
   run_command_checked(
     "clang -E " + path + " -o " + preprocessed_path,
+    "preprocess " + path,
+  )
+  let data = @fs.read_file(preprocessed_path)
+  data.text()
+}
+
+///|
+async fn preprocess_c_file_with_flags(
+  path : String,
+  flags : String,
+  tag : String,
+) -> String {
+  let preprocessed_path = temp_file_path(tag, path + flags, ".i")
+  run_command_checked(
+    "clang -E " +
+    flags +
+    " " +
+    shell_quote(path) +
+    " -o " +
+    shell_quote(preprocessed_path),
     "preprocess " + path,
   )
   let data = @fs.read_file(preprocessed_path)
@@ -153,6 +193,150 @@ async fn compile_sqlite_fixture_object_with(
     Kimicc => compile_sqlite_fixture_object()
     Clang => compile_clang_sqlite_fixture_object()
   }
+}
+
+///|
+fn sqlite_testfixture_flags() -> String {
+  "-DSQLITE_NO_SYNC=1 " +
+  "-DSQLITE_TEST=1 " +
+  "-DSQLITE_CRASH_TEST=1 " +
+  "-DTCLSH_INIT_PROC=sqlite3TestInit " +
+  "-DSQLITE_SERVER=1 " +
+  "-DSQLITE_PRIVATE= " +
+  "-DSQLITE_CORE " +
+  "-DBUILD_sqlite " +
+  "-DSQLITE_SERIES_CONSTRAINT_VERIFY=1 " +
+  "-DSQLITE_DEFAULT_PAGE_SIZE=1024 " +
+  "-DSQLITE_ENABLE_STMTVTAB " +
+  "-DSQLITE_ENABLE_DBPAGE_VTAB " +
+  "-DSQLITE_ENABLE_BYTECODE_VTAB " +
+  "-DSQLITE_CKSUMVFS_STATIC " +
+  "-DSQLITE_STATIC_RANDOMJSON " +
+  "-DSQLITE_STRICT_SUBTYPE=1 " +
+  "-I test/fixtures/sqlite"
+}
+
+///|
+async fn compile_sqlite_fixture_testfixture_object() -> String {
+  let source = preprocess_c_file_with_flags(
+    "test/fixtures/sqlite/sqlite3.c",
+    sqlite_testfixture_flags(),
+    "sqlite3_testfixture_preprocessed",
+  )
+  let assembly = compile(source)
+  assert_true(assembly.contains("_sqlite3_open:"))
+  assert_true(assembly.contains("_sqlite3Atoi64:"))
+  let asm_path = "/tmp/kimicc_sqlite3_testfixture.s"
+  let obj_path = "/tmp/kimicc_sqlite3_testfixture.o"
+  write_text_file(asm_path, assembly)
+  run_command_checked(
+    "clang -c -o " + shell_quote(obj_path) + " " + shell_quote(asm_path),
+    "assemble sqlite3 testfixture object",
+  )
+  obj_path
+}
+
+///|
+fn sqlite_public_source_root() -> String {
+  "/tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001"
+}
+
+///|
+fn sqlite_public_tests_available() -> Bool {
+  let root = sqlite_public_source_root()
+  path_exists(root + "/configure") && path_exists(root + "/test/select1.test")
+}
+
+///|
+fn sqlite_tcl_config_path() -> String {
+  let macos_155 = "/Library/Developer/CommandLineTools/SDKs/MacOSX15.5.sdk/System/Library/Frameworks/Tcl.framework/tclConfig.sh"
+  if path_exists(macos_155) {
+    return macos_155
+  }
+  let macos_260 = "/Library/Developer/CommandLineTools/SDKs/MacOSX26.0.sdk/System/Library/Frameworks/Tcl.framework/tclConfig.sh"
+  if path_exists(macos_260) {
+    return macos_260
+  }
+  ""
+}
+
+///|
+async fn build_sqlite_public_testfixture() -> String {
+  let root = sqlite_public_source_root()
+  let tcl_config = sqlite_tcl_config_path()
+  if tcl_config == "" {
+    abort("SQLite public Tcl testfixture requires tclConfig.sh")
+  }
+  let object_path = compile_sqlite_fixture_testfixture_object()
+  let build_dir = "/tmp/kimicc_sqlite_testfixture_build"
+  let configure_log = "/tmp/kimicc_sqlite_configure.out"
+  let make_log = "/tmp/kimicc_sqlite_make_testfixture.out"
+  run_command_checked(
+    "rm -rf " +
+    shell_quote(build_dir) +
+    " && mkdir -p " +
+    shell_quote(build_dir),
+    "prepare sqlite testfixture build dir",
+  )
+  run_command_checked(
+    "cd " +
+    shell_quote(build_dir) +
+    " && " +
+    shell_quote(root + "/configure") +
+    " TCL_CONFIG_SH=" +
+    shell_quote(tcl_config) +
+    " --disable-shared --enable-static > " +
+    shell_quote(configure_log) +
+    " 2>&1",
+    "configure sqlite testfixture",
+  )
+  run_command_checked(
+    "cd " +
+    shell_quote(build_dir) +
+    " && make parse.h sqlite3.h opcodes.h >> " +
+    shell_quote(make_log) +
+    " 2>&1",
+    "prepare sqlite generated test headers",
+  )
+  run_command_checked(
+    "cd " +
+    shell_quote(build_dir) +
+    " && make testfixture TCL_CONFIG_SH=" +
+    shell_quote(tcl_config) +
+    " USE_AMALGAMATION=1 TESTFIXTURE_SRC1=" +
+    shell_quote(object_path) +
+    " >> " +
+    shell_quote(make_log) +
+    " 2>&1",
+    "build sqlite public testfixture",
+  )
+  build_dir + "/testfixture"
+}
+
+///|
+async fn run_sqlite_public_tcl_test(
+  test_path : String,
+  tag : String,
+) -> CommandResult {
+  if !sqlite_public_tests_available() {
+    return { code: 0, output: "sqlite-public-tests-skipped\n" }
+  }
+  let root = sqlite_public_source_root()
+  let testfixture = build_sqlite_public_testfixture()
+  let run_dir = temp_file_path(tag + "_work", test_path, "")
+  run_command_checked(
+    "rm -rf " + shell_quote(run_dir) + " && mkdir -p " + shell_quote(run_dir),
+    "prepare sqlite public tcl test work dir",
+  )
+  run_command_capture(
+    "cd " +
+    shell_quote(run_dir) +
+    " && " +
+    shell_quote(testfixture) +
+    " " +
+    shell_quote(root + "/" + test_path),
+    tag,
+  )
 }
 
 ///|
