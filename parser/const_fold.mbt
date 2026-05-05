@@ -589,6 +589,12 @@ fn Parser::const_expr_type(self : Parser, expr : Expr) -> Type {
   match expr {
     Sizeof(_) | SizeofExpr(_) | OffsetOf(_, _) => ULong
     Cast(ty, _) => ty
+    Var(name) =>
+      if self.value_types.contains(name) {
+        self.value_types[name]
+      } else {
+        type_of_expr(expr)
+      }
     AddrOf(e) => Pointer(self.const_expr_type(e))
     Deref(e) =>
       match self.const_expr_type(e) {

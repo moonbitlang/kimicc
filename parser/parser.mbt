@@ -8,6 +8,7 @@ pub struct Parser {
   mut anon_counter : Int
   enum_constants : Map[String, Int64]
   globals : Array[GlobalDecl]
+  mut value_types : Map[String, Type]
   mut current_func_name : String
   mut static_locals : Map[String, String]
   mut case_label_counter : Int
@@ -24,6 +25,7 @@ pub fn Parser::new(lexer : Lexer) -> Parser {
     anon_counter: 0,
     enum_constants: {},
     globals: [],
+    value_types: {},
     current_func_name: "",
     static_locals: {},
     case_label_counter: 0,
@@ -119,4 +121,11 @@ pub fn parse(input : String) -> Program {
   let lexer = Lexer::new(input)
   let parser = Parser::new(lexer)
   parser.parse_program()
+}
+
+///|
+fn Parser::remember_value_type(self : Parser, name : String, ty : Type) -> Unit {
+  if name != "" {
+    self.value_types[name] = ty
+  }
 }

@@ -56,12 +56,17 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
     self.skip_attributes()
     self.current_func_name = decl.name
     self.static_locals = {}
+    let saved_value_types = self.value_types.copy()
+    for p in params {
+      self.remember_value_type(p.name, p.ty)
+    }
     let body = if self.token == LBrace {
       Some(self.parse_compound_stmt())
     } else {
       self.expect(Semicolon)
       None
     }
+    self.value_types = saved_value_types
     self.current_func_name = ""
     self.static_locals = {}
     let ret_ty = match decl.func_ret_ty {
@@ -168,6 +173,7 @@ fn Parser::parse_global_var_tail(
     is_static: spec.is_static,
     is_extern: spec.is_extern,
   })
+  self.remember_value_type(name, ty)
   // Handle additional variables separated by comma
   while self.token == Comma {
     self.advance()
@@ -207,6 +213,7 @@ fn Parser::parse_global_var_tail(
       is_static: spec.is_static,
       is_extern: spec.is_extern,
     })
+    self.remember_value_type(extra_decl.name, extra_ty)
   }
   self.expect(Semicolon)
 }

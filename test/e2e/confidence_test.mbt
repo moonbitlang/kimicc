@@ -589,6 +589,31 @@ async test "e2e local array sized by struct tail constant" {
 }
 
 ///|
+async test "e2e local array bound uses sizeof global array" {
+  let source =
+    #|typedef unsigned char u8;
+    #|static const u8 magic[8] = {0xd9,0xd5,0x05,0xf9,0x20,0xa1,0x63,0xd7};
+    #|void put4(u8 *p, unsigned v) {
+    #|  p[0] = (u8)(v >> 24);
+    #|  p[1] = (u8)(v >> 16);
+    #|  p[2] = (u8)(v >> 8);
+    #|  p[3] = (u8)v;
+    #|}
+    #|int main() {
+    #|  u8 zHeader[sizeof(magic)+4];
+    #|  if (sizeof(zHeader) != 12) return 1;
+    #|  __builtin_memcpy(zHeader, magic, sizeof(magic));
+    #|  put4(&zHeader[sizeof(magic)], 9);
+    #|  if (zHeader[0] != 0xd9 || zHeader[7] != 0xd7) return 2;
+    #|  if (zHeader[8] != 0 || zHeader[9] != 0) return 3;
+    #|  if (zHeader[10] != 0 || zHeader[11] != 9) return 4;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e global pointer initialized to array element" {
   let source =
     #|unsigned char table[4] = {1, 40, 9, 2};

@@ -473,12 +473,14 @@ fn Parser::parse_return_stmt(self : Parser) -> Stmt {
 
 ///|
 fn Parser::parse_compound_stmt(self : Parser) -> Stmt {
+  let saved_value_types = self.value_types.copy()
   self.expect(LBrace)
   let stmts = []
   while self.token != RBrace {
     stmts.push(self.parse_stmt())
   }
   self.expect(RBrace)
+  self.value_types = saved_value_types
   Compound(stmts)
 }
 
@@ -624,6 +626,8 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
         is_extern: false,
       })
     }
+    self.remember_value_type(mangled, final_ty)
+    self.remember_value_type(decl.name, final_ty)
     // Parse additional static/extern variables
     while self.token == Comma {
       self.advance()
@@ -645,6 +649,8 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
           is_extern: false,
         })
       }
+      self.remember_value_type(extra_mangled, extra_ty)
+      self.remember_value_type(extra_decl.name, extra_ty)
     }
     self.expect(Semicolon)
     return ExprStmt(Expr::Number(0))
@@ -728,11 +734,13 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
     stmts.push(VarDecl(decl_ty, decl.name, None))
     decl_ty
   }
+  self.remember_value_type(decl.name, ty)
   // Parse additional variables: int a, *b, c[8], (*fp)(void);
   while self.token == Comma {
     self.advance()
     let extra_decl = self.parse_declarator(spec.base_type)
     let extra_decl_ty = resolve_var_type(extra_decl)
+    let mut remembered_extra_ty = extra_decl_ty
     if self.token == Assign {
       self.advance()
       if self.token == LBrace {
@@ -758,6 +766,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
             Array(elem_ty, 0) => Type::Array(elem_ty, init_count)
             other => other
           }
+          remembered_extra_ty = extra_ty
           stmts.push(VarDecl(extra_ty, extra_decl.name, Some(Expr::Number(0))))
           self.push_array_init_assignments(
             stmts,
@@ -772,6 +781,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
           (Array(elem_ty, 0), Expr::String(s)) => {
             let len = s.length()
             let arr_ty = Type::Array(elem_ty, len + 1)
+            remembered_extra_ty = arr_ty
             stmts.push(VarDecl(arr_ty, extra_decl.name, None))
             for i = 0; i < len; i = i + 1 {
               let ch = s[i]
@@ -805,6 +815,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
     } else {
       stmts.push(VarDecl(extra_decl_ty, extra_decl.name, None))
     }
+    self.remember_value_type(extra_decl.name, remembered_extra_ty)
   }
   self.expect(Semicolon)
   if stmts.length() == 1 {

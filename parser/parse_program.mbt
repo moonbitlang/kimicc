@@ -4,6 +4,7 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
   // Parse first declarator
   let decl = self.parse_declarator(base_ty)
   if decl.name != "" {
+    let decl_ty = resolve_var_type(decl)
     let mut init : GlobalInit? = None
     if self.token == Assign {
       self.advance()
@@ -15,18 +16,20 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
       }
     }
     self.globals.push({
-      ty: resolve_var_type(decl),
+      ty: decl_ty,
       name: decl.name,
       init,
       is_static: false,
       is_extern: false,
     })
+    self.remember_value_type(decl.name, decl_ty)
   }
   // Additional variables separated by comma
   while self.token == Comma {
     self.advance()
     let extra = self.parse_declarator(base_ty)
     if extra.name != "" {
+      let extra_ty = resolve_var_type(extra)
       let mut extra_init : GlobalInit? = None
       if self.token == Assign {
         self.advance()
@@ -38,12 +41,13 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
         }
       }
       self.globals.push({
-        ty: resolve_var_type(extra),
+        ty: extra_ty,
         name: extra.name,
         init: extra_init,
         is_static: false,
         is_extern: false,
       })
+      self.remember_value_type(extra.name, extra_ty)
     }
   }
   self.expect(Semicolon)

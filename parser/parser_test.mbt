@@ -507,6 +507,30 @@ test "parse array declaration and access" {
 }
 
 ///|
+test "parse array bound using sizeof global array" {
+  let source =
+    #|typedef unsigned char u8;
+    #|static const u8 magic[8] = {1,2,3,4,5,6,7,8};
+    #|int main() {
+    #|  u8 zHeader[sizeof(magic)+4];
+    #|  return sizeof(zHeader);
+    #|}
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(
+      Compound(
+        [
+          VarDecl(Array(UChar, 12), "zHeader", None),
+          Return(Some(SizeofExpr(Var("zHeader")))),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected sizeof(global array) to fold to an array bound of 12")
+  }
+}
+
+///|
 test "parse global variable" {
   let source = "int g = 10; int main() { return g; }"
   let prog = @parser.parse(source)
