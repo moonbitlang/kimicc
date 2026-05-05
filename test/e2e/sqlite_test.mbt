@@ -230,3 +230,31 @@ async test "sqlite object handles bound statements and aggregates" {
   }
   assert_true(result.output.contains("bound-aggregate-ok"))
 }
+
+///|
+async test "sqlite object matches clang baseline for SQL script runner" {
+  let sql =
+    #|create table account(
+    #|  id integer primary key,
+    #|  name text not null unique,
+    #|  balance integer not null check(balance >= 0)
+    #|);
+    #|create index account_balance_idx on account(balance, name);
+    #|insert into account(name, balance)
+    #|  values('alpha', 10), ('beta', 25), ('gamma', 17);
+    #|begin;
+    #|update account set balance = balance + 5 where name in ('alpha', 'gamma');
+    #|insert into account(name, balance)
+    #|  select 'delta', sum(balance) from account where name != 'beta';
+    #|commit;
+    #|select name, balance from account where balance >= 15 order by balance, name;
+    #|select count(*) as n, sum(balance) as total, max(balance) as high
+    #|  from account;
+  let result = run_sql_script_against_clang_baseline(
+    sql, "sqlite_sql_script_core",
+  )
+  assert_true(result.output.contains("row|name=gamma|balance=22"))
+  assert_true(result.output.contains("row|name=delta|balance=37"))
+  assert_true(result.output.contains("row|n=4|total=99|high=37"))
+  assert_true(result.output.contains("script-ok"))
+}

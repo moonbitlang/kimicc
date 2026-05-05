@@ -39,6 +39,10 @@ Passing kimicc SQLite e2e tests:
 - Create a table, insert rows, and read them back.
 - Use bound statements, update rows, aggregate with `count`/`sum`, and verify
   `sqlite3_changes`.
+- Run a deterministic SQL script through both clang-built SQLite and
+  kimicc-built SQLite, then require identical output. This currently covers
+  indexes, constraints, transactions, `insert ... select`, updates, ordered
+  selects, and aggregate queries.
 
 This is useful smoke coverage, not a claim that SQLite passes its test suite.
 
@@ -78,10 +82,12 @@ amalgamation fixture and focused e2e regressions in version control.
 - [x] Identify the exact public SQLite test source that matches the fixture.
 - [x] Decide whether to vendor the matching public test tree or fetch it into a
   cache during explicit SQLite conformance runs.
-- [ ] Add a MoonBit harness entry point for broader SQLite tests.
-- [ ] Add a small SQL-script runner before trying the full upstream test suite.
-- [ ] Run the first broader batch with both clang-built SQLite and kimicc-built
+- [x] Add a MoonBit harness entry point for broader SQLite tests.
+- [x] Add a small SQL-script runner before trying the full upstream test suite.
+- [x] Run the first broader batch with both clang-built SQLite and kimicc-built
   SQLite to separate harness bugs from compiler bugs.
+- [ ] Add a public SQLite Tcl `testfixture` harness mode.
+- [ ] Run the first upstream public Tcl batch through the `testfixture` harness.
 - [ ] For every failure class, record the command, output, generated assembly or
   object paths, clang-vs-kimicc behavior, minimized C or SQL repro, status, and
   fixing commit.
@@ -93,7 +99,8 @@ amalgamation fixture and focused e2e regressions in version control.
 
 | Status | Area | Repro | Notes |
 | --- | --- | --- | --- |
-| Open | Public SQLite tests | Not wired yet | Next task is locating and wiring the matching public test source. |
+| Passed | SQL script differential harness | `moon test test/e2e --target native --filter 'sqlite object matches clang baseline for SQL script runner'` | clang-built and kimicc-built SQLite objects produced identical output. |
+| Open | Public SQLite Tcl tests | Not wired yet | Next task is building a `testfixture` mode that can link kimicc's SQLite object. |
 
 ## Execution Plan
 
