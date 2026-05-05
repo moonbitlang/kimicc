@@ -783,6 +783,31 @@ test "parse __func__ builtin" {
 }
 
 ///|
+test "parse struct compound literal assignment" {
+  let source =
+    #|typedef union ValueUnion { int int32; void *ptr; } ValueUnion;
+    #|typedef struct Value { ValueUnion u; long tag; } Value;
+    #|int main(void) {
+    #|  Value v;
+    #|  v = (Value){ (ValueUnion){ .int32 = 7 }, 4 };
+    #|  return 0;
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(Compound([VarDecl(_, "v", None), ExprStmt(Assign(_, rhs)), _])) =>
+      match rhs {
+        CompoundLiteral(
+          Struct(_),
+          [CompoundLiteral(Union(_), _, _), Number(4)],
+          _
+        ) => ()
+        _ => fail("Expected compound literal assignment rhs")
+      }
+    _ => fail("Expected compound literal assignment")
+  }
+}
+
+///|
 test "check ast for array init locals" {
   let source =
     #|int main() {

@@ -180,6 +180,8 @@ pub(all) enum Expr {
   VaArg(Expr, Type)
   OffsetOf(Type, String)
   Array(Array[Expr])
+  CompoundLiteral(Type, Array[Expr], Int)
+  DesignatedField(String, Expr)
 } derive(Eq)
 
 ///|

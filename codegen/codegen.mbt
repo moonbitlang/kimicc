@@ -132,6 +132,8 @@ fn Codegen::global_expr_type(
       } else {
         Pointer(Void)
       }
+    CompoundLiteral(ty, _, _) => ty
+    DesignatedField(_, e) => self.global_expr_type(e)
     Cast(ty, _) => ty
     AddrOf(e) => Pointer(self.global_expr_type(e))
     ArrayAccess(base, _) =>
@@ -276,6 +278,7 @@ fn Codegen::fold_const(self : Codegen, expr : @parser.Expr) -> Int64? {
         _ => None
       }
     Cast(_, e) => self.fold_const(e)
+    DesignatedField(_, e) => self.fold_const(e)
     Sizeof(ty) => Some(self.type_size(ty).to_int64())
     SizeofExpr(e) => Some(self.type_size(self.global_expr_type(e)).to_int64())
     OffsetOf(ty, field) =>
@@ -453,6 +456,8 @@ fn Codegen::emit_global_scalar(
       // Function pointer or address of global in initializer
       self.emit("\t.quad\t_" + name)
     Cast(_, e) => self.emit_global_scalar(ty, e)
+    DesignatedField(_, e) => self.emit_global_scalar(ty, e)
+    CompoundLiteral(_, exprs, _) => self.emit_global_array(ty, exprs)
     Array(nested) =>
       // Nested brace initializer: emit as array/struct
       self.emit_global_array(ty, nested)

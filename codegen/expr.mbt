@@ -109,6 +109,8 @@ fn Codegen::type_of(
     // CommaExpr is not in the AST, comma expressions are flattened into nested Binary(",", ...)
     Cast(ty, _) => ty
     Array(_) => SInt
+    CompoundLiteral(ty, _, _) => ty
+    DesignatedField(_, e) => self.type_of(e, frame_size)
     _ => SInt
   }
 }
@@ -913,6 +915,174 @@ fn Codegen::emit_builtin_call(
     }
     _ => false
   }
+}
+
+///|
+fn is_aggregate_type(ty : @parser.Type) -> Bool {
+  match ty {
+    Struct(_) | Union(_) | Array(_, _) => true
+    _ => false
+  }
+}
+
+///|
+fn Codegen::emit_add_offset_to_x9(self : Codegen, offset : Int) -> Unit {
+  if offset == 0 {
+    return
+  }
+  if offset >= 0 && offset <= 4095 {
+    self.emit("\tadd\tx9, x9, #" + offset.to_string())
+  } else {
+    self.emit_load_int("x12", offset.to_int64())
+    self.emit("\tadd\tx9, x9, x12")
+  }
+}
+
+///|
+fn Codegen::emit_copy_aggregate_from_addr_on_stack(
+  self : Codegen,
+  ty : @parser.Type,
+) -> Unit {
+  self.emit("\tldr\tx0, [sp, #16]")
+  self.emit("\tldr\tx1, [sp]")
+  let size = self.type_size(ty)
+  self.emit_load_int("x2", size.to_int64())
+  self.emit("\tbl\t_memcpy")
+  self.emit("\tadd\tsp, sp, #32")
+  self.emit("\tmov\tx9, x0")
+}
+
+///|
+fn Codegen::emit_init_scalar_at_addr(
+  self : Codegen,
+  ty : @parser.Type,
+  init_expr : @parser.Expr,
+  frame_size : Int,
+) -> Unit {
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.gen_expr(init_expr, frame_size)
+  self.emit_numeric_conversion(self.type_of(init_expr, frame_size), ty)
+  self.emit_scalar_conversion_to(ty)
+  self.emit("\tldr\tx10, [sp], #16")
+  self.emit_store_typed("x9", "x10", ty)
+}
+
+///|
+fn Codegen::emit_init_value_at_addr(
+  self : Codegen,
+  ty : @parser.Type,
+  init_expr : @parser.Expr,
+  frame_size : Int,
+) -> Unit {
+  let value = match init_expr {
+    DesignatedField(_, e) => e
+    _ => init_expr
+  }
+  if is_aggregate_type(ty) {
+    match init_expr {
+      DesignatedField(_, DesignatedField(_, _) as nested) =>
+        self.emit_init_aggregate_at_addr(ty, [nested], frame_size)
+      _ =>
+        match value {
+          CompoundLiteral(_, init_exprs, _) | Array(init_exprs) =>
+            self.emit_init_aggregate_at_addr(ty, init_exprs, frame_size)
+          Number(0) => ()
+          _ => {
+            self.emit("\tstr\tx9, [sp, #-16]!")
+            self.gen_aggregate_addr(value, frame_size)
+            self.emit("\tstr\tx9, [sp, #-16]!")
+            self.emit_copy_aggregate_from_addr_on_stack(ty)
+          }
+        }
+    }
+  } else {
+    self.emit_init_scalar_at_addr(ty, value, frame_size)
+  }
+}
+
+///|
+fn Codegen::emit_init_aggregate_at_addr(
+  self : Codegen,
+  ty : @parser.Type,
+  init_exprs : Array[@parser.Expr],
+  frame_size : Int,
+) -> Unit {
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.emit("\tldr\tx0, [sp]")
+  self.emit("\tmov\tx1, #0")
+  let size = self.type_size(ty)
+  self.emit_load_int("x2", size.to_int64())
+  self.emit("\tbl\t_memset")
+  match ty {
+    Struct(name) => {
+      let layout = if self.struct_layouts.contains(name) {
+        self.struct_layouts[name]
+      } else {
+        []
+      }
+      let mut positional = 0
+      for init_expr in init_exprs {
+        let field = match init_expr {
+          DesignatedField(field_name, _) =>
+            self.find_field_layout(name, field_name)
+          _ =>
+            if positional < layout.length() {
+              let f = layout[positional]
+              positional += 1
+              Some(f)
+            } else {
+              None
+            }
+        }
+        match field {
+          Some((_, field_ty, field_offset, _, _, bit_width)) =>
+            if bit_width == 0 {
+              self.emit("\tldr\tx9, [sp]")
+              self.emit_add_offset_to_x9(field_offset)
+              self.emit_init_value_at_addr(field_ty, init_expr, frame_size)
+            }
+          None => ()
+        }
+      }
+    }
+    Union(name) => {
+      let field = if init_exprs.length() > 0 {
+        match init_exprs[0] {
+          DesignatedField(field_name, _) =>
+            self.find_field_layout(name, field_name)
+          _ =>
+            if self.struct_layouts.contains(name) &&
+              self.struct_layouts[name].length() > 0 {
+              Some(self.struct_layouts[name][0])
+            } else {
+              None
+            }
+        }
+      } else {
+        None
+      }
+      match field {
+        Some((_, field_ty, field_offset, _, _, bit_width)) =>
+          if bit_width == 0 && init_exprs.length() > 0 {
+            self.emit("\tldr\tx9, [sp]")
+            self.emit_add_offset_to_x9(field_offset)
+            self.emit_init_value_at_addr(field_ty, init_exprs[0], frame_size)
+          }
+        None => ()
+      }
+    }
+    Array(elem_ty, n) => {
+      let elem_size = self.type_size(elem_ty)
+      let count = if init_exprs.length() < n { init_exprs.length() } else { n }
+      for i in 0..<count {
+        self.emit("\tldr\tx9, [sp]")
+        self.emit_add_offset_to_x9(i * elem_size)
+        self.emit_init_value_at_addr(elem_ty, init_exprs[i], frame_size)
+      }
+    }
+    _ => ()
+  }
+  self.emit("\tadd\tsp, sp, #16")
 }
 
 ///|
@@ -2225,6 +2395,20 @@ fn Codegen::gen_expr(
       }
       self.emit_load_int("x9", offset.to_int64())
     }
+    CompoundLiteral(ty, init_exprs, id) =>
+      if is_aggregate_type(ty) {
+        self.gen_aggregate_addr(CompoundLiteral(ty, init_exprs, id), frame_size)
+      } else if init_exprs.length() > 0 {
+        self.gen_expr(init_exprs[0], frame_size)
+        self.emit_numeric_conversion(
+          self.type_of(init_exprs[0], frame_size),
+          ty,
+        )
+        self.emit_scalar_conversion_to(ty)
+      } else {
+        self.emit("\tmov\tx9, #0")
+      }
+    DesignatedField(_, value) => self.gen_expr(value, frame_size)
     _ => self.emit("\tmov\tx9, #0")
   }
 }
@@ -2252,6 +2436,17 @@ fn Codegen::gen_aggregate_addr(
       self.gen_aggregate_addr(right, frame_size)
     }
     Assign(_, _) => self.gen_expr(expr, frame_size)
+    CompoundLiteral(ty, init_exprs, id) => {
+      let name = compound_literal_local_name(id)
+      let offset = if self.local_offsets.contains(name) {
+        self.local_offsets[name]
+      } else {
+        self.alloc_local(name, ty)
+      }
+      self.emit_local_addr(offset, frame_size)
+      self.emit_init_aggregate_at_addr(ty, init_exprs, frame_size)
+      self.emit_local_addr(offset, frame_size)
+    }
     _ => self.gen_addr(expr, frame_size)
   }
 }
@@ -2312,6 +2507,7 @@ fn Codegen::gen_addr(
       self.emit("\tmov\tx11, #" + elem_size.to_string())
       self.emit("\tmadd\tx9, x12, x11, x9")
     }
+    CompoundLiteral(_, _, _) => self.gen_aggregate_addr(expr, frame_size)
     Call(_, _) =>
       // Function call result used as address (e.g., compound literal or GCC extension)
       self.gen_expr(expr, frame_size)

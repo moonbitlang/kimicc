@@ -92,6 +92,36 @@ async test "e2e local array of structs with nested initializer" {
 }
 
 ///|
+async test "e2e compound literal struct assignment after void call" {
+  let source =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  void *ptr;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|void poison(void) {
+    #|}
+    #|int main(void) {
+    #|  int payload = 42;
+    #|  Value v;
+    #|  poison();
+    #|  v = (Value){ (ValueUnion){ .int32 = 7 }, 4 };
+    #|  if (v.tag != 4) return 1;
+    #|  if (v.u.int32 != 7) return 2;
+    #|  poison();
+    #|  v = (Value){ (ValueUnion){ .ptr = &payload }, -1 };
+    #|  if (v.tag != -1) return 3;
+    #|  if (*(int *)v.u.ptr != 42) return 4;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e static aggregate initializer folds sizeof typedef struct" {
   let source =
     #|typedef struct File File;

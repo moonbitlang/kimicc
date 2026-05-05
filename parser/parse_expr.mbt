@@ -410,8 +410,10 @@ fn Parser::parse_unary(self : Parser) -> Expr {
           self.advance() // past )
           if self.token == LBrace {
             // Compound literal: (Type){ ... }
-            self.skip_brace_initializer()
-            self.apply_postfix(Number(0))
+            let init_exprs = self.parse_compound_literal_init_exprs()
+            let id = self.compound_literal_counter
+            self.compound_literal_counter += 1
+            self.apply_postfix(CompoundLiteral(ty, init_exprs, id))
           } else {
             self.apply_postfix(Cast(ty, self.parse_unary()))
           }

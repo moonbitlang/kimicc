@@ -231,6 +231,59 @@ fn Codegen::alloc_local(
 }
 
 ///|
+fn compound_literal_local_name(id : Int) -> String {
+  "__kimicc_compound_literal_" + id.to_string()
+}
+
+///|
+fn Codegen::collect_expr_locals(self : Codegen, expr : @parser.Expr) -> Unit {
+  match expr {
+    Binary(_, lhs, rhs) | Assign(lhs, rhs) => {
+      self.collect_expr_locals(lhs)
+      self.collect_expr_locals(rhs)
+    }
+    Unary(_, e)
+    | Deref(e)
+    | AddrOf(e)
+    | SizeofExpr(e)
+    | Cast(_, e)
+    | PrefixInc(e)
+    | PrefixDec(e)
+    | PostfixInc(e)
+    | PostfixDec(e)
+    | DesignatedField(_, e) => self.collect_expr_locals(e)
+    Call(func, args) => {
+      self.collect_expr_locals(func)
+      for arg in args {
+        self.collect_expr_locals(arg)
+      }
+    }
+    MemberAccess(obj, _) => self.collect_expr_locals(obj)
+    ArrayAccess(arr, index) => {
+      self.collect_expr_locals(arr)
+      self.collect_expr_locals(index)
+    }
+    Ternary(cond, then_expr, else_expr) => {
+      self.collect_expr_locals(cond)
+      self.collect_expr_locals(then_expr)
+      self.collect_expr_locals(else_expr)
+    }
+    VaArg(ap, _) => self.collect_expr_locals(ap)
+    Array(exprs) =>
+      for e in exprs {
+        self.collect_expr_locals(e)
+      }
+    CompoundLiteral(ty, exprs, id) => {
+      let _ = self.alloc_local(compound_literal_local_name(id), ty)
+      for e in exprs {
+        self.collect_expr_locals(e)
+      }
+    }
+    _ => ()
+  }
+}
+
+///|
 fn Codegen::collect_locals(self : Codegen, stmt : @parser.Stmt) -> Unit {
   match stmt {
     Compound(stmts) =>
@@ -241,28 +294,53 @@ fn Codegen::collect_locals(self : Codegen, stmt : @parser.Stmt) -> Unit {
       for s in stmts {
         self.collect_locals(s)
       }
-    If(_, then_, else_) => {
+    ExprStmt(expr) => self.collect_expr_locals(expr)
+    Return(expr) =>
+      match expr {
+        Some(e) => self.collect_expr_locals(e)
+        None => ()
+      }
+    If(cond, then_, else_) => {
+      self.collect_expr_locals(cond)
       self.collect_locals(then_)
       match else_ {
         Some(e) => self.collect_locals(e)
         None => ()
       }
     }
-    While(_, body) => self.collect_locals(body)
-    For(init, _, _, body) => {
+    While(cond, body) => {
+      self.collect_expr_locals(cond)
+      self.collect_locals(body)
+    }
+    For(init, cond, update, body) => {
       match init {
         Some(i) => self.collect_locals(i)
         None => ()
       }
+      self.collect_expr_locals(cond)
+      match update {
+        Some(e) => self.collect_expr_locals(e)
+        None => ()
+      }
       self.collect_locals(body)
     }
-    DoWhile(_, body) => self.collect_locals(body)
-    Switch(_, body, _) => self.collect_locals(body)
-    Label(_, s) => self.collect_locals(s)
-    VarDecl(ty, name, _) => {
-      let _ = self.alloc_local(name, ty)
+    DoWhile(cond, body) => {
+      self.collect_expr_locals(cond)
+      self.collect_locals(body)
     }
-    ComputedGoto(_) => ()
+    Switch(expr, body, _) => {
+      self.collect_expr_locals(expr)
+      self.collect_locals(body)
+    }
+    Label(_, s) => self.collect_locals(s)
+    VarDecl(ty, name, init) => {
+      let _ = self.alloc_local(name, ty)
+      match init {
+        Some(e) => self.collect_expr_locals(e)
+        None => ()
+      }
+    }
+    ComputedGoto(expr) => self.collect_expr_locals(expr)
     _ => ()
   }
 }

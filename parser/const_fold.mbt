@@ -117,7 +117,9 @@ pub fn fold_const(expr : Expr) -> Int64? {
     Cast(_, e) => fold_const(e)
     Sizeof(ty) => Some(basic_type_size(ty).to_int64())
     SizeofExpr(e) => Some(basic_type_size(type_of_expr(e)).to_int64())
+    DesignatedField(_, e) => fold_const(e)
     Array(_) => None
+    CompoundLiteral(_, _, _) => None
     _ => None
   }
 }
@@ -247,7 +249,9 @@ fn Parser::fold_const(self : Parser, expr : Expr) -> Int64? {
         Some(offset) => Some(offset.to_int64())
         None => None
       }
+    DesignatedField(_, e) => self.fold_const(e)
     Array(_) => None
+    CompoundLiteral(_, _, _) => None
     _ => None
   }
 }
@@ -605,6 +609,8 @@ fn type_of_expr(expr : Expr) -> Type {
     VaArg(_, ty) => ty
     OffsetOf(_, _) => SInt
     Array(_) => SInt
+    CompoundLiteral(ty, _, _) => ty
+    DesignatedField(_, e) => type_of_expr(e)
   }
 }
 
@@ -638,6 +644,8 @@ fn Parser::const_expr_type(self : Parser, expr : Expr) -> Type {
     String(s) => Array(SChar, s.length() + 1)
     FloatLiteral(_) => Double
     Number(_) => SInt
+    CompoundLiteral(ty, _, _) => ty
+    DesignatedField(_, e) => self.const_expr_type(e)
     Ternary(_, a, _) => self.const_expr_type(a)
     Assign(_, rhs) => self.const_expr_type(rhs)
     _ => type_of_expr(expr)

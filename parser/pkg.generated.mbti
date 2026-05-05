@@ -34,6 +34,8 @@ pub(all) enum Expr {
   VaArg(Expr, Type)
   OffsetOf(Type, String)
   Array(Array[Expr])
+  CompoundLiteral(Type, Array[Expr], Int)
+  DesignatedField(String, Expr)
 } derive(Eq)
 
 pub(all) struct FuncDecl {
@@ -84,6 +86,7 @@ pub struct Parser {
   mut current_func_name : String
   mut static_locals : Map[String, String]
   mut case_label_counter : Int
+  mut compound_literal_counter : Int
 }
 pub fn Parser::new(Lexer) -> Self
 

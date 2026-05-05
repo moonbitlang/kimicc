@@ -54,6 +54,60 @@ fn Parser::parse_brace_init_exprs(
 }
 
 ///|
+fn Parser::parse_compound_literal_init_exprs(self : Parser) -> Array[Expr] {
+  let exprs = []
+  self.expect(LBrace)
+  while self.token != RBrace && self.token != EOF {
+    if self.token == LBrace {
+      let nested = self.parse_compound_literal_init_exprs()
+      exprs.push(Expr::Array(nested))
+    } else if self.token == Dot {
+      self.advance()
+      let fields = []
+      let field = match self.token {
+        Ident(name) => {
+          self.advance()
+          name
+        }
+        _ => abort("Expected field name in designated initializer")
+      }
+      fields.push(field)
+      while self.token == Dot {
+        self.advance()
+        match self.token {
+          Ident(name) => {
+            self.advance()
+            fields.push(name)
+          }
+          _ => abort("Expected field name in designated initializer")
+        }
+      }
+      self.expect(Assign)
+      let mut value = if self.token == LBrace {
+        Expr::Array(self.parse_compound_literal_init_exprs())
+      } else {
+        self.parse_assign()
+      }
+      for i = fields.length() - 1; i >= 0; i = i - 1 {
+        value = Expr::DesignatedField(fields[i], value)
+      }
+      exprs.push(value)
+    } else if self.token == LBracket {
+      // Array designators are still outside kimicc's initializer subset.
+      self.skip_remaining_brace_initializer()
+      break
+    } else {
+      exprs.push(self.parse_assign())
+    }
+    if self.token == Comma {
+      self.advance()
+    }
+  }
+  self.expect(RBrace)
+  exprs
+}
+
+///|
 /// Skip tokens until matching RBrace at current depth (does not consume RBrace)
 fn Parser::skip_remaining_brace_initializer(self : Parser) -> Unit {
   let mut depth = 1
