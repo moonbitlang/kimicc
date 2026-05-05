@@ -21,6 +21,7 @@ pub struct Codegen {
   func_rets : Map[String, @parser.Type]
   func_variadic : Map[String, Bool]
   func_param_counts : Map[String, Int]
+  func_param_types : Map[String, Array[@parser.Type]]
   struct_layouts : Map[String, Array[(String, @parser.Type, Int, Int, Int, Int)]]
   struct_decls : Map[String, @parser.StructDecl]
   strings : Array[String]

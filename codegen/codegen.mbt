@@ -10,6 +10,7 @@ pub struct Codegen {
   func_rets : Map[String, @parser.Type]
   func_variadic : Map[String, Bool]
   func_param_counts : Map[String, Int]
+  func_param_types : Map[String, Array[@parser.Type]]
   struct_layouts : Map[
     String,
     Array[(String, @parser.Type, Int, Int, Int, Int)],
@@ -380,6 +381,7 @@ pub fn Codegen::new() -> Codegen {
     func_rets: {},
     func_variadic: {},
     func_param_counts: {},
+    func_param_types: {},
     struct_layouts: {},
     struct_decls: {},
     strings: [],
@@ -545,6 +547,11 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
     self.func_rets[decl.name] = decl.ret
     self.func_variadic[decl.name] = decl.variadic
     self.func_param_counts[decl.name] = decl.params.length()
+    let param_types = []
+    for param in decl.params {
+      param_types.push(param.ty)
+    }
+    self.func_param_types[decl.name] = param_types
     func_count += 1
   }
   let globals = merge_global_decls(prog.globals)

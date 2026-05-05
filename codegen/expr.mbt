@@ -226,6 +226,46 @@ fn Codegen::emit_scalar_conversion_to(
 }
 
 ///|
+fn Codegen::declared_call_arg_type(
+  self : Codegen,
+  func : @parser.Expr,
+  index : Int,
+  actual : @parser.Type,
+  named_count_limit : Int?,
+) -> @parser.Type {
+  match named_count_limit {
+    Some(limit) => if index >= limit { return actual }
+    None => ()
+  }
+  match func {
+    Var(name) =>
+      if self.func_param_types.contains(name) {
+        let param_types = self.func_param_types[name]
+        if index < param_types.length() {
+          param_types[index]
+        } else {
+          actual
+        }
+      } else {
+        actual
+      }
+    _ => actual
+  }
+}
+
+///|
+fn Codegen::emit_call_arg_conversion(
+  self : Codegen,
+  actual : @parser.Type,
+  expected : @parser.Type,
+) -> Unit {
+  if actual != expected {
+    self.emit_numeric_conversion(actual, expected)
+    self.emit_scalar_conversion_to(expected)
+  }
+}
+
+///|
 fn unary_integer_result_type(ty : @parser.Type) -> @parser.Type {
   match ty {
     Bool | SChar | UChar | SShort | UShort => SInt
@@ -1395,10 +1435,18 @@ fn Codegen::gen_expr(
           let mut int_idx = 0
           let mut fp_idx = 0
           let mut total_slots = 0
+          let actual_arg_types = []
           let arg_types = []
           let arg_slot_counts = []
           for i = 0; i < args.length(); i = i + 1 {
-            let arg_ty = self.type_of(args[i], frame_size)
+            let actual_ty = self.type_of(args[i], frame_size)
+            let arg_ty = self.declared_call_arg_type(
+              func,
+              i,
+              actual_ty,
+              Some(named_count),
+            )
+            actual_arg_types.push(actual_ty)
             arg_types.push(arg_ty)
             match arg_ty {
               Float | Double => {
@@ -1476,6 +1524,7 @@ fn Codegen::gen_expr(
               }
               _ => {
                 self.gen_expr(args[i], frame_size)
+                self.emit_call_arg_conversion(actual_arg_types[i], arg_types[i])
                 self.emit(
                   "\tstr\tx9, [sp, #" +
                   (backup_offset + slot_idx * 8).to_string() +
@@ -1602,10 +1651,13 @@ fn Codegen::gen_expr(
           let mut int_idx = 0
           let mut fp_idx = 0
           let mut stack_count = 0
+          let actual_arg_types = []
           let arg_types = []
           let arg_slot_counts = []
           for i = 0; i < args.length(); i = i + 1 {
-            let arg_ty = self.type_of(args[i], frame_size)
+            let actual_ty = self.type_of(args[i], frame_size)
+            let arg_ty = self.declared_call_arg_type(func, i, actual_ty, None)
+            actual_arg_types.push(actual_ty)
             arg_types.push(arg_ty)
             match arg_ty {
               Float | Double => {
@@ -1683,6 +1735,7 @@ fn Codegen::gen_expr(
               }
               _ => {
                 self.gen_expr(args[i], frame_size)
+                self.emit_call_arg_conversion(actual_arg_types[i], arg_types[i])
                 self.emit(
                   "\tstr\tx9, [sp, #" + (slot_idx * 8).to_string() + "]",
                 )

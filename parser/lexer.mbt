@@ -329,13 +329,14 @@ pub fn Lexer::next_token(self : Lexer) -> Token {
             self.advance()
           }
         }
+        let fend = self.pos
         if self.peek() == 'f' ||
           self.peek() == 'F' ||
           self.peek() == 'l' ||
           self.peek() == 'L' {
           self.advance()
         }
-        let fs = self.input[fstart:self.pos]
+        let fs = self.input[fstart:fend]
         let v = @strconv.parse_double(fs) catch { _ => 0.0 }
         FloatLiteral(v)
       } else {
@@ -675,13 +676,14 @@ fn Lexer::read_number(self : Lexer) -> Token {
         self.advance()
       }
     }
+    let fend = self.pos
     if self.peek() == 'f' ||
       self.peek() == 'F' ||
       self.peek() == 'l' ||
       self.peek() == 'L' {
       self.advance()
     }
-    let fs = self.input[start:self.pos]
+    let fs = self.input[start:fend]
     let v = @strconv.parse_double(fs) catch { _ => 0.0 }
     return FloatLiteral(v)
   }

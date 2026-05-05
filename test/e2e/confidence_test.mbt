@@ -863,3 +863,26 @@ async test "e2e atomic array element access uses element width" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")
 }
+
+///|
+async test "e2e prototype converts float argument to double parameter" {
+  let source =
+    #|double captured;
+    #|
+    #|void take_double(double x) {
+    #|  captured = x;
+    #|}
+    #|
+    #|int main(void) {
+    #|  union RtreeCoord {
+    #|    float f;
+    #|    unsigned int u;
+    #|  } c;
+    #|  c.f = 1.0f;
+    #|  take_double(c.f);
+    #|  if (captured != 1.0) return 1;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
