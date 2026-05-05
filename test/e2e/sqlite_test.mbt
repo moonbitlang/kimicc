@@ -147,3 +147,86 @@ async test "sqlite object creates inserts and reads rows" {
   }
   assert_true(result.output.contains("create-insert-read-ok"))
 }
+
+///|
+async test "sqlite object handles bound statements and aggregates" {
+  let driver =
+    #|#include "sqlite3.h"
+    #|#include <stdio.h>
+    #|
+    #|int main(void) {
+    #|  sqlite3 *db = 0;
+    #|  sqlite3_stmt *insert = 0;
+    #|  sqlite3_stmt *query = 0;
+    #|  char *err = 0;
+    #|  const char *names[3] = {"alpha", "beta", "gamma"};
+    #|  int values[3] = {10, 20, 12};
+    #|  int rc = sqlite3_open(":memory:", &db);
+    #|  if (rc != SQLITE_OK) {
+    #|    printf("open rc=%d err=%s\n", rc, db ? sqlite3_errmsg(db) : "null");
+    #|    return 1;
+    #|  }
+    #|  rc = sqlite3_exec(db, "create table t(name text, v integer);", 0, 0, &err);
+    #|  if (rc != SQLITE_OK) {
+    #|    printf("create rc=%d err=%s\n", rc, err ? err : sqlite3_errmsg(db));
+    #|    sqlite3_free(err);
+    #|    sqlite3_close(db);
+    #|    return 2;
+    #|  }
+    #|  rc = sqlite3_prepare_v2(db, "insert into t(name, v) values(?, ?);", -1, &insert, 0);
+    #|  if (rc != SQLITE_OK) {
+    #|    printf("insert prepare rc=%d err=%s\n", rc, sqlite3_errmsg(db));
+    #|    sqlite3_close(db);
+    #|    return 3;
+    #|  }
+    #|  for (int i = 0; i < 3; i++) {
+    #|    sqlite3_bind_text(insert, 1, names[i], -1, SQLITE_STATIC);
+    #|    sqlite3_bind_int(insert, 2, values[i]);
+    #|    rc = sqlite3_step(insert);
+    #|    if (rc != SQLITE_DONE) {
+    #|      printf("insert step %d rc=%d err=%s\n", i, rc, sqlite3_errmsg(db));
+    #|      sqlite3_finalize(insert);
+    #|      sqlite3_close(db);
+    #|      return 4;
+    #|    }
+    #|    sqlite3_reset(insert);
+    #|    sqlite3_clear_bindings(insert);
+    #|  }
+    #|  sqlite3_finalize(insert);
+    #|  rc = sqlite3_exec(db, "update t set v = v + 10 where name = 'gamma';", 0, 0, &err);
+    #|  if (rc != SQLITE_OK || sqlite3_changes(db) != 1) {
+    #|    printf("update rc=%d changes=%d err=%s\n", rc, sqlite3_changes(db),
+    #|           err ? err : sqlite3_errmsg(db));
+    #|    sqlite3_free(err);
+    #|    sqlite3_close(db);
+    #|    return 5;
+    #|  }
+    #|  rc = sqlite3_prepare_v2(db, "select count(*), sum(v) from t where v >= ?;", -1, &query, 0);
+    #|  if (rc != SQLITE_OK) {
+    #|    printf("query prepare rc=%d err=%s\n", rc, sqlite3_errmsg(db));
+    #|    sqlite3_close(db);
+    #|    return 6;
+    #|  }
+    #|  sqlite3_bind_int(query, 1, 20);
+    #|  rc = sqlite3_step(query);
+    #|  if (rc != SQLITE_ROW) {
+    #|    printf("query step rc=%d err=%s\n", rc, sqlite3_errmsg(db));
+    #|    sqlite3_finalize(query);
+    #|    sqlite3_close(db);
+    #|    return 7;
+    #|  }
+    #|  int count = sqlite3_column_int(query, 0);
+    #|  int sum = sqlite3_column_int(query, 1);
+    #|  printf("aggregate=%d:%d\n", count, sum);
+    #|  sqlite3_finalize(query);
+    #|  sqlite3_close(db);
+    #|  if (count != 2 || sum != 42) return 8;
+    #|  printf("bound-aggregate-ok\n");
+    #|  return 0;
+    #|}
+  let result = run_driver_with_sqlite_object(driver, "sqlite_bound_aggregate")
+  if result.code != 0 {
+    abort("SQLite bound statement aggregate failed:\n" + result.output)
+  }
+  assert_true(result.output.contains("bound-aggregate-ok"))
+}
