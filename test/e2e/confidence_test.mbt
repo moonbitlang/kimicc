@@ -63,3 +63,20 @@ async test "e2e unsigned char buffer through pointer" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")
 }
+
+///|
+async test "e2e switch default before later case" {
+  let source =
+    #|int main() {
+    #|  int x = 3;
+    #|  switch (x) {
+    #|    default:
+    #|      return 42;
+    #|    case 1:
+    #|      return 1;
+    #|  }
+    #|  return 0;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}

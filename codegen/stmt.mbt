@@ -140,14 +140,17 @@ fn Codegen::gen_stmt(
           None => () // default handled after all cases
         }
       }
-      // Branch to default or end
-      let default_label = if cases.length() > 0 {
-        match cases[cases.length() - 1].0 {
-          None => case_labels[cases.length() - 1]
-          Some(_) => end_label
+      // Branch to default or end. The default clause may appear anywhere in
+      // source order; fallthrough still follows the emitted case body order.
+      let mut default_label = end_label
+      for i = 0; i < cases.length(); i = i + 1 {
+        match cases[i].0 {
+          None => {
+            default_label = case_labels[i]
+            break
+          }
+          Some(_) => ()
         }
-      } else {
-        end_label
       }
       self.emit("\tb\t" + default_label)
       // Generate case bodies
