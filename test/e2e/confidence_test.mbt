@@ -914,6 +914,24 @@ async test "e2e atomic array element access uses element width" {
 }
 
 ///|
+async test "e2e sqlite-style unsigned int overflow chain count" {
+  let source =
+    #|typedef unsigned int u32;
+    #|typedef unsigned short u16;
+    #|
+    #|int main(void) {
+    #|  u32 nPayload = 0xffffffffu;
+    #|  u16 nLocal = 39;
+    #|  u32 ovflPageSize = 508;
+    #|  int nOvfl = (nPayload - nLocal + ovflPageSize - 1) / ovflPageSize;
+    #|  if (nOvfl != 0) return 1;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e prototype converts float argument to double parameter" {
   let source =
     #|double captured;

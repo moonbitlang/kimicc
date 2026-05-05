@@ -362,7 +362,7 @@ fn binary_result_type(
   match op {
     "==" | "!=" | "<" | ">" | "<=" | ">=" | "&&" | "||" => SInt
     "," => rhs_ty
-    "<<" | ">>" => lhs_ty
+    "<<" | ">>" => unary_integer_result_type(lhs_ty)
     _ =>
       if lhs_ty.is_floating() || rhs_ty.is_floating() {
         if lhs_ty == Double || rhs_ty == Double {
@@ -375,6 +375,14 @@ fn binary_result_type(
       } else {
         SInt
       }
+  }
+}
+
+///|
+fn binary_needs_scalar_result_conversion(op : String) -> Bool {
+  match op {
+    "+" | "-" | "*" | "/" | "%" => true
+    _ => false
   }
 }
 
@@ -1108,6 +1116,13 @@ fn Codegen::gen_expr(
         (Array(_, _), Array(_, _)) => true
         _ => false
       }
+      let has_ptr_operand = match (left_ty, right_ty) {
+        (Pointer(_), _)
+        | (Array(_, _), _)
+        | (_, Pointer(_))
+        | (_, Array(_, _)) => true
+        _ => false
+      }
       let scale_right = match (left_ty, right_ty) {
         (Pointer(_), rhs_ty) | (Array(_, _), rhs_ty) =>
           !is_ptr_diff && (op == "+" || op == "-") && rhs_ty.is_integer()
@@ -1118,13 +1133,17 @@ fn Codegen::gen_expr(
           !is_ptr_diff && op == "+" && lhs_ty.is_integer()
         _ => false
       }
-      let is_ptr_op = ptr_scale > 1 || is_ptr_diff
+      let is_ptr_op = has_ptr_operand
       let is_fp = not(is_ptr_op) &&
         op != "," &&
         (left_ty.is_floating() || right_ty.is_floating())
       let is_double = is_fp && (left_ty == Double || right_ty == Double)
       let fp_ty : @parser.Type = if is_double { Double } else { Float }
-      let is_unsigned_int = uses_unsigned_integer_op(left_ty, right_ty)
+      let result_ty = binary_result_type(op, left_ty, right_ty)
+      let is_unsigned_int = match op {
+        "<<" | ">>" => is_unsigned_integer_type(result_ty)
+        _ => uses_unsigned_integer_op(left_ty, right_ty)
+      }
       let is_unsigned_cmp = is_unsigned_int || is_ptr_diff
       self.gen_expr(left, frame_size)
       if is_fp {
@@ -1348,6 +1367,9 @@ fn Codegen::gen_expr(
             }
           }
         _ => ()
+      }
+      if !is_fp && !is_ptr_op && binary_needs_scalar_result_conversion(op) {
+        self.emit_scalar_conversion_to(result_ty)
       }
     }
     Unary("-", operand) => {
