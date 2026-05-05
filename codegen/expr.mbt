@@ -1022,6 +1022,82 @@ fn Codegen::emit_load_register_aggregate_from_x9(
 }
 
 ///|
+priv struct MemberAddrInfo {
+  ty : @parser.Type
+  size : Int
+  bit_offset : Int
+  bit_width : Int
+  stack_temp_size : Int
+}
+
+///|
+fn Codegen::emit_member_base_addr(
+  self : Codegen,
+  obj : @parser.Expr,
+  frame_size : Int,
+) -> Int {
+  let obj_ty = self.type_of(obj, frame_size)
+  match obj {
+    Call(_, _) if self.is_register_aggregate(obj_ty) => {
+      self.gen_expr(obj, frame_size)
+      self.emit_save_register_aggregate(obj_ty)
+      self.emit("\tmov\tx9, sp")
+      16
+    }
+    Cast(ty, inner) if is_aggregate_type(ty) =>
+      self.emit_member_base_addr(inner, frame_size)
+    Binary(",", left, right) => {
+      self.gen_expr(left, frame_size)
+      self.emit_member_base_addr(right, frame_size)
+    }
+    MemberAccess(_, _) =>
+      match self.emit_member_addr(obj, frame_size) {
+        Some(info) => info.stack_temp_size
+        None => {
+          self.gen_addr(obj, frame_size)
+          0
+        }
+      }
+    _ => {
+      self.gen_addr(obj, frame_size)
+      0
+    }
+  }
+}
+
+///|
+fn Codegen::emit_member_addr(
+  self : Codegen,
+  expr : @parser.Expr,
+  frame_size : Int,
+) -> MemberAddrInfo? {
+  match expr {
+    MemberAccess(obj, field) => {
+      let obj_ty = self.type_of(obj, frame_size)
+      let struct_name = match obj_ty {
+        Struct(n) => n
+        Union(n) => n
+        _ => return None
+      }
+      let stack_temp_size = self.emit_member_base_addr(obj, frame_size)
+      match self.find_field_layout(struct_name, field) {
+        None => {
+          if stack_temp_size > 0 {
+            self.emit("\tadd\tsp, sp, #" + stack_temp_size.to_string())
+          }
+          None
+        }
+        Some((_, ty, offset, size, bit_offset, bit_width)) => {
+          self.emit_add_offset_to_x9(offset)
+          Some({ ty, size, bit_offset, bit_width, stack_temp_size })
+        }
+      }
+    }
+    _ => None
+  }
+}
+
+///|
 fn Codegen::emit_add_offset_to_x9(self : Codegen, offset : Int) -> Unit {
   if offset == 0 {
     return
@@ -2298,27 +2374,18 @@ fn Codegen::gen_expr(
         }
       }
     }
-    MemberAccess(obj, field) => {
-      let obj_ty = self.type_of(obj, frame_size)
-      let struct_name = match obj_ty {
-        Struct(n) => n
-        Union(n) => n
-        _ => {
+    MemberAccess(_, _) =>
+      match self.emit_member_addr(expr, frame_size) {
+        None => {
           self.gen_addr(expr, frame_size)
           self.emit("\tldr\tx9, [x9]")
-          return
         }
-      }
-      match self.find_field_layout(struct_name, field) {
-        None => self.emit("\tmov\tx9, #0")
-        Some((_, ty, offset, size, bit_offset, bit_width)) => {
-          // Compute address of container
-          self.gen_addr(obj, frame_size)
-          if offset != 0 {
-            self.emit("\tadd\tx9, x9, #" + offset.to_string())
-          }
+        Some(info) => {
+          let ty = info.ty
+          let size = info.size
+          let bit_offset = info.bit_offset
+          let bit_width = info.bit_width
           if bit_width > 0 {
-            // Bit-field: always load container
             match size {
               1 => self.emit("\tldrb\tw9, [x9]")
               2 => self.emit("\tldrh\tw9, [x9]")
@@ -2326,7 +2393,6 @@ fn Codegen::gen_expr(
               _ => self.emit("\tldr\tx9, [x9]")
             }
           } else {
-            // Non-bit-field: load scalar value, but keep address for aggregates
             match ty {
               Array(_, _) | Struct(_) | Union(_) => ()
               _ =>
@@ -2339,7 +2405,6 @@ fn Codegen::gen_expr(
             }
           }
           if bit_width > 0 {
-            // Extract bit-field
             self.emit("\tlsr\tx9, x9, #" + bit_offset.to_string())
             if bit_width < 64 {
               let mask = (1 << bit_width) - 1
@@ -2347,15 +2412,12 @@ fn Codegen::gen_expr(
               self.emit("\tand\tx9, x9, x10")
             }
           }
-          // Sign-extend if signed type
           if ty.is_signed() {
             if bit_width > 0 {
-              // Bit-field: sign-extend from bit_width
               let shift = 64 - bit_width
               self.emit("\tlsl\tx9, x9, #" + shift.to_string())
               self.emit("\tasr\tx9, x9, #" + shift.to_string())
             } else {
-              // Normal field: sign-extend from field size
               match size {
                 1 => self.emit("\tsxtb\tx9, w9")
                 2 => self.emit("\tsxth\tx9, w9")
@@ -2364,9 +2426,11 @@ fn Codegen::gen_expr(
               }
             }
           }
+          if info.stack_temp_size > 0 {
+            self.emit("\tadd\tsp, sp, #" + info.stack_temp_size.to_string())
+          }
         }
       }
-    }
     Deref(ptr) => {
       self.gen_expr(ptr, frame_size)
       let deref_ty = match self.type_of(ptr, frame_size) {

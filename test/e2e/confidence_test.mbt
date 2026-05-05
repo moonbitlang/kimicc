@@ -1320,3 +1320,41 @@ async test "e2e function pointer double return is read from fp register" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")
 }
+
+///|
+async test "e2e member access reads field from struct call result" {
+  let source =
+    #|typedef struct Obj Obj;
+    #|
+    #|struct Obj {
+    #|  long header;
+    #|  long payload;
+    #|};
+    #|
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  Obj *ptr;
+    #|} ValueUnion;
+    #|
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|
+    #|Obj global = { 0x000c010000000002L, 42 };
+    #|
+    #|Value dup_value(Obj *p) {
+    #|  Value v;
+    #|  v.u.ptr = p;
+    #|  v.tag = -1;
+    #|  return v;
+    #|}
+    #|
+    #|int main(void) {
+    #|  Obj *q = dup_value(&global).u.ptr;
+    #|  if (q != &global) return 1;
+    #|  return q->payload;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
