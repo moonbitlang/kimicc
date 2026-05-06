@@ -639,7 +639,7 @@ async test "sqlite public residual scripts match clang and direct when enabled" 
 }
 
 ///|
-async test "sqlite public full residual failures match clang when enabled" {
+async test "sqlite public full residual failures match clang and direct when enabled" {
   if !sqlite_public_conformance_enabled("full") {
     return
   }
@@ -658,17 +658,32 @@ async test "sqlite public full residual failures match clang when enabled" {
     Clang,
     320,
   )
-  if kimicc.code != clang.code {
+  let direct = run_sqlite_public_tcl_runner_tail_with(
+    "--jobs 4 full",
+    "sqlite_public_full",
+    DirectObject,
+    320,
+  )
+  if kimicc.code != clang.code || kimicc.code != direct.code {
     abort(
       "SQLite full exit code differs:\nkimicc:\n" +
       kimicc.output +
       "\nclang:\n" +
-      clang.output,
+      clang.output +
+      "\ndirect:\n" +
+      direct.output,
     )
   }
-  if kimicc.code == 0 {
+  let has_full_failures = kimicc.output.contains("FAILED:") ||
+    clang.output.contains("FAILED:") ||
+    direct.output.contains("FAILED:")
+  if !has_full_failures {
+    if kimicc.code != 0 {
+      abort("SQLite full failed without residual markers:\n" + kimicc.output)
+    }
     return
   }
   assert_sqlite_full_residuals(kimicc.output, "kimicc")
   assert_sqlite_full_residuals(clang.output, "clang")
+  assert_sqlite_full_residuals(direct.output, "direct object")
 }
