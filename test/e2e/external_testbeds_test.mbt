@@ -1278,6 +1278,151 @@ async test "external zlib direct object compression roundtrip runs when enabled"
 }
 
 ///|
+fn cjson_flags(root : String) -> String {
+  "-I " + shell_quote(root)
+}
+
+///|
+fn cjson_smoke_source() -> String {
+  let source =
+    #|#include "cJSON.h"
+    #|
+    #|extern int printf(const char *, ...);
+    #|extern int strcmp(const char *, const char *);
+    #|extern char *strstr(const char *, const char *);
+    #|
+    #|int main(void) {
+    #|  const char *text = "{\"name\":\"kimicc\",\"values\":[1,2,3.5],\"nested\":{\"ok\":true}}";
+    #|  cJSON *root = cJSON_Parse(text);
+    #|  if (!root) return 10;
+    #|  cJSON *name = cJSON_GetObjectItemCaseSensitive(root, "name");
+    #|  cJSON *values = cJSON_GetObjectItemCaseSensitive(root, "values");
+    #|  cJSON *nested = cJSON_GetObjectItemCaseSensitive(root, "nested");
+    #|  cJSON *ok = cJSON_GetObjectItemCaseSensitive(nested, "ok");
+    #|  if (!cJSON_IsString(name) || strcmp(name->valuestring, "kimicc") != 0) return 11;
+    #|  if (!cJSON_IsArray(values) || cJSON_GetArraySize(values) != 3) return 12;
+    #|  double total = 0.0;
+    #|  for (int i = 0; i < cJSON_GetArraySize(values); i++) {
+    #|    cJSON *item = cJSON_GetArrayItem(values, i);
+    #|    if (!cJSON_IsNumber(item)) return 13;
+    #|    total += item->valuedouble;
+    #|  }
+    #|  if (total < 6.49 || total > 6.51) return 14;
+    #|  if (!cJSON_IsTrue(ok)) return 15;
+    #|  cJSON_AddStringToObject(root, "mode", "direct");
+    #|  char *printed = cJSON_PrintUnformatted(root);
+    #|  if (!printed) return 16;
+    #|  int has_mode = strstr(printed, "\"mode\":\"direct\"") != 0;
+    #|  printf("cjson-smoke %.1f %d %s\n", total, cJSON_GetArraySize(values), has_mode ? "ok" : "missing");
+    #|  cJSON_free(printed);
+    #|  cJSON_Delete(root);
+    #|  return has_mode ? 42 : 17;
+    #|}
+  source
+}
+
+///|
+async fn compile_cjson_smoke_driver(
+  root : String,
+  tag : String,
+  direct : Bool,
+) -> String {
+  let path = "/tmp/kimicc_cjson_" + tag + "_driver.c"
+  write_text_file(path, cjson_smoke_source())
+  if direct {
+    compile_c_file_with_kimicc_direct_object_path(
+      path,
+      cjson_flags(root),
+      "cjson_direct_external_" + tag + "_driver",
+    )
+  } else {
+    compile_c_file_with_kimicc_object_path(
+      path,
+      cjson_flags(root),
+      "cjson_external_" + tag + "_driver",
+    )
+  }
+}
+
+///|
+async fn build_cjson_with_kimicc(root : String, tag : String) -> String {
+  let library_path = root + "/cJSON.c"
+  require_external_path(library_path, "cJSON source")
+  let objects = [
+    compile_c_file_with_kimicc_object_path(
+      library_path,
+      cjson_flags(root),
+      "cjson_external_" + tag + "_library",
+    ),
+    compile_cjson_smoke_driver(root, tag, false),
+  ]
+  let binary_path = "/tmp/kimicc_cjson_external_" + tag
+  run_command_checked(
+    "clang -o " + shell_quote(binary_path) + " " + shell_join_quoted(objects),
+    "link cJSON external " + tag,
+  )
+  binary_path
+}
+
+///|
+async fn build_cjson_with_direct_object(root : String, tag : String) -> String {
+  let library_path = root + "/cJSON.c"
+  require_external_path(library_path, "cJSON source")
+  let objects = [
+    compile_c_file_with_kimicc_direct_object_path(
+      library_path,
+      cjson_flags(root),
+      "cjson_direct_external_" + tag + "_library",
+    ),
+    compile_cjson_smoke_driver(root, tag, true),
+  ]
+  let binary_path = "/tmp/kimicc_cjson_direct_external_" + tag
+  run_command_checked(
+    "clang -o " + shell_quote(binary_path) + " " + shell_join_quoted(objects),
+    "link direct cJSON external " + tag,
+  )
+  binary_path
+}
+
+///|
+async fn assert_cjson_smoke(binary_path : String, tag : String) -> Unit {
+  let result = run_command_capture(
+    shell_quote(binary_path),
+    "cjson_external_smoke_" + tag,
+  )
+  if result.code != 42 || !result.output.contains("cjson-smoke 6.5 3 ok") {
+    abort(
+      "cJSON external smoke failed with code " +
+      result.code.to_string() +
+      ":\n" +
+      result.output,
+    )
+  }
+}
+
+///|
+async test "external cJSON parser roundtrip runs when enabled" {
+  if !external_testbed_enabled("cjson") {
+    return
+  }
+  let root = "/tmp/kimicc_cjson/cJSON-1.7.18"
+  require_external_path(root + "/cJSON.h", "cJSON source root")
+  let binary_path = build_cjson_with_kimicc(root, "roundtrip")
+  assert_cjson_smoke(binary_path, "roundtrip")
+}
+
+///|
+async test "external cJSON direct object parser roundtrip runs when enabled" {
+  if !external_testbed_enabled("cjson") {
+    return
+  }
+  let root = "/tmp/kimicc_cjson/cJSON-1.7.18"
+  require_external_path(root + "/cJSON.h", "cJSON source root")
+  let binary_path = build_cjson_with_direct_object(root, "roundtrip")
+  assert_cjson_smoke(binary_path, "direct_roundtrip")
+}
+
+///|
 fn lua_flags(root : String) -> String {
   "-DLUA_COMPAT_5_3 -I " + shell_quote(root + "/src")
 }
