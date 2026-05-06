@@ -563,6 +563,64 @@ fn Codegen::emit_copy_large_arg_to_call_area(
 }
 
 ///|
+fn Codegen::emit_save_small_aggregate_arg_to_stack(
+  self : Codegen,
+  arg : @parser.Expr,
+  ty : @parser.Type,
+  frame_size : Int,
+  dest_offset : Int,
+) -> Unit {
+  let size = self.type_size(ty)
+  match arg {
+    Call(_, _) => {
+      self.gen_expr(arg, frame_size)
+      self.emit("\tstr\tx0, [sp, #" + dest_offset.to_string() + "]")
+      if size > 8 {
+        self.emit("\tstr\tx1, [sp, #" + (dest_offset + 8).to_string() + "]")
+      }
+    }
+    MemberAccess(_, _) =>
+      match self.emit_member_addr(arg, frame_size) {
+        Some(info) => {
+          self.emit("\tldr\tx10, [x9]")
+          if size > 8 {
+            self.emit("\tldr\tx11, [x9, #8]")
+          }
+          if info.stack_temp_size > 0 {
+            self.emit("\tadd\tsp, sp, #" + info.stack_temp_size.to_string())
+          }
+          self.emit("\tstr\tx10, [sp, #" + dest_offset.to_string() + "]")
+          if size > 8 {
+            self.emit(
+              "\tstr\tx11, [sp, #" + (dest_offset + 8).to_string() + "]",
+            )
+          }
+        }
+        None => {
+          self.gen_aggregate_addr(arg, frame_size)
+          self.emit("\tldr\tx10, [x9]")
+          self.emit("\tstr\tx10, [sp, #" + dest_offset.to_string() + "]")
+          if size > 8 {
+            self.emit("\tldr\tx10, [x9, #8]")
+            self.emit(
+              "\tstr\tx10, [sp, #" + (dest_offset + 8).to_string() + "]",
+            )
+          }
+        }
+      }
+    _ => {
+      self.gen_aggregate_addr(arg, frame_size)
+      self.emit("\tldr\tx10, [x9]")
+      self.emit("\tstr\tx10, [sp, #" + dest_offset.to_string() + "]")
+      if size > 8 {
+        self.emit("\tldr\tx10, [x9, #8]")
+        self.emit("\tstr\tx10, [sp, #" + (dest_offset + 8).to_string() + "]")
+      }
+    }
+  }
+}
+
+///|
 fn Codegen::emit_call_sret_addr(
   self : Codegen,
   ret_ty : @parser.Type,
@@ -3113,40 +3171,12 @@ fn Codegen::gen_expr(
               Struct(_) | Union(_) => {
                 let size = self.type_size(arg_types[i])
                 if size <= 16 {
-                  match args[i] {
-                    Call(_, _) => {
-                      self.gen_expr(args[i], frame_size)
-                      self.emit(
-                        "\tstr\tx0, [sp, #" +
-                        (backup_offset + slot_idx * 8).to_string() +
-                        "]",
-                      )
-                      if size > 8 {
-                        self.emit(
-                          "\tstr\tx1, [sp, #" +
-                          (backup_offset + (slot_idx + 1) * 8).to_string() +
-                          "]",
-                        )
-                      }
-                    }
-                    _ => {
-                      self.gen_aggregate_addr(args[i], frame_size)
-                      self.emit("\tldr\tx10, [x9]")
-                      self.emit(
-                        "\tstr\tx10, [sp, #" +
-                        (backup_offset + slot_idx * 8).to_string() +
-                        "]",
-                      )
-                      if size > 8 {
-                        self.emit("\tldr\tx10, [x9, #8]")
-                        self.emit(
-                          "\tstr\tx10, [sp, #" +
-                          (backup_offset + (slot_idx + 1) * 8).to_string() +
-                          "]",
-                        )
-                      }
-                    }
-                  }
+                  self.emit_save_small_aggregate_arg_to_stack(
+                    args[i],
+                    arg_types[i],
+                    frame_size,
+                    backup_offset + slot_idx * 8,
+                  )
                   if size > 8 {
                     slot_idx += 2
                   } else {
@@ -3415,36 +3445,12 @@ fn Codegen::gen_expr(
               Struct(_) | Union(_) => {
                 let size = self.type_size(arg_types[i])
                 if size <= 16 {
-                  match args[i] {
-                    Call(_, _) => {
-                      self.gen_expr(args[i], frame_size)
-                      self.emit(
-                        "\tstr\tx0, [sp, #" + (slot_idx * 8).to_string() + "]",
-                      )
-                      if size > 8 {
-                        self.emit(
-                          "\tstr\tx1, [sp, #" +
-                          ((slot_idx + 1) * 8).to_string() +
-                          "]",
-                        )
-                      }
-                    }
-                    _ => {
-                      self.gen_aggregate_addr(args[i], frame_size)
-                      self.emit("\tldr\tx10, [x9]")
-                      self.emit(
-                        "\tstr\tx10, [sp, #" + (slot_idx * 8).to_string() + "]",
-                      )
-                      if size > 8 {
-                        self.emit("\tldr\tx10, [x9, #8]")
-                        self.emit(
-                          "\tstr\tx10, [sp, #" +
-                          ((slot_idx + 1) * 8).to_string() +
-                          "]",
-                        )
-                      }
-                    }
-                  }
+                  self.emit_save_small_aggregate_arg_to_stack(
+                    args[i],
+                    arg_types[i],
+                    frame_size,
+                    slot_idx * 8,
+                  )
                   if size > 8 {
                     slot_idx += 2
                   } else {

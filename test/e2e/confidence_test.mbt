@@ -2037,6 +2037,40 @@ async test "e2e member access reads field from struct call result" {
 }
 
 ///|
+async test "e2e aggregate field from struct call passes by value" {
+  let source =
+    #|typedef struct Point {
+    #|  unsigned row;
+    #|  unsigned column;
+    #|} Point;
+    #|
+    #|typedef struct Length {
+    #|  unsigned bytes;
+    #|  Point extent;
+    #|} Length;
+    #|
+    #|Length size_of_node(void) {
+    #|  Length length;
+    #|  length.bytes = 9;
+    #|  length.extent.row = 4;
+    #|  length.extent.column = 7;
+    #|  return length;
+    #|}
+    #|
+    #|int consume_point(Point point) {
+    #|  if (point.row != 4) return 1;
+    #|  if (point.column != 7) return 2;
+    #|  return 42;
+    #|}
+    #|
+    #|int main(void) {
+    #|  return consume_point(size_of_node().extent);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e parameter shadowing preserves compound literal frame slot" {
   let source =
     #|typedef struct Pair {
