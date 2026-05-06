@@ -34,6 +34,20 @@ async test "direct macho object supports local multiply and subtract" {
 }
 
 ///|
+async test "direct macho object supports signed division" {
+  let source = "int main(void) { int a = 40; int b = 5; return a / b; }"
+  let exit_code = run_source_direct_object_async(source, "macho_signed_div")
+  inspect(exit_code, content="8")
+}
+
+///|
+async test "direct macho object supports signed modulo" {
+  let source = "int main(void) { int a = 43; int b = 5; return a % b; }"
+  let exit_code = run_source_direct_object_async(source, "macho_signed_mod")
+  inspect(exit_code, content="3")
+}
+
+///|
 async test "direct macho object supports zero-argument internal call" {
   let source = "int answer(void) { return 42; } int main(void) { return answer(); }"
   let exit_code = run_source_direct_object_async(source, "macho_internal_call0")

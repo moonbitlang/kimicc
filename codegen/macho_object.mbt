@@ -342,6 +342,38 @@ fn encode_madd(rest : String) -> UInt {
 }
 
 ///|
+fn encode_msub(rest : String) -> UInt {
+  let parts = split_operands(rest)
+  if parts.length() != 4 {
+    abort("malformed msub instruction")
+  }
+  let rd = parse_register(parts[0])
+  let rn = parse_register(parts[1])
+  let rm = parse_register(parts[2])
+  let ra = parse_register(parts[3])
+  0x9b008000U |
+  (rm.reinterpret_as_uint() << 16) |
+  (ra.reinterpret_as_uint() << 10) |
+  (rn.reinterpret_as_uint() << 5) |
+  rd.reinterpret_as_uint()
+}
+
+///|
+fn encode_sdiv(rest : String) -> UInt {
+  let parts = split_operands(rest)
+  if parts.length() != 3 {
+    abort("malformed sdiv instruction")
+  }
+  let rd = parse_register(parts[0])
+  let rn = parse_register(parts[1])
+  let rm = parse_register(parts[2])
+  0x9ac00c00U |
+  (rm.reinterpret_as_uint() << 16) |
+  (rn.reinterpret_as_uint() << 5) |
+  rd.reinterpret_as_uint()
+}
+
+///|
 fn encode_cmp(rest : String) -> UInt {
   let parts = split_operands(rest)
   if parts.length() != 2 {
@@ -1046,6 +1078,16 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         append_u32_to_section(
           sections[current_section],
           encode_madd(line.substring(start=5)),
+        )
+      } else if line.has_prefix("msub\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_msub(line.substring(start=5)),
+        )
+      } else if line.has_prefix("sdiv\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_sdiv(line.substring(start=5)),
         )
       } else if line.has_prefix("cmp\t") {
         append_u32_to_section(
