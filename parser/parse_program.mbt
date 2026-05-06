@@ -12,7 +12,7 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
         let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
         init = Some(GlobalInit::Array(init_exprs))
       } else {
-        init = Some(GlobalInit::Scalar(self.parse_expr()))
+        init = Some(GlobalInit::Scalar(self.parse_assign()))
       }
     }
     self.globals.push({
@@ -37,7 +37,7 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
           let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
           extra_init = Some(GlobalInit::Array(init_exprs))
         } else {
-          extra_init = Some(GlobalInit::Scalar(self.parse_expr()))
+          extra_init = Some(GlobalInit::Scalar(self.parse_assign()))
         }
       }
       self.globals.push({
@@ -136,7 +136,7 @@ fn Parser::parse_typedef(self : Parser) -> Unit {
   // Parse first typedef declarator
   let decl = self.parse_declarator(spec.base_type)
   self.skip_attributes()
-  self.typedefs[decl.name] = decl.ty
+  self.typedefs[decl.name] = apply_decl_align(decl.ty, spec.align)
   // Handle comma-separated typedef names: typedef int a, b, c;
   while self.token == Comma {
     self.advance()
@@ -144,7 +144,7 @@ fn Parser::parse_typedef(self : Parser) -> Unit {
     self.skip_qualifiers()
     let extra_decl = self.parse_declarator(spec.base_type)
     self.skip_attributes()
-    self.typedefs[extra_decl.name] = extra_decl.ty
+    self.typedefs[extra_decl.name] = apply_decl_align(extra_decl.ty, spec.align)
   }
   self.expect(Semicolon)
 }

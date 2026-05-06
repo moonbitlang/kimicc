@@ -121,6 +121,143 @@ fn merge_global_decls(
 }
 
 ///|
+fn mark_static_inline_needed(
+  name : String,
+  inline_decls : Map[String, @parser.FuncDecl],
+  needed : Map[String, Bool],
+) -> Unit {
+  if needed.contains(name) || !inline_decls.contains(name) {
+    return
+  }
+  needed[name] = true
+  match inline_decls[name].body {
+    Some(body) => collect_static_inline_stmt(body, inline_decls, needed)
+    None => ()
+  }
+}
+
+///|
+fn collect_static_inline_expr(
+  expr : @parser.Expr,
+  inline_decls : Map[String, @parser.FuncDecl],
+  needed : Map[String, Bool],
+) -> Unit {
+  match expr {
+    Var(_)
+    | Number(_)
+    | FloatLiteral(_)
+    | String(_)
+    | Sizeof(_)
+    | LabelAddr(_)
+    | OffsetOf(_, _) => ()
+    Binary(_, left, right)
+    | Assign(left, right)
+    | CompoundAssign(_, left, right)
+    | ArrayAccess(left, right) => {
+      collect_static_inline_expr(left, inline_decls, needed)
+      collect_static_inline_expr(right, inline_decls, needed)
+    }
+    Unary(_, inner)
+    | Deref(inner)
+    | SizeofExpr(inner)
+    | Cast(_, inner)
+    | PrefixInc(inner)
+    | PrefixDec(inner)
+    | PostfixInc(inner)
+    | PostfixDec(inner)
+    | VaArg(inner, _)
+    | DesignatedField(_, inner)
+    | DesignatedIndex(_, inner)
+    | DesignatedRange(_, _, inner) =>
+      collect_static_inline_expr(inner, inline_decls, needed)
+    MemberAccess(obj, _) =>
+      collect_static_inline_expr(obj, inline_decls, needed)
+    AddrOf(inner) => {
+      match inner {
+        Var(name) => mark_static_inline_needed(name, inline_decls, needed)
+        _ => ()
+      }
+      collect_static_inline_expr(inner, inline_decls, needed)
+    }
+    Call(callee, args) => {
+      match callee {
+        Var(name) => mark_static_inline_needed(name, inline_decls, needed)
+        _ => ()
+      }
+      collect_static_inline_expr(callee, inline_decls, needed)
+      for arg in args {
+        collect_static_inline_expr(arg, inline_decls, needed)
+      }
+    }
+    Ternary(cond, yes, no) => {
+      collect_static_inline_expr(cond, inline_decls, needed)
+      collect_static_inline_expr(yes, inline_decls, needed)
+      collect_static_inline_expr(no, inline_decls, needed)
+    }
+    Array(items) | CompoundLiteral(_, items, _) =>
+      for item in items {
+        collect_static_inline_expr(item, inline_decls, needed)
+      }
+  }
+}
+
+///|
+fn collect_static_inline_stmt(
+  stmt : @parser.Stmt,
+  inline_decls : Map[String, @parser.FuncDecl],
+  needed : Map[String, Bool],
+) -> Unit {
+  match stmt {
+    ExprStmt(expr) | ComputedGoto(expr) =>
+      collect_static_inline_expr(expr, inline_decls, needed)
+    Return(expr) =>
+      match expr {
+        Some(value) => collect_static_inline_expr(value, inline_decls, needed)
+        None => ()
+      }
+    If(cond, then_, else_) => {
+      collect_static_inline_expr(cond, inline_decls, needed)
+      collect_static_inline_stmt(then_, inline_decls, needed)
+      match else_ {
+        Some(stmt) => collect_static_inline_stmt(stmt, inline_decls, needed)
+        None => ()
+      }
+    }
+    While(cond, body) | DoWhile(cond, body) => {
+      collect_static_inline_expr(cond, inline_decls, needed)
+      collect_static_inline_stmt(body, inline_decls, needed)
+    }
+    Compound(stmts) | StmtList(stmts) =>
+      for child in stmts {
+        collect_static_inline_stmt(child, inline_decls, needed)
+      }
+    VarDecl(_, _, init) =>
+      match init {
+        Some(expr) => collect_static_inline_expr(expr, inline_decls, needed)
+        None => ()
+      }
+    Switch(expr, body, _) => {
+      collect_static_inline_expr(expr, inline_decls, needed)
+      collect_static_inline_stmt(body, inline_decls, needed)
+    }
+    Label(_, body) => collect_static_inline_stmt(body, inline_decls, needed)
+    For(init, cond, update, body) => {
+      match init {
+        Some(stmt) => collect_static_inline_stmt(stmt, inline_decls, needed)
+        None => ()
+      }
+      collect_static_inline_expr(cond, inline_decls, needed)
+      match update {
+        Some(expr) => collect_static_inline_expr(expr, inline_decls, needed)
+        None => ()
+      }
+      collect_static_inline_stmt(body, inline_decls, needed)
+    }
+    Break | Continue | Goto(_) => ()
+  }
+}
+
+///|
 fn Codegen::global_expr_type(
   self : Codegen,
   expr : @parser.Expr,
@@ -477,7 +614,10 @@ fn Codegen::emit_global_scalar(
   expr : @parser.Expr,
 ) -> Unit {
   match ty {
-    Pointer(_) | FuncPtr(_, _, _) =>
+    Pointer(_)
+    | FuncPtr(_, _, _)
+    | Aligned(Pointer(_), _)
+    | Aligned(FuncPtr(_, _, _), _) =>
       match self.global_address_reloc(expr) {
         Some(reloc) => {
           self.emit("\t.quad\t" + reloc)
@@ -724,6 +864,7 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   }
   // Precompute function return types, variadic flags, and param counts
   let mut func_count = 0
+  let static_inline_decls : Map[String, @parser.FuncDecl] = {}
   for decl in prog.decls {
     self.func_rets[decl.name] = decl.ret
     self.func_variadic[decl.name] = decl.variadic
@@ -733,7 +874,23 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
       param_types.push(param.ty)
     }
     self.func_param_types[decl.name] = param_types
+    if decl.is_static && decl.is_inline {
+      static_inline_decls[decl.name] = decl
+    }
     func_count += 1
+  }
+  let needed_static_inline : Map[String, Bool] = {}
+  for decl in prog.decls {
+    if !(decl.is_inline && !decl.is_static) &&
+      !(decl.is_static && decl.is_inline) {
+      match decl.body {
+        Some(body) =>
+          collect_static_inline_stmt(
+            body, static_inline_decls, needed_static_inline,
+          )
+        None => ()
+      }
+    }
   }
   let globals = merge_global_decls(prog.globals)
   // Record global variables
@@ -741,6 +898,14 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
     self.globals[g.name] = g
   }
   for decl in prog.decls {
+    if decl.is_inline && !decl.is_static {
+      continue
+    }
+    if decl.is_static &&
+      decl.is_inline &&
+      !needed_static_inline.contains(decl.name) {
+      continue
+    }
     self.gen_func(decl)
   }
   // Emit initialized global variables

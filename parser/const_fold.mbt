@@ -280,6 +280,7 @@ fn basic_type_size(ty : Type) -> Int {
     Struct(_) => 8 // unknown struct size, assume pointer-sized
     Union(_) => 8 // unknown union size, assume pointer-sized
     Atomic(inner) => basic_type_size(inner)
+    Aligned(inner, _) => basic_type_size(inner)
   }
 }
 
@@ -300,6 +301,7 @@ fn Parser::const_type_size(self : Parser, ty : Type) -> Int {
     SInt128 | UInt128 => 16
     Array(elem, n) => self.const_type_size(elem) * n
     Atomic(inner) => self.const_type_size(inner)
+    Aligned(inner, _) => self.const_type_size(inner)
     Struct(name) => self.const_struct_size(name)
     Union(name) => self.const_union_size(name)
   }
@@ -322,6 +324,14 @@ fn Parser::const_type_align(self : Parser, ty : Type) -> Int {
     SInt128 | UInt128 => 16
     Array(elem, _) => self.const_type_align(elem)
     Atomic(inner) => self.const_type_align(inner)
+    Aligned(inner, align) => {
+      let inner_align = self.const_type_align(inner)
+      if align > inner_align {
+        align
+      } else {
+        inner_align
+      }
+    }
     Struct(name) => self.const_struct_align(name)
     Union(name) => self.const_union_align(name)
   }
@@ -591,6 +601,7 @@ fn type_of_expr(expr : Expr) -> Type {
     Unary(_, _) => SInt
     Call(_, _) => SInt
     Assign(_, rhs) => type_of_expr(rhs)
+    CompoundAssign(_, lhs, _) => type_of_expr(lhs)
     MemberAccess(_, _) => SInt
     Deref(_) => SInt
     AddrOf(_) => Pointer(SInt)
@@ -650,6 +661,7 @@ fn Parser::const_expr_type(self : Parser, expr : Expr) -> Type {
     DesignatedRange(_, _, e) => self.const_expr_type(e)
     Ternary(_, a, _) => self.const_expr_type(a)
     Assign(_, rhs) => self.const_expr_type(rhs)
+    CompoundAssign(_, lhs, _) => self.const_expr_type(lhs)
     _ => type_of_expr(expr)
   }
 }

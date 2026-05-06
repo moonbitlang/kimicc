@@ -1,12 +1,17 @@
 ///|
 fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
   self.skip_attributes()
+  let mut leading_inline = false
   while self.token == Inline {
+    leading_inline = true
     self.advance()
     self.skip_attributes()
     self.skip_qualifiers()
   }
   let spec = self.parse_decl_specifiers()
+  if leading_inline {
+    spec.is_inline = true
+  }
   let decl = self.parse_declarator(spec.base_type)
   // If no name and no function suffix, skip to semicolon
   if decl.name == "" && decl.func_params.is_none() {
@@ -22,11 +27,29 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       params: [],
       variadic: false,
       is_static: false,
+      is_inline: false,
       body: None,
     }
   }
   // Function declaration or definition
   if decl.is_func_decl {
+    if self.token == Comma {
+      while self.token != Semicolon && self.token != EOF {
+        self.advance()
+      }
+      if self.token == Semicolon {
+        self.advance()
+      }
+      return {
+        ret: Void,
+        name: "",
+        params: [],
+        variadic: false,
+        is_static: false,
+        is_inline: false,
+        body: None,
+      }
+    }
     let params = decl.func_params.unwrap()
     // Detect variadic function and filter out the "..." parameter
     let (_, variadic) = function_param_info(params)
@@ -79,6 +102,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       params,
       variadic,
       is_static: spec.is_static,
+      is_inline: spec.is_inline,
       body,
     }
   }
@@ -94,6 +118,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       params: [],
       variadic: false,
       is_static: false,
+      is_inline: false,
       body: None,
     }
   }
@@ -110,6 +135,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
     params: [],
     variadic: false,
     is_static: false,
+    is_inline: false,
     body: None,
   }
 }
@@ -136,7 +162,7 @@ fn Parser::parse_global_var_tail(
   spec : DeclSpec,
   decl : DeclaratorResult,
 ) -> Unit {
-  let mut ty = resolve_var_type(decl)
+  let mut ty = apply_decl_align(resolve_var_type(decl), spec.align)
   let name = decl.name
   let mut init : GlobalInit? = None
   // Parse initializer for first variable
@@ -151,7 +177,7 @@ fn Parser::parse_global_var_tail(
       }
       init = Some(GlobalInit::Array(init_exprs))
     } else {
-      let expr = self.parse_expr()
+      let expr = self.parse_assign()
       match (ty, expr) {
         (Array(elem_ty, 0), Expr::String(s)) => {
           ty = Type::Array(elem_ty, s.length() + 1)
@@ -178,7 +204,10 @@ fn Parser::parse_global_var_tail(
   while self.token == Comma {
     self.advance()
     let extra_decl = self.parse_declarator(spec.base_type)
-    let mut extra_ty = resolve_var_type(extra_decl)
+    let mut extra_ty = apply_decl_align(
+      resolve_var_type(extra_decl),
+      spec.align,
+    )
     let mut extra_init : GlobalInit? = None
     if self.token == Assign {
       self.advance()
@@ -191,7 +220,7 @@ fn Parser::parse_global_var_tail(
         }
         extra_init = Some(GlobalInit::Array(init_exprs))
       } else {
-        let expr = self.parse_expr()
+        let expr = self.parse_assign()
         match (extra_ty, expr) {
           (Array(elem_ty, 0), Expr::String(s)) => {
             extra_ty = Type::Array(elem_ty, s.length() + 1)
@@ -227,5 +256,9 @@ fn Parser::parse_param(self : Parser) -> Param {
   let spec = self.parse_decl_specifiers()
   let decl = self.parse_declarator(spec.base_type)
   self.skip_attributes()
-  { ty: decl.ty, name: decl.name, bit_width: None }
+  {
+    ty: apply_decl_align(decl.ty, spec.align),
+    name: decl.name,
+    bit_width: None,
+  }
 }

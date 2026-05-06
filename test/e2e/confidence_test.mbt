@@ -461,6 +461,29 @@ async test "e2e extern declaration followed by definition emits storage" {
 }
 
 ///|
+async test "e2e local extern array declaration resolves global symbol" {
+  let def =
+    #|const char * const header[] = { "answer", 0 };
+  let user =
+    #|int first(void) {
+    #|  extern char const * const header[];
+    #|  return header[0][0];
+    #|}
+    #|int main(void) {
+    #|  return first() - 55;
+    #|}
+  let def_obj = compile_source_to_object_path(def, "local_extern_array_def")
+  let use_obj = compile_source_to_object_path(user, "local_extern_array_use")
+  let bin_path = temp_file_path("local_extern_array_linkage", def + user, "")
+  run_command_checked(
+    "clang -o " + bin_path + " " + def_obj + " " + use_obj,
+    "link local extern array linkage",
+  )
+  let result = run_command_capture(bin_path, "local_extern_array_linkage")
+  inspect(result.code, content="42")
+}
+
+///|
 async test "e2e tentative global followed by initialized definition emits once" {
   let source =
     #|int shared;
@@ -470,6 +493,38 @@ async test "e2e tentative global followed by initialized definition emits once" 
     #|int shared = 42;
     #|int main(void) {
     #|  return read_shared();
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e comma separated initialized globals are distinct" {
+  let source =
+    #|int action_fd = -1, entry_fd = -1, text_fd = -1;
+    #|int main(void) {
+    #|  action_fd = 40;
+    #|  entry_fd = 3;
+    #|  return action_fd + entry_fd + text_fd;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e compound assignment evaluates pointer lvalue once" {
+  let source =
+    #|int main(void) {
+    #|  unsigned a[2] = {1, 4};
+    #|  unsigned b[2] = {2, 8};
+    #|  unsigned *p = a;
+    #|  unsigned *q = b;
+    #|  *p++ |= *q++;
+    #|  if (a[0] != 3) return 1;
+    #|  if (a[1] != 4) return 2;
+    #|  if (p != &a[1]) return 3;
+    #|  if (q != &b[1]) return 4;
+    #|  return 42;
     #|}
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")
@@ -688,6 +743,52 @@ async test "e2e bitfields pack after byte fields like clang" {
     #|}
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e bare atomic typedef qualifier from ocamlyacc headers" {
+  let source =
+    #|typedef unsigned long uintnat;
+    #|typedef _Atomic uintnat atomic_uintnat;
+    #|typedef _Atomic(uintnat) atomic_uintnat_paren;
+    #|typedef void (*caml_timing_hook)(void);
+    #|extern _Atomic caml_timing_hook caml_major_slice_begin_hook;
+    #|struct AlignedBytes {
+    #|  _Alignas(8) char c;
+    #|  char d;
+    #|};
+    #|extern void exit(int);
+    #|_Noreturn static void die(int code) {
+    #|  exit(code);
+    #|}
+    #|void comma_proto_a(void), comma_proto_b(void);
+    #|void comma_proto_a(void) {}
+    #|void comma_proto_b(void) {}
+    #|extern int missing_inline_dependency(void);
+    #|inline int external_inline_ignored(void) {
+    #|  return missing_inline_dependency();
+    #|}
+    #|static inline int used_static_inline(int x) {
+    #|  return x + 1;
+    #|}
+    #|
+    #|int main(void) {
+    #|  _Atomic uintnat local;
+    #|  atomic_uintnat *counter = (atomic_uintnat*)0;
+    #|  if (sizeof(atomic_uintnat) != sizeof(uintnat)) return 1;
+    #|  if (sizeof(atomic_uintnat_paren) != sizeof(uintnat)) return 2;
+    #|  if (sizeof(local) != sizeof(uintnat)) return 3;
+    #|  if (sizeof(*counter) != sizeof(uintnat)) return 4;
+    #|  if (sizeof(struct AlignedBytes) != 8) return 5;
+    #|  if (__builtin_offsetof(struct AlignedBytes, d) != 1) return 6;
+    #|  if (L'a' != 97) return 7;
+    #|  if (used_static_inline(40) != 41) return 8;
+    #|  comma_proto_a();
+    #|  comma_proto_b();
+    #|  return 77;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="77")
 }
 
 ///|

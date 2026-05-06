@@ -21,6 +21,7 @@ fn Parser::skip_qualifiers(self : Parser) -> Unit {
         self.token == Ident("__volatile__") ||
         self.token == Ident("__const") ||
         self.token == Ident("__const__") ||
+        self.token == Ident("_Noreturn") ||
         self.token == Ident("_Nullable") ||
         self.token == Ident("_Nonnull") ||
         self.token == Ident("_Null_unspecified") {
@@ -51,5 +52,21 @@ fn Parser::skip_attributes(self : Parser) -> Unit {
         break
       }
     }
+  }
+}
+
+///|
+fn Parser::parse_alignas_specifier(self : Parser) -> Int? {
+  match self.token {
+    Ident("_Alignas") | Ident("alignas") => ()
+    _ => return None
+  }
+  self.advance()
+  self.expect(LParen)
+  let expr = self.parse_assign()
+  self.expect(RParen)
+  match self.fold_const(expr) {
+    Some(n) => Some(n.to_int())
+    None => None
   }
 }

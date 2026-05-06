@@ -230,6 +230,8 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
       self.parse_typedef()
       ExprStmt(Expr::Number(0))
     }
+    Ident("_Alignas") | Ident("alignas") => self.parse_var_decl_stmt()
+    Ident("_Atomic") => self.parse_var_decl_stmt()
     Case => {
       self.advance()
       let expr = self.parse_assign()
@@ -398,7 +400,11 @@ fn Parser::parse_for_stmt(self : Parser) -> Stmt {
     Some(self.parse_var_decl_stmt())
   } else {
     let is_typedef = match self.token {
-      Ident(name) => self.typedefs.contains(name)
+      Ident(name) =>
+        name == "_Atomic" ||
+        name == "_Alignas" ||
+        name == "alignas" ||
+        self.typedefs.contains(name)
       _ => false
     }
     if is_typedef {
@@ -804,7 +810,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
   let stmts = []
   // Parse first declarator
   let decl = self.parse_declarator(spec.base_type)
-  let decl_ty = resolve_var_type(decl)
+  let decl_ty = apply_decl_align(resolve_var_type(decl), spec.align)
   // Local function prototype inside a function body: int foo(void);
   if decl.is_func_decl && self.token == Semicolon {
     self.expect(Semicolon)
@@ -828,6 +834,14 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
         is_static: true,
         is_extern: false,
       })
+    } else {
+      self.globals.push({
+        ty: final_ty,
+        name: mangled,
+        init: None,
+        is_static: false,
+        is_extern: true,
+      })
     }
     self.remember_value_type(mangled, final_ty)
     self.remember_value_type(decl.name, final_ty)
@@ -835,7 +849,10 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
     while self.token == Comma {
       self.advance()
       let extra_decl = self.parse_declarator(spec.base_type)
-      let extra_decl_ty = resolve_var_type(extra_decl)
+      let extra_decl_ty = apply_decl_align(
+        resolve_var_type(extra_decl),
+        spec.align,
+      )
       let extra_mangled = if spec.is_static {
         self.register_static_local(extra_decl.name)
       } else {
@@ -850,6 +867,14 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
           init: extra_init,
           is_static: true,
           is_extern: false,
+        })
+      } else {
+        self.globals.push({
+          ty: extra_ty,
+          name: extra_mangled,
+          init: None,
+          is_static: false,
+          is_extern: true,
         })
       }
       self.remember_value_type(extra_mangled, extra_ty)
@@ -942,7 +967,10 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
   while self.token == Comma {
     self.advance()
     let extra_decl = self.parse_declarator(spec.base_type)
-    let extra_decl_ty = resolve_var_type(extra_decl)
+    let extra_decl_ty = apply_decl_align(
+      resolve_var_type(extra_decl),
+      spec.align,
+    )
     let mut remembered_extra_ty = extra_decl_ty
     if self.token == Assign {
       self.advance()

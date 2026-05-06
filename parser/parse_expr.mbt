@@ -55,7 +55,7 @@ fn Parser::parse_assign(self : Parser) -> Expr {
           ">>=" => ">>"
           _ => ""
         }
-        Assign(expr, Binary(base_op, expr, rhs))
+        CompoundAssign(base_op, expr, rhs)
       }
     } else {
       abort("Invalid assignment target")
@@ -347,6 +347,9 @@ fn Parser::parse_unary(self : Parser) -> Expr {
           | Const
           | Restrict
           | Volatile => true
+          Ident("_Atomic") => true
+          Ident("_Alignas") => true
+          Ident("alignas") => true
           Ident(name) => self.typedefs.contains(name)
           _ => false
         }
@@ -403,6 +406,8 @@ fn Parser::parse_unary(self : Parser) -> Expr {
         Ident("__int128_t") => true
         Ident("__uint128_t") => true
         Ident("_Atomic") => true
+        Ident("_Alignas") => true
+        Ident("alignas") => true
         Ident(name) => self.typedefs.contains(name)
         _ => false
       }

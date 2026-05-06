@@ -137,6 +137,7 @@ fn Codegen::emit_load_typed(
         self.emit("\tldr\t" + paired_high_reg(reg) + ", [" + addr_reg + ", #8]")
       }
     Atomic(inner) => self.emit_load_typed(reg, addr_reg, inner)
+    Aligned(inner, _) => self.emit_load_typed(reg, addr_reg, inner)
     _ => self.emit("\tldr\t" + reg + ", [" + addr_reg + "]")
   }
 }
@@ -163,6 +164,7 @@ fn Codegen::emit_store_typed(
       )
     }
     Atomic(inner) => self.emit_store_typed(value_reg, addr_reg, inner)
+    Aligned(inner, _) => self.emit_store_typed(value_reg, addr_reg, inner)
     _ => self.emit("\tstr\t" + value_reg + ", [" + addr_reg + "]")
   }
 }

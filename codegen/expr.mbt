@@ -58,11 +58,14 @@ fn Codegen::type_of(
       unary_integer_result_type(self.type_of(operand, frame_size))
     Call(func, _) => self.call_return_type(func, frame_size)
     Assign(_, rhs) => self.type_of(rhs, frame_size)
+    CompoundAssign(_, lhs, _) => self.type_of(lhs, frame_size)
     MemberAccess(obj, field) => {
       let obj_ty = self.type_of(obj, frame_size)
       let struct_name = match obj_ty {
         Struct(n) => n
         Union(n) => n
+        Aligned(Struct(n), _) => n
+        Aligned(Union(n), _) => n
         _ => return SInt
       }
       if self.struct_layouts.contains(struct_name) {
@@ -80,6 +83,7 @@ fn Codegen::type_of(
         Pointer(ty) => ty
         FuncPtr(ret, count, variadic) => FuncPtr(ret, count, variadic)
         Array(elem, _) => elem
+        Aligned(inner, _) => inner
         _ => SInt
       }
     AddrOf(e) => Pointer(self.type_of(e, frame_size))
@@ -240,6 +244,7 @@ fn Codegen::emit_scalar_conversion_to(
     UInt => self.emit("\tand\tx9, x9, #0xFFFFFFFF")
     SInt128 | UInt128 => ()
     Atomic(inner) => self.emit_scalar_conversion_to(inner)
+    Aligned(inner, _) => self.emit_scalar_conversion_to(inner)
     _ => ()
   }
 }
@@ -485,6 +490,155 @@ fn binary_needs_scalar_result_conversion(op : String) -> Bool {
     "+" | "-" | "*" | "/" | "%" => true
     _ => false
   }
+}
+
+///|
+fn Codegen::gen_compound_assign(
+  self : Codegen,
+  op : String,
+  lhs : @parser.Expr,
+  rhs : @parser.Expr,
+  frame_size : Int,
+) -> Unit {
+  let lhs_ty = self.type_of(lhs, frame_size)
+  let rhs_ty = self.type_of(rhs, frame_size)
+  let ptr_scale = match (lhs_ty, rhs_ty) {
+    (Pointer(elem), _) => self.type_size(elem)
+    (Array(elem, _), _) => self.type_size(elem)
+    (_, Pointer(elem)) => self.type_size(elem)
+    (_, Array(elem, _)) => self.type_size(elem)
+    _ => 1
+  }
+  let has_ptr_operand = match (lhs_ty, rhs_ty) {
+    (Pointer(_), _) | (Array(_, _), _) | (_, Pointer(_)) | (_, Array(_, _)) =>
+      true
+    _ => false
+  }
+  let scale_right = match lhs_ty {
+    Pointer(_) | Array(_, _) => (op == "+" || op == "-") && rhs_ty.is_integer()
+    _ => false
+  }
+  let is_fp = !has_ptr_operand && (lhs_ty.is_floating() || rhs_ty.is_floating())
+  let is_double = is_fp && (lhs_ty == Double || rhs_ty == Double)
+  let fp_ty : @parser.Type = if is_double { Double } else { Float }
+  let result_ty = binary_result_type(op, lhs_ty, rhs_ty)
+  let is_unsigned_int = match op {
+    "<<" | ">>" => is_unsigned_integer_type(result_ty)
+    _ => uses_unsigned_integer_op(lhs_ty, rhs_ty)
+  }
+
+  self.gen_addr(lhs, frame_size)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.emit_load_typed("x9", "x9", lhs_ty)
+  if is_fp {
+    self.emit_numeric_conversion(lhs_ty, fp_ty)
+  }
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.gen_expr(rhs, frame_size)
+  if is_fp {
+    self.emit_numeric_conversion(rhs_ty, fp_ty)
+  }
+  if ptr_scale > 1 && scale_right {
+    self.emit("\tmov\tx11, #" + ptr_scale.to_string())
+    self.emit("\tmul\tx9, x9, x11")
+  }
+  self.emit("\tmov\tx10, x9")
+  self.emit("\tldr\tx9, [sp], #16")
+  match op {
+    "+" =>
+      if is_fp {
+        if is_double {
+          self.emit("\tfmov\td9, x9")
+          self.emit("\tfmov\td10, x10")
+          self.emit("\tfadd\td9, d9, d10")
+          self.emit("\tfmov\tx9, d9")
+        } else {
+          self.emit("\tfmov\ts9, w9")
+          self.emit("\tfmov\ts10, w10")
+          self.emit("\tfadd\ts9, s9, s10")
+          self.emit("\tfmov\tw9, s9")
+        }
+      } else {
+        self.emit("\tadd\tx9, x9, x10")
+      }
+    "-" =>
+      if is_fp {
+        if is_double {
+          self.emit("\tfmov\td9, x9")
+          self.emit("\tfmov\td10, x10")
+          self.emit("\tfsub\td9, d9, d10")
+          self.emit("\tfmov\tx9, d9")
+        } else {
+          self.emit("\tfmov\ts9, w9")
+          self.emit("\tfmov\ts10, w10")
+          self.emit("\tfsub\ts9, s9, s10")
+          self.emit("\tfmov\tw9, s9")
+        }
+      } else {
+        self.emit("\tsub\tx9, x9, x10")
+      }
+    "*" =>
+      if is_fp {
+        if is_double {
+          self.emit("\tfmov\td9, x9")
+          self.emit("\tfmov\td10, x10")
+          self.emit("\tfmul\td9, d9, d10")
+          self.emit("\tfmov\tx9, d9")
+        } else {
+          self.emit("\tfmov\ts9, w9")
+          self.emit("\tfmov\ts10, w10")
+          self.emit("\tfmul\ts9, s9, s10")
+          self.emit("\tfmov\tw9, s9")
+        }
+      } else {
+        self.emit("\tmul\tx9, x9, x10")
+      }
+    "/" =>
+      if is_fp {
+        if is_double {
+          self.emit("\tfmov\td9, x9")
+          self.emit("\tfmov\td10, x10")
+          self.emit("\tfdiv\td9, d9, d10")
+          self.emit("\tfmov\tx9, d9")
+        } else {
+          self.emit("\tfmov\ts9, w9")
+          self.emit("\tfmov\ts10, w10")
+          self.emit("\tfdiv\ts9, s9, s10")
+          self.emit("\tfmov\tw9, s9")
+        }
+      } else if is_unsigned_int {
+        self.emit("\tudiv\tx9, x9, x10")
+      } else {
+        self.emit("\tsdiv\tx9, x9, x10")
+      }
+    "%" =>
+      if is_unsigned_int {
+        self.emit("\tudiv\tx11, x9, x10\n\tmsub\tx9, x11, x10, x9")
+      } else {
+        self.emit("\tsdiv\tx11, x9, x10\n\tmsub\tx9, x11, x10, x9")
+      }
+    "&" => self.emit("\tand\tx9, x9, x10")
+    "|" => self.emit("\torr\tx9, x9, x10")
+    "^" => self.emit("\teor\tx9, x9, x10")
+    "<<" => self.emit("\tlsl\tx9, x9, x10")
+    ">>" =>
+      if is_unsigned_int {
+        self.emit("\tlsr\tx9, x9, x10")
+      } else {
+        self.emit("\tasr\tx9, x9, x10")
+      }
+    _ => ()
+  }
+  if is_fp {
+    self.emit_numeric_conversion(fp_ty, lhs_ty)
+  } else if !has_ptr_operand {
+    self.emit_scalar_conversion_to(lhs_ty)
+  }
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.emit("\tldr\tx10, [sp, #16]")
+  self.emit_store_typed("x9", "x10", lhs_ty)
+  self.emit("\tldr\tx9, [sp], #16")
+  self.emit("\tadd\tsp, sp, #16")
 }
 
 ///|
@@ -967,6 +1121,7 @@ fn Codegen::emit_builtin_call(
           Pointer(t) => t
           Array(t, _) => t
           Atomic(t) => t
+          Aligned(t, _) => t
           _ => SLongLong
         }
         match elem_ty {
@@ -990,6 +1145,7 @@ fn Codegen::emit_builtin_call(
           Pointer(t) => t
           Array(t, _) => t
           Atomic(t) => t
+          Aligned(t, _) => t
           _ => SLongLong
         }
         self.gen_expr(args[1], frame_size)
@@ -1715,6 +1871,8 @@ fn Codegen::gen_expr(
       } else {
         self.emit("\tmov\tx9, #0")
       }
+    CompoundAssign(op, lhs, rhs) =>
+      self.gen_compound_assign(op, lhs, rhs, frame_size)
     Assign(lhs, rhs) => {
       // Check if lhs is a bit-field member access
       let is_bitfield = match lhs {
@@ -3203,7 +3361,7 @@ fn Codegen::gen_aggregate_addr(
     }
     Cast(ty, inner) if is_aggregate_type(ty) =>
       self.gen_aggregate_addr(inner, frame_size)
-    Assign(_, _) => self.gen_expr(expr, frame_size)
+    Assign(_, _) | CompoundAssign(_, _, _) => self.gen_expr(expr, frame_size)
     CompoundLiteral(ty, init_exprs, id) => {
       let name = compound_literal_local_name(id)
       let offset = if self.local_offsets.contains(name) {

@@ -18,6 +18,7 @@ pub(all) enum Expr {
   Unary(String, Expr)
   Call(Expr, Array[Expr])
   Assign(Expr, Expr)
+  CompoundAssign(String, Expr, Expr)
   MemberAccess(Expr, String)
   Deref(Expr)
   AddrOf(Expr)
@@ -46,6 +47,7 @@ pub(all) struct FuncDecl {
   params : Array[Param]
   variadic : Bool
   is_static : Bool
+  is_inline : Bool
   body : Stmt?
 } derive(Eq)
 
@@ -234,6 +236,7 @@ pub(all) enum Type {
   Pointer(Type)
   Array(Type, Int)
   Atomic(Type)
+  Aligned(Type, Int)
 } derive(Eq)
 pub fn Type::align(Self) -> Int
 pub fn Type::is_floating(Self) -> Bool

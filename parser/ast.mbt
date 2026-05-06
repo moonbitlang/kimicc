@@ -22,6 +22,7 @@ pub(all) enum Type {
   Pointer(Type)
   Array(Type, Int)
   Atomic(Type)
+  Aligned(Type, Int)
 } derive(Eq)
 
 ///|
@@ -56,6 +57,8 @@ pub impl Show for Type with to_string(self) {
     Pointer(ty) => "Pointer(" + ty.to_string() + ")"
     Array(ty, n) => "Array(" + ty.to_string() + ", " + n.to_string() + ")"
     Atomic(ty) => "Atomic(" + ty.to_string() + ")"
+    Aligned(ty, align) =>
+      "Aligned(" + ty.to_string() + ", " + align.to_string() + ")"
   }
 }
 
@@ -75,6 +78,7 @@ pub fn Type::is_integer(self : Type) -> Bool {
     | ULongLong
     | SInt128
     | UInt128 => true
+    Aligned(ty, _) => ty.is_integer()
     _ => false
   }
 }
@@ -84,6 +88,7 @@ pub fn Type::is_integer(self : Type) -> Bool {
 pub fn Type::is_signed(self : Type) -> Bool {
   match self {
     SChar | SShort | SInt | SLong | SLongLong | SInt128 => true
+    Aligned(ty, _) => ty.is_signed()
     _ => false
   }
 }
@@ -93,6 +98,7 @@ pub fn Type::is_signed(self : Type) -> Bool {
 pub fn Type::is_floating(self : Type) -> Bool {
   match self {
     Float | Double => true
+    Aligned(ty, _) => ty.is_floating()
     _ => false
   }
 }
@@ -107,6 +113,7 @@ pub fn Type::to_unsigned(self : Type) -> Type {
     SLong => ULong
     SLongLong => ULongLong
     SInt128 => UInt128
+    Aligned(ty, align) => Aligned(ty.to_unsigned(), align)
     _ => self
   }
 }
@@ -135,6 +142,7 @@ pub fn Type::size(self : Type) -> Int {
       abort("Cannot compute union size without struct_decls: " + name)
     Array(elem, n) => elem.size() * n
     Atomic(ty) => ty.size()
+    Aligned(ty, _) => ty.size()
   }
 }
 
@@ -160,6 +168,14 @@ pub fn Type::align(self : Type) -> Int {
       abort("Cannot compute union alignment without struct_decls: " + name)
     Array(elem, _) => elem.align()
     Atomic(ty) => ty.align()
+    Aligned(ty, align) => {
+      let inner = ty.align()
+      if align > inner {
+        align
+      } else {
+        inner
+      }
+    }
   }
 }
 
@@ -173,6 +189,7 @@ pub(all) enum Expr {
   Unary(String, Expr)
   Call(Expr, Array[Expr])
   Assign(Expr, Expr)
+  CompoundAssign(String, Expr, Expr)
   MemberAccess(Expr, String)
   Deref(Expr)
   AddrOf(Expr)
@@ -235,6 +252,7 @@ pub(all) struct FuncDecl {
   params : Array[Param]
   variadic : Bool
   is_static : Bool
+  is_inline : Bool
   body : Stmt?
 } derive(Eq)
 

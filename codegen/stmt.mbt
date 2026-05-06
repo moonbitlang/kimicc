@@ -2,6 +2,7 @@
 fn switch_control_type(ty : @parser.Type) -> @parser.Type {
   match ty {
     Atomic(inner) => switch_control_type(inner)
+    Aligned(inner, _) => switch_control_type(inner)
     Bool | SChar | UChar | SShort | UShort => SInt
     _ => ty
   }

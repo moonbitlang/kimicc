@@ -15,6 +15,7 @@ fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
     SInt128 | UInt128 => 16
     Array(elem, n) => self.type_size(elem) * n
     Atomic(ty) => self.type_size(ty)
+    Aligned(ty, _) => self.type_size(ty)
     Struct(name) => {
       if not(self.struct_layouts.contains(name)) {
         if self.struct_decls.contains(name) {
@@ -80,6 +81,14 @@ fn Codegen::type_align(self : Codegen, ty : @parser.Type) -> Int {
     SInt128 | UInt128 => 16
     Array(elem, _) => self.type_align(elem)
     Atomic(ty) => self.type_align(ty)
+    Aligned(ty, align) => {
+      let inner = self.type_align(ty)
+      if align > inner {
+        align
+      } else {
+        inner
+      }
+    }
     Struct(name) => {
       if not(self.struct_layouts.contains(name)) {
         if self.struct_decls.contains(name) {

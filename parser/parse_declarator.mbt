@@ -7,6 +7,7 @@ priv struct DeclSpec {
   mut is_inline : Bool
   mut is_register : Bool
   mut is_auto : Bool
+  mut align : Int?
 }
 
 ///|
@@ -35,6 +36,7 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     is_inline: false,
     is_register: false,
     is_auto: false,
+    align: None,
   }
   self.skip_attributes()
   let mut has_void = false
@@ -50,6 +52,9 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
   let mut struct_result = Type::SInt
   let mut has_typedef_name = false
   let mut typedef_type = Type::SInt
+  let mut has_atomic_type = false
+  let mut atomic_type = Type::SInt
+  let mut has_atomic_qualifier = false
   let mut saw_primitive = false
   let mut saw_typedef_name = false
   let mut has_va_list = false
@@ -100,6 +105,20 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
           self.advance()
           consumed = true
         }
+        Ident("_Alignas") | Ident("alignas") => {
+          let align = self.parse_alignas_specifier()
+          match align {
+            Some(n) =>
+              if n > 0 {
+                spec.align = match spec.align {
+                  Some(prev) => Some(if n > prev { n } else { prev })
+                  None => Some(n)
+                }
+              }
+            None => ()
+          }
+          consumed = true
+        }
         Ident("__extension__")
         | Ident("__inline")
         | Ident("__inline__")
@@ -113,6 +132,7 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
         | Ident("__volatile__")
         | Ident("__const")
         | Ident("__const__")
+        | Ident("_Noreturn")
         | Ident("_Nullable")
         | Ident("_Nonnull")
         | Ident("_Null_unspecified") => {
@@ -208,10 +228,13 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
             self.advance()
             if self.token == LParen {
               self.advance()
-              let _ = self.parse_type_name()
+              atomic_type = Atomic(self.parse_type_name())
               self.expect(RParen)
+              has_atomic_type = true
+              saw_primitive = true
+            } else {
+              has_atomic_qualifier = true
             }
-            saw_primitive = true
             consumed = true
           } else if name == "__builtin_va_list" {
             spec.base_type = Pointer(SChar)
@@ -250,7 +273,9 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
       break
     }
   }
-  if has_struct {
+  if has_atomic_type {
+    spec.base_type = atomic_type
+  } else if has_struct {
     spec.base_type = struct_result
   } else if has_typedef_name {
     spec.base_type = typedef_type
@@ -298,6 +323,9 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     spec.base_type = UInt
   } else {
     spec.base_type = SInt
+  }
+  if has_atomic_qualifier {
+    spec.base_type = Atomic(spec.base_type)
   }
   spec
 }
@@ -424,6 +452,7 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] {
     self.skip_qualifiers()
     let spec = self.parse_decl_specifiers()
     let decl = self.parse_declarator(spec.base_type)
+    let field_ty = apply_decl_align(decl.ty, spec.align)
     let bit_width = if self.token == Colon {
       self.advance()
       match self.fold_const(self.parse_assign()) {
@@ -433,12 +462,13 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] {
     } else {
       None
     }
-    fields.push({ ty: decl.ty, name: decl.name, bit_width })
+    fields.push({ ty: field_ty, name: decl.name, bit_width })
     while self.token == Comma {
       self.advance()
       self.skip_attributes()
       self.skip_qualifiers()
       let extra = self.parse_declarator(spec.base_type)
+      let extra_ty = apply_decl_align(extra.ty, spec.align)
       let extra_bit_width = if self.token == Colon {
         self.advance()
         match self.fold_const(self.parse_assign()) {
@@ -448,7 +478,7 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] {
       } else {
         None
       }
-      fields.push({ ty: extra.ty, name: extra.name, bit_width: extra_bit_width })
+      fields.push({ ty: extra_ty, name: extra.name, bit_width: extra_bit_width })
     }
     self.expect(Semicolon)
   }
@@ -544,9 +574,17 @@ fn push_function_pointer_inside(
 fn type_contains_func_ptr(ty : Type) -> Bool {
   match ty {
     FuncPtr(_, _, _) => true
-    Pointer(inner) | Array(inner, _) | Atomic(inner) =>
+    Pointer(inner) | Array(inner, _) | Atomic(inner) | Aligned(inner, _) =>
       type_contains_func_ptr(inner)
     _ => false
+  }
+}
+
+///|
+fn apply_decl_align(ty : Type, align : Int?) -> Type {
+  match align {
+    Some(n) => if n > 0 { Aligned(ty, n) } else { ty }
+    None => ty
   }
 }
 

@@ -271,7 +271,7 @@ fn compound_literal_local_name(id : Int) -> String {
 ///|
 fn Codegen::collect_expr_locals(self : Codegen, expr : @parser.Expr) -> Unit {
   match expr {
-    Binary(_, lhs, rhs) | Assign(lhs, rhs) => {
+    Binary(_, lhs, rhs) | Assign(lhs, rhs) | CompoundAssign(_, lhs, rhs) => {
       self.collect_expr_locals(lhs)
       self.collect_expr_locals(rhs)
     }

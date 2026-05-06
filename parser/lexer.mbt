@@ -481,6 +481,24 @@ pub fn Lexer::next_token(self : Lexer) -> Token {
     _ =>
       if is_digit(ch) {
         self.read_number()
+      } else if ch == 'u' &&
+        self.peek_next() == '8' &&
+        (self.peek_offset(2) == '\'' || self.peek_offset(2) == '"') {
+        self.advance()
+        self.advance()
+        if self.peek() == '\'' {
+          self.read_char()
+        } else {
+          self.read_string()
+        }
+      } else if (ch == 'L' || ch == 'u' || ch == 'U') &&
+        (self.peek_next() == '\'' || self.peek_next() == '"') {
+        self.advance()
+        if self.peek() == '\'' {
+          self.read_char()
+        } else {
+          self.read_string()
+        }
       } else if is_alpha(ch) || ch == '_' {
         self.read_ident()
       } else {
@@ -901,6 +919,15 @@ fn Lexer::peek_next(self : Lexer) -> Char {
     '\u0000'
   } else {
     self.input.get_char(self.pos + 1).unwrap_or('\u0000')
+  }
+}
+
+///|
+fn Lexer::peek_offset(self : Lexer, offset : Int) -> Char {
+  if self.pos + offset >= self.input.length() {
+    '\u0000'
+  } else {
+    self.input.get_char(self.pos + offset).unwrap_or('\u0000')
   }
 }
 

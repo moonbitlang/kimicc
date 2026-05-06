@@ -355,13 +355,13 @@ test "parse compound assignment" {
   match decl.body {
     Some(Compound(stmts)) => {
       // Stmt 1: var decl
-      // Stmt 2: x += 3 -> Assign(Var("x"), Binary("+", Var("x"), Number(3)))
+      // Stmt 2: x += 3
       match stmts[1] {
-        ExprStmt(Assign(Var("x"), Binary("+", Var("x"), Number(3)))) => ()
+        ExprStmt(CompoundAssign("+", Var("x"), Number(3))) => ()
         _ => fail("Expected +=")
       }
       match stmts[3] {
-        ExprStmt(Assign(Var("x"), Binary("*", Var("x"), Number(2)))) => ()
+        ExprStmt(CompoundAssign("*", Var("x"), Number(2))) => ()
         _ => fail("Expected *=")
       }
     }
@@ -539,6 +539,21 @@ test "parse global variable" {
   match decl.body {
     Some(Compound([Return(Some(Var("g")))])) => ()
     _ => fail("Expected global access")
+  }
+}
+
+///|
+test "parse comma separated initialized globals" {
+  let source = "int action_fd = -1, entry_fd = -1, text_fd = -1; int main(void) { return entry_fd; }"
+  let prog = @parser.parse(source)
+  inspect(prog.globals.length(), content="3")
+  match prog.globals {
+    [
+      { name: "action_fd", init: Some(Scalar(Unary("-", Number(1)))), .. },
+      { name: "entry_fd", init: Some(Scalar(Unary("-", Number(1)))), .. },
+      { name: "text_fd", init: Some(Scalar(Unary("-", Number(1)))), .. },
+    ] => ()
+    _ => fail("Expected three initialized globals")
   }
 }
 
@@ -779,6 +794,25 @@ test "parse __func__ builtin" {
   match decl.body {
     Some(Compound([Return(Some(ArrayAccess(String("main"), Number(0))))])) => ()
     _ => fail("Expected __func__ as string literal")
+  }
+}
+
+///|
+test "parse bare _Atomic typedef qualifier" {
+  let source =
+    #|typedef unsigned long uintnat;
+    #|typedef _Atomic uintnat atomic_uintnat;
+    #|typedef _Atomic(uintnat) atomic_uintnat_paren;
+    #|atomic_uintnat counter;
+    #|atomic_uintnat_paren other;
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  match prog.globals {
+    [
+      { ty: Atomic(ULong), name: "counter", .. },
+      { ty: Atomic(ULong), name: "other", .. },
+    ] => ()
+    _ => fail("Expected atomic typedef globals")
   }
 }
 
