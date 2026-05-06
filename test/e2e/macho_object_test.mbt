@@ -1,4 +1,13 @@
 ///|
+
+///|
+priv struct DirectObjectFixture {
+  path : String
+  tag : String
+  expected : Int
+}
+
+///|
 async test "direct macho object links and runs constant return" {
   let source = "int main(void) { return 42; }"
   let exit_code = run_source_direct_object_async(source, "macho_return_42")
@@ -134,6 +143,13 @@ async test "direct macho object supports logical or branch" {
 }
 
 ///|
+async test "direct macho object supports logical not compare" {
+  let source = "int main(void) { int b = 0; if (!b) return 42; return 1; }"
+  let exit_code = run_source_direct_object_async(source, "macho_logic_not")
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object supports simple while loop" {
   let source = "int main(void) { int i = 0; int s = 0; while (i < 4) { s = s + i; i = i + 1; } return s; }"
   let exit_code = run_source_direct_object_async(source, "macho_while_sum")
@@ -228,4 +244,82 @@ async test "direct macho object supports external branch relocation" {
   let source = "int putchar(int); int main(void) { return putchar(65); }"
   let exit_code = run_source_direct_object_async(source, "macho_external_bl")
   inspect(exit_code, content="65")
+}
+
+///|
+async test "direct macho object runs fixture matrix" {
+  let fixtures : Array[DirectObjectFixture] = [
+    { path: "test/run_fixtures/add.c", tag: "fixture_add", expected: 7 },
+    { path: "test/run_fixtures/arrays.c", tag: "fixture_arrays", expected: 3 },
+    {
+      path: "test/run_fixtures/bitwise.c",
+      tag: "fixture_bitwise",
+      expected: 255,
+    },
+    {
+      path: "test/run_fixtures/for_loop.c",
+      tag: "fixture_for_loop",
+      expected: 15,
+    },
+    {
+      path: "test/run_fixtures/funcall.c",
+      tag: "fixture_funcall",
+      expected: 25,
+    },
+    { path: "test/run_fixtures/globals.c", tag: "fixture_globals", expected: 2 },
+    {
+      path: "test/run_fixtures/if_else.c",
+      tag: "fixture_if_else",
+      expected: 20,
+    },
+    { path: "test/run_fixtures/logic.c", tag: "fixture_logic", expected: 3 },
+    {
+      path: "test/run_fixtures/pointers.c",
+      tag: "fixture_pointers",
+      expected: 50,
+    },
+    {
+      path: "test/run_fixtures/prepost.c",
+      tag: "fixture_prepost",
+      expected: 24,
+    },
+    {
+      path: "test/run_fixtures/return_42.c",
+      tag: "fixture_return_42",
+      expected: 42,
+    },
+    { path: "test/run_fixtures/struct.c", tag: "fixture_struct", expected: 7 },
+    {
+      path: "test/run_fixtures/switch_case.c",
+      tag: "fixture_switch_case",
+      expected: 30,
+    },
+    {
+      path: "test/run_fixtures/ternary.c",
+      tag: "fixture_ternary",
+      expected: 10,
+    },
+    {
+      path: "test/run_fixtures/while_loop.c",
+      tag: "fixture_while_loop",
+      expected: 10,
+    },
+    { path: "test/fixtures/hello.c", tag: "fixture_hello", expected: 6 },
+    {
+      path: "test/fixtures/var_decls.c",
+      tag: "fixture_var_decls",
+      expected: 100,
+    },
+    { path: "test/fixtures/switch.c", tag: "fixture_switch", expected: 20 },
+    {
+      path: "test/fixtures/pointers.c",
+      tag: "fixture_pointers_full",
+      expected: 50,
+    },
+  ]
+  for fixture in fixtures {
+    let source = @fs.read_file(fixture.path).text()
+    let exit_code = run_source_direct_object_async(source, fixture.tag)
+    inspect(exit_code, content=fixture.expected.to_string())
+  }
 }

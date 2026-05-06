@@ -462,10 +462,16 @@ fn encode_cmp(rest : String) -> UInt {
     abort("malformed cmp instruction")
   }
   let rn = parse_register(parts[0])
-  let rm = parse_register(parts[1])
-  0x6b00001fU |
-  (rm.reinterpret_as_uint() << 16) |
-  (rn.reinterpret_as_uint() << 5)
+  if parts[1].has_prefix("#") {
+    let imm = parse_immediate(parts[1])
+    let base = if parts[0].has_prefix("w") { 0x7100001fU } else { 0xf100001fU }
+    base | (imm.reinterpret_as_uint() << 10) | (rn.reinterpret_as_uint() << 5)
+  } else {
+    let rm = parse_register(parts[1])
+    0x6b00001fU |
+    (rm.reinterpret_as_uint() << 16) |
+    (rn.reinterpret_as_uint() << 5)
+  }
 }
 
 ///|
