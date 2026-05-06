@@ -2,6 +2,7 @@
 priv struct PendingBranch {
   offset : Int
   label : String
+  link : Bool
 }
 
 ///|
@@ -236,6 +237,23 @@ fn encode_ldr_unsigned(rt_text : String, base_text : String) -> UInt {
 }
 
 ///|
+fn encode_ldr_unsigned_offset(
+  rt_text : String,
+  base_text : String,
+  offset_text : String,
+) -> UInt {
+  let rt = parse_register(rt_text)
+  let rn = parse_register(clean_mem_token(base_text))
+  let offset = parse_immediate(clean_mem_token(offset_text))
+  let scale = if rt_text.has_prefix("w") { 4 } else { 8 }
+  let base = if rt_text.has_prefix("w") { 0xb9400000U } else { 0xf9400000U }
+  base |
+  ((offset / scale).reinterpret_as_uint() << 10) |
+  (rn.reinterpret_as_uint() << 5) |
+  rt.reinterpret_as_uint()
+}
+
+///|
 fn encode_ldr_post_64(
   rt_text : String,
   base_text : String,
@@ -269,7 +287,11 @@ fn encode_ldr(rest : String) -> UInt {
   if parts.length() == 2 {
     encode_ldr_unsigned(parts[0], parts[1])
   } else if parts.length() == 3 {
-    encode_ldr_post_64(parts[0], parts[1], parts[2])
+    if parts[1].has_suffix("]") {
+      encode_ldr_post_64(parts[0], parts[1], parts[2])
+    } else {
+      encode_ldr_unsigned_offset(parts[0], parts[1], parts[2])
+    }
   } else {
     abort("malformed ldr instruction")
   }
@@ -352,12 +374,26 @@ fn encode_mov(rest : String) -> UInt {
 
 ///|
 fn encode_branch(from_offset : Int, target_offset : Int) -> UInt {
+  encode_branch_with_base(from_offset, target_offset, 0x14000000U)
+}
+
+///|
+fn encode_branch_link(from_offset : Int, target_offset : Int) -> UInt {
+  encode_branch_with_base(from_offset, target_offset, 0x94000000U)
+}
+
+///|
+fn encode_branch_with_base(
+  from_offset : Int,
+  target_offset : Int,
+  base : UInt,
+) -> UInt {
   let delta = (target_offset - from_offset) / 4
   if delta < -(1 << 25) || delta >= 1 << 25 {
     abort("branch target out of range for Mach-O object backend")
   }
   let imm = if delta < 0 { delta + (1 << 26) } else { delta }
-  0x14000000U | imm.reinterpret_as_uint()
+  base | imm.reinterpret_as_uint()
 }
 
 ///|
@@ -440,6 +476,14 @@ fn assemble_text_from_darwin_arm64(assembly : String) -> AssembledText {
         pending.push({
           offset: words.length() * 4,
           label: line.substring(start=2).trim().to_string(),
+          link: false,
+        })
+        words.push(0U)
+      } else if line.has_prefix("bl\t") {
+        pending.push({
+          offset: words.length() * 4,
+          label: line.substring(start=3).trim().to_string(),
+          link: true,
         })
         words.push(0U)
       } else {
@@ -450,7 +494,11 @@ fn assemble_text_from_darwin_arm64(assembly : String) -> AssembledText {
   for branch in pending {
     match symbols.get(branch.label) {
       Some(target) =>
-        words[branch.offset / 4] = encode_branch(branch.offset, target)
+        words[branch.offset / 4] = if branch.link {
+          encode_branch_link(branch.offset, target)
+        } else {
+          encode_branch(branch.offset, target)
+        }
       None =>
         abort("unknown branch label in Mach-O object backend: " + branch.label)
     }

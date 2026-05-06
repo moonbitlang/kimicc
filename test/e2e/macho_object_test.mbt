@@ -32,3 +32,17 @@ async test "direct macho object supports local multiply and subtract" {
   let exit_code = run_source_direct_object_async(source, "macho_local_mul_sub")
   inspect(exit_code, content="41")
 }
+
+///|
+async test "direct macho object supports zero-argument internal call" {
+  let source = "int answer(void) { return 42; } int main(void) { return answer(); }"
+  let exit_code = run_source_direct_object_async(source, "macho_internal_call0")
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports integer argument internal call" {
+  let source = "int add(int a, int b) { return a + b; } int main(void) { return add(20, 22); }"
+  let exit_code = run_source_direct_object_async(source, "macho_internal_call2")
+  inspect(exit_code, content="42")
+}
