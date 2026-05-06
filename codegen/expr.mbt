@@ -3769,13 +3769,17 @@ fn Codegen::gen_expr(
         Array(elem, _) => elem
         _ => SInt
       }
-      self.emit_load_typed("x9", "x9", deref_ty)
+      if !address_value_type(deref_ty) {
+        self.emit_load_typed("x9", "x9", deref_ty)
+      }
     }
     AddrOf(e) => self.gen_addr(e, frame_size)
     ArrayAccess(_, _) => {
       self.gen_addr(expr, frame_size)
       let elem_ty = self.type_of(expr, frame_size)
-      self.emit_load_typed("x9", "x9", elem_ty)
+      if !address_value_type(elem_ty) {
+        self.emit_load_typed("x9", "x9", elem_ty)
+      }
     }
     Sizeof(ty) => {
       let size = self.type_size(ty)

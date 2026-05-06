@@ -616,10 +616,11 @@ fn Parser::parse_direct_declarator(
       self.advance()
       let inner = self.parse_declarator(base_ty)
       self.expect(RParen)
+      let push_suffix_inside = inner.ptr_depth > 0
       let outer = self.parse_declarator_suffixes(
         inner.ty,
         inner.name,
-        true,
+        push_suffix_inside,
         inner.ptr_depth,
       )
       outer.set_func_info(inner)

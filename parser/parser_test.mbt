@@ -780,6 +780,21 @@ test "parse multidimensional array declarator keeps outer dimension first" {
 }
 
 ///|
+test "parse parenthesized function declarator as function" {
+  let source = "extern int (putchar)(int);\nint main() { return putchar(65); }"
+  let prog = @parser.parse(source)
+  inspect(prog.globals.length(), content="0")
+  inspect(prog.decls.length(), content="2")
+  inspect(prog.decls[0].name, content="putchar")
+  inspect(prog.decls[0].ret, content="SInt")
+  inspect(prog.decls[0].params.length(), content="1")
+  match prog.decls[0].body {
+    None => ()
+    Some(_) => fail("Expected parenthesized extern function declaration")
+  }
+}
+
+///|
 test "parse computed goto label address" {
   let source = "int main() { void *p = &&label; label: return 0; }"
   let prog = @parser.parse(source)

@@ -806,6 +806,33 @@ async test "2D array explicit assignment" {
 }
 
 ///|
+async test "2D array row access decays to pointer" {
+  let source =
+    #|int main() {
+    #|  int matrix[2][3];
+    #|  int *row;
+    #|  matrix[0][0] = 1; matrix[0][1] = 2; matrix[0][2] = 3;
+    #|  matrix[1][0] = 4; matrix[1][1] = 5; matrix[1][2] = 6;
+    #|  row = matrix[1];
+    #|  if (row != &matrix[1][0]) return 1;
+    #|  return row[0] + row[2];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="10")
+}
+
+///|
+async test "parenthesized extern function declarator calls directly" {
+  let source =
+    #|extern int (putchar)(int);
+    #|int main(void) {
+    #|  return putchar(65) == 65 ? 42 : 1;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "array in ternary expression" {
   let source =
     #|int main() {

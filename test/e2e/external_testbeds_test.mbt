@@ -1122,3 +1122,155 @@ async test "external QuickJS qjs runs language matrix when enabled" {
     )
   }
 }
+
+///|
+fn lua_flags(root : String) -> String {
+  "-DLUA_COMPAT_5_3 -I " + shell_quote(root + "/src")
+}
+
+///|
+fn lua_source_paths(root : String) -> Array[String] {
+  let paths : Array[String] = []
+  for
+    name in [
+      "lapi", "lcode", "lctype", "ldebug", "ldo", "ldump", "lfunc", "lgc", "llex",
+      "lmem", "lobject", "lopcodes", "lparser", "lstate", "lstring", "ltable", "ltm",
+      "lundump", "lvm", "lzio", "lauxlib", "lbaselib", "lcorolib", "ldblib", "liolib",
+      "lmathlib", "loadlib", "loslib", "lstrlib", "ltablib", "lutf8lib", "linit",
+      "lua",
+    ] {
+    paths.push(root + "/src/" + name + ".c")
+  }
+  paths
+}
+
+///|
+async fn build_lua_with_kimicc(root : String, tag : String) -> String {
+  let flags = lua_flags(root)
+  let objects : Array[String] = []
+  for path in lua_source_paths(root) {
+    require_external_path(path, "Lua source")
+    objects.push(
+      compile_c_file_with_kimicc_object_path(
+        path,
+        flags,
+        "lua_external_" + tag + "_" + source_id(path),
+      ),
+    )
+  }
+  let binary_path = "/tmp/kimicc_lua_external_" + tag
+  run_command_checked(
+    "clang -o " +
+    shell_quote(binary_path) +
+    " " +
+    shell_join_quoted(objects) +
+    " -lm",
+    "link Lua external " + tag,
+  )
+  binary_path
+}
+
+///|
+async fn build_lua_with_direct_object(root : String, tag : String) -> String {
+  let flags = lua_flags(root)
+  let objects : Array[String] = []
+  for path in lua_source_paths(root) {
+    require_external_path(path, "Lua source")
+    objects.push(
+      compile_c_file_with_kimicc_direct_object_path(
+        path,
+        flags,
+        "lua_direct_external_" + tag + "_" + source_id(path),
+      ),
+    )
+  }
+  let binary_path = "/tmp/kimicc_lua_direct_external_" + tag
+  run_command_checked(
+    "clang -o " +
+    shell_quote(binary_path) +
+    " " +
+    shell_join_quoted(objects) +
+    " -lm",
+    "link direct Lua external " + tag,
+  )
+  binary_path
+}
+
+///|
+fn lua_language_matrix_script() -> String {
+  let script =
+    #|local function fact(n)
+    #|  if n < 2 then return 1 end
+    #|  return n * fact(n - 1)
+    #|end
+    #|
+    #|local total = 0
+    #|local values = {}
+    #|for i = 1, 6 do
+    #|  values[i] = fact(i)
+    #|  total = total + values[i]
+    #|end
+    #|
+    #|local co = coroutine.create(function(a, b)
+    #|  coroutine.yield(a + b)
+    #|  return a * b
+    #|end)
+    #|
+    #|local ok1, first = coroutine.resume(co, 7, 5)
+    #|local ok2, second = coroutine.resume(co)
+    #|if not ok1 or not ok2 then error("coroutine") end
+    #|if table.concat({"a", "b", "c"}, ":") ~= "a:b:c" then error("table") end
+    #|
+    #|print("lua-matrix", total + first + second)
+  script
+}
+
+///|
+async fn assert_lua_language_matrix(lua_path : String, tag : String) -> Unit {
+  let version = run_command_capture(
+    shell_quote(lua_path) + " -v",
+    "lua_external_version_" + tag,
+  )
+  if version.code != 0 || !version.output.contains("Lua 5.4.6") {
+    abort(
+      "Lua external version failed with code " +
+      version.code.to_string() +
+      ":\n" +
+      version.output,
+    )
+  }
+  let result = run_command_capture(
+    shell_quote(lua_path) + " -e " + shell_quote(lua_language_matrix_script()),
+    "lua_external_matrix_" + tag,
+  )
+  if result.code != 0 || !result.output.contains("lua-matrix\t920") {
+    abort(
+      "Lua external language matrix failed with code " +
+      result.code.to_string() +
+      ":\n" +
+      result.output,
+    )
+  }
+}
+
+///|
+async test "external Lua interpreter runs language matrix when enabled" {
+  if !external_testbed_enabled("lua") {
+    return
+  }
+  let root = "/tmp/kimicc_lua/lua-5.4.6"
+  require_external_path(root + "/src/lua.c", "Lua source root")
+  let lua_path = build_lua_with_kimicc(root, "matrix")
+  assert_lua_language_matrix(lua_path, "matrix")
+}
+
+///|
+async test "external Lua direct object interpreter runs language matrix when enabled" {
+  if !external_testbed_enabled("lua") {
+    return
+  }
+  let root = "/tmp/kimicc_lua/lua-5.4.6"
+  require_external_path(root + "/src/lua.c", "Lua source root")
+  let lua_path = build_lua_with_direct_object(root, "matrix")
+  assert_lua_language_matrix(lua_path, "direct_matrix")
+}

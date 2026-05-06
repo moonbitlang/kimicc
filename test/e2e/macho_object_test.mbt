@@ -718,6 +718,35 @@ async test "direct macho object supports string literal byte load" {
 }
 
 ///|
+async test "direct macho object keeps 2D array row decay as address" {
+  let source =
+    #|int main(void) {
+    #|  int matrix[2][3];
+    #|  int *row;
+    #|  matrix[0][0] = 1; matrix[0][1] = 2; matrix[0][2] = 3;
+    #|  matrix[1][0] = 4; matrix[1][1] = 5; matrix[1][2] = 6;
+    #|  row = matrix[1];
+    #|  if (row != &matrix[1][0]) return 1;
+    #|  return row[0] + row[2];
+    #|}
+  let exit_code = run_source_direct_object_async(source, "macho_2d_row_decay")
+  inspect(exit_code, content="10")
+}
+
+///|
+async test "direct macho object calls parenthesized extern function declarator" {
+  let source =
+    #|extern int (putchar)(int);
+    #|int main(void) {
+    #|  return putchar(65) == 65 ? 42 : 1;
+    #|}
+  let exit_code = run_source_direct_object_async(
+    source, "macho_parenthesized_extern_call",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object supports data pointer relocation" {
   let source = "char *g = \"x\"; int main(void) { return g[0]; }"
   let exit_code = run_source_direct_object_async(source, "macho_data_pointer")
