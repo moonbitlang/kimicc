@@ -58,6 +58,17 @@ fn Codegen::gen_stmt(
     Return(Some(expr)) => {
       let ret_ty = self.func_rets[self.func_name]
       match ret_ty {
+        Struct(_) | Union(_) if self.is_indirect_aggregate(ret_ty) => {
+          self.gen_aggregate_addr(expr, frame_size)
+          self.emit("\tstr\tx9, [sp, #-16]!")
+          self.emit_load_local("x9", self.sret_dest_offset, frame_size)
+          self.emit("\tstr\tx9, [sp, #-16]!")
+          self.emit("\tmov\tx0, x9")
+          self.emit("\tldr\tx1, [sp, #16]")
+          self.emit_load_int("x2", self.type_size(ret_ty).to_int64())
+          self.emit("\tbl\t_memcpy")
+          self.emit("\tadd\tsp, sp, #32")
+        }
         Struct(_) | Union(_) if self.is_register_aggregate(ret_ty) =>
           match expr {
             Call(_, _) => self.gen_expr(expr, frame_size)

@@ -311,6 +311,9 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
             }
           }
         }
+        if self.is_stmt_decl_start() {
+          return self.parse_var_decl_stmt()
+        }
         self.expect(Semicolon)
         return ExprStmt(Expr::Number(0))
       }
@@ -338,6 +341,39 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
       }
     }
     _ => self.parse_expr_stmt()
+  }
+}
+
+///|
+fn Parser::is_stmt_decl_start(self : Parser) -> Bool {
+  match self.token {
+    Int
+    | Void
+    | Char
+    | Struct
+    | Union
+    | Signed
+    | Unsigned
+    | Short
+    | Long
+    | Float
+    | Double
+    | Bool
+    | Enum
+    | Const
+    | Restrict
+    | Volatile
+    | Extern
+    | Static
+    | Inline
+    | Register
+    | Auto => true
+    Ident(name) =>
+      name == "_Atomic" ||
+      name == "_Alignas" ||
+      name == "alignas" ||
+      self.typedefs.contains(name)
+    _ => false
   }
 }
 

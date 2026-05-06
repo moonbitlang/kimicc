@@ -692,6 +692,7 @@ fn Parser::parse_declarator_suffixes(
   ptr_depth : Int,
 ) -> DeclaratorResult {
   let mut ty = base_ty
+  let mut pending_arrays : Array[Int] = []
   let mut func_params : Array[Param]? = None
   let mut func_ret_ty : Type? = None
   let mut is_func_decl = false
@@ -717,13 +718,11 @@ fn Parser::parse_declarator_suffixes(
             None => 0
           }
         }
-        if push_mode {
-          ty = push_array_inside(ty, size)
-        } else {
-          ty = Array(ty, size)
-        }
+        pending_arrays.push(size)
       }
       LParen => {
+        ty = apply_pending_array_suffixes(ty, pending_arrays, push_mode)
+        pending_arrays = []
         self.advance()
         let params : Array[Param] = []
         if self.token != RParen {
@@ -747,6 +746,7 @@ fn Parser::parse_declarator_suffixes(
       _ => break
     }
   }
+  ty = apply_pending_array_suffixes(ty, pending_arrays, push_mode)
   { ty, name, ptr_depth, func_params, func_ret_ty, is_func_decl }
 }
 
@@ -758,6 +758,7 @@ fn Parser::parse_abstract_declarator_suffixes(
   ptr_depth : Int,
 ) -> Type {
   let mut result = ty
+  let mut pending_arrays : Array[Int] = []
   while true {
     match self.token {
       LBracket => {
@@ -780,13 +781,11 @@ fn Parser::parse_abstract_declarator_suffixes(
             None => 0
           }
         }
-        if push_mode {
-          result = push_array_inside(result, size)
-        } else {
-          result = Array(result, size)
-        }
+        pending_arrays.push(size)
       }
       LParen => {
+        result = apply_pending_array_suffixes(result, pending_arrays, push_mode)
+        pending_arrays = []
         self.advance()
         let params : Array[Param] = []
         if self.token != RParen {
@@ -805,14 +804,39 @@ fn Parser::parse_abstract_declarator_suffixes(
       _ => break
     }
   }
+  result = apply_pending_array_suffixes(result, pending_arrays, push_mode)
   result
 }
 
 ///|
-fn push_array_inside(ty : Type, size : Int) -> Type {
+fn apply_array_suffixes(ty : Type, sizes : Array[Int]) -> Type {
+  let mut result = ty
+  for i = sizes.length() - 1; i >= 0; i = i - 1 {
+    result = Type::Array(result, sizes[i])
+  }
+  result
+}
+
+///|
+fn push_array_suffixes_inside(ty : Type, sizes : Array[Int]) -> Type {
   match ty {
-    Pointer(inner) => Pointer(push_array_inside(inner, size))
-    _ => Type::Array(ty, size)
+    Pointer(inner) => Pointer(push_array_suffixes_inside(inner, sizes))
+    _ => apply_array_suffixes(ty, sizes)
+  }
+}
+
+///|
+fn apply_pending_array_suffixes(
+  ty : Type,
+  sizes : Array[Int],
+  push_mode : Bool,
+) -> Type {
+  if sizes.length() == 0 {
+    ty
+  } else if push_mode {
+    push_array_suffixes_inside(ty, sizes)
+  } else {
+    apply_array_suffixes(ty, sizes)
   }
 }
 

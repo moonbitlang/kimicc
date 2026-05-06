@@ -1309,6 +1309,267 @@ async test "e2e atomic array element access uses element width" {
 }
 
 ///|
+async test "e2e static inline function pointer references are emitted" {
+  let source =
+    #|typedef int (*Callback)(int);
+    #|
+    #|static inline int cb_inc(int x) {
+    #|  return x + 1;
+    #|}
+    #|
+    #|static inline int cb_dec(int x) {
+    #|  return x - 1;
+    #|}
+    #|
+    #|static int call_it(Callback cb, int x) {
+    #|  return cb(x);
+    #|}
+    #|
+    #|int main(void) {
+    #|  Callback cb = 1 ? cb_inc : cb_dec;
+    #|  if (call_it(cb, 41) != 42) return 1;
+    #|  if (call_it(cb_dec, 43) != 42) return 2;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e atomic add and sub fetch lower to arm64 atomics" {
+  let source =
+    #|unsigned int value = 10;
+    #|int calls = 0;
+    #|
+    #|unsigned int next_value(void) {
+    #|  calls = calls + 1;
+    #|  return 5;
+    #|}
+    #|
+    #|int main(void) {
+    #|  if (__atomic_add_fetch(&value, next_value(), 5) != 15) return 1;
+    #|  if (calls != 1 || value != 15) return 2;
+    #|  if (__atomic_sub_fetch(&value, 3U, 5) != 12) return 3;
+    #|  if (value != 12) return 4;
+    #|  __atomic_store_n(&value, next_value(), 5);
+    #|  if (calls != 2 || value != 5) return 5;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e builtin bswap16 lowers without external symbol" {
+  let source =
+    #|int main(void) {
+    #|  unsigned short x = __builtin_bswap16(0x1234);
+    #|  if (x != 0x3412) return 1;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e statement attribute before local declaration" {
+  let source =
+    #|int main(void) {
+    #|  __attribute__((unused)) _Bool ok = 1;
+    #|  return ok ? 42 : 1;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e large struct parameter is copied from hidden pointer" {
+  let source =
+    #|struct InputLike {
+    #|  void *payload;
+    #|  int (*read)(void);
+    #|  int encoding;
+    #|  void *decode;
+    #|};
+    #|
+    #|int forty_two(void) {
+    #|  return 42;
+    #|}
+    #|
+    #|int consume(struct InputLike input) {
+    #|  if (input.payload != (void*)0x1234) return 1;
+    #|  if (input.encoding != 7) return 2;
+    #|  if (!input.read) return 3;
+    #|  return input.read();
+    #|}
+    #|
+    #|int main(void) {
+    #|  struct InputLike input = {
+    #|    (void*)0x1234,
+    #|    forty_two,
+    #|    7,
+    #|    (void*)0,
+    #|  };
+    #|  return consume(input);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e nested union compound literal initializes bitfields" {
+  let source =
+    #|typedef unsigned char uint8_t;
+    #|typedef unsigned short uint16_t;
+    #|typedef _Bool bool;
+    #|
+    #|struct InlineData {
+    #|  bool is_inline : 1;
+    #|  bool visible : 1;
+    #|  bool named : 1;
+    #|  bool extra : 1;
+    #|  bool has_changes : 1;
+    #|  bool is_missing : 1;
+    #|  bool is_keyword : 1;
+    #|  uint8_t symbol;
+    #|  uint16_t parse_state;
+    #|  uint8_t padding_columns;
+    #|  uint8_t padding_rows : 4;
+    #|  uint8_t lookahead_bytes : 4;
+    #|  uint8_t padding_bytes;
+    #|  uint8_t size_bytes;
+    #|};
+    #|
+    #|union Subtree {
+    #|  struct InlineData data;
+    #|  void *ptr;
+    #|};
+    #|
+    #|union Subtree make(void) {
+    #|  return (union Subtree) {{
+    #|    .parse_state = 9,
+    #|    .symbol = 7,
+    #|    .padding_bytes = 0,
+    #|    .padding_rows = 0,
+    #|    .padding_columns = 0,
+    #|    .size_bytes = 3,
+    #|    .lookahead_bytes = 5,
+    #|    .visible = 1,
+    #|    .named = 1,
+    #|    .extra = 0,
+    #|    .has_changes = 0,
+    #|    .is_missing = 0,
+    #|    .is_keyword = 0,
+    #|    .is_inline = 1,
+    #|  }};
+    #|}
+    #|
+    #|int retain(union Subtree s) {
+    #|  if (s.data.is_inline) return 42;
+    #|  return 1;
+    #|}
+    #|
+    #|int main(void) {
+    #|  union Subtree s = make();
+    #|  if (!s.data.is_inline) return 1;
+    #|  if (!s.data.visible || !s.data.named) return 2;
+    #|  if (s.data.symbol != 7) return 3;
+    #|  if (s.data.parse_state != 9) return 4;
+    #|  if (s.data.lookahead_bytes != 5) return 5;
+    #|  if (s.data.size_bytes != 3) return 6;
+    #|  if (((unsigned long)s.ptr & 1UL) != 1UL) return 7;
+    #|  return retain(s);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e large struct return uses hidden result pointer" {
+  let source =
+    #|struct PairArray {
+    #|  long a;
+    #|  long b;
+    #|  long c;
+    #|  long d;
+    #|};
+    #|
+    #|struct PairArray make(long base) {
+    #|  struct PairArray out = { base, base + 1, base + 2, base + 3 };
+    #|  return out;
+    #|}
+    #|
+    #|int main(void) {
+    #|  struct PairArray value = make(9);
+    #|  if (value.a != 9) return 1;
+    #|  if (value.b != 10) return 2;
+    #|  if (value.c != 11) return 3;
+    #|  if (value.d != 12) return 4;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e discarded large struct return still passes hidden result pointer" {
+  let source =
+    #|struct PairArray {
+    #|  long a;
+    #|  long b;
+    #|  long c;
+    #|  long d;
+    #|};
+    #|
+    #|int observed;
+    #|
+    #|struct PairArray make(long base) {
+    #|  struct PairArray out = { base, base + 1, base + 2, base + 3 };
+    #|  observed = (int)out.c;
+    #|  return out;
+    #|}
+    #|
+    #|int main(void) {
+    #|  make(9);
+    #|  if (observed != 11) return 1;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e global nested array designators emit in index order" {
+  let source =
+    #|unsigned short table[2][4] = {
+    #|  [0] = {
+    #|    [2] = 4,
+    #|    [3] = 5,
+    #|    [0] = 1,
+    #|    [1] = 2,
+    #|  },
+    #|  [1] = {
+    #|    [3] = 9,
+    #|    [0] = 6,
+    #|  },
+    #|};
+    #|
+    #|int main(void) {
+    #|  if (table[0][0] != 1) return 1;
+    #|  if (table[0][1] != 2) return 2;
+    #|  if (table[0][2] != 4) return 3;
+    #|  if (table[0][3] != 5) return 4;
+    #|  if (table[1][0] != 6) return 5;
+    #|  if (table[1][1] != 0) return 6;
+    #|  if (table[1][2] != 0) return 7;
+    #|  if (table[1][3] != 9) return 8;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e sqlite-style unsigned int overflow chain count" {
   let source =
     #|typedef unsigned int u32;

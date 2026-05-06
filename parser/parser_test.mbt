@@ -772,6 +772,14 @@ test "parse global array initializer inferred size" {
 }
 
 ///|
+test "parse multidimensional array declarator keeps outer dimension first" {
+  let source = "unsigned short table[2][4];\nint main() { return 0; }"
+  let prog = @parser.parse(source)
+  inspect(prog.globals.length(), content="1")
+  inspect(prog.globals[0].ty, content="Array(Array(UShort, 4), 2)")
+}
+
+///|
 test "parse computed goto label address" {
   let source = "int main() { void *p = &&label; label: return 0; }"
   let prog = @parser.parse(source)

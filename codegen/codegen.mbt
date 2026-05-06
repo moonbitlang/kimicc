@@ -23,6 +23,10 @@ pub struct Codegen {
   mut emitted_labels : Map[String, String]
   mut defined_labels : Map[String, Bool]
   mut fp_literals : Array[Double]
+  mut sret_dest_offset : Int
+  mut sret_scratch_offset : Int
+  mut sret_scratch_size : Int
+  mut pending_sret_offset : Int
 }
 
 ///|
@@ -143,8 +147,8 @@ fn collect_static_inline_expr(
   needed : Map[String, Bool],
 ) -> Unit {
   match expr {
-    Var(_)
-    | Number(_)
+    Var(name) => mark_static_inline_needed(name, inline_decls, needed)
+    Number(_)
     | FloatLiteral(_)
     | String(_)
     | Sizeof(_)
@@ -604,6 +608,10 @@ pub fn Codegen::new() -> Codegen {
     emitted_labels: {},
     defined_labels: {},
     fp_literals: [],
+    sret_dest_offset: -1,
+    sret_scratch_offset: -1,
+    sret_scratch_size: 0,
+    pending_sret_offset: -1,
   }
 }
 
@@ -715,7 +723,7 @@ fn Codegen::emit_global_array(
   match ty {
     Array(elem_ty, n) => {
       let elem_size = self.type_size(elem_ty)
-      let mut emitted = 0
+      let slots : Array[@parser.Expr?] = Array::make(n, None)
       let mut cursor = 0
       for expr in exprs {
         let mut start = cursor
@@ -738,24 +746,18 @@ fn Codegen::emit_global_array(
             expr
           }
         }
-        if start > emitted {
-          self.emit("\t.space\t" + ((start - emitted) * elem_size).to_string())
-          emitted = start
-        }
         for i = start; i <= end; i = i + 1 {
-          if i >= emitted && i < n {
-            match value {
-              Array(nested) => self.emit_global_array(elem_ty, nested)
-              _ => self.emit_global_scalar(elem_ty, value)
-            }
-            emitted = i + 1
+          if i >= 0 && i < n {
+            slots[i] = Some(value)
           }
         }
       }
-      // Pad remaining elements with zeros
-      let pad_count = n - emitted
-      if pad_count > 0 {
-        self.emit("\t.space\t" + (pad_count * elem_size).to_string())
+      for slot in slots {
+        match slot {
+          Some(Array(nested)) => self.emit_global_array(elem_ty, nested)
+          Some(value) => self.emit_global_scalar(elem_ty, value)
+          None => self.emit("\t.space\t" + elem_size.to_string())
+        }
       }
     }
     Struct(name) => {

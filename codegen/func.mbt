@@ -11,10 +11,21 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
       self.fp_literals = []
       self.func_name = decl.name
       self.func_params = decl.params
+      self.sret_dest_offset = -1
+      self.sret_scratch_offset = -1
+      self.sret_scratch_size = 0
+      self.pending_sret_offset = -1
       // Allocate space for params
       let param_offsets : Map[String, Int] = {}
       let param_types : Map[String, @parser.Type] = {}
       let mut param_stack_end = 0
+      if self.is_indirect_aggregate(decl.ret) {
+        self.sret_dest_offset = self.alloc_local(
+          "__kimicc_sret_dest",
+          Pointer(Void),
+        )
+        param_stack_end = self.sret_dest_offset + 8
+      }
       for i = 0; i < decl.params.length(); i = i + 1 {
         let p = decl.params[i]
         let offset = self.alloc_local(p.name, p.ty)
@@ -28,6 +39,12 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
       }
       // Collect locals and compute offsets
       self.collect_locals(body)
+      if self.sret_scratch_size > 0 {
+        self.sret_scratch_offset = self.alloc_local(
+          "__kimicc_sret_scratch",
+          Array(UChar, self.sret_scratch_size),
+        )
+      }
       let frame_size = (self.stack_size + 15) / 16 * 16
       if !decl.is_static {
         self.emit("\t.globl\t_" + decl.name)
@@ -43,6 +60,9 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
           self.emit_load_int("x16", frame_size.to_int64())
           self.emit("\tsub\tsp, sp, x16")
         }
+      }
+      if self.sret_dest_offset >= 0 {
+        self.emit_store_local("x8", self.sret_dest_offset, frame_size)
       }
       // Store params
       // AAPCS64: args 1-8 in x0-x7 (or v0-v7 for FP), args 9+ on stack
@@ -103,7 +123,21 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
           }
           Struct(_) | Union(_) => {
             let size = self.type_size(p.ty)
-            if size > 8 && size <= 16 {
+            if size > 16 {
+              if int_idx < 8 {
+                let reg = "x" + int_idx.to_string()
+                self.emit_copy_indirect_param_to_local(
+                  reg, offset, size, frame_size,
+                )
+              } else {
+                let stack_off = 16 + (int_idx - 8) * 8
+                self.emit("\tldr\tx11, [x29, #" + stack_off.to_string() + "]")
+                self.emit_copy_indirect_param_to_local(
+                  "x11", offset, size, frame_size,
+                )
+              }
+              int_idx += 1
+            } else if size > 8 {
               // Composite type passed in two consecutive X registers or on stack
               if int_idx < 7 {
                 self.emit_store_local(
@@ -198,6 +232,42 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
 }
 
 ///|
+fn Codegen::emit_copy_indirect_param_to_local(
+  self : Codegen,
+  src_reg : String,
+  offset : Int,
+  size : Int,
+  frame_size : Int,
+) -> Unit {
+  self.emit("\tmov\tx10, " + src_reg)
+  self.emit_local_addr(offset, frame_size)
+  let mut pos = 0
+  while pos + 8 <= size {
+    let suffix = if pos == 0 { "" } else { ", #" + pos.to_string() }
+    self.emit("\tldr\tx12, [x10" + suffix + "]")
+    self.emit("\tstr\tx12, [x9" + suffix + "]")
+    pos += 8
+  }
+  if pos + 4 <= size {
+    let suffix = if pos == 0 { "" } else { ", #" + pos.to_string() }
+    self.emit("\tldr\tw12, [x10" + suffix + "]")
+    self.emit("\tstr\tw12, [x9" + suffix + "]")
+    pos += 4
+  }
+  if pos + 2 <= size {
+    let suffix = if pos == 0 { "" } else { ", #" + pos.to_string() }
+    self.emit("\tldrh\tw12, [x10" + suffix + "]")
+    self.emit("\tstrh\tw12, [x9" + suffix + "]")
+    pos += 2
+  }
+  if pos < size {
+    let suffix = if pos == 0 { "" } else { ", #" + pos.to_string() }
+    self.emit("\tldrb\tw12, [x10" + suffix + "]")
+    self.emit("\tstrb\tw12, [x9" + suffix + "]")
+  }
+}
+
+///|
 fn Codegen::emit_load_local(
   self : Codegen,
   dst_reg : String,
@@ -286,6 +356,13 @@ fn Codegen::collect_expr_locals(self : Codegen, expr : @parser.Expr) -> Unit {
     | PostfixDec(e)
     | DesignatedField(_, e) => self.collect_expr_locals(e)
     Call(func, args) => {
+      let ret_ty = self.call_return_type(func, 0)
+      if self.is_indirect_aggregate(ret_ty) {
+        let size = self.type_size(ret_ty)
+        if size > self.sret_scratch_size {
+          self.sret_scratch_size = size
+        }
+      }
       self.collect_expr_locals(func)
       for arg in args {
         self.collect_expr_locals(arg)

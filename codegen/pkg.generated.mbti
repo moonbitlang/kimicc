@@ -31,6 +31,10 @@ pub struct Codegen {
   mut emitted_labels : Map[String, String]
   mut defined_labels : Map[String, Bool]
   mut fp_literals : Array[Double]
+  mut sret_dest_offset : Int
+  mut sret_scratch_offset : Int
+  mut sret_scratch_size : Int
+  mut pending_sret_offset : Int
 }
 pub fn Codegen::generate(Self, @parser.Program) -> String
 pub fn Codegen::new() -> Self
