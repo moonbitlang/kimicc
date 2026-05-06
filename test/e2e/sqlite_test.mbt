@@ -598,7 +598,7 @@ async test "sqlite public release gate scripts pass with clang and direct baseli
 }
 
 ///|
-async test "sqlite public residual scripts match clang when enabled" {
+async test "sqlite public residual scripts match clang and direct when enabled" {
   if !sqlite_public_conformance_enabled("residuals") {
     return
   }
@@ -615,12 +615,19 @@ async test "sqlite public residual scripts match clang when enabled" {
     "sqlite_public_residuals",
     Clang,
   )
-  if kimicc.code != clang.code {
+  let direct = run_sqlite_public_tcl_batch_collect_with(
+    sqlite_residual_script_paths(),
+    "sqlite_public_residuals",
+    DirectObject,
+  )
+  if kimicc.code != clang.code || kimicc.code != direct.code {
     abort(
       "SQLite residual script exit code differs:\nkimicc:\n" +
       kimicc.output +
       "\nclang:\n" +
-      clang.output,
+      clang.output +
+      "\ndirect:\n" +
+      direct.output,
     )
   }
   if kimicc.code == 0 {
@@ -628,6 +635,7 @@ async test "sqlite public residual scripts match clang when enabled" {
   }
   assert_sqlite_residual_script_outputs(kimicc.output, "kimicc")
   assert_sqlite_residual_script_outputs(clang.output, "clang")
+  assert_sqlite_residual_script_outputs(direct.output, "direct object")
 }
 
 ///|
