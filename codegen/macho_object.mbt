@@ -642,14 +642,19 @@ fn add_relocation(
   pcrel : Bool,
   type_ : Int,
 ) -> Unit {
-  section.relocs.push({
-    address,
-    symbol,
-    pcrel,
-    length: 2,
-    external: true,
-    type_,
-  })
+  add_relocation_with_length(section, address, symbol, pcrel, type_, 2)
+}
+
+///|
+fn add_relocation_with_length(
+  section : ObjectSection,
+  address : Int,
+  symbol : String,
+  pcrel : Bool,
+  type_ : Int,
+  length : Int,
+) -> Unit {
+  section.relocs.push({ address, symbol, pcrel, length, external: true, type_ })
 }
 
 ///|
@@ -762,6 +767,29 @@ fn parse_data_integer(value : String, context : String) -> Int {
 }
 
 ///|
+fn parse_data_integer_opt(value : String) -> Int? {
+  let text = value.trim().to_string()
+  let n = @string.parse_int(text) catch { _ => return None }
+  Some(n)
+}
+
+///|
+fn append_quad_value(section : ObjectSection, value : String) -> Unit {
+  match parse_data_integer_opt(value) {
+    Some(n) => append_u64_to_section(section, n.to_int64())
+    None => {
+      let symbol = value.trim().to_string()
+      if symbol == "" || symbol.contains(" ") {
+        abort("unsupported .quad operand in Mach-O object backend: " + value)
+      }
+      let address = section.bytes.length()
+      append_u64_to_section(section, 0L)
+      add_relocation_with_length(section, address, symbol, false, 0, 3)
+    }
+  }
+}
+
+///|
 fn is_octal_char(ch : UInt16) -> Bool {
   ch >= '0'.to_int().to_uint16() && ch <= '7'.to_int().to_uint16()
 }
@@ -833,10 +861,7 @@ fn append_data_directive(section : ObjectSection, line : String) -> Bool {
     return true
   } else if line.has_prefix(".quad") {
     for value in split_operands(directive_rest(line, ".quad")) {
-      append_u64_to_section(
-        section,
-        parse_data_integer(value, ".quad").to_int64(),
-      )
+      append_quad_value(section, value)
     }
     return true
   } else if line.has_prefix(".space") {
