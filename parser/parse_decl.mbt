@@ -13,6 +13,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
     spec.is_inline = true
   }
   let decl = self.parse_declarator(spec.base_type)
+  self.skip_attributes()
   // If no name and no function suffix, skip to semicolon
   if decl.name == "" && decl.func_params.is_none() {
     while self.token != Semicolon && self.token != EOF {
@@ -165,6 +166,7 @@ fn Parser::parse_global_var_tail(
   let mut ty = apply_decl_align(resolve_var_type(decl), spec.align)
   let name = decl.name
   let mut init : GlobalInit? = None
+  self.skip_attributes()
   // Parse initializer for first variable
   if self.token == Assign {
     self.advance()
@@ -200,10 +202,12 @@ fn Parser::parse_global_var_tail(
     is_extern: spec.is_extern,
   })
   self.remember_value_type(name, ty)
+  self.skip_attributes()
   // Handle additional variables separated by comma
   while self.token == Comma {
     self.advance()
     let extra_decl = self.parse_declarator(spec.base_type)
+    self.skip_attributes()
     let mut extra_ty = apply_decl_align(
       resolve_var_type(extra_decl),
       spec.align,
@@ -243,7 +247,9 @@ fn Parser::parse_global_var_tail(
       is_extern: spec.is_extern,
     })
     self.remember_value_type(extra_decl.name, extra_ty)
+    self.skip_attributes()
   }
+  self.skip_attributes()
   self.expect(Semicolon)
 }
 

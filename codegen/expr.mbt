@@ -1,4 +1,44 @@
 ///|
+fn peel_aligned_type(ty : @parser.Type) -> @parser.Type {
+  match ty {
+    Aligned(inner, _) => peel_aligned_type(inner)
+    _ => ty
+  }
+}
+
+///|
+fn aggregate_owner_name(ty : @parser.Type) -> String? {
+  match peel_aligned_type(ty) {
+    Struct(n) | Union(n) => Some(n)
+    _ => None
+  }
+}
+
+///|
+fn array_element_type(ty : @parser.Type) -> @parser.Type? {
+  match peel_aligned_type(ty) {
+    Array(elem, _) => Some(elem)
+    _ => None
+  }
+}
+
+///|
+fn pointer_or_array_element_type(ty : @parser.Type) -> @parser.Type? {
+  match peel_aligned_type(ty) {
+    Pointer(elem) | Array(elem, _) => Some(elem)
+    _ => None
+  }
+}
+
+///|
+fn address_value_type(ty : @parser.Type) -> Bool {
+  match peel_aligned_type(ty) {
+    Array(_, _) | Struct(_) | Union(_) => true
+    _ => false
+  }
+}
+
+///|
 fn Codegen::type_of(
   self : Codegen,
   expr : @parser.Expr,
@@ -21,8 +61,10 @@ fn Codegen::type_of(
     Binary(op, lhs, rhs) => {
       let lhs_ty = self.type_of(lhs, frame_size)
       let rhs_ty = self.type_of(rhs, frame_size)
+      let lhs_core = peel_aligned_type(lhs_ty)
+      let rhs_core = peel_aligned_type(rhs_ty)
       // Pointer arithmetic
-      match (lhs_ty, rhs_ty) {
+      match (lhs_core, rhs_core) {
         (Pointer(_), Pointer(_))
         | (Array(_, _), Pointer(_))
         | (Pointer(_), Array(_, _))
@@ -61,12 +103,9 @@ fn Codegen::type_of(
     CompoundAssign(_, lhs, _) => self.type_of(lhs, frame_size)
     MemberAccess(obj, field) => {
       let obj_ty = self.type_of(obj, frame_size)
-      let struct_name = match obj_ty {
-        Struct(n) => n
-        Union(n) => n
-        Aligned(Struct(n), _) => n
-        Aligned(Union(n), _) => n
-        _ => return SInt
+      let struct_name = match aggregate_owner_name(obj_ty) {
+        Some(n) => n
+        None => return SInt
       }
       if self.struct_layouts.contains(struct_name) {
         let fields = self.struct_layouts[struct_name]
@@ -79,22 +118,17 @@ fn Codegen::type_of(
       SInt
     }
     Deref(ptr) =>
-      match self.type_of(ptr, frame_size) {
+      match peel_aligned_type(self.type_of(ptr, frame_size)) {
         Pointer(ty) => ty
         FuncPtr(ret, count, variadic) => FuncPtr(ret, count, variadic)
         Array(elem, _) => elem
-        Aligned(inner, _) => inner
         _ => SInt
       }
     AddrOf(e) => Pointer(self.type_of(e, frame_size))
     ArrayAccess(arr, _) =>
-      match self.type_of(arr, frame_size) {
-        Array(elem, _) => elem
-        Pointer(elem) => elem
-        _ => {
-          let arr_ty = self.type_of(arr, frame_size)
-          SInt
-        }
+      match pointer_or_array_element_type(self.type_of(arr, frame_size)) {
+        Some(elem) => elem
+        None => SInt
       }
     Sizeof(_) => SInt
     SizeofExpr(_) => SInt
@@ -126,7 +160,7 @@ fn ternary_result_type(
   then_ty : @parser.Type,
   else_ty : @parser.Type,
 ) -> @parser.Type {
-  match (then_ty, else_ty) {
+  match (peel_aligned_type(then_ty), peel_aligned_type(else_ty)) {
     (Array(elem, _), _) => Pointer(elem)
     (_, Array(elem, _)) => Pointer(elem)
     _ => then_ty
@@ -265,58 +299,64 @@ fn Codegen::emit_atomic_update_loop(
   self : Codegen,
   op : String,
   elem_ty : @parser.Type,
+  return_new : Bool,
 ) -> Unit {
   let loop_label = self.new_label()
   let byte_width = self.type_size(elem_ty)
   self.emit(loop_label + ":")
   if byte_width == 1 {
     self.emit("\tldaxrb\tw9, [x0]")
-    if op == "+" {
-      self.emit("\tadd\tw11, w9, w10")
-    } else {
-      self.emit("\tsub\tw11, w9, w10")
-    }
+    self.emit_atomic_update_op(op, "w11", "w9", "w10")
     self.emit("\tstlxrb\tw12, w11, [x0]")
   } else if byte_width == 2 {
     self.emit("\tldaxrh\tw9, [x0]")
-    if op == "+" {
-      self.emit("\tadd\tw11, w9, w10")
-    } else {
-      self.emit("\tsub\tw11, w9, w10")
-    }
+    self.emit_atomic_update_op(op, "w11", "w9", "w10")
     self.emit("\tstlxrh\tw12, w11, [x0]")
   } else if byte_width == 4 {
     self.emit("\tldaxr\tw9, [x0]")
-    if op == "+" {
-      self.emit("\tadd\tw11, w9, w10")
-    } else {
-      self.emit("\tsub\tw11, w9, w10")
-    }
+    self.emit_atomic_update_op(op, "w11", "w9", "w10")
     self.emit("\tstlxr\tw12, w11, [x0]")
   } else {
     self.emit("\tldaxr\tx9, [x0]")
-    if op == "+" {
-      self.emit("\tadd\tx11, x9, x10")
-    } else {
-      self.emit("\tsub\tx11, x9, x10")
-    }
+    self.emit_atomic_update_op(op, "x11", "x9", "x10")
     self.emit("\tstlxr\tw12, x11, [x0]")
   }
   self.emit("\tcbnz\tw12, " + loop_label)
-  if byte_width == 8 {
-    self.emit("\tmov\tx9, x11")
-  } else {
-    self.emit("\tmov\tw9, w11")
+  if return_new {
+    if byte_width == 8 {
+      self.emit("\tmov\tx9, x11")
+    } else {
+      self.emit("\tmov\tw9, w11")
+    }
   }
   self.emit_scalar_conversion_to(elem_ty)
 }
 
 ///|
-fn Codegen::emit_atomic_fetch_add_sub(
+fn Codegen::emit_atomic_update_op(
+  self : Codegen,
+  op : String,
+  dst : String,
+  old : String,
+  value : String,
+) -> Unit {
+  match op {
+    "+" => self.emit("\tadd\t" + dst + ", " + old + ", " + value)
+    "-" => self.emit("\tsub\t" + dst + ", " + old + ", " + value)
+    "&" => self.emit("\tand\t" + dst + ", " + old + ", " + value)
+    "|" => self.emit("\torr\t" + dst + ", " + old + ", " + value)
+    "^" => self.emit("\teor\t" + dst + ", " + old + ", " + value)
+    _ => self.emit("\tmov\t" + dst + ", " + old)
+  }
+}
+
+///|
+fn Codegen::emit_atomic_update(
   self : Codegen,
   args : Array[@parser.Expr],
   frame_size : Int,
   op : String,
+  return_new : Bool,
 ) -> Unit {
   if args.length() >= 2 {
     let elem_ty = atomic_target_type(self.type_of(args[0], frame_size))
@@ -331,7 +371,151 @@ fn Codegen::emit_atomic_fetch_add_sub(
       self.emit("\tmov\tw10, w9")
     }
     self.emit("\tldr\tx0, [sp], #16")
-    self.emit_atomic_update_loop(op, elem_ty)
+    self.emit_atomic_update_loop(op, elem_ty, return_new)
+  } else {
+    self.emit("\tmov\tx9, #0")
+  }
+}
+
+///|
+fn Codegen::emit_atomic_exchange(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Unit {
+  if args.length() >= 2 {
+    let elem_ty = atomic_target_type(self.type_of(args[0], frame_size))
+    let byte_width = self.type_size(elem_ty)
+    self.gen_expr(args[0], frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_expr(args[1], frame_size)
+    self.emit_numeric_conversion(self.type_of(args[1], frame_size), elem_ty)
+    self.emit_scalar_conversion_to(elem_ty)
+    if byte_width == 8 {
+      self.emit("\tmov\tx10, x9")
+    } else {
+      self.emit("\tmov\tw10, w9")
+    }
+    self.emit("\tldr\tx0, [sp], #16")
+    let loop_label = self.new_label()
+    self.emit(loop_label + ":")
+    if byte_width == 1 {
+      self.emit("\tldaxrb\tw9, [x0]")
+      self.emit("\tstlxrb\tw12, w10, [x0]")
+    } else if byte_width == 2 {
+      self.emit("\tldaxrh\tw9, [x0]")
+      self.emit("\tstlxrh\tw12, w10, [x0]")
+    } else if byte_width == 4 {
+      self.emit("\tldaxr\tw9, [x0]")
+      self.emit("\tstlxr\tw12, w10, [x0]")
+    } else {
+      self.emit("\tldaxr\tx9, [x0]")
+      self.emit("\tstlxr\tw12, x10, [x0]")
+    }
+    self.emit("\tcbnz\tw12, " + loop_label)
+    self.emit_scalar_conversion_to(elem_ty)
+  } else {
+    self.emit("\tmov\tx9, #0")
+  }
+}
+
+///|
+fn Codegen::emit_atomic_compare_exchange(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Unit {
+  if args.length() >= 3 {
+    let elem_ty = atomic_target_type(self.type_of(args[0], frame_size))
+    let byte_width = self.type_size(elem_ty)
+    self.gen_expr(args[0], frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_expr(args[1], frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_expr(args[2], frame_size)
+    self.emit_numeric_conversion(self.type_of(args[2], frame_size), elem_ty)
+    self.emit_scalar_conversion_to(elem_ty)
+    if byte_width == 8 {
+      self.emit("\tmov\tx10, x9")
+    } else {
+      self.emit("\tmov\tw10, w9")
+    }
+    self.emit("\tldr\tx1, [sp], #16")
+    self.emit("\tldr\tx0, [sp], #16")
+    self.emit_load_typed("x13", "x1", elem_ty)
+    let loop_label = self.new_label()
+    let fail_label = self.new_label()
+    let done_label = self.new_label()
+    self.emit(loop_label + ":")
+    if byte_width == 1 {
+      self.emit("\tldaxrb\tw9, [x0]")
+      self.emit("\tcmp\tw9, w13")
+      self.emit("\tb.ne\t" + fail_label)
+      self.emit("\tstlxrb\tw12, w10, [x0]")
+    } else if byte_width == 2 {
+      self.emit("\tldaxrh\tw9, [x0]")
+      self.emit("\tcmp\tw9, w13")
+      self.emit("\tb.ne\t" + fail_label)
+      self.emit("\tstlxrh\tw12, w10, [x0]")
+    } else if byte_width == 4 {
+      self.emit("\tldaxr\tw9, [x0]")
+      self.emit("\tcmp\tw9, w13")
+      self.emit("\tb.ne\t" + fail_label)
+      self.emit("\tstlxr\tw12, w10, [x0]")
+    } else {
+      self.emit("\tldaxr\tx9, [x0]")
+      self.emit("\tcmp\tx9, x13")
+      self.emit("\tb.ne\t" + fail_label)
+      self.emit("\tstlxr\tw12, x10, [x0]")
+    }
+    self.emit("\tcbnz\tw12, " + loop_label)
+    self.emit("\tmov\tx9, #1")
+    self.emit("\tb\t" + done_label)
+    self.emit(fail_label + ":")
+    self.emit_store_typed("x9", "x1", elem_ty)
+    self.emit("\tmov\tx9, #0")
+    self.emit(done_label + ":")
+  } else {
+    self.emit("\tmov\tx9, #0")
+  }
+}
+
+///|
+fn Codegen::emit_darwin_fd_helper(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+  op : String,
+) -> Unit {
+  if args.length() >= 2 {
+    self.gen_expr(args[0], frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_expr(args[1], frame_size)
+    self.emit("\tmov\tx10, x9")
+    self.emit("\tldr\tx9, [sp], #16")
+    self.emit("\tand\tx11, x9, #31")
+    self.emit("\tmov\tx12, #1")
+    self.emit("\tlsl\tx12, x12, x11")
+    self.emit("\tlsr\tx11, x9, #5")
+    self.emit("\tadd\tx10, x10, x11, lsl #2")
+    self.emit("\tldr\tw13, [x10]")
+    match op {
+      "set" => {
+        self.emit("\torr\tw13, w13, w12")
+        self.emit("\tstr\tw13, [x10]")
+        self.emit("\tmov\tx9, #0")
+      }
+      "clr" => {
+        self.emit("\tbic\tw13, w13, w12")
+        self.emit("\tstr\tw13, [x10]")
+        self.emit("\tmov\tx9, #0")
+      }
+      _ => {
+        self.emit("\tand\tw9, w13, w12")
+        self.emit("\tcmp\tw9, #0")
+        self.emit("\tcset\tx9, ne")
+      }
+    }
   } else {
     self.emit("\tmov\tx9, #0")
   }
@@ -639,21 +823,30 @@ fn Codegen::gen_compound_assign(
   rhs : @parser.Expr,
   frame_size : Int,
 ) -> Unit {
+  match self.find_bitfield_member(lhs, frame_size) {
+    Some(info) => {
+      self.gen_bitfield_compound_assign(op, lhs, rhs, info, frame_size)
+      return
+    }
+    None => ()
+  }
   let lhs_ty = self.type_of(lhs, frame_size)
   let rhs_ty = self.type_of(rhs, frame_size)
-  let ptr_scale = match (lhs_ty, rhs_ty) {
+  let lhs_core = peel_aligned_type(lhs_ty)
+  let rhs_core = peel_aligned_type(rhs_ty)
+  let ptr_scale = match (lhs_core, rhs_core) {
     (Pointer(elem), _) => self.type_size(elem)
     (Array(elem, _), _) => self.type_size(elem)
     (_, Pointer(elem)) => self.type_size(elem)
     (_, Array(elem, _)) => self.type_size(elem)
     _ => 1
   }
-  let has_ptr_operand = match (lhs_ty, rhs_ty) {
+  let has_ptr_operand = match (lhs_core, rhs_core) {
     (Pointer(_), _) | (Array(_, _), _) | (_, Pointer(_)) | (_, Array(_, _)) =>
       true
     _ => false
   }
-  let scale_right = match lhs_ty {
+  let scale_right = match lhs_core {
     Pointer(_) | Array(_, _) => (op == "+" || op == "-") && rhs_ty.is_integer()
     _ => false
   }
@@ -781,6 +974,132 @@ fn Codegen::gen_compound_assign(
 }
 
 ///|
+fn Codegen::find_bitfield_member(
+  self : Codegen,
+  expr : @parser.Expr,
+  frame_size : Int,
+) -> MemberAddrInfo? {
+  match expr {
+    MemberAccess(obj, field) => {
+      let obj_ty = self.type_of(obj, frame_size)
+      match aggregate_owner_name(obj_ty) {
+        Some(struct_name) =>
+          match self.find_field_layout(struct_name, field) {
+            Some((_, ty, _, size, bit_offset, bit_width)) =>
+              if bit_width > 0 {
+                Some({ ty, size, bit_offset, bit_width, stack_temp_size: 0 })
+              } else {
+                None
+              }
+            None => None
+          }
+        None => None
+      }
+    }
+    _ => None
+  }
+}
+
+///|
+fn Codegen::gen_bitfield_compound_assign(
+  self : Codegen,
+  op : String,
+  lhs : @parser.Expr,
+  rhs : @parser.Expr,
+  info : MemberAddrInfo,
+  frame_size : Int,
+) -> Unit {
+  let lhs_ty = info.ty
+  let rhs_ty = self.type_of(rhs, frame_size)
+  let is_unsigned_int = match op {
+    "<<" | ">>" => is_unsigned_integer_type(lhs_ty)
+    _ => uses_unsigned_integer_op(lhs_ty, rhs_ty)
+  }
+  let mask = (1 << info.bit_width) - 1
+  self.gen_addr(lhs, frame_size)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  match info.size {
+    1 => self.emit("\tldrb\tw9, [x9]")
+    2 => self.emit("\tldrh\tw9, [x9]")
+    4 => self.emit("\tldr\tw9, [x9]")
+    _ => self.emit("\tldr\tx9, [x9]")
+  }
+  self.emit("\tlsr\tx9, x9, #" + info.bit_offset.to_string())
+  self.emit_load_int("x10", mask.to_int64())
+  self.emit("\tand\tx9, x9, x10")
+  if lhs_ty.is_signed() {
+    let shift = 64 - info.bit_width
+    self.emit("\tlsl\tx9, x9, #" + shift.to_string())
+    self.emit("\tasr\tx9, x9, #" + shift.to_string())
+  }
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.gen_expr(rhs, frame_size)
+  self.emit_numeric_conversion(rhs_ty, lhs_ty)
+  self.emit_scalar_conversion_to(lhs_ty)
+  self.emit("\tmov\tx10, x9")
+  self.emit("\tldr\tx9, [sp], #16")
+  match op {
+    "+" => self.emit("\tadd\tx9, x9, x10")
+    "-" => self.emit("\tsub\tx9, x9, x10")
+    "*" => self.emit("\tmul\tx9, x9, x10")
+    "/" =>
+      if is_unsigned_int {
+        self.emit("\tudiv\tx9, x9, x10")
+      } else {
+        self.emit("\tsdiv\tx9, x9, x10")
+      }
+    "%" =>
+      if is_unsigned_int {
+        self.emit("\tudiv\tx11, x9, x10\n\tmsub\tx9, x11, x10, x9")
+      } else {
+        self.emit("\tsdiv\tx11, x9, x10\n\tmsub\tx9, x11, x10, x9")
+      }
+    "&" => self.emit("\tand\tx9, x9, x10")
+    "|" => self.emit("\torr\tx9, x9, x10")
+    "^" => self.emit("\teor\tx9, x9, x10")
+    "<<" => self.emit("\tlsl\tx9, x9, x10")
+    ">>" =>
+      if is_unsigned_int {
+        self.emit("\tlsr\tx9, x9, x10")
+      } else {
+        self.emit("\tasr\tx9, x9, x10")
+      }
+    _ => ()
+  }
+  self.emit_scalar_conversion_to(lhs_ty)
+  self.emit_load_int("x10", mask.to_int64())
+  self.emit("\tand\tx9, x9, x10")
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.emit("\tldr\tx10, [sp, #16]")
+  match info.size {
+    1 => self.emit("\tldrb\tw11, [x10]")
+    2 => self.emit("\tldrh\tw11, [x10]")
+    4 => self.emit("\tldr\tw11, [x10]")
+    _ => self.emit("\tldr\tx11, [x10]")
+  }
+  self.emit_load_int("x12", mask.to_int64())
+  self.emit("\tlsl\tx12, x12, #" + info.bit_offset.to_string())
+  self.emit("\tmvn\tx12, x12")
+  self.emit("\tand\tx11, x11, x12")
+  self.emit("\tldr\tx9, [sp]")
+  self.emit("\tlsl\tx9, x9, #" + info.bit_offset.to_string())
+  self.emit("\torr\tx11, x11, x9")
+  match info.size {
+    1 => self.emit("\tstrb\tw11, [x10]")
+    2 => self.emit("\tstrh\tw11, [x10]")
+    4 => self.emit("\tstr\tw11, [x10]")
+    _ => self.emit("\tstr\tx11, [x10]")
+  }
+  self.emit("\tldr\tx9, [sp], #16")
+  self.emit("\tadd\tsp, sp, #16")
+  if lhs_ty.is_signed() {
+    let shift = 64 - info.bit_width
+    self.emit("\tlsl\tx9, x9, #" + shift.to_string())
+    self.emit("\tasr\tx9, x9, #" + shift.to_string())
+  }
+}
+
+///|
 fn Codegen::gen_callee_addr(
   self : Codegen,
   func : @parser.Expr,
@@ -884,6 +1203,17 @@ fn Codegen::emit_builtin_call(
       self.emit("\tbrk\t#0x1")
       true
     }
+    "__builtin_frame_address" => {
+      if args.length() > 0 {
+        match args[0] {
+          Number(0L) => self.emit("\tmov\tx9, x29")
+          _ => self.emit("\tmov\tx9, #0")
+        }
+      } else {
+        self.emit("\tmov\tx9, x29")
+      }
+      true
+    }
     "__builtin_assume" => {
       // No-op
       self.emit("\tmov\tx9, #0")
@@ -980,6 +1310,13 @@ fn Codegen::emit_builtin_call(
         self.emit_builtin_lib_call("_memset", args, 3, frame_size)
       }
       self.emit("\tmov\tx9, x0")
+      true
+    }
+    "__builtin_bzero" => {
+      if args.length() >= 2 {
+        self.emit_builtin_lib_call("_bzero", args, 2, frame_size)
+      }
+      self.emit("\tmov\tx9, #0")
       true
     }
     "__builtin_memmove" => {
@@ -1259,7 +1596,7 @@ fn Codegen::emit_builtin_call(
       }
       true
     }
-    "__atomic_load_n" => {
+    "__atomic_load_n" | "__c11_atomic_load" => {
       // __atomic_load_n(ptr, memorder)
       if args.length() >= 2 {
         self.gen_expr(args[0], frame_size)
@@ -1276,7 +1613,7 @@ fn Codegen::emit_builtin_call(
       }
       true
     }
-    "__atomic_store_n" => {
+    "__atomic_store_n" | "__c11_atomic_store" => {
       // __atomic_store_n(ptr, val, memorder)
       if args.length() >= 2 {
         let elem_ty = atomic_target_type(self.type_of(args[0], frame_size))
@@ -1297,11 +1634,51 @@ fn Codegen::emit_builtin_call(
       true
     }
     "__atomic_add_fetch" => {
-      self.emit_atomic_fetch_add_sub(args, frame_size, "+")
+      self.emit_atomic_update(args, frame_size, "+", true)
       true
     }
     "__atomic_sub_fetch" => {
-      self.emit_atomic_fetch_add_sub(args, frame_size, "-")
+      self.emit_atomic_update(args, frame_size, "-", true)
+      true
+    }
+    "__c11_atomic_fetch_add" => {
+      self.emit_atomic_update(args, frame_size, "+", false)
+      true
+    }
+    "__c11_atomic_fetch_sub" => {
+      self.emit_atomic_update(args, frame_size, "-", false)
+      true
+    }
+    "__c11_atomic_fetch_and" => {
+      self.emit_atomic_update(args, frame_size, "&", false)
+      true
+    }
+    "__c11_atomic_fetch_or" => {
+      self.emit_atomic_update(args, frame_size, "|", false)
+      true
+    }
+    "__c11_atomic_fetch_xor" => {
+      self.emit_atomic_update(args, frame_size, "^", false)
+      true
+    }
+    "__c11_atomic_exchange" => {
+      self.emit_atomic_exchange(args, frame_size)
+      true
+    }
+    "__c11_atomic_compare_exchange_strong" => {
+      self.emit_atomic_compare_exchange(args, frame_size)
+      true
+    }
+    "__darwin_fd_set" => {
+      self.emit_darwin_fd_helper(args, frame_size, "set")
+      true
+    }
+    "__darwin_fd_clr" => {
+      self.emit_darwin_fd_helper(args, frame_size, "clr")
+      true
+    }
+    "__darwin_fd_isset" => {
+      self.emit_darwin_fd_helper(args, frame_size, "isset")
       true
     }
     "__sync_synchronize" => {
@@ -1423,7 +1800,7 @@ fn Codegen::emit_builtin_call(
 
 ///|
 fn is_aggregate_type(ty : @parser.Type) -> Bool {
-  match ty {
+  match peel_aligned_type(ty) {
     Struct(_) | Union(_) | Array(_, _) => true
     _ => false
   }
@@ -1431,7 +1808,7 @@ fn is_aggregate_type(ty : @parser.Type) -> Bool {
 
 ///|
 fn Codegen::is_register_aggregate(self : Codegen, ty : @parser.Type) -> Bool {
-  match ty {
+  match peel_aligned_type(ty) {
     Struct(_) | Union(_) => self.type_size(ty) <= 16
     _ => false
   }
@@ -1439,7 +1816,7 @@ fn Codegen::is_register_aggregate(self : Codegen, ty : @parser.Type) -> Bool {
 
 ///|
 fn Codegen::is_indirect_aggregate(self : Codegen, ty : @parser.Type) -> Bool {
-  match ty {
+  match peel_aligned_type(ty) {
     Struct(_) | Union(_) => self.type_size(ty) > 16
     _ => false
   }
@@ -1539,10 +1916,9 @@ fn Codegen::emit_member_addr(
   match expr {
     MemberAccess(obj, field) => {
       let obj_ty = self.type_of(obj, frame_size)
-      let struct_name = match obj_ty {
-        Struct(n) => n
-        Union(n) => n
-        _ => return None
+      let struct_name = match aggregate_owner_name(obj_ty) {
+        Some(n) => n
+        None => return None
       }
       let stack_temp_size = self.emit_member_base_addr(obj, frame_size)
       match self.find_field_layout(struct_name, field) {
@@ -2064,22 +2440,19 @@ fn Codegen::gen_expr(
       if self.local_offsets.contains(name) {
         let ty = self.var_types[name]
         let offset = self.local_offsets[name]
-        match ty {
-          Array(_, _) | Struct(_) | Union(_) =>
-            self.emit_local_addr(offset, frame_size)
-          _ => {
-            self.emit_local_addr(offset, frame_size)
-            self.emit_load_typed("x9", "x9", ty)
-          }
+        if address_value_type(ty) {
+          self.emit_local_addr(offset, frame_size)
+        } else {
+          self.emit_local_addr(offset, frame_size)
+          self.emit_load_typed("x9", "x9", ty)
         }
       } else if self.globals.contains(name) {
         let ty = self.globals[name].ty
         // Use GOT for globals to handle undefined externals on macOS
         self.emit("\tadrp\tx9, _" + name + "@GOTPAGE")
         self.emit("\tldr\tx9, [x9, _" + name + "@GOTPAGEOFF]")
-        match ty {
-          Array(_, _) | Struct(_) | Union(_) => ()
-          _ => self.emit_load_typed("x9", "x9", ty)
+        if !address_value_type(ty) {
+          self.emit_load_typed("x9", "x9", ty)
         }
       } else if self.func_rets.contains(name) {
         // Function pointer / function address - use GOT for undefined externals
@@ -2095,18 +2468,13 @@ fn Codegen::gen_expr(
       let is_bitfield = match lhs {
         MemberAccess(obj, field) => {
           let obj_ty = self.type_of(obj, frame_size)
-          let struct_name = match obj_ty {
-            Struct(n) => n
-            Union(n) => n
-            _ => ""
-          }
-          if struct_name != "" {
-            match self.find_field_layout(struct_name, field) {
-              Some((_, _, _, _, _, bit_width)) => bit_width > 0
-              None => false
-            }
-          } else {
-            false
+          match aggregate_owner_name(obj_ty) {
+            Some(struct_name) =>
+              match self.find_field_layout(struct_name, field) {
+                Some((_, _, _, _, _, bit_width)) => bit_width > 0
+                None => false
+              }
+            None => false
           }
         }
         _ => false
@@ -2122,10 +2490,9 @@ fn Codegen::gen_expr(
         match lhs {
           MemberAccess(obj, field) => {
             let obj_ty = self.type_of(obj, frame_size)
-            let struct_name = match obj_ty {
-              Struct(n) => n
-              Union(n) => n
-              _ => ""
+            let struct_name = match aggregate_owner_name(obj_ty) {
+              Some(n) => n
+              None => ""
             }
             match self.find_field_layout(struct_name, field) {
               Some((_, field_ty, _, size, bit_offset, bit_width)) => {
@@ -2169,7 +2536,7 @@ fn Codegen::gen_expr(
         }
       } else {
         let lhs_ty = self.type_of(lhs, frame_size)
-        match lhs_ty {
+        match peel_aligned_type(lhs_ty) {
           Struct(_) | Union(_) =>
             // Struct/union assignment: use memcpy via addresses
             match rhs {
@@ -2646,7 +3013,7 @@ fn Codegen::gen_expr(
             actual_arg_types.push(actual_ty)
             arg_types.push(arg_ty)
             arg_copy_offsets.push(-1)
-            match arg_ty {
+            match peel_aligned_type(arg_ty) {
               Float | Double => {
                 total_slots += 1
                 fp_idx += 1
@@ -2705,7 +3072,7 @@ fn Codegen::gen_expr(
           // Evaluate all args first; nested calls can clobber argument registers.
           let mut slot_idx = 0
           for i = 0; i < args.length(); i = i + 1 {
-            match arg_types[i] {
+            match peel_aligned_type(arg_types[i]) {
               Struct(_) | Union(_) => {
                 let size = self.type_size(arg_types[i])
                 if size <= 16 {
@@ -2798,7 +3165,7 @@ fn Codegen::gen_expr(
           fp_idx = 0
           slot_idx = 0
           for i = 0; i < args.length(); i = i + 1 {
-            match arg_types[i] {
+            match peel_aligned_type(arg_types[i]) {
               Float => {
                 let reg = "s" + fp_idx.to_string()
                 self.emit(
@@ -2940,7 +3307,7 @@ fn Codegen::gen_expr(
             actual_arg_types.push(actual_ty)
             arg_types.push(arg_ty)
             arg_copy_offsets.push(-1)
-            match arg_ty {
+            match peel_aligned_type(arg_ty) {
               Float | Double => {
                 if fp_idx >= 8 {
                   stack_count += 1
@@ -3007,7 +3374,7 @@ fn Codegen::gen_expr(
           // Evaluate all args and save to temporary stack slots
           let mut slot_idx = 0
           for i = 0; i < args.length(); i = i + 1 {
-            match arg_types[i] {
+            match peel_aligned_type(arg_types[i]) {
               Struct(_) | Union(_) => {
                 let size = self.type_size(arg_types[i])
                 if size <= 16 {
@@ -3091,7 +3458,7 @@ fn Codegen::gen_expr(
           let mut stack_idx = 0
           slot_idx = 0
           for i = 0; i < args.length(); i = i + 1 {
-            match arg_types[i] {
+            match peel_aligned_type(arg_types[i]) {
               Float => {
                 if fp_idx < 8 {
                   self.emit(
@@ -3296,7 +3663,9 @@ fn Codegen::gen_expr(
       match self.emit_member_addr(expr, frame_size) {
         None => {
           self.gen_addr(expr, frame_size)
-          self.emit("\tldr\tx9, [x9]")
+          if !address_value_type(self.type_of(expr, frame_size)) {
+            self.emit("\tldr\tx9, [x9]")
+          }
         }
         Some(info) => {
           let ty = info.ty
@@ -3310,16 +3679,12 @@ fn Codegen::gen_expr(
               4 => self.emit("\tldr\tw9, [x9]")
               _ => self.emit("\tldr\tx9, [x9]")
             }
-          } else {
-            match ty {
-              Array(_, _) | Struct(_) | Union(_) => ()
-              _ =>
-                match size {
-                  1 => self.emit("\tldrb\tw9, [x9]")
-                  2 => self.emit("\tldrh\tw9, [x9]")
-                  4 => self.emit("\tldr\tw9, [x9]")
-                  _ => self.emit("\tldr\tx9, [x9]")
-                }
+          } else if !address_value_type(ty) {
+            match size {
+              1 => self.emit("\tldrb\tw9, [x9]")
+              2 => self.emit("\tldrh\tw9, [x9]")
+              4 => self.emit("\tldr\tw9, [x9]")
+              _ => self.emit("\tldr\tx9, [x9]")
             }
           }
           if bit_width > 0 {
@@ -3351,7 +3716,7 @@ fn Codegen::gen_expr(
       }
     Deref(ptr) => {
       self.gen_expr(ptr, frame_size)
-      let deref_ty = match self.type_of(ptr, frame_size) {
+      let deref_ty = match peel_aligned_type(self.type_of(ptr, frame_size)) {
         Pointer(ty) => ty
         Array(elem, _) => elem
         _ => SInt
@@ -3652,10 +4017,9 @@ fn Codegen::gen_addr(
     MemberAccess(obj, field) => {
       self.gen_addr(obj, frame_size)
       let obj_ty = self.type_of(obj, frame_size)
-      let struct_name = match obj_ty {
-        Struct(n) => n
-        Union(n) => n
-        _ => return
+      let struct_name = match aggregate_owner_name(obj_ty) {
+        Some(n) => n
+        None => return
       }
       if self.struct_layouts.contains(struct_name) {
         let fields = self.struct_layouts[struct_name]
@@ -3675,9 +4039,9 @@ fn Codegen::gen_addr(
     AddrOf(e) => self.gen_addr(e, frame_size)
     ArrayAccess(arr, index) => {
       // Array decay: if arr is an array type, use its address; if pointer, use its value
-      match self.type_of(arr, frame_size) {
-        Array(_, _) => self.gen_addr(arr, frame_size)
-        _ => self.gen_expr(arr, frame_size)
+      match array_element_type(self.type_of(arr, frame_size)) {
+        Some(_) => self.gen_addr(arr, frame_size)
+        None => self.gen_expr(arr, frame_size)
       }
       self.emit("\tstr\tx9, [sp, #-16]!")
       self.gen_expr(index, frame_size)

@@ -1284,6 +1284,116 @@ async test "e2e nested bit-field assignment returns assigned value" {
 }
 
 ///|
+async test "e2e compound assignment updates only target bit-field" {
+  let source =
+    #|struct ShapeProperty {
+    #|  unsigned int hash_next : 26;
+    #|  unsigned int flags : 6;
+    #|  unsigned int atom;
+    #|};
+    #|
+    #|union ShapeWords {
+    #|  struct ShapeProperty p;
+    #|  unsigned int words[2];
+    #|};
+    #|
+    #|int main(void) {
+    #|  union ShapeWords u = {0};
+    #|  unsigned int hash = 0x02345678u & ((1u << 26) - 1);
+    #|  u.p.hash_next = hash;
+    #|  u.p.flags = 0x2fu;
+    #|  if (sizeof(struct ShapeProperty) != 8) return 1;
+    #|  if (__builtin_offsetof(struct ShapeProperty, atom) != 4) return 2;
+    #|  if (u.p.hash_next != hash) return 3;
+    #|  if (u.p.flags != 0x2fu) return 4;
+    #|  if ((u.words[0] >> 26) != 0x2fu) return 5;
+    #|  u.p.flags &= ~0x0fu;
+    #|  if (u.p.flags != 0x20u) return 6;
+    #|  if (u.p.hash_next != hash) return 7;
+    #|  u.p.flags |= 0x03u;
+    #|  if (u.p.flags != 0x23u) return 8;
+    #|  if (u.p.hash_next != hash) return 9;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e nonnegative enum bit-field reads as unsigned" {
+  let source =
+    #|typedef enum {
+    #|  CLOSURE_LOCAL,
+    #|  CLOSURE_ARG,
+    #|  CLOSURE_REF,
+    #|  CLOSURE_GLOBAL_REF,
+    #|  CLOSURE_GLOBAL_DECL,
+    #|  CLOSURE_GLOBAL,
+    #|  CLOSURE_MODULE_DECL,
+    #|  CLOSURE_MODULE_IMPORT,
+    #|} ClosureType;
+    #|
+    #|struct ClosureVar {
+    #|  ClosureType closure_type : 3;
+    #|  unsigned char is_lexical : 1;
+    #|  unsigned char is_const : 1;
+    #|  unsigned char var_kind : 4;
+    #|  unsigned short var_idx;
+    #|};
+    #|
+    #|typedef enum {
+    #|  NEGATIVE = -1,
+    #|  POSITIVE = 1,
+    #|} SignedEnum;
+    #|
+    #|int main(void) {
+    #|  struct ClosureVar cv = {0};
+    #|  cv.closure_type = CLOSURE_MODULE_IMPORT;
+    #|  if (cv.closure_type != CLOSURE_MODULE_IMPORT) return 1;
+    #|  if ((int)cv.closure_type < 0) return 2;
+    #|  SignedEnum e = (SignedEnum)-1;
+    #|  if (e >= 0) return 3;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e static computed-goto dispatch table keeps label addresses" {
+  let source =
+    #|int main(void) {
+    #|  int op = 3;
+    #|  static void * const dispatch_table[4] = {
+    #|    &&case_zero,
+    #|    &&case_one,
+    #|    [2 ... 3] = &&case_two,
+    #|  };
+    #|  goto *dispatch_table[op];
+    #|case_zero:
+    #|  return 1;
+    #|case_one:
+    #|  return 2;
+    #|case_two:
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e extern globals survive post-declarator attributes" {
+  let source =
+    #|extern void *__stdoutp __attribute__((__swift_attr__("nonisolated(unsafe)")));
+    #|
+    #|int main(void) {
+    #|  return __stdoutp ? 42 : 1;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e atomic array element access uses element width" {
   let source =
     #|typedef unsigned int u32;
@@ -1353,6 +1463,84 @@ async test "e2e atomic add and sub fetch lower to arm64 atomics" {
     #|  if (value != 12) return 4;
     #|  __atomic_store_n(&value, next_value(), 5);
     #|  if (calls != 2 || value != 5) return 5;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e c11 atomic builtins lower without external symbols" {
+  let source =
+    #|int main(void) {
+    #|  _Atomic(unsigned int) x = 5;
+    #|  unsigned int expected = 11;
+    #|  if (__c11_atomic_fetch_add(&x, 3, 5) != 5) return 1;
+    #|  if (x != 8) return 2;
+    #|  if (__c11_atomic_fetch_sub(&x, 1, 5) != 8) return 3;
+    #|  if (__c11_atomic_fetch_or(&x, 16, 5) != 7) return 4;
+    #|  if (__c11_atomic_fetch_and(&x, 23, 5) != 23) return 5;
+    #|  if (__c11_atomic_fetch_xor(&x, 3, 5) != 23) return 6;
+    #|  if (__c11_atomic_exchange(&x, 11, 5) != 20) return 7;
+    #|  if (!__c11_atomic_compare_exchange_strong(&x, &expected, 19, 5, 5)) return 8;
+    #|  if (x != 19) return 9;
+    #|  expected = 11;
+    #|  if (__c11_atomic_compare_exchange_strong(&x, &expected, 21, 5, 5)) return 10;
+    #|  if (expected != 19) return 11;
+    #|  if (__c11_atomic_load(&x, 5) != 19) return 12;
+    #|  __c11_atomic_store(&x, 42, 5);
+    #|  return (int)x;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e aligned struct array member decays before by-value call" {
+  let source =
+    #|struct Value {
+    #|  long a;
+    #|  long b;
+    #|};
+    #|
+    #|struct Context {
+    #|  long prefix[12];
+    #|  _Alignas(16) struct Value class_proto[2];
+    #|};
+    #|
+    #|long take(struct Value value) {
+    #|  return value.a + value.b;
+    #|}
+    #|
+    #|int main(void) {
+    #|  struct Context ctx;
+    #|  ctx.class_proto[0].a = 1;
+    #|  ctx.class_proto[0].b = 2;
+    #|  ctx.class_proto[1].a = 40;
+    #|  ctx.class_proto[1].b = 2;
+    #|  return (int)take(ctx.class_proto[1]);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e builtin frame address bzero and darwin fd helpers lower" {
+  let source =
+    #|struct fd_set {
+    #|  int fds_bits[32];
+    #|};
+    #|
+    #|int main(void) {
+    #|  struct fd_set fds;
+    #|  if (__builtin_frame_address(0) == 0) return 1;
+    #|  if (__builtin_frame_address(1) != 0) return 2;
+    #|  __builtin_bzero(&fds, sizeof(fds));
+    #|  __darwin_fd_set(9, &fds);
+    #|  if (!__darwin_fd_isset(9, &fds)) return 3;
+    #|  if (__darwin_fd_isset(8, &fds)) return 4;
+    #|  __darwin_fd_clr(9, &fds);
+    #|  if (__darwin_fd_isset(9, &fds)) return 5;
     #|  return 42;
     #|}
   let exit_code = run_source_async(source)

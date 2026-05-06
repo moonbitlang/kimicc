@@ -50,6 +50,8 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
   let mut has_bool = false
   let mut has_struct = false
   let mut struct_result = Type::SInt
+  let mut has_enum = false
+  let mut enum_result = Type::SInt
   let mut has_typedef_name = false
   let mut typedef_type = Type::SInt
   let mut has_atomic_type = false
@@ -219,7 +221,8 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
           consumed = true
         }
         Enum => {
-          spec.base_type = self.parse_enum_type_specifier()
+          enum_result = self.parse_enum_type_specifier()
+          has_enum = true
           saw_primitive = true
           consumed = true
         }
@@ -277,6 +280,8 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     spec.base_type = atomic_type
   } else if has_struct {
     spec.base_type = struct_result
+  } else if has_enum {
+    spec.base_type = enum_result
   } else if has_typedef_name {
     spec.base_type = typedef_type
   } else if has_va_list {
@@ -406,11 +411,13 @@ fn Parser::parse_enum_type_specifier(self : Parser) -> Type {
     self.advance()
     self.skip_attributes()
   }
+  let mut explicit_ty : Type? = None
   if self.token == Colon {
     self.advance()
-    let _ = self.parse_type_name()
+    explicit_ty = Some(self.parse_type_name())
   }
   self.skip_attributes()
+  let mut has_negative = false
   if self.token == LBrace {
     self.expect(LBrace)
     let mut next_value : Int64 = 0
@@ -430,6 +437,9 @@ fn Parser::parse_enum_type_specifier(self : Parser) -> Type {
           } else {
             next_value
           }
+          if value < 0 {
+            has_negative = true
+          }
           self.enum_constants[name] = value
           next_value = value + 1
           if self.token == Comma {
@@ -441,7 +451,10 @@ fn Parser::parse_enum_type_specifier(self : Parser) -> Type {
     }
     self.expect(RBrace)
   }
-  Type::SInt
+  match explicit_ty {
+    Some(ty) => ty
+    None => if has_negative { Type::SInt } else { Type::UInt }
+  }
 }
 
 ///|

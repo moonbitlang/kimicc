@@ -562,6 +562,7 @@ fn Codegen::global_address_reloc(
         Some((label, offset)) => Some(reloc_with_offset(label, offset))
         None => None
       }
+    LabelAddr(name) => Some(self.label_ref(name))
     Var(name) => Some("_" + name)
     Binary("+", base, offset_expr) =>
       match (self.global_address_reloc(base), self.fold_const(offset_expr)) {
@@ -899,6 +900,7 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   for g in globals {
     self.globals[g.name] = g
   }
+  let func_label_maps : Map[String, Map[String, String]] = {}
   for decl in prog.decls {
     if decl.is_inline && !decl.is_static {
       continue
@@ -909,6 +911,7 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
       continue
     }
     self.gen_func(decl)
+    func_label_maps[decl.name] = self.emitted_labels
   }
   // Emit initialized global variables
   let mut has_data = false
@@ -923,11 +926,25 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
       }
       self.emit("	.p2align	3")
       self.emit("_" + g.name + ":")
+      let saved_func_name = self.func_name
+      let saved_emitted_labels = self.emitted_labels
+      match static_global_owner_name(g.name, prog.decls) {
+        Some(owner) => {
+          self.func_name = owner
+          match func_label_maps.get(owner) {
+            Some(labels) => self.emitted_labels = labels
+            None => ()
+          }
+        }
+        None => ()
+      }
       match g.init {
         Some(Scalar(expr)) => self.emit_global_scalar(g.ty, expr)
         Some(Array(exprs)) => self.emit_global_array(g.ty, exprs)
         None => ()
       }
+      self.func_name = saved_func_name
+      self.emitted_labels = saved_emitted_labels
     }
   }
   // Emit uninitialized global variables
@@ -956,6 +973,23 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
     }
   }
   self.output.to_string()
+}
+
+///|
+fn static_global_owner_name(
+  name : String,
+  decls : Array[@parser.FuncDecl],
+) -> String? {
+  let mut owner : String? = None
+  let mut owner_prefix_len = 0
+  for decl in decls {
+    let prefix = "_" + decl.name + "_"
+    if name.has_prefix(prefix) && prefix.length() > owner_prefix_len {
+      owner = Some(decl.name)
+      owner_prefix_len = prefix.length()
+    }
+  }
+  owner
 }
 
 ///|
