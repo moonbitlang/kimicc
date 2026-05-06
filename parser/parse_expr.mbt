@@ -400,6 +400,8 @@ fn Parser::parse_unary(self : Parser) -> Expr {
         | Inline => true
         Ident("_Float16") => true
         Ident("__int128") => true
+        Ident("__int128_t") => true
+        Ident("__uint128_t") => true
         Ident("_Atomic") => true
         Ident(name) => self.typedefs.contains(name)
         _ => false

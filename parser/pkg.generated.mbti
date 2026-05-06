@@ -224,6 +224,8 @@ pub(all) enum Type {
   ULong
   SLongLong
   ULongLong
+  SInt128
+  UInt128
   Float
   Double
   Struct(String)

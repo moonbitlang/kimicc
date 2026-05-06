@@ -83,6 +83,27 @@ fn w_reg(x : String) -> String {
 }
 
 ///|
+fn paired_high_reg(x : String) -> String {
+  match x {
+    "x0" => "x1"
+    "x1" => "x2"
+    "x2" => "x3"
+    "x3" => "x4"
+    "x4" => "x5"
+    "x5" => "x6"
+    "x6" => "x7"
+    "x7" => "x8"
+    "x9" => "x10"
+    "x10" => "x11"
+    "x11" => "x12"
+    "x12" => "x13"
+    "x13" => "x14"
+    "x14" => "x15"
+    _ => x
+  }
+}
+
+///|
 // Load a value of type ty from [addr_reg] into reg.
 // Uses correct width and sign/zero extension.
 fn Codegen::emit_load_typed(
@@ -107,6 +128,14 @@ fn Codegen::emit_load_typed(
       self.emit("\tldr\t" + w_reg(reg) + ", [" + addr_reg + "]")
       self.emit("\tsxtw\t" + reg + ", " + w_reg(reg))
     }
+    SInt128 | UInt128 =>
+      if reg == addr_reg {
+        self.emit("\tldr\t" + paired_high_reg(reg) + ", [" + addr_reg + ", #8]")
+        self.emit("\tldr\t" + reg + ", [" + addr_reg + "]")
+      } else {
+        self.emit("\tldr\t" + reg + ", [" + addr_reg + "]")
+        self.emit("\tldr\t" + paired_high_reg(reg) + ", [" + addr_reg + ", #8]")
+      }
     Atomic(inner) => self.emit_load_typed(reg, addr_reg, inner)
     _ => self.emit("\tldr\t" + reg + ", [" + addr_reg + "]")
   }
@@ -127,6 +156,12 @@ fn Codegen::emit_store_typed(
       self.emit("\tstrh\t" + w_reg(value_reg) + ", [" + addr_reg + "]")
     SInt | UInt | Float =>
       self.emit("\tstr\t" + w_reg(value_reg) + ", [" + addr_reg + "]")
+    SInt128 | UInt128 => {
+      self.emit("\tstr\t" + value_reg + ", [" + addr_reg + "]")
+      self.emit(
+        "\tstr\t" + paired_high_reg(value_reg) + ", [" + addr_reg + ", #8]",
+      )
+    }
     Atomic(inner) => self.emit_store_typed(value_reg, addr_reg, inner)
     _ => self.emit("\tstr\t" + value_reg + ", [" + addr_reg + "]")
   }

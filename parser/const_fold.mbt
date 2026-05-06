@@ -275,6 +275,7 @@ fn basic_type_size(ty : Type) -> Int {
     | Double
     | Pointer(_)
     | FuncPtr(_, _, _) => 8
+    SInt128 | UInt128 => 16
     Array(elem, n) => basic_type_size(elem) * n
     Struct(_) => 8 // unknown struct size, assume pointer-sized
     Union(_) => 8 // unknown union size, assume pointer-sized
@@ -296,6 +297,7 @@ fn Parser::const_type_size(self : Parser, ty : Type) -> Int {
     | Double
     | Pointer(_)
     | FuncPtr(_, _, _) => 8
+    SInt128 | UInt128 => 16
     Array(elem, n) => self.const_type_size(elem) * n
     Atomic(inner) => self.const_type_size(inner)
     Struct(name) => self.const_struct_size(name)
@@ -317,6 +319,7 @@ fn Parser::const_type_align(self : Parser, ty : Type) -> Int {
     | Double
     | Pointer(_)
     | FuncPtr(_, _, _) => 8
+    SInt128 | UInt128 => 16
     Array(elem, _) => self.const_type_align(elem)
     Atomic(inner) => self.const_type_align(inner)
     Struct(name) => self.const_struct_align(name)

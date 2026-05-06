@@ -1447,3 +1447,46 @@ async test "e2e nested designator advances following struct initializer" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")
 }
+
+///|
+async test "e2e unsigned int128 supports wide limb arithmetic" {
+  let source =
+    #|typedef unsigned __int128 u128;
+    #|
+    #|u128 mk(unsigned long a, unsigned long b) {
+    #|  return (u128)a * (u128)b;
+    #|}
+    #|
+    #|unsigned long lo(u128 x) {
+    #|  return (unsigned long)x;
+    #|}
+    #|
+    #|unsigned long hi(u128 x) {
+    #|  return (unsigned long)(x >> 64);
+    #|}
+    #|
+    #|unsigned long divlo(u128 x, unsigned long d) {
+    #|  return (unsigned long)(x / d);
+    #|}
+    #|
+    #|unsigned long modlo(u128 x, unsigned long d) {
+    #|  return (unsigned long)(x % d);
+    #|}
+    #|
+    #|int main(void) {
+    #|  unsigned long all = ~0UL;
+    #|  u128 x;
+    #|  if (sizeof(u128) != 16) return 1;
+    #|  x = mk(65536UL, 65536UL);
+    #|  if (lo(x) != 4294967296UL) return 2;
+    #|  if (hi(x) != 0UL) return 3;
+    #|  x = mk(all, 2UL);
+    #|  if (lo(x) != all - 1UL) return 4;
+    #|  if (hi(x) != 1UL) return 5;
+    #|  if (divlo(x, 3UL) != 12297829382473034410UL) return 6;
+    #|  if (modlo(x, 3UL) != 0UL) return 7;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}

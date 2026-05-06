@@ -74,6 +74,33 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
             }
             fp_idx += 1
           }
+          SInt128 | UInt128 => {
+            if int_idx < 7 {
+              self.emit_store_local(
+                "x" + int_idx.to_string(),
+                offset,
+                frame_size,
+              )
+              self.emit_store_local(
+                "x" + (int_idx + 1).to_string(),
+                offset + 8,
+                frame_size,
+              )
+            } else if int_idx == 7 {
+              self.emit_store_local("x7", offset, frame_size)
+              self.emit("\tldr\tx9, [x29, #16]")
+              self.emit_store_local("x9", offset + 8, frame_size)
+            } else {
+              let stack_off = 16 + (int_idx - 8) * 8
+              self.emit("\tldr\tx9, [x29, #" + stack_off.to_string() + "]")
+              self.emit_store_local("x9", offset, frame_size)
+              self.emit(
+                "\tldr\tx9, [x29, #" + (stack_off + 8).to_string() + "]",
+              )
+              self.emit_store_local("x9", offset + 8, frame_size)
+            }
+            int_idx += 2
+          }
           Struct(_) | Union(_) => {
             let size = self.type_size(p.ty)
             if size > 8 && size <= 16 {
@@ -137,6 +164,10 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
       match decl.ret {
         Float => self.emit("\tfmov\ts0, wzr")
         Double => self.emit("\tfmov\td0, xzr")
+        SInt128 | UInt128 => {
+          self.emit("\tmov\tx0, #0")
+          self.emit("\tmov\tx1, #0")
+        }
         _ => self.emit("\tmov\tx0, #0")
       }
       self.emit("_" + decl.name + "_ret:")
@@ -220,7 +251,11 @@ fn Codegen::alloc_local(
   ty : @parser.Type,
 ) -> Int {
   let size = self.type_size(ty)
-  let aligned_size = (size + 7) / 8 * 8
+  let natural_align = self.type_align(ty)
+  let align = if natural_align > 8 { natural_align } else { 8 }
+  let padding = (align - self.stack_size % align) % align
+  self.stack_size += padding
+  let aligned_size = (size + align - 1) / align * align
   let offset = self.stack_size
   self.stack_size += aligned_size
   self.local_offsets[name] = offset

@@ -12,6 +12,7 @@ fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
     | Double
     | Pointer(_)
     | FuncPtr(_, _, _) => 8
+    SInt128 | UInt128 => 16
     Array(elem, n) => self.type_size(elem) * n
     Atomic(ty) => self.type_size(ty)
     Struct(name) => {
@@ -76,6 +77,7 @@ fn Codegen::type_align(self : Codegen, ty : @parser.Type) -> Int {
     | Double
     | Pointer(_)
     | FuncPtr(_, _, _) => 8
+    SInt128 | UInt128 => 16
     Array(elem, _) => self.type_align(elem)
     Atomic(ty) => self.type_align(ty)
     Struct(name) => {

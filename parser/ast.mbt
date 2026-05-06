@@ -12,6 +12,8 @@ pub(all) enum Type {
   ULong
   SLongLong
   ULongLong
+  SInt128
+  UInt128
   Float
   Double
   Struct(String)
@@ -37,6 +39,8 @@ pub impl Show for Type with to_string(self) {
     ULong => "ULong"
     SLongLong => "SLongLong"
     ULongLong => "ULongLong"
+    SInt128 => "SInt128"
+    UInt128 => "UInt128"
     Float => "Float"
     Double => "Double"
     Struct(name) => "Struct(" + name + ")"
@@ -68,7 +72,9 @@ pub fn Type::is_integer(self : Type) -> Bool {
     | SLong
     | ULong
     | SLongLong
-    | ULongLong => true
+    | ULongLong
+    | SInt128
+    | UInt128 => true
     _ => false
   }
 }
@@ -77,7 +83,7 @@ pub fn Type::is_integer(self : Type) -> Bool {
 // Helper: check if type is a signed integer type
 pub fn Type::is_signed(self : Type) -> Bool {
   match self {
-    SChar | SShort | SInt | SLong | SLongLong => true
+    SChar | SShort | SInt | SLong | SLongLong | SInt128 => true
     _ => false
   }
 }
@@ -100,6 +106,7 @@ pub fn Type::to_unsigned(self : Type) -> Type {
     SInt => UInt
     SLong => ULong
     SLongLong => ULongLong
+    SInt128 => UInt128
     _ => self
   }
 }
@@ -119,6 +126,7 @@ pub fn Type::size(self : Type) -> Int {
     | Double
     | Pointer(_)
     | FuncPtr(_, _, _) => 8
+    SInt128 | UInt128 => 16
     Struct(name) =>
       // Forward reference: we can't compute struct size without the decl.
       // Callers should use codegen's type_size which has struct_decls.
@@ -145,6 +153,7 @@ pub fn Type::align(self : Type) -> Int {
     | Double
     | Pointer(_)
     | FuncPtr(_, _, _) => 8
+    SInt128 | UInt128 => 16
     Struct(name) =>
       abort("Cannot compute struct alignment without struct_decls: " + name)
     Union(name) =>

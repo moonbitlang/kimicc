@@ -43,6 +43,7 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
   let mut long_count = 0
   let mut has_float = false
   let mut has_double = false
+  let mut has_int128 = false
   let mut has_unsigned = false
   let mut has_bool = false
   let mut has_struct = false
@@ -218,9 +219,18 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
             self.advance()
             saw_primitive = true
             consumed = true
-          } else if name == "__uint128_t" ||
-            name == "__int128" ||
-            name == "_Float16" {
+          } else if name == "__uint128_t" {
+            has_int128 = true
+            has_unsigned = true
+            self.advance()
+            saw_primitive = true
+            consumed = true
+          } else if name == "__int128" || name == "__int128_t" {
+            has_int128 = true
+            self.advance()
+            saw_primitive = true
+            consumed = true
+          } else if name == "_Float16" {
             self.advance()
             saw_primitive = true
             consumed = true
@@ -254,6 +264,12 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     spec.base_type = Float
   } else if has_double {
     spec.base_type = Double
+  } else if has_int128 {
+    if has_unsigned {
+      spec.base_type = UInt128
+    } else {
+      spec.base_type = SInt128
+    }
   } else if has_char {
     if has_unsigned {
       spec.base_type = UChar

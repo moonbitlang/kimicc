@@ -72,6 +72,10 @@ fn Codegen::gen_stmt(
           match ret_ty {
             Float => self.emit("\tfmov\ts0, w9")
             Double => self.emit("\tfmov\td0, x9")
+            SInt128 | UInt128 => {
+              self.emit("\tmov\tx0, x9")
+              self.emit("\tmov\tx1, x10")
+            }
             _ => self.emit("\tmov\tx0, x9")
           }
         }
@@ -250,6 +254,16 @@ fn Codegen::gen_stmt(
               self.emit_scalar_conversion_to(ty)
               match ty {
                 Float => self.emit_store_local("w9", offset, frame_size)
+                SInt128 | UInt128 => {
+                  self.emit("\tstr\tx9, [sp, #-16]!")
+                  self.emit("\tstr\tx10, [sp, #8]")
+                  self.emit_local_addr(offset, frame_size)
+                  self.emit("\tmov\tx11, x9")
+                  self.emit("\tldr\tx9, [sp]")
+                  self.emit("\tldr\tx10, [sp, #8]")
+                  self.emit("\tadd\tsp, sp, #16")
+                  self.emit_store_typed("x9", "x11", ty)
+                }
                 _ => self.emit_store_local("x9", offset, frame_size)
               }
             }

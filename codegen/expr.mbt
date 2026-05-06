@@ -132,9 +132,27 @@ fn ternary_result_type(
 ///|
 fn is_unsigned_integer_type(ty : @parser.Type) -> Bool {
   match ty {
-    UChar | UShort | UInt | ULong | ULongLong => true
+    UChar | UShort | UInt | ULong | ULongLong | UInt128 => true
     _ => false
   }
+}
+
+///|
+fn is_int128_type(ty : @parser.Type) -> Bool {
+  match ty {
+    SInt128 | UInt128 => true
+    _ => false
+  }
+}
+
+///|
+fn needs_int128_integer_op(
+  lhs_ty : @parser.Type,
+  rhs_ty : @parser.Type,
+) -> Bool {
+  lhs_ty.is_integer() &&
+  rhs_ty.is_integer() &&
+  is_int128_type(integer_common_type(lhs_ty, rhs_ty))
 }
 
 ///|
@@ -147,6 +165,7 @@ fn Codegen::emit_numeric_conversion(
     return
   }
   match (src, dst) {
+    (src, Bool) => if is_int128_type(src) { self.emit("\torr\tx9, x9, x10") }
     (src, Double) =>
       if src.is_integer() {
         if is_unsigned_integer_type(src) {
@@ -191,6 +210,14 @@ fn Codegen::emit_numeric_conversion(
           self.emit("\tfcvtzu\tx9, s9")
         }
       }
+    (src, SInt128) | (src, UInt128) =>
+      if src.is_integer() && !is_int128_type(src) {
+        if src.is_signed() {
+          self.emit("\tasr\tx10, x9, #63")
+        } else {
+          self.emit("\tmov\tx10, #0")
+        }
+      }
     _ => ()
   }
 }
@@ -211,6 +238,7 @@ fn Codegen::emit_scalar_conversion_to(
     UShort => self.emit("\tand\tx9, x9, #0xFFFF")
     SInt => self.emit("\tsxtw\tx9, w9")
     UInt => self.emit("\tand\tx9, x9, #0xFFFFFFFF")
+    SInt128 | UInt128 => ()
     Atomic(inner) => self.emit_scalar_conversion_to(inner)
     _ => ()
   }
@@ -287,6 +315,10 @@ fn Codegen::emit_call_result(self : Codegen, ret_ty : @parser.Type) -> Unit {
   match ret_ty {
     Float => self.emit("\tfmov\tw9, s0")
     Double => self.emit("\tfmov\tx9, d0")
+    SInt128 | UInt128 => {
+      self.emit("\tmov\tx9, x0")
+      self.emit("\tmov\tx10, x1")
+    }
     _ => self.emit("\tmov\tx9, x0")
   }
 }
@@ -316,13 +348,16 @@ fn integer_rank(ty : @parser.Type) -> Int {
     SInt | UInt => 3
     SLong | ULong => 4
     SLongLong | ULongLong => 5
+    SInt128 | UInt128 => 6
     _ => 0
   }
 }
 
 ///|
 fn unsigned_type_for_rank(rank : Int) -> @parser.Type {
-  if rank >= 5 {
+  if rank >= 6 {
+    UInt128
+  } else if rank == 5 {
     ULongLong
   } else if rank == 4 {
     ULong
@@ -333,7 +368,9 @@ fn unsigned_type_for_rank(rank : Int) -> @parser.Type {
 
 ///|
 fn signed_type_for_rank(rank : Int) -> @parser.Type {
-  if rank >= 5 {
+  if rank >= 6 {
+    SInt128
+  } else if rank == 5 {
     SLongLong
   } else if rank == 4 {
     SLong
@@ -349,6 +386,7 @@ fn integer_width_bits(ty : @parser.Type) -> Int {
     SShort | UShort => 16
     SInt | UInt => 32
     SLong | ULong | SLongLong | ULongLong => 64
+    SInt128 | UInt128 => 128
     _ => 0
   }
 }
@@ -1426,6 +1464,214 @@ fn Codegen::emit_load_float_literal(self : Codegen, v : Double) -> Unit {
 }
 
 ///|
+fn Codegen::emit_int128_compare(
+  self : Codegen,
+  op : String,
+  is_unsigned : Bool,
+) -> Unit {
+  let high_diff = self.new_label()
+  let done = self.new_label()
+  self.emit("\tcmp\tx10, x12")
+  self.emit("\tb.ne\t" + high_diff)
+  self.emit("\tcmp\tx9, x11")
+  match op {
+    "==" => self.emit("\tcset\tx9, eq")
+    "!=" => self.emit("\tcset\tx9, ne")
+    "<" => self.emit("\tcset\tx9, lo")
+    "<=" => self.emit("\tcset\tx9, ls")
+    ">" => self.emit("\tcset\tx9, hi")
+    ">=" => self.emit("\tcset\tx9, hs")
+    _ => self.emit("\tmov\tx9, #0")
+  }
+  self.emit("\tb\t" + done)
+  self.emit(high_diff + ":")
+  match op {
+    "==" => self.emit("\tmov\tx9, #0")
+    "!=" => self.emit("\tmov\tx9, #1")
+    "<" =>
+      if is_unsigned {
+        self.emit("\tcset\tx9, lo")
+      } else {
+        self.emit("\tcset\tx9, lt")
+      }
+    "<=" =>
+      if is_unsigned {
+        self.emit("\tcset\tx9, lo")
+      } else {
+        self.emit("\tcset\tx9, lt")
+      }
+    ">" =>
+      if is_unsigned {
+        self.emit("\tcset\tx9, hi")
+      } else {
+        self.emit("\tcset\tx9, gt")
+      }
+    ">=" =>
+      if is_unsigned {
+        self.emit("\tcset\tx9, hi")
+      } else {
+        self.emit("\tcset\tx9, gt")
+      }
+    _ => self.emit("\tmov\tx9, #0")
+  }
+  self.emit(done + ":")
+}
+
+///|
+fn Codegen::emit_int128_left_shift(self : Codegen) -> Unit {
+  let wide = self.new_label()
+  let done = self.new_label()
+  self.emit("\tand\tx13, x11, #127")
+  self.emit("\tcmp\tx13, #0")
+  self.emit("\tb.eq\t" + done)
+  self.emit("\tcmp\tx13, #64")
+  self.emit("\tb.hs\t" + wide)
+  self.emit("\tmov\tx14, #64")
+  self.emit("\tsub\tx14, x14, x13")
+  self.emit("\tlsl\tx10, x10, x13")
+  self.emit("\tlsr\tx15, x9, x14")
+  self.emit("\torr\tx10, x10, x15")
+  self.emit("\tlsl\tx9, x9, x13")
+  self.emit("\tb\t" + done)
+  self.emit(wide + ":")
+  self.emit("\tsub\tx13, x13, #64")
+  self.emit("\tlsl\tx10, x9, x13")
+  self.emit("\tmov\tx9, #0")
+  self.emit(done + ":")
+}
+
+///|
+fn Codegen::emit_int128_right_shift(self : Codegen, is_unsigned : Bool) -> Unit {
+  let wide = self.new_label()
+  let done = self.new_label()
+  self.emit("\tand\tx13, x11, #127")
+  self.emit("\tcmp\tx13, #0")
+  self.emit("\tb.eq\t" + done)
+  self.emit("\tcmp\tx13, #64")
+  self.emit("\tb.hs\t" + wide)
+  self.emit("\tmov\tx14, #64")
+  self.emit("\tsub\tx14, x14, x13")
+  self.emit("\tlsr\tx9, x9, x13")
+  self.emit("\tlsl\tx15, x10, x14")
+  self.emit("\torr\tx9, x9, x15")
+  if is_unsigned {
+    self.emit("\tlsr\tx10, x10, x13")
+  } else {
+    self.emit("\tasr\tx10, x10, x13")
+  }
+  self.emit("\tb\t" + done)
+  self.emit(wide + ":")
+  self.emit("\tsub\tx13, x13, #64")
+  if is_unsigned {
+    self.emit("\tlsr\tx9, x10, x13")
+    self.emit("\tmov\tx10, #0")
+  } else {
+    self.emit("\tasr\tx9, x10, x13")
+    self.emit("\tasr\tx10, x10, #63")
+  }
+  self.emit(done + ":")
+}
+
+///|
+fn Codegen::gen_int128_binary(
+  self : Codegen,
+  op : String,
+  left : @parser.Expr,
+  right : @parser.Expr,
+  left_ty : @parser.Type,
+  right_ty : @parser.Type,
+  frame_size : Int,
+) -> Unit {
+  let result_ty = if op == "<<" || op == ">>" {
+    unary_integer_result_type(left_ty)
+  } else {
+    integer_common_type(left_ty, right_ty)
+  }
+  let is_unsigned = is_unsigned_integer_type(result_ty)
+  self.gen_expr(left, frame_size)
+  self.emit_numeric_conversion(left_ty, result_ty)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.emit("\tstr\tx10, [sp, #8]")
+  self.gen_expr(right, frame_size)
+  if op == "<<" || op == ">>" {
+    self.emit_numeric_conversion(right_ty, unary_integer_result_type(right_ty))
+  } else {
+    self.emit_numeric_conversion(right_ty, result_ty)
+  }
+  self.emit("\tmov\tx11, x9")
+  self.emit("\tmov\tx12, x10")
+  self.emit("\tldr\tx9, [sp]")
+  self.emit("\tldr\tx10, [sp, #8]")
+  self.emit("\tadd\tsp, sp, #16")
+  match op {
+    "+" => {
+      self.emit("\tadds\tx9, x9, x11")
+      self.emit("\tadc\tx10, x10, x12")
+    }
+    "-" => {
+      self.emit("\tsubs\tx9, x9, x11")
+      self.emit("\tsbc\tx10, x10, x12")
+    }
+    "*" => {
+      self.emit("\tmul\tx13, x9, x11")
+      self.emit("\tumulh\tx14, x9, x11")
+      self.emit("\tmul\tx15, x9, x12")
+      self.emit("\tadd\tx14, x14, x15")
+      self.emit("\tmul\tx15, x10, x11")
+      self.emit("\tadd\tx10, x14, x15")
+      self.emit("\tmov\tx9, x13")
+    }
+    "/" => {
+      self.emit("\tmov\tx0, x9")
+      self.emit("\tmov\tx1, x10")
+      self.emit("\tmov\tx2, x11")
+      self.emit("\tmov\tx3, x12")
+      if is_unsigned {
+        self.emit("\tbl\t___udivti3")
+      } else {
+        self.emit("\tbl\t___divti3")
+      }
+      self.emit("\tmov\tx9, x0")
+      self.emit("\tmov\tx10, x1")
+    }
+    "%" => {
+      self.emit("\tmov\tx0, x9")
+      self.emit("\tmov\tx1, x10")
+      self.emit("\tmov\tx2, x11")
+      self.emit("\tmov\tx3, x12")
+      if is_unsigned {
+        self.emit("\tbl\t___umodti3")
+      } else {
+        self.emit("\tbl\t___modti3")
+      }
+      self.emit("\tmov\tx9, x0")
+      self.emit("\tmov\tx10, x1")
+    }
+    "&" => {
+      self.emit("\tand\tx9, x9, x11")
+      self.emit("\tand\tx10, x10, x12")
+    }
+    "|" => {
+      self.emit("\torr\tx9, x9, x11")
+      self.emit("\torr\tx10, x10, x12")
+    }
+    "^" => {
+      self.emit("\teor\tx9, x9, x11")
+      self.emit("\teor\tx10, x10, x12")
+    }
+    "<<" => self.emit_int128_left_shift()
+    ">>" => self.emit_int128_right_shift(is_unsigned)
+    "==" | "!=" | "<" | "<=" | ">" | ">=" =>
+      self.emit_int128_compare(op, is_unsigned)
+    "," => {
+      self.emit("\tmov\tx9, x11")
+      self.emit("\tmov\tx10, x12")
+    }
+    _ => ()
+  }
+}
+
+///|
 fn Codegen::gen_expr(
   self : Codegen,
   expr : @parser.Expr,
@@ -1576,11 +1822,22 @@ fn Codegen::gen_expr(
             self.gen_expr(rhs, frame_size)
             self.emit_numeric_conversion(self.type_of(rhs, frame_size), lhs_ty)
             self.emit_scalar_conversion_to(lhs_ty)
-            self.emit("\tstr\tx9, [sp, #-16]!")
-            self.gen_addr(lhs, frame_size)
-            self.emit("\tmov\tx10, x9")
-            self.emit("\tldr\tx9, [sp], #16")
-            self.emit_store_typed("x9", "x10", lhs_ty)
+            if is_int128_type(lhs_ty) {
+              self.emit("\tstr\tx9, [sp, #-16]!")
+              self.emit("\tstr\tx10, [sp, #8]")
+              self.gen_addr(lhs, frame_size)
+              self.emit("\tmov\tx11, x9")
+              self.emit("\tldr\tx9, [sp]")
+              self.emit("\tldr\tx10, [sp, #8]")
+              self.emit("\tadd\tsp, sp, #16")
+              self.emit_store_typed("x9", "x11", lhs_ty)
+            } else {
+              self.emit("\tstr\tx9, [sp, #-16]!")
+              self.gen_addr(lhs, frame_size)
+              self.emit("\tmov\tx10, x9")
+              self.emit("\tldr\tx9, [sp], #16")
+              self.emit_store_typed("x9", "x10", lhs_ty)
+            }
           }
         }
       }
@@ -1614,6 +1871,10 @@ fn Codegen::gen_expr(
     Binary(op, left, right) => {
       let left_ty = self.type_of(left, frame_size)
       let right_ty = self.type_of(right, frame_size)
+      if needs_int128_integer_op(left_ty, right_ty) {
+        self.gen_int128_binary(op, left, right, left_ty, right_ty, frame_size)
+        return
+      }
       let ptr_scale = match (left_ty, right_ty) {
         (Pointer(elem), _) => self.type_size(elem)
         (Array(elem, _), _) => self.type_size(elem)
@@ -1897,16 +2158,27 @@ fn Codegen::gen_expr(
           self.emit("\tfneg\ts9, s9")
           self.emit("\tfmov\tw9, s9")
         }
+      } else if is_int128_type(op_ty) {
+        self.emit("\tnegs\tx9, x9")
+        self.emit("\tngc\tx10, x10")
       } else {
         self.emit("\tneg\tx9, x9")
       }
     }
     Unary("~", operand) => {
       self.gen_expr(operand, frame_size)
-      self.emit("\tmvn\tx9, x9")
+      if is_int128_type(self.type_of(operand, frame_size)) {
+        self.emit("\tmvn\tx9, x9")
+        self.emit("\tmvn\tx10, x10")
+      } else {
+        self.emit("\tmvn\tx9, x9")
+      }
     }
     Unary("!", operand) => {
       self.gen_expr(operand, frame_size)
+      if is_int128_type(self.type_of(operand, frame_size)) {
+        self.emit("\torr\tx9, x9, x10")
+      }
       self.emit("\tcmp\tx9, #0")
       self.emit("\tcset\tx9, eq")
     }
@@ -2001,6 +2273,11 @@ fn Codegen::gen_expr(
                 total_slots += 1
                 fp_idx += 1
                 arg_slot_counts.push(1)
+              }
+              SInt128 | UInt128 => {
+                total_slots += 2
+                int_idx += 2
+                arg_slot_counts.push(2)
               }
               Struct(_) | Union(_) => {
                 let size = self.type_size(arg_ty)
@@ -2100,12 +2377,26 @@ fn Codegen::gen_expr(
               _ => {
                 self.gen_expr(args[i], frame_size)
                 self.emit_call_arg_conversion(actual_arg_types[i], arg_types[i])
-                self.emit(
-                  "\tstr\tx9, [sp, #" +
-                  (backup_offset + slot_idx * 8).to_string() +
-                  "]",
-                )
-                slot_idx += 1
+                if is_int128_type(arg_types[i]) {
+                  self.emit(
+                    "\tstr\tx9, [sp, #" +
+                    (backup_offset + slot_idx * 8).to_string() +
+                    "]",
+                  )
+                  self.emit(
+                    "\tstr\tx10, [sp, #" +
+                    (backup_offset + (slot_idx + 1) * 8).to_string() +
+                    "]",
+                  )
+                  slot_idx += 2
+                } else {
+                  self.emit(
+                    "\tstr\tx9, [sp, #" +
+                    (backup_offset + slot_idx * 8).to_string() +
+                    "]",
+                  )
+                  slot_idx += 1
+                }
               }
             }
           }
@@ -2140,6 +2431,24 @@ fn Codegen::gen_expr(
                 self.emit("\tfmov\t" + reg + ", x9")
                 fp_idx += 1
                 slot_idx += 1
+              }
+              SInt128 | UInt128 => {
+                self.emit(
+                  "\tldr\tx" +
+                  int_idx.to_string() +
+                  ", [sp, #" +
+                  (backup_offset + slot_idx * 8).to_string() +
+                  "]",
+                )
+                self.emit(
+                  "\tldr\tx" +
+                  (int_idx + 1).to_string() +
+                  ", [sp, #" +
+                  (backup_offset + (slot_idx + 1) * 8).to_string() +
+                  "]",
+                )
+                int_idx += 2
+                slot_idx += 2
               }
               Struct(_) | Union(_) => {
                 let size = self.type_size(arg_types[i])
@@ -2246,6 +2555,15 @@ fn Codegen::gen_expr(
                 fp_idx += 1
                 arg_slot_counts.push(1)
               }
+              SInt128 | UInt128 => {
+                if int_idx >= 7 {
+                  stack_count += 2
+                } else if int_idx == 7 {
+                  stack_count += 1
+                }
+                int_idx += 2
+                arg_slot_counts.push(2)
+              }
               Struct(_) | Union(_) => {
                 let size = self.type_size(arg_ty)
                 if size > 8 && size <= 16 {
@@ -2340,10 +2658,22 @@ fn Codegen::gen_expr(
               _ => {
                 self.gen_expr(args[i], frame_size)
                 self.emit_call_arg_conversion(actual_arg_types[i], arg_types[i])
-                self.emit(
-                  "\tstr\tx9, [sp, #" + (slot_idx * 8).to_string() + "]",
-                )
-                slot_idx += 1
+                if is_int128_type(arg_types[i]) {
+                  self.emit(
+                    "\tstr\tx9, [sp, #" + (slot_idx * 8).to_string() + "]",
+                  )
+                  self.emit(
+                    "\tstr\tx10, [sp, #" +
+                    ((slot_idx + 1) * 8).to_string() +
+                    "]",
+                  )
+                  slot_idx += 2
+                } else {
+                  self.emit(
+                    "\tstr\tx9, [sp, #" + (slot_idx * 8).to_string() + "]",
+                  )
+                  slot_idx += 1
+                }
               }
             }
           }
@@ -2393,6 +2723,49 @@ fn Codegen::gen_expr(
                 }
                 fp_idx += 1
                 slot_idx += 1
+              }
+              SInt128 | UInt128 => {
+                if int_idx < 7 {
+                  self.emit(
+                    "\tldr\tx" +
+                    int_idx.to_string() +
+                    ", [sp, #" +
+                    (slot_idx * 8).to_string() +
+                    "]",
+                  )
+                  self.emit(
+                    "\tldr\tx" +
+                    (int_idx + 1).to_string() +
+                    ", [sp, #" +
+                    ((slot_idx + 1) * 8).to_string() +
+                    "]",
+                  )
+                } else if int_idx == 7 {
+                  self.emit(
+                    "\tldr\tx7, [sp, #" + (slot_idx * 8).to_string() + "]",
+                  )
+                  let offset = temp_area + stack_idx * 8
+                  self.emit(
+                    "\tldr\tx9, [sp, #" + ((slot_idx + 1) * 8).to_string() + "]",
+                  )
+                  self.emit("\tstr\tx9, [sp, #" + offset.to_string() + "]")
+                  stack_idx += 1
+                } else {
+                  let offset = temp_area + stack_idx * 8
+                  self.emit(
+                    "\tldr\tx9, [sp, #" + (slot_idx * 8).to_string() + "]",
+                  )
+                  self.emit("\tstr\tx9, [sp, #" + offset.to_string() + "]")
+                  self.emit(
+                    "\tldr\tx9, [sp, #" + ((slot_idx + 1) * 8).to_string() + "]",
+                  )
+                  self.emit(
+                    "\tstr\tx9, [sp, #" + (offset + 8).to_string() + "]",
+                  )
+                  stack_idx += 2
+                }
+                int_idx += 2
+                slot_idx += 2
               }
               Struct(_) | Union(_) => {
                 let size = self.type_size(arg_types[i])
