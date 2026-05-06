@@ -83,6 +83,15 @@ async test "direct macho object supports unsigned shift mask" {
 }
 
 ///|
+async test "direct macho object supports double addition and cast" {
+  let source = "double add(double a, double b) { return a + b; } int main(void) { return (int)add(1.5, 2.5); }"
+  let exit_code = run_source_direct_object_async(
+    source, "macho_double_add_cast",
+  )
+  inspect(exit_code, content="4")
+}
+
+///|
 async test "direct macho object supports zero-argument internal call" {
   let source = "int answer(void) { return 42; } int main(void) { return answer(); }"
   let exit_code = run_source_direct_object_async(source, "macho_internal_call0")

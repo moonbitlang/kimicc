@@ -183,6 +183,18 @@ fn append_u64_to_section(section : ObjectSection, value : Int64) -> Unit {
 }
 
 ///|
+fn append_u64_bits_to_section(section : ObjectSection, value : UInt64) -> Unit {
+  append_byte(section, ((value >> 0) & 0xffUL).to_int())
+  append_byte(section, ((value >> 8) & 0xffUL).to_int())
+  append_byte(section, ((value >> 16) & 0xffUL).to_int())
+  append_byte(section, ((value >> 24) & 0xffUL).to_int())
+  append_byte(section, ((value >> 32) & 0xffUL).to_int())
+  append_byte(section, ((value >> 40) & 0xffUL).to_int())
+  append_byte(section, ((value >> 48) & 0xffUL).to_int())
+  append_byte(section, ((value >> 56) & 0xffUL).to_int())
+}
+
+///|
 fn patch_u32_in_section(
   section : ObjectSection,
   offset : Int,
@@ -241,6 +253,31 @@ fn parse_register(reg : String) -> Int {
     parse_int_or_abort(reg.substring(start=1), "register")
   } else {
     abort("unsupported register in object backend: " + reg)
+  }
+}
+
+///|
+fn parse_fp_register(reg : String) -> Int {
+  if reg.has_prefix("d") || reg.has_prefix("s") {
+    parse_int_or_abort(reg.substring(start=1), "floating-point register")
+  } else {
+    abort("unsupported floating-point register in object backend: " + reg)
+  }
+}
+
+///|
+fn is_fp_register(reg : String) -> Bool {
+  reg.has_prefix("d") || reg.has_prefix("s")
+}
+
+///|
+fn fp_register_scale(reg : String) -> Int {
+  if reg.has_prefix("d") {
+    8
+  } else if reg.has_prefix("s") {
+    4
+  } else {
+    abort("unsupported floating-point register in object backend: " + reg)
   }
 }
 
@@ -509,6 +546,88 @@ fn encode_str_pre_64(
 }
 
 ///|
+fn encode_fp_mem_signed(
+  rt_text : String,
+  base_text : String,
+  offset_text : String,
+  is_load : Bool,
+) -> UInt {
+  let rt = parse_fp_register(rt_text)
+  let rn = parse_register(clean_mem_token(base_text))
+  let offset = parse_immediate(clean_mem_token(offset_text))
+  let base = if rt_text.has_prefix("d") {
+    if is_load {
+      0xfc400000U
+    } else {
+      0xfc000000U
+    }
+  } else if is_load {
+    0xbc400000U
+  } else {
+    0xbc000000U
+  }
+  base |
+  ((offset & 0x1ff).reinterpret_as_uint() << 12) |
+  (rn.reinterpret_as_uint() << 5) |
+  rt.reinterpret_as_uint()
+}
+
+///|
+fn encode_fp_mem_pre(
+  rt_text : String,
+  base_text : String,
+  offset_text : String,
+  is_load : Bool,
+) -> UInt {
+  encode_fp_mem_signed(rt_text, base_text, offset_text, is_load) | 0x00000c00U
+}
+
+///|
+fn encode_fp_mem_unsigned(
+  rt_text : String,
+  base_text : String,
+  offset_text : String,
+  is_load : Bool,
+) -> UInt {
+  let rt = parse_fp_register(rt_text)
+  let rn = parse_register(clean_mem_token(base_text))
+  let offset = parse_immediate(clean_mem_token(offset_text))
+  let scale = fp_register_scale(rt_text)
+  let base = if rt_text.has_prefix("d") {
+    if is_load {
+      0xfd400000U
+    } else {
+      0xfd000000U
+    }
+  } else if is_load {
+    0xbd400000U
+  } else {
+    0xbd000000U
+  }
+  base |
+  ((offset / scale).reinterpret_as_uint() << 10) |
+  (rn.reinterpret_as_uint() << 5) |
+  rt.reinterpret_as_uint()
+}
+
+///|
+fn encode_fp_mem(
+  rt_text : String,
+  base_text : String,
+  offset_text : String,
+  is_load : Bool,
+) -> UInt {
+  let cleaned_offset = clean_mem_token(offset_text)
+  let offset = parse_immediate(cleaned_offset)
+  let scale = fp_register_scale(rt_text)
+  if offset >= 0 && offset % scale == 0 {
+    encode_fp_mem_unsigned(rt_text, base_text, offset_text, is_load)
+  } else {
+    encode_fp_mem_signed(rt_text, base_text, offset_text, is_load)
+  }
+}
+
+///|
 fn encode_ldr_unsigned(rt_text : String, base_text : String) -> UInt {
   let rt = parse_register(rt_text)
   let rn = parse_register(clean_mem_token(base_text))
@@ -551,13 +670,21 @@ fn encode_ldr_post_64(
 ///|
 fn encode_str(rest : String) -> UInt {
   let parts = split_operands(rest)
-  if parts.length() == 2 {
+  if parts.length() == 2 && is_fp_register(parts[0]) {
+    encode_fp_mem_unsigned(parts[0], parts[1], "#0", false)
+  } else if parts.length() == 2 {
     let rt = parse_register(parts[0])
     let rn = parse_register(clean_mem_token(parts[1]))
     let base = if parts[0].has_prefix("w") { 0xb9000000U } else { 0xf9000000U }
     base | (rn.reinterpret_as_uint() << 5) | rt.reinterpret_as_uint()
   } else if parts.length() != 3 {
     abort("malformed str instruction")
+  } else if is_fp_register(parts[0]) {
+    if parts[2].has_suffix("]!") {
+      encode_fp_mem_pre(parts[0], parts[1], parts[2], false)
+    } else {
+      encode_fp_mem(parts[0], parts[1], parts[2], false)
+    }
   } else if parts[2].has_suffix("]!") {
     encode_str_pre_64(parts[0], parts[1], parts[2])
   } else {
@@ -568,10 +695,18 @@ fn encode_str(rest : String) -> UInt {
 ///|
 fn encode_ldr(rest : String) -> UInt {
   let parts = split_operands(rest)
-  if parts.length() == 2 {
+  if parts.length() == 2 && is_fp_register(parts[0]) {
+    encode_fp_mem_unsigned(parts[0], parts[1], "#0", true)
+  } else if parts.length() == 2 {
     encode_ldr_unsigned(parts[0], parts[1])
   } else if parts.length() == 3 {
-    if parts[1].has_suffix("]") {
+    if is_fp_register(parts[0]) {
+      if parts[1].has_suffix("]") {
+        abort("unsupported post-index floating-point load in object backend")
+      } else {
+        encode_fp_mem(parts[0], parts[1], parts[2], true)
+      }
+    } else if parts[1].has_suffix("]") {
       encode_ldr_post_64(parts[0], parts[1], parts[2])
     } else {
       encode_ldr_unsigned_offset(parts[0], parts[1], parts[2])
@@ -692,6 +827,59 @@ fn encode_mov(rest : String) -> UInt {
   } else {
     encode_mov_reg(parts[0], parts[1])
   }
+}
+
+///|
+fn encode_fmov(rest : String) -> UInt {
+  let parts = split_operands(rest)
+  if parts.length() != 2 {
+    abort("malformed fmov instruction")
+  }
+  if parts[0].has_prefix("d") && !is_fp_register(parts[1]) {
+    let rd = parse_fp_register(parts[0])
+    let rn = parse_register(parts[1])
+    0x9e670000U | (rn.reinterpret_as_uint() << 5) | rd.reinterpret_as_uint()
+  } else if !is_fp_register(parts[0]) && parts[1].has_prefix("d") {
+    let rd = parse_register(parts[0])
+    let rn = parse_fp_register(parts[1])
+    0x9e660000U | (rn.reinterpret_as_uint() << 5) | rd.reinterpret_as_uint()
+  } else {
+    abort("unsupported fmov instruction in object backend: " + rest)
+  }
+}
+
+///|
+fn encode_fp_three_register(rest : String, base : UInt, name : String) -> UInt {
+  let parts = split_operands(rest)
+  if parts.length() != 3 {
+    abort("malformed " + name + " instruction")
+  }
+  if !parts[0].has_prefix("d") ||
+    !parts[1].has_prefix("d") ||
+    !parts[2].has_prefix("d") {
+    abort("unsupported " + name + " operand width in object backend")
+  }
+  let rd = parse_fp_register(parts[0])
+  let rn = parse_fp_register(parts[1])
+  let rm = parse_fp_register(parts[2])
+  base |
+  (rm.reinterpret_as_uint() << 16) |
+  (rn.reinterpret_as_uint() << 5) |
+  rd.reinterpret_as_uint()
+}
+
+///|
+fn encode_fp_convert_to_int(rest : String, base : UInt, name : String) -> UInt {
+  let parts = split_operands(rest)
+  if parts.length() != 2 {
+    abort("malformed " + name + " instruction")
+  }
+  if !parts[0].has_prefix("x") || !parts[1].has_prefix("d") {
+    abort("unsupported " + name + " operand width in object backend")
+  }
+  let rd = parse_register(parts[0])
+  let rn = parse_fp_register(parts[1])
+  base | (rn.reinterpret_as_uint() << 5) | rd.reinterpret_as_uint()
 }
 
 ///|
@@ -821,6 +1009,8 @@ fn section_flags(segname : String, sectname : String, line : String) -> UInt {
   } else if (segname == "__TEXT" && sectname == "__cstring") ||
     line.contains("cstring_literals") {
     0x00000002U
+  } else if line.contains("8byte_literals") {
+    0x00000004U
   } else {
     0U
   }
@@ -930,6 +1120,15 @@ fn append_quad_value(section : ObjectSection, value : String) -> Unit {
 }
 
 ///|
+fn append_double_value(section : ObjectSection, value : String) -> Unit {
+  let text = value.trim().to_string()
+  let parsed = @string.parse_double(text) catch {
+    _ => abort("cannot parse double in .double: " + text)
+  }
+  append_u64_bits_to_section(section, parsed.reinterpret_as_uint64())
+}
+
+///|
 fn is_octal_char(ch : UInt16) -> Bool {
   ch >= '0'.to_int().to_uint16() && ch <= '7'.to_int().to_uint16()
 }
@@ -1002,6 +1201,11 @@ fn append_data_directive(section : ObjectSection, line : String) -> Bool {
   } else if line.has_prefix(".quad") {
     for value in split_operands(directive_rest(line, ".quad")) {
       append_quad_value(section, value)
+    }
+    return true
+  } else if line.has_prefix(".double") {
+    for value in split_operands(directive_rest(line, ".double")) {
+      append_double_value(section, value)
     }
     return true
   } else if line.has_prefix(".space") {
@@ -1185,6 +1389,49 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         append_u32_to_section(
           sections[current_section],
           encode_sdiv(line.substring(start=5)),
+        )
+      } else if line.has_prefix("fmov\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_fmov(line.substring(start=5)),
+        )
+      } else if line.has_prefix("fadd\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_fp_three_register(line.substring(start=5), 0x1e602800U, "fadd"),
+        )
+      } else if line.has_prefix("fsub\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_fp_three_register(line.substring(start=5), 0x1e603800U, "fsub"),
+        )
+      } else if line.has_prefix("fmul\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_fp_three_register(line.substring(start=5), 0x1e600800U, "fmul"),
+        )
+      } else if line.has_prefix("fdiv\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_fp_three_register(line.substring(start=5), 0x1e601800U, "fdiv"),
+        )
+      } else if line.has_prefix("fcvtzs\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_fp_convert_to_int(
+            line.substring(start=7),
+            0x9e780000U,
+            "fcvtzs",
+          ),
+        )
+      } else if line.has_prefix("fcvtzu\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_fp_convert_to_int(
+            line.substring(start=7),
+            0x9e790000U,
+            "fcvtzu",
+          ),
         )
       } else if line.has_prefix("udiv\t") {
         append_u32_to_section(
