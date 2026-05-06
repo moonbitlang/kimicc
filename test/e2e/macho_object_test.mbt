@@ -48,6 +48,27 @@ async test "direct macho object supports signed modulo" {
 }
 
 ///|
+async test "direct macho object supports bitwise operators" {
+  let source = "int main(void) { int a = 12; int b = 10; return (a & b) | (a ^ b); }"
+  let exit_code = run_source_direct_object_async(source, "macho_bitwise")
+  inspect(exit_code, content="14")
+}
+
+///|
+async test "direct macho object supports signed shifts" {
+  let source = "int main(void) { int a = 3; int b = 2; return (a << b) + (16 >> b); }"
+  let exit_code = run_source_direct_object_async(source, "macho_signed_shift")
+  inspect(exit_code, content="16")
+}
+
+///|
+async test "direct macho object supports unsigned shift mask" {
+  let source = "int main(void) { unsigned int a = 16; int b = 2; return a >> b; }"
+  let exit_code = run_source_direct_object_async(source, "macho_unsigned_shift")
+  inspect(exit_code, content="4")
+}
+
+///|
 async test "direct macho object supports zero-argument internal call" {
   let source = "int answer(void) { return 42; } int main(void) { return answer(); }"
   let exit_code = run_source_direct_object_async(source, "macho_internal_call0")

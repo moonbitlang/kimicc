@@ -374,6 +374,36 @@ fn encode_sdiv(rest : String) -> UInt {
 }
 
 ///|
+fn encode_three_register(rest : String, base : UInt, name : String) -> UInt {
+  let parts = split_operands(rest)
+  if parts.length() != 3 {
+    abort("malformed " + name + " instruction")
+  }
+  let rd = parse_register(parts[0])
+  let rn = parse_register(parts[1])
+  let rm = parse_register(parts[2])
+  base |
+  (rm.reinterpret_as_uint() << 16) |
+  (rn.reinterpret_as_uint() << 5) |
+  rd.reinterpret_as_uint()
+}
+
+///|
+fn encode_and(rest : String) -> UInt {
+  let parts = split_operands(rest)
+  if parts.length() != 3 {
+    abort("malformed and instruction")
+  }
+  if parts[2] == "#0xFFFFFFFF" {
+    let rd = parse_register(parts[0])
+    let rn = parse_register(parts[1])
+    0x92407c00U | (rn.reinterpret_as_uint() << 5) | rd.reinterpret_as_uint()
+  } else {
+    encode_three_register(rest, 0x8a000000U, "and")
+  }
+}
+
+///|
 fn encode_cmp(rest : String) -> UInt {
   let parts = split_operands(rest)
   if parts.length() != 2 {
@@ -1088,6 +1118,36 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         append_u32_to_section(
           sections[current_section],
           encode_sdiv(line.substring(start=5)),
+        )
+      } else if line.has_prefix("and\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_and(line.substring(start=4)),
+        )
+      } else if line.has_prefix("orr\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_three_register(line.substring(start=4), 0xaa000000U, "orr"),
+        )
+      } else if line.has_prefix("eor\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_three_register(line.substring(start=4), 0xca000000U, "eor"),
+        )
+      } else if line.has_prefix("lsl\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_three_register(line.substring(start=4), 0x9ac02000U, "lsl"),
+        )
+      } else if line.has_prefix("asr\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_three_register(line.substring(start=4), 0x9ac02800U, "asr"),
+        )
+      } else if line.has_prefix("lsr\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_three_register(line.substring(start=4), 0x9ac02400U, "lsr"),
         )
       } else if line.has_prefix("cmp\t") {
         append_u32_to_section(
