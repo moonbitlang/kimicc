@@ -517,7 +517,7 @@ fn assert_sqlite_release_gate_output(
 }
 
 ///|
-async test "sqlite public veryquick residual failures match clang when enabled" {
+async test "sqlite public veryquick residual failures match clang and direct when enabled" {
   if !sqlite_public_conformance_enabled("veryquick") {
     return
   }
@@ -536,12 +536,20 @@ async test "sqlite public veryquick residual failures match clang when enabled" 
     Clang,
     220,
   )
-  if kimicc.code != clang.code {
+  let direct = run_sqlite_public_tcl_script_tail_with(
+    "test/veryquick.test",
+    "sqlite_public_veryquick",
+    DirectObject,
+    220,
+  )
+  if kimicc.code != clang.code || kimicc.code != direct.code {
     abort(
       "SQLite veryquick exit code differs:\nkimicc:\n" +
       kimicc.output +
       "\nclang:\n" +
-      clang.output,
+      clang.output +
+      "\ndirect:\n" +
+      direct.output,
     )
   }
   if kimicc.code == 0 {
@@ -549,6 +557,7 @@ async test "sqlite public veryquick residual failures match clang when enabled" 
   }
   assert_sqlite_veryquick_residuals(kimicc.output, "kimicc")
   assert_sqlite_veryquick_residuals(clang.output, "clang")
+  assert_sqlite_veryquick_residuals(direct.output, "direct object")
 }
 
 ///|
