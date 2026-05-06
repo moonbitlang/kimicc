@@ -46,6 +46,7 @@ priv struct ObjectSection {
 priv struct AssembledObject {
   sections : Array[ObjectSection]
   globals : Array[String]
+  defined_symbols : Array[String]
   symbols : Map[String, SymbolLocation]
 }
 
@@ -1606,6 +1607,7 @@ fn append_data_directive(section : ObjectSection, line : String) -> Bool {
 fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
   let sections : Array[ObjectSection] = []
   let globals : Array[String] = []
+  let defined_symbols : Array[String] = []
   let symbols : Map[String, SymbolLocation] = {}
   let pending : Array[PendingBranch] = []
   let pending_cbz : Array[PendingCbz] = []
@@ -1640,10 +1642,12 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
       if current_section < 0 {
         abort("label before section in Mach-O object backend: " + line)
       }
-      symbols[line.substring(end=line.length() - 1)] = {
+      let name = line.substring(end=line.length() - 1)
+      symbols[name] = {
         section_index: current_section,
         offset: sections[current_section].bytes.length(),
       }
+      push_string_once(defined_symbols, name)
     } else if current_section >= 0 && section_is_text(sections[current_section]) {
       if line == "stp\tx29, x30, [sp, #-16]!" {
         append_u32_to_section(sections[current_section], 0xa9bf7bfdU)
@@ -2165,7 +2169,7 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         )
     }
   }
-  { sections, globals, symbols }
+  { sections, globals, defined_symbols, symbols }
 }
 
 ///|
@@ -2176,8 +2180,8 @@ fn write_macho_header(buf : @buffer.Buffer, sizeofcmds : Int) -> Unit {
   write_u32_le(buf, 1U) // MH_OBJECT
   write_u32_le(buf, 4U)
   write_i32_le(buf, sizeofcmds)
-  write_u32_le(buf, 0x2000U) // MH_SUBSECTIONS_VIA_SYMBOLS
-  write_u32_le(buf, 0U)
+  write_u32_le(buf, 0U) // flags
+  write_u32_le(buf, 0U) // reserved
 }
 
 ///|
@@ -2370,6 +2374,11 @@ fn push_string_once(values : Array[String], target : String) -> Unit {
 }
 
 ///|
+fn is_temporary_label(name : String) -> Bool {
+  name.has_prefix("L")
+}
+
+///|
 fn symbol_value(
   name : String,
   symbols : Map[String, SymbolLocation],
@@ -2399,6 +2408,11 @@ fn build_symbol_layout(obj : AssembledObject) -> SymbolLayout {
       }
     } else {
       push_string_once(undefs, name)
+    }
+  }
+  for name in obj.defined_symbols {
+    if !array_contains_string(obj.globals, name) && !is_temporary_label(name) {
+      push_string_once(locals, name)
     }
   }
   for name in obj.globals {

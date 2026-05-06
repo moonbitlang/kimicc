@@ -297,6 +297,36 @@ async test "sqlite object matches clang baseline for SQL script runner" {
 }
 
 ///|
+async test "sqlite direct object matches clang baseline for SQL script runner" {
+  let sql =
+    #|create table account(
+    #|  id integer primary key,
+    #|  name text not null unique,
+    #|  balance integer not null check(balance >= 0)
+    #|);
+    #|create index account_balance_idx on account(balance, name);
+    #|insert into account(name, balance)
+    #|  values('alpha', 10), ('beta', 25), ('gamma', 17);
+    #|begin;
+    #|update account set balance = balance + 5 where name in ('alpha', 'gamma');
+    #|insert into account(name, balance)
+    #|  select 'delta', sum(balance) from account where name != 'beta';
+    #|commit;
+    #|select name, balance from account where balance >= 15 order by balance, name;
+    #|select count(*) as n, sum(balance) as total, max(balance) as high
+    #|  from account;
+  let result = run_sql_script_compiler_against_clang_baseline(
+    sql,
+    "sqlite_direct_sql_script_core",
+    DirectObject,
+  )
+  assert_true(result.output.contains("row|name=gamma|balance=22"))
+  assert_true(result.output.contains("row|name=delta|balance=37"))
+  assert_true(result.output.contains("row|n=4|total=99|high=37"))
+  assert_true(result.output.contains("script-ok"))
+}
+
+///|
 async test "sqlite public tcl smoke batch passes through testfixture harness" {
   let result = run_sqlite_public_tcl_batch(
     [
@@ -319,6 +349,25 @@ async test "sqlite public tcl smoke batch passes through testfixture harness" {
   assert_true(result.output.contains("0 errors out of 36717 tests"))
   assert_true(result.output.contains("0 errors out of 18 tests"))
   assert_true(result.output.contains("with6-400... Ok"))
+}
+
+///|
+async test "sqlite direct object public tcl select smoke passes" {
+  let result = run_sqlite_public_tcl_batch_with(
+    ["test/select1.test"],
+    "sqlite_direct_public_tcl_select_smoke",
+    DirectObject,
+  )
+  if result.code != 0 {
+    abort(
+      "SQLite direct-object public Tcl select smoke failed:\n" + result.output,
+    )
+  }
+  if result.output == "sqlite-public-tests-skipped\n" {
+    return
+  }
+  assert_true(result.output.contains("### test/select1.test"))
+  assert_true(result.output.contains("0 errors out of 192 tests"))
 }
 
 ///|

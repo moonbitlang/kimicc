@@ -91,6 +91,7 @@ priv struct CommandResult {
 priv enum SQLiteObjectCompiler {
   Kimicc
   Clang
+  DirectObject
 }
 
 ///|
@@ -98,6 +99,7 @@ fn SQLiteObjectCompiler::tag(self : SQLiteObjectCompiler) -> String {
   match self {
     Kimicc => "kimicc"
     Clang => "clang"
+    DirectObject => "direct"
   }
 }
 
@@ -330,6 +332,7 @@ async fn compile_sqlite_fixture_object_with(
   match compiler {
     Kimicc => compile_sqlite_fixture_object()
     Clang => compile_clang_sqlite_fixture_object()
+    DirectObject => compile_sqlite_fixture_direct_object()
   }
 }
 
@@ -390,6 +393,16 @@ async fn compile_sqlite_fixture_testfixture_object_with(
         "compile clang sqlite3 testfixture object",
       )
       obj_path
+    }
+    DirectObject => {
+      let source = preprocess_c_file_with_flags(
+        "test/fixtures/sqlite/sqlite3.c",
+        sqlite_testfixture_flags(),
+        "sqlite3_direct_testfixture_preprocessed",
+      )
+      compile_source_to_direct_object_path(
+        source, "sqlite3_direct_testfixture_object",
+      )
     }
   }
 }
@@ -813,21 +826,37 @@ async fn run_sql_script_against_clang_baseline(
   sql : String,
   tag : String,
 ) -> CommandResult {
+  run_sql_script_compiler_against_clang_baseline(sql, tag, Kimicc)
+}
+
+///|
+async fn run_sql_script_compiler_against_clang_baseline(
+  sql : String,
+  tag : String,
+  compiler : SQLiteObjectCompiler,
+) -> CommandResult {
   let clang_result = run_sql_script_with_sqlite_object(sql, tag, Clang)
   if clang_result.code != 0 {
     abort("SQLite clang baseline failed:\n" + clang_result.output)
   }
-  let kimicc_result = run_sql_script_with_sqlite_object(sql, tag, Kimicc)
-  if kimicc_result.code != 0 {
-    abort("SQLite kimicc object failed:\n" + kimicc_result.output)
-  }
-  if kimicc_result.output != clang_result.output {
+  let compiled_result = run_sql_script_with_sqlite_object(sql, tag, compiler)
+  let compiler_tag = compiler.tag()
+  if compiled_result.code != 0 {
     abort(
-      "SQLite kimicc output differs from clang baseline:\nclang:\n" +
-      clang_result.output +
-      "\nkimicc:\n" +
-      kimicc_result.output,
+      "SQLite " + compiler_tag + " object failed:\n" + compiled_result.output,
     )
   }
-  kimicc_result
+  if compiled_result.output != clang_result.output {
+    abort(
+      "SQLite " +
+      compiler_tag +
+      " output differs from clang baseline:\nclang:\n" +
+      clang_result.output +
+      "\n" +
+      compiler_tag +
+      ":\n" +
+      compiled_result.output,
+    )
+  }
+  compiled_result
 }

@@ -83,6 +83,46 @@ async test "direct macho object emits bss as zerofill with later const data" {
 }
 
 ///|
+async test "direct macho object retains non-external function labels" {
+  let source = "static int hidden(void) { return 42; }"
+  let obj_path = compile_source_to_direct_object_path(
+    source, "macho_local_function_symbol",
+  )
+  let symbols = run_command_capture(
+    "nm -m " + shell_quote(obj_path),
+    "macho_local_function_symbol_nm",
+  )
+  if !symbols.output.contains("non-external _hidden") {
+    abort(
+      "direct Mach-O object omitted local function symbol:\n" + symbols.output,
+    )
+  }
+}
+
+///|
+async test "direct macho object keeps subsection atomization disabled" {
+  let source = "int helper(void) { return 40; } int main(void) { return helper() + 2; }"
+  let obj_path = compile_source_to_direct_object_path(
+    source, "macho_no_subsections_via_symbols",
+  )
+  let header = run_command_capture(
+    "otool -h " + shell_quote(obj_path),
+    "macho_no_subsections_via_symbols_header",
+  )
+  if !header.output.contains("0x00000000") ||
+    header.output.contains("0x00002000") {
+    abort(
+      "direct Mach-O object should not request MH_SUBSECTIONS_VIA_SYMBOLS:\n" +
+      header.output,
+    )
+  }
+  let exit_code = run_source_direct_object_async(
+    source, "macho_no_subsections_via_symbols_run",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object supports local integer arithmetic" {
   let source = "int main(void) { int a = 1; int b = 2; return a + b + 3; }"
   let exit_code = run_source_direct_object_async(source, "macho_local_arith")
