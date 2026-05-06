@@ -108,6 +108,13 @@ async test "direct macho object supports string literal page relocation" {
 }
 
 ///|
+async test "direct macho object supports string literal byte load" {
+  let source = "int main(void) { char *s = \"x\"; return s[0]; }"
+  let exit_code = run_source_direct_object_async(source, "macho_string_byte")
+  inspect(exit_code, content="120")
+}
+
+///|
 async test "direct macho object supports external branch relocation" {
   let source = "int putchar(int); int main(void) { return putchar(65); }"
   let exit_code = run_source_direct_object_async(source, "macho_external_bl")

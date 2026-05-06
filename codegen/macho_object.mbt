@@ -325,6 +325,23 @@ fn encode_mul(rest : String) -> UInt {
 }
 
 ///|
+fn encode_madd(rest : String) -> UInt {
+  let parts = split_operands(rest)
+  if parts.length() != 4 {
+    abort("malformed madd instruction")
+  }
+  let rd = parse_register(parts[0])
+  let rn = parse_register(parts[1])
+  let rm = parse_register(parts[2])
+  let ra = parse_register(parts[3])
+  0x9b000000U |
+  (rm.reinterpret_as_uint() << 16) |
+  (ra.reinterpret_as_uint() << 10) |
+  (rn.reinterpret_as_uint() << 5) |
+  rd.reinterpret_as_uint()
+}
+
+///|
 fn encode_cmp(rest : String) -> UInt {
   let parts = split_operands(rest)
   if parts.length() != 2 {
@@ -512,6 +529,32 @@ fn encode_sxtw(dst : String, src : String) -> UInt {
   let rd = parse_register(dst)
   let rn = parse_register(src)
   0x93407c00U | (rn.reinterpret_as_uint() << 5) | rd.reinterpret_as_uint()
+}
+
+///|
+fn encode_sxtb(dst : String, src : String) -> UInt {
+  let rd = parse_register(dst)
+  let rn = parse_register(src)
+  0x93401c00U | (rn.reinterpret_as_uint() << 5) | rd.reinterpret_as_uint()
+}
+
+///|
+fn encode_ldrb(rest : String) -> UInt {
+  let parts = split_operands(rest)
+  if parts.length() != 2 && parts.length() != 3 {
+    abort("malformed ldrb instruction")
+  }
+  let rt = parse_register(parts[0])
+  let rn = parse_register(clean_mem_token(parts[1]))
+  let offset = if parts.length() == 3 {
+    parse_immediate(clean_mem_token(parts[2]))
+  } else {
+    0
+  }
+  0x39400000U |
+  (offset.reinterpret_as_uint() << 10) |
+  (rn.reinterpret_as_uint() << 5) |
+  rt.reinterpret_as_uint()
 }
 
 ///|
@@ -893,6 +936,15 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
           sections[current_section],
           encode_sxtw(parts[0], parts[1]),
         )
+      } else if line.has_prefix("sxtb\t") {
+        let parts = split_operands(line.substring(start=5))
+        if parts.length() != 2 {
+          abort("malformed sxtb instruction")
+        }
+        append_u32_to_section(
+          sections[current_section],
+          encode_sxtb(parts[0], parts[1]),
+        )
       } else if line.has_prefix("adrp\t") {
         let parts = split_operands(line.substring(start=5))
         if parts.length() != 2 {
@@ -944,6 +996,11 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
           sections[current_section],
           encode_mul(line.substring(start=4)),
         )
+      } else if line.has_prefix("madd\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_madd(line.substring(start=5)),
+        )
       } else if line.has_prefix("cmp\t") {
         append_u32_to_section(
           sections[current_section],
@@ -958,6 +1015,11 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         append_u32_to_section(
           sections[current_section],
           encode_str(line.substring(start=4)),
+        )
+      } else if line.has_prefix("ldrb\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_ldrb(line.substring(start=5)),
         )
       } else if line.has_prefix("ldr\t") {
         let parts = split_operands(line.substring(start=4))
