@@ -12,6 +12,7 @@ priv struct PendingCbz {
   offset : Int
   label : String
   reg : Int
+  nonzero : Bool
 }
 
 ///|
@@ -918,6 +919,11 @@ fn encode_cbz(from_offset : Int, target_offset : Int, reg : Int) -> UInt {
 }
 
 ///|
+fn encode_cbnz(from_offset : Int, target_offset : Int, reg : Int) -> UInt {
+  encode_cbz(from_offset, target_offset, reg) | 0x01000000U
+}
+
+///|
 fn encode_cond_branch(
   from_offset : Int,
   target_offset : Int,
@@ -1581,6 +1587,20 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
           offset: sections[current_section].bytes.length(),
           label: parts[1],
           reg: parse_register(parts[0]),
+          nonzero: false,
+        })
+        append_u32_to_section(sections[current_section], 0U)
+      } else if line.has_prefix("cbnz\t") {
+        let parts = split_operands(line.substring(start=5))
+        if parts.length() != 2 {
+          abort("malformed cbnz instruction")
+        }
+        pending_cbz.push({
+          section_index: current_section,
+          offset: sections[current_section].bytes.length(),
+          label: parts[1],
+          reg: parse_register(parts[0]),
+          nonzero: true,
         })
         append_u32_to_section(sections[current_section], 0U)
       } else if line.has_prefix("b.") {
@@ -1670,11 +1690,18 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
           patch_u32_in_section(
             sections[branch.section_index],
             branch.offset,
-            encode_cbz(branch.offset, target.offset, branch.reg),
+            if branch.nonzero {
+              encode_cbnz(branch.offset, target.offset, branch.reg)
+            } else {
+              encode_cbz(branch.offset, target.offset, branch.reg)
+            },
           )
         }
       None =>
-        abort("unknown cbz label in Mach-O object backend: " + branch.label)
+        abort(
+          "unknown compare-zero branch label in Mach-O object backend: " +
+          branch.label,
+        )
     }
   }
   for branch in pending_cond {

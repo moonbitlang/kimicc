@@ -127,6 +127,13 @@ async test "direct macho object supports comparison if control flow" {
 }
 
 ///|
+async test "direct macho object supports logical or branch" {
+  let source = "int main(void) { int a = 0; int b = 1; if (a || b) return 42; return 1; }"
+  let exit_code = run_source_direct_object_async(source, "macho_logic_or")
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object supports simple while loop" {
   let source = "int main(void) { int i = 0; int s = 0; while (i < 4) { s = s + i; i = i + 1; } return s; }"
   let exit_code = run_source_direct_object_async(source, "macho_while_sum")
