@@ -830,6 +830,21 @@ fn encode_mov(rest : String) -> UInt {
 }
 
 ///|
+fn encode_mvn(rest : String) -> UInt {
+  let parts = split_operands(rest)
+  if parts.length() != 2 {
+    abort("malformed mvn instruction")
+  }
+  let rd = parse_register(parts[0])
+  let rm = parse_register(parts[1])
+  let base = if parts[0].has_prefix("w") { 0x2a200000U } else { 0xaa200000U }
+  base |
+  (rm.reinterpret_as_uint() << 16) |
+  (31U << 5) |
+  rd.reinterpret_as_uint()
+}
+
+///|
 fn encode_fmov(rest : String) -> UInt {
   let parts = split_operands(rest)
   if parts.length() != 2 {
@@ -1296,6 +1311,11 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         append_u32_to_section(
           sections[current_section],
           encode_mov_wide(line.substring(start=5), "movn"),
+        )
+      } else if line.has_prefix("mvn\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_mvn(line.substring(start=4)),
         )
       } else if line.has_prefix("sxtw\t") {
         let parts = split_operands(line.substring(start=5))

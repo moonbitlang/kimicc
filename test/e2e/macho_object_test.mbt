@@ -69,6 +69,13 @@ async test "direct macho object supports bitwise operators" {
 }
 
 ///|
+async test "direct macho object supports bitwise not" {
+  let source = "int main(void) { int a = 15; return ~a; }"
+  let exit_code = run_source_direct_object_async(source, "macho_bitwise_not")
+  inspect(exit_code, content="240")
+}
+
+///|
 async test "direct macho object supports signed shifts" {
   let source = "int main(void) { int a = 3; int b = 2; return (a << b) + (16 >> b); }"
   let exit_code = run_source_direct_object_async(source, "macho_signed_shift")
