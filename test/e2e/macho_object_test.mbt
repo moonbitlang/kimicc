@@ -338,6 +338,10 @@ async test "direct macho object supports bit count and byte swap builtins" {
     #|  if (__builtin_ctzll(16) != 4) return 4;
     #|  if ((__builtin_bswap32(0x01020304u) & 255) != 1) return 5;
     #|  if ((__builtin_bswap64(0x0102030405060708ull) & 255) != 1) return 6;
+    #|  if (__builtin_rotateleft32(0x12345678u, 8) != 0x34567812u) return 7;
+    #|  if (__builtin_rotateright32(0x12345678u, 8) != 0x78123456u) return 8;
+    #|  if (__builtin_rotateleft64(0x0123456789abcdefull, 16) != 0x456789abcdef0123ull) return 9;
+    #|  if (__builtin_rotateright64(0x0123456789abcdefull, 16) != 0xcdef0123456789abull) return 10;
     #|  return 42;
     #|}
   let exit_code = run_source_direct_object_async(source, "macho_bit_builtins")

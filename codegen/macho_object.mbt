@@ -654,10 +654,11 @@ fn encode_shift(rest : String, kind : String) -> UInt {
     abort("malformed " + kind + " instruction")
   }
   if !parts[2].has_prefix("#") {
+    let wide = !parts[0].has_prefix("w")
     let base = match kind {
-      "lsl" => 0x9ac02000U
-      "lsr" => 0x9ac02400U
-      "asr" => 0x9ac02800U
+      "lsl" => if wide { 0x9ac02000U } else { 0x1ac02000U }
+      "lsr" => if wide { 0x9ac02400U } else { 0x1ac02400U }
+      "asr" => if wide { 0x9ac02800U } else { 0x1ac02800U }
       _ => abort("unsupported shift instruction: " + kind)
     }
     encode_three_register(rest, base, kind)

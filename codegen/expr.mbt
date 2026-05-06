@@ -703,6 +703,8 @@ fn Codegen::call_return_type(
             | "__builtin_huge_vall"
             | "__builtin_inf"
             | "__builtin_infl" => Double
+            "__builtin_rotateleft32" | "__builtin_rotateright32" => UInt
+            "__builtin_rotateleft64" | "__builtin_rotateright64" => ULongLong
             _ => self.func_rets.get_or_default(name, SInt)
           }
         _ => SInt
@@ -1277,6 +1279,46 @@ fn Codegen::emit_lowered_builtin_call(
 }
 
 ///|
+fn Codegen::emit_builtin_rotate(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+  width : Int,
+  left : Bool,
+) -> Unit {
+  if args.length() < 2 {
+    self.emit("\tmov\tx9, #0")
+    return
+  }
+  self.gen_expr(args[0], frame_size)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.gen_expr(args[1], frame_size)
+  self.emit("\tmov\tx10, x9")
+  self.emit("\tldr\tx9, [sp], #16")
+  if width == 32 {
+    self.emit("\tneg\tw11, w10")
+    if left {
+      self.emit("\tlsl\tw12, w9, w10")
+      self.emit("\tlsr\tw11, w9, w11")
+    } else {
+      self.emit("\tlsr\tw12, w9, w10")
+      self.emit("\tlsl\tw11, w9, w11")
+    }
+    self.emit("\torr\tw9, w12, w11")
+  } else {
+    self.emit("\tneg\tx11, x10")
+    if left {
+      self.emit("\tlsl\tx12, x9, x10")
+      self.emit("\tlsr\tx11, x9, x11")
+    } else {
+      self.emit("\tlsr\tx12, x9, x10")
+      self.emit("\tlsl\tx11, x9, x11")
+    }
+    self.emit("\torr\tx9, x12, x11")
+  }
+}
+
+///|
 fn Codegen::emit_builtin_call(
   self : Codegen,
   name : String,
@@ -1381,6 +1423,22 @@ fn Codegen::emit_builtin_call(
       } else {
         self.emit("\tmov\tx9, #0")
       }
+      true
+    }
+    "__builtin_rotateleft32" => {
+      self.emit_builtin_rotate(args, frame_size, 32, true)
+      true
+    }
+    "__builtin_rotateright32" => {
+      self.emit_builtin_rotate(args, frame_size, 32, false)
+      true
+    }
+    "__builtin_rotateleft64" => {
+      self.emit_builtin_rotate(args, frame_size, 64, true)
+      true
+    }
+    "__builtin_rotateright64" => {
+      self.emit_builtin_rotate(args, frame_size, 64, false)
       true
     }
     "__builtin_popcount" | "__builtin_popcountl" | "__builtin_popcountll" => {

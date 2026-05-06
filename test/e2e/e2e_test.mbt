@@ -1797,6 +1797,24 @@ async test "__builtin_bswap32" {
 }
 
 ///|
+async test "__builtin_rotateleft and rotateright" {
+  let source =
+    #|int main() {
+    #|  unsigned int a = __builtin_rotateleft32(0x12345678u, 8);
+    #|  unsigned int b = __builtin_rotateright32(0x12345678u, 8);
+    #|  unsigned long long c = __builtin_rotateleft64(0x0123456789abcdefull, 16);
+    #|  unsigned long long d = __builtin_rotateright64(0x0123456789abcdefull, 16);
+    #|  if (a != 0x34567812u) return 1;
+    #|  if (b != 0x78123456u) return 2;
+    #|  if (c != 0x456789abcdef0123ull) return 3;
+    #|  if (d != 0xcdef0123456789abull) return 4;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "__builtin_memcpy" {
   let source =
     #|int main() {
