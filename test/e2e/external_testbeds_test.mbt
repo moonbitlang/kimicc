@@ -796,6 +796,19 @@ async fn compile_preprocessed_file_with_kimicc_direct_object_path(
 }
 
 ///|
+fn tinycc_smoke_source() -> String {
+  let source =
+    #|int fib(int n) {
+    #|  return n < 2 ? n : fib(n - 1) + fib(n - 2);
+    #|}
+    #|
+    #|int main(void) {
+    #|  return fib(10) == 55 ? 42 : 1;
+    #|}
+  source
+}
+
+///|
 async test "external TinyCC stripped compiler builds and emits smoke object when enabled" {
   if !external_testbed_enabled("tinycc") {
     return
@@ -824,14 +837,7 @@ async test "external TinyCC stripped compiler builds and emits smoke object when
       version.output,
     )
   }
-  let smoke_source =
-    #|int fib(int n) {
-    #|  return n < 2 ? n : fib(n - 1) + fib(n - 2);
-    #|}
-    #|
-    #|int main(void) {
-    #|  return fib(10) == 55 ? 42 : 1;
-    #|}
+  let smoke_source = tinycc_smoke_source()
   let smoke_source_path = "/tmp/kimicc_tinycc_external_smoke.c"
   let smoke_object_path = "/tmp/kimicc_tinycc_external_smoke.o"
   let smoke_binary_path = "/tmp/kimicc_tinycc_external_smoke"
@@ -862,6 +868,72 @@ async test "external TinyCC stripped compiler builds and emits smoke object when
   if result.code != 0 || !result.output.contains("ELF 64-bit") {
     abort(
       "TinyCC external smoke object check failed with code " +
+      result.code.to_string() +
+      ":\n" +
+      result.output,
+    )
+  }
+}
+
+///|
+async test "external TinyCC stripped compiler direct object builds and emits smoke object when enabled" {
+  if !external_testbed_enabled("tinycc") {
+    return
+  }
+  let source_path = "/tmp/tinycc_stripped.c"
+  require_external_path(source_path, "TinyCC stripped source")
+  let data = @fs.read_file(source_path)
+  let object_path = compile_source_to_direct_object_path(
+    data.text(),
+    "tinycc_direct_external_stripped",
+  )
+  let tcc_path = "/tmp/kimicc_tinycc_direct_external"
+  run_command_checked(
+    "clang -o " + shell_quote(tcc_path) + " " + shell_quote(object_path),
+    "link direct TinyCC external compiler",
+  )
+  let version = run_command_capture(
+    shell_quote(tcc_path) + " -v",
+    "tinycc_direct_external_version",
+  )
+  if version.code != 0 || !version.output.contains("tcc version") {
+    abort(
+      "TinyCC direct external version failed with code " +
+      version.code.to_string() +
+      ":\n" +
+      version.output,
+    )
+  }
+  let smoke_source_path = "/tmp/kimicc_tinycc_direct_external_smoke.c"
+  let smoke_object_path = "/tmp/kimicc_tinycc_direct_external_smoke.o"
+  let smoke_binary_path = "/tmp/kimicc_tinycc_direct_external_smoke"
+  write_text_file(smoke_source_path, tinycc_smoke_source())
+  run_command_checked(
+    "rm -f " +
+    shell_quote(smoke_object_path) +
+    " " +
+    shell_quote(smoke_binary_path),
+    "clean direct TinyCC smoke outputs",
+  )
+  run_command_checked(
+    shell_quote(tcc_path) +
+    " -c -o " +
+    shell_quote(smoke_object_path) +
+    " " +
+    shell_quote(smoke_source_path),
+    "direct TinyCC compile smoke object",
+  )
+  run_command_checked(
+    "test -s " + shell_quote(smoke_object_path),
+    "direct TinyCC smoke object exists",
+  )
+  let result = run_command_capture(
+    "file " + shell_quote(smoke_object_path),
+    "tinycc_direct_external_smoke_object",
+  )
+  if result.code != 0 || !result.output.contains("ELF 64-bit") {
+    abort(
+      "TinyCC direct external smoke object check failed with code " +
       result.code.to_string() +
       ":\n" +
       result.output,

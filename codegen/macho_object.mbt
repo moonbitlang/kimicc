@@ -384,12 +384,27 @@ fn encode_add_sub_imm_with_base(
   imm : Int,
   base : UInt,
 ) -> UInt {
+  let (encoded_imm, shift) = encode_add_sub_imm12_fields(imm, "add/sub")
   let rd = parse_register(dst)
   let rn = parse_register(src)
   base |
-  (imm.reinterpret_as_uint() << 10) |
+  (shift.reinterpret_as_uint() << 22) |
+  (encoded_imm.reinterpret_as_uint() << 10) |
   (rn.reinterpret_as_uint() << 5) |
   rd.reinterpret_as_uint()
+}
+
+///|
+fn encode_add_sub_imm12_fields(imm : Int, context : String) -> (Int, Int) {
+  if imm < 0 {
+    abort(context + " immediate must be non-negative")
+  } else if imm <= 4095 {
+    (imm, 0)
+  } else if imm % 4096 == 0 && imm / 4096 <= 4095 {
+    (imm / 4096, 1)
+  } else {
+    abort(context + " immediate out of range for object backend")
+  }
 }
 
 ///|
@@ -800,8 +815,15 @@ fn encode_cmp(rest : String) -> UInt {
   let rn = parse_register(parts[0])
   if parts[1].has_prefix("#") {
     let imm = parse_immediate(parts[1])
-    let base = if parts[0].has_prefix("w") { 0x7100001fU } else { 0xf100001fU }
-    base | (imm.reinterpret_as_uint() << 10) | (rn.reinterpret_as_uint() << 5)
+    let is_wide = !parts[0].has_prefix("w")
+    let zero = if is_wide { "xzr" } else { "wzr" }
+    if imm < 0 {
+      let base = if is_wide { 0xb1000000U } else { 0x31000000U }
+      encode_add_sub_imm_with_base(zero, parts[0], -imm, base)
+    } else {
+      let base = if is_wide { 0xf1000000U } else { 0x71000000U }
+      encode_add_sub_imm_with_base(zero, parts[0], imm, base)
+    }
   } else {
     let rm = parse_register(parts[1])
     let base = if parts[0].has_prefix("w") { 0x6b00001fU } else { 0xeb00001fU }

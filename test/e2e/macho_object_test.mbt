@@ -442,6 +442,26 @@ async test "direct macho object supports double comparison" {
 }
 
 ///|
+async test "direct macho object supports negative compare immediates" {
+  let source =
+    #|long f(long x) {
+    #|  return x == -1 ? 40 : 1;
+    #|}
+    #|
+    #|int g(int x) {
+    #|  return x == -1 ? 2 : 1;
+    #|}
+    #|
+    #|int main(void) {
+    #|  return (int)f(-1) + g(-1);
+    #|}
+  let exit_code = run_source_direct_object_async(
+    source, "macho_negative_cmp_imm",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object supports double negation" {
   let source = "double f(double x) { return -x; } int main(void) { return (int)f(42.0) + 84; }"
   let exit_code = run_source_direct_object_async(source, "macho_double_neg")
