@@ -539,10 +539,22 @@ fn encode_sxtb(dst : String, src : String) -> UInt {
 }
 
 ///|
-fn encode_ldrb(rest : String) -> UInt {
+fn encode_sxth(dst : String, src : String) -> UInt {
+  let rd = parse_register(dst)
+  let rn = parse_register(src)
+  0x93403c00U | (rn.reinterpret_as_uint() << 5) | rd.reinterpret_as_uint()
+}
+
+///|
+fn encode_byte_halfword_memory(
+  rest : String,
+  base : UInt,
+  scale : Int,
+  name : String,
+) -> UInt {
   let parts = split_operands(rest)
   if parts.length() != 2 && parts.length() != 3 {
-    abort("malformed ldrb instruction")
+    abort("malformed " + name + " instruction")
   }
   let rt = parse_register(parts[0])
   let rn = parse_register(clean_mem_token(parts[1]))
@@ -551,8 +563,8 @@ fn encode_ldrb(rest : String) -> UInt {
   } else {
     0
   }
-  0x39400000U |
-  (offset.reinterpret_as_uint() << 10) |
+  base |
+  ((offset / scale).reinterpret_as_uint() << 10) |
   (rn.reinterpret_as_uint() << 5) |
   rt.reinterpret_as_uint()
 }
@@ -970,6 +982,15 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
           sections[current_section],
           encode_sxtb(parts[0], parts[1]),
         )
+      } else if line.has_prefix("sxth\t") {
+        let parts = split_operands(line.substring(start=5))
+        if parts.length() != 2 {
+          abort("malformed sxth instruction")
+        }
+        append_u32_to_section(
+          sections[current_section],
+          encode_sxth(parts[0], parts[1]),
+        )
       } else if line.has_prefix("adrp\t") {
         let parts = split_operands(line.substring(start=5))
         if parts.length() != 2 {
@@ -1041,10 +1062,45 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
           sections[current_section],
           encode_str(line.substring(start=4)),
         )
+      } else if line.has_prefix("strb\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_byte_halfword_memory(
+            line.substring(start=5),
+            0x39000000U,
+            1,
+            "strb",
+          ),
+        )
+      } else if line.has_prefix("strh\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_byte_halfword_memory(
+            line.substring(start=5),
+            0x79000000U,
+            2,
+            "strh",
+          ),
+        )
       } else if line.has_prefix("ldrb\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_ldrb(line.substring(start=5)),
+          encode_byte_halfword_memory(
+            line.substring(start=5),
+            0x39400000U,
+            1,
+            "ldrb",
+          ),
+        )
+      } else if line.has_prefix("ldrh\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_byte_halfword_memory(
+            line.substring(start=5),
+            0x79400000U,
+            2,
+            "ldrh",
+          ),
         )
       } else if line.has_prefix("ldr\t") {
         let parts = split_operands(line.substring(start=4))

@@ -101,6 +101,20 @@ async test "direct macho object supports zero global write relocation" {
 }
 
 ///|
+async test "direct macho object supports char global write relocation" {
+  let source = "char g; int main(void) { g = 42; return g; }"
+  let exit_code = run_source_direct_object_async(source, "macho_char_global")
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports short global write relocation" {
+  let source = "short g; int main(void) { g = 42; return g; }"
+  let exit_code = run_source_direct_object_async(source, "macho_short_global")
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object supports string literal page relocation" {
   let source = "int main(void) { char *s = \"x\"; return 7; }"
   let exit_code = run_source_direct_object_async(source, "macho_string_page")
