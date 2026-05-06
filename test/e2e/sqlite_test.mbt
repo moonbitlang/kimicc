@@ -389,6 +389,17 @@ fn sqlite_residual_script_paths() -> Array[String] {
 }
 
 ///|
+fn sqlite_release_gate_script_paths() -> Array[String] {
+  [
+    "test/selectC.test", "ext/expert/expert1.test", "ext/fts5/test/fts5contentless.test",
+    "ext/fts5/test/fts5aa.test", "ext/fts5/test/fts5origintext4.test", "ext/intck/intck1.test",
+    "ext/intck/intck2.test", "ext/recover/recover1.test", "ext/rtree/rtree2.test",
+    "ext/rtree/rtree7.test", "ext/rtree/rtree9.test", "test/avtrans.test", "test/decimal.test",
+    "test/func7.test", "test/corruptI.test", "test/incrcorrupt.test",
+  ]
+}
+
+///|
 fn assert_sqlite_residual_script_outputs(
   output : String,
   compiler : String,
@@ -420,6 +431,26 @@ fn assert_sqlite_residual_script_outputs(
         "SQLite " +
         compiler +
         " residual script output missing " +
+        marker +
+        ":\n" +
+        output,
+      )
+    }
+  }
+}
+
+///|
+fn assert_sqlite_release_gate_output(
+  output : String,
+  compiler : String,
+) -> Unit {
+  for script in sqlite_release_gate_script_paths() {
+    let marker = "### " + script
+    if !output.contains(marker) {
+      abort(
+        "SQLite " +
+        compiler +
+        " release gate output missing " +
         marker +
         ":\n" +
         output,
@@ -461,6 +492,34 @@ async test "sqlite public veryquick residual failures match clang when enabled" 
   }
   assert_sqlite_veryquick_residuals(kimicc.output, "kimicc")
   assert_sqlite_veryquick_residuals(clang.output, "clang")
+}
+
+///|
+async test "sqlite public release gate scripts pass with clang baseline when enabled" {
+  if !sqlite_public_conformance_enabled("release") {
+    return
+  }
+  let kimicc = run_sqlite_public_tcl_batch_with(
+    sqlite_release_gate_script_paths(),
+    "sqlite_public_release_gate",
+    Kimicc,
+  )
+  if kimicc.output == "sqlite-public-tests-skipped\n" {
+    return
+  }
+  let clang = run_sqlite_public_tcl_batch_with(
+    sqlite_release_gate_script_paths(),
+    "sqlite_public_release_gate",
+    Clang,
+  )
+  if kimicc.code != 0 {
+    abort("SQLite kimicc release gate failed:\n" + kimicc.output)
+  }
+  if clang.code != 0 {
+    abort("SQLite clang release gate failed:\n" + clang.output)
+  }
+  assert_sqlite_release_gate_output(kimicc.output, "kimicc")
+  assert_sqlite_release_gate_output(clang.output, "clang")
 }
 
 ///|

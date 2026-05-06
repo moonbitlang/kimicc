@@ -78,6 +78,9 @@ Passing kimicc SQLite e2e tests:
 - Run the 6 known SQLite residual scripts individually with both kimicc-built
   and clang-built `testfixture` binaries, then verify the residual test IDs are
   still the expected clang-matching platform/Tcl expectation drift.
+- Run a middle-weight release gate of high-value public SQLite scripts that have
+  previously exposed compiler bugs, using both kimicc-built and clang-built
+  `testfixture` binaries.
 
 This is useful smoke coverage, not a claim that SQLite passes its test suite.
 
@@ -112,6 +115,10 @@ The broad `veryquick` and `full` comparisons are available as opt-in MoonBit
 e2e tests:
 
 ```bash
+KIMICC_SQLITE_CONFORMANCE=release \
+  moon test test/e2e/sqlite_test.mbt --target native \
+  --filter 'sqlite public release gate scripts pass with clang baseline when enabled'
+
 KIMICC_SQLITE_CONFORMANCE=residuals \
   moon test test/e2e/sqlite_test.mbt --target native \
   --filter 'sqlite public residual scripts match clang when enabled'
@@ -145,6 +152,8 @@ KIMICC_SQLITE_CONFORMANCE=full \
   permutation.
 - [x] Add an opt-in residual-script guard that verifies the current full-suite
   residual signatures against clang without rerunning the whole suite.
+- [x] Add an opt-in release gate for previously fixed high-value public SQLite
+  scripts.
 - [ ] For every failure class, record the command, output, generated assembly or
   object paths, clang-vs-kimicc behavior, minimized C or SQL repro, status, and
   fixing commit.
@@ -220,6 +229,7 @@ KIMICC_SQLITE_CONFORMANCE=full \
 | Passed | TinyCC stripped compiler smoke | `KIMICC_EXTERNAL_TESTBED=tinycc moon test test/e2e/external_testbeds_test.mbt --target native --filter 'external TinyCC stripped compiler builds and emits smoke object when enabled'` | The opt-in MoonBit e2e test rebuilds `/tmp/tinycc_stripped.c` through kimicc, runs the resulting TinyCC binary with `-v`, and has TinyCC compile a freestanding Fibonacci smoke to a nonempty AArch64 ELF object. This stripped TinyCC fixture currently emits ELF relocatables and this machine has no `libtcc1.a`, so the guard does not link/run TinyCC output on Darwin. Routine tests skip it unless `KIMICC_EXTERNAL_TESTBED=tinycc` or `all` is set. |
 | Passed | tree-sitter C library smoke | `KIMICC_EXTERNAL_TESTBED=tree-sitter moon test test/e2e/external_testbeds_test.mbt --target native --filter 'external tree-sitter *'` | The opt-in MoonBit e2e tests rebuild tree-sitter's C runtime files from `/tmp/kimicc_tree_sitter/lib/src` plus the generated mini parser from `/tmp/kimicc_tree_sitter/src/parser.c` through kimicc. The original smoke parses `alpha beta gamma`, checks the printed tree for `source_file` and `word`, and exits with status 42. The expanded smoke also compiles a query, inspects capture metadata, walks nodes with a tree cursor, executes query cursor capture iteration, performs an incremental insert edit, verifies changed ranges, and checks edited node byte ranges. Routine tests skip this unless `KIMICC_EXTERNAL_TESTBED=tree-sitter` or `all` is set. |
 | Passed | ocamlyacc grammar differentials | `KIMICC_EXTERNAL_TESTBED=ocamlyacc moon test test/e2e/external_testbeds_test.mbt --target native --filter 'external ocamlyacc *'` | The opt-in MoonBit e2e tests rebuild OCaml's pure-C `yacc/` parser generator from `/tmp/kimicc_ocaml` through kimicc, build a clang baseline from the same sources, and byte-compare generated outputs. Coverage now includes the existing `calc_parser.mly`, OCaml's `parsecheck.mly` with `-q --strict`, an embedded expression grammar with precedence and multiple starts, and an embedded ambiguous grammar with `-v` where the `.output` conflict report is compared too. Routine tests skip this unless `KIMICC_EXTERNAL_TESTBED=ocamlyacc` or `all` is set. |
+| Passed | Public SQLite release gate scripts | `KIMICC_SQLITE_CONFORMANCE=release moon test test/e2e/sqlite_test.mbt --target native --filter 'sqlite public release gate scripts pass with clang baseline when enabled'` | The opt-in release gate runs a curated set of public SQLite scripts that previously exposed compiler bugs, including select trigger coverage, expert/FTS5/intck/recover/RTree extension coverage, transaction coverage, decimal/math/corruption checks, and `incrcorrupt`. It requires the kimicc-built and clang-built `testfixture` binaries to complete the full script batch successfully. |
 | Open | SQLite `veryquick.test` residual platform/Tcl expectation failures | `KIMICC_SQLITE_CONFORMANCE=veryquick moon test test/e2e --target native --filter 'sqlite public veryquick residual failures match clang when enabled'`; kimicc output at `/tmp/kimicc_veryquick_after_math.out`; clang output at `/tmp/clang_veryquick_after_math.out` | The broad run now completes with `rc=1`: 24 errors out of 330516 tests. The same 24 failures occur with a clang-linked `testfixture` built with the same feature flags: `Inf` versus `inf` casing in `func`, `json101`, `json501`, and `literal`, plus the `types3-1.1` Tcl expectation mismatch (`text` versus `string text`). No kimicc-only cluster is currently known in `veryquick.test`. |
 | Open | SQLite residual platform/Tcl expectation failures | `KIMICC_SQLITE_CONFORMANCE=residuals moon test test/e2e/sqlite_test.mbt --target native --filter 'sqlite public residual scripts match clang when enabled'`; broad check: `KIMICC_SQLITE_CONFORMANCE=full moon test test/e2e/sqlite_test.mbt --target native --filter 'sqlite public full residual failures match clang when enabled'`; fresh kimicc output at `/tmp/kimicc_sqlite_public_full_kimicc_279101241_180985381.out`; fresh clang output at `/tmp/kimicc_sqlite_public_full_clang_279101241_-1052129227.out` | The public `full` permutation completes and the MoonBit harness verifies that kimicc and clang have the same non-zero exit code plus the same residual script set: 26 errors across `json101.test`, `func.test`, `types3.test`, `literal.test`, `json501.test`, and `loadext.test`. The residual-script guard runs those scripts individually and checks the expected residual IDs: `Inf` versus `inf` casing in `func`, `json101`, `json501`, and `literal`; `types3-1.1` Tcl expectation drift; and Darwin dynamic-loader expectation drift in `loadext-2.1`/`loadext-2.2`. No kimicc-only SQLite failure is currently known. |
 
