@@ -1119,6 +1119,11 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
           sections[current_section],
           encode_sdiv(line.substring(start=5)),
         )
+      } else if line.has_prefix("udiv\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_three_register(line.substring(start=5), 0x9ac00800U, "udiv"),
+        )
       } else if line.has_prefix("and\t") {
         append_u32_to_section(
           sections[current_section],

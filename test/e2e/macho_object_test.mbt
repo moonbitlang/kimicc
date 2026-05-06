@@ -48,6 +48,20 @@ async test "direct macho object supports signed modulo" {
 }
 
 ///|
+async test "direct macho object supports unsigned division" {
+  let source = "int main(void) { unsigned long a = 42; unsigned long b = 5; return (int)(a / b); }"
+  let exit_code = run_source_direct_object_async(source, "macho_unsigned_div")
+  inspect(exit_code, content="8")
+}
+
+///|
+async test "direct macho object supports unsigned modulo" {
+  let source = "int main(void) { unsigned long a = 42; unsigned long b = 5; return (int)(a % b); }"
+  let exit_code = run_source_direct_object_async(source, "macho_unsigned_mod")
+  inspect(exit_code, content="2")
+}
+
+///|
 async test "direct macho object supports bitwise operators" {
   let source = "int main(void) { int a = 12; int b = 10; return (a & b) | (a ^ b); }"
   let exit_code = run_source_direct_object_async(source, "macho_bitwise")
