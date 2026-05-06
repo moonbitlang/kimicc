@@ -552,7 +552,7 @@ async test "sqlite public veryquick residual failures match clang when enabled" 
 }
 
 ///|
-async test "sqlite public release gate scripts pass with clang baseline when enabled" {
+async test "sqlite public release gate scripts pass with clang and direct baselines when enabled" {
   if !sqlite_public_conformance_enabled("release") {
     return
   }
@@ -569,14 +569,23 @@ async test "sqlite public release gate scripts pass with clang baseline when ena
     "sqlite_public_release_gate",
     Clang,
   )
+  let direct = run_sqlite_public_tcl_batch_with(
+    sqlite_release_gate_script_paths(),
+    "sqlite_public_release_gate",
+    DirectObject,
+  )
   if kimicc.code != 0 {
     abort("SQLite kimicc release gate failed:\n" + kimicc.output)
   }
   if clang.code != 0 {
     abort("SQLite clang release gate failed:\n" + clang.output)
   }
+  if direct.code != 0 {
+    abort("SQLite direct-object release gate failed:\n" + direct.output)
+  }
   assert_sqlite_release_gate_output(kimicc.output, "kimicc")
   assert_sqlite_release_gate_output(clang.output, "clang")
+  assert_sqlite_release_gate_output(direct.output, "direct object")
 }
 
 ///|
