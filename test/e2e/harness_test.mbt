@@ -35,7 +35,7 @@ fn run_source(source : String) -> Int {
   if link_rc != 0 {
     abort("Link failed with code: " + link_rc.to_string())
   }
-  moonbit_system(@utf8.encode(bin_path))
+  run_command_exit_silent(shell_quote(bin_path), "run_source")
 }
 
 ///|
@@ -151,6 +151,12 @@ fn run_command_checked(cmd : String, context : String) -> Unit {
 }
 
 ///|
+fn run_command_exit_silent(cmd : String, tag : String) -> Int {
+  let output_path = temp_file_path(tag, cmd, ".out")
+  moonbit_system(@utf8.encode(cmd + " > " + shell_quote(output_path) + " 2>&1"))
+}
+
+///|
 async fn run_command_capture(cmd : String, tag : String) -> CommandResult {
   let output_path = temp_file_path(tag, cmd, ".out")
   let rc = moonbit_system(@utf8.encode(cmd + " > " + output_path + " 2>&1"))
@@ -217,7 +223,7 @@ fn run_source_direct_object_async(source : String, tag : String) -> Int {
     "clang -o " + shell_quote(bin_path) + " " + shell_quote(obj_path),
     "link direct object " + tag,
   )
-  moonbit_system(@utf8.encode(shell_quote(bin_path)))
+  run_command_exit_silent(shell_quote(bin_path), tag + "_direct_run")
 }
 
 ///|
@@ -658,6 +664,24 @@ async fn run_driver_with_sqlite_object(
   tag : String,
 ) -> CommandResult {
   let object_path = compile_sqlite_fixture_object_with(Kimicc)
+  let bin_path = compile_driver_with_object(driver_source, object_path, tag)
+  run_command_capture(bin_path, tag)
+}
+
+///|
+async fn compile_sqlite_fixture_direct_object() -> String {
+  let source = preprocess_c_file(
+    "test/fixtures/sqlite/sqlite3.c", "sqlite3_direct_preprocessed",
+  )
+  compile_source_to_direct_object_path(source, "sqlite3_direct_object")
+}
+
+///|
+async fn run_driver_with_direct_sqlite_object(
+  driver_source : String,
+  tag : String,
+) -> CommandResult {
+  let object_path = compile_sqlite_fixture_direct_object()
   let bin_path = compile_driver_with_object(driver_source, object_path, tag)
   run_command_capture(bin_path, tag)
 }

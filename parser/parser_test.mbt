@@ -863,28 +863,25 @@ test "check ast for array init locals" {
     #|}
   let prog = @parser.parse(source)
   match prog.decls[0].body {
-    Some(Compound(stmts)) =>
-      for i = 0; i < stmts.length(); i = i + 1 {
-        match stmts[i] {
-          StmtList(inner) => {
-            println(
-              "StmtList[" +
-              i.to_string() +
-              "] len=" +
-              inner.length().to_string(),
-            )
-            for j = 0; j < inner.length(); j = j + 1 {
-              match inner[j] {
-                VarDecl(ty, name, _) => println("  VarDecl: " + name)
-                ExprStmt(_) => println("  ExprStmt")
-                _ => println("  other")
-              }
-            }
+    Some(Compound(stmts)) => {
+      inspect(stmts.length(), content="7")
+      assert_true(stmts[0] is VarDecl(_, "buf", _))
+      assert_true(stmts[1] is VarDecl(_, "p", _))
+      match stmts[2] {
+        StmtList(inner) => {
+          inspect(inner.length(), content="6")
+          assert_true(inner[0] is VarDecl(_, "src", _))
+          for i = 1; i < inner.length(); i = i + 1 {
+            assert_true(inner[i] is ExprStmt(_))
           }
-          VarDecl(ty, name, _) => println("VarDecl: " + name)
-          _ => println("Stmt[" + i.to_string() + "]: other")
         }
+        _ => fail("Expected lowered char array initializer")
       }
+      assert_true(stmts[3] is VarDecl(_, "dst", _))
+      assert_true(stmts[4] is VarDecl(_, "buf2", _))
+      assert_true(stmts[5] is VarDecl(_, "buf3", _))
+      assert_true(stmts[6] is Return(_))
+    }
     _ => fail("Not compound")
   }
 }

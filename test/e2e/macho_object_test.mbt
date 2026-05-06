@@ -29,6 +29,60 @@ async test "direct macho object supports wide immediate return" {
 }
 
 ///|
+async test "direct macho object supports shifted mov immediate" {
+  let source = "int main(void) { unsigned long x = 2147483648UL; return x == 2147483648UL ? 42 : 1; }"
+  let exit_code = run_source_direct_object_async(
+    source, "macho_shifted_mov_imm",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports large quad initializer" {
+  let source = "unsigned long g = 2147483648UL; int main(void) { return g == 2147483648UL ? 42 : 1; }"
+  let exit_code = run_source_direct_object_async(
+    source, "macho_large_quad_init",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports float global initializer" {
+  let source = "float g = 1.0f; int main(void) { unsigned int *p = (unsigned int *)&g; return *p == 0x3f800000 ? 42 : 1; }"
+  let exit_code = run_source_direct_object_async(
+    source, "macho_float_global_init",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object emits bss as zerofill with later const data" {
+  let source = "int data = 1; int bss; int main(void) { char *s = \"A\"; bss = 40; return data + bss + s[0] - 64; }"
+  let obj_path = compile_source_to_direct_object_path(
+    source, "macho_bss_zerofill_const",
+  )
+  let bin_path = temp_file_path("macho_bss_zerofill_const_bin", source, "")
+  run_command_checked(
+    "clang -o " + shell_quote(bin_path) + " " + shell_quote(obj_path),
+    "link direct object macho_bss_zerofill_const",
+  )
+  let headers = run_command_capture(
+    "otool -l " + shell_quote(obj_path),
+    "macho_bss_zerofill_const_otool",
+  )
+  if !headers.output.contains("sectname __bss") ||
+    !headers.output.contains("offset 0") ||
+    !headers.output.contains("flags 0x00000001") {
+    abort("direct Mach-O __bss is not emitted as zerofill:\n" + headers.output)
+  }
+  let result = run_command_capture(
+    shell_quote(bin_path),
+    "macho_bss_zerofill_const_run",
+  )
+  inspect(result.code, content="42")
+}
+
+///|
 async test "direct macho object supports local integer arithmetic" {
   let source = "int main(void) { int a = 1; int b = 2; return a + b + 3; }"
   let exit_code = run_source_direct_object_async(source, "macho_local_arith")
@@ -92,6 +146,38 @@ async test "direct macho object supports bitwise not" {
 }
 
 ///|
+async test "direct macho object supports unsigned char mask immediate" {
+  let source = "int main(void) { long x = 0x12345; return (unsigned char)x; }"
+  let exit_code = run_source_direct_object_async(source, "macho_and_imm_u8")
+  inspect(exit_code, content="69")
+}
+
+///|
+async test "direct macho object supports unsigned short mask immediate" {
+  let source = "int main(void) { long x = 0x12345; return (unsigned short)x; }"
+  let exit_code = run_source_direct_object_async(source, "macho_and_imm_u16")
+  inspect(exit_code, content="69")
+}
+
+///|
+async test "direct macho object supports bitfield shift immediates" {
+  let source = "struct S { signed int a:5; unsigned int b:6; }; int main(void) { struct S s; s.a = -3; s.b = 17; return s.a + s.b + 3; }"
+  let exit_code = run_source_direct_object_async(
+    source, "macho_bitfield_shift_immediates",
+  )
+  inspect(exit_code, content="17")
+}
+
+///|
+async test "direct macho object supports stack store register offset" {
+  let source = "int f(long a) { long pad[40]; pad[0] = 1; return (int)(a + pad[0]); } int main(void) { return f(41); }"
+  let exit_code = run_source_direct_object_async(
+    source, "macho_stack_store_register_offset",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object supports signed shifts" {
   let source = "int main(void) { int a = 3; int b = 2; return (a << b) + (16 >> b); }"
   let exit_code = run_source_direct_object_async(source, "macho_signed_shift")
@@ -115,6 +201,59 @@ async test "direct macho object supports double addition and cast" {
 }
 
 ///|
+async test "direct macho object supports signed integer to double cast" {
+  let source = "double f(long x) { return (double)x; } int main(void) { return (int)f(42); }"
+  let exit_code = run_source_direct_object_async(source, "macho_scvtf")
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports unsigned integer to double cast" {
+  let source = "double f(unsigned long x) { return (double)x; } int main(void) { return (int)f(42); }"
+  let exit_code = run_source_direct_object_async(source, "macho_ucvtf")
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports double comparison" {
+  let source = "int main(void) { double a = 2.0; double b = 1.0; if (a > b) return 42; return 1; }"
+  let exit_code = run_source_direct_object_async(source, "macho_double_cmp")
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports double negation" {
+  let source = "double f(double x) { return -x; } int main(void) { return (int)f(42.0) + 84; }"
+  let exit_code = run_source_direct_object_async(source, "macho_double_neg")
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports float to double conversion" {
+  let source = "double f(float x) { return (double)x; } int main(void) { return (int)f(42.0f); }"
+  let exit_code = run_source_direct_object_async(
+    source, "macho_float_to_double",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports synchronization barrier" {
+  let source = "int main(void) { __sync_synchronize(); return 42; }"
+  let exit_code = run_source_direct_object_async(source, "macho_dmb_ish")
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports atomic load and store widths" {
+  let source = "int main(void) { unsigned char b = 0; unsigned short h = 0; int w = 0; long x = 0; __atomic_store_n(&b, 1, 5); __atomic_store_n(&h, 2, 5); __atomic_store_n(&w, 3, 5); __atomic_store_n(&x, 36, 5); return __atomic_load_n(&b, 5) + __atomic_load_n(&h, 5) + __atomic_load_n(&w, 5) + (int)__atomic_load_n(&x, 5); }"
+  let exit_code = run_source_direct_object_async(
+    source, "macho_atomic_load_store_widths",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object supports zero-argument internal call" {
   let source = "int answer(void) { return 42; } int main(void) { return answer(); }"
   let exit_code = run_source_direct_object_async(source, "macho_internal_call0")
@@ -129,6 +268,15 @@ async test "direct macho object supports integer argument internal call" {
 }
 
 ///|
+async test "direct macho object supports function pointer call" {
+  let source = "int add(int x) { return x + 3; } int main(void) { int (*fp)(int) = add; return fp(39); }"
+  let exit_code = run_source_direct_object_async(
+    source, "macho_function_pointer_call",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object supports constant if control flow" {
   let source = "int main(void) { if (1) return 42; return 1; }"
   let exit_code = run_source_direct_object_async(source, "macho_if_const")
@@ -139,6 +287,13 @@ async test "direct macho object supports constant if control flow" {
 async test "direct macho object supports comparison if control flow" {
   let source = "int main(void) { int x = 5; if (x > 3) return 42; return 1; }"
   let exit_code = run_source_direct_object_async(source, "macho_if_cmp")
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports 64-bit register comparison" {
+  let source = "int main(void) { long a = 4294967296L; long b = 0; return a > b ? 42 : 1; }"
+  let exit_code = run_source_direct_object_async(source, "macho_cmp_x_register")
   inspect(exit_code, content="42")
 }
 
@@ -365,4 +520,38 @@ async test "direct macho object runs preprocessed c4 smoke program" {
       result.output,
     )
   }
+}
+
+///|
+async test "direct macho object links and runs sqlite basic api smoke" {
+  let driver =
+    #|#include "sqlite3.h"
+    #|#include <stdio.h>
+    #|
+    #|int main(void) {
+    #|  sqlite3 *db = 0;
+    #|  char *err = 0;
+    #|  int rc = sqlite3_open(":memory:", &db);
+    #|  if (rc != SQLITE_OK) {
+    #|    printf("open rc=%d err=%s\n", rc, db ? sqlite3_errmsg(db) : "null");
+    #|    return 1;
+    #|  }
+    #|  rc = sqlite3_exec(db, "select 1;", 0, 0, &err);
+    #|  if (rc != SQLITE_OK) {
+    #|    printf("exec rc=%d err=%s\n", rc, err ? err : sqlite3_errmsg(db));
+    #|    sqlite3_free(err);
+    #|    sqlite3_close(db);
+    #|    return 2;
+    #|  }
+    #|  sqlite3_close(db);
+    #|  printf("sqlite-direct-ok\n");
+    #|  return 0;
+    #|}
+  let result = run_driver_with_direct_sqlite_object(
+    driver, "sqlite_direct_basic_api",
+  )
+  if result.code != 0 {
+    abort("SQLite direct-object basic API smoke failed:\n" + result.output)
+  }
+  assert_true(result.output.contains("sqlite-direct-ok"))
 }
