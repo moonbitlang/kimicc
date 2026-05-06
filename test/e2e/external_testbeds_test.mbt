@@ -81,6 +81,8 @@ fn tree_sitter_query_edit_source() -> String {
     #|  uint32_t changed_count = 0;
     #|  TSParser *parser = ts_parser_new();
     #|  TSQuery *query = 0;
+    #|  TSQueryCursor *query_cursor = 0;
+    #|  TSQueryMatch match;
     #|  TSTree *tree = 0;
     #|  TSTree *edited_tree = 0;
     #|  TSRange *changed = 0;
@@ -88,6 +90,8 @@ fn tree_sitter_query_edit_source() -> String {
     #|  TSTreeCursor cursor;
     #|  TSInputEdit edit;
     #|  uint32_t capture_name_len = 0;
+    #|  uint32_t match_count = 0;
+    #|  uint32_t query_capture_count = 0;
     #|  const char *capture_name = 0;
     #|
     #|  if (!parser) fail(1, "parser");
@@ -117,6 +121,16 @@ fn tree_sitter_query_edit_source() -> String {
     #|  if (ts_query_pattern_count(query) != 1) fail(16, "pattern count");
     #|  capture_name = ts_query_capture_name_for_id(query, 0, &capture_name_len);
     #|  if (!capture_name || capture_name_len != 4 || strncmp(capture_name, "item", 4) != 0) fail(20, "capture name");
+    #|  query_cursor = ts_query_cursor_new();
+    #|  if (!query_cursor) fail(21, "query cursor");
+    #|  ts_query_cursor_exec(query_cursor, query, root);
+    #|  while (ts_query_cursor_next_match(query_cursor, &match)) {
+    #|    match_count++;
+    #|    query_capture_count += match.capture_count;
+    #|  }
+    #|  if (match_count != 3 || query_capture_count != 3) fail(23, "query cursor captures");
+    #|  ts_query_cursor_delete(query_cursor);
+    #|  query_cursor = 0;
     #|
     #|  edit.start_byte = 6;
     #|  edit.old_end_byte = 6;
@@ -135,6 +149,7 @@ fn tree_sitter_query_edit_source() -> String {
     #|  second = ts_node_named_child(edited_root, 1);
     #|  if (ts_node_start_byte(second) != 6 || ts_node_end_byte(second) != 11) fail(22, "edited second range");
     #|
+    #|  if (query_cursor) ts_query_cursor_delete(query_cursor);
     #|  ts_query_delete(query);
     #|  ts_tree_delete(edited_tree);
     #|  ts_tree_delete(tree);

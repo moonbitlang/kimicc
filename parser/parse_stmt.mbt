@@ -923,15 +923,14 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
   let ty = if self.token == Assign {
     self.advance()
     if self.token == LBrace {
-      // For struct/union types, skip the brace initializer entirely
-      // (we don't support struct field initializers yet)
+      // For struct/union types, lower brace initializers into field assignments.
       let is_struct = match decl_ty {
         Struct(_) | Union(_) => true
         _ => false
       }
       if is_struct {
         // Parse brace initializer expressions and create field assignments
-        let init_exprs = self.parse_brace_init_exprs()
+        let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
         stmts.push(VarDecl(decl_ty, decl.name, Some(Expr::Number(0))))
         self.push_struct_init_assignments(
           stmts,
@@ -1019,7 +1018,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
           stmts.push(
             VarDecl(extra_decl_ty, extra_decl.name, Some(Expr::Number(0))),
           )
-          let init_exprs = self.parse_brace_init_exprs()
+          let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
           self.push_struct_init_assignments(
             stmts,
             Expr::Var(extra_decl.name),

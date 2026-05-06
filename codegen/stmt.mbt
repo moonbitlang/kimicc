@@ -237,29 +237,10 @@ fn Codegen::gen_stmt(
               self.emit_load_int("x2", size.to_int64())
               self.emit("\tbl\t_memset")
             }
-            (Struct(_) | Union(_), rhs) =>
-              match rhs {
-                Call(_, _) if self.is_register_aggregate(ty) => {
-                  self.gen_expr(rhs, frame_size)
-                  self.emit_save_register_aggregate(ty)
-                  self.emit_local_addr(offset, frame_size)
-                  self.emit_store_saved_register_aggregate_at_x9(ty)
-                }
-                _ => {
-                  // Struct/union initialization from another struct: use memcpy
-                  self.gen_aggregate_addr(rhs, frame_size)
-                  self.emit("\tstr\tx9, [sp, #-16]!")
-                  self.emit_local_addr(offset, frame_size)
-                  self.emit("\tstr\tx9, [sp, #-16]!")
-                  self.emit("\tmov\tx0, x9")
-                  self.emit("\tldr\tx1, [sp, #16]")
-                  let size = self.type_size(ty)
-                  self.emit_load_int("x2", size.to_int64())
-                  self.emit("\tbl\t_memcpy")
-                  self.emit("\tadd\tsp, sp, #32")
-                  self.emit("\tmov\tx9, x0")
-                }
-              }
+            (Struct(_) | Union(_) | Array(_, _), rhs) => {
+              self.emit_local_addr(offset, frame_size)
+              self.emit_init_value_at_addr(ty, rhs, frame_size)
+            }
             _ => {
               self.gen_expr(expr, frame_size)
               self.emit_numeric_conversion(self.type_of(expr, frame_size), ty)

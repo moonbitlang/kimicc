@@ -2160,6 +2160,39 @@ async test "e2e nested designator advances following struct initializer" {
 }
 
 ///|
+async test "e2e local nested aggregate initializer preserves struct field" {
+  let source =
+    #|typedef struct Point {
+    #|  unsigned row;
+    #|  unsigned column;
+    #|} Point;
+    #|
+    #|typedef struct Length {
+    #|  unsigned bytes;
+    #|  Point extent;
+    #|} Length;
+    #|
+    #|unsigned five(void) {
+    #|  return 5;
+    #|}
+    #|
+    #|Length make_length(void) {
+    #|  Length result = {five(), {0, five()}};
+    #|  return result;
+    #|}
+    #|
+    #|int main(void) {
+    #|  Length l = make_length();
+    #|  if (l.bytes != 5) return 1;
+    #|  if (l.extent.row != 0) return 2;
+    #|  if (l.extent.column != 5) return 3;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e unsigned int128 supports wide limb arithmetic" {
   let source =
     #|typedef unsigned __int128 u128;
