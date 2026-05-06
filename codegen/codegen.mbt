@@ -866,8 +866,7 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
     self.compute_struct_layout(sdecl)
   }
   // Precompute function return types, variadic flags, and param counts
-  let mut func_count = 0
-  let static_inline_decls : Map[String, @parser.FuncDecl] = {}
+  let inline_decls : Map[String, @parser.FuncDecl] = {}
   for decl in prog.decls {
     self.func_rets[decl.name] = decl.ret
     self.func_variadic[decl.name] = decl.variadic
@@ -877,20 +876,16 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
       param_types.push(param.ty)
     }
     self.func_param_types[decl.name] = param_types
-    if decl.is_static && decl.is_inline {
-      static_inline_decls[decl.name] = decl
+    if decl.is_inline {
+      inline_decls[decl.name] = decl
     }
-    func_count += 1
   }
-  let needed_static_inline : Map[String, Bool] = {}
+  let needed_inline : Map[String, Bool] = {}
   for decl in prog.decls {
-    if !(decl.is_inline && !decl.is_static) &&
-      !(decl.is_static && decl.is_inline) {
+    if !decl.is_inline {
       match decl.body {
         Some(body) =>
-          collect_static_inline_stmt(
-            body, static_inline_decls, needed_static_inline,
-          )
+          collect_static_inline_stmt(body, inline_decls, needed_inline)
         None => ()
       }
     }
@@ -902,12 +897,7 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   }
   let func_label_maps : Map[String, Map[String, String]] = {}
   for decl in prog.decls {
-    if decl.is_inline && !decl.is_static {
-      continue
-    }
-    if decl.is_static &&
-      decl.is_inline &&
-      !needed_static_inline.contains(decl.name) {
+    if decl.is_inline && !needed_inline.contains(decl.name) {
       continue
     }
     self.gen_func(decl)

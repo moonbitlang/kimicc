@@ -46,7 +46,7 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
         )
       }
       let frame_size = (self.stack_size + 15) / 16 * 16
-      if !decl.is_static {
+      if !decl.is_static && !decl.is_inline {
         self.emit("\t.globl\t_" + decl.name)
       }
       self.emit("\t.p2align\t2")

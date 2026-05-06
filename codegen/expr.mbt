@@ -39,13 +39,22 @@ fn address_value_type(ty : @parser.Type) -> Bool {
 }
 
 ///|
+fn number_literal_type(value : Int64) -> @parser.Type {
+  if value < -2147483648L || value > 2147483647L {
+    SLongLong
+  } else {
+    SInt
+  }
+}
+
+///|
 fn Codegen::type_of(
   self : Codegen,
   expr : @parser.Expr,
   frame_size : Int,
 ) -> @parser.Type {
   match expr {
-    Number(_) => SInt
+    Number(value) => number_literal_type(value)
     FloatLiteral(_) => Double
     String(_) => Pointer(SChar)
     Var(name) =>
@@ -91,7 +100,7 @@ fn Codegen::type_of(
           }
         _ => ()
       }
-      binary_result_type(op, lhs_ty, rhs_ty)
+      binary_expr_result_type(op, lhs, lhs_ty, rhs, rhs_ty)
     }
     Unary("-", operand) =>
       unary_numeric_result_type(self.type_of(operand, frame_size))
@@ -720,6 +729,15 @@ fn integer_width_bits(ty : @parser.Type) -> Int {
 }
 
 ///|
+fn bitfield_mask(width : Int) -> Int64 {
+  if width >= 64 {
+    -1L
+  } else {
+    (1L << width) - 1L
+  }
+}
+
+///|
 fn integer_common_type(
   lhs_ty : @parser.Type,
   rhs_ty : @parser.Type,
@@ -805,6 +823,23 @@ fn binary_result_type(
         SInt
       }
   }
+}
+
+///|
+fn binary_expr_result_type(
+  op : String,
+  lhs : @parser.Expr,
+  lhs_ty : @parser.Type,
+  rhs : @parser.Expr,
+  rhs_ty : @parser.Type,
+) -> @parser.Type {
+  if op == "<<" || op == ">>" {
+    match (lhs, rhs) {
+      (Number(_), Number(shift)) => if shift >= 32L { return ULongLong }
+      _ => ()
+    }
+  }
+  binary_result_type(op, lhs_ty, rhs_ty)
 }
 
 ///|
@@ -1015,7 +1050,7 @@ fn Codegen::gen_bitfield_compound_assign(
     "<<" | ">>" => is_unsigned_integer_type(lhs_ty)
     _ => uses_unsigned_integer_op(lhs_ty, rhs_ty)
   }
-  let mask = (1 << info.bit_width) - 1
+  let mask = bitfield_mask(info.bit_width)
   self.gen_addr(lhs, frame_size)
   self.emit("\tstr\tx9, [sp, #-16]!")
   match info.size {
@@ -1025,7 +1060,7 @@ fn Codegen::gen_bitfield_compound_assign(
     _ => self.emit("\tldr\tx9, [x9]")
   }
   self.emit("\tlsr\tx9, x9, #" + info.bit_offset.to_string())
-  self.emit_load_int("x10", mask.to_int64())
+  self.emit_load_int("x10", mask)
   self.emit("\tand\tx9, x9, x10")
   if lhs_ty.is_signed() {
     let shift = 64 - info.bit_width
@@ -1067,7 +1102,7 @@ fn Codegen::gen_bitfield_compound_assign(
     _ => ()
   }
   self.emit_scalar_conversion_to(lhs_ty)
-  self.emit_load_int("x10", mask.to_int64())
+  self.emit_load_int("x10", mask)
   self.emit("\tand\tx9, x9, x10")
   self.emit("\tstr\tx9, [sp, #-16]!")
   self.emit("\tldr\tx10, [sp, #16]")
@@ -1077,7 +1112,7 @@ fn Codegen::gen_bitfield_compound_assign(
     4 => self.emit("\tldr\tw11, [x10]")
     _ => self.emit("\tldr\tx11, [x10]")
   }
-  self.emit_load_int("x12", mask.to_int64())
+  self.emit_load_int("x12", mask)
   self.emit("\tlsl\tx12, x12, #" + info.bit_offset.to_string())
   self.emit("\tmvn\tx12, x12")
   self.emit("\tand\tx11, x11, x12")
@@ -2050,12 +2085,12 @@ fn Codegen::emit_init_bitfield_at_addr(
     4 => self.emit("\tldr\tw11, [x10]")
     _ => self.emit("\tldr\tx11, [x10]")
   }
-  let mask = (1 << bit_width) - 1
-  self.emit_load_int("x12", mask.to_int64())
+  let mask = bitfield_mask(bit_width)
+  self.emit_load_int("x12", mask)
   self.emit("\tlsl\tx12, x12, #" + bit_offset.to_string())
   self.emit("\tmvn\tx12, x12")
   self.emit("\tand\tx11, x11, x12")
-  self.emit_load_int("x12", mask.to_int64())
+  self.emit_load_int("x12", mask)
   self.emit("\tand\tx9, x9, x12")
   self.emit("\tlsl\tx9, x9, #" + bit_offset.to_string())
   self.emit("\torr\tx11, x11, x9")
@@ -2504,13 +2539,13 @@ fn Codegen::gen_expr(
                   _ => self.emit("\tldr\tx11, [x10]")
                 }
                 // Clear old bits
-                let mask = (1 << bit_width) - 1
-                self.emit_load_int("x12", mask.to_int64())
+                let mask = bitfield_mask(bit_width)
+                self.emit_load_int("x12", mask)
                 self.emit("\tlsl\tx12, x12, #" + bit_offset.to_string())
                 self.emit("\tmvn\tx12, x12")
                 self.emit("\tand\tx11, x11, x12")
                 // Insert new value
-                self.emit_load_int("x12", mask.to_int64())
+                self.emit_load_int("x12", mask)
                 self.emit("\tand\tx9, x9, x12")
                 self.emit("\tstr\tx9, [sp, #-16]!")
                 self.emit("\tlsl\tx9, x9, #" + bit_offset.to_string())
@@ -2654,7 +2689,9 @@ fn Codegen::gen_expr(
         (left_ty.is_floating() || right_ty.is_floating())
       let is_double = is_fp && (left_ty == Double || right_ty == Double)
       let fp_ty : @parser.Type = if is_double { Double } else { Float }
-      let result_ty = binary_result_type(op, left_ty, right_ty)
+      let result_ty = binary_expr_result_type(
+        op, left, left_ty, right, right_ty,
+      )
       let is_unsigned_int = match op {
         "<<" | ">>" => is_unsigned_integer_type(result_ty)
         _ => uses_unsigned_integer_op(left_ty, right_ty)
@@ -3690,8 +3727,8 @@ fn Codegen::gen_expr(
           if bit_width > 0 {
             self.emit("\tlsr\tx9, x9, #" + bit_offset.to_string())
             if bit_width < 64 {
-              let mask = (1 << bit_width) - 1
-              self.emit_load_int("x10", mask.to_int64())
+              let mask = bitfield_mask(bit_width)
+              self.emit_load_int("x10", mask)
               self.emit("\tand\tx9, x9, x10")
             }
           }

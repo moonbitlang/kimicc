@@ -792,6 +792,82 @@ async test "e2e bare atomic typedef qualifier from ocamlyacc headers" {
 }
 
 ///|
+async test "e2e used non-static inline emits local body" {
+  let source =
+    #|extern int missing_inline_dependency(void);
+    #|
+    #|inline int unused_inline_dependency(void) {
+    #|  return missing_inline_dependency();
+    #|}
+    #|
+    #|inline int local_sigbits(int signo) {
+    #|  return signo > 32 ? 0 : (1 << (signo - 1));
+    #|}
+    #|
+    #|int main(void) {
+    #|  if (local_sigbits(6) != 32) return 1;
+    #|  if (local_sigbits(33) != 0) return 2;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e 64-bit dyld chained pointer bitfields preserve wide masks" {
+  let source =
+    #|typedef unsigned long long uint64_t;
+    #|
+    #|struct Rebase {
+    #|  uint64_t target : 36,
+    #|           high8 : 8,
+    #|           reserved : 7,
+    #|           next : 12,
+    #|           bind : 1;
+    #|};
+    #|
+    #|int main(void) {
+    #|  union {
+    #|    struct Rebase rebase;
+    #|    uint64_t raw;
+    #|  } value;
+    #|  uint64_t cur = 0x1200000000000005ULL;
+    #|  value.raw = ~0ULL;
+    #|  value.rebase.target = cur & 0xfffffffffULL;
+    #|  value.rebase.high8 = cur >> 56;
+    #|  value.rebase.reserved = 0;
+    #|  value.rebase.next = 0;
+    #|  value.rebase.bind = 0;
+    #|  if (value.rebase.target != 5ULL) return 1;
+    #|  if (value.rebase.high8 != 0x12ULL) return 2;
+    #|  if (((uint64_t)value.rebase.high8 << 56) + value.rebase.target != cur) return 3;
+    #|  if (value.raw != 0x12000000005ULL) return 4;
+    #|  value.rebase.target = 0xfffffffffULL;
+    #|  value.rebase.high8 = 0x12;
+    #|  if (value.rebase.target != 0xfffffffffULL) return 5;
+    #|  if (value.rebase.high8 != 0x12) return 6;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e wide literal shifts do not narrow to int" {
+  let source =
+    #|typedef unsigned long long uint64_t;
+    #|
+    #|int main(void) {
+    #|  uint64_t shifted = (0x12ULL << 36) + 5ULL;
+    #|  if (shifted != 0x12000000005ULL) return 1;
+    #|  if ((1ULL << 40) != 0x10000000000ULL) return 2;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e mixed bitfield layout matches quickjs object header" {
   let source =
     #|typedef unsigned char uint8_t;
