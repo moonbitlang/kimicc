@@ -132,6 +132,83 @@ KIMICC_SQLITE_CONFORMANCE=full \
   --filter 'sqlite public full residual failures match clang when enabled'
 ```
 
+## Release Gate Checklist
+
+Use these gates before claiming a confidence increase or publishing a new
+MoonBit package version:
+
+1. Default native gate:
+
+   ```bash
+   moon fmt
+   moon info --target native
+   moon test --target native
+   git diff --check
+   ```
+
+   This must pass with no compilation errors. Existing MoonBit deprecation and
+   unused-code warnings are tracked separately and are not current release
+   blockers.
+
+2. External compiler testbed gate:
+
+   ```bash
+   KIMICC_EXTERNAL_TESTBED=all \
+     moon test test/e2e/external_testbeds_test.mbt --target native
+   ```
+
+   This currently covers QuickJS `qjs`, TinyCC stripped compiler object
+   emission, OCaml `ocamlyacc` clang differentials, and tree-sitter parser/query
+   APIs.
+
+3. SQLite middle-weight release gate:
+
+   ```bash
+   KIMICC_SQLITE_CONFORMANCE=release \
+     moon test test/e2e/sqlite_test.mbt --target native \
+     --filter 'sqlite public release gate scripts pass with clang baseline when enabled'
+   ```
+
+   This is the fastest public SQLite Tcl batch that is broad enough to catch
+   many previously fixed compiler classes.
+
+4. SQLite residual guard:
+
+   ```bash
+   KIMICC_SQLITE_CONFORMANCE=residuals \
+     moon test test/e2e/sqlite_test.mbt --target native \
+     --filter 'sqlite public residual scripts match clang when enabled'
+   ```
+
+   Run this before saying there are no known kimicc-only SQLite failures. The
+   expected failures must remain clang-matching platform/Tcl expectation drift.
+
+5. Broad periodic SQLite gates:
+
+   ```bash
+   KIMICC_SQLITE_CONFORMANCE=veryquick \
+     moon test test/e2e --target native \
+     --filter 'sqlite public veryquick residual failures match clang when enabled'
+
+   KIMICC_SQLITE_CONFORMANCE=full \
+     moon test test/e2e/sqlite_test.mbt --target native \
+     --filter 'sqlite public full residual failures match clang when enabled'
+   ```
+
+   Run these before larger releases and after compiler changes touching shared
+   codegen, ABI, integer conversions, aggregate initialization, or parser
+   constant folding.
+
+6. Publish checklist:
+
+   - Ensure `git status --short` contains only intended changes.
+   - Commit the validated slice.
+   - Bump `moon.mod.json` only when publishing a new package version.
+   - Run `moon publish` only after the default native gate and at least the
+     external compiler testbed gate pass on the publish commit.
+   - For a confidence/publish announcement, report which optional SQLite gates
+     were run and whether any residuals were clang-matching.
+
 ## Todo
 
 - [x] Clean slate: native build/test has no compilation errors.
@@ -154,6 +231,7 @@ KIMICC_SQLITE_CONFORMANCE=full \
   residual signatures against clang without rerunning the whole suite.
 - [x] Add an opt-in release gate for previously fixed high-value public SQLite
   scripts.
+- [x] Define release gates and the publish checklist.
 - [ ] For every failure class, record the command, output, generated assembly or
   object paths, clang-vs-kimicc behavior, minimized C or SQL repro, status, and
   fixing commit.
