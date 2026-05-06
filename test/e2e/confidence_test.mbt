@@ -789,6 +789,69 @@ async test "e2e mixed scalar aggregate return and argument ABI" {
 }
 
 ///|
+fn deterministic_scalar_aggregate_differential_source(
+  case_index : Int,
+) -> String {
+  let signed_seed = case_index * 37 - 111
+  let unsigned_seed = case_index * 70001 + 12345
+  let long_seed = case_index * case_index * 97 - 500
+  let shift = case_index % 5 + 1
+  let alt_shift = shift % 5 + 1
+  let source = StringBuilder::new()
+  source.write_string("#include <stdio.h>\n")
+  source.write_string(
+    "typedef struct Pair { int a; unsigned int b; long c; } Pair;\n",
+  )
+  source.write_string(
+    "static Pair make_pair(int a, unsigned int b, long c) { Pair p = { a, b, c }; return p; }\n",
+  )
+  source.write_string("static long fold(Pair p, int shift) {\n")
+  source.write_string(
+    "  unsigned int mixed = (p.b << shift) | (p.b >> (32 - shift));\n",
+  )
+  source.write_string("  long base = p.c + p.a;\n")
+  source.write_string(
+    "  if ((unsigned int)p.a < p.b) base += (long)(mixed & 1023u);\n",
+  )
+  source.write_string("  else base -= (long)(mixed & 511u);\n")
+  source.write_string("  return base ^ (long)(unsigned long)mixed;\n")
+  source.write_string("}\n")
+  source.write_string("int main(void) {\n")
+  source.write_string("  Pair p = make_pair(")
+  source.write_string(signed_seed.to_string())
+  source.write_string(", ")
+  source.write_string(unsigned_seed.to_string())
+  source.write_string("u, ")
+  source.write_string(long_seed.to_string())
+  source.write_string("L);\n")
+  source.write_string(
+    "  Pair q = { (int)(p.b & 255u) - 128, (unsigned int)(p.a * 17u + p.b), p.c - p.a };\n",
+  )
+  source.write_string("  long r = fold(p, ")
+  source.write_string(shift.to_string())
+  source.write_string(") + fold(q, ")
+  source.write_string(alt_shift.to_string())
+  source.write_string(");\n")
+  source.write_string("  printf(\"case=%d r=%ld q=%u\\n\", ")
+  source.write_string(case_index.to_string())
+  source.write_string(", r, q.b);\n")
+  source.write_string("  return (int)((unsigned long)r & 127u);\n")
+  source.write_string("}\n")
+  source.to_string()
+}
+
+///|
+async test "e2e deterministic scalar aggregate differential corpus matches clang" {
+  for case_index in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] {
+    let result = run_source_against_clang_baseline(
+      deterministic_scalar_aggregate_differential_source(case_index),
+      "scalar_aggregate_differential_" + case_index.to_string(),
+    )
+    assert_true(result.output.contains("case=" + case_index.to_string()))
+  }
+}
+
+///|
 async test "e2e bitfields pack after byte fields like clang" {
   let source =
     #|typedef unsigned int Pgno;

@@ -44,6 +44,44 @@ fn run_source_async(source : String) -> Int {
 }
 
 ///|
+async fn run_source_against_clang_baseline(
+  source : String,
+  tag : String,
+) -> CommandResult {
+  let source_path = temp_file_path(tag + "_source", source, ".c")
+  let asm_path = temp_file_path(tag + "_kimicc", source, ".s")
+  let kimicc_bin = temp_file_path(tag + "_kimicc", source, "")
+  let clang_bin = temp_file_path(tag + "_clang", source, "")
+  write_text_file(source_path, source)
+  write_text_file(asm_path, compile(source))
+  run_command_checked(
+    "clang -o " + shell_quote(kimicc_bin) + " " + shell_quote(asm_path),
+    "link kimicc differential " + tag,
+  )
+  run_command_checked(
+    "clang -o " + shell_quote(clang_bin) + " " + shell_quote(source_path),
+    "build clang differential " + tag,
+  )
+  let kimicc = run_command_capture(shell_quote(kimicc_bin), tag + "_kimicc_run")
+  let clang = run_command_capture(shell_quote(clang_bin), tag + "_clang_run")
+  if kimicc.code != clang.code || kimicc.output != clang.output {
+    abort(
+      "C differential mismatch for " +
+      tag +
+      ":\nclang code=" +
+      clang.code.to_string() +
+      "\nclang output:\n" +
+      clang.output +
+      "\nkimicc code=" +
+      kimicc.code.to_string() +
+      "\nkimicc output:\n" +
+      kimicc.output,
+    )
+  }
+  kimicc
+}
+
+///|
 priv struct CommandResult {
   code : Int
   output : String
