@@ -6,6 +6,13 @@ priv struct PendingBranch {
 }
 
 ///|
+priv struct PendingCbz {
+  offset : Int
+  label : String
+  reg : Int
+}
+
+///|
 priv struct AssembledText {
   words : Array[UInt]
   globals : Array[String]
@@ -188,6 +195,45 @@ fn encode_mul(rest : String) -> UInt {
 }
 
 ///|
+fn encode_cmp(rest : String) -> UInt {
+  let parts = split_operands(rest)
+  if parts.length() != 2 {
+    abort("malformed cmp instruction")
+  }
+  let rn = parse_register(parts[0])
+  let rm = parse_register(parts[1])
+  0x6b00001fU |
+  (rm.reinterpret_as_uint() << 16) |
+  (rn.reinterpret_as_uint() << 5)
+}
+
+///|
+fn inverted_condition_code(cond : String) -> Int {
+  match cond {
+    "eq" => 1
+    "ne" => 0
+    "lt" => 10
+    "ge" => 11
+    "gt" => 13
+    "le" => 12
+    "hi" => 9
+    "ls" => 8
+    _ => abort("unsupported cset condition: " + cond)
+  }
+}
+
+///|
+fn encode_cset(rest : String) -> UInt {
+  let parts = split_operands(rest)
+  if parts.length() != 2 {
+    abort("malformed cset instruction")
+  }
+  let rd = parse_register(parts[0])
+  let cond = inverted_condition_code(parts[1])
+  0x9a9f07e0U | (cond.reinterpret_as_uint() << 12) | rd.reinterpret_as_uint()
+}
+
+///|
 fn encode_mov_reg(dst : String, src : String) -> UInt {
   let rd = parse_register(dst)
   let rn = parse_register(src)
@@ -271,10 +317,14 @@ fn encode_ldr_post_64(
 ///|
 fn encode_str(rest : String) -> UInt {
   let parts = split_operands(rest)
-  if parts.length() != 3 {
+  if parts.length() == 2 {
+    let rt = parse_register(parts[0])
+    let rn = parse_register(clean_mem_token(parts[1]))
+    let base = if parts[0].has_prefix("w") { 0xb9000000U } else { 0xf9000000U }
+    base | (rn.reinterpret_as_uint() << 5) | rt.reinterpret_as_uint()
+  } else if parts.length() != 3 {
     abort("malformed str instruction")
-  }
-  if parts[2].has_suffix("]!") {
+  } else if parts[2].has_suffix("]!") {
     encode_str_pre_64(parts[0], parts[1], parts[2])
   } else {
     encode_stur_64(parts[0], parts[1], parts[2])
@@ -383,6 +433,16 @@ fn encode_branch_link(from_offset : Int, target_offset : Int) -> UInt {
 }
 
 ///|
+fn encode_cbz(from_offset : Int, target_offset : Int, reg : Int) -> UInt {
+  let delta = (target_offset - from_offset) / 4
+  if delta < -(1 << 18) || delta >= 1 << 18 {
+    abort("cbz target out of range for Mach-O object backend")
+  }
+  let imm = if delta < 0 { delta + (1 << 19) } else { delta }
+  0xb4000000U | (imm.reinterpret_as_uint() << 5) | reg.reinterpret_as_uint()
+}
+
+///|
 fn encode_branch_with_base(
   from_offset : Int,
   target_offset : Int,
@@ -418,6 +478,7 @@ fn assemble_text_from_darwin_arm64(assembly : String) -> AssembledText {
   let globals : Array[String] = []
   let symbols : Map[String, Int] = {}
   let pending : Array[PendingBranch] = []
+  let pending_cbz : Array[PendingCbz] = []
   let mut in_text = false
   for raw in assembly.split("\n") {
     let line = raw.to_string().trim().to_string()
@@ -468,10 +529,25 @@ fn assemble_text_from_darwin_arm64(assembly : String) -> AssembledText {
         words.push(encode_add_sub(line.substring(start=4), true))
       } else if line.has_prefix("mul\t") {
         words.push(encode_mul(line.substring(start=4)))
+      } else if line.has_prefix("cmp\t") {
+        words.push(encode_cmp(line.substring(start=4)))
+      } else if line.has_prefix("cset\t") {
+        words.push(encode_cset(line.substring(start=5)))
       } else if line.has_prefix("str\t") {
         words.push(encode_str(line.substring(start=4)))
       } else if line.has_prefix("ldr\t") {
         words.push(encode_ldr(line.substring(start=4)))
+      } else if line.has_prefix("cbz\t") {
+        let parts = split_operands(line.substring(start=4))
+        if parts.length() != 2 {
+          abort("malformed cbz instruction")
+        }
+        pending_cbz.push({
+          offset: words.length() * 4,
+          label: parts[1],
+          reg: parse_register(parts[0]),
+        })
+        words.push(0U)
       } else if line.has_prefix("b\t") {
         pending.push({
           offset: words.length() * 4,
@@ -501,6 +577,14 @@ fn assemble_text_from_darwin_arm64(assembly : String) -> AssembledText {
         }
       None =>
         abort("unknown branch label in Mach-O object backend: " + branch.label)
+    }
+  }
+  for branch in pending_cbz {
+    match symbols.get(branch.label) {
+      Some(target) =>
+        words[branch.offset / 4] = encode_cbz(branch.offset, target, branch.reg)
+      None =>
+        abort("unknown cbz label in Mach-O object backend: " + branch.label)
     }
   }
   { words, globals, symbols }

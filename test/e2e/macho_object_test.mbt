@@ -46,3 +46,24 @@ async test "direct macho object supports integer argument internal call" {
   let exit_code = run_source_direct_object_async(source, "macho_internal_call2")
   inspect(exit_code, content="42")
 }
+
+///|
+async test "direct macho object supports constant if control flow" {
+  let source = "int main(void) { if (1) return 42; return 1; }"
+  let exit_code = run_source_direct_object_async(source, "macho_if_const")
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports comparison if control flow" {
+  let source = "int main(void) { int x = 5; if (x > 3) return 42; return 1; }"
+  let exit_code = run_source_direct_object_async(source, "macho_if_cmp")
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports simple while loop" {
+  let source = "int main(void) { int i = 0; int s = 0; while (i < 4) { s = s + i; i = i + 1; } return s; }"
+  let exit_code = run_source_direct_object_async(source, "macho_while_sum")
+  inspect(exit_code, content="6")
+}
