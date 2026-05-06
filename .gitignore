@@ -2,3 +2,5 @@
 _build/
 .mooncakes/
 .moonagent/
+test/debug_ast.mbt
+testdir/
