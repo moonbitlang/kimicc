@@ -85,3 +85,31 @@ async test "direct macho object links zero-filled global data section" {
   )
   inspect(exit_code, content="9")
 }
+
+///|
+async test "direct macho object supports initialized global read relocation" {
+  let source = "int g = 40; int main(void) { return g + 2; }"
+  let exit_code = run_source_direct_object_async(source, "macho_global_read")
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports zero global write relocation" {
+  let source = "int g; int main(void) { g = 42; return g; }"
+  let exit_code = run_source_direct_object_async(source, "macho_global_write")
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports string literal page relocation" {
+  let source = "int main(void) { char *s = \"x\"; return 7; }"
+  let exit_code = run_source_direct_object_async(source, "macho_string_page")
+  inspect(exit_code, content="7")
+}
+
+///|
+async test "direct macho object supports external branch relocation" {
+  let source = "int putchar(int); int main(void) { return putchar(65); }"
+  let exit_code = run_source_direct_object_async(source, "macho_external_bl")
+  inspect(exit_code, content="65")
+}

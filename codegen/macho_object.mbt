@@ -27,8 +27,10 @@ priv struct ObjectSection {
   flags : UInt
   mut align_power : Int
   bytes : Array[Int]
+  relocs : Array[Relocation]
   mut addr : Int
   mut offset : Int
+  mut reloff : Int
 }
 
 ///|
@@ -36,6 +38,33 @@ priv struct AssembledObject {
   sections : Array[ObjectSection]
   globals : Array[String]
   symbols : Map[String, SymbolLocation]
+}
+
+///|
+priv struct Relocation {
+  address : Int
+  symbol : String
+  pcrel : Bool
+  length : Int
+  external : Bool
+  type_ : Int
+}
+
+///|
+priv struct SymbolEntry {
+  name : String
+  type_ : Int
+  section_index : Int
+  value : Int
+}
+
+///|
+priv struct SymbolLayout {
+  entries : Array[SymbolEntry]
+  indexes : Map[String, Int]
+  nlocals : Int
+  nextdefs : Int
+  nundefs : Int
 }
 
 ///|
@@ -544,6 +573,11 @@ fn encode_cbz(from_offset : Int, target_offset : Int, reg : Int) -> UInt {
 }
 
 ///|
+fn encode_adrp(dst : String) -> UInt {
+  0x90000000U | parse_register(dst).reinterpret_as_uint()
+}
+
+///|
 fn encode_branch_with_base(
   from_offset : Int,
   target_offset : Int,
@@ -555,6 +589,33 @@ fn encode_branch_with_base(
   }
   let imm = if delta < 0 { delta + (1 << 26) } else { delta }
   base | imm.reinterpret_as_uint()
+}
+
+///|
+fn add_relocation(
+  section : ObjectSection,
+  address : Int,
+  symbol : String,
+  pcrel : Bool,
+  type_ : Int,
+) -> Unit {
+  section.relocs.push({
+    address,
+    symbol,
+    pcrel,
+    length: 2,
+    external: true,
+    type_,
+  })
+}
+
+///|
+fn strip_reloc_suffix(operand : String, suffix : String) -> String {
+  let cleaned = clean_mem_token(operand)
+  if !cleaned.has_suffix(suffix) {
+    abort("unsupported relocation operand: " + operand)
+  }
+  cleaned.substring(end=cleaned.length() - suffix.length())
 }
 
 ///|
@@ -621,8 +682,10 @@ fn get_or_add_section(
     flags,
     align_power,
     bytes: [],
+    relocs: [],
     addr: 0,
     offset: 0,
+    reloff: 0,
   })
   sections.length() - 1
 }
@@ -830,11 +893,47 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
           sections[current_section],
           encode_sxtw(parts[0], parts[1]),
         )
-      } else if line.has_prefix("add\t") {
-        append_u32_to_section(
+      } else if line.has_prefix("adrp\t") {
+        let parts = split_operands(line.substring(start=5))
+        if parts.length() != 2 {
+          abort("malformed adrp instruction")
+        }
+        let reloc_type = if parts[1].has_suffix("@GOTPAGE") { 5 } else { 3 }
+        let suffix = if parts[1].has_suffix("@GOTPAGE") {
+          "@GOTPAGE"
+        } else {
+          "@PAGE"
+        }
+        let address = sections[current_section].bytes.length()
+        append_u32_to_section(sections[current_section], encode_adrp(parts[0]))
+        add_relocation(
           sections[current_section],
-          encode_add_sub(line.substring(start=4), false),
+          address,
+          strip_reloc_suffix(parts[1], suffix),
+          true,
+          reloc_type,
         )
+      } else if line.has_prefix("add\t") {
+        let parts = split_operands(line.substring(start=4))
+        if parts.length() == 3 && parts[2].contains("@PAGEOFF") {
+          let address = sections[current_section].bytes.length()
+          append_u32_to_section(
+            sections[current_section],
+            encode_add_sub_imm(parts[0], parts[1], 0, false),
+          )
+          add_relocation(
+            sections[current_section],
+            address,
+            strip_reloc_suffix(parts[2], "@PAGEOFF"),
+            false,
+            4,
+          )
+        } else {
+          append_u32_to_section(
+            sections[current_section],
+            encode_add_sub(line.substring(start=4), false),
+          )
+        }
       } else if line.has_prefix("sub\t") {
         append_u32_to_section(
           sections[current_section],
@@ -861,10 +960,33 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
           encode_str(line.substring(start=4)),
         )
       } else if line.has_prefix("ldr\t") {
-        append_u32_to_section(
-          sections[current_section],
-          encode_ldr(line.substring(start=4)),
-        )
+        let parts = split_operands(line.substring(start=4))
+        if parts.length() == 3 &&
+          (parts[2].contains("@GOTPAGEOFF") || parts[2].contains("@PAGEOFF")) {
+          let reloc_type = if parts[2].contains("@GOTPAGEOFF") { 6 } else { 4 }
+          let suffix = if parts[2].contains("@GOTPAGEOFF") {
+            "@GOTPAGEOFF"
+          } else {
+            "@PAGEOFF"
+          }
+          let address = sections[current_section].bytes.length()
+          append_u32_to_section(
+            sections[current_section],
+            encode_ldr_unsigned_offset(parts[0], parts[1], "#0"),
+          )
+          add_relocation(
+            sections[current_section],
+            address,
+            strip_reloc_suffix(parts[2], suffix),
+            false,
+            reloc_type,
+          )
+        } else {
+          append_u32_to_section(
+            sections[current_section],
+            encode_ldr(line.substring(start=4)),
+          )
+        }
       } else if line.has_prefix("cbz\t") {
         let parts = split_operands(line.substring(start=4))
         if parts.length() != 2 {
@@ -920,7 +1042,24 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
           )
         }
       None =>
-        abort("unknown branch label in Mach-O object backend: " + branch.label)
+        if branch.link {
+          patch_u32_in_section(
+            sections[branch.section_index],
+            branch.offset,
+            0x94000000U,
+          )
+          add_relocation(
+            sections[branch.section_index],
+            branch.offset,
+            branch.label,
+            true,
+            2,
+          )
+        } else {
+          abort(
+            "unknown branch label in Mach-O object backend: " + branch.label,
+          )
+        }
     }
   }
   for branch in pending_cbz {
@@ -986,8 +1125,8 @@ fn write_section_header(buf : @buffer.Buffer, section : ObjectSection) -> Unit {
   write_u64_le(buf, section.bytes.length().to_int64())
   write_i32_le(buf, section.offset)
   write_i32_le(buf, section.align_power)
-  write_i32_le(buf, 0)
-  write_i32_le(buf, 0)
+  write_i32_le(buf, section.reloff)
+  write_i32_le(buf, section.relocs.length())
   write_u32_le(buf, section.flags)
   write_i32_le(buf, 0)
   write_i32_le(buf, 0)
@@ -1021,15 +1160,20 @@ fn write_symtab_command(
 }
 
 ///|
-fn write_dysymtab_command(buf : @buffer.Buffer, nsyms : Int) -> Unit {
+fn write_dysymtab_command(
+  buf : @buffer.Buffer,
+  nlocals : Int,
+  nextdefs : Int,
+  nundefs : Int,
+) -> Unit {
   write_u32_le(buf, 0xbU) // LC_DYSYMTAB
   write_i32_le(buf, 80)
   write_i32_le(buf, 0)
-  write_i32_le(buf, 0)
-  write_i32_le(buf, 0)
-  write_i32_le(buf, nsyms)
-  write_i32_le(buf, nsyms)
-  write_i32_le(buf, 0)
+  write_i32_le(buf, nlocals)
+  write_i32_le(buf, nlocals)
+  write_i32_le(buf, nextdefs)
+  write_i32_le(buf, nlocals + nextdefs)
+  write_i32_le(buf, nundefs)
   let mut i = 0
   while i < 12 {
     write_i32_le(buf, 0)
@@ -1051,45 +1195,162 @@ fn append_sections(
 }
 
 ///|
-fn symbol_string_size(symbols : Array[String]) -> Int {
-  let mut size = 1
-  for symbol in symbols {
-    size = size + symbol.length() + 1
+fn write_relocation(
+  buf : @buffer.Buffer,
+  reloc : Relocation,
+  symbol_indexes : Map[String, Int],
+) -> Unit {
+  if !symbol_indexes.contains(reloc.symbol) {
+    abort("missing relocation symbol in Mach-O object backend: " + reloc.symbol)
   }
-  size
+  write_i32_le(buf, reloc.address)
+  let pcrel = if reloc.pcrel { 1 << 24 } else { 0 }
+  let external = if reloc.external { 1 << 27 } else { 0 }
+  let info = symbol_indexes[reloc.symbol] |
+    pcrel |
+    (reloc.length << 25) |
+    external |
+    (reloc.type_ << 28)
+  write_i32_le(buf, info)
 }
 
 ///|
-fn write_symbol_table(
+fn write_relocations(
   buf : @buffer.Buffer,
-  globals : Array[String],
-  symbols : Map[String, SymbolLocation],
   sections : Array[ObjectSection],
+  symbol_indexes : Map[String, Int],
 ) -> Unit {
-  let mut strx = 1
-  for symbol in globals {
-    match symbols.get(symbol) {
-      Some(loc) => {
-        write_i32_le(buf, strx)
-        buf.write_byte((0x0f).to_byte()) // N_SECT | N_EXT
-        buf.write_byte((loc.section_index + 1).to_byte())
-        write_u16_le(buf, 0)
-        write_u64_le(
-          buf,
-          (sections[loc.section_index].addr + loc.offset).to_int64(),
-        )
-        strx = strx + symbol.length() + 1
+  for section in sections {
+    if section.relocs.length() > 0 {
+      write_padding_to_offset(buf, section.reloff)
+      for i = section.relocs.length() - 1; i >= 0; i = i - 1 {
+        write_relocation(buf, section.relocs[i], symbol_indexes)
       }
-      None => abort("global symbol has no label: " + symbol)
     }
   }
 }
 
 ///|
-fn write_string_table(buf : @buffer.Buffer, globals : Array[String]) -> Unit {
+fn symbol_string_size(symbols : Array[SymbolEntry]) -> Int {
+  let mut size = 1
+  for symbol in symbols {
+    size = size + symbol.name.length() + 1
+  }
+  size
+}
+
+///|
+fn write_symbol_table(buf : @buffer.Buffer, layout : SymbolLayout) -> Unit {
+  let mut strx = 1
+  for symbol in layout.entries {
+    write_i32_le(buf, strx)
+    buf.write_byte(symbol.type_.to_byte())
+    buf.write_byte(symbol.section_index.to_byte())
+    write_u16_le(buf, 0)
+    write_u64_le(buf, symbol.value.to_int64())
+    strx = strx + symbol.name.length() + 1
+  }
+}
+
+///|
+fn write_string_table(
+  buf : @buffer.Buffer,
+  entries : Array[SymbolEntry],
+) -> Unit {
   buf.write_byte((0).to_byte())
-  for symbol in globals {
-    write_ascii_z(buf, symbol)
+  for symbol in entries {
+    write_ascii_z(buf, symbol.name)
+  }
+}
+
+///|
+fn array_contains_string(values : Array[String], target : String) -> Bool {
+  for value in values {
+    if value == target {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn push_string_once(values : Array[String], target : String) -> Unit {
+  if !array_contains_string(values, target) {
+    values.push(target)
+  }
+}
+
+///|
+fn symbol_value(
+  name : String,
+  symbols : Map[String, SymbolLocation],
+  sections : Array[ObjectSection],
+) -> Int {
+  match symbols.get(name) {
+    Some(loc) => sections[loc.section_index].addr + loc.offset
+    None => 0
+  }
+}
+
+///|
+fn build_symbol_layout(obj : AssembledObject) -> SymbolLayout {
+  let referenced : Array[String] = []
+  for section in obj.sections {
+    for reloc in section.relocs {
+      push_string_once(referenced, reloc.symbol)
+    }
+  }
+  let locals : Array[String] = []
+  let extdefs : Array[String] = []
+  let undefs : Array[String] = []
+  for name in referenced {
+    if obj.symbols.contains(name) {
+      if !array_contains_string(obj.globals, name) {
+        push_string_once(locals, name)
+      }
+    } else {
+      push_string_once(undefs, name)
+    }
+  }
+  for name in obj.globals {
+    if obj.symbols.contains(name) {
+      push_string_once(extdefs, name)
+    } else {
+      push_string_once(undefs, name)
+    }
+  }
+  let entries : Array[SymbolEntry] = []
+  let indexes : Map[String, Int] = {}
+  for name in locals {
+    indexes[name] = entries.length()
+    let loc = obj.symbols[name]
+    entries.push({
+      name,
+      type_: 0x0e,
+      section_index: loc.section_index + 1,
+      value: symbol_value(name, obj.symbols, obj.sections),
+    })
+  }
+  for name in extdefs {
+    indexes[name] = entries.length()
+    let loc = obj.symbols[name]
+    entries.push({
+      name,
+      type_: 0x0f,
+      section_index: loc.section_index + 1,
+      value: symbol_value(name, obj.symbols, obj.sections),
+    })
+  }
+  for name in undefs {
+    indexes[name] = entries.length()
+    entries.push({ name, type_: 0x01, section_index: 0, value: 0 })
+  }
+  {
+    entries,
+    indexes,
+    nlocals: locals.length(),
+    nextdefs: extdefs.length(),
+    nundefs: undefs.length(),
   }
 }
 
@@ -1117,6 +1378,18 @@ fn layout_sections(
 }
 
 ///|
+fn layout_relocations(sections : Array[ObjectSection], offset : Int) -> Int {
+  let mut cursor = align_int(offset, 4)
+  for section in sections {
+    if section.relocs.length() > 0 {
+      section.reloff = cursor
+      cursor = cursor + section.relocs.length() * 8
+    }
+  }
+  cursor
+}
+
+///|
 fn macho_object_from_assembled(obj : AssembledObject) -> Bytes {
   let header_size = 32
   let seg_cmd_size = 72 + obj.sections.length() * 80
@@ -1129,10 +1402,15 @@ fn macho_object_from_assembled(obj : AssembledObject) -> Bytes {
     obj.sections,
     content_offset,
   )
-  let symoff = align_int(segment_fileoff + segment_filesize, 8)
-  let nsyms = obj.globals.length()
+  let reloc_end = layout_relocations(
+    obj.sections,
+    segment_fileoff + segment_filesize,
+  )
+  let symbol_layout = build_symbol_layout(obj)
+  let symoff = align_int(reloc_end, 8)
+  let nsyms = symbol_layout.entries.length()
   let stroff = symoff + nsyms * 16
-  let strsize = symbol_string_size(obj.globals)
+  let strsize = symbol_string_size(symbol_layout.entries)
   let buf = @buffer.new(size_hint=stroff + strsize)
   write_macho_header(buf, sizeofcmds)
   write_segment_command(
@@ -1144,11 +1422,17 @@ fn macho_object_from_assembled(obj : AssembledObject) -> Bytes {
   )
   write_build_version_command(buf)
   write_symtab_command(buf, symoff, nsyms, stroff, strsize)
-  write_dysymtab_command(buf, nsyms)
+  write_dysymtab_command(
+    buf,
+    symbol_layout.nlocals,
+    symbol_layout.nextdefs,
+    symbol_layout.nundefs,
+  )
   append_sections(buf, obj.sections)
+  write_relocations(buf, obj.sections, symbol_layout.indexes)
   write_padding_to_offset(buf, symoff)
-  write_symbol_table(buf, obj.globals, obj.symbols, obj.sections)
-  write_string_table(buf, obj.globals)
+  write_symbol_table(buf, symbol_layout)
+  write_string_table(buf, symbol_layout.entries)
   buf.to_bytes()
 }
 
