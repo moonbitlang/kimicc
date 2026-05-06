@@ -15,6 +15,14 @@ priv struct PendingCbz {
 }
 
 ///|
+priv struct PendingCondBranch {
+  section_index : Int
+  offset : Int
+  label : String
+  cond : String
+}
+
+///|
 priv struct SymbolLocation {
   section_index : Int
   offset : Int
@@ -417,18 +425,29 @@ fn encode_cmp(rest : String) -> UInt {
 }
 
 ///|
-fn inverted_condition_code(cond : String) -> Int {
+fn condition_code(cond : String) -> Int {
   match cond {
-    "eq" => 1
-    "ne" => 0
-    "lt" => 10
-    "ge" => 11
-    "gt" => 13
-    "le" => 12
-    "hi" => 9
-    "ls" => 8
-    _ => abort("unsupported cset condition: " + cond)
+    "eq" => 0
+    "ne" => 1
+    "hs" | "cs" => 2
+    "lo" | "cc" => 3
+    "mi" => 4
+    "pl" => 5
+    "vs" => 6
+    "vc" => 7
+    "hi" => 8
+    "ls" => 9
+    "ge" => 10
+    "lt" => 11
+    "gt" => 12
+    "le" => 13
+    _ => abort("unsupported condition: " + cond)
   }
+}
+
+///|
+fn inverted_condition_code(cond : String) -> Int {
+  condition_code(cond) ^ 1
 }
 
 ///|
@@ -687,6 +706,22 @@ fn encode_cbz(from_offset : Int, target_offset : Int, reg : Int) -> UInt {
   }
   let imm = if delta < 0 { delta + (1 << 19) } else { delta }
   0xb4000000U | (imm.reinterpret_as_uint() << 5) | reg.reinterpret_as_uint()
+}
+
+///|
+fn encode_cond_branch(
+  from_offset : Int,
+  target_offset : Int,
+  cond : String,
+) -> UInt {
+  let delta = (target_offset - from_offset) / 4
+  if delta < -(1 << 18) || delta >= 1 << 18 {
+    abort("conditional branch target out of range for Mach-O object backend")
+  }
+  let imm = if delta < 0 { delta + (1 << 19) } else { delta }
+  0x54000000U |
+  (imm.reinterpret_as_uint() << 5) |
+  condition_code(cond).reinterpret_as_uint()
 }
 
 ///|
@@ -965,6 +1000,7 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
   let symbols : Map[String, SymbolLocation] = {}
   let pending : Array[PendingBranch] = []
   let pending_cbz : Array[PendingCbz] = []
+  let pending_cond : Array[PendingCondBranch] = []
   let mut current_section = -1
   for raw in assembly.split("\n") {
     let line = raw.to_string().trim().to_string()
@@ -1249,6 +1285,21 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
           reg: parse_register(parts[0]),
         })
         append_u32_to_section(sections[current_section], 0U)
+      } else if line.has_prefix("b.") {
+        let parts : Array[String] = []
+        for part in line.substring(start=2).trim().to_string().split("\t") {
+          parts.push(part.to_string().trim().to_string())
+        }
+        if parts.length() != 2 {
+          abort("malformed conditional branch instruction: " + line)
+        }
+        pending_cond.push({
+          section_index: current_section,
+          offset: sections[current_section].bytes.length(),
+          label: parts[1],
+          cond: parts[0],
+        })
+        append_u32_to_section(sections[current_section], 0U)
       } else if line.has_prefix("b\t") {
         pending.push({
           section_index: current_section,
@@ -1326,6 +1377,27 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         }
       None =>
         abort("unknown cbz label in Mach-O object backend: " + branch.label)
+    }
+  }
+  for branch in pending_cond {
+    match symbols.get(branch.label) {
+      Some(target) =>
+        if target.section_index != branch.section_index {
+          abort(
+            "cross-section conditional branch needs relocation: " + branch.label,
+          )
+        } else {
+          patch_u32_in_section(
+            sections[branch.section_index],
+            branch.offset,
+            encode_cond_branch(branch.offset, target.offset, branch.cond),
+          )
+        }
+      None =>
+        abort(
+          "unknown conditional branch label in Mach-O object backend: " +
+          branch.label,
+        )
     }
   }
   { sections, globals, symbols }

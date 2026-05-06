@@ -118,6 +118,13 @@ async test "direct macho object supports simple while loop" {
 }
 
 ///|
+async test "direct macho object supports switch conditional branches" {
+  let source = "int f(int x) { switch (x) { case 1: return 11; case 2: return 22; default: return 7; } } int main(void) { return f(2); }"
+  let exit_code = run_source_direct_object_async(source, "macho_switch_cond")
+  inspect(exit_code, content="22")
+}
+
+///|
 async test "direct macho object links initialized global data section" {
   let source = "int g = 42; char name[] = \"kimicc\"; int main(void) { return 7; }"
   let exit_code = run_source_direct_object_async(
