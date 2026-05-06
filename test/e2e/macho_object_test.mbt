@@ -67,3 +67,21 @@ async test "direct macho object supports simple while loop" {
   let exit_code = run_source_direct_object_async(source, "macho_while_sum")
   inspect(exit_code, content="6")
 }
+
+///|
+async test "direct macho object links initialized global data section" {
+  let source = "int g = 42; char name[] = \"kimicc\"; int main(void) { return 7; }"
+  let exit_code = run_source_direct_object_async(
+    source, "macho_initialized_global_data",
+  )
+  inspect(exit_code, content="7")
+}
+
+///|
+async test "direct macho object links zero-filled global data section" {
+  let source = "int g; char scratch[32]; int main(void) { return 9; }"
+  let exit_code = run_source_direct_object_async(
+    source, "macho_zero_global_data",
+  )
+  inspect(exit_code, content="9")
+}

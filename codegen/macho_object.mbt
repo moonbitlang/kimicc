@@ -1,5 +1,6 @@
 ///|
 priv struct PendingBranch {
+  section_index : Int
   offset : Int
   label : String
   link : Bool
@@ -7,16 +8,34 @@ priv struct PendingBranch {
 
 ///|
 priv struct PendingCbz {
+  section_index : Int
   offset : Int
   label : String
   reg : Int
 }
 
 ///|
-priv struct AssembledText {
-  words : Array[UInt]
+priv struct SymbolLocation {
+  section_index : Int
+  offset : Int
+}
+
+///|
+priv struct ObjectSection {
+  sectname : String
+  segname : String
+  flags : UInt
+  mut align_power : Int
+  bytes : Array[Int]
+  mut addr : Int
+  mut offset : Int
+}
+
+///|
+priv struct AssembledObject {
+  sections : Array[ObjectSection]
   globals : Array[String]
-  symbols : Map[String, Int]
+  symbols : Map[String, SymbolLocation]
 }
 
 ///|
@@ -75,10 +94,92 @@ fn write_ascii_z(buf : @buffer.Buffer, value : String) -> Unit {
 }
 
 ///|
-fn align_buffer(buf : @buffer.Buffer, align : Int) -> Unit {
-  let mask = align - 1
-  while (buf.length() & mask) != 0 {
+fn align_int(value : Int, align : Int) -> Int {
+  if align <= 1 {
+    value
+  } else {
+    (value + align - 1) & -align
+  }
+}
+
+///|
+fn append_byte(section : ObjectSection, value : Int) -> Unit {
+  section.bytes.push(value & 0xff)
+}
+
+///|
+fn append_u16_to_section(section : ObjectSection, value : Int) -> Unit {
+  let v = value.reinterpret_as_uint()
+  append_byte(section, (v & 0xffU).reinterpret_as_int())
+  append_byte(section, ((v >> 8) & 0xffU).reinterpret_as_int())
+}
+
+///|
+fn append_u32_to_section(section : ObjectSection, value : UInt) -> Unit {
+  append_byte(section, (value & 0xffU).reinterpret_as_int())
+  append_byte(section, ((value >> 8) & 0xffU).reinterpret_as_int())
+  append_byte(section, ((value >> 16) & 0xffU).reinterpret_as_int())
+  append_byte(section, ((value >> 24) & 0xffU).reinterpret_as_int())
+}
+
+///|
+fn append_i32_to_section(section : ObjectSection, value : Int) -> Unit {
+  append_u32_to_section(section, value.reinterpret_as_uint())
+}
+
+///|
+fn append_u64_to_section(section : ObjectSection, value : Int64) -> Unit {
+  append_byte(section, ((value >> 0) & 0xffL).to_int())
+  append_byte(section, ((value >> 8) & 0xffL).to_int())
+  append_byte(section, ((value >> 16) & 0xffL).to_int())
+  append_byte(section, ((value >> 24) & 0xffL).to_int())
+  append_byte(section, ((value >> 32) & 0xffL).to_int())
+  append_byte(section, ((value >> 40) & 0xffL).to_int())
+  append_byte(section, ((value >> 48) & 0xffL).to_int())
+  append_byte(section, ((value >> 56) & 0xffL).to_int())
+}
+
+///|
+fn patch_u32_in_section(
+  section : ObjectSection,
+  offset : Int,
+  value : UInt,
+) -> Unit {
+  section.bytes[offset] = (value & 0xffU).reinterpret_as_int()
+  section.bytes[offset + 1] = ((value >> 8) & 0xffU).reinterpret_as_int()
+  section.bytes[offset + 2] = ((value >> 16) & 0xffU).reinterpret_as_int()
+  section.bytes[offset + 3] = ((value >> 24) & 0xffU).reinterpret_as_int()
+}
+
+///|
+fn align_section(
+  section : ObjectSection,
+  align : Int,
+  text_fill : Bool,
+) -> Unit {
+  while (section.bytes.length() & (align - 1)) != 0 {
+    if text_fill &&
+      section.bytes.length() % 4 == 0 &&
+      section.bytes.length() + 4 <= align_int(section.bytes.length(), align) {
+      append_u32_to_section(section, 0xd503201fU)
+    } else {
+      append_byte(section, 0)
+    }
+  }
+}
+
+///|
+fn section_is_text(section : ObjectSection) -> Bool {
+  section.segname == "__TEXT" && section.sectname == "__text"
+}
+
+///|
+fn write_padding_to_offset(buf : @buffer.Buffer, offset : Int) -> Unit {
+  while buf.length() < offset {
     buf.write_byte((0).to_byte())
+  }
+  if buf.length() > offset {
+    abort("Mach-O section layout wrote past expected offset")
   }
 }
 
@@ -459,7 +560,11 @@ fn encode_branch_with_base(
 ///|
 fn parse_p2align(line : String) -> Int {
   let rest = line.substring(start=".p2align".length()).trim().to_string()
-  parse_int_or_abort(rest, ".p2align")
+  let parts = split_operands(rest)
+  if parts.length() == 0 {
+    abort("malformed .p2align directive")
+  }
+  parse_int_or_abort(parts[0], ".p2align")
 }
 
 ///|
@@ -473,19 +578,195 @@ fn push_global_once(globals : Array[String], name : String) -> Unit {
 }
 
 ///|
-fn assemble_text_from_darwin_arm64(assembly : String) -> AssembledText {
-  let words : Array[UInt] = []
+fn default_section_align_power(segname : String, sectname : String) -> Int {
+  if segname == "__TEXT" && sectname == "__text" {
+    2
+  } else if segname == "__TEXT" && sectname == "__const" {
+    0
+  } else if segname == "__TEXT" && sectname == "__cstring" {
+    0
+  } else {
+    3
+  }
+}
+
+///|
+fn section_flags(segname : String, sectname : String, line : String) -> UInt {
+  if segname == "__TEXT" && sectname == "__text" {
+    0x80000400U
+  } else if (segname == "__TEXT" && sectname == "__cstring") ||
+    line.contains("cstring_literals") {
+    0x00000002U
+  } else {
+    0U
+  }
+}
+
+///|
+fn get_or_add_section(
+  sections : Array[ObjectSection],
+  segname : String,
+  sectname : String,
+  flags : UInt,
+  align_power : Int,
+) -> Int {
+  for i = 0; i < sections.length(); i = i + 1 {
+    if sections[i].segname == segname && sections[i].sectname == sectname {
+      return i
+    }
+  }
+  sections.push({
+    sectname,
+    segname,
+    flags,
+    align_power,
+    bytes: [],
+    addr: 0,
+    offset: 0,
+  })
+  sections.length() - 1
+}
+
+///|
+fn parse_section_index(sections : Array[ObjectSection], line : String) -> Int {
+  let rest = line.substring(start=".section".length()).trim().to_string()
+  let parts = split_operands(rest)
+  if parts.length() < 2 {
+    abort("malformed Mach-O section directive: " + line)
+  }
+  let segname = parts[0]
+  let sectname = parts[1]
+  get_or_add_section(
+    sections,
+    segname,
+    sectname,
+    section_flags(segname, sectname, line),
+    default_section_align_power(segname, sectname),
+  )
+}
+
+///|
+fn directive_rest(line : String, directive : String) -> String {
+  line.substring(start=directive.length()).trim().to_string()
+}
+
+///|
+fn parse_data_integer(value : String, context : String) -> Int {
+  parse_int_or_abort(value.trim().to_string(), context)
+}
+
+///|
+fn is_octal_char(ch : UInt16) -> Bool {
+  ch >= '0'.to_int().to_uint16() && ch <= '7'.to_int().to_uint16()
+}
+
+///|
+fn parse_asm_string_literal(rest : String) -> Array[Int] {
+  let bytes : Array[Int] = []
+  let s = rest.trim().to_string()
+  if s.length() < 2 || s[0] != '"' {
+    abort("malformed string directive in Mach-O object backend: " + rest)
+  }
+  let mut i = 1
+  while i < s.length() {
+    let ch = s[i]
+    if ch == '"' {
+      return bytes
+    } else if ch == '\\' {
+      if i + 1 >= s.length() {
+        abort("unterminated escape in string directive")
+      }
+      let next = s[i + 1]
+      if is_octal_char(next) {
+        let mut value = 0
+        let mut count = 0
+        i = i + 1
+        while i < s.length() && count < 3 && is_octal_char(s[i]) {
+          value = value * 8 + s[i].to_int() - '0'.to_int()
+          i = i + 1
+          count = count + 1
+        }
+        bytes.push(value & 0xff)
+        continue
+      } else {
+        match next {
+          'n' => bytes.push(10)
+          't' => bytes.push(9)
+          'r' => bytes.push(13)
+          '\\' => bytes.push('\\'.to_int())
+          '"' => bytes.push('"'.to_int())
+          _ => bytes.push(next.to_int())
+        }
+        i = i + 2
+        continue
+      }
+    } else {
+      bytes.push(ch.to_int() & 0xff)
+      i = i + 1
+    }
+  }
+  abort("unterminated string directive in Mach-O object backend: " + rest)
+}
+
+///|
+fn append_data_directive(section : ObjectSection, line : String) -> Bool {
+  if line.has_prefix(".byte") {
+    for value in split_operands(directive_rest(line, ".byte")) {
+      append_byte(section, parse_data_integer(value, ".byte"))
+    }
+    return true
+  } else if line.has_prefix(".short") {
+    for value in split_operands(directive_rest(line, ".short")) {
+      append_u16_to_section(section, parse_data_integer(value, ".short"))
+    }
+    return true
+  } else if line.has_prefix(".long") {
+    for value in split_operands(directive_rest(line, ".long")) {
+      append_i32_to_section(section, parse_data_integer(value, ".long"))
+    }
+    return true
+  } else if line.has_prefix(".quad") {
+    for value in split_operands(directive_rest(line, ".quad")) {
+      append_u64_to_section(
+        section,
+        parse_data_integer(value, ".quad").to_int64(),
+      )
+    }
+    return true
+  } else if line.has_prefix(".space") {
+    let count = parse_data_integer(directive_rest(line, ".space"), ".space")
+    let mut i = 0
+    while i < count {
+      append_byte(section, 0)
+      i = i + 1
+    }
+    return true
+  } else if line.has_prefix(".asciz") {
+    let bytes = parse_asm_string_literal(directive_rest(line, ".asciz"))
+    for byte in bytes {
+      append_byte(section, byte)
+    }
+    append_byte(section, 0)
+    return true
+  } else {
+    false
+  }
+}
+
+///|
+fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
+  let sections : Array[ObjectSection] = []
   let globals : Array[String] = []
-  let symbols : Map[String, Int] = {}
+  let symbols : Map[String, SymbolLocation] = {}
   let pending : Array[PendingBranch] = []
   let pending_cbz : Array[PendingCbz] = []
-  let mut in_text = false
+  let mut current_section = -1
   for raw in assembly.split("\n") {
     let line = raw.to_string().trim().to_string()
     if line == "" {
       continue
     } else if line.has_prefix(".section") {
-      in_text = line.contains("__TEXT,__text")
+      current_section = parse_section_index(sections, line)
     } else if line.has_prefix(".build_version") {
       continue
     } else if line.has_prefix(".globl") {
@@ -494,86 +775,149 @@ fn assemble_text_from_darwin_arm64(assembly : String) -> AssembledText {
         line.substring(start=".globl".length()).trim().to_string(),
       )
     } else if line.has_prefix(".p2align") {
-      if in_text {
-        let align = 1 << parse_p2align(line)
-        while words.length() * 4 % align != 0 {
-          words.push(0xd503201fU)
+      if current_section >= 0 {
+        let power = parse_p2align(line)
+        if power > sections[current_section].align_power {
+          sections[current_section].align_power = power
         }
+        align_section(
+          sections[current_section],
+          1 << power,
+          section_is_text(sections[current_section]),
+        )
       }
     } else if line.has_suffix(":") {
-      symbols[line.substring(end=line.length() - 1)] = words.length() * 4
-    } else if in_text {
+      if current_section < 0 {
+        abort("label before section in Mach-O object backend: " + line)
+      }
+      symbols[line.substring(end=line.length() - 1)] = {
+        section_index: current_section,
+        offset: sections[current_section].bytes.length(),
+      }
+    } else if current_section >= 0 && section_is_text(sections[current_section]) {
       if line == "stp\tx29, x30, [sp, #-16]!" {
-        words.push(0xa9bf7bfdU)
+        append_u32_to_section(sections[current_section], 0xa9bf7bfdU)
       } else if line == "ldp\tx29, x30, [sp], #16" {
-        words.push(0xa8c17bfdU)
+        append_u32_to_section(sections[current_section], 0xa8c17bfdU)
       } else if line == "ret" {
-        words.push(0xd65f03c0U)
+        append_u32_to_section(sections[current_section], 0xd65f03c0U)
       } else if line.has_prefix("mov\t") {
-        words.push(encode_mov(line.substring(start=4)))
+        append_u32_to_section(
+          sections[current_section],
+          encode_mov(line.substring(start=4)),
+        )
       } else if line.has_prefix("movz\t") {
-        words.push(encode_mov_wide(line.substring(start=5), "movz"))
+        append_u32_to_section(
+          sections[current_section],
+          encode_mov_wide(line.substring(start=5), "movz"),
+        )
       } else if line.has_prefix("movk\t") {
-        words.push(encode_mov_wide(line.substring(start=5), "movk"))
+        append_u32_to_section(
+          sections[current_section],
+          encode_mov_wide(line.substring(start=5), "movk"),
+        )
       } else if line.has_prefix("movn\t") {
-        words.push(encode_mov_wide(line.substring(start=5), "movn"))
+        append_u32_to_section(
+          sections[current_section],
+          encode_mov_wide(line.substring(start=5), "movn"),
+        )
       } else if line.has_prefix("sxtw\t") {
         let parts = split_operands(line.substring(start=5))
         if parts.length() != 2 {
           abort("malformed sxtw instruction")
         }
-        words.push(encode_sxtw(parts[0], parts[1]))
+        append_u32_to_section(
+          sections[current_section],
+          encode_sxtw(parts[0], parts[1]),
+        )
       } else if line.has_prefix("add\t") {
-        words.push(encode_add_sub(line.substring(start=4), false))
+        append_u32_to_section(
+          sections[current_section],
+          encode_add_sub(line.substring(start=4), false),
+        )
       } else if line.has_prefix("sub\t") {
-        words.push(encode_add_sub(line.substring(start=4), true))
+        append_u32_to_section(
+          sections[current_section],
+          encode_add_sub(line.substring(start=4), true),
+        )
       } else if line.has_prefix("mul\t") {
-        words.push(encode_mul(line.substring(start=4)))
+        append_u32_to_section(
+          sections[current_section],
+          encode_mul(line.substring(start=4)),
+        )
       } else if line.has_prefix("cmp\t") {
-        words.push(encode_cmp(line.substring(start=4)))
+        append_u32_to_section(
+          sections[current_section],
+          encode_cmp(line.substring(start=4)),
+        )
       } else if line.has_prefix("cset\t") {
-        words.push(encode_cset(line.substring(start=5)))
+        append_u32_to_section(
+          sections[current_section],
+          encode_cset(line.substring(start=5)),
+        )
       } else if line.has_prefix("str\t") {
-        words.push(encode_str(line.substring(start=4)))
+        append_u32_to_section(
+          sections[current_section],
+          encode_str(line.substring(start=4)),
+        )
       } else if line.has_prefix("ldr\t") {
-        words.push(encode_ldr(line.substring(start=4)))
+        append_u32_to_section(
+          sections[current_section],
+          encode_ldr(line.substring(start=4)),
+        )
       } else if line.has_prefix("cbz\t") {
         let parts = split_operands(line.substring(start=4))
         if parts.length() != 2 {
           abort("malformed cbz instruction")
         }
         pending_cbz.push({
-          offset: words.length() * 4,
+          section_index: current_section,
+          offset: sections[current_section].bytes.length(),
           label: parts[1],
           reg: parse_register(parts[0]),
         })
-        words.push(0U)
+        append_u32_to_section(sections[current_section], 0U)
       } else if line.has_prefix("b\t") {
         pending.push({
-          offset: words.length() * 4,
+          section_index: current_section,
+          offset: sections[current_section].bytes.length(),
           label: line.substring(start=2).trim().to_string(),
           link: false,
         })
-        words.push(0U)
+        append_u32_to_section(sections[current_section], 0U)
       } else if line.has_prefix("bl\t") {
         pending.push({
-          offset: words.length() * 4,
+          section_index: current_section,
+          offset: sections[current_section].bytes.length(),
           label: line.substring(start=3).trim().to_string(),
           link: true,
         })
-        words.push(0U)
+        append_u32_to_section(sections[current_section], 0U)
       } else {
         abort("unsupported instruction in Mach-O object backend: " + line)
       }
+    } else if current_section >= 0 &&
+      append_data_directive(sections[current_section], line) {
+      continue
+    } else if line == ".subsections_via_symbols" {
+      continue
     }
   }
   for branch in pending {
     match symbols.get(branch.label) {
       Some(target) =>
-        words[branch.offset / 4] = if branch.link {
-          encode_branch_link(branch.offset, target)
+        if target.section_index != branch.section_index {
+          abort("cross-section branch needs relocation: " + branch.label)
         } else {
-          encode_branch(branch.offset, target)
+          patch_u32_in_section(
+            sections[branch.section_index],
+            branch.offset,
+            if branch.link {
+              encode_branch_link(branch.offset, target.offset)
+            } else {
+              encode_branch(branch.offset, target.offset)
+            },
+          )
         }
       None =>
         abort("unknown branch label in Mach-O object backend: " + branch.label)
@@ -582,12 +926,20 @@ fn assemble_text_from_darwin_arm64(assembly : String) -> AssembledText {
   for branch in pending_cbz {
     match symbols.get(branch.label) {
       Some(target) =>
-        words[branch.offset / 4] = encode_cbz(branch.offset, target, branch.reg)
+        if target.section_index != branch.section_index {
+          abort("cross-section cbz needs relocation: " + branch.label)
+        } else {
+          patch_u32_in_section(
+            sections[branch.section_index],
+            branch.offset,
+            encode_cbz(branch.offset, target.offset, branch.reg),
+          )
+        }
       None =>
         abort("unknown cbz label in Mach-O object backend: " + branch.label)
     }
   }
-  { words, globals, symbols }
+  { sections, globals, symbols }
 }
 
 ///|
@@ -605,29 +957,38 @@ fn write_macho_header(buf : @buffer.Buffer, sizeofcmds : Int) -> Unit {
 ///|
 fn write_segment_command(
   buf : @buffer.Buffer,
-  text_offset : Int,
-  text_size : Int,
+  sections : Array[ObjectSection],
+  segment_fileoff : Int,
+  segment_filesize : Int,
+  segment_vmsize : Int,
 ) -> Unit {
   write_u32_le(buf, 0x19U) // LC_SEGMENT_64
-  write_i32_le(buf, 72 + 80)
+  write_i32_le(buf, 72 + sections.length() * 80)
   write_fixed_ascii(buf, "", 16)
   write_u64_le(buf, 0L)
-  write_u64_le(buf, text_size.to_int64())
-  write_u64_le(buf, text_offset.to_int64())
-  write_u64_le(buf, text_size.to_int64())
+  write_u64_le(buf, segment_vmsize.to_int64())
+  write_u64_le(buf, segment_fileoff.to_int64())
+  write_u64_le(buf, segment_filesize.to_int64())
   write_i32_le(buf, 7)
   write_i32_le(buf, 7)
-  write_i32_le(buf, 1)
+  write_i32_le(buf, sections.length())
   write_i32_le(buf, 0)
-  write_fixed_ascii(buf, "__text", 16)
-  write_fixed_ascii(buf, "__TEXT", 16)
-  write_u64_le(buf, 0L)
-  write_u64_le(buf, text_size.to_int64())
-  write_i32_le(buf, text_offset)
-  write_i32_le(buf, 2)
+  for section in sections {
+    write_section_header(buf, section)
+  }
+}
+
+///|
+fn write_section_header(buf : @buffer.Buffer, section : ObjectSection) -> Unit {
+  write_fixed_ascii(buf, section.sectname, 16)
+  write_fixed_ascii(buf, section.segname, 16)
+  write_u64_le(buf, section.addr.to_int64())
+  write_u64_le(buf, section.bytes.length().to_int64())
+  write_i32_le(buf, section.offset)
+  write_i32_le(buf, section.align_power)
   write_i32_le(buf, 0)
   write_i32_le(buf, 0)
-  write_u32_le(buf, 0x80000400U)
+  write_u32_le(buf, section.flags)
   write_i32_le(buf, 0)
   write_i32_le(buf, 0)
   write_i32_le(buf, 0)
@@ -677,9 +1038,15 @@ fn write_dysymtab_command(buf : @buffer.Buffer, nsyms : Int) -> Unit {
 }
 
 ///|
-fn append_text(buf : @buffer.Buffer, words : Array[UInt]) -> Unit {
-  for word in words {
-    write_u32_le(buf, word)
+fn append_sections(
+  buf : @buffer.Buffer,
+  sections : Array[ObjectSection],
+) -> Unit {
+  for section in sections {
+    write_padding_to_offset(buf, section.offset)
+    for byte in section.bytes {
+      buf.write_byte(byte.to_byte())
+    }
   }
 }
 
@@ -696,20 +1063,24 @@ fn symbol_string_size(symbols : Array[String]) -> Int {
 fn write_symbol_table(
   buf : @buffer.Buffer,
   globals : Array[String],
-  symbols : Map[String, Int],
+  symbols : Map[String, SymbolLocation],
+  sections : Array[ObjectSection],
 ) -> Unit {
   let mut strx = 1
   for symbol in globals {
     match symbols.get(symbol) {
-      Some(value) => {
+      Some(loc) => {
         write_i32_le(buf, strx)
         buf.write_byte((0x0f).to_byte()) // N_SECT | N_EXT
-        buf.write_byte((1).to_byte())
+        buf.write_byte((loc.section_index + 1).to_byte())
         write_u16_le(buf, 0)
-        write_u64_le(buf, value.to_int64())
+        write_u64_le(
+          buf,
+          (sections[loc.section_index].addr + loc.offset).to_int64(),
+        )
         strx = strx + symbol.length() + 1
       }
-      None => abort("global symbol has no text label: " + symbol)
+      None => abort("global symbol has no label: " + symbol)
     }
   }
 }
@@ -723,34 +1094,66 @@ fn write_string_table(buf : @buffer.Buffer, globals : Array[String]) -> Unit {
 }
 
 ///|
-fn macho_object_from_text(text : AssembledText) -> Bytes {
+fn layout_sections(
+  sections : Array[ObjectSection],
+  content_offset : Int,
+) -> (Int, Int, Int) {
+  let mut file_cursor = content_offset
+  let mut addr_cursor = 0
+  let mut first_fileoff = content_offset
+  for i = 0; i < sections.length(); i = i + 1 {
+    let align = 1 << sections[i].align_power
+    file_cursor = align_int(file_cursor, align)
+    addr_cursor = align_int(addr_cursor, align)
+    if i == 0 {
+      first_fileoff = file_cursor
+    }
+    sections[i].offset = file_cursor
+    sections[i].addr = addr_cursor
+    file_cursor = file_cursor + sections[i].bytes.length()
+    addr_cursor = addr_cursor + sections[i].bytes.length()
+  }
+  (first_fileoff, file_cursor - first_fileoff, addr_cursor)
+}
+
+///|
+fn macho_object_from_assembled(obj : AssembledObject) -> Bytes {
   let header_size = 32
-  let seg_cmd_size = 72 + 80
+  let seg_cmd_size = 72 + obj.sections.length() * 80
   let build_cmd_size = 24
   let sym_cmd_size = 24
   let dysym_cmd_size = 80
   let sizeofcmds = seg_cmd_size + build_cmd_size + sym_cmd_size + dysym_cmd_size
-  let text_offset = header_size + sizeofcmds
-  let text_size = text.words.length() * 4
-  let symoff = (text_offset + text_size + 7) & -8
-  let nsyms = text.globals.length()
+  let content_offset = header_size + sizeofcmds
+  let (segment_fileoff, segment_filesize, segment_vmsize) = layout_sections(
+    obj.sections,
+    content_offset,
+  )
+  let symoff = align_int(segment_fileoff + segment_filesize, 8)
+  let nsyms = obj.globals.length()
   let stroff = symoff + nsyms * 16
-  let strsize = symbol_string_size(text.globals)
+  let strsize = symbol_string_size(obj.globals)
   let buf = @buffer.new(size_hint=stroff + strsize)
   write_macho_header(buf, sizeofcmds)
-  write_segment_command(buf, text_offset, text_size)
+  write_segment_command(
+    buf,
+    obj.sections,
+    segment_fileoff,
+    segment_filesize,
+    segment_vmsize,
+  )
   write_build_version_command(buf)
   write_symtab_command(buf, symoff, nsyms, stroff, strsize)
   write_dysymtab_command(buf, nsyms)
-  append_text(buf, text.words)
-  align_buffer(buf, 8)
-  write_symbol_table(buf, text.globals, text.symbols)
-  write_string_table(buf, text.globals)
+  append_sections(buf, obj.sections)
+  write_padding_to_offset(buf, symoff)
+  write_symbol_table(buf, obj.globals, obj.symbols, obj.sections)
+  write_string_table(buf, obj.globals)
   buf.to_bytes()
 }
 
 ///|
 pub fn generate_macho_object(prog : @parser.Program) -> Bytes {
   let assembly = Codegen::new().generate(prog)
-  macho_object_from_text(assemble_text_from_darwin_arm64(assembly))
+  macho_object_from_assembled(assemble_object_from_darwin_arm64(assembly))
 }
