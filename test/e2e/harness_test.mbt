@@ -184,6 +184,43 @@ async fn preprocess_c_file_with_flags(
 }
 
 ///|
+async fn compile_c_file_with_kimicc_object_path(
+  path : String,
+  flags : String,
+  tag : String,
+) -> String {
+  let source = preprocess_c_file_with_flags(path, flags, tag)
+  compile_source_to_object_path(source, tag)
+}
+
+///|
+fn shell_join_quoted(values : Array[String]) -> String {
+  let buf = StringBuilder::new()
+  let mut first = true
+  for value in values {
+    if first {
+      first = false
+    } else {
+      buf.write_char(' ')
+    }
+    buf.write_string(shell_quote(value))
+  }
+  buf.to_string()
+}
+
+///|
+fn external_testbed_enabled(name : String) -> Bool {
+  moonbit_system(
+    @utf8.encode(
+      "test \"${KIMICC_EXTERNAL_TESTBED:-}\" = " +
+      shell_quote(name) +
+      " || test \"${KIMICC_EXTERNAL_TESTBED:-}\" = all",
+    ),
+  ) ==
+  0
+}
+
+///|
 async fn compile_sqlite_fixture_object() -> String {
   let source = preprocess_c_file(
     "test/fixtures/sqlite/sqlite3.c", "sqlite3_preprocessed",
