@@ -452,6 +452,39 @@ async fn run_sqlite_public_tcl_script_tail_with(
 }
 
 ///|
+async fn run_sqlite_public_tcl_runner_tail_with(
+  runner_args : String,
+  tag : String,
+  compiler : SQLiteObjectCompiler,
+  tail_lines : Int,
+) -> CommandResult {
+  if !sqlite_public_tests_available() {
+    return { code: 0, output: "sqlite-public-tests-skipped\n" }
+  }
+  let root = sqlite_public_source_root()
+  let testfixture = build_sqlite_public_testfixture_with(compiler)
+  let run_seed = root + "/test/testrunner.tcl " + runner_args
+  let run_tag = tag + "_" + compiler.tag() + "_" + source_id(run_seed)
+  let run_dir = temp_file_path(run_tag + "_work", run_seed, "")
+  run_command_checked(
+    "rm -rf " + shell_quote(run_dir) + " && mkdir -p " + shell_quote(run_dir),
+    "prepare sqlite public tcl runner work dir",
+  )
+  run_command_capture_tail(
+    "cd " +
+    shell_quote(run_dir) +
+    " && " +
+    shell_quote(testfixture) +
+    " " +
+    shell_quote(root + "/test/testrunner.tcl") +
+    " " +
+    runner_args,
+    run_tag,
+    tail_lines,
+  )
+}
+
+///|
 fn compile_driver_with_object(
   driver_source : String,
   object_path : String,

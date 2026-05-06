@@ -356,6 +356,31 @@ fn assert_sqlite_veryquick_residuals(
 }
 
 ///|
+fn assert_sqlite_full_residuals(output : String, compiler : String) -> Unit {
+  if !output.contains("26 errors out of 1016630 tests") {
+    abort(
+      "SQLite " + compiler + " full output missing residual summary:\n" + output,
+    )
+  }
+  for
+    marker in [
+      "FAILED: test/json101.test", "FAILED: test/func.test", "FAILED: test/literal.test",
+      "FAILED: test/json501.test", "FAILED: test/loadext.test", "FAILED: test/types3.test",
+    ] {
+    if !output.contains(marker) {
+      abort(
+        "SQLite " +
+        compiler +
+        " full residual output missing " +
+        marker +
+        ":\n" +
+        output,
+      )
+    }
+  }
+}
+
+///|
 async test "sqlite public veryquick residual failures match clang when enabled" {
   if !sqlite_public_conformance_enabled("veryquick") {
     return
@@ -388,4 +413,39 @@ async test "sqlite public veryquick residual failures match clang when enabled" 
   }
   assert_sqlite_veryquick_residuals(kimicc.output, "kimicc")
   assert_sqlite_veryquick_residuals(clang.output, "clang")
+}
+
+///|
+async test "sqlite public full residual failures match clang when enabled" {
+  if !sqlite_public_conformance_enabled("full") {
+    return
+  }
+  let kimicc = run_sqlite_public_tcl_runner_tail_with(
+    "--jobs 4 full",
+    "sqlite_public_full",
+    Kimicc,
+    320,
+  )
+  if kimicc.output == "sqlite-public-tests-skipped\n" {
+    return
+  }
+  let clang = run_sqlite_public_tcl_runner_tail_with(
+    "--jobs 4 full",
+    "sqlite_public_full",
+    Clang,
+    320,
+  )
+  if kimicc.code != clang.code {
+    abort(
+      "SQLite full exit code differs:\nkimicc:\n" +
+      kimicc.output +
+      "\nclang:\n" +
+      clang.output,
+    )
+  }
+  if kimicc.code == 0 {
+    return
+  }
+  assert_sqlite_full_residuals(kimicc.output, "kimicc")
+  assert_sqlite_full_residuals(clang.output, "clang")
 }

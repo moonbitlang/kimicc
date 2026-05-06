@@ -105,12 +105,17 @@ SQLite conformance an explicit harness mode that accepts a checked-out or
 cached source tree via environment variable, while the repo keeps the small
 amalgamation fixture and focused e2e regressions in version control.
 
-The broad `veryquick` comparison is available as an opt-in MoonBit e2e test:
+The broad `veryquick` and `full` comparisons are available as opt-in MoonBit
+e2e tests:
 
 ```bash
 KIMICC_SQLITE_CONFORMANCE=veryquick \
   moon test test/e2e --target native \
   --filter 'sqlite public veryquick residual failures match clang when enabled'
+
+KIMICC_SQLITE_CONFORMANCE=full \
+  moon test test/e2e/sqlite_test.mbt --target native \
+  --filter 'sqlite public full residual failures match clang when enabled'
 ```
 
 ## Todo
@@ -129,6 +134,8 @@ KIMICC_SQLITE_CONFORMANCE=veryquick \
 - [x] Link a public SQLite Tcl `testfixture` binary with kimicc's SQLite object.
 - [x] Add a public SQLite Tcl `testfixture` harness mode to MoonBit tests.
 - [x] Run the first upstream public Tcl batch through the `testfixture` harness.
+- [x] Add an opt-in MoonBit e2e comparison for SQLite's public `full`
+  permutation.
 - [ ] For every failure class, record the command, output, generated assembly or
   object paths, clang-vs-kimicc behavior, minimized C or SQL repro, status, and
   fixing commit.
@@ -199,7 +206,7 @@ KIMICC_SQLITE_CONFORMANCE=veryquick \
 | Fixed | Member access on small aggregate call results | `moon test test/e2e --target native --filter 'e2e member access reads field from struct call result'` | QuickJS's cleanup crash minimized to `JS_VALUE_GET_OBJ(JS_DupValue(ctx, getter))`, which preprocesses to member access through a 16-byte `JSValue` returned in registers. kimicc treated the first return word as an address and loaded the JS object header, storing values such as `0x000c010000000002` into getter/setter pointer slots. Member-access codegen now materializes register-returned struct/union values before selecting nested fields. |
 | Passed | QuickJS reduced embed smoke | `/tmp/kimicc_quickjs_smoke/run_emscripten_noatomics/embed_smoke`, built from QuickJS 2025-09-13 with atomics/stack-check disabled and support files compiled by clang | The smoke preprocesses, compiles, assembles, links, evaluates `let x = 1 + 2; x`, prints `3`, frees the context/runtime, and exits with status `0`. Normal macOS QuickJS preprocessing still leaves compiler builtins such as fortified `snprintf`, C11 atomics, and `__builtin_frame_address`, so full unmodified QuickJS needs either builtin lowering or a sanitized preprocessor profile. |
 | Open | SQLite `veryquick.test` residual platform/Tcl expectation failures | `KIMICC_SQLITE_CONFORMANCE=veryquick moon test test/e2e --target native --filter 'sqlite public veryquick residual failures match clang when enabled'`; kimicc output at `/tmp/kimicc_veryquick_after_math.out`; clang output at `/tmp/clang_veryquick_after_math.out` | The broad run now completes with `rc=1`: 24 errors out of 330516 tests. The same 24 failures occur with a clang-linked `testfixture` built with the same feature flags: `Inf` versus `inf` casing in `func`, `json101`, `json501`, and `literal`, plus the `types3-1.1` Tcl expectation mismatch (`text` versus `string text`). No kimicc-only cluster is currently known in `veryquick.test`. |
-| Open | SQLite `full` permutation residual platform/Tcl expectation failures | `cd /tmp/kimicc_sqlite_testfixture_build_kimicc && ./testfixture /tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001/test/testrunner.tcl --jobs 4 full`; output at `/tmp/kimicc_full_current.out` | The public `full` permutation completes: 26 errors out of 1016630 tests across 6 failed scripts: `json101.test`, `func.test`, `types3.test`, `literal.test`, `json501.test`, and `loadext.test`. The first five are the same clang-matching `veryquick` residual groups. The extra `loadext.test` failures (`loadext-2.1`, `loadext-2.2`) also match clang exactly and are Darwin dynamic-loader message expectation drift, not a kimicc-only behavior difference. |
+| Open | SQLite `full` permutation residual platform/Tcl expectation failures | `KIMICC_SQLITE_CONFORMANCE=full moon test test/e2e/sqlite_test.mbt --target native --filter 'sqlite public full residual failures match clang when enabled'`; fresh kimicc output at `/tmp/kimicc_sqlite_public_full_kimicc_279101241_180985381.out`; fresh clang output at `/tmp/kimicc_sqlite_public_full_clang_279101241_-1052129227.out` | The public `full` permutation completes and the MoonBit harness verifies that kimicc and clang have the same non-zero exit code plus the same residual script set: 26 errors out of 1016630 tests across `json101.test`, `func.test`, `types3.test`, `literal.test`, `json501.test`, and `loadext.test`. The first five are the same clang-matching `veryquick` residual groups. The extra `loadext.test` failures (`loadext-2.1`, `loadext-2.2`) also match clang exactly and are Darwin dynamic-loader message expectation drift, not a kimicc-only behavior difference. |
 
 ## Execution Plan
 
