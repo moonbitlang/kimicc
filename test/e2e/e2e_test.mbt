@@ -1815,6 +1815,22 @@ async test "__builtin_rotateleft and rotateright" {
 }
 
 ///|
+async test "_Static_assert declarations do not emit calls" {
+  let source =
+    #|_Static_assert(sizeof(int) == 4, "int size");
+    #|struct Box {
+    #|  static_assert(sizeof(long) == 8, "long size");
+    #|  int value;
+    #|};
+    #|int main(void) {
+    #|  __Static_assert(sizeof(char) == 1, "char size");
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "__builtin_memcpy" {
   let source =
     #|int main() {

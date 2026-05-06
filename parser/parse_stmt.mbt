@@ -205,6 +205,12 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
       self.advance()
       ExprStmt(Expr::Number(0))
     }
+    Ident("_Static_assert")
+    | Ident("__Static_assert")
+    | Ident("static_assert") => {
+      self.parse_static_assert_decl()
+      ExprStmt(Expr::Number(0))
+    }
     Int
     | Void
     | Char

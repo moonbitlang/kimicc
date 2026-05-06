@@ -821,6 +821,28 @@ test "parse __func__ builtin" {
 }
 
 ///|
+test "parse static assertions at declaration scopes" {
+  let source =
+    #|_Static_assert(sizeof(int) == 4, "int size");
+    #|struct Box {
+    #|  static_assert(sizeof(long) == 8, "long size");
+    #|  int value;
+    #|};
+    #|int main(void) {
+    #|  __Static_assert(sizeof(char) == 1, "char size");
+    #|  return 42;
+    #|}
+  let prog = @parser.parse(source)
+  inspect(prog.structs.length(), content="1")
+  inspect(prog.structs[0].fields.length(), content="1")
+  inspect(prog.decls.length(), content="1")
+  match prog.decls[0].body {
+    Some(Compound([ExprStmt(Number(0)), Return(Some(Number(42)))])) => ()
+    _ => fail("Expected static assertion to parse as a no-op declaration")
+  }
+}
+
+///|
 test "parse bare _Atomic typedef qualifier" {
   let source =
     #|typedef unsigned long uintnat;

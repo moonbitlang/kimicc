@@ -462,6 +462,10 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] {
   let fields : Array[Param] = []
   while self.token != RBrace {
     self.skip_attributes()
+    if self.is_static_assert_token() {
+      self.parse_static_assert_decl()
+      continue
+    }
     self.skip_qualifiers()
     let spec = self.parse_decl_specifiers()
     let decl = self.parse_declarator(spec.base_type)

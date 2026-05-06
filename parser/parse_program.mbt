@@ -59,7 +59,9 @@ fn Parser::parse_program(self : Parser) -> Program {
   let decls = []
   while self.token != EOF {
     self.skip_attributes()
-    if self.token == Struct || self.token == Union {
+    if self.is_static_assert_token() {
+      self.parse_static_assert_decl()
+    } else if self.token == Struct || self.token == Union {
       // Peek ahead to distinguish struct/union definition from function declaration
       let saved_pos = self.lexer.pos
       let saved_token = self.token

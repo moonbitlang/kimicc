@@ -1279,10 +1279,7 @@ async test "external zlib direct object compression roundtrip runs when enabled"
 
 ///|
 fn xxhash_flags(root : String) -> String {
-  "-DXXH_NO_XXH3 " +
-  shell_quote("-DXXH_STATIC_ASSERT(c)=((void)0)") +
-  " -I " +
-  shell_quote(root)
+  "-DXXH_NO_XXH3 -I " + shell_quote(root)
 }
 
 ///|
