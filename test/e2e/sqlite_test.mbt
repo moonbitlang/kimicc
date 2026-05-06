@@ -327,15 +327,20 @@ async test "sqlite direct object matches clang baseline for SQL script runner" {
 }
 
 ///|
+fn sqlite_public_smoke_script_paths() -> Array[String] {
+  [
+    "test/select1.test", "test/select2.test", "test/select3.test", "test/select4.test",
+    "test/select5.test", "test/select6.test", "test/select7.test", "test/select8.test",
+    "test/select9.test", "test/selectA.test", "test/selectB.test", "test/selectC.test",
+    "test/selectD.test", "test/selectE.test", "test/selectF.test", "test/selectG.test",
+    "test/selectH.test", "test/with6.test",
+  ]
+}
+
+///|
 async test "sqlite public tcl smoke batch passes through testfixture harness" {
   let result = run_sqlite_public_tcl_batch(
-    [
-      "test/select1.test", "test/select2.test", "test/select3.test", "test/select4.test",
-      "test/select5.test", "test/select6.test", "test/select7.test", "test/select8.test",
-      "test/select9.test", "test/selectA.test", "test/selectB.test", "test/selectC.test",
-      "test/selectD.test", "test/selectE.test", "test/selectF.test", "test/selectG.test",
-      "test/selectH.test", "test/with6.test",
-    ],
+    sqlite_public_smoke_script_paths(),
     "sqlite_public_tcl_smoke_batch",
   )
   if result.code != 0 {
@@ -352,10 +357,10 @@ async test "sqlite public tcl smoke batch passes through testfixture harness" {
 }
 
 ///|
-async test "sqlite direct object public tcl select smoke passes" {
+async test "sqlite direct object public tcl smoke batch passes" {
   let result = run_sqlite_public_tcl_batch_with(
-    ["test/select1.test"],
-    "sqlite_direct_public_tcl_select_smoke",
+    sqlite_public_smoke_script_paths(),
+    "sqlite_direct_public_tcl_smoke_batch",
     DirectObject,
   )
   if result.code != 0 {
@@ -366,8 +371,11 @@ async test "sqlite direct object public tcl select smoke passes" {
   if result.output == "sqlite-public-tests-skipped\n" {
     return
   }
-  assert_true(result.output.contains("### test/select1.test"))
-  assert_true(result.output.contains("0 errors out of 192 tests"))
+  assert_true(result.output.contains("### test/selectH.test"))
+  assert_true(result.output.contains("### test/with6.test"))
+  assert_true(result.output.contains("0 errors out of 36717 tests"))
+  assert_true(result.output.contains("0 errors out of 18 tests"))
+  assert_true(result.output.contains("with6-400... Ok"))
 }
 
 ///|
