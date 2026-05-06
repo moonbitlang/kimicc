@@ -253,3 +253,136 @@ async test "external ocamlyacc calc grammar matches clang when enabled" {
     "compare ocamlyacc generated mli",
   )
 }
+
+///|
+async fn compile_preprocessed_file_with_kimicc_object_path(
+  path : String,
+  tag : String,
+) -> String {
+  require_external_path(path, "preprocessed C testbed")
+  let data = @fs.read_file(path)
+  compile_source_to_object_path(data.text(), tag)
+}
+
+///|
+async test "external TinyCC stripped compiler builds and emits smoke object when enabled" {
+  if !external_testbed_enabled("tinycc") {
+    return
+  }
+  let source_path = "/tmp/tinycc_stripped.c"
+  require_external_path(source_path, "TinyCC stripped source")
+  let data = @fs.read_file(source_path)
+  let object_path = compile_source_to_object_path(
+    data.text(),
+    "tinycc_external_stripped",
+  )
+  let tcc_path = "/tmp/kimicc_tinycc_external"
+  run_command_checked(
+    "clang -o " + shell_quote(tcc_path) + " " + shell_quote(object_path),
+    "link TinyCC external compiler",
+  )
+  let version = run_command_capture(
+    shell_quote(tcc_path) + " -v",
+    "tinycc_external_version",
+  )
+  if version.code != 0 || !version.output.contains("tcc version") {
+    abort(
+      "TinyCC external version failed with code " +
+      version.code.to_string() +
+      ":\n" +
+      version.output,
+    )
+  }
+  let smoke_source =
+    #|int fib(int n) {
+    #|  return n < 2 ? n : fib(n - 1) + fib(n - 2);
+    #|}
+    #|
+    #|int main(void) {
+    #|  return fib(10) == 55 ? 42 : 1;
+    #|}
+  let smoke_source_path = "/tmp/kimicc_tinycc_external_smoke.c"
+  let smoke_object_path = "/tmp/kimicc_tinycc_external_smoke.o"
+  let smoke_binary_path = "/tmp/kimicc_tinycc_external_smoke"
+  write_text_file(smoke_source_path, smoke_source)
+  run_command_checked(
+    "rm -f " +
+    shell_quote(smoke_object_path) +
+    " " +
+    shell_quote(smoke_binary_path),
+    "clean TinyCC smoke outputs",
+  )
+  run_command_checked(
+    shell_quote(tcc_path) +
+    " -c -o " +
+    shell_quote(smoke_object_path) +
+    " " +
+    shell_quote(smoke_source_path),
+    "TinyCC compile smoke object",
+  )
+  run_command_checked(
+    "test -s " + shell_quote(smoke_object_path),
+    "TinyCC smoke object exists",
+  )
+  let result = run_command_capture(
+    "file " + shell_quote(smoke_object_path),
+    "tinycc_external_smoke_object",
+  )
+  if result.code != 0 || !result.output.contains("ELF 64-bit") {
+    abort(
+      "TinyCC external smoke object check failed with code " +
+      result.code.to_string() +
+      ":\n" +
+      result.output,
+    )
+  }
+}
+
+///|
+async fn compile_quickjs_object(
+  build_dir : String,
+  name : String,
+  objects : Array[String],
+) -> Unit {
+  objects.push(
+    compile_preprocessed_file_with_kimicc_object_path(
+      build_dir + "/" + name + ".i",
+      "quickjs_external_" + name,
+    ),
+  )
+}
+
+///|
+async test "external QuickJS qjs builds and runs smoke when enabled" {
+  if !external_testbed_enabled("quickjs") {
+    return
+  }
+  let build_dir = "/tmp/kimicc_quickjs_build"
+  let objects : Array[String] = []
+  for
+    name in [
+      "quickjs", "libregexp", "libunicode", "cutils", "quickjs-libc", "repl", "qjs",
+      "dtoa",
+    ] {
+    compile_quickjs_object(build_dir, name, objects)
+  }
+  let qjs_path = "/tmp/kimicc_quickjs_external_qjs"
+  run_command_checked(
+    "clang -o " + shell_quote(qjs_path) + " " + shell_join_quoted(objects),
+    "link QuickJS qjs external",
+  )
+  let script = "let s = 0; for (let i = 0; i < 1000; i++) s += i; " +
+    "console.log('quickjs-smoke', s);"
+  let result = run_command_capture(
+    shell_quote(qjs_path) + " -e " + shell_quote(script),
+    "quickjs_external_smoke",
+  )
+  if result.code != 0 || !result.output.contains("quickjs-smoke 499500") {
+    abort(
+      "QuickJS external smoke failed with code " +
+      result.code.to_string() +
+      ":\n" +
+      result.output,
+    )
+  }
+}
