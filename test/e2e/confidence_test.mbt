@@ -669,6 +669,51 @@ async test "e2e unsigned int compares as signed long when promoted" {
 }
 
 ///|
+async test "e2e usual arithmetic conversion signedness matrix" {
+  let source =
+    #|int main(void) {
+    #|  signed char sc = -6;
+    #|  unsigned char uc = 250;
+    #|  short ss = -10;
+    #|  unsigned short us = 65530;
+    #|  int i = -1;
+    #|  unsigned int u = 1;
+    #|  long l = -1;
+    #|  unsigned int umax = 4294967295u;
+    #|  unsigned long ul = 1;
+    #|
+    #|  if (sc + uc != 244) return 1;
+    #|  if (ss + us != 65520) return 2;
+    #|  if (i < u) return 3;
+    #|  if (!(i > u)) return 4;
+    #|  if (!(l < umax)) return 5;
+    #|  if (!((long)-1 > ul)) return 6;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e narrow scalar parameter ABI preserves signedness" {
+  let source =
+    #|int check(signed char a, unsigned char b, signed short c, unsigned short d, int e) {
+    #|  if (a != -1) return 1;
+    #|  if (b != 255) return 2;
+    #|  if (c != -2) return 3;
+    #|  if (d != 65534) return 4;
+    #|  if (e != -3) return 5;
+    #|  return 42;
+    #|}
+    #|
+    #|int main(void) {
+    #|  return check(255, -1, 65534, -2, (signed char)253);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e sixteen byte struct return assign and pass by value" {
   let source =
     #|struct Value {
@@ -706,6 +751,38 @@ async test "e2e sixteen byte struct return assign and pass by value" {
     #|  if (check(dup_value(v), &payload, -1) != 42) return 5;
     #|  if (check(make_value(&payload, 5), &payload, 5) != 42) return 6;
     #|  return check(make_literal(&payload, 9), &payload, 9);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e mixed scalar aggregate return and argument ABI" {
+  let source =
+    #|typedef struct Mix {
+    #|  double d;
+    #|  int i;
+    #|  int j;
+    #|} Mix;
+    #|
+    #|Mix make_mix(double d, int i, int j) {
+    #|  Mix m = { d, i, j };
+    #|  return m;
+    #|}
+    #|
+    #|int check_mix(Mix a, Mix b) {
+    #|  if ((long)(a.d * 10.0) != 15) return 1;
+    #|  if (a.i != 20) return 2;
+    #|  if (a.j != -5) return 3;
+    #|  if ((long)(b.d * 10.0) != 25) return 4;
+    #|  if (b.i != -7) return 5;
+    #|  if (b.j != 9) return 6;
+    #|  return 42;
+    #|}
+    #|
+    #|int main(void) {
+    #|  Mix local = make_mix(1.5, 20, -5);
+    #|  return check_mix(local, (Mix){ 2.5, -7, 9 });
     #|}
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")
