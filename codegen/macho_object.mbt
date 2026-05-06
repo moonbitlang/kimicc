@@ -153,23 +153,11 @@ fn append_byte(section : ObjectSection, value : Int) -> Unit {
 }
 
 ///|
-fn append_u16_to_section(section : ObjectSection, value : Int) -> Unit {
-  let v = value.reinterpret_as_uint()
-  append_byte(section, (v & 0xffU).reinterpret_as_int())
-  append_byte(section, ((v >> 8) & 0xffU).reinterpret_as_int())
-}
-
-///|
 fn append_u32_to_section(section : ObjectSection, value : UInt) -> Unit {
   append_byte(section, (value & 0xffU).reinterpret_as_int())
   append_byte(section, ((value >> 8) & 0xffU).reinterpret_as_int())
   append_byte(section, ((value >> 16) & 0xffU).reinterpret_as_int())
   append_byte(section, ((value >> 24) & 0xffU).reinterpret_as_int())
-}
-
-///|
-fn append_i32_to_section(section : ObjectSection, value : Int) -> Unit {
-  append_u32_to_section(section, value.reinterpret_as_uint())
 }
 
 ///|
@@ -633,7 +621,11 @@ fn encode_stur_64(
   let rt = parse_register(rt_text)
   let rn = parse_register(clean_mem_token(base_text))
   let offset = parse_immediate(clean_mem_token(offset_text))
-  0xf8000000U |
+  let base = if rt_text.has_prefix("w") { 0xb8000000U } else { 0xf8000000U }
+  if offset < -256 || offset > 255 {
+    abort("stur offset out of range for Mach-O object backend")
+  }
+  base |
   ((offset & 0x1ff).reinterpret_as_uint() << 12) |
   (rn.reinterpret_as_uint() << 5) |
   rt.reinterpret_as_uint()
@@ -648,7 +640,11 @@ fn encode_str_pre_64(
   let rt = parse_register(rt_text)
   let rn = parse_register(clean_mem_token(base_text))
   let offset = parse_immediate(clean_mem_token(offset_text))
-  0xf8000c00U |
+  let base = if rt_text.has_prefix("w") { 0xb8000c00U } else { 0xf8000c00U }
+  if offset < -256 || offset > 255 {
+    abort("pre-index str offset out of range for Mach-O object backend")
+  }
+  base |
   ((offset & 0x1ff).reinterpret_as_uint() << 12) |
   (rn.reinterpret_as_uint() << 5) |
   rt.reinterpret_as_uint()
@@ -755,10 +751,47 @@ fn encode_ldr_unsigned_offset(
   let offset = parse_immediate(clean_mem_token(offset_text))
   let scale = if rt_text.has_prefix("w") { 4 } else { 8 }
   let base = if rt_text.has_prefix("w") { 0xb9400000U } else { 0xf9400000U }
+  if offset < 0 || offset % scale != 0 || offset / scale > 4095 {
+    abort("unsigned ldr offset out of range for Mach-O object backend")
+  }
   base |
   ((offset / scale).reinterpret_as_uint() << 10) |
   (rn.reinterpret_as_uint() << 5) |
   rt.reinterpret_as_uint()
+}
+
+///|
+fn encode_ldur(
+  rt_text : String,
+  base_text : String,
+  offset_text : String,
+) -> UInt {
+  let rt = parse_register(rt_text)
+  let rn = parse_register(clean_mem_token(base_text))
+  let offset = parse_immediate(clean_mem_token(offset_text))
+  let base = if rt_text.has_prefix("w") { 0xb8400000U } else { 0xf8400000U }
+  if offset < -256 || offset > 255 {
+    abort("ldur offset out of range for Mach-O object backend")
+  }
+  base |
+  ((offset & 0x1ff).reinterpret_as_uint() << 12) |
+  (rn.reinterpret_as_uint() << 5) |
+  rt.reinterpret_as_uint()
+}
+
+///|
+fn encode_ldr_offset(
+  rt_text : String,
+  base_text : String,
+  offset_text : String,
+) -> UInt {
+  let offset = parse_immediate(clean_mem_token(offset_text))
+  let scale = if rt_text.has_prefix("w") { 4 } else { 8 }
+  if offset >= 0 && offset % scale == 0 {
+    encode_ldr_unsigned_offset(rt_text, base_text, offset_text)
+  } else {
+    encode_ldur(rt_text, base_text, offset_text)
+  }
 }
 
 ///|
@@ -770,7 +803,11 @@ fn encode_ldr_post_64(
   let rt = parse_register(rt_text)
   let rn = parse_register(clean_mem_token(base_text))
   let offset = parse_immediate(clean_mem_token(offset_text))
-  0xf8400400U |
+  let base = if rt_text.has_prefix("w") { 0xb8400400U } else { 0xf8400400U }
+  if offset < -256 || offset > 255 {
+    abort("post-index ldr offset out of range for Mach-O object backend")
+  }
+  base |
   ((offset & 0x1ff).reinterpret_as_uint() << 12) |
   (rn.reinterpret_as_uint() << 5) |
   rt.reinterpret_as_uint()
@@ -854,7 +891,7 @@ fn encode_ldr(rest : String) -> UInt {
     } else if is_register_name(clean_mem_token(parts[2])) {
       encode_register_offset_memory(parts[0], parts[1], parts[2], true)
     } else {
-      encode_ldr_unsigned_offset(parts[0], parts[1], parts[2])
+      encode_ldr_offset(parts[0], parts[1], parts[2])
     }
   } else {
     abort("malformed ldr instruction")
@@ -1203,6 +1240,26 @@ fn encode_atomic_memory(rest : String, base : UInt, name : String) -> UInt {
 }
 
 ///|
+fn encode_exclusive_load(rest : String, base : UInt, name : String) -> UInt {
+  encode_atomic_memory(rest, base, name)
+}
+
+///|
+fn encode_exclusive_store(rest : String, base : UInt, name : String) -> UInt {
+  let parts = split_operands(rest)
+  if parts.length() != 3 {
+    abort("malformed " + name + " instruction")
+  }
+  let rs = parse_register(parts[0])
+  let rt = parse_register(parts[1])
+  let rn = parse_register(clean_mem_token(parts[2]))
+  base |
+  (rs.reinterpret_as_uint() << 16) |
+  (rn.reinterpret_as_uint() << 5) |
+  rt.reinterpret_as_uint()
+}
+
+///|
 fn encode_branch(from_offset : Int, target_offset : Int) -> UInt {
   encode_branch_with_base(from_offset, target_offset, 0x14000000U)
 }
@@ -1399,6 +1456,14 @@ fn parse_data_integer(value : String, context : String) -> Int {
 }
 
 ///|
+fn parse_data_integer_i64(value : String, context : String) -> Int64 {
+  match parse_data_integer_i64_opt(value) {
+    Some(n) => n
+    None => abort("cannot parse integer in " + context + ": " + value)
+  }
+}
+
+///|
 fn parse_data_integer_i64_opt(value : String) -> Int64? {
   let mut text = value.trim().to_string()
   if text.length() == 0 {
@@ -1434,6 +1499,33 @@ fn parse_data_integer_i64_opt(value : String) -> Int64? {
     n = n * base.to_int64() + digit.to_int64()
   }
   Some(n * sign)
+}
+
+///|
+fn append_data_integer_bytes(
+  section : ObjectSection,
+  value : String,
+  context : String,
+  width : Int,
+) -> Unit {
+  let n = parse_data_integer_i64(value, context)
+  let (min, max) = match width {
+    1 => (-128L, 255L)
+    2 => (-32768L, 65535L)
+    4 => (-2147483648L, 4294967295L)
+    _ => abort("unsupported integer data width")
+  }
+  if n < min || n > max {
+    abort("integer out of range in " + context + ": " + value)
+  }
+  append_byte(section, ((n >> 0) & 0xffL).to_int())
+  if width >= 2 {
+    append_byte(section, ((n >> 8) & 0xffL).to_int())
+  }
+  if width >= 4 {
+    append_byte(section, ((n >> 16) & 0xffL).to_int())
+    append_byte(section, ((n >> 24) & 0xffL).to_int())
+  }
 }
 
 ///|
@@ -1555,17 +1647,17 @@ fn parse_asm_string_literal(rest : String) -> Array[Int] {
 fn append_data_directive(section : ObjectSection, line : String) -> Bool {
   if line.has_prefix(".byte") {
     for value in split_operands(directive_rest(line, ".byte")) {
-      append_byte(section, parse_data_integer(value, ".byte"))
+      append_data_integer_bytes(section, value, ".byte", 1)
     }
     return true
   } else if line.has_prefix(".short") {
     for value in split_operands(directive_rest(line, ".short")) {
-      append_u16_to_section(section, parse_data_integer(value, ".short"))
+      append_data_integer_bytes(section, value, ".short", 2)
     }
     return true
   } else if line.has_prefix(".long") {
     for value in split_operands(directive_rest(line, ".long")) {
-      append_i32_to_section(section, parse_data_integer(value, ".long"))
+      append_data_integer_bytes(section, value, ".long", 4)
     }
     return true
   } else if line.has_prefix(".quad") {
@@ -1856,6 +1948,27 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
           sections[current_section],
           encode_dmb(line.substring(start=4)),
         )
+      } else if line.has_prefix("ldaxrb\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_exclusive_load(line.substring(start=7), 0x085ffc00U, "ldaxrb"),
+        )
+      } else if line.has_prefix("ldaxrh\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_exclusive_load(line.substring(start=7), 0x485ffc00U, "ldaxrh"),
+        )
+      } else if line.has_prefix("ldaxr\t") {
+        let parts = split_operands(line.substring(start=6))
+        let base = if parts.length() > 0 && parts[0].has_prefix("x") {
+          0xc85ffc00U
+        } else {
+          0x885ffc00U
+        }
+        append_u32_to_section(
+          sections[current_section],
+          encode_exclusive_load(line.substring(start=6), base, "ldaxr"),
+        )
       } else if line.has_prefix("ldarb\t") {
         append_u32_to_section(
           sections[current_section],
@@ -1897,6 +2010,27 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         append_u32_to_section(
           sections[current_section],
           encode_atomic_memory(line.substring(start=5), base, "stlr"),
+        )
+      } else if line.has_prefix("stlxrb\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_exclusive_store(line.substring(start=7), 0x0800fc00U, "stlxrb"),
+        )
+      } else if line.has_prefix("stlxrh\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_exclusive_store(line.substring(start=7), 0x4800fc00U, "stlxrh"),
+        )
+      } else if line.has_prefix("stlxr\t") {
+        let parts = split_operands(line.substring(start=6))
+        let base = if parts.length() > 1 && parts[1].has_prefix("x") {
+          0xc800fc00U
+        } else {
+          0x8800fc00U
+        }
+        append_u32_to_section(
+          sections[current_section],
+          encode_exclusive_store(line.substring(start=6), base, "stlxr"),
         )
       } else if line.has_prefix("udiv\t") {
         append_u32_to_section(

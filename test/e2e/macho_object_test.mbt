@@ -56,6 +56,15 @@ async test "direct macho object supports float global initializer" {
 }
 
 ///|
+async test "direct macho object supports max unsigned data initializers" {
+  let source = "unsigned char c = 255; unsigned short s = 65535; unsigned int i = 4294967295U; int main(void) { return c == 255 && s == 65535 && i == 4294967295U ? 42 : 1; }"
+  let exit_code = run_source_direct_object_async(
+    source, "macho_unsigned_data_max",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object emits bss as zerofill with later const data" {
   let source = "int data = 1; int bss; int main(void) { char *s = \"A\"; bss = 40; return data + bss + s[0] - 64; }"
   let obj_path = compile_source_to_direct_object_path(
@@ -289,6 +298,63 @@ async test "direct macho object supports atomic load and store widths" {
   let source = "int main(void) { unsigned char b = 0; unsigned short h = 0; int w = 0; long x = 0; __atomic_store_n(&b, 1, 5); __atomic_store_n(&h, 2, 5); __atomic_store_n(&w, 3, 5); __atomic_store_n(&x, 36, 5); return __atomic_load_n(&b, 5) + __atomic_load_n(&h, 5) + __atomic_load_n(&w, 5) + (int)__atomic_load_n(&x, 5); }"
   let exit_code = run_source_direct_object_async(
     source, "macho_atomic_load_store_widths",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports exclusive atomic update loops" {
+  let source =
+    #|int main(void) {
+    #|  _Atomic(unsigned int) x = 5;
+    #|  unsigned int expected = 11;
+    #|  if (__c11_atomic_fetch_add(&x, 3, 5) != 5) return 1;
+    #|  if (x != 8) return 2;
+    #|  if (__c11_atomic_fetch_sub(&x, 1, 5) != 8) return 3;
+    #|  if (__c11_atomic_fetch_or(&x, 16, 5) != 7) return 4;
+    #|  if (__c11_atomic_fetch_and(&x, 23, 5) != 23) return 5;
+    #|  if (__c11_atomic_fetch_xor(&x, 3, 5) != 23) return 6;
+    #|  if (__c11_atomic_exchange(&x, 11, 5) != 20) return 7;
+    #|  if (!__c11_atomic_compare_exchange_strong(&x, &expected, 19, 5, 5)) return 8;
+    #|  if (x != 19) return 9;
+    #|  expected = 11;
+    #|  if (__c11_atomic_compare_exchange_strong(&x, &expected, 21, 5, 5)) return 10;
+    #|  if (expected != 19) return 11;
+    #|  if (__c11_atomic_load(&x, 5) != 19) return 12;
+    #|  __c11_atomic_store(&x, 42, 5);
+    #|  return (int)x;
+    #|}
+  let exit_code = run_source_direct_object_async(
+    source, "macho_exclusive_atomic_update_loops",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports negative offset loads" {
+  let source =
+    #|struct Pair {
+    #|  long a;
+    #|  long b;
+    #|  long c;
+    #|  long d;
+    #|};
+    #|
+    #|struct Pair make_pair(long seed) {
+    #|  struct Pair p;
+    #|  p.a = seed;
+    #|  p.b = seed + 1;
+    #|  p.c = seed + 2;
+    #|  p.d = seed + 3;
+    #|  return p;
+    #|}
+    #|
+    #|int main(void) {
+    #|  struct Pair p = make_pair(39);
+    #|  return (int)p.d;
+    #|}
+  let exit_code = run_source_direct_object_async(
+    source, "macho_negative_offset_loads",
   )
   inspect(exit_code, content="42")
 }

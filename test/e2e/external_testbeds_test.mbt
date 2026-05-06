@@ -28,6 +28,28 @@ async fn compile_tree_sitter_object(
 }
 
 ///|
+async fn compile_tree_sitter_direct_object(
+  root : String,
+  name : String,
+  tag : String,
+  objects : Array[String],
+) -> Unit {
+  let flags = "-I " +
+    shell_quote(root + "/lib/include") +
+    " -I " +
+    shell_quote(root + "/lib/src")
+  let path = root + "/lib/src/" + name + ".c"
+  require_external_path(path, "tree-sitter source")
+  objects.push(
+    compile_c_file_with_kimicc_direct_object_path(
+      path,
+      flags,
+      "tree_sitter_direct_external_" + tag + "_" + name,
+    ),
+  )
+}
+
+///|
 fn tree_sitter_smoke_source() -> String {
   let source =
     #|#include <stdint.h>
@@ -208,6 +230,53 @@ async fn build_tree_sitter_external_binary(
 }
 
 ///|
+async fn build_tree_sitter_external_direct_binary(
+  root : String,
+  driver_source : String,
+  tag : String,
+) -> String {
+  require_external_path(
+    root + "/lib/include/tree_sitter/api.h",
+    "tree-sitter public header",
+  )
+  require_external_path(root + "/src/parser.c", "tree-sitter mini parser")
+  let objects : Array[String] = []
+  for
+    name in [
+      "alloc", "get_changed_ranges", "language", "lexer", "node", "parser", "point",
+      "query", "stack", "subtree", "tree", "tree_cursor", "wasm_store",
+    ] {
+    compile_tree_sitter_direct_object(root, name, tag, objects)
+  }
+  let flags = "-I " +
+    shell_quote(root + "/lib/include") +
+    " -I " +
+    shell_quote(root + "/lib/src")
+  objects.push(
+    compile_c_file_with_kimicc_direct_object_path(
+      root + "/src/parser.c",
+      flags,
+      "tree_sitter_direct_external_" + tag + "_mini_parser",
+    ),
+  )
+  let smoke_path = "/tmp/kimicc_tree_sitter_direct_external_" + tag + ".c"
+  write_text_file(smoke_path, driver_source)
+  objects.push(
+    compile_c_file_with_kimicc_direct_object_path(
+      smoke_path,
+      flags,
+      "tree_sitter_direct_external_" + tag + "_driver",
+    ),
+  )
+  let binary_path = "/tmp/kimicc_tree_sitter_direct_external_" + tag
+  run_command_checked(
+    "clang -o " + shell_quote(binary_path) + " " + shell_join_quoted(objects),
+    "link direct tree-sitter external " + tag,
+  )
+  binary_path
+}
+
+///|
 async test "external tree-sitter C library smoke compiles and runs when enabled" {
   if !external_testbed_enabled("tree-sitter") {
     return
@@ -250,6 +319,31 @@ async test "external tree-sitter query edit APIs run when enabled" {
   if result.code != 43 || !result.output.contains("tree-sitter-query-edit-ok") {
     abort(
       "tree-sitter query/edit smoke failed with code " +
+      result.code.to_string() +
+      ":\n" +
+      result.output,
+    )
+  }
+}
+
+///|
+async test "external tree-sitter direct object query edit APIs run when enabled" {
+  if !external_testbed_enabled("tree-sitter") {
+    return
+  }
+  let root = "/tmp/kimicc_tree_sitter"
+  let binary_path = build_tree_sitter_external_direct_binary(
+    root,
+    tree_sitter_query_edit_source(),
+    "query_edit",
+  )
+  let result = run_command_capture(
+    shell_quote(binary_path),
+    "tree_sitter_direct_external_query_edit",
+  )
+  if result.code != 43 || !result.output.contains("tree-sitter-query-edit-ok") {
+    abort(
+      "tree-sitter direct query/edit smoke failed with code " +
       result.code.to_string() +
       ":\n" +
       result.output,
