@@ -181,6 +181,85 @@ async test "direct macho object supports unsigned modulo" {
 }
 
 ///|
+async test "direct macho object supports unsigned int128 multiply high limb" {
+  let source =
+    #|typedef unsigned __int128 u128;
+    #|
+    #|u128 mk(unsigned long a, unsigned long b) {
+    #|  return (u128)a * (u128)b;
+    #|}
+    #|
+    #|unsigned long lo(u128 x) {
+    #|  return (unsigned long)x;
+    #|}
+    #|
+    #|unsigned long hi(u128 x) {
+    #|  return (unsigned long)(x >> 64);
+    #|}
+    #|
+    #|int main(void) {
+    #|  unsigned long all = ~0UL;
+    #|  u128 x = mk(all, 2UL);
+    #|  if (lo(x) != all - 1UL) return 1;
+    #|  if (hi(x) != 1UL) return 2;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_direct_object_async(source, "macho_uint128_mul")
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports unsigned int128 add and subtract carry" {
+  let source =
+    #|typedef unsigned __int128 u128;
+    #|
+    #|unsigned long lo(u128 x) {
+    #|  return (unsigned long)x;
+    #|}
+    #|
+    #|unsigned long hi(u128 x) {
+    #|  return (unsigned long)(x >> 64);
+    #|}
+    #|
+    #|int main(void) {
+    #|  unsigned long all = ~0UL;
+    #|  u128 x = (u128)all + 2UL;
+    #|  if (lo(x) != 1UL) return 1;
+    #|  if (hi(x) != 1UL) return 2;
+    #|  x = x - 3UL;
+    #|  if (lo(x) != all - 1UL) return 3;
+    #|  if (hi(x) != 0UL) return 4;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_direct_object_async(source, "macho_uint128_carry")
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports unsigned int128 negation carry" {
+  let source =
+    #|typedef unsigned __int128 u128;
+    #|
+    #|unsigned long lo(u128 x) {
+    #|  return (unsigned long)x;
+    #|}
+    #|
+    #|unsigned long hi(u128 x) {
+    #|  return (unsigned long)(x >> 64);
+    #|}
+    #|
+    #|int main(void) {
+    #|  unsigned long all = ~0UL;
+    #|  u128 x = -((u128)1);
+    #|  if (lo(x) != all) return 1;
+    #|  if (hi(x) != all) return 2;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_direct_object_async(source, "macho_uint128_neg")
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object supports bitwise operators" {
   let source = "int main(void) { int a = 12; int b = 10; return (a & b) | (a ^ b); }"
   let exit_code = run_source_direct_object_async(source, "macho_bitwise")
@@ -227,6 +306,15 @@ async test "direct macho object supports stack store register offset" {
 }
 
 ///|
+async test "direct macho object supports large aligned stack offsets" {
+  let source = "int main(void) { long pad[80]; pad[70] = 42; return (int)pad[70]; }"
+  let exit_code = run_source_direct_object_async(
+    source, "macho_large_aligned_stack_offset",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object supports signed shifts" {
   let source = "int main(void) { int a = 3; int b = 2; return (a << b) + (16 >> b); }"
   let exit_code = run_source_direct_object_async(source, "macho_signed_shift")
@@ -238,6 +326,68 @@ async test "direct macho object supports unsigned shift mask" {
   let source = "int main(void) { unsigned int a = 16; int b = 2; return a >> b; }"
   let exit_code = run_source_direct_object_async(source, "macho_unsigned_shift")
   inspect(exit_code, content="4")
+}
+
+///|
+async test "direct macho object supports bit count and byte swap builtins" {
+  let source =
+    #|int main(void) {
+    #|  if (__builtin_clz(1) != 31) return 1;
+    #|  if (__builtin_clzll(1) != 63) return 2;
+    #|  if (__builtin_ctz(8) != 3) return 3;
+    #|  if (__builtin_ctzll(16) != 4) return 4;
+    #|  if ((__builtin_bswap32(0x01020304u) & 255) != 1) return 5;
+    #|  if ((__builtin_bswap64(0x0102030405060708ull) & 255) != 1) return 6;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_direct_object_async(source, "macho_bit_builtins")
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports alloca alignment mask" {
+  let source =
+    #|int main(void) {
+    #|  char *p = __builtin_alloca(13);
+    #|  return (((long)p & 15) == 0) ? 42 : 1;
+    #|}
+  let exit_code = run_source_direct_object_async(source, "macho_alloca_bic")
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object adjusts stack for dynamic alloca" {
+  let source =
+    #|int main(void) {
+    #|  int n = 17;
+    #|  char *a = __builtin_alloca(n);
+    #|  a[0] = 40;
+    #|  char *b = __builtin_alloca(n);
+    #|  b[0] = 2;
+    #|  return a[0] + b[0];
+    #|}
+  let exit_code = run_source_direct_object_async(source, "macho_alloca_sp_sub")
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports darwin fd clear helper" {
+  let source =
+    #|struct fd_set {
+    #|  int fds_bits[32];
+    #|};
+    #|
+    #|int main(void) {
+    #|  struct fd_set fds;
+    #|  __builtin_bzero(&fds, sizeof(fds));
+    #|  __darwin_fd_set(9, &fds);
+    #|  if (!__darwin_fd_isset(9, &fds)) return 1;
+    #|  __darwin_fd_clr(9, &fds);
+    #|  if (__darwin_fd_isset(9, &fds)) return 2;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_direct_object_async(source, "macho_darwin_fd_bic")
+  inspect(exit_code, content="42")
 }
 
 ///|
@@ -264,6 +414,27 @@ async test "direct macho object supports unsigned integer to double cast" {
 }
 
 ///|
+async test "direct macho object supports signed integer to float cast" {
+  let source = "float f(long x) { return (float)x; } int main(void) { return (int)f(42); }"
+  let exit_code = run_source_direct_object_async(source, "macho_scvtf_float")
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports unsigned integer to float cast" {
+  let source = "float f(unsigned long x) { return (float)x; } int main(void) { return (int)f(42); }"
+  let exit_code = run_source_direct_object_async(source, "macho_ucvtf_float")
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports float to unsigned integer cast" {
+  let source = "unsigned long f(float x) { return (unsigned long)x; } int main(void) { return (int)f(42.5f); }"
+  let exit_code = run_source_direct_object_async(source, "macho_fcvtzu_float")
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object supports double comparison" {
   let source = "int main(void) { double a = 2.0; double b = 1.0; if (a > b) return 42; return 1; }"
   let exit_code = run_source_direct_object_async(source, "macho_double_cmp")
@@ -283,6 +454,26 @@ async test "direct macho object supports float to double conversion" {
   let exit_code = run_source_direct_object_async(
     source, "macho_float_to_double",
   )
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports floating absolute value" {
+  let source = "float f(float x) { return __builtin_fabsf(x); } double g(double x) { return __builtin_fabs(x); } int main(void) { return (int)(f(-19.5f) + g(-22.5)); }"
+  let exit_code = run_source_direct_object_async(source, "macho_fabs")
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports floating register offset memory" {
+  let source =
+    #|int main(void) {
+    #|  double a[4];
+    #|  int i = 2;
+    #|  a[i] = 21.0;
+    #|  return (int)(a[i] * 2.0);
+    #|}
+  let exit_code = run_source_direct_object_async(source, "macho_fp_reg_offset")
   inspect(exit_code, content="42")
 }
 
@@ -429,6 +620,21 @@ async test "direct macho object supports switch conditional branches" {
   let source = "int f(int x) { switch (x) { case 1: return 11; case 2: return 22; default: return 7; } } int main(void) { return f(2); }"
   let exit_code = run_source_direct_object_async(source, "macho_switch_cond")
   inspect(exit_code, content="22")
+}
+
+///|
+async test "direct macho object supports computed goto branch register" {
+  let source =
+    #|int main(void) {
+    #|  static void *labels[] = { &&case0, &&case1 };
+    #|  goto *labels[1];
+    #|case0:
+    #|  return 1;
+    #|case1:
+    #|  return 42;
+    #|}
+  let exit_code = run_source_direct_object_async(source, "macho_computed_goto")
+  inspect(exit_code, content="42")
 }
 
 ///|

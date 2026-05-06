@@ -691,8 +691,13 @@ fn Codegen::call_return_type(
       match func {
         Var(name) =>
           match name {
-            "__builtin_nanf" | "__builtin_huge_valf" | "__builtin_inff" => Float
-            "__builtin_nan"
+            "__builtin_fabsf"
+            | "__builtin_nanf"
+            | "__builtin_huge_valf"
+            | "__builtin_inff" => Float
+            "__builtin_fabs"
+            | "__builtin_fabsl"
+            | "__builtin_nan"
             | "__builtin_nanl"
             | "__builtin_huge_val"
             | "__builtin_huge_vall"
