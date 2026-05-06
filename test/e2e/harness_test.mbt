@@ -115,6 +115,14 @@ fn write_text_file(path : String, content : String) -> Unit {
 }
 
 ///|
+fn write_binary_file(path : String, content : Bytes) -> Unit {
+  let rc = moonbit_write_file(@utf8.encode(path), content)
+  if rc != 0 {
+    abort("write failed for " + path + " with code: " + rc.to_string())
+  }
+}
+
+///|
 fn shell_quote(value : String) -> String {
   let buf = StringBuilder::new()
   buf.write_string("'")
@@ -188,6 +196,28 @@ fn compile_source_to_object_path(source : String, tag : String) -> String {
     "assemble " + tag,
   )
   obj_path
+}
+
+///|
+fn compile_source_to_direct_object_path(
+  source : String,
+  tag : String,
+) -> String {
+  let obj_path = temp_file_path(tag, source, ".direct.o")
+  let prog = @parser.parse(source)
+  write_binary_file(obj_path, @codegen.generate_macho_object(prog))
+  obj_path
+}
+
+///|
+fn run_source_direct_object_async(source : String, tag : String) -> Int {
+  let obj_path = compile_source_to_direct_object_path(source, tag)
+  let bin_path = temp_file_path(tag + "_direct_bin", source, "")
+  run_command_checked(
+    "clang -o " + shell_quote(bin_path) + " " + shell_quote(obj_path),
+    "link direct object " + tag,
+  )
+  moonbit_system(@utf8.encode(shell_quote(bin_path)))
 }
 
 ///|

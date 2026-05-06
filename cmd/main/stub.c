@@ -18,9 +18,9 @@ moonbit_bytes_t moonbit_read_file(moonbit_bytes_t path) {
 
 MOONBIT_FFI_EXPORT
 int moonbit_write_file(moonbit_bytes_t path, moonbit_bytes_t content) {
-  FILE *f = fopen((const char *)path, "w");
+  FILE *f = fopen((const char *)path, "wb");
   if (!f) return -1;
-  size_t len = strlen((const char *)content);
+  size_t len = Moonbit_array_length(content);
   size_t written = fwrite(content, 1, len, f);
   fclose(f);
   return written == len ? 0 : -1;

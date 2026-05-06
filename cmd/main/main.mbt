@@ -22,10 +22,19 @@ fn write_file(path : String, content : String) -> Bool {
 }
 
 ///|
+fn write_bytes_file(path : String, content : Bytes) -> Bool {
+  let rc = moonbit_write_file(@utf8.encode(path), content)
+  rc == 0
+}
+
+///|
 fn main {
   let cmd = @argparse.Command(
     "kimicc",
-    flags=[@argparse.FlagArg("version", short='v', long="version")],
+    flags=[
+      @argparse.FlagArg("version", short='v', long="version"),
+      @argparse.FlagArg("compile", short='c', long="compile"),
+    ],
     options=[
       @argparse.OptionArg("output", short='o', long="output", default_values=[
         "-",
@@ -44,6 +53,7 @@ fn main {
     println("kimicc 0.1.0")
     return
   }
+  let compile_object = matches.flags.get("compile") == Some(true)
   let input_path = match matches.values.get("input") {
     Some(arr) =>
       if arr.length() > 0 {
@@ -69,11 +79,22 @@ fn main {
     }
   }
   let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
-  if output_path == "-" {
+  if compile_object && output_path == "-" {
+    println("error: direct object output requires -o")
+  } else if compile_object {
+    let object = @codegen.generate_macho_object(prog)
+    if !write_bytes_file(output_path, object) {
+      println("error: cannot write file: " + output_path)
+    }
+  } else if output_path == "-" {
+    let codegen = @codegen.Codegen::new()
+    let assembly = codegen.generate(prog)
     println(assembly)
-  } else if !write_file(output_path, assembly) {
-    println("error: cannot write file: " + output_path)
+  } else {
+    let codegen = @codegen.Codegen::new()
+    let assembly = codegen.generate(prog)
+    if !write_file(output_path, assembly) {
+      println("error: cannot write file: " + output_path)
+    }
   }
 }

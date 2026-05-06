@@ -6,6 +6,7 @@ import {
 }
 
 // Values
+pub fn generate_macho_object(@parser.Program) -> Bytes
 
 // Errors
 
