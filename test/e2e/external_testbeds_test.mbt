@@ -1278,6 +1278,146 @@ async test "external zlib direct object compression roundtrip runs when enabled"
 }
 
 ///|
+fn xxhash_flags(root : String) -> String {
+  "-DXXH_NO_XXH3 -DNO_CLANG_BUILTIN " +
+  shell_quote("-DXXH_STATIC_ASSERT(c)=((void)0)") +
+  " -I " +
+  shell_quote(root)
+}
+
+///|
+fn xxhash_smoke_source() -> String {
+  let source =
+    #|#include "xxhash.h"
+    #|
+    #|extern int printf(const char *, ...);
+    #|extern unsigned long strlen(const char *);
+    #|
+    #|int main(void) {
+    #|  const char *text = "kimicc xxhash smoke: alpha beta gamma";
+    #|  unsigned int h32 = XXH32(text, strlen(text), 0x12345678U);
+    #|  unsigned long long h64 = (unsigned long long)XXH64(text, strlen(text), 0x123456789abcdef0ULL);
+    #|  XXH64_state_t *state = XXH64_createState();
+    #|  if (!state) return 10;
+    #|  if (XXH64_reset(state, 0x123456789abcdef0ULL) != XXH_OK) return 11;
+    #|  if (XXH64_update(state, text, 13) != XXH_OK) return 12;
+    #|  if (XXH64_update(state, text + 13, strlen(text) - 13) != XXH_OK) return 13;
+    #|  unsigned long long stream = (unsigned long long)XXH64_digest(state);
+    #|  XXH64_freeState(state);
+    #|  if (h32 != 313589854U) return 20;
+    #|  if (h64 != 12728883423309814983ULL) return 21;
+    #|  if (stream != h64) return 22;
+    #|  printf("xxhash-smoke %u %llu %llu\n", h32, h64, stream);
+    #|  return 42;
+    #|}
+  source
+}
+
+///|
+async fn compile_xxhash_smoke_driver(
+  root : String,
+  tag : String,
+  direct : Bool,
+) -> String {
+  let path = "/tmp/kimicc_xxhash_" + tag + "_driver.c"
+  write_text_file(path, xxhash_smoke_source())
+  if direct {
+    compile_c_file_with_kimicc_direct_object_path(
+      path,
+      xxhash_flags(root),
+      "xxhash_direct_external_" + tag + "_driver",
+    )
+  } else {
+    compile_c_file_with_kimicc_object_path(
+      path,
+      xxhash_flags(root),
+      "xxhash_external_" + tag + "_driver",
+    )
+  }
+}
+
+///|
+async fn build_xxhash_with_kimicc(root : String, tag : String) -> String {
+  let library_path = root + "/xxhash.c"
+  require_external_path(library_path, "xxHash source")
+  let objects = [
+    compile_c_file_with_kimicc_object_path(
+      library_path,
+      xxhash_flags(root),
+      "xxhash_external_" + tag + "_library",
+    ),
+    compile_xxhash_smoke_driver(root, tag, false),
+  ]
+  let binary_path = "/tmp/kimicc_xxhash_external_" + tag
+  run_command_checked(
+    "clang -o " + shell_quote(binary_path) + " " + shell_join_quoted(objects),
+    "link xxHash external " + tag,
+  )
+  binary_path
+}
+
+///|
+async fn build_xxhash_with_direct_object(root : String, tag : String) -> String {
+  let library_path = root + "/xxhash.c"
+  require_external_path(library_path, "xxHash source")
+  let objects = [
+    compile_c_file_with_kimicc_direct_object_path(
+      library_path,
+      xxhash_flags(root),
+      "xxhash_direct_external_" + tag + "_library",
+    ),
+    compile_xxhash_smoke_driver(root, tag, true),
+  ]
+  let binary_path = "/tmp/kimicc_xxhash_direct_external_" + tag
+  run_command_checked(
+    "clang -o " + shell_quote(binary_path) + " " + shell_join_quoted(objects),
+    "link direct xxHash external " + tag,
+  )
+  binary_path
+}
+
+///|
+async fn assert_xxhash_smoke(binary_path : String, tag : String) -> Unit {
+  let result = run_command_capture(
+    shell_quote(binary_path),
+    "xxhash_external_smoke_" + tag,
+  )
+  if result.code != 42 ||
+    !result.output.contains(
+      "xxhash-smoke 313589854 12728883423309814983 12728883423309814983",
+    ) {
+    abort(
+      "xxHash external smoke failed with code " +
+      result.code.to_string() +
+      ":\n" +
+      result.output,
+    )
+  }
+}
+
+///|
+async test "external xxHash checksum matrix runs when enabled" {
+  if !external_testbed_enabled("xxhash") {
+    return
+  }
+  let root = "/tmp/kimicc_xxhash/xxHash-0.8.2"
+  require_external_path(root + "/xxhash.h", "xxHash source root")
+  let binary_path = build_xxhash_with_kimicc(root, "checksum_matrix")
+  assert_xxhash_smoke(binary_path, "checksum_matrix")
+}
+
+///|
+async test "external xxHash direct object checksum matrix runs when enabled" {
+  if !external_testbed_enabled("xxhash") {
+    return
+  }
+  let root = "/tmp/kimicc_xxhash/xxHash-0.8.2"
+  require_external_path(root + "/xxhash.h", "xxHash source root")
+  let binary_path = build_xxhash_with_direct_object(root, "checksum_matrix")
+  assert_xxhash_smoke(binary_path, "direct_checksum_matrix")
+}
+
+///|
 fn cjson_flags(root : String) -> String {
   "-I " + shell_quote(root)
 }
