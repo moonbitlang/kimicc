@@ -59,6 +59,12 @@ priv struct Relocation {
 }
 
 ///|
+priv struct SymbolAddend {
+  symbol : String
+  addend : Int
+}
+
+///|
 priv struct SymbolEntry {
   name : String
   type_ : Int
@@ -883,17 +889,42 @@ fn parse_data_integer_opt(value : String) -> Int? {
 }
 
 ///|
+fn parse_symbol_addend(value : String) -> SymbolAddend {
+  let text = value.trim().to_string()
+  if text == "" || text.contains(" ") {
+    abort("unsupported .quad operand in Mach-O object backend: " + value)
+  }
+  let mut split_at = -1
+  let mut i = 1
+  while i < text.length() {
+    if text[i] == '+' || text[i] == '-' {
+      split_at = i
+      break
+    }
+    i = i + 1
+  }
+  if split_at < 0 {
+    { symbol: text, addend: 0 }
+  } else {
+    let symbol = text.substring(end=split_at)
+    let amount = parse_int_or_abort(
+      text.substring(start=split_at + 1),
+      ".quad symbol addend",
+    )
+    let addend = if text[split_at] == '-' { -amount } else { amount }
+    { symbol, addend }
+  }
+}
+
+///|
 fn append_quad_value(section : ObjectSection, value : String) -> Unit {
   match parse_data_integer_opt(value) {
     Some(n) => append_u64_to_section(section, n.to_int64())
     None => {
-      let symbol = value.trim().to_string()
-      if symbol == "" || symbol.contains(" ") {
-        abort("unsupported .quad operand in Mach-O object backend: " + value)
-      }
+      let parsed = parse_symbol_addend(value)
       let address = section.bytes.length()
-      append_u64_to_section(section, 0L)
-      add_relocation_with_length(section, address, symbol, false, 0, 3)
+      append_u64_to_section(section, parsed.addend.to_int64())
+      add_relocation_with_length(section, address, parsed.symbol, false, 0, 3)
     }
   }
 }

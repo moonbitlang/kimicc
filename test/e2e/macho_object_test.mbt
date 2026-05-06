@@ -192,6 +192,15 @@ async test "direct macho object supports data pointer relocation" {
 }
 
 ///|
+async test "direct macho object supports data pointer relocation addend" {
+  let source = "static unsigned char table[4] = {1, 40, 9, 2}; unsigned char *p = &table[1]; int main(void) { return *p; }"
+  let exit_code = run_source_direct_object_async(
+    source, "macho_data_pointer_addend",
+  )
+  inspect(exit_code, content="40")
+}
+
+///|
 async test "direct macho object supports external branch relocation" {
   let source = "int putchar(int); int main(void) { return putchar(65); }"
   let exit_code = run_source_direct_object_async(source, "macho_external_bl")
