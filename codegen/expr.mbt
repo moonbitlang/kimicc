@@ -338,6 +338,38 @@ fn Codegen::emit_atomic_fetch_add_sub(
 }
 
 ///|
+fn Codegen::emit_sp_offset_addr(
+  self : Codegen,
+  reg : String,
+  offset : Int,
+) -> Unit {
+  if offset == 0 {
+    self.emit("\tmov\t" + reg + ", sp")
+  } else if offset <= 4095 {
+    self.emit("\tadd\t" + reg + ", sp, #" + offset.to_string())
+  } else {
+    self.emit_load_int(reg, offset.to_int64())
+    self.emit("\tadd\t" + reg + ", sp, " + reg)
+  }
+}
+
+///|
+fn Codegen::emit_copy_large_arg_to_call_area(
+  self : Codegen,
+  arg : @parser.Expr,
+  ty : @parser.Type,
+  frame_size : Int,
+  dest_offset : Int,
+) -> Unit {
+  self.gen_aggregate_addr(arg, frame_size)
+  self.emit("\tmov\tx1, x9")
+  self.emit_sp_offset_addr("x0", dest_offset)
+  self.emit_load_int("x2", self.type_size(ty).to_int64())
+  self.emit("\tbl\t_memcpy")
+  self.emit_sp_offset_addr("x9", dest_offset)
+}
+
+///|
 fn Codegen::emit_call_sret_addr(
   self : Codegen,
   ret_ty : @parser.Type,
@@ -2601,6 +2633,8 @@ fn Codegen::gen_expr(
           let actual_arg_types = []
           let arg_types = []
           let arg_slot_counts = []
+          let arg_copy_offsets = []
+          let mut copy_area_size = 0
           for i = 0; i < args.length(); i = i + 1 {
             let actual_ty = self.type_of(args[i], frame_size)
             let arg_ty = self.declared_call_arg_type(
@@ -2611,6 +2645,7 @@ fn Codegen::gen_expr(
             )
             actual_arg_types.push(actual_ty)
             arg_types.push(arg_ty)
+            arg_copy_offsets.push(-1)
             match arg_ty {
               Float | Double => {
                 total_slots += 1
@@ -2629,6 +2664,10 @@ fn Codegen::gen_expr(
                   int_idx += 2
                   arg_slot_counts.push(2)
                 } else {
+                  if size > 16 {
+                    arg_copy_offsets[i] = copy_area_size
+                    copy_area_size += (size + 15) / 16 * 16
+                  }
                   total_slots += 1
                   int_idx += 1
                   arg_slot_counts.push(1)
@@ -2657,7 +2696,9 @@ fn Codegen::gen_expr(
           let backup_offset = variadic_area
           let callee_save_size = if needs_indirect_callee { 16 } else { 0 }
           let callee_offset = variadic_area + aligned_save
-          let total_stack = variadic_area + aligned_save + callee_save_size
+          let copy_base = variadic_area + aligned_save + callee_save_size
+          let aligned_copy_area = (copy_area_size + 15) / 16 * 16
+          let total_stack = copy_base + aligned_copy_area
           if total_stack > 0 {
             self.emit("\tsub\tsp, sp, #" + total_stack.to_string())
           }
@@ -2708,7 +2749,12 @@ fn Codegen::gen_expr(
                     slot_idx += 1
                   }
                 } else {
-                  self.gen_aggregate_addr(args[i], frame_size)
+                  self.emit_copy_large_arg_to_call_area(
+                    args[i],
+                    arg_types[i],
+                    frame_size,
+                    copy_base + arg_copy_offsets[i],
+                  )
                   self.emit(
                     "\tstr\tx9, [sp, #" +
                     (backup_offset + slot_idx * 8).to_string() +
@@ -2881,6 +2927,8 @@ fn Codegen::gen_expr(
           let actual_arg_types = []
           let arg_types = []
           let arg_slot_counts = []
+          let arg_copy_offsets = []
+          let mut copy_area_size = 0
           for i = 0; i < args.length(); i = i + 1 {
             let actual_ty = self.type_of(args[i], frame_size)
             let arg_ty = self.declared_call_arg_type(
@@ -2891,6 +2939,7 @@ fn Codegen::gen_expr(
             )
             actual_arg_types.push(actual_ty)
             arg_types.push(arg_ty)
+            arg_copy_offsets.push(-1)
             match arg_ty {
               Float | Double => {
                 if fp_idx >= 8 {
@@ -2919,6 +2968,10 @@ fn Codegen::gen_expr(
                   int_idx += 2
                   arg_slot_counts.push(2)
                 } else {
+                  if size > 16 {
+                    arg_copy_offsets[i] = copy_area_size
+                    copy_area_size += (size + 15) / 16 * 16
+                  }
                   if int_idx >= 8 {
                     stack_count += 1
                   }
@@ -2945,7 +2998,9 @@ fn Codegen::gen_expr(
           let callee_save_size = if needs_indirect_callee { 16 } else { 0 }
           let temp_area = aligned_reg_save + callee_save_size
           let callee_offset = aligned_reg_save
-          let total_stack = temp_area + aligned_stack_arg
+          let copy_base = temp_area + aligned_stack_arg
+          let aligned_copy_area = (copy_area_size + 15) / 16 * 16
+          let total_stack = copy_base + aligned_copy_area
           if total_stack > 0 {
             self.emit("\tsub\tsp, sp, #" + total_stack.to_string())
           }
@@ -2992,7 +3047,12 @@ fn Codegen::gen_expr(
                     slot_idx += 1
                   }
                 } else {
-                  self.gen_aggregate_addr(args[i], frame_size)
+                  self.emit_copy_large_arg_to_call_area(
+                    args[i],
+                    arg_types[i],
+                    frame_size,
+                    copy_base + arg_copy_offsets[i],
+                  )
                   self.emit(
                     "\tstr\tx9, [sp, #" + (slot_idx * 8).to_string() + "]",
                   )
@@ -3224,8 +3284,9 @@ fn Codegen::gen_expr(
               _ => ()
             }
           }
-          if aligned_stack_arg > 0 {
-            self.emit("\tadd\tsp, sp, #" + aligned_stack_arg.to_string())
+          let call_stack_area = aligned_stack_arg + aligned_copy_area
+          if call_stack_area > 0 {
+            self.emit("\tadd\tsp, sp, #" + call_stack_area.to_string())
           }
           self.emit_call_result(ret_ty)
         }

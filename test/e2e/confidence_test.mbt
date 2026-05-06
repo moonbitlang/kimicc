@@ -1417,6 +1417,57 @@ async test "e2e large struct parameter is copied from hidden pointer" {
 }
 
 ///|
+async test "e2e large struct argument passed to clang callee uses caller copy" {
+  let callee =
+    #|struct BigArg {
+    #|  long a;
+    #|  long b;
+    #|  long c;
+    #|  long d;
+    #|};
+    #|
+    #|int clang_observe(struct BigArg value, struct BigArg *original) {
+    #|  value.a = 99;
+    #|  if (&value == original) return 1;
+    #|  return (int)(value.a + value.d);
+    #|}
+  let callee_c = temp_file_path("large_struct_clang_callee", callee, ".c")
+  let callee_obj = temp_file_path("large_struct_clang_callee", callee, ".o")
+  write_text_file(callee_c, callee)
+  run_command_checked(
+    "clang -c -o " + callee_obj + " " + callee_c,
+    "compile large struct clang callee",
+  )
+  let caller =
+    #|struct BigArg {
+    #|  long a;
+    #|  long b;
+    #|  long c;
+    #|  long d;
+    #|};
+    #|
+    #|int clang_observe(struct BigArg value, struct BigArg *original);
+    #|
+    #|int main(void) {
+    #|  struct BigArg value = { 1, 2, 3, 4 };
+    #|  int seen = clang_observe(value, &value);
+    #|  if (seen != 103) return 2;
+    #|  if (value.a != 1) return 3;
+    #|  return 42;
+    #|}
+  let caller_obj = compile_source_to_object_path(
+    caller, "large_struct_kimicc_caller",
+  )
+  let bin_path = temp_file_path("large_struct_cross_abi", callee + caller, "")
+  run_command_checked(
+    "clang -o " + bin_path + " " + caller_obj + " " + callee_obj,
+    "link large struct cross abi",
+  )
+  let result = run_command_capture(bin_path, "large_struct_cross_abi")
+  inspect(result.code, content="42")
+}
+
+///|
 async test "e2e nested union compound literal initializes bitfields" {
   let source =
     #|typedef unsigned char uint8_t;
