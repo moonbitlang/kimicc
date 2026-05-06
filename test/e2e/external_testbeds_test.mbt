@@ -1423,6 +1423,209 @@ async test "external cJSON direct object parser roundtrip runs when enabled" {
 }
 
 ///|
+fn inih_flags(root : String) -> String {
+  "-DINI_HANDLER_LINENO=1 -DINI_CALL_HANDLER_ON_NEW_SECTION=1 -DINI_ALLOW_NO_VALUE=1 -I " +
+  shell_quote(root)
+}
+
+///|
+fn inih_smoke_source() -> String {
+  let source =
+    #|#include "ini.h"
+    #|
+    #|extern int printf(const char *, ...);
+    #|extern int strcmp(const char *, const char *);
+    #|
+    #|typedef struct {
+    #|  int sections;
+    #|  int callbacks;
+    #|  int server_port;
+    #|  int multiline_hits;
+    #|  int no_value_hits;
+    #|  char host[32];
+    #|  char title[64];
+    #|} Config;
+    #|
+    #|static void copy_text(char *dst, unsigned long cap, const char *src) {
+    #|  unsigned long i = 0;
+    #|  while (i + 1 < cap && src[i]) {
+    #|    dst[i] = src[i];
+    #|    i++;
+    #|  }
+    #|  dst[i] = 0;
+    #|}
+    #|
+    #|static void append_text(char *dst, unsigned long cap, const char *src) {
+    #|  unsigned long i = 0;
+    #|  unsigned long j = 0;
+    #|  while (i < cap && dst[i]) i++;
+    #|  while (i + 1 < cap && src[j]) {
+    #|    dst[i] = src[j];
+    #|    i++;
+    #|    j++;
+    #|  }
+    #|  dst[i] = 0;
+    #|}
+    #|
+    #|static int parse_decimal(const char *s) {
+    #|  int value = 0;
+    #|  while (*s >= '0' && *s <= '9') {
+    #|    value = value * 10 + (*s - '0');
+    #|    s++;
+    #|  }
+    #|  return value;
+    #|}
+    #|
+    #|static int handler(void *user, const char *section, const char *name, const char *value, int lineno) {
+    #|  Config *cfg = (Config *)user;
+    #|  cfg->callbacks++;
+    #|  if (name == 0) {
+    #|    cfg->sections++;
+    #|    return lineno > 0;
+    #|  }
+    #|  if (strcmp(section, "server") == 0 && strcmp(name, "host") == 0) {
+    #|    copy_text(cfg->host, sizeof(cfg->host), value);
+    #|  } else if (strcmp(section, "server") == 0 && strcmp(name, "port") == 0) {
+    #|    cfg->server_port = parse_decimal(value);
+    #|  } else if (strcmp(section, "meta") == 0 && strcmp(name, "title") == 0) {
+    #|    if (cfg->title[0]) append_text(cfg->title, sizeof(cfg->title), ":");
+    #|    append_text(cfg->title, sizeof(cfg->title), value);
+    #|    cfg->multiline_hits++;
+    #|  } else if (strcmp(section, "meta") == 0 && strcmp(name, "flag") == 0 && value == 0) {
+    #|    cfg->no_value_hits++;
+    #|  }
+    #|  return lineno > 0;
+    #|}
+    #|
+    #|int main(void) {
+    #|  const char *text =
+    #|      "; comment\n"
+    #|      "[server]\n"
+    #|      "host = localhost ; inline\n"
+    #|      "port: 8080\n"
+    #|      "[meta]\n"
+    #|      "title = alpha\n"
+    #|      "  beta\n"
+    #|      "flag\n";
+    #|  Config cfg = {0};
+    #|  int rc = ini_parse_string(text, handler, &cfg);
+    #|  if (rc != 0) return 10 + rc;
+    #|  if (cfg.sections != 2) return 20;
+    #|  if (cfg.callbacks != 7) return 21;
+    #|  if (strcmp(cfg.host, "localhost") != 0) return 22;
+    #|  if (cfg.server_port != 8080) return 23;
+    #|  if (strcmp(cfg.title, "alpha:beta") != 0) return 24;
+    #|  if (cfg.multiline_hits != 2) return 25;
+    #|  if (cfg.no_value_hits != 1) return 26;
+    #|  printf("inih-smoke %d %d %s %s\n", cfg.sections, cfg.server_port, cfg.host, cfg.title);
+    #|  return 42;
+    #|}
+  source
+}
+
+///|
+async fn compile_inih_smoke_driver(
+  root : String,
+  tag : String,
+  direct : Bool,
+) -> String {
+  let path = "/tmp/kimicc_inih_" + tag + "_driver.c"
+  write_text_file(path, inih_smoke_source())
+  if direct {
+    compile_c_file_with_kimicc_direct_object_path(
+      path,
+      inih_flags(root),
+      "inih_direct_external_" + tag + "_driver",
+    )
+  } else {
+    compile_c_file_with_kimicc_object_path(
+      path,
+      inih_flags(root),
+      "inih_external_" + tag + "_driver",
+    )
+  }
+}
+
+///|
+async fn build_inih_with_kimicc(root : String, tag : String) -> String {
+  let library_path = root + "/ini.c"
+  require_external_path(library_path, "inih source")
+  let objects = [
+    compile_c_file_with_kimicc_object_path(
+      library_path,
+      inih_flags(root),
+      "inih_external_" + tag + "_library",
+    ),
+    compile_inih_smoke_driver(root, tag, false),
+  ]
+  let binary_path = "/tmp/kimicc_inih_external_" + tag
+  run_command_checked(
+    "clang -o " + shell_quote(binary_path) + " " + shell_join_quoted(objects),
+    "link inih external " + tag,
+  )
+  binary_path
+}
+
+///|
+async fn build_inih_with_direct_object(root : String, tag : String) -> String {
+  let library_path = root + "/ini.c"
+  require_external_path(library_path, "inih source")
+  let objects = [
+    compile_c_file_with_kimicc_direct_object_path(
+      library_path,
+      inih_flags(root),
+      "inih_direct_external_" + tag + "_library",
+    ),
+    compile_inih_smoke_driver(root, tag, true),
+  ]
+  let binary_path = "/tmp/kimicc_inih_direct_external_" + tag
+  run_command_checked(
+    "clang -o " + shell_quote(binary_path) + " " + shell_join_quoted(objects),
+    "link direct inih external " + tag,
+  )
+  binary_path
+}
+
+///|
+async fn assert_inih_smoke(binary_path : String, tag : String) -> Unit {
+  let result = run_command_capture(
+    shell_quote(binary_path),
+    "inih_external_smoke_" + tag,
+  )
+  if result.code != 42 ||
+    !result.output.contains("inih-smoke 2 8080 localhost alpha:beta") {
+    abort(
+      "inih external smoke failed with code " +
+      result.code.to_string() +
+      ":\n" +
+      result.output,
+    )
+  }
+}
+
+///|
+async test "external inih parser callback matrix runs when enabled" {
+  if !external_testbed_enabled("inih") {
+    return
+  }
+  let root = "/tmp/kimicc_inih/inih-r58"
+  require_external_path(root + "/ini.h", "inih source root")
+  let binary_path = build_inih_with_kimicc(root, "callback_matrix")
+  assert_inih_smoke(binary_path, "callback_matrix")
+}
+
+///|
+async test "external inih direct object parser callback matrix runs when enabled" {
+  if !external_testbed_enabled("inih") {
+    return
+  }
+  let root = "/tmp/kimicc_inih/inih-r58"
+  require_external_path(root + "/ini.h", "inih source root")
+  let binary_path = build_inih_with_direct_object(root, "callback_matrix")
+  assert_inih_smoke(binary_path, "direct_callback_matrix")
+}
+
+///|
 fn lua_flags(root : String) -> String {
   "-DLUA_COMPAT_5_3 -I " + shell_quote(root + "/src")
 }
