@@ -335,3 +335,34 @@ async test "direct macho object runs fixture matrix" {
     inspect(exit_code, content=fixture.expected.to_string())
   }
 }
+
+///|
+async test "direct macho object runs preprocessed c4 smoke program" {
+  let source = preprocess_c_file(
+    "test/fixtures/c4_stripped.c", "fixture_c4_direct_preprocessed",
+  )
+  let obj_path = compile_source_to_direct_object_path(
+    source, "fixture_c4_preprocessed_direct",
+  )
+  let bin_path = temp_file_path(
+    "fixture_c4_preprocessed_direct_bin", source, "",
+  )
+  run_command_checked(
+    "clang -o " + shell_quote(bin_path) + " " + shell_quote(obj_path),
+    "link direct object fixture_c4_preprocessed_direct",
+  )
+  let input_path = temp_file_path("fixture_c4_smoke_input", source, ".c")
+  write_text_file(input_path, "int main() { return 42; }\n")
+  let result = run_command_capture(
+    shell_quote(bin_path) + " " + shell_quote(input_path),
+    "fixture_c4_preprocessed_direct_run",
+  )
+  if result.code != 42 || !result.output.contains("exit(42) cycle = 5") {
+    abort(
+      "preprocessed c4 direct-object smoke failed with code " +
+      result.code.to_string() +
+      "\n" +
+      result.output,
+    )
+  }
+}
