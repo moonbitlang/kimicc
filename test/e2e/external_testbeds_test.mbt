@@ -704,10 +704,7 @@ async fn compile_quickjs_object(
 }
 
 ///|
-async test "external QuickJS qjs builds and runs smoke when enabled" {
-  if !external_testbed_enabled("quickjs") {
-    return
-  }
+async fn build_quickjs_qjs_external(tag : String) -> String {
   let build_dir = "/tmp/kimicc_quickjs_build"
   let objects : Array[String] = []
   for
@@ -717,11 +714,20 @@ async test "external QuickJS qjs builds and runs smoke when enabled" {
     ] {
     compile_quickjs_object(build_dir, name, objects)
   }
-  let qjs_path = "/tmp/kimicc_quickjs_external_qjs"
+  let qjs_path = "/tmp/kimicc_quickjs_external_qjs_" + tag
   run_command_checked(
     "clang -o " + shell_quote(qjs_path) + " " + shell_join_quoted(objects),
-    "link QuickJS qjs external",
+    "link QuickJS qjs external " + tag,
   )
+  qjs_path
+}
+
+///|
+async test "external QuickJS qjs builds and runs smoke when enabled" {
+  if !external_testbed_enabled("quickjs") {
+    return
+  }
+  let qjs_path = build_quickjs_qjs_external("smoke")
   let script = "let s = 0; for (let i = 0; i < 1000; i++) s += i; " +
     "console.log('quickjs-smoke', s);"
   let result = run_command_capture(
@@ -731,6 +737,67 @@ async test "external QuickJS qjs builds and runs smoke when enabled" {
   if result.code != 0 || !result.output.contains("quickjs-smoke 499500") {
     abort(
       "QuickJS external smoke failed with code " +
+      result.code.to_string() +
+      ":\n" +
+      result.output,
+    )
+  }
+}
+
+///|
+async test "external QuickJS qjs runs language matrix when enabled" {
+  if !external_testbed_enabled("quickjs") {
+    return
+  }
+  let qjs_path = build_quickjs_qjs_external("matrix")
+  let script =
+    #|function assert(cond, message) {
+    #|  if (!cond) throw new Error(message);
+    #|}
+    #|
+    #|class Box {
+    #|  constructor(value) { this.value = value; }
+    #|  inc(delta) {
+    #|    this.value += delta;
+    #|    return this.value;
+    #|  }
+    #|}
+    #|
+    #|function *range(n) {
+    #|  for (let i = 0; i < n; i++) yield i;
+    #|}
+    #|
+    #|let box = new Box(10);
+    #|let total = 0;
+    #|for (const n of range(5)) total += box.inc(n);
+    #|assert(total === 70, "generator/class total");
+    #|
+    #|let data = JSON.parse(JSON.stringify({ items: ["alpha", "beta"], total }));
+    #|assert(data.items.join(":") === "alpha:beta", "json roundtrip");
+    #|
+    #|let match = /([a-z]+)-(\d+)/.exec("ticket-42");
+    #|assert(match[1] === "ticket" && Number(match[2]) === 42, "regexp");
+    #|
+    #|let mapped = [1, 2, 3, 4]
+    #|  .map(x => x * x)
+    #|  .filter(x => x % 2 === 0)
+    #|  .reduce((a, b) => a + b, 0);
+    #|assert(mapped === 20, "array methods");
+    #|
+    #|let keys = Object.keys({ b: 1, a: 2 }).sort().join("");
+    #|assert(keys === "ab", "object keys");
+    #|
+    #|let big = typeof BigInt === "function" ? Number(BigInt(10) + BigInt(32)) : 42;
+    #|assert(big === 42, "bigint");
+    #|
+    #|console.log("quickjs-matrix", total + mapped + big);
+  let result = run_command_capture(
+    shell_quote(qjs_path) + " -e " + shell_quote(script),
+    "quickjs_external_matrix",
+  )
+  if result.code != 0 || !result.output.contains("quickjs-matrix 132") {
+    abort(
+      "QuickJS external language matrix failed with code " +
       result.code.to_string() +
       ":\n" +
       result.output,
