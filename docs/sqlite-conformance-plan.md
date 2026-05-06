@@ -117,19 +117,19 @@ e2e tests:
 ```bash
 KIMICC_SQLITE_CONFORMANCE=release \
   moon test test/e2e/sqlite_test.mbt --target native \
-  --filter 'sqlite public release gate scripts pass with clang baseline when enabled'
+  --filter 'sqlite public release gate scripts pass with clang and direct baselines when enabled'
 
 KIMICC_SQLITE_CONFORMANCE=residuals \
   moon test test/e2e/sqlite_test.mbt --target native \
-  --filter 'sqlite public residual scripts match clang when enabled'
+  --filter 'sqlite public residual scripts match clang and direct when enabled'
 
 KIMICC_SQLITE_CONFORMANCE=veryquick \
   moon test test/e2e --target native \
-  --filter 'sqlite public veryquick residual failures match clang when enabled'
+  --filter 'sqlite public veryquick residual failures match clang and direct when enabled'
 
 KIMICC_SQLITE_CONFORMANCE=full \
   moon test test/e2e/sqlite_test.mbt --target native \
-  --filter 'sqlite public full residual failures match clang when enabled'
+  --filter 'sqlite public full residual failures match clang and direct when enabled'
 ```
 
 ## Release Gate Checklist
@@ -180,7 +180,7 @@ MoonBit package version:
    ```bash
    KIMICC_SQLITE_CONFORMANCE=residuals \
      moon test test/e2e/sqlite_test.mbt --target native \
-     --filter 'sqlite public residual scripts match clang when enabled'
+     --filter 'sqlite public residual scripts match clang and direct when enabled'
    ```
 
    Run this before saying there are no known kimicc-only SQLite failures. The
@@ -191,11 +191,11 @@ MoonBit package version:
    ```bash
    KIMICC_SQLITE_CONFORMANCE=veryquick \
      moon test test/e2e --target native \
-     --filter 'sqlite public veryquick residual failures match clang when enabled'
+     --filter 'sqlite public veryquick residual failures match clang and direct when enabled'
 
    KIMICC_SQLITE_CONFORMANCE=full \
      moon test test/e2e/sqlite_test.mbt --target native \
-     --filter 'sqlite public full residual failures match clang when enabled'
+     --filter 'sqlite public full residual failures match clang and direct when enabled'
    ```
 
    Run these before larger releases and after compiler changes touching shared
