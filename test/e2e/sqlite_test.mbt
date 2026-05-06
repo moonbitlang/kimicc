@@ -438,6 +438,54 @@ fn assert_sqlite_full_residuals(output : String, compiler : String) -> Unit {
 }
 
 ///|
+fn sqlite_residual_failure_signature(output : String) -> String {
+  let signature = StringBuilder::new()
+  for raw in output.split("\n") {
+    let line = raw.to_owned()
+    if line.has_prefix("### ") ||
+      line.has_prefix("! ") ||
+      line.contains(" errors out of ") ||
+      line.contains("FAILED: ") {
+      signature.write_string(line)
+      signature.write_string("\n")
+    }
+  }
+  signature.to_string()
+}
+
+///|
+fn assert_sqlite_residual_signatures_match(
+  kimicc : String,
+  clang : String,
+  direct : String,
+  context : String,
+) -> Unit {
+  let kimicc_signature = sqlite_residual_failure_signature(kimicc)
+  let clang_signature = sqlite_residual_failure_signature(clang)
+  let direct_signature = sqlite_residual_failure_signature(direct)
+  if kimicc_signature != clang_signature {
+    abort(
+      "SQLite " +
+      context +
+      " kimicc residual signature differs from clang:\nkimicc:\n" +
+      kimicc_signature +
+      "\nclang:\n" +
+      clang_signature,
+    )
+  }
+  if direct_signature != clang_signature {
+    abort(
+      "SQLite " +
+      context +
+      " direct-object residual signature differs from clang:\ndirect:\n" +
+      direct_signature +
+      "\nclang:\n" +
+      clang_signature,
+    )
+  }
+}
+
+///|
 fn sqlite_residual_script_paths() -> Array[String] {
   [
     "test/func.test", "test/json101.test", "test/json501.test", "test/literal.test",
@@ -558,6 +606,12 @@ async test "sqlite public veryquick residual failures match clang and direct whe
   assert_sqlite_veryquick_residuals(kimicc.output, "kimicc")
   assert_sqlite_veryquick_residuals(clang.output, "clang")
   assert_sqlite_veryquick_residuals(direct.output, "direct object")
+  assert_sqlite_residual_signatures_match(
+    kimicc.output,
+    clang.output,
+    direct.output,
+    "veryquick",
+  )
 }
 
 ///|
@@ -636,6 +690,12 @@ async test "sqlite public residual scripts match clang and direct when enabled" 
   assert_sqlite_residual_script_outputs(kimicc.output, "kimicc")
   assert_sqlite_residual_script_outputs(clang.output, "clang")
   assert_sqlite_residual_script_outputs(direct.output, "direct object")
+  assert_sqlite_residual_signatures_match(
+    kimicc.output,
+    clang.output,
+    direct.output,
+    "residual scripts",
+  )
 }
 
 ///|
@@ -686,4 +746,10 @@ async test "sqlite public full residual failures match clang and direct when ena
   assert_sqlite_full_residuals(kimicc.output, "kimicc")
   assert_sqlite_full_residuals(clang.output, "clang")
   assert_sqlite_full_residuals(direct.output, "direct object")
+  assert_sqlite_residual_signatures_match(
+    kimicc.output,
+    clang.output,
+    direct.output,
+    "full",
+  )
 }
