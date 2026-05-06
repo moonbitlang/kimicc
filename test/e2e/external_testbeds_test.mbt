@@ -109,3 +109,147 @@ async test "external tree-sitter C library smoke compiles and runs when enabled"
     )
   }
 }
+
+///|
+fn ocamlyacc_flags(root : String) -> String {
+  "-DHAS_MKSTEMP -I " +
+  shell_quote(root + "/yacc") +
+  " -I " +
+  shell_quote(root + "/runtime")
+}
+
+///|
+fn ocamlyacc_source_paths(root : String) -> Array[String] {
+  let paths : Array[String] = []
+  for
+    name in [
+      "mkpar", "skeleton", "lr0", "warshall", "closure", "reader", "main", "error",
+      "lalr", "verbose", "output", "symtab",
+    ] {
+    paths.push(root + "/yacc/" + name + ".c")
+  }
+  paths
+}
+
+///|
+async fn build_ocamlyacc_with_kimicc(root : String) -> String {
+  let flags = ocamlyacc_flags(root)
+  let objects : Array[String] = []
+  for path in ocamlyacc_source_paths(root) {
+    require_external_path(path, "ocamlyacc source")
+    objects.push(
+      compile_c_file_with_kimicc_object_path(
+        path,
+        flags,
+        "ocamlyacc_external_" + source_id(path),
+      ),
+    )
+  }
+  let binary_path = "/tmp/kimicc_ocamlyacc_external"
+  run_command_checked(
+    "clang -o " + shell_quote(binary_path) + " " + shell_join_quoted(objects),
+    "link kimicc ocamlyacc",
+  )
+  binary_path
+}
+
+///|
+fn build_ocamlyacc_with_clang(root : String) -> String {
+  let binary_path = "/tmp/clang_ocamlyacc_external"
+  run_command_checked(
+    "clang " +
+    ocamlyacc_flags(root) +
+    " -o " +
+    shell_quote(binary_path) +
+    " " +
+    shell_join_quoted(ocamlyacc_source_paths(root)),
+    "build clang ocamlyacc",
+  )
+  binary_path
+}
+
+///|
+async fn run_ocamlyacc_calc_parser(
+  binary_path : String,
+  root : String,
+  work_dir : String,
+  tag : String,
+) -> CommandResult {
+  run_command_checked(
+    "rm -rf " + shell_quote(work_dir) + " && mkdir -p " + shell_quote(work_dir),
+    "prepare ocamlyacc work dir",
+  )
+  run_command_checked(
+    "cp " +
+    shell_quote(root + "/testsuite/tests/tool-lexyacc/calc_parser.mly") +
+    " " +
+    shell_quote(work_dir + "/calc_parser.mly"),
+    "copy ocamlyacc calc grammar",
+  )
+  run_command_capture(
+    "cd " +
+    shell_quote(work_dir) +
+    " && " +
+    shell_quote(binary_path) +
+    " " +
+    shell_quote("calc_parser.mly"),
+    tag,
+  )
+}
+
+///|
+async test "external ocamlyacc calc grammar matches clang when enabled" {
+  if !external_testbed_enabled("ocamlyacc") {
+    return
+  }
+  let root = "/tmp/kimicc_ocaml"
+  require_external_path(root + "/yacc/main.c", "ocamlyacc source root")
+  require_external_path(
+    root + "/testsuite/tests/tool-lexyacc/calc_parser.mly",
+    "ocamlyacc calc grammar",
+  )
+  let kimicc_binary = build_ocamlyacc_with_kimicc(root)
+  let clang_binary = build_ocamlyacc_with_clang(root)
+  let kimicc_version = run_command_capture(
+    shell_quote(kimicc_binary) + " -version",
+    "ocamlyacc_kimicc_version",
+  )
+  if kimicc_version.code != 0 {
+    abort("kimicc ocamlyacc -version failed:\n" + kimicc_version.output)
+  }
+  let clang_version = run_command_capture(
+    shell_quote(clang_binary) + " -version",
+    "ocamlyacc_clang_version",
+  )
+  if clang_version.code != 0 {
+    abort("clang ocamlyacc -version failed:\n" + clang_version.output)
+  }
+  let kimicc_dir = "/tmp/kimicc_ocamlyacc_external_cmp/kimicc"
+  let clang_dir = "/tmp/kimicc_ocamlyacc_external_cmp/clang"
+  let kimicc = run_ocamlyacc_calc_parser(
+    kimicc_binary, root, kimicc_dir, "ocamlyacc_kimicc_calc",
+  )
+  if kimicc.code != 0 {
+    abort("kimicc ocamlyacc calc parser failed:\n" + kimicc.output)
+  }
+  let clang = run_ocamlyacc_calc_parser(
+    clang_binary, root, clang_dir, "ocamlyacc_clang_calc",
+  )
+  if clang.code != 0 {
+    abort("clang ocamlyacc calc parser failed:\n" + clang.output)
+  }
+  run_command_checked(
+    "cmp -s " +
+    shell_quote(kimicc_dir + "/calc_parser.ml") +
+    " " +
+    shell_quote(clang_dir + "/calc_parser.ml"),
+    "compare ocamlyacc generated ml",
+  )
+  run_command_checked(
+    "cmp -s " +
+    shell_quote(kimicc_dir + "/calc_parser.mli") +
+    " " +
+    shell_quote(clang_dir + "/calc_parser.mli"),
+    "compare ocamlyacc generated mli",
+  )
+}
