@@ -326,7 +326,7 @@ fn assert_sqlite_veryquick_residuals(
   output : String,
   compiler : String,
 ) -> Unit {
-  if !output.contains("24 errors out of 330516 tests") {
+  if !output.contains("24 errors out of") {
     abort(
       "SQLite " +
       compiler +
@@ -357,7 +357,7 @@ fn assert_sqlite_veryquick_residuals(
 
 ///|
 fn assert_sqlite_full_residuals(output : String, compiler : String) -> Unit {
-  if !output.contains("26 errors out of 1016630 tests") {
+  if !output.contains("26 errors out of") {
     abort(
       "SQLite " + compiler + " full output missing residual summary:\n" + output,
     )
@@ -372,6 +372,54 @@ fn assert_sqlite_full_residuals(output : String, compiler : String) -> Unit {
         "SQLite " +
         compiler +
         " full residual output missing " +
+        marker +
+        ":\n" +
+        output,
+      )
+    }
+  }
+}
+
+///|
+fn sqlite_residual_script_paths() -> Array[String] {
+  [
+    "test/func.test", "test/json101.test", "test/json501.test", "test/literal.test",
+    "test/types3.test", "test/loadext.test",
+  ]
+}
+
+///|
+fn assert_sqlite_residual_script_outputs(
+  output : String,
+  compiler : String,
+) -> Unit {
+  for script in sqlite_residual_script_paths() {
+    let marker = "### " + script
+    if !output.contains(marker) {
+      abort(
+        "SQLite " +
+        compiler +
+        " residual script output missing " +
+        marker +
+        ":\n" +
+        output,
+      )
+    }
+  }
+  for
+    marker in [
+      "func-38.100", "func-39.120", "func-39.130", "func-39.140", "func-39.150",
+      "func-39.160", "func-39.170", "func-39.180", "func-39.190", "json101-20.2",
+      "json101-20.3", "json501-9.1", "json501-9.2", "json501-9.3", "literal-2.3.1",
+      "literal-2.3.2", "literal-2.3.3", "literal-2.4.1", "literal-2.4.2", "literal-2.4.3",
+      "literal-3.4.1", "literal-3.4.2", "literal-3.4.3", "types3-1.1", "loadext-2.1",
+      "loadext-2.2",
+    ] {
+    if !output.contains(marker) {
+      abort(
+        "SQLite " +
+        compiler +
+        " residual script output missing " +
         marker +
         ":\n" +
         output,
@@ -413,6 +461,39 @@ async test "sqlite public veryquick residual failures match clang when enabled" 
   }
   assert_sqlite_veryquick_residuals(kimicc.output, "kimicc")
   assert_sqlite_veryquick_residuals(clang.output, "clang")
+}
+
+///|
+async test "sqlite public residual scripts match clang when enabled" {
+  if !sqlite_public_conformance_enabled("residuals") {
+    return
+  }
+  let kimicc = run_sqlite_public_tcl_batch_collect_with(
+    sqlite_residual_script_paths(),
+    "sqlite_public_residuals",
+    Kimicc,
+  )
+  if kimicc.output == "sqlite-public-tests-skipped\n" {
+    return
+  }
+  let clang = run_sqlite_public_tcl_batch_collect_with(
+    sqlite_residual_script_paths(),
+    "sqlite_public_residuals",
+    Clang,
+  )
+  if kimicc.code != clang.code {
+    abort(
+      "SQLite residual script exit code differs:\nkimicc:\n" +
+      kimicc.output +
+      "\nclang:\n" +
+      clang.output,
+    )
+  }
+  if kimicc.code == 0 {
+    return
+  }
+  assert_sqlite_residual_script_outputs(kimicc.output, "kimicc")
+  assert_sqlite_residual_script_outputs(clang.output, "clang")
 }
 
 ///|

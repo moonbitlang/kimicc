@@ -451,6 +451,48 @@ async fn run_sqlite_public_tcl_batch_with(
 }
 
 ///|
+async fn run_sqlite_public_tcl_batch_collect_with(
+  test_paths : Array[String],
+  tag : String,
+  compiler : SQLiteObjectCompiler,
+) -> CommandResult {
+  if !sqlite_public_tests_available() {
+    return { code: 0, output: "sqlite-public-tests-skipped\n" }
+  }
+  let root = sqlite_public_source_root()
+  let testfixture = build_sqlite_public_testfixture_with(compiler)
+  let output = StringBuilder::new()
+  let mut code = 0
+  for test_path in test_paths {
+    let run_tag = tag + "_" + compiler.tag() + "_" + source_id(test_path)
+    let run_dir = temp_file_path(run_tag + "_work", test_path, "")
+    run_command_checked(
+      "rm -rf " + shell_quote(run_dir) + " && mkdir -p " + shell_quote(run_dir),
+      "prepare sqlite public tcl test work dir",
+    )
+    let result = run_command_capture(
+      "cd " +
+      shell_quote(run_dir) +
+      " && " +
+      shell_quote(testfixture) +
+      " " +
+      shell_quote(root + "/" + test_path),
+      run_tag,
+    )
+    output.write_string("### ")
+    output.write_string(test_path)
+    output.write_string("\nexit-code: ")
+    output.write_string(result.code.to_string())
+    output.write_string("\n")
+    output.write_string(result.output)
+    if code == 0 && result.code != 0 {
+      code = result.code
+    }
+  }
+  { code, output: output.to_string() }
+}
+
+///|
 async fn run_sqlite_public_tcl_batch(
   test_paths : Array[String],
   tag : String,
