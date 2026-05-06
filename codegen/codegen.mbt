@@ -281,12 +281,12 @@ fn Codegen::global_expr_type(
     Cast(ty, _) => ty
     AddrOf(e) => Pointer(self.global_expr_type(e))
     ArrayAccess(base, _) =>
-      match self.global_expr_type(base) {
+      match peel_aligned_type(self.global_expr_type(base)) {
         Array(elem, _) | Pointer(elem) => elem
         _ => SInt
       }
     MemberAccess(obj, field) =>
-      match self.global_expr_type(obj) {
+      match peel_aligned_type(self.global_expr_type(obj)) {
         Struct(name) | Union(name) =>
           match self.find_field_layout(name, field) {
             Some((_, ty, _, _, _, _)) => ty
@@ -518,7 +518,7 @@ fn Codegen::global_lvalue_reloc(
     ArrayAccess(base, index) =>
       match self.global_lvalue_reloc(base) {
         Some((label, base_offset)) => {
-          let elem_size = match self.global_expr_type(base) {
+          let elem_size = match peel_aligned_type(self.global_expr_type(base)) {
             Array(elem, _) | Pointer(elem) => self.type_size(elem)
             _ => 1
           }
@@ -532,7 +532,7 @@ fn Codegen::global_lvalue_reloc(
     MemberAccess(obj, field) =>
       match self.global_lvalue_reloc(obj) {
         Some((label, base_offset)) =>
-          match self.global_expr_type(obj) {
+          match peel_aligned_type(self.global_expr_type(obj)) {
             Struct(name)
             | Union(name)
             | Pointer(Struct(name))
@@ -623,10 +623,14 @@ fn Codegen::emit_global_scalar(
   expr : @parser.Expr,
 ) -> Unit {
   match ty {
-    Pointer(_)
-    | FuncPtr(_, _, _)
-    | Aligned(Pointer(_), _)
-    | Aligned(FuncPtr(_, _, _), _) =>
+    Aligned(inner, _) => {
+      self.emit_global_scalar(inner, expr)
+      return
+    }
+    _ => ()
+  }
+  match ty {
+    Pointer(_) | FuncPtr(_, _, _) =>
       match self.global_address_reloc(expr) {
         Some(reloc) => {
           self.emit("\t.quad\t" + reloc)
@@ -722,6 +726,7 @@ fn Codegen::emit_global_array(
   exprs : Array[@parser.Expr],
 ) -> Unit {
   match ty {
+    Aligned(inner, _) => self.emit_global_array(inner, exprs)
     Array(elem_ty, n) => {
       let elem_size = self.type_size(elem_ty)
       let slots : Array[@parser.Expr?] = Array::make(n, None)
@@ -852,6 +857,24 @@ fn Codegen::emit_global_array(
 }
 
 ///|
+fn global_align_power(align : Int) -> Int {
+  let mut power = 0
+  let mut bytes = 1
+  while bytes < align {
+    bytes = bytes * 2
+    power = power + 1
+  }
+  power
+}
+
+///|
+fn Codegen::emit_global_p2align(self : Codegen, ty : @parser.Type) -> Unit {
+  let align = self.type_align(ty)
+  let effective_align = if align > 8 { align } else { 8 }
+  self.emit("\t.p2align\t" + global_align_power(effective_align).to_string())
+}
+
+///|
 pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   self.output.write_string(
     "\t.section\t__TEXT,__text,regular,pure_instructions\n",
@@ -914,7 +937,7 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
       if !g.is_static {
         self.emit("	.globl	_" + g.name)
       }
-      self.emit("	.p2align	3")
+      self.emit_global_p2align(g.ty)
       self.emit("_" + g.name + ":")
       let saved_func_name = self.func_name
       let saved_emitted_labels = self.emitted_labels
@@ -949,7 +972,7 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
       if !g.is_static {
         self.emit("	.globl	_" + g.name)
       }
-      self.emit("	.p2align	3")
+      self.emit_global_p2align(g.ty)
       self.emit("_" + g.name + ":")
       self.emit("	.space	" + size.to_string())
     }

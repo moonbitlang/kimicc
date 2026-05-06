@@ -342,9 +342,46 @@ async test "direct macho object supports bit count and byte swap builtins" {
     #|  if (__builtin_rotateright32(0x12345678u, 8) != 0x78123456u) return 8;
     #|  if (__builtin_rotateleft64(0x0123456789abcdefull, 16) != 0x456789abcdef0123ull) return 9;
     #|  if (__builtin_rotateright64(0x0123456789abcdefull, 16) != 0xcdef0123456789abull) return 10;
+    #|  __builtin_prefetch((void*)0, 0, 3);
     #|  return 42;
     #|}
   let exit_code = run_source_direct_object_async(source, "macho_bit_builtins")
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object keeps aligned struct array pointer arithmetic address" {
+  let source =
+    #|struct State {
+    #|  unsigned long prefix;
+    #|  _Alignas(64) unsigned char buffer[256];
+    #|  unsigned int bufferedSize;
+    #|};
+    #|
+    #|int main(void) {
+    #|  struct State state;
+    #|  state.bufferedSize = 13;
+    #|  unsigned char *p = state.buffer + state.bufferedSize;
+    #|  *p = 42;
+    #|  return state.buffer[13];
+    #|}
+  let exit_code = run_source_direct_object_async(
+    source, "macho_aligned_member_ptr_arith",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object keeps aligned global byte array initializer" {
+  let source =
+    #|_Alignas(64) static const unsigned char secret[4] = { 1, 2, 3, 36 };
+    #|
+    #|int main(void) {
+    #|  return secret[0] + secret[1] + secret[2] + secret[3];
+    #|}
+  let exit_code = run_source_direct_object_async(
+    source, "macho_aligned_global_array_init",
+  )
   inspect(exit_code, content="42")
 }
 

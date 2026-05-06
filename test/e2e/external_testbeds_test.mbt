@@ -1279,7 +1279,7 @@ async test "external zlib direct object compression roundtrip runs when enabled"
 
 ///|
 fn xxhash_flags(root : String) -> String {
-  "-DXXH_NO_XXH3 -I " + shell_quote(root)
+  "-DXXH_VECTOR=0 -U__ARM_NEON -U__ARM_NEON__ -I " + shell_quote(root)
 }
 
 ///|
@@ -1294,6 +1294,9 @@ fn xxhash_smoke_source() -> String {
     #|  const char *text = "kimicc xxhash smoke: alpha beta gamma";
     #|  unsigned int h32 = XXH32(text, strlen(text), 0x12345678U);
     #|  unsigned long long h64 = (unsigned long long)XXH64(text, strlen(text), 0x123456789abcdef0ULL);
+    #|  unsigned long long h3 = (unsigned long long)XXH3_64bits(text, strlen(text));
+    #|  unsigned long long h3seed = (unsigned long long)XXH3_64bits_withSeed(text, strlen(text), 0x123456789abcdef0ULL);
+    #|  XXH128_hash_t h128 = XXH3_128bits(text, strlen(text));
     #|  XXH64_state_t *state = XXH64_createState();
     #|  if (!state) return 10;
     #|  if (XXH64_reset(state, 0x123456789abcdef0ULL) != XXH_OK) return 11;
@@ -1301,10 +1304,22 @@ fn xxhash_smoke_source() -> String {
     #|  if (XXH64_update(state, text + 13, strlen(text) - 13) != XXH_OK) return 13;
     #|  unsigned long long stream = (unsigned long long)XXH64_digest(state);
     #|  XXH64_freeState(state);
+    #|  XXH3_state_t *state3 = XXH3_createState();
+    #|  if (!state3) return 14;
+    #|  if (XXH3_64bits_reset(state3) != XXH_OK) return 15;
+    #|  if (XXH3_64bits_update(state3, text, 13) != XXH_OK) return 16;
+    #|  if (XXH3_64bits_update(state3, text + 13, strlen(text) - 13) != XXH_OK) return 17;
+    #|  unsigned long long stream3 = (unsigned long long)XXH3_64bits_digest(state3);
+    #|  XXH3_freeState(state3);
     #|  if (h32 != 313589854U) return 20;
     #|  if (h64 != 12728883423309814983ULL) return 21;
     #|  if (stream != h64) return 22;
-    #|  printf("xxhash-smoke %u %llu %llu\n", h32, h64, stream);
+    #|  if (h3 != 12821467295178229974ULL) return 23;
+    #|  if (h3seed != 2994235077724246409ULL) return 24;
+    #|  if ((unsigned long long)h128.low64 != 6904674586532039231ULL) return 25;
+    #|  if ((unsigned long long)h128.high64 != 12534773462583583157ULL) return 26;
+    #|  if (stream3 != h3) return 27;
+    #|  printf("xxhash-smoke %u %llu %llu %llu %llu %llu %llu\n", h32, h64, stream, h3, h3seed, (unsigned long long)h128.low64, (unsigned long long)h128.high64);
     #|  return 42;
     #|}
   source
@@ -1381,7 +1396,7 @@ async fn assert_xxhash_smoke(binary_path : String, tag : String) -> Unit {
   )
   if result.code != 42 ||
     !result.output.contains(
-      "xxhash-smoke 313589854 12728883423309814983 12728883423309814983",
+      "xxhash-smoke 313589854 12728883423309814983 12728883423309814983 12821467295178229974 2994235077724246409 6904674586532039231 12534773462583583157",
     ) {
     abort(
       "xxHash external smoke failed with code " +

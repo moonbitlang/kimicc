@@ -339,8 +339,8 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
       }
       self.lexer.pos = saved_pos
       self.token = saved_token
-      // Check if this is a typedef'd type used for variable declaration
-      if self.typedefs.contains(name) {
+      // Check if this is a typedef'd or builtin type used for variable declaration
+      if self.is_stmt_decl_start() {
         self.parse_var_decl_stmt()
       } else {
         self.parse_expr_stmt()
@@ -378,6 +378,10 @@ fn Parser::is_stmt_decl_start(self : Parser) -> Bool {
       name == "_Atomic" ||
       name == "_Alignas" ||
       name == "alignas" ||
+      name == "__int128" ||
+      name == "__int128_t" ||
+      name == "__uint128_t" ||
+      name == "_Float16" ||
       self.typedefs.contains(name)
     _ => false
   }
@@ -446,6 +450,10 @@ fn Parser::parse_for_stmt(self : Parser) -> Stmt {
         name == "_Atomic" ||
         name == "_Alignas" ||
         name == "alignas" ||
+        name == "__int128" ||
+        name == "__int128_t" ||
+        name == "__uint128_t" ||
+        name == "_Float16" ||
         self.typedefs.contains(name)
       _ => false
     }

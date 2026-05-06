@@ -1265,6 +1265,38 @@ async test "struct array access" {
 }
 
 ///|
+async test "aligned struct array member pointer arithmetic keeps full address" {
+  let source =
+    #|struct State {
+    #|  unsigned long prefix;
+    #|  _Alignas(64) unsigned char buffer[256];
+    #|  unsigned int bufferedSize;
+    #|};
+    #|
+    #|int main(void) {
+    #|  struct State state;
+    #|  state.bufferedSize = 13;
+    #|  unsigned char *p = state.buffer + state.bufferedSize;
+    #|  *p = 42;
+    #|  return state.buffer[13];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "aligned global byte array keeps initializer" {
+  let source =
+    #|_Alignas(64) static const unsigned char secret[4] = { 1, 2, 3, 36 };
+    #|
+    #|int main(void) {
+    #|  return secret[0] + secret[1] + secret[2] + secret[3];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "union basic usage" {
   let source =
     #|union U { int i; char c; };
@@ -1825,6 +1857,31 @@ async test "_Static_assert declarations do not emit calls" {
     #|int main(void) {
     #|  __Static_assert(sizeof(char) == 1, "char size");
     #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "builtin 128-bit aliases declare block locals" {
+  let source =
+    #|int main(void) {
+    #|  __uint128_t const wide = ((__uint128_t)1) << 65;
+    #|  for (__int128_t signed_wide = 0; signed_wide < 1; signed_wide = signed_wide + 1) {
+    #|  }
+    #|  return (int)(wide >> 65) + 41;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "__builtin_prefetch is a no-op hint" {
+  let source =
+    #|int main(void) {
+    #|  int value = 42;
+    #|  __builtin_prefetch(&value, 0, 3);
+    #|  return value;
     #|}
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")

@@ -843,6 +843,30 @@ test "parse static assertions at declaration scopes" {
 }
 
 ///|
+test "parse builtin 128-bit declarations in block scope" {
+  let source =
+    #|int main(void) {
+    #|  __uint128_t const wide = ((__uint128_t)1) << 65;
+    #|  for (__int128_t signed_wide = 0; signed_wide < 1; signed_wide = signed_wide + 1) {
+    #|  }
+    #|  return (int)(wide >> 65);
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [
+          VarDecl(UInt128, "wide", Some(_)),
+          For(Some(_), _, _, _),
+          Return(Some(_)),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected builtin 128-bit declarations in block scope")
+  }
+}
+
+///|
 test "parse bare _Atomic typedef qualifier" {
   let source =
     #|typedef unsigned long uintnat;

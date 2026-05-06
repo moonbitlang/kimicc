@@ -1359,6 +1359,10 @@ fn Codegen::emit_builtin_call(
       self.emit("\tmov\tx9, #0")
       true
     }
+    "__builtin_prefetch" => {
+      self.emit("\tmov\tx9, #0")
+      true
+    }
     "__builtin_clz" | "__builtin_clzl" => {
       if args.length() > 0 {
         self.gen_expr(args[0], frame_size)
@@ -2769,37 +2773,39 @@ fn Codegen::gen_expr(
     Binary(op, left, right) => {
       let left_ty = self.type_of(left, frame_size)
       let right_ty = self.type_of(right, frame_size)
+      let left_core = peel_aligned_type(left_ty)
+      let right_core = peel_aligned_type(right_ty)
       if needs_int128_integer_op(left_ty, right_ty) {
         self.gen_int128_binary(op, left, right, left_ty, right_ty, frame_size)
         return
       }
-      let ptr_scale = match (left_ty, right_ty) {
+      let ptr_scale = match (left_core, right_core) {
         (Pointer(elem), _) => self.type_size(elem)
         (Array(elem, _), _) => self.type_size(elem)
         (_, Pointer(elem)) => self.type_size(elem)
         (_, Array(elem, _)) => self.type_size(elem)
         _ => 1
       }
-      let is_ptr_diff = match (left_ty, right_ty) {
+      let is_ptr_diff = match (left_core, right_core) {
         (Pointer(_), Pointer(_)) => true
         (Array(_, _), Pointer(_)) => true
         (Pointer(_), Array(_, _)) => true
         (Array(_, _), Array(_, _)) => true
         _ => false
       }
-      let has_ptr_operand = match (left_ty, right_ty) {
+      let has_ptr_operand = match (left_core, right_core) {
         (Pointer(_), _)
         | (Array(_, _), _)
         | (_, Pointer(_))
         | (_, Array(_, _)) => true
         _ => false
       }
-      let scale_right = match (left_ty, right_ty) {
+      let scale_right = match (left_core, right_core) {
         (Pointer(_), rhs_ty) | (Array(_, _), rhs_ty) =>
           !is_ptr_diff && (op == "+" || op == "-") && rhs_ty.is_integer()
         _ => false
       }
-      let scale_left = match (left_ty, right_ty) {
+      let scale_left = match (left_core, right_core) {
         (lhs_ty, Pointer(_)) | (lhs_ty, Array(_, _)) =>
           !is_ptr_diff && op == "+" && lhs_ty.is_integer()
         _ => false
