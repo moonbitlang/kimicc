@@ -57,6 +57,13 @@ async test "direct macho object supports signed modulo" {
 }
 
 ///|
+async test "direct macho object supports unary minus" {
+  let source = "int main(void) { int a = 7; return -a + 9; }"
+  let exit_code = run_source_direct_object_async(source, "macho_unary_minus")
+  inspect(exit_code, content="2")
+}
+
+///|
 async test "direct macho object supports unsigned division" {
   let source = "int main(void) { unsigned long a = 42; unsigned long b = 5; return (int)(a / b); }"
   let exit_code = run_source_direct_object_async(source, "macho_unsigned_div")
@@ -315,6 +322,11 @@ async test "direct macho object runs fixture matrix" {
       path: "test/fixtures/pointers.c",
       tag: "fixture_pointers_full",
       expected: 50,
+    },
+    {
+      path: "test/fixtures/c4_stripped.c",
+      tag: "fixture_c4_stripped_usage",
+      expected: 255,
     },
   ]
   for fixture in fixtures {

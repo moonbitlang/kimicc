@@ -852,6 +852,21 @@ fn encode_mvn(rest : String) -> UInt {
 }
 
 ///|
+fn encode_neg(rest : String) -> UInt {
+  let parts = split_operands(rest)
+  if parts.length() != 2 {
+    abort("malformed neg instruction")
+  }
+  let rd = parse_register(parts[0])
+  let rm = parse_register(parts[1])
+  let base = if parts[0].has_prefix("w") { 0x4b000000U } else { 0xcb000000U }
+  base |
+  (rm.reinterpret_as_uint() << 16) |
+  (31U << 5) |
+  rd.reinterpret_as_uint()
+}
+
+///|
 fn encode_fmov(rest : String) -> UInt {
   let parts = split_operands(rest)
   if parts.length() != 2 {
@@ -1328,6 +1343,11 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         append_u32_to_section(
           sections[current_section],
           encode_mvn(line.substring(start=4)),
+        )
+      } else if line.has_prefix("neg\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_neg(line.substring(start=4)),
         )
       } else if line.has_prefix("sxtw\t") {
         let parts = split_operands(line.substring(start=5))
