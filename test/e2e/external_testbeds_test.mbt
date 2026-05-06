@@ -1124,6 +1124,160 @@ async test "external QuickJS qjs runs language matrix when enabled" {
 }
 
 ///|
+fn zlib_flags(root : String) -> String {
+  "-DHAVE_UNISTD_H -I " + shell_quote(root)
+}
+
+///|
+fn zlib_source_paths(root : String) -> Array[String] {
+  let paths : Array[String] = []
+  for
+    name in [
+      "adler32", "compress", "crc32", "deflate", "infback", "inffast", "inflate",
+      "inftrees", "trees", "uncompr", "zutil",
+    ] {
+    paths.push(root + "/" + name + ".c")
+  }
+  paths
+}
+
+///|
+fn zlib_smoke_source() -> String {
+  let source =
+    #|#include "zlib.h"
+    #|
+    #|extern int printf(const char *, ...);
+    #|extern unsigned long strlen(const char *);
+    #|extern int strcmp(const char *, const char *);
+    #|
+    #|int main(void) {
+    #|  const unsigned char input[] = "kimicc zlib smoke: alpha beta gamma alpha beta gamma";
+    #|  unsigned char compressed[256];
+    #|  unsigned char output[256];
+    #|  uLongf compressed_len = sizeof(compressed);
+    #|  uLongf output_len = sizeof(output);
+    #|  int rc = compress2(compressed, &compressed_len, input, (uLong)strlen((const char *)input) + 1, Z_BEST_COMPRESSION);
+    #|  if (rc != Z_OK) return 10 + rc;
+    #|  rc = uncompress(output, &output_len, compressed, compressed_len);
+    #|  if (rc != Z_OK) return 20 + rc;
+    #|  if (output_len != strlen((const char *)input) + 1) return 30;
+    #|  if (strcmp((const char *)input, (const char *)output) != 0) return 31;
+    #|  printf("zlib-smoke %lu %lu %s\n", (unsigned long)compressed_len, (unsigned long)output_len, zlibVersion());
+    #|  return 42;
+    #|}
+  source
+}
+
+///|
+async fn compile_zlib_smoke_driver(
+  root : String,
+  tag : String,
+  direct : Bool,
+) -> String {
+  let path = "/tmp/kimicc_zlib_" + tag + "_driver.c"
+  write_text_file(path, zlib_smoke_source())
+  if direct {
+    compile_c_file_with_kimicc_direct_object_path(
+      path,
+      zlib_flags(root),
+      "zlib_direct_external_" + tag + "_driver",
+    )
+  } else {
+    compile_c_file_with_kimicc_object_path(
+      path,
+      zlib_flags(root),
+      "zlib_external_" + tag + "_driver",
+    )
+  }
+}
+
+///|
+async fn build_zlib_with_kimicc(root : String, tag : String) -> String {
+  let flags = zlib_flags(root)
+  let objects : Array[String] = []
+  for path in zlib_source_paths(root) {
+    require_external_path(path, "zlib source")
+    objects.push(
+      compile_c_file_with_kimicc_object_path(
+        path,
+        flags,
+        "zlib_external_" + tag + "_" + source_id(path),
+      ),
+    )
+  }
+  objects.push(compile_zlib_smoke_driver(root, tag, false))
+  let binary_path = "/tmp/kimicc_zlib_external_" + tag
+  run_command_checked(
+    "clang -o " + shell_quote(binary_path) + " " + shell_join_quoted(objects),
+    "link zlib external " + tag,
+  )
+  binary_path
+}
+
+///|
+async fn build_zlib_with_direct_object(root : String, tag : String) -> String {
+  let flags = zlib_flags(root)
+  let objects : Array[String] = []
+  for path in zlib_source_paths(root) {
+    require_external_path(path, "zlib source")
+    objects.push(
+      compile_c_file_with_kimicc_direct_object_path(
+        path,
+        flags,
+        "zlib_direct_external_" + tag + "_" + source_id(path),
+      ),
+    )
+  }
+  objects.push(compile_zlib_smoke_driver(root, tag, true))
+  let binary_path = "/tmp/kimicc_zlib_direct_external_" + tag
+  run_command_checked(
+    "clang -o " + shell_quote(binary_path) + " " + shell_join_quoted(objects),
+    "link direct zlib external " + tag,
+  )
+  binary_path
+}
+
+///|
+async fn assert_zlib_smoke(binary_path : String, tag : String) -> Unit {
+  let result = run_command_capture(
+    shell_quote(binary_path),
+    "zlib_external_smoke_" + tag,
+  )
+  if result.code != 42 ||
+    !result.output.contains("zlib-smoke ") ||
+    !result.output.contains(" 1.3.1") {
+    abort(
+      "zlib external smoke failed with code " +
+      result.code.to_string() +
+      ":\n" +
+      result.output,
+    )
+  }
+}
+
+///|
+async test "external zlib compression roundtrip runs when enabled" {
+  if !external_testbed_enabled("zlib") {
+    return
+  }
+  let root = "/tmp/kimicc_zlib/zlib-1.3.1"
+  require_external_path(root + "/zlib.h", "zlib source root")
+  let binary_path = build_zlib_with_kimicc(root, "roundtrip")
+  assert_zlib_smoke(binary_path, "roundtrip")
+}
+
+///|
+async test "external zlib direct object compression roundtrip runs when enabled" {
+  if !external_testbed_enabled("zlib") {
+    return
+  }
+  let root = "/tmp/kimicc_zlib/zlib-1.3.1"
+  require_external_path(root + "/zlib.h", "zlib source root")
+  let binary_path = build_zlib_with_direct_object(root, "roundtrip")
+  assert_zlib_smoke(binary_path, "direct_roundtrip")
+}
+
+///|
 fn lua_flags(root : String) -> String {
   "-DLUA_COMPAT_5_3 -I " + shell_quote(root + "/src")
 }
