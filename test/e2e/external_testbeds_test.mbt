@@ -301,6 +301,28 @@ async fn build_ocamlyacc_with_kimicc(root : String) -> String {
 }
 
 ///|
+async fn build_ocamlyacc_with_direct_object(root : String) -> String {
+  let flags = ocamlyacc_flags(root)
+  let objects : Array[String] = []
+  for path in ocamlyacc_source_paths(root) {
+    require_external_path(path, "ocamlyacc source")
+    objects.push(
+      compile_c_file_with_kimicc_direct_object_path(
+        path,
+        flags,
+        "ocamlyacc_direct_external_" + source_id(path),
+      ),
+    )
+  }
+  let binary_path = "/tmp/kimicc_ocamlyacc_direct_external"
+  run_command_checked(
+    "clang -o " + shell_quote(binary_path) + " " + shell_join_quoted(objects),
+    "link direct-object ocamlyacc",
+  )
+  binary_path
+}
+
+///|
 fn build_ocamlyacc_with_clang(root : String) -> String {
   let binary_path = "/tmp/clang_ocamlyacc_external"
   run_command_checked(
@@ -602,6 +624,60 @@ async test "external ocamlyacc grammar matrix matches clang when enabled" {
   run_and_compare_ocamlyacc_grammar(
     kimicc_binary, clang_binary, conflict_path, "conflict_matrix.mly", "conflict_matrix",
     "-v", true, work_root, "conflict_matrix",
+  )
+}
+
+///|
+async test "external ocamlyacc direct object grammar matrix matches clang when enabled" {
+  if !external_testbed_enabled("ocamlyacc") {
+    return
+  }
+  let root = "/tmp/kimicc_ocaml"
+  require_external_path(root + "/yacc/main.c", "ocamlyacc source root")
+  require_external_path(
+    root + "/testsuite/tests/tool-lexyacc/parsecheck.mly",
+    "ocamlyacc parsecheck grammar",
+  )
+  let direct_binary = build_ocamlyacc_with_direct_object(root)
+  let clang_binary = build_ocamlyacc_with_clang(root)
+  let fixture_dir = "/tmp/kimicc_ocamlyacc_direct_external_matrix/fixtures"
+  run_command_checked(
+    "rm -rf " +
+    shell_quote(fixture_dir) +
+    " && mkdir -p " +
+    shell_quote(fixture_dir),
+    "prepare direct ocamlyacc matrix fixtures",
+  )
+  let expr_path = fixture_dir + "/expr_matrix.mly"
+  let conflict_path = fixture_dir + "/conflict_matrix.mly"
+  write_text_file(expr_path, ocamlyacc_expression_grammar())
+  write_text_file(conflict_path, ocamlyacc_conflict_grammar())
+  let work_root = "/tmp/kimicc_ocamlyacc_direct_external_matrix/run"
+  run_command_checked(
+    "rm -rf " +
+    shell_quote(work_root) +
+    " && mkdir -p " +
+    shell_quote(work_root),
+    "prepare direct ocamlyacc matrix work root",
+  )
+  run_and_compare_ocamlyacc_grammar(
+    direct_binary,
+    clang_binary,
+    root + "/testsuite/tests/tool-lexyacc/parsecheck.mly",
+    "parsecheck.mly",
+    "parsecheck",
+    "-q --strict",
+    false,
+    work_root,
+    "direct_parsecheck",
+  )
+  run_and_compare_ocamlyacc_grammar(
+    direct_binary, clang_binary, expr_path, "expr_matrix.mly", "expr_matrix", "",
+    false, work_root, "direct_expr_matrix",
+  )
+  run_and_compare_ocamlyacc_grammar(
+    direct_binary, clang_binary, conflict_path, "conflict_matrix.mly", "conflict_matrix",
+    "-v", true, work_root, "direct_conflict_matrix",
   )
 }
 
