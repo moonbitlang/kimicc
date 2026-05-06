@@ -103,12 +103,87 @@ fn parse_immediate(imm : String) -> Int {
 }
 
 ///|
+fn clean_mem_token(token : String) -> String {
+  token
+  .replace_all(old="[", new="")
+  .replace_all(old="]", new="")
+  .replace_all(old="!", new="")
+  .trim()
+  .to_string()
+}
+
+///|
 fn split_operands(rest : String) -> Array[String] {
   let parts : Array[String] = []
   for part in rest.split(",") {
     parts.push(part.to_string().trim().to_string())
   }
   parts
+}
+
+///|
+fn encode_add_sub_imm(
+  dst : String,
+  src : String,
+  imm : Int,
+  is_sub : Bool,
+) -> UInt {
+  let rd = parse_register(dst)
+  let rn = parse_register(src)
+  if imm < 0 {
+    encode_add_sub_imm(dst, src, -imm, !is_sub)
+  } else {
+    let base = if is_sub { 0xd1000000U } else { 0x91000000U }
+    base |
+    (imm.reinterpret_as_uint() << 10) |
+    (rn.reinterpret_as_uint() << 5) |
+    rd.reinterpret_as_uint()
+  }
+}
+
+///|
+fn encode_add_sub_reg(
+  dst : String,
+  left : String,
+  right : String,
+  is_sub : Bool,
+) -> UInt {
+  let rd = parse_register(dst)
+  let rn = parse_register(left)
+  let rm = parse_register(right)
+  let base = if is_sub { 0xcb000000U } else { 0x8b000000U }
+  base |
+  (rm.reinterpret_as_uint() << 16) |
+  (rn.reinterpret_as_uint() << 5) |
+  rd.reinterpret_as_uint()
+}
+
+///|
+fn encode_add_sub(rest : String, is_sub : Bool) -> UInt {
+  let parts = split_operands(rest)
+  if parts.length() != 3 {
+    abort("malformed add/sub instruction")
+  }
+  if parts[2].has_prefix("#") {
+    encode_add_sub_imm(parts[0], parts[1], parse_immediate(parts[2]), is_sub)
+  } else {
+    encode_add_sub_reg(parts[0], parts[1], parts[2], is_sub)
+  }
+}
+
+///|
+fn encode_mul(rest : String) -> UInt {
+  let parts = split_operands(rest)
+  if parts.length() != 3 {
+    abort("malformed mul instruction")
+  }
+  let rd = parse_register(parts[0])
+  let rn = parse_register(parts[1])
+  let rm = parse_register(parts[2])
+  0x9b007c00U |
+  (rm.reinterpret_as_uint() << 16) |
+  (rn.reinterpret_as_uint() << 5) |
+  rd.reinterpret_as_uint()
 }
 
 ///|
@@ -119,6 +194,84 @@ fn encode_mov_reg(dst : String, src : String) -> UInt {
     0x91000000U | (rn.reinterpret_as_uint() << 5) | rd.reinterpret_as_uint()
   } else {
     0xaa0003e0U | (rn.reinterpret_as_uint() << 16) | rd.reinterpret_as_uint()
+  }
+}
+
+///|
+fn encode_stur_64(
+  rt_text : String,
+  base_text : String,
+  offset_text : String,
+) -> UInt {
+  let rt = parse_register(rt_text)
+  let rn = parse_register(clean_mem_token(base_text))
+  let offset = parse_immediate(clean_mem_token(offset_text))
+  0xf8000000U |
+  ((offset & 0x1ff).reinterpret_as_uint() << 12) |
+  (rn.reinterpret_as_uint() << 5) |
+  rt.reinterpret_as_uint()
+}
+
+///|
+fn encode_str_pre_64(
+  rt_text : String,
+  base_text : String,
+  offset_text : String,
+) -> UInt {
+  let rt = parse_register(rt_text)
+  let rn = parse_register(clean_mem_token(base_text))
+  let offset = parse_immediate(clean_mem_token(offset_text))
+  0xf8000c00U |
+  ((offset & 0x1ff).reinterpret_as_uint() << 12) |
+  (rn.reinterpret_as_uint() << 5) |
+  rt.reinterpret_as_uint()
+}
+
+///|
+fn encode_ldr_unsigned(rt_text : String, base_text : String) -> UInt {
+  let rt = parse_register(rt_text)
+  let rn = parse_register(clean_mem_token(base_text))
+  let base = if rt_text.has_prefix("w") { 0xb9400000U } else { 0xf9400000U }
+  base | (rn.reinterpret_as_uint() << 5) | rt.reinterpret_as_uint()
+}
+
+///|
+fn encode_ldr_post_64(
+  rt_text : String,
+  base_text : String,
+  offset_text : String,
+) -> UInt {
+  let rt = parse_register(rt_text)
+  let rn = parse_register(clean_mem_token(base_text))
+  let offset = parse_immediate(clean_mem_token(offset_text))
+  0xf8400400U |
+  ((offset & 0x1ff).reinterpret_as_uint() << 12) |
+  (rn.reinterpret_as_uint() << 5) |
+  rt.reinterpret_as_uint()
+}
+
+///|
+fn encode_str(rest : String) -> UInt {
+  let parts = split_operands(rest)
+  if parts.length() != 3 {
+    abort("malformed str instruction")
+  }
+  if parts[2].has_suffix("]!") {
+    encode_str_pre_64(parts[0], parts[1], parts[2])
+  } else {
+    encode_stur_64(parts[0], parts[1], parts[2])
+  }
+}
+
+///|
+fn encode_ldr(rest : String) -> UInt {
+  let parts = split_operands(rest)
+  if parts.length() == 2 {
+    encode_ldr_unsigned(parts[0], parts[1])
+  } else if parts.length() == 3 {
+    encode_ldr_post_64(parts[0], parts[1], parts[2])
+  } else {
+    abort("malformed ldr instruction")
   }
 }
 
@@ -273,6 +426,16 @@ fn assemble_text_from_darwin_arm64(assembly : String) -> AssembledText {
           abort("malformed sxtw instruction")
         }
         words.push(encode_sxtw(parts[0], parts[1]))
+      } else if line.has_prefix("add\t") {
+        words.push(encode_add_sub(line.substring(start=4), false))
+      } else if line.has_prefix("sub\t") {
+        words.push(encode_add_sub(line.substring(start=4), true))
+      } else if line.has_prefix("mul\t") {
+        words.push(encode_mul(line.substring(start=4)))
+      } else if line.has_prefix("str\t") {
+        words.push(encode_str(line.substring(start=4)))
+      } else if line.has_prefix("ldr\t") {
+        words.push(encode_ldr(line.substring(start=4)))
       } else if line.has_prefix("b\t") {
         pending.push({
           offset: words.length() * 4,
