@@ -1358,3 +1358,92 @@ async test "e2e member access reads field from struct call result" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")
 }
+
+///|
+async test "e2e parameter shadowing preserves compound literal frame slot" {
+  let source =
+    #|typedef struct Pair {
+    #|  long a;
+    #|  long b;
+    #|} Pair;
+    #|
+    #|int sum_pair(Pair v) {
+    #|  return (int)(v.a + v.b);
+    #|}
+    #|
+    #|int foo(int name) {
+    #|  goto done;
+    #|done:
+    #|  {
+    #|    int result;
+    #|    int name = 7;
+    #|    result = sum_pair((Pair){ .a = 1, .b = 2 });
+    #|    return name + result;
+    #|  }
+    #|}
+    #|
+    #|int main(void) {
+    #|  return foo(5);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="10")
+}
+
+///|
+async test "e2e global floating initializer folds infinities and nan" {
+  let source =
+    #|double pos = 1.0 / 0.0;
+    #|double neg = -__builtin_huge_valf();
+    #|double nanv = __builtin_nanf("0x7fc00000");
+    #|
+    #|int main(void) {
+    #|  if (!(pos > 2147483647.0)) return 1;
+    #|  if (!(neg < -2147483647.0)) return 2;
+    #|  if (nanv == nanv) return 3;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e local floating builtins produce infinities and nan" {
+  let source =
+    #|typedef union Box {
+    #|  double d;
+    #|  long bits;
+    #|} Box;
+    #|
+    #|int main(void) {
+    #|  Box nan_box = { .d = __builtin_nanf("0x7fc00000") };
+    #|  double inf = __builtin_huge_valf();
+    #|  if (nan_box.d == nan_box.d) return 1;
+    #|  if (!(inf > 2147483647.0)) return 2;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e nested designator advances following struct initializer" {
+  let source =
+    #|typedef union ValueUnion {
+    #|  double float64;
+    #|  long int64;
+    #|} ValueUnion;
+    #|
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  int tag;
+    #|} Value;
+    #|
+    #|int main(void) {
+    #|  Value v = { .u.float64 = __builtin_nanf("0x7fc00000"), 8 };
+    #|  if (v.tag != 8) return 1;
+    #|  if (v.u.float64 == v.u.float64) return 2;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}

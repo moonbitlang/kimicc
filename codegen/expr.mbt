@@ -266,7 +266,17 @@ fn Codegen::call_return_type(
     FuncPtr(ret, _, _) => ret
     _ =>
       match func {
-        Var(name) => self.func_rets.get_or_default(name, SInt)
+        Var(name) =>
+          match name {
+            "__builtin_nanf" | "__builtin_huge_valf" | "__builtin_inff" => Float
+            "__builtin_nan"
+            | "__builtin_nanl"
+            | "__builtin_huge_val"
+            | "__builtin_huge_vall"
+            | "__builtin_inf"
+            | "__builtin_infl" => Double
+            _ => self.func_rets.get_or_default(name, SInt)
+          }
         _ => SInt
       }
   }
@@ -806,7 +816,7 @@ fn Codegen::emit_builtin_call(
       }
       true
     }
-    "__builtin_nan" | "__builtin_nanf" => {
+    "__builtin_nan" | "__builtin_nanf" | "__builtin_nanl" => {
       // Ignore string argument, return canonical NaN
       if name == "__builtin_nanf" {
         // float NaN: 0x7FC00000
@@ -820,7 +830,7 @@ fn Codegen::emit_builtin_call(
       }
       true
     }
-    "__builtin_huge_val" | "__builtin_inf" => {
+    "__builtin_huge_val" | "__builtin_huge_vall" | "__builtin_inf" => {
       // double +inf: 0x7FF0000000000000
       self.emit("\tmovz\tx9, #0")
       self.emit("\tmovk\tx9, #0, lsl #16")
@@ -1309,8 +1319,18 @@ fn Codegen::emit_init_aggregate_at_addr(
       let mut positional = 0
       for init_expr in init_exprs {
         let field = match init_expr {
-          DesignatedField(field_name, _) =>
-            self.find_field_layout(name, field_name)
+          DesignatedField(field_name, _) => {
+            let mut found = None
+            for i = 0; i < layout.length(); i = i + 1 {
+              let f = layout[i]
+              if f.0 == field_name {
+                found = Some(f)
+                positional = i + 1
+                break
+              }
+            }
+            found
+          }
           _ =>
             if positional < layout.length() {
               let f = layout[positional]
@@ -1396,6 +1416,16 @@ fn Codegen::emit_init_aggregate_at_addr(
 }
 
 ///|
+fn Codegen::emit_load_float_literal(self : Codegen, v : Double) -> Unit {
+  let idx = self.fp_literals.length()
+  self.fp_literals.push(v)
+  let label = "_fp_lit_" + self.func_name + "_" + idx.to_string()
+  self.emit("\tadrp\tx9, " + label + "@PAGE")
+  self.emit("\tadd\tx9, x9, " + label + "@PAGEOFF")
+  self.emit("\tldr\tx9, [x9]")
+}
+
+///|
 fn Codegen::gen_expr(
   self : Codegen,
   expr : @parser.Expr,
@@ -1403,14 +1433,7 @@ fn Codegen::gen_expr(
 ) -> Unit {
   match expr {
     Number(n) => self.emit_load_int("x9", n)
-    FloatLiteral(v) => {
-      let idx = self.fp_literals.length()
-      self.fp_literals.push(v)
-      let label = "_fp_lit_" + self.func_name + "_" + idx.to_string()
-      self.emit("\tadrp\tx9, " + label + "@PAGE")
-      self.emit("\tadd\tx9, x9, " + label + "@PAGEOFF")
-      self.emit("\tldr\tx9, [x9]")
-    }
+    FloatLiteral(v) => self.emit_load_float_literal(v)
     String(s) => {
       let idx = self.strings.length()
       self.strings.push(s)

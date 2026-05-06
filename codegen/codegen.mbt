@@ -300,6 +300,74 @@ fn Codegen::fold_const(self : Codegen, expr : @parser.Expr) -> Int64? {
 }
 
 ///|
+fn Codegen::fold_float_const(self : Codegen, expr : @parser.Expr) -> Double? {
+  match expr {
+    FloatLiteral(v) => Some(v)
+    Number(n) => Some(n.to_double())
+    Binary("+", a, b) =>
+      match (self.fold_float_const(a), self.fold_float_const(b)) {
+        (Some(x), Some(y)) => Some(x + y)
+        _ => None
+      }
+    Binary("-", a, b) =>
+      match (self.fold_float_const(a), self.fold_float_const(b)) {
+        (Some(x), Some(y)) => Some(x - y)
+        _ => None
+      }
+    Binary("*", a, b) =>
+      match (self.fold_float_const(a), self.fold_float_const(b)) {
+        (Some(x), Some(y)) => Some(x * y)
+        _ => None
+      }
+    Binary("/", a, b) =>
+      match (self.fold_float_const(a), self.fold_float_const(b)) {
+        (Some(x), Some(y)) => Some(x / y)
+        _ => None
+      }
+    Unary("-", e) =>
+      match self.fold_float_const(e) {
+        Some(x) => Some(-x)
+        None => None
+      }
+    Unary("+", e) => self.fold_float_const(e)
+    Ternary(cond, a, b) =>
+      match self.fold_const(cond) {
+        Some(0L) => self.fold_float_const(b)
+        Some(_) => self.fold_float_const(a)
+        None => None
+      }
+    Cast(_, e) => self.fold_float_const(e)
+    DesignatedField(_, e) => self.fold_float_const(e)
+    DesignatedIndex(_, e) => self.fold_float_const(e)
+    DesignatedRange(_, _, e) => self.fold_float_const(e)
+    Call(Var(name), _) =>
+      match name {
+        "__builtin_nan" | "__builtin_nanf" | "__builtin_nanl" => Some(0.0 / 0.0)
+        "__builtin_huge_val"
+        | "__builtin_huge_valf"
+        | "__builtin_huge_vall"
+        | "__builtin_inf"
+        | "__builtin_inff"
+        | "__builtin_infl" => Some(1.0 / 0.0)
+        _ => None
+      }
+    _ => None
+  }
+}
+
+///|
+fn Codegen::emit_global_float(
+  self : Codegen,
+  ty : @parser.Type,
+  v : Double,
+) -> Unit {
+  match ty {
+    Float => self.emit("\t.single\t" + v.to_string())
+    _ => self.emit("\t.double\t" + v.to_string())
+  }
+}
+
+///|
 fn Codegen::global_lvalue_reloc(
   self : Codegen,
   expr : @parser.Expr,
@@ -419,6 +487,17 @@ fn Codegen::emit_global_scalar(
       }
     _ => ()
   }
+  match ty {
+    Float | Double =>
+      match self.fold_float_const(expr) {
+        Some(v) => {
+          self.emit_global_float(ty, v)
+          return
+        }
+        None => ()
+      }
+    _ => ()
+  }
   // Try constant-fold the expression first
   let folded_expr = match self.fold_const(expr) {
     Some(n) => @parser.Expr::Number(n)
@@ -429,7 +508,8 @@ fn Codegen::emit_global_scalar(
       match ty {
         Bool | SChar | UChar => self.emit("\t.byte\t" + n.to_string())
         SShort | UShort => self.emit("\t.short\t" + n.to_string())
-        SInt | UInt | Float => self.emit("\t.long\t" + n.to_string())
+        SInt | UInt => self.emit("\t.long\t" + n.to_string())
+        Float | Double => self.emit_global_float(ty, n.to_double())
         Struct(_) | Union(_) | Array(_, _) => {
           // Zero-initialize aggregate type
           let size = self.type_size(ty)
@@ -437,11 +517,7 @@ fn Codegen::emit_global_scalar(
         }
         _ => self.emit("\t.quad\t" + n.to_string())
       }
-    FloatLiteral(v) =>
-      match ty {
-        Float => self.emit("\t.single\t" + v.to_string())
-        _ => self.emit("\t.double\t" + v.to_string())
-      }
+    FloatLiteral(v) => self.emit_global_float(ty, v)
     String(s) =>
       match ty {
         Array(SChar, n) | Array(UChar, n) => {

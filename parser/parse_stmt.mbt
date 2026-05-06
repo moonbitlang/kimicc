@@ -684,6 +684,16 @@ fn Parser::parse_static_initializer(
 }
 
 ///|
+fn find_struct_init_field_index(fields : Array[Param], name : String) -> Int {
+  for i = 0; i < fields.length(); i = i + 1 {
+    if fields[i].name == name {
+      return i
+    }
+  }
+  -1
+}
+
+///|
 fn Parser::push_struct_init_assignments(
   self : Parser,
   stmts : Array[Stmt],
@@ -700,18 +710,39 @@ fn Parser::push_struct_init_assignments(
   } else {
     []
   }
-  for i = 0; i < init_exprs.length() && i < fields.length(); i = i + 1 {
-    let field_target = Expr::MemberAccess(target, fields[i].name)
-    match (fields[i].ty, init_exprs[i]) {
+  let mut positional = 0
+  for init_expr in init_exprs {
+    let (field_index, value) = match init_expr {
+      DesignatedField(field_name, e) => {
+        let idx = find_struct_init_field_index(fields, field_name)
+        if idx >= 0 {
+          positional = idx + 1
+        }
+        (idx, e)
+      }
+      _ => {
+        let idx = positional
+        positional += 1
+        (idx, init_expr)
+      }
+    }
+    if field_index < 0 || field_index >= fields.length() {
+      continue
+    }
+    let field = fields[field_index]
+    let field_target = Expr::MemberAccess(target, field.name)
+    match (field.ty, value) {
       (Struct(_) | Union(_), Expr::Array(field_exprs)) =>
         self.push_struct_init_assignments(
           stmts,
           field_target,
-          fields[i].ty,
+          field.ty,
           field_exprs,
         )
+      (Struct(_) | Union(_), Expr::DesignatedField(_, _)) =>
+        self.push_struct_init_assignments(stmts, field_target, field.ty, [value])
       (Struct(_) | Union(_), Expr::Number(0)) => ()
-      _ => stmts.push(ExprStmt(Expr::Assign(field_target, init_exprs[i])))
+      _ => stmts.push(ExprStmt(Expr::Assign(field_target, value)))
     }
   }
 }

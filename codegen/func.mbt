@@ -12,8 +12,19 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
       self.func_name = decl.name
       self.func_params = decl.params
       // Allocate space for params
+      let param_offsets : Map[String, Int] = {}
+      let param_types : Map[String, @parser.Type] = {}
+      let mut param_stack_end = 0
       for i = 0; i < decl.params.length(); i = i + 1 {
-        let _ = self.alloc_local(decl.params[i].name, decl.params[i].ty)
+        let p = decl.params[i]
+        let offset = self.alloc_local(p.name, p.ty)
+        param_offsets[p.name] = offset
+        param_types[p.name] = p.ty
+        let param_size = (self.type_size(p.ty) + 7) / 8 * 8
+        let param_end = offset + param_size
+        if param_end > param_stack_end {
+          param_stack_end = param_end
+        }
       }
       // Collect locals and compute offsets
       self.collect_locals(body)
@@ -39,7 +50,7 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
       let mut fp_idx = 0
       for i = 0; i < decl.params.length(); i = i + 1 {
         let p = decl.params[i]
-        let offset = self.local_offsets[p.name]
+        let offset = param_offsets[p.name]
         match p.ty {
           Float => {
             if fp_idx < 8 {
@@ -118,19 +129,6 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
         }
       }
       // Reset local state so gen_stmt allocates locals fresh
-      let param_offsets : Map[String, Int] = {}
-      let param_types : Map[String, @parser.Type] = {}
-      let mut param_stack_end = 0
-      for i = 0; i < decl.params.length(); i = i + 1 {
-        let p = decl.params[i]
-        param_offsets[p.name] = self.local_offsets[p.name]
-        param_types[p.name] = self.var_types[p.name]
-        let param_size = (self.type_size(p.ty) + 7) / 8 * 8
-        param_stack_end = @math.maximum(
-          param_stack_end,
-          self.local_offsets[p.name] + param_size,
-        )
-      }
       self.local_offsets = param_offsets
       self.var_types = param_types
       self.stack_size = param_stack_end
