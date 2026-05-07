@@ -28,6 +28,43 @@ test "jit calls internal helper" {
 }
 
 ///|
+test "jit calls external libc function" {
+  let source =
+    #|extern int strcmp(char *, char *);
+    #|int entry(void) { return strcmp("kimicc", "kimicc") + 42; }
+  match call_i32_0(source, "entry") {
+    Some(value) => if value != 42 { abort("expected 42") }
+    None => abort("JIT call failed")
+  }
+}
+
+///|
+test "jit calls external function through local pointer" {
+  let source =
+    #|extern int strcmp(char *, char *);
+    #|int entry(void) {
+    #|  int (*p)(char *, char *) = strcmp;
+    #|  return p("a", "a") + 42;
+    #|}
+  match call_i32_0(source, "entry") {
+    Some(value) => if value != 42 { abort("expected 42") }
+    None => abort("JIT call failed")
+  }
+}
+
+///|
+test "jit calls external function through global pointer" {
+  let source =
+    #|extern int strcmp(char *, char *);
+    #|int (*p)(char *, char *) = strcmp;
+    #|int entry(void) { return p("a", "a") + 42; }
+  match call_i32_0(source, "entry") {
+    Some(value) => if value != 42 { abort("expected 42") }
+    None => abort("JIT call failed")
+  }
+}
+
+///|
 test "jit reads initialized global" {
   let source = "int g = 40; int entry(void) { return g + 2; }"
   match call_i32_0(source, "entry") {

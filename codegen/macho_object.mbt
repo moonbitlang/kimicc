@@ -75,6 +75,12 @@ priv struct SymbolEntry {
 }
 
 ///|
+priv struct JitExternalRelocation {
+  offset : Int
+  symbol : String
+}
+
+///|
 priv struct SymbolLayout {
   entries : Array[SymbolEntry]
   indexes : Map[String, Int]
@@ -94,6 +100,7 @@ pub struct JitImage {
   code : Bytes
   executable_size : Int
   base_relocations : Bytes
+  external_relocations : Bytes
   symbols : Array[JitSymbol]
 }
 
@@ -3288,6 +3295,25 @@ fn u32_offsets_to_bytes(values : Array[Int]) -> Bytes {
 }
 
 ///|
+fn jit_external_relocations_to_bytes(
+  relocs : Array[JitExternalRelocation],
+) -> Bytes {
+  let mut size_hint = relocs.length() * 8
+  for reloc in relocs {
+    size_hint = size_hint + reloc.symbol.length()
+  }
+  let buf = @buffer.new(size_hint~)
+  for reloc in relocs {
+    write_i32_le(buf, reloc.offset)
+    write_i32_le(buf, reloc.symbol.length())
+    for ch in reloc.symbol {
+      buf.write_byte(ch.to_int().to_byte())
+    }
+  }
+  buf.to_bytes()
+}
+
+///|
 fn find_text_section(obj : AssembledObject) -> Int {
   for i = 0; i < obj.sections.length(); i = i + 1 {
     if section_is_text(obj.sections[i]) {
@@ -3308,6 +3334,11 @@ fn jit_page_size() -> Int {
 }
 
 ///|
+fn symbol_is_defined(obj : AssembledObject, symbol : String) -> Bool {
+  obj.symbols.get(symbol) is Some(_)
+}
+
+///|
 fn collect_jit_got_symbols(obj : AssembledObject) -> Array[String] {
   let symbols : Array[String] = []
   for section in obj.sections {
@@ -3321,10 +3352,24 @@ fn collect_jit_got_symbols(obj : AssembledObject) -> Array[String] {
 }
 
 ///|
+fn collect_jit_external_branch_symbols(obj : AssembledObject) -> Array[String] {
+  let symbols : Array[String] = []
+  for section in obj.sections {
+    for reloc in section.relocs {
+      if reloc.type_ == 2 && !symbol_is_defined(obj, reloc.symbol) {
+        push_string_once(symbols, reloc.symbol)
+      }
+    }
+  }
+  symbols
+}
+
+///|
 fn layout_jit_sections(
   sections : Array[ObjectSection],
   got_symbols : Array[String],
-) -> (Int, Map[String, Int], Int) {
+  external_branch_symbols : Array[String],
+) -> (Int, Map[String, Int], Map[String, Int], Int) {
   let mut cursor = 0
   for section in sections {
     if section_is_jit_executable(section) {
@@ -3334,6 +3379,12 @@ fn layout_jit_sections(
       section.offset = cursor
       cursor = cursor + section.bytes.length()
     }
+  }
+  cursor = align_int(cursor, 4)
+  let branch_stub_offsets : Map[String, Int] = {}
+  for symbol in external_branch_symbols {
+    branch_stub_offsets[symbol] = cursor
+    cursor = cursor + 16
   }
   let executable_size = align_int(cursor, jit_page_size())
   cursor = executable_size
@@ -3359,6 +3410,7 @@ fn layout_jit_sections(
       cursor
     },
     got_offsets,
+    branch_stub_offsets,
     executable_size,
   )
 }
@@ -3380,6 +3432,21 @@ fn copy_jit_sections(
     for i = 0; i < section.bytes.length(); i = i + 1 {
       image[section.addr + i] = section.bytes[i]
     }
+  }
+}
+
+///|
+fn write_jit_external_branch_stubs(
+  image : Array[Int],
+  symbols : Array[String],
+  branch_stub_offsets : Map[String, Int],
+  external_relocations : Array[JitExternalRelocation],
+) -> Unit {
+  for symbol in symbols {
+    let offset = branch_stub_offsets[symbol]
+    patch_u32_in_array(image, offset, 0x58000050U)
+    patch_u32_in_array(image, offset + 4, 0xd61f0200U)
+    external_relocations.push({ offset: offset + 8, symbol })
   }
 }
 
@@ -3466,33 +3533,66 @@ fn patch_jit_relocations(
   image : Array[Int],
   got_symbols : Array[String],
   got_offsets : Map[String, Int],
+  branch_stub_offsets : Map[String, Int],
+  external_relocations : Array[JitExternalRelocation],
 ) -> Array[Int] {
   let base_relocations : Array[Int] = []
   for got_symbol in got_symbols {
-    patch_i64_in_array(
-      image,
-      got_offsets[got_symbol],
-      symbol_image_addr(obj, got_symbol).to_int64(),
-    )
-    base_relocations.push(got_offsets[got_symbol])
+    let got_offset = got_offsets[got_symbol]
+    if symbol_is_defined(obj, got_symbol) {
+      patch_i64_in_array(
+        image,
+        got_offset,
+        symbol_image_addr(obj, got_symbol).to_int64(),
+      )
+      base_relocations.push(got_offset)
+    } else {
+      external_relocations.push({ offset: got_offset, symbol: got_symbol })
+    }
   }
   for section in obj.sections {
     for reloc in section.relocs {
       let offset = section.addr + reloc.address
-      let target = if reloc.type_ == 5 || reloc.type_ == 6 {
-        got_offsets[reloc.symbol]
-      } else {
-        symbol_image_addr(obj, reloc.symbol)
-      }
       match reloc.type_ {
         0 => {
           let addend = read_i64_from_array(image, offset)
-          patch_i64_in_array(image, offset, target.to_int64() + addend)
-          base_relocations.push(offset)
+          if symbol_is_defined(obj, reloc.symbol) {
+            let target = symbol_image_addr(obj, reloc.symbol)
+            patch_i64_in_array(image, offset, target.to_int64() + addend)
+            base_relocations.push(offset)
+          } else {
+            external_relocations.push({ offset, symbol: reloc.symbol })
+          }
         }
-        2 => patch_jit_branch(image, offset, target)
-        3 | 5 => patch_jit_adrp(image, offset, target)
-        4 | 6 => patch_jit_pageoff(image, offset, target, reloc.type_)
+        2 => {
+          let target = match obj.symbols.get(reloc.symbol) {
+            Some(loc) => obj.sections[loc.section_index].addr + loc.offset
+            None => branch_stub_offsets[reloc.symbol]
+          }
+          patch_jit_branch(image, offset, target)
+        }
+        3 | 4 => {
+          if !symbol_is_defined(obj, reloc.symbol) {
+            abort(
+              "JIT image does not support external page relocation: " +
+              reloc.symbol,
+            )
+          }
+          let target = symbol_image_addr(obj, reloc.symbol)
+          if reloc.type_ == 3 {
+            patch_jit_adrp(image, offset, target)
+          } else {
+            patch_jit_pageoff(image, offset, target, reloc.type_)
+          }
+        }
+        5 => patch_jit_adrp(image, offset, got_offsets[reloc.symbol])
+        6 =>
+          patch_jit_pageoff(
+            image,
+            offset,
+            got_offsets[reloc.symbol],
+            reloc.type_,
+          )
         _ => abort("unsupported JIT relocation type")
       }
     }
@@ -3527,19 +3627,28 @@ fn jit_symbols_from_assembled(
 fn jit_image_from_assembled(obj : AssembledObject) -> JitImage {
   let text_index = find_text_section(obj)
   let got_symbols = collect_jit_got_symbols(obj)
-  let (image_size, got_offsets, executable_size) = layout_jit_sections(
+  let external_branch_symbols = collect_jit_external_branch_symbols(obj)
+  let (image_size, got_offsets, branch_stub_offsets, executable_size) = layout_jit_sections(
     obj.sections,
     got_symbols,
+    external_branch_symbols,
   )
   let image = Array::make(image_size, 0)
   copy_jit_sections(image, obj.sections)
+  let external_relocations : Array[JitExternalRelocation] = []
+  write_jit_external_branch_stubs(
+    image, external_branch_symbols, branch_stub_offsets, external_relocations,
+  )
   let base_relocations = patch_jit_relocations(
-    obj, image, got_symbols, got_offsets,
+    obj, image, got_symbols, got_offsets, branch_stub_offsets, external_relocations,
   )
   {
     code: section_bytes_to_bytes(image),
     executable_size,
     base_relocations: u32_offsets_to_bytes(base_relocations),
+    external_relocations: jit_external_relocations_to_bytes(
+      external_relocations,
+    ),
     symbols: jit_symbols_from_assembled(obj, text_index),
   }
 }

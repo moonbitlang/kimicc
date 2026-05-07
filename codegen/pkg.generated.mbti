@@ -46,6 +46,7 @@ pub struct JitImage {
   code : Bytes
   executable_size : Int
   base_relocations : Bytes
+  external_relocations : Bytes
   symbols : Array[JitSymbol]
 }
 

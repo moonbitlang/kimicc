@@ -1,5 +1,7 @@
+#include <dlfcn.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -34,6 +36,25 @@ static uint32_t kimicc_jit_read_u32_le(const uint8_t *bytes) {
          ((uint32_t)bytes[3] << 24);
 }
 
+static int kimicc_jit_add_u64_to_slot(
+  uint8_t *ptr,
+  size_t mapped_size,
+  uint32_t offset,
+  uint64_t addend
+) {
+  if (
+    (size_t)offset > mapped_size ||
+    mapped_size - (size_t)offset < sizeof(uint64_t)
+  ) {
+    return -1;
+  }
+  uint64_t value = 0;
+  memcpy(&value, ptr + offset, sizeof(value));
+  value += addend;
+  memcpy(ptr + offset, &value, sizeof(value));
+  return 0;
+}
+
 static int kimicc_jit_apply_base_relocations(
   uint8_t *ptr,
   size_t mapped_size,
@@ -49,15 +70,68 @@ static int kimicc_jit_apply_base_relocations(
       (const uint8_t *)base_relocations + i
     );
     if (
-      (size_t)offset > mapped_size ||
-      mapped_size - (size_t)offset < sizeof(uint64_t)
+      kimicc_jit_add_u64_to_slot(
+        ptr,
+        mapped_size,
+        offset,
+        (uint64_t)base
+      ) != 0
     ) {
       return -1;
     }
-    uint64_t value = 0;
-    memcpy(&value, ptr + offset, sizeof(value));
-    value += (uint64_t)base;
-    memcpy(ptr + offset, &value, sizeof(value));
+  }
+  return 0;
+}
+
+static void *kimicc_jit_lookup_symbol(const char *name) {
+  void *symbol = dlsym(RTLD_DEFAULT, name);
+  if (symbol == NULL && name[0] == '_') {
+    symbol = dlsym(RTLD_DEFAULT, name + 1);
+  }
+  return symbol;
+}
+
+static int kimicc_jit_apply_external_relocations(
+  uint8_t *ptr,
+  size_t mapped_size,
+  moonbit_bytes_t external_relocations
+) {
+  const uint8_t *bytes = (const uint8_t *)external_relocations;
+  size_t reloc_size = Moonbit_array_length(external_relocations);
+  size_t i = 0;
+  while (i < reloc_size) {
+    if (reloc_size - i < 8) {
+      return -1;
+    }
+    uint32_t offset = kimicc_jit_read_u32_le(bytes + i);
+    uint32_t name_size = kimicc_jit_read_u32_le(bytes + i + 4);
+    i += 8;
+    if (name_size > reloc_size - i) {
+      return -1;
+    }
+    char *name = (char *)malloc((size_t)name_size + 1);
+    if (name == NULL) {
+      return -1;
+    }
+    memcpy(name, bytes + i, name_size);
+    name[name_size] = '\0';
+    i += name_size;
+
+    void *symbol = kimicc_jit_lookup_symbol(name);
+    free(name);
+    if (symbol == NULL) {
+      return -1;
+    }
+    if (
+      kimicc_jit_add_u64_to_slot(
+        ptr,
+        mapped_size,
+        offset,
+        (uint64_t)(uintptr_t)symbol
+      ) != 0
+    ) {
+      return -1;
+    }
   }
   return 0;
 }
@@ -66,7 +140,8 @@ MOONBIT_FFI_EXPORT
 KimiccJitMemory *kimicc_jit_memory_new(
   moonbit_bytes_t code,
   int32_t executable_size,
-  moonbit_bytes_t base_relocations
+  moonbit_bytes_t base_relocations,
+  moonbit_bytes_t external_relocations
 ) {
   size_t code_size = Moonbit_array_length(code);
   if (code_size == 0) {
@@ -94,6 +169,14 @@ KimiccJitMemory *kimicc_jit_memory_new(
         (uint8_t *)ptr,
         mapped_size,
         base_relocations
+      ) != 0) {
+    munmap(ptr, mapped_size);
+    return kimicc_jit_memory_make_empty();
+  }
+  if (kimicc_jit_apply_external_relocations(
+        (uint8_t *)ptr,
+        mapped_size,
+        external_relocations
       ) != 0) {
     munmap(ptr, mapped_size);
     return kimicc_jit_memory_make_empty();

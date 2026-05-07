@@ -21,6 +21,7 @@ pub fn compile(source : String) -> Module? {
     image.code,
     image.executable_size,
     image.base_relocations,
+    image.external_relocations,
   )
   if executable_memory_is_valid(memory) {
     Some({ image, memory })
