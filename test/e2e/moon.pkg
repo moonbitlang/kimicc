@@ -1,12 +1,14 @@
 import {
   "bobzhang/kimicc/parser",
+}
+
+import {
   "bobzhang/kimicc/codegen",
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/async",
   "moonbitlang/async/fs",
-  "moonbitlang/async/stdio",
-}
+} for "test"
 
 supported_targets = "+native"
 
