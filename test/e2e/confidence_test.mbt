@@ -852,6 +852,73 @@ async test "e2e deterministic scalar aggregate differential corpus matches clang
 }
 
 ///|
+fn deterministic_scalar_control_differential_source(case_index : Int) -> String {
+  let seed_a = case_index * 9973 + 123
+  let seed_b = case_index * 7919 + 4567
+  let rounds = case_index % 9 + 6
+  let source = StringBuilder::new()
+  source.write_string("#include <stdio.h>\n")
+  source.write_string("static unsigned mix(unsigned x, unsigned y, int n) {\n")
+  source.write_string("  unsigned r = x ^ (y + 1103515245u);\n")
+  source.write_string("  for (int i = 0; i < n; i = i + 1) {\n")
+  source.write_string("    switch ((r + (unsigned)i) & 7u) {\n")
+  source.write_string("      case 0: r = (r << 3) | (r >> 29); break;\n")
+  source.write_string(
+    "      case 1: r = r + (y ^ (unsigned)(i * 17 + 3)); break;\n",
+  )
+  source.write_string("      case 2: r = r - ((x >> (i & 7)) | 1u); break;\n")
+  source.write_string("      case 3: r = (r & 16777215u) ^ (r >> 7); break;\n")
+  source.write_string("      case 4: r = (r * 33u) + (x & 255u); break;\n")
+  source.write_string(
+    "      case 5: r = (r / ((y & 15u) + 1u)) + (r % ((x & 31u) + 1u)); break;\n",
+  )
+  source.write_string("      case 6: r = (r <= y) ? r + x : r - y; break;\n")
+  source.write_string("      default: r = ~r + (unsigned)i; break;\n")
+  source.write_string("    }\n")
+  source.write_string("  }\n")
+  source.write_string("  return r;\n")
+  source.write_string("}\n")
+  source.write_string("int main(void) {\n")
+  source.write_string("  unsigned a = ")
+  source.write_string(seed_a.to_string())
+  source.write_string("u;\n")
+  source.write_string("  unsigned b = ")
+  source.write_string(seed_b.to_string())
+  source.write_string("u;\n")
+  source.write_string("  unsigned r = 0u;\n")
+  source.write_string("  for (int i = 0; i < ")
+  source.write_string(rounds.to_string())
+  source.write_string("; i = i + 1) {\n")
+  source.write_string(
+    "    r ^= mix(a + (unsigned)(i * 13), b ^ (unsigned)(i * 101), (i % 7) + 3);\n",
+  )
+  source.write_string("    if ((r & 3u) == 0u) r += a >> (i & 7);\n")
+  source.write_string("    else if ((r & 3u) == 1u) r ^= b << (i & 3);\n")
+  source.write_string("    else r -= (unsigned)(i * 19 + 5);\n")
+  source.write_string("  }\n")
+  source.write_string(
+    "  long signed_probe = (long)(int)(r & 65535u) - 32768L;\n",
+  )
+  source.write_string("  printf(\"case=%d r=%u signed=%ld\\n\", ")
+  source.write_string(case_index.to_string())
+  source.write_string(", r, signed_probe);\n")
+  source.write_string("  return (int)(r & 127u);\n")
+  source.write_string("}\n")
+  source.to_string()
+}
+
+///|
+async test "e2e deterministic scalar control differential corpus matches clang" {
+  for case_index in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] {
+    let result = run_source_against_clang_baseline(
+      deterministic_scalar_control_differential_source(case_index),
+      "scalar_control_differential_" + case_index.to_string(),
+    )
+    assert_true(result.output.contains("case=" + case_index.to_string()))
+  }
+}
+
+///|
 async test "e2e bitfields pack after byte fields like clang" {
   let source =
     #|typedef unsigned int Pgno;
