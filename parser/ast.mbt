@@ -1,4 +1,8 @@
 ///|
+/// C type representation used by the parser and code generator.
+///
+/// `Struct(name)` and `Union(name)` identify aggregate declarations by name;
+/// layout-sensitive operations need the corresponding `StructDecl`.
 pub(all) enum Type {
   Void
   Bool
@@ -63,7 +67,10 @@ pub impl Show for Type with to_string(self) {
 }
 
 ///|
-// Helper: check if type is any integer type (signed or unsigned)
+/// Returns true for scalar integer types.
+///
+/// `Aligned(inner, _)` delegates to `inner`. Pointers are not considered
+/// integers by this predicate.
 pub fn Type::is_integer(self : Type) -> Bool {
   match self {
     SChar
@@ -84,7 +91,9 @@ pub fn Type::is_integer(self : Type) -> Bool {
 }
 
 ///|
-// Helper: check if type is a signed integer type
+/// Returns true for signed scalar integer types.
+///
+/// `Aligned(inner, _)` delegates to `inner`. Non-integer types return false.
 pub fn Type::is_signed(self : Type) -> Bool {
   match self {
     SChar | SShort | SInt | SLong | SLongLong | SInt128 => true
@@ -94,7 +103,7 @@ pub fn Type::is_signed(self : Type) -> Bool {
 }
 
 ///|
-// Helper: check if type is a floating-point type
+/// Returns true for `float` and `double`.
 pub fn Type::is_floating(self : Type) -> Bool {
   match self {
     Float | Double => true
@@ -104,7 +113,9 @@ pub fn Type::is_floating(self : Type) -> Bool {
 }
 
 ///|
-// Helper: get the unsigned variant of a signed integer type
+/// Converts a signed integer type to the corresponding unsigned type.
+///
+/// Types that are already unsigned or not integer types are returned unchanged.
 pub fn Type::to_unsigned(self : Type) -> Type {
   match self {
     SChar => UChar
@@ -119,7 +130,10 @@ pub fn Type::to_unsigned(self : Type) -> Type {
 }
 
 ///|
-// Helper: get the size in bytes for a type (ARM64 macOS ABI)
+/// Returns the ABI size in bytes for this type under ARM64 macOS assumptions.
+///
+/// This method aborts for `Struct(name)` and `Union(name)` because a bare
+/// `Type` does not include the aggregate declaration layout.
 pub fn Type::size(self : Type) -> Int {
   match self {
     Void => 0
@@ -147,7 +161,10 @@ pub fn Type::size(self : Type) -> Int {
 }
 
 ///|
-// Helper: get the alignment in bytes for a type (ARM64 macOS ABI)
+/// Returns the ABI alignment in bytes under ARM64 macOS assumptions.
+///
+/// This method aborts for `Struct(name)` and `Union(name)` because aggregate
+/// alignment depends on the corresponding declaration layout.
 pub fn Type::align(self : Type) -> Int {
   match self {
     Void => 1
@@ -180,6 +197,10 @@ pub fn Type::align(self : Type) -> Int {
 }
 
 ///|
+/// C expression tree.
+///
+/// Binary and unary operators are stored as source-level operator strings such
+/// as `"+"`, `"=="`, `"*"`, and `"!"`.
 pub(all) enum Expr {
   Number(Int64)
   FloatLiteral(Double)
@@ -213,6 +234,11 @@ pub(all) enum Expr {
 } derive(Eq)
 
 ///|
+/// C statement tree.
+///
+/// Compound statements contain nested statement arrays. `For(init, cond, inc,
+/// body)` stores the condition as an expression; parser-generated empty
+/// conditions are represented internally as a truthy expression.
 pub(all) enum Stmt {
   ExprStmt(Expr)
   Return(Expr?)
@@ -232,6 +258,9 @@ pub(all) enum Stmt {
 } derive(Eq)
 
 ///|
+/// Function parameter or aggregate field.
+///
+/// `bit_width` is `Some(width)` for C bit-fields and `None` otherwise.
 pub(all) struct Param {
   ty : Type
   name : String
@@ -239,6 +268,9 @@ pub(all) struct Param {
 } derive(Eq)
 
 ///|
+/// Struct or union declaration.
+///
+/// `is_union` distinguishes `union` declarations from `struct` declarations.
 pub(all) struct StructDecl {
   name : String
   fields : Array[Param]
@@ -246,6 +278,9 @@ pub(all) struct StructDecl {
 } derive(Eq)
 
 ///|
+/// Function declaration or definition.
+///
+/// `body` is `None` for declarations without a function body.
 pub(all) struct FuncDecl {
   ret : Type
   name : String
@@ -257,12 +292,19 @@ pub(all) struct FuncDecl {
 } derive(Eq)
 
 ///|
+/// Global initializer representation.
+///
+/// `Scalar` covers scalar initializers and `Array` covers brace initializer
+/// lists, including aggregate initializers.
 pub(all) enum GlobalInit {
   Scalar(Expr)
   Array(Array[Expr])
 } derive(Eq)
 
 ///|
+/// Global variable declaration or definition.
+///
+/// `init` is `None` for declarations without an initializer.
 pub(all) struct GlobalDecl {
   ty : Type
   name : String
@@ -272,6 +314,10 @@ pub(all) struct GlobalDecl {
 } derive(Eq)
 
 ///|
+/// Parsed C translation unit.
+///
+/// `structs` stores aggregate declarations, `globals` stores global variables,
+/// and `decls` stores function declarations and definitions.
 pub(all) struct Program {
   structs : Array[StructDecl]
   globals : Array[GlobalDecl]

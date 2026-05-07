@@ -1,4 +1,9 @@
 ///|
+/// Loaded native JIT module.
+///
+/// A module owns executable memory allocated by the native FFI stub. The type
+/// is opaque; use `compile` to create one and `call_i32_N` methods to invoke
+/// exported C functions with matching signatures.
 struct Module {
   image : @codegen.JitImage
   memory : ExecutableMemory
@@ -14,6 +19,11 @@ fn normalize_symbol_name(name : String) -> String {
 }
 
 ///|
+/// Compiles C source to native memory and resolves relocations.
+///
+/// Returns `None` if parsing/codegen succeeds but native image allocation,
+/// memory protection, base relocation, or external-symbol resolution fails.
+/// The source must already be preprocessed.
 pub fn compile(source : String) -> Module? {
   let prog = @parser.parse(source)
   let image = @codegen.generate_jit_image(prog)
@@ -31,6 +41,10 @@ pub fn compile(source : String) -> Module? {
 }
 
 ///|
+/// Looks up a compiled symbol by C or Darwin spelling.
+///
+/// For example, both `"answer"` and `"_answer"` are accepted. The result is a
+/// byte offset into the module's in-memory image.
 pub fn Module::symbol_offset(self : Module, name : String) -> Int? {
   let normalized = normalize_symbol_name(name)
   for symbol in self.image.symbols {
@@ -42,6 +56,10 @@ pub fn Module::symbol_offset(self : Module, name : String) -> Int? {
 }
 
 ///|
+/// Calls an exported `int fn(void)` symbol.
+///
+/// Returns `None` if the symbol is missing. Calling a symbol with a different
+/// native signature is undefined behavior.
 pub fn Module::call_i32_0(self : Module, name : String) -> Int? {
   match self.symbol_offset(name) {
     Some(offset) => Some(executable_memory_call_i32_0(self.memory, offset))
@@ -50,6 +68,10 @@ pub fn Module::call_i32_0(self : Module, name : String) -> Int? {
 }
 
 ///|
+/// Calls an exported `int fn(int)` symbol.
+///
+/// Returns `None` if the symbol is missing. Calling a symbol with a different
+/// native signature is undefined behavior.
 pub fn Module::call_i32_1(self : Module, name : String, arg0 : Int) -> Int? {
   match self.symbol_offset(name) {
     Some(offset) =>
@@ -59,6 +81,10 @@ pub fn Module::call_i32_1(self : Module, name : String, arg0 : Int) -> Int? {
 }
 
 ///|
+/// Calls an exported `int fn(int, int)` symbol.
+///
+/// Returns `None` if the symbol is missing. Calling a symbol with a different
+/// native signature is undefined behavior.
 pub fn Module::call_i32_2(
   self : Module,
   name : String,
@@ -73,6 +99,10 @@ pub fn Module::call_i32_2(
 }
 
 ///|
+/// Calls an exported `int fn(int, int, int)` symbol.
+///
+/// Returns `None` if the symbol is missing. Calling a symbol with a different
+/// native signature is undefined behavior.
 pub fn Module::call_i32_3(
   self : Module,
   name : String,
@@ -88,6 +118,9 @@ pub fn Module::call_i32_3(
 }
 
 ///|
+/// Compiles `source` and calls an exported `int fn(void)` symbol once.
+///
+/// For repeated calls, use `compile` and keep the returned `Module`.
 pub fn call_i32_0(source : String, name : String) -> Int? {
   match compile(source) {
     Some(module_) => module_.call_i32_0(name)
@@ -96,6 +129,9 @@ pub fn call_i32_0(source : String, name : String) -> Int? {
 }
 
 ///|
+/// Compiles `source` and calls an exported `int fn(int, int)` symbol once.
+///
+/// For repeated calls, use `compile` and keep the returned `Module`.
 pub fn call_i32_2(
   source : String,
   name : String,
@@ -109,6 +145,9 @@ pub fn call_i32_2(
 }
 
 ///|
+/// Compiles `source` and calls an exported `int fn(int, int, int)` symbol once.
+///
+/// For repeated calls, use `compile` and keep the returned `Module`.
 pub fn call_i32_3(
   source : String,
   name : String,
@@ -123,6 +162,9 @@ pub fn call_i32_3(
 }
 
 ///|
+/// Compiles `source` and calls an exported `int fn(int)` symbol once.
+///
+/// For repeated calls, use `compile` and keep the returned `Module`.
 pub fn call_i32_1(source : String, name : String, arg0 : Int) -> Int? {
   match compile(source) {
     Some(module_) => module_.call_i32_1(name, arg0)

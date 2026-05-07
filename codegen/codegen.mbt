@@ -1,4 +1,9 @@
 ///|
+/// Darwin ARM64 assembly generator for a parsed C program.
+///
+/// Construct with `Codegen::new`. The fields are exposed by the current
+/// MoonBit API surface, but callers should treat them as implementation
+/// details and use `generate` as the stable entry point.
 pub struct Codegen {
   output : StringBuilder
   mut label_counter : Int
@@ -587,6 +592,7 @@ fn Codegen::global_address_reloc(
 }
 
 ///|
+/// Creates a fresh code generator with empty per-program state.
 pub fn Codegen::new() -> Codegen {
   {
     output: StringBuilder::new(),
@@ -875,6 +881,10 @@ fn Codegen::emit_global_p2align(self : Codegen, ty : @parser.Type) -> Unit {
 }
 
 ///|
+/// Generates Darwin ARM64 assembly for a parsed C translation unit.
+///
+/// The input must come from `bobzhang/kimicc/parser`. The returned string is
+/// assembly text intended for the macOS assembler and linker.
 pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   self.output.write_string(
     "\t.section\t__TEXT,__text,regular,pure_instructions\n",

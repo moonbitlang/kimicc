@@ -1,4 +1,9 @@
 ///|
+/// Incremental parser state for a single C translation unit.
+///
+/// Most callers should use `parse` instead of constructing `Parser` directly.
+/// The state is public so parser tests and compiler tools can inspect it, but
+/// its fields are implementation details and may not remain stable.
 pub struct Parser {
   lexer : Lexer
   mut token : Token
@@ -16,6 +21,9 @@ pub struct Parser {
 }
 
 ///|
+/// Creates a parser over an existing lexer and reads the first token.
+///
+/// Prefer `parse(input)` unless you need to drive lexer/parser state manually.
 pub fn Parser::new(lexer : Lexer) -> Parser {
   let p = {
     lexer,
@@ -119,6 +127,10 @@ fn Parser::skip_balanced_brackets(self : Parser) -> Unit {
 }
 
 ///|
+/// Parses one complete, already preprocessed C translation unit.
+///
+/// The parser does not run a C preprocessor. Invalid or unsupported syntax
+/// aborts instead of returning a structured error value.
 pub fn parse(input : String) -> Program {
   let lexer = Lexer::new(input)
   let parser = Parser::new(lexer)

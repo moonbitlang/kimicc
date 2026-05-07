@@ -1,4 +1,9 @@
 ///|
+/// Attempts to evaluate an integer constant expression.
+///
+/// Returns `Some(value)` when all required operands can be folded. Returns
+/// `None` for expressions that depend on runtime values, unsupported operators,
+/// floating-point expressions, and aggregate literals.
 pub fn fold_const(expr : Expr) -> Int64? {
   match expr {
     Number(n) => Some(n)

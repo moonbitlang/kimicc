@@ -1,4 +1,9 @@
 ///|
+/// Token produced by the C lexer.
+///
+/// Keywords, punctuation, and operators are represented as fixed variants.
+/// Identifiers, integer literals, floating literals, and string literals carry
+/// their source value.
 pub(all) enum Token {
   EOF
   Ident(String)
@@ -181,17 +186,25 @@ impl Show for Token with to_string(self) {
 }
 
 ///|
+/// Mutable lexer over a C source string.
+///
+/// The lexer skips whitespace and comments. It is exposed primarily for tests
+/// and low-level parser tooling; most consumers should call `parse`.
 pub struct Lexer {
   input : String
   mut pos : Int
 }
 
 ///|
+/// Creates a lexer positioned at the start of `input`.
 pub fn Lexer::new(input : String) -> Lexer {
   { input, pos: 0 }
 }
 
 ///|
+/// Returns the next token and advances the lexer.
+///
+/// End of input is reported as `EOF`. Invalid lexical forms abort.
 pub fn Lexer::next_token(self : Lexer) -> Token {
   self.skip_whitespace()
   if self.pos >= self.input.length() {

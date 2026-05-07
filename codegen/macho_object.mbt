@@ -90,12 +90,21 @@ priv struct SymbolLayout {
 }
 
 ///|
+/// Symbol exported by a JIT image.
+///
+/// `name` uses Darwin symbol spelling, so C function names usually include a
+/// leading underscore. `offset` is the byte offset into `JitImage.code`.
 pub struct JitSymbol {
   name : String
   offset : Int
 }
 
 ///|
+/// In-memory image consumed by the native JIT loader.
+///
+/// This is not a Mach-O object file. `code` contains both executable bytes and
+/// writable data. `executable_size` marks the leading executable prefix.
+/// Relocation byte arrays are loader-private encodings.
 pub struct JitImage {
   code : Bytes
   executable_size : Int
@@ -3654,12 +3663,20 @@ fn jit_image_from_assembled(obj : AssembledObject) -> JitImage {
 }
 
 ///|
+/// Emits a Mach-O relocatable object file for ARM64 macOS.
+///
+/// The returned bytes can be written to a `.o` file and linked with the macOS
+/// toolchain.
 pub fn generate_macho_object(prog : @parser.Program) -> Bytes {
   let assembly = Codegen::new().generate(prog)
   macho_object_from_assembled(assemble_object_from_darwin_arm64(assembly))
 }
 
 ///|
+/// Emits an in-memory JIT image for ARM64 macOS.
+///
+/// The returned image is intended for `bobzhang/kimicc/jit`; it is not a
+/// portable object-file format.
 pub fn generate_jit_image(prog : @parser.Program) -> JitImage {
   let assembly = Codegen::new().generate(prog)
   jit_image_from_assembled(assemble_object_from_darwin_arm64(assembly))
