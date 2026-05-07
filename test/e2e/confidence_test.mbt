@@ -1280,6 +1280,103 @@ async test "e2e direct Mach-O variadic differential corpus matches clang" {
 }
 
 ///|
+fn deterministic_bitfield_differential_source(case_index : Int) -> String {
+  let seed = case_index * 19 + 7
+  let rounds = case_index % 7 + 8
+  let source = StringBuilder::new()
+  source.write_string("#include <stdio.h>\n")
+  source.write_string("typedef struct Bits {\n")
+  source.write_string("  unsigned a : 3;\n")
+  source.write_string("  unsigned b : 5;\n")
+  source.write_string("  int c : 6;\n")
+  source.write_string("  unsigned d : 10;\n")
+  source.write_string("  unsigned e : 1;\n")
+  source.write_string("  unsigned f : 7;\n")
+  source.write_string("} Bits;\n")
+  source.write_string("typedef struct Packet {\n")
+  source.write_string("  unsigned char prefix;\n")
+  source.write_string("  Bits bits;\n")
+  source.write_string("  unsigned short suffix;\n")
+  source.write_string("} Packet;\n")
+  source.write_string("static long fold(Packet *packets, int rounds) {\n")
+  source.write_string("  long acc = 0;\n")
+  source.write_string("  for (int i = 0; i < rounds; i = i + 1) {\n")
+  source.write_string("    Packet *p = packets + (i % 3);\n")
+  source.write_string(
+    "    unsigned before = p->bits.a + (p->bits.b << 3) + (((unsigned)(p->bits.c & 63)) << 8) + (p->bits.d << 14) + (p->bits.e << 24) + (p->bits.f << 25);\n",
+  )
+  source.write_string("    p->bits.a = (p->bits.a + i + p->prefix) & 7u;\n")
+  source.write_string("    p->bits.b = (p->bits.b + p->suffix + i) & 31u;\n")
+  source.write_string("    p->bits.c = (int)(((p->bits.c + i) % 31) - 15);\n")
+  source.write_string("    p->bits.d = (p->bits.d ^ (before + i)) & 1023u;\n")
+  source.write_string("    p->bits.e = (p->bits.d >> (i & 3)) & 1u;\n")
+  source.write_string(
+    "    p->bits.f = (p->bits.f + p->bits.a + p->bits.b + i) & 127u;\n",
+  )
+  source.write_string(
+    "    acc += (long)before + (long)p->bits.a - (long)p->bits.c + (long)p->bits.d + (long)p->bits.f;\n",
+  )
+  source.write_string("  }\n")
+  source.write_string("  return acc;\n")
+  source.write_string("}\n")
+  source.write_string("int main(void) {\n")
+  source.write_string("  Packet packets[3];\n")
+  source.write_string("  for (int i = 0; i < 3; i = i + 1) {\n")
+  source.write_string("    unsigned base = ")
+  source.write_string(seed.to_string())
+  source.write_string("u + (unsigned)i * 23u;\n")
+  source.write_string("    packets[i].prefix = (unsigned char)(base + 11u);\n")
+  source.write_string(
+    "    packets[i].suffix = (unsigned short)(base * 13u + 5u);\n",
+  )
+  source.write_string("    packets[i].bits.a = base & 7u;\n")
+  source.write_string("    packets[i].bits.b = (base >> 1) & 31u;\n")
+  source.write_string("    packets[i].bits.c = (int)(base % 31u) - 15;\n")
+  source.write_string("    packets[i].bits.d = (base * 17u + 3u) & 1023u;\n")
+  source.write_string("    packets[i].bits.e = (base >> 2) & 1u;\n")
+  source.write_string("    packets[i].bits.f = (base * 9u + 1u) & 127u;\n")
+  source.write_string("  }\n")
+  source.write_string("  long total = fold(packets, ")
+  source.write_string(rounds.to_string())
+  source.write_string(");\n")
+  source.write_string(
+    "  unsigned probe = packets[1].bits.a + (packets[1].bits.b << 3) + (packets[1].bits.d << 8) + (packets[1].bits.f << 18);\n",
+  )
+  source.write_string(
+    "  printf(\"case=%d total=%ld size=%lu probe=%u signed=%d\\n\", ",
+  )
+  source.write_string(case_index.to_string())
+  source.write_string(
+    ", total, (unsigned long)sizeof(Packet), probe, packets[2].bits.c);\n",
+  )
+  source.write_string("  return (int)((unsigned long)total & 127u);\n")
+  source.write_string("}\n")
+  source.to_string()
+}
+
+///|
+async test "e2e deterministic bitfield differential corpus matches clang" {
+  for case_index in [0, 1, 2, 3, 4, 5, 6, 7] {
+    let result = run_source_against_clang_baseline(
+      deterministic_bitfield_differential_source(case_index),
+      "bitfield_differential_" + case_index.to_string(),
+    )
+    assert_true(result.output.contains("case=" + case_index.to_string()))
+  }
+}
+
+///|
+async test "e2e direct Mach-O bitfield differential corpus matches clang" {
+  for case_index in [0, 1, 2, 3] {
+    let result = run_source_direct_object_against_clang_baseline(
+      deterministic_bitfield_differential_source(case_index),
+      "direct_bitfield_differential_" + case_index.to_string(),
+    )
+    assert_true(result.output.contains("case=" + case_index.to_string()))
+  }
+}
+
+///|
 async test "e2e bitfields pack after byte fields like clang" {
   let source =
     #|typedef unsigned int Pgno;
