@@ -607,6 +607,26 @@ fn assert_sqlite_runner_error_details(
 }
 
 ///|
+fn assert_sqlite_platform_adjusted_output(
+  output : String,
+  compiler : String,
+) -> Unit {
+  for script in sqlite_residual_script_paths() {
+    let marker = "### " + script
+    if !output.contains(marker) {
+      abort(
+        "SQLite " +
+        compiler +
+        " platform-adjusted output missing " +
+        marker +
+        ":\n" +
+        output,
+      )
+    }
+  }
+}
+
+///|
 fn assert_sqlite_release_gate_output(
   output : String,
   compiler : String,
@@ -796,6 +816,84 @@ async test "sqlite public residual scripts match clang and direct when enabled" 
     direct_runner.output,
     "runner residual detail",
   )
+}
+
+///|
+async test "sqlite public platform-adjusted residual scripts pass with clang and direct when enabled" {
+  if !sqlite_public_conformance_enabled("platform") {
+    return
+  }
+  let root = sqlite_public_platform_adjusted_source_root()
+  let kimicc = run_sqlite_public_tcl_batch_collect_with_root(
+    sqlite_residual_script_paths(),
+    "sqlite_public_platform_residuals",
+    Kimicc,
+    root,
+  )
+  if kimicc.output == "sqlite-public-tests-skipped\n" {
+    return
+  }
+  let clang = run_sqlite_public_tcl_batch_collect_with_root(
+    sqlite_residual_script_paths(),
+    "sqlite_public_platform_residuals",
+    Clang,
+    root,
+  )
+  let direct = run_sqlite_public_tcl_batch_collect_with_root(
+    sqlite_residual_script_paths(),
+    "sqlite_public_platform_residuals",
+    DirectObject,
+    root,
+  )
+  if kimicc.code != 0 || clang.code != 0 || direct.code != 0 {
+    abort(
+      "SQLite platform-adjusted residual scripts failed:\nkimicc:\n" +
+      kimicc.output +
+      "\nclang:\n" +
+      clang.output +
+      "\ndirect:\n" +
+      direct.output,
+    )
+  }
+  assert_sqlite_platform_adjusted_output(kimicc.output, "kimicc")
+  assert_sqlite_platform_adjusted_output(clang.output, "clang")
+  assert_sqlite_platform_adjusted_output(direct.output, "direct object")
+  let kimicc_runner = run_sqlite_public_tcl_runner_tail_with_root(
+    "--jobs 1 full json101",
+    "sqlite_public_platform_runner",
+    Kimicc,
+    80,
+    root,
+  )
+  let clang_runner = run_sqlite_public_tcl_runner_tail_with_root(
+    "--jobs 1 full json101",
+    "sqlite_public_platform_runner",
+    Clang,
+    80,
+    root,
+  )
+  let direct_runner = run_sqlite_public_tcl_runner_tail_with_root(
+    "--jobs 1 full json101",
+    "sqlite_public_platform_runner",
+    DirectObject,
+    80,
+    root,
+  )
+  if kimicc_runner.code != 0 ||
+    clang_runner.code != 0 ||
+    direct_runner.code != 0 ||
+    kimicc_runner.output.contains("FAILED:") ||
+    clang_runner.output.contains("FAILED:") ||
+    direct_runner.output.contains("FAILED:") {
+    abort(
+      "SQLite platform-adjusted runner residual failed:\nkimicc:\n" +
+      kimicc_runner.output +
+      "\nclang:\n" +
+      clang_runner.output +
+      "\ndirect:\n" +
+      direct_runner.output,
+    )
+  }
 }
 
 ///|

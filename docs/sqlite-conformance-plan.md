@@ -83,6 +83,12 @@ Passing kimicc SQLite e2e tests:
   clang-built, and direct Mach-O-object-linked `testfixture` binaries, then
   verify the exact current-run residual failure signatures match clang and are
   still the expected platform/Tcl expectation drift.
+- Run those same 6 residual scripts against a copied, platform-adjusted public
+  SQLite source tree where only the known Tcl/platform expectations are
+  patched, then require kimicc-built, clang-built, and direct
+  Mach-O-object-linked `testfixture` binaries to pass. The same adjusted root
+  also passes a focused `testrunner.tcl --jobs 1 full json101` probe in all
+  three modes.
 - Run a middle-weight release gate of high-value public SQLite scripts that have
   previously exposed compiler bugs, using kimicc-built, clang-built, and direct
   Mach-O-object-linked `testfixture` binaries.
@@ -127,6 +133,10 @@ KIMICC_SQLITE_CONFORMANCE=release \
 KIMICC_SQLITE_CONFORMANCE=residuals \
   moon test test/e2e/sqlite_test.mbt --target native \
   --filter 'sqlite public residual scripts match clang and direct when enabled'
+
+KIMICC_SQLITE_CONFORMANCE=platform \
+  moon test test/e2e/sqlite_test.mbt --target native \
+  --filter 'sqlite public platform-adjusted residual scripts pass with clang and direct when enabled'
 
 KIMICC_SQLITE_CONFORMANCE=veryquick \
   moon test test/e2e --target native \
@@ -197,7 +207,20 @@ MoonBit package version:
    Run this before saying there are no known kimicc-only SQLite failures. The
    expected failures must remain clang-matching platform/Tcl expectation drift.
 
-5. Broad periodic SQLite gates:
+5. SQLite platform-adjusted residual proof:
+
+   ```bash
+   KIMICC_SQLITE_CONFORMANCE=platform \
+     moon test test/e2e/sqlite_test.mbt --target native \
+     --filter 'sqlite public platform-adjusted residual scripts pass with clang and direct when enabled'
+   ```
+
+   This copies the public SQLite source tree to a temporary root and patches
+   only the known Tcl/platform expectation drift. It should pass with kimicc,
+   clang, and direct object mode; it does not replace testing the unmodified
+   public source tree.
+
+6. Broad periodic SQLite gates:
 
    ```bash
    KIMICC_SQLITE_CONFORMANCE=veryquick \
@@ -213,7 +236,7 @@ MoonBit package version:
    codegen, ABI, integer conversions, aggregate initialization, or parser
    constant folding.
 
-6. Publish checklist:
+7. Publish checklist:
 
    - Ensure `git status --short` contains only intended changes.
    - Commit the validated slice.
@@ -246,6 +269,9 @@ MoonBit package version:
   whole suite.
 - [x] Add an opt-in release gate for previously fixed high-value public SQLite
   scripts.
+- [x] Add an opt-in platform-adjusted residual gate proving the current
+  unmodified residual set disappears when only known Tcl/platform expectations
+  are patched in a temporary public-source copy.
 - [x] Define release gates and the publish checklist.
 - [ ] For every failure class, record the command, output, generated assembly or
   object paths, clang-vs-kimicc behavior, minimized C or SQL repro, status, and
@@ -343,6 +369,7 @@ MoonBit package version:
 | Passed | tree-sitter C library smoke | `KIMICC_EXTERNAL_TESTBED=tree-sitter moon test test/e2e/external_testbeds_test.mbt --target native --filter 'external tree-sitter *'` | The opt-in MoonBit e2e tests rebuild tree-sitter's C runtime files from `/tmp/kimicc_tree_sitter/lib/src` plus the generated mini parser from `/tmp/kimicc_tree_sitter/src/parser.c` through kimicc assembly and direct Mach-O object mode. The original smoke parses `alpha beta gamma`, checks the printed tree for `source_file` and `word`, and exits with status 42. The expanded smoke also compiles a query, inspects capture metadata, walks nodes with a tree cursor, executes query cursor capture iteration, performs an incremental insert edit, verifies changed ranges, and checks edited node byte ranges. Routine tests skip this unless `KIMICC_EXTERNAL_TESTBED=tree-sitter` or `all` is set. |
 | Passed | ocamlyacc grammar differentials | `KIMICC_EXTERNAL_TESTBED=ocamlyacc moon test test/e2e/external_testbeds_test.mbt --target native --filter 'external ocamlyacc *'` | The opt-in MoonBit e2e tests rebuild OCaml's pure-C `yacc/` parser generator from `/tmp/kimicc_ocaml` through kimicc assembly and direct Mach-O object mode, build a clang baseline from the same sources, and byte-compare generated outputs. Coverage now includes the existing `calc_parser.mly`, OCaml's `parsecheck.mly` with `-q --strict`, an embedded expression grammar with precedence and multiple starts, and an embedded ambiguous grammar with `-v` where the `.output` conflict report is compared too. Routine tests skip this unless `KIMICC_EXTERNAL_TESTBED=ocamlyacc` or `all` is set. |
 | Passed | Public SQLite release gate scripts | `KIMICC_SQLITE_CONFORMANCE=release moon test test/e2e/sqlite_test.mbt --target native --filter 'sqlite public release gate scripts pass with clang and direct baselines when enabled'` | The opt-in release gate runs a curated set of public SQLite scripts that previously exposed compiler bugs, including select trigger coverage, expert/FTS5/intck/recover/RTree extension coverage, transaction coverage, decimal/math/corruption checks, and `incrcorrupt`. It requires the kimicc-built, direct Mach-O object, and clang-built `testfixture` binaries to complete the full script batch successfully. |
+| Passed | SQLite platform-adjusted residual scripts | `KIMICC_SQLITE_CONFORMANCE=platform moon test test/e2e/sqlite_test.mbt --target native --filter 'sqlite public platform-adjusted residual scripts pass with clang and direct when enabled'` | The opt-in gate copies the public SQLite source tree to `/tmp/kimicc_sqlite_src_3049001_platform`, patches only the known Tcl/platform expectation drift in `func`, `json101`, `json501`, `literal`, `types3`, and `loadext`, then requires those formerly residual scripts to pass with kimicc-built, clang-built, and direct Mach-O-object-linked `testfixture` binaries. It also runs a focused adjusted `testrunner.tcl --jobs 1 full json101` probe in all three modes. The original public source tree remains unmodified and covered by the residual-signature guards. |
 | Open | SQLite `veryquick.test` residual platform/Tcl expectation failures | `KIMICC_SQLITE_CONFORMANCE=veryquick moon test test/e2e --target native --filter 'sqlite public veryquick residual failures match clang and direct when enabled'`; kimicc output at `/tmp/kimicc_veryquick_after_math.out`; clang output at `/tmp/clang_veryquick_after_math.out`; direct probe output at `/tmp/kimicc_direct_veryquick_probe.out` | The broad run now completes with `rc=1`: 24 errors out of 330516 tests. The same 24 failures occur with clang-linked and direct Mach-O-object-linked `testfixture` builds using the same feature flags: `Inf` versus `inf` casing in `func`, `json101`, `json501`, and `literal`, plus the `types3-1.1` Tcl expectation mismatch (`text` versus `string text`). No kimicc-only or direct-object-only cluster is currently known in `veryquick.test`. |
 | Open | SQLite residual platform/Tcl expectation failures | `KIMICC_SQLITE_CONFORMANCE=residuals moon test test/e2e/sqlite_test.mbt --target native --filter 'sqlite public residual scripts match clang and direct when enabled'`; broad check: `KIMICC_SQLITE_CONFORMANCE=full moon test test/e2e/sqlite_test.mbt --target native --filter 'sqlite public full residual failures match clang and direct when enabled'`; fresh kimicc output at `/tmp/kimicc_sqlite_public_full_kimicc_279101241_180985381.out`; fresh clang output at `/tmp/kimicc_sqlite_public_full_clang_279101241_-1052129227.out`; direct residual probe at `/tmp/kimicc_direct_residuals_probe.out`; direct full probe at `/tmp/kimicc_direct_full_probe.out` | The public `full` permutation completes and the MoonBit harness verifies the same residual script set for kimicc, clang, and direct Mach-O object mode: 26 errors across `json101.test`, `func.test`, `types3.test`, `literal.test`, `json501.test`, and `loadext.test`. Broad runner failures now append `testrunner.tcl errors` from the same work directory before comparing signatures, so the full guard checks exact residual test IDs and expected/got lines after normalizing volatile worker IDs and total-test denominators. The residual-script guard runs those scripts individually for all three modes, checking that kimicc and direct object mode produce the same current-run failure signature as clang: `Inf` versus `inf` casing in `func`, `json101`, `json501`, and `literal`; `types3-1.1` Tcl expectation drift; and Darwin dynamic-loader expectation drift in `loadext-2.1`/`loadext-2.2`. No kimicc-only or direct-object-only SQLite failure is currently known. |
 

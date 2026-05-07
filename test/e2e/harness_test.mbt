@@ -424,8 +424,62 @@ fn sqlite_public_source_root() -> String {
 
 ///|
 fn sqlite_public_tests_available() -> Bool {
-  let root = sqlite_public_source_root()
+  sqlite_public_tests_available_at(sqlite_public_source_root())
+}
+
+///|
+fn sqlite_public_tests_available_at(root : String) -> Bool {
   path_exists(root + "/configure") && path_exists(root + "/test/select1.test")
+}
+
+///|
+fn sqlite_public_platform_adjusted_source_root() -> String {
+  let src = sqlite_public_source_root()
+  let root = "/tmp/kimicc_sqlite_src_3049001_platform"
+  if !sqlite_public_tests_available_at(src) {
+    return root
+  }
+  run_command_checked(
+    "rm -rf " +
+    shell_quote(root) +
+    " && cp -R " +
+    shell_quote(src) +
+    " " +
+    shell_quote(root),
+    "prepare platform-adjusted sqlite public source",
+  )
+  let testdir = root + "/test"
+  run_command_checked(
+    "perl -0pi -e 's/\\{Inf Inf Inf -Inf -Inf -Inf\\}/\\{inf inf inf -inf -inf -inf\\}/g; s/\\{Inf Inf Inf\\}/\\{inf inf inf\\}/g' " +
+    shell_quote(testdir + "/func.test"),
+    "patch sqlite func infinity expectations",
+  )
+  run_command_checked(
+    "perl -0pi -e 's/\\n\\} Inf\\n/\\n\\} inf\\n/g; s/\\n\\} \\{-Inf\\}\\n/\\n\\} \\{-inf\\}\\n/g' " +
+    shell_quote(testdir + "/json101.test"),
+    "patch sqlite json101 infinity expectations",
+  )
+  run_command_checked(
+    "perl -0pi -e 's/\\{Inf \\{\\{\"x\":9e999\\}\\}\\}/\\{inf \\{\\{\"x\":9e999\\}\\}\\}/g; s/\\{-Inf \\{\\{\"x\":-9e999\\}\\}\\}/\\{-inf \\{\\{\"x\":-9e999\\}\\}\\}/g' " +
+    shell_quote(testdir + "/json501.test"),
+    "patch sqlite json501 infinity expectations",
+  )
+  run_command_checked(
+    "perl -0pi -e 's/(test_literal 2\\.3\\s+1e1000\\s+real\\s+)Inf/$1inf/; s/(test_literal 2\\.4\\s+-1e1000\\s+real\\s+)-Inf/$1-inf/; s/(test_literal 3\\.4\\s+1e1_000\\s+real\\s+)Inf/$1inf/' " +
+    shell_quote(testdir + "/literal.test"),
+    "patch sqlite literal infinity expectations",
+  )
+  run_command_checked(
+    "perl -0pi -e 's/\\} \\{text\\}\\n\\n# A variable with an integer/\\} \\{string text\\}\\n\\n# A variable with an integer/' " +
+    shell_quote(testdir + "/types3.test"),
+    "patch sqlite types3 Tcl string representation expectation",
+  )
+  run_command_checked(
+    "perl -0pi -e 's/\\Qset dlerror_nosuchfile {dlopen.%s, 10.: .*image.*found.*}\\E/set dlerror_nosuchfile {dlopen.%s.*(image.*found|no such file).*}/; s/set dlerror_notadll\\s+\\{dlopen\\.[^\\n]*image\\.\\*found\\.\\*\\}/set dlerror_notadll    {dlopen.%1\\$s.*(image.*found|no such file).*}/' " +
+    shell_quote(testdir + "/loadext.test"),
+    "patch sqlite loadext Darwin loader expectations",
+  )
+  root
 }
 
 ///|
@@ -553,10 +607,24 @@ async fn run_sqlite_public_tcl_batch_collect_with(
   tag : String,
   compiler : SQLiteObjectCompiler,
 ) -> CommandResult {
-  if !sqlite_public_tests_available() {
+  run_sqlite_public_tcl_batch_collect_with_root(
+    test_paths,
+    tag,
+    compiler,
+    sqlite_public_source_root(),
+  )
+}
+
+///|
+async fn run_sqlite_public_tcl_batch_collect_with_root(
+  test_paths : Array[String],
+  tag : String,
+  compiler : SQLiteObjectCompiler,
+  root : String,
+) -> CommandResult {
+  if !sqlite_public_tests_available_at(root) {
     return { code: 0, output: "sqlite-public-tests-skipped\n" }
   }
-  let root = sqlite_public_source_root()
   let testfixture = build_sqlite_public_testfixture_with(compiler)
   let output = StringBuilder::new()
   let mut code = 0
@@ -634,10 +702,26 @@ async fn run_sqlite_public_tcl_runner_tail_with(
   compiler : SQLiteObjectCompiler,
   tail_lines : Int,
 ) -> CommandResult {
-  if !sqlite_public_tests_available() {
+  run_sqlite_public_tcl_runner_tail_with_root(
+    runner_args,
+    tag,
+    compiler,
+    tail_lines,
+    sqlite_public_source_root(),
+  )
+}
+
+///|
+async fn run_sqlite_public_tcl_runner_tail_with_root(
+  runner_args : String,
+  tag : String,
+  compiler : SQLiteObjectCompiler,
+  tail_lines : Int,
+  root : String,
+) -> CommandResult {
+  if !sqlite_public_tests_available_at(root) {
     return { code: 0, output: "sqlite-public-tests-skipped\n" }
   }
-  let root = sqlite_public_source_root()
   let testfixture = build_sqlite_public_testfixture_with(compiler)
   let run_seed = root + "/test/testrunner.tcl " + runner_args
   let run_tag = tag + "_" + compiler.tag() + "_" + source_id(run_seed)
