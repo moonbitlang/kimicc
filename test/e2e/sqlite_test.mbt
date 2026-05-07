@@ -492,6 +492,22 @@ test "sqlite residual signature normalizes full runner progress fields" {
 }
 
 ///|
+test "sqlite public source root uses optional environment override" {
+  assert_eq(
+    sqlite_public_source_root_from_env(None),
+    sqlite_public_default_source_root(),
+  )
+  assert_eq(
+    sqlite_public_source_root_from_env(Some("")),
+    sqlite_public_default_source_root(),
+  )
+  assert_eq(
+    sqlite_public_source_root_from_env(Some("/tmp/custom-sqlite-root")),
+    "/tmp/custom-sqlite-root",
+  )
+}
+
+///|
 fn assert_sqlite_residual_signatures_match(
   kimicc : String,
   clang : String,

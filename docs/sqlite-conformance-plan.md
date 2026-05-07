@@ -126,6 +126,17 @@ SQLite conformance an explicit harness mode that accepts a checked-out or
 cached source tree via environment variable, while the repo keeps the small
 amalgamation fixture and focused e2e regressions in version control.
 
+By default, the broader harness looks for the public source tree at:
+
+```text
+/tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001
+```
+
+Set `KIMICC_SQLITE_SOURCE_ROOT` to use a different checkout of the matching
+public SQLite source tree. The platform-adjusted gates copy that root to
+`/tmp/kimicc_sqlite_src_3049001_platform` and patch only known Tcl/platform test
+expectations in the copy.
+
 The broad `veryquick` and `full` comparisons are available as opt-in MoonBit
 e2e tests:
 

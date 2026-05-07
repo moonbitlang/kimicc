@@ -418,8 +418,28 @@ async fn compile_sqlite_fixture_testfixture_object_with(
 }
 
 ///|
-fn sqlite_public_source_root() -> String {
+fn sqlite_public_default_source_root() -> String {
   "/tmp/kimicc_sqlite_src_3049001/sqlite-src-3049001"
+}
+
+///|
+fn sqlite_public_source_root_from_env(root : String?) -> String {
+  match root {
+    Some(value) =>
+      if value == "" {
+        sqlite_public_default_source_root()
+      } else {
+        value
+      }
+    None => sqlite_public_default_source_root()
+  }
+}
+
+///|
+fn sqlite_public_source_root() -> String {
+  sqlite_public_source_root_from_env(
+    @env.get_env_var("KIMICC_SQLITE_SOURCE_ROOT"),
+  )
 }
 
 ///|
