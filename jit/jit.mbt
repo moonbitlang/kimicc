@@ -59,9 +59,65 @@ pub fn Module::call_i32_1(self : Module, name : String, arg0 : Int) -> Int? {
 }
 
 ///|
+pub fn Module::call_i32_2(
+  self : Module,
+  name : String,
+  arg0 : Int,
+  arg1 : Int,
+) -> Int? {
+  match self.symbol_offset(name) {
+    Some(offset) =>
+      Some(executable_memory_call_i32_2(self.memory, offset, arg0, arg1))
+    None => None
+  }
+}
+
+///|
+pub fn Module::call_i32_3(
+  self : Module,
+  name : String,
+  arg0 : Int,
+  arg1 : Int,
+  arg2 : Int,
+) -> Int? {
+  match self.symbol_offset(name) {
+    Some(offset) =>
+      Some(executable_memory_call_i32_3(self.memory, offset, arg0, arg1, arg2))
+    None => None
+  }
+}
+
+///|
 pub fn call_i32_0(source : String, name : String) -> Int? {
   match compile(source) {
     Some(module_) => module_.call_i32_0(name)
+    None => None
+  }
+}
+
+///|
+pub fn call_i32_2(
+  source : String,
+  name : String,
+  arg0 : Int,
+  arg1 : Int,
+) -> Int? {
+  match compile(source) {
+    Some(module_) => module_.call_i32_2(name, arg0, arg1)
+    None => None
+  }
+}
+
+///|
+pub fn call_i32_3(
+  source : String,
+  name : String,
+  arg0 : Int,
+  arg1 : Int,
+  arg2 : Int,
+) -> Int? {
+  match compile(source) {
+    Some(module_) => module_.call_i32_3(name, arg0, arg1, arg2)
     None => None
   }
 }

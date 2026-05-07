@@ -227,3 +227,28 @@ int32_t kimicc_jit_call_i32_1(
   JitFn fn = (JitFn)(void *)(memory->ptr + offset);
   return fn(arg0);
 }
+
+MOONBIT_FFI_EXPORT
+int32_t kimicc_jit_call_i32_2(
+  KimiccJitMemory *memory,
+  int32_t offset,
+  int32_t arg0,
+  int32_t arg1
+) {
+  typedef int32_t (*JitFn)(int32_t, int32_t);
+  JitFn fn = (JitFn)(void *)(memory->ptr + offset);
+  return fn(arg0, arg1);
+}
+
+MOONBIT_FFI_EXPORT
+int32_t kimicc_jit_call_i32_3(
+  KimiccJitMemory *memory,
+  int32_t offset,
+  int32_t arg0,
+  int32_t arg1,
+  int32_t arg2
+) {
+  typedef int32_t (*JitFn)(int32_t, int32_t, int32_t);
+  JitFn fn = (JitFn)(void *)(memory->ptr + offset);
+  return fn(arg0, arg1, arg2);
+}

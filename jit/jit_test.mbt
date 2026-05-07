@@ -17,6 +17,24 @@ test "jit calls one-argument int function" {
 }
 
 ///|
+test "jit calls two-argument int function" {
+  let source = "int add(int x, int y) { return x + y; }"
+  match call_i32_2(source, "add", 20, 22) {
+    Some(value) => if value != 42 { abort("expected 42") }
+    None => abort("JIT call failed")
+  }
+}
+
+///|
+test "jit calls three-argument int function" {
+  let source = "int mix(int x, int y, int z) { return x * y + z; }"
+  match call_i32_3(source, "mix", 5, 8, 2) {
+    Some(value) => if value != 42 { abort("expected 42") }
+    None => abort("JIT call failed")
+  }
+}
+
+///|
 test "jit calls internal helper" {
   let source =
     #|int helper(int x) { return x * 2; }

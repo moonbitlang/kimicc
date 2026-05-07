@@ -28,3 +28,22 @@ extern "c" fn executable_memory_call_i32_1(
   offset : Int,
   arg0 : Int,
 ) -> Int = "kimicc_jit_call_i32_1"
+
+///|
+#borrow(memory)
+extern "c" fn executable_memory_call_i32_2(
+  memory : ExecutableMemory,
+  offset : Int,
+  arg0 : Int,
+  arg1 : Int,
+) -> Int = "kimicc_jit_call_i32_2"
+
+///|
+#borrow(memory)
+extern "c" fn executable_memory_call_i32_3(
+  memory : ExecutableMemory,
+  offset : Int,
+  arg0 : Int,
+  arg1 : Int,
+  arg2 : Int,
+) -> Int = "kimicc_jit_call_i32_3"
