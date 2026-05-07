@@ -311,11 +311,26 @@ fn parse_int_or_abort(value : String, context : String) -> Int {
 }
 
 ///|
+fn slice_from(text : String, start : Int) -> String {
+  text[start:].to_owned()
+}
+
+///|
+fn slice_to(text : String, end : Int) -> String {
+  text[:end].to_owned()
+}
+
+///|
+fn trim_to_owned(text : String) -> String {
+  text.trim().to_owned()
+}
+
+///|
 fn parse_register(reg : String) -> Int {
   if reg == "sp" || reg == "xzr" || reg == "wzr" {
     31
   } else if reg.has_prefix("x") || reg.has_prefix("w") {
-    parse_int_or_abort(reg.substring(start=1), "register")
+    parse_int_or_abort(slice_from(reg, 1), "register")
   } else {
     abort("unsupported register in object backend: " + reg)
   }
@@ -324,7 +339,7 @@ fn parse_register(reg : String) -> Int {
 ///|
 fn parse_fp_register(reg : String) -> Int {
   if reg.has_prefix("d") || reg.has_prefix("s") {
-    parse_int_or_abort(reg.substring(start=1), "floating-point register")
+    parse_int_or_abort(slice_from(reg, 1), "floating-point register")
   } else {
     abort("unsupported floating-point register in object backend: " + reg)
   }
@@ -348,9 +363,9 @@ fn fp_register_scale(reg : String) -> Int {
 
 ///|
 fn parse_immediate(imm : String) -> Int {
-  let s = imm.trim().to_string()
+  let s = trim_to_owned(imm)
   if s.has_prefix("#") {
-    parse_int_or_abort(s.substring(start=1), "immediate")
+    parse_int_or_abort(slice_from(s, 1), "immediate")
   } else {
     parse_int_or_abort(s, "immediate")
   }
@@ -375,21 +390,17 @@ fn digit_value_or_abort(ch : Char, base : Int, context : String) -> Int {
 
 ///|
 fn parse_immediate_i64(imm : String) -> Int64 {
-  let s = imm.trim().to_string()
-  let mut text = if s.has_prefix("#") {
-    s.substring(start=1).to_string()
-  } else {
-    s
-  }
+  let s = trim_to_owned(imm)
+  let mut text = if s.has_prefix("#") { slice_from(s, 1) } else { s }
   let mut sign = 1L
   if text.has_prefix("-") {
     sign = -1L
-    text = text.substring(start=1).to_string()
+    text = slice_from(text, 1)
   }
   let mut base = 10
   if text.has_prefix("0x") || text.has_prefix("0X") {
     base = 16
-    text = text.substring(start=2).to_string()
+    text = slice_from(text, 2)
   }
   if text.length() == 0 {
     abort("empty immediate")
@@ -409,14 +420,14 @@ fn clean_mem_token(token : String) -> String {
   .replace_all(old="]", new="")
   .replace_all(old="!", new="")
   .trim()
-  .to_string()
+  .to_owned()
 }
 
 ///|
 fn split_operands(rest : String) -> Array[String] {
   let parts : Array[String] = []
   for part in rest.split(",") {
-    parts.push(part.to_string().trim().to_string())
+    parts.push(part.trim().to_owned())
   }
   parts
 }
@@ -547,7 +558,7 @@ fn encode_add_sub(rest : String, is_sub : Bool) -> UInt {
     encode_add_sub_imm(parts[0], parts[1], parse_immediate(parts[2]), is_sub)
   } else if parts.length() == 4 {
     let shift = if parts[3].has_prefix("lsl #") {
-      parse_int_or_abort(parts[3].substring(start=5), "add/sub shift")
+      parse_int_or_abort(slice_from(parts[3], 5), "add/sub shift")
     } else {
       abort("unsupported add/sub shift: " + parts[3])
     }
@@ -583,7 +594,7 @@ fn encode_add_sub_flags(rest : String, is_sub : Bool) -> UInt {
   } else {
     let shift = if parts.length() == 4 {
       if parts[3].has_prefix("lsl #") {
-        parse_int_or_abort(parts[3].substring(start=5), "add/sub shift")
+        parse_int_or_abort(slice_from(parts[3], 5), "add/sub shift")
       } else {
         abort("unsupported flag-setting add/sub shift: " + parts[3])
       }
@@ -1389,7 +1400,7 @@ fn encode_mov_wide(rest : String, kind : String) -> UInt {
   let shift = if parts.length() >= 3 {
     let s = parts[2]
     if s.has_prefix("lsl #") {
-      parse_int_or_abort(s.substring(start=5), kind + " shift")
+      parse_int_or_abort(slice_from(s, 5), kind + " shift")
     } else {
       abort("unsupported " + kind + " shift: " + s)
     }
@@ -1482,13 +1493,13 @@ fn encode_neg_with_base(
 
 ///|
 fn encode_blr(rest : String) -> UInt {
-  let rn = parse_register(rest.trim().to_string())
+  let rn = parse_register(trim_to_owned(rest))
   0xd63f0000U | (rn.reinterpret_as_uint() << 5)
 }
 
 ///|
 fn encode_br(rest : String) -> UInt {
-  let rn = parse_register(rest.trim().to_string())
+  let rn = parse_register(trim_to_owned(rest))
   0xd61f0000U | (rn.reinterpret_as_uint() << 5)
 }
 
@@ -1700,7 +1711,7 @@ fn encode_int_convert_to_fp(
 
 ///|
 fn encode_dmb(rest : String) -> UInt {
-  let option = rest.trim().to_string()
+  let option = trim_to_owned(rest)
   match option {
     "ish" => 0xd5033bbfU
     "ishld" => 0xd50339bfU
@@ -1829,12 +1840,12 @@ fn strip_reloc_suffix(operand : String, suffix : String) -> String {
   if !cleaned.has_suffix(suffix) {
     abort("unsupported relocation operand: " + operand)
   }
-  cleaned.substring(end=cleaned.length() - suffix.length())
+  slice_to(cleaned, cleaned.length() - suffix.length())
 }
 
 ///|
 fn parse_p2align(line : String) -> Int {
-  let rest = line.substring(start=".p2align".length()).trim().to_string()
+  let rest = trim_to_owned(slice_from(line, ".p2align".length()))
   let parts = split_operands(rest)
   if parts.length() == 0 {
     abort("malformed .p2align directive")
@@ -1910,7 +1921,7 @@ fn get_or_add_section(
 
 ///|
 fn parse_section_index(sections : Array[ObjectSection], line : String) -> Int {
-  let rest = line.substring(start=".section".length()).trim().to_string()
+  let rest = trim_to_owned(slice_from(line, ".section".length()))
   let parts = split_operands(rest)
   if parts.length() < 2 {
     abort("malformed Mach-O section directive: " + line)
@@ -1928,12 +1939,12 @@ fn parse_section_index(sections : Array[ObjectSection], line : String) -> Int {
 
 ///|
 fn directive_rest(line : String, directive : String) -> String {
-  line.substring(start=directive.length()).trim().to_string()
+  trim_to_owned(slice_from(line, directive.length()))
 }
 
 ///|
 fn parse_data_integer(value : String, context : String) -> Int {
-  parse_int_or_abort(value.trim().to_string(), context)
+  parse_int_or_abort(trim_to_owned(value), context)
 }
 
 ///|
@@ -1946,19 +1957,19 @@ fn parse_data_integer_i64(value : String, context : String) -> Int64 {
 
 ///|
 fn parse_data_integer_i64_opt(value : String) -> Int64? {
-  let mut text = value.trim().to_string()
+  let mut text = trim_to_owned(value)
   if text.length() == 0 {
     return None
   }
   let mut sign = 1L
   if text.has_prefix("-") {
     sign = -1L
-    text = text.substring(start=1).to_string()
+    text = slice_from(text, 1)
   }
   let mut base = 10
   if text.has_prefix("0x") || text.has_prefix("0X") {
     base = 16
-    text = text.substring(start=2).to_string()
+    text = slice_from(text, 2)
   }
   if text.length() == 0 {
     return None
@@ -2011,7 +2022,7 @@ fn append_data_integer_bytes(
 
 ///|
 fn parse_symbol_addend(value : String) -> SymbolAddend {
-  let text = value.trim().to_string()
+  let text = trim_to_owned(value)
   if text == "" || text.contains(" ") {
     abort("unsupported .quad operand in Mach-O object backend: " + value)
   }
@@ -2027,9 +2038,9 @@ fn parse_symbol_addend(value : String) -> SymbolAddend {
   if split_at < 0 {
     { symbol: text, addend: 0 }
   } else {
-    let symbol = text.substring(end=split_at)
+    let symbol = slice_to(text, split_at)
     let amount = parse_int_or_abort(
-      text.substring(start=split_at + 1),
+      slice_from(text, split_at + 1),
       ".quad symbol addend",
     )
     let addend = if text[split_at] == '-' { -amount } else { amount }
@@ -2052,7 +2063,7 @@ fn append_quad_value(section : ObjectSection, value : String) -> Unit {
 
 ///|
 fn append_double_value(section : ObjectSection, value : String) -> Unit {
-  let text = value.trim().to_string()
+  let text = trim_to_owned(value)
   let parsed = @string.parse_double(text) catch {
     _ => abort("cannot parse double in .double: " + text)
   }
@@ -2061,7 +2072,7 @@ fn append_double_value(section : ObjectSection, value : String) -> Unit {
 
 ///|
 fn append_single_value(section : ObjectSection, value : String) -> Unit {
-  let text = value.trim().to_string()
+  let text = trim_to_owned(value)
   let parsed = @string.parse_double(text) catch {
     _ => abort("cannot parse float in .single: " + text)
   }
@@ -2079,7 +2090,7 @@ fn is_octal_char(ch : UInt16) -> Bool {
 ///|
 fn parse_asm_string_literal(rest : String) -> Array[Int] {
   let bytes : Array[Int] = []
-  let s = rest.trim().to_string()
+  let s = trim_to_owned(rest)
   if s.length() < 2 || s[0] != '"' {
     abort("malformed string directive in Mach-O object backend: " + rest)
   }
@@ -2187,7 +2198,7 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
   let pending_cond : Array[PendingCondBranch] = []
   let mut current_section = -1
   for raw in assembly.split("\n") {
-    let line = raw.to_string().trim().to_string()
+    let line = raw.trim().to_owned()
     if line == "" {
       continue
     } else if line.has_prefix(".section") {
@@ -2197,7 +2208,7 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
     } else if line.has_prefix(".globl") {
       push_global_once(
         globals,
-        line.substring(start=".globl".length()).trim().to_string(),
+        trim_to_owned(slice_from(line, ".globl".length())),
       )
     } else if line.has_prefix(".p2align") {
       if current_section >= 0 {
@@ -2215,7 +2226,7 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
       if current_section < 0 {
         abort("label before section in Mach-O object backend: " + line)
       }
-      let name = line.substring(end=line.length() - 1)
+      let name = slice_to(line, line.length() - 1)
       symbols[name] = {
         section_index: current_section,
         offset: sections[current_section].bytes.length(),
@@ -2231,38 +2242,38 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
       } else if line.has_prefix("mov\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_mov(line.substring(start=4)),
+          encode_mov(slice_from(line, 4)),
         )
       } else if line.has_prefix("movz\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_mov_wide(line.substring(start=5), "movz"),
+          encode_mov_wide(slice_from(line, 5), "movz"),
         )
       } else if line.has_prefix("movk\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_mov_wide(line.substring(start=5), "movk"),
+          encode_mov_wide(slice_from(line, 5), "movk"),
         )
       } else if line.has_prefix("movn\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_mov_wide(line.substring(start=5), "movn"),
+          encode_mov_wide(slice_from(line, 5), "movn"),
         )
       } else if line.has_prefix("mvn\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_mvn(line.substring(start=4)),
+          encode_mvn(slice_from(line, 4)),
         )
       } else if line.has_prefix("neg\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_neg(line.substring(start=4)),
+          encode_neg(slice_from(line, 4)),
         )
       } else if line.has_prefix("negs\t") {
         append_u32_to_section(
           sections[current_section],
           encode_neg_with_base(
-            line.substring(start=5),
+            slice_from(line, 5),
             0x6b000000U,
             0xeb000000U,
             "negs",
@@ -2272,14 +2283,14 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         append_u32_to_section(
           sections[current_section],
           encode_neg_with_base(
-            line.substring(start=4),
+            slice_from(line, 4),
             0x5a000000U,
             0xda000000U,
             "ngc",
           ),
         )
       } else if line.has_prefix("sxtw\t") {
-        let parts = split_operands(line.substring(start=5))
+        let parts = split_operands(slice_from(line, 5))
         if parts.length() != 2 {
           abort("malformed sxtw instruction")
         }
@@ -2288,7 +2299,7 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
           encode_sxtw(parts[0], parts[1]),
         )
       } else if line.has_prefix("sxtb\t") {
-        let parts = split_operands(line.substring(start=5))
+        let parts = split_operands(slice_from(line, 5))
         if parts.length() != 2 {
           abort("malformed sxtb instruction")
         }
@@ -2297,7 +2308,7 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
           encode_sxtb(parts[0], parts[1]),
         )
       } else if line.has_prefix("sxth\t") {
-        let parts = split_operands(line.substring(start=5))
+        let parts = split_operands(slice_from(line, 5))
         if parts.length() != 2 {
           abort("malformed sxth instruction")
         }
@@ -2306,7 +2317,7 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
           encode_sxth(parts[0], parts[1]),
         )
       } else if line.has_prefix("adrp\t") {
-        let parts = split_operands(line.substring(start=5))
+        let parts = split_operands(slice_from(line, 5))
         if parts.length() != 2 {
           abort("malformed adrp instruction")
         }
@@ -2326,7 +2337,7 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
           reloc_type,
         )
       } else if line.has_prefix("add\t") {
-        let parts = split_operands(line.substring(start=4))
+        let parts = split_operands(slice_from(line, 4))
         if parts.length() == 3 && parts[2].contains("@PAGEOFF") {
           let address = sections[current_section].bytes.length()
           append_u32_to_section(
@@ -2343,24 +2354,24 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         } else {
           append_u32_to_section(
             sections[current_section],
-            encode_add_sub(line.substring(start=4), false),
+            encode_add_sub(slice_from(line, 4), false),
           )
         }
       } else if line.has_prefix("sub\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_add_sub(line.substring(start=4), true),
+          encode_add_sub(slice_from(line, 4), true),
         )
       } else if line.has_prefix("adds\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_add_sub_flags(line.substring(start=5), false),
+          encode_add_sub_flags(slice_from(line, 5), false),
         )
       } else if line.has_prefix("adc\t") {
         append_u32_to_section(
           sections[current_section],
           encode_logical_register(
-            line.substring(start=4),
+            slice_from(line, 4),
             0x1a000000U,
             0x9a000000U,
             "adc",
@@ -2369,13 +2380,13 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
       } else if line.has_prefix("subs\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_add_sub_flags(line.substring(start=5), true),
+          encode_add_sub_flags(slice_from(line, 5), true),
         )
       } else if line.has_prefix("sbc\t") {
         append_u32_to_section(
           sections[current_section],
           encode_logical_register(
-            line.substring(start=4),
+            slice_from(line, 4),
             0x5a000000U,
             0xda000000U,
             "sbc",
@@ -2384,53 +2395,53 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
       } else if line.has_prefix("mul\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_mul(line.substring(start=4)),
+          encode_mul(slice_from(line, 4)),
         )
       } else if line.has_prefix("madd\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_madd(line.substring(start=5)),
+          encode_madd(slice_from(line, 5)),
         )
       } else if line.has_prefix("msub\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_msub(line.substring(start=5)),
+          encode_msub(slice_from(line, 5)),
         )
       } else if line.has_prefix("sdiv\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_sdiv(line.substring(start=5)),
+          encode_sdiv(slice_from(line, 5)),
         )
       } else if line.has_prefix("fmov\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_fmov(line.substring(start=5)),
+          encode_fmov(slice_from(line, 5)),
         )
       } else if line.has_prefix("fadd\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_fp_three_register(line.substring(start=5), 0x1e602800U, "fadd"),
+          encode_fp_three_register(slice_from(line, 5), 0x1e602800U, "fadd"),
         )
       } else if line.has_prefix("fsub\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_fp_three_register(line.substring(start=5), 0x1e603800U, "fsub"),
+          encode_fp_three_register(slice_from(line, 5), 0x1e603800U, "fsub"),
         )
       } else if line.has_prefix("fmul\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_fp_three_register(line.substring(start=5), 0x1e600800U, "fmul"),
+          encode_fp_three_register(slice_from(line, 5), 0x1e600800U, "fmul"),
         )
       } else if line.has_prefix("fdiv\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_fp_three_register(line.substring(start=5), 0x1e601800U, "fdiv"),
+          encode_fp_three_register(slice_from(line, 5), 0x1e601800U, "fdiv"),
         )
       } else if line.has_prefix("fneg\t") {
         append_u32_to_section(
           sections[current_section],
           encode_fp_two_register(
-            line.substring(start=5),
+            slice_from(line, 5),
             0x1e614000U,
             0x1e214000U,
             "fneg",
@@ -2440,7 +2451,7 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         append_u32_to_section(
           sections[current_section],
           encode_fp_two_register(
-            line.substring(start=5),
+            slice_from(line, 5),
             0x1e60c000U,
             0x1e20c000U,
             "fabs",
@@ -2449,50 +2460,50 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
       } else if line.has_prefix("fcvt\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_fp_precision_convert(line.substring(start=5)),
+          encode_fp_precision_convert(slice_from(line, 5)),
         )
       } else if line.has_prefix("fcmp\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_fcmp(line.substring(start=5)),
+          encode_fcmp(slice_from(line, 5)),
         )
       } else if line.has_prefix("fcvtzs\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_fp_convert_to_int(line.substring(start=7), true, "fcvtzs"),
+          encode_fp_convert_to_int(slice_from(line, 7), true, "fcvtzs"),
         )
       } else if line.has_prefix("fcvtzu\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_fp_convert_to_int(line.substring(start=7), false, "fcvtzu"),
+          encode_fp_convert_to_int(slice_from(line, 7), false, "fcvtzu"),
         )
       } else if line.has_prefix("scvtf\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_int_convert_to_fp(line.substring(start=6), true, "scvtf"),
+          encode_int_convert_to_fp(slice_from(line, 6), true, "scvtf"),
         )
       } else if line.has_prefix("ucvtf\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_int_convert_to_fp(line.substring(start=6), false, "ucvtf"),
+          encode_int_convert_to_fp(slice_from(line, 6), false, "ucvtf"),
         )
       } else if line.has_prefix("dmb\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_dmb(line.substring(start=4)),
+          encode_dmb(slice_from(line, 4)),
         )
       } else if line.has_prefix("ldaxrb\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_exclusive_load(line.substring(start=7), 0x085ffc00U, "ldaxrb"),
+          encode_exclusive_load(slice_from(line, 7), 0x085ffc00U, "ldaxrb"),
         )
       } else if line.has_prefix("ldaxrh\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_exclusive_load(line.substring(start=7), 0x485ffc00U, "ldaxrh"),
+          encode_exclusive_load(slice_from(line, 7), 0x485ffc00U, "ldaxrh"),
         )
       } else if line.has_prefix("ldaxr\t") {
-        let parts = split_operands(line.substring(start=6))
+        let parts = split_operands(slice_from(line, 6))
         let base = if parts.length() > 0 && parts[0].has_prefix("x") {
           0xc85ffc00U
         } else {
@@ -2500,20 +2511,20 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         }
         append_u32_to_section(
           sections[current_section],
-          encode_exclusive_load(line.substring(start=6), base, "ldaxr"),
+          encode_exclusive_load(slice_from(line, 6), base, "ldaxr"),
         )
       } else if line.has_prefix("ldarb\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_atomic_memory(line.substring(start=6), 0x08dffc00U, "ldarb"),
+          encode_atomic_memory(slice_from(line, 6), 0x08dffc00U, "ldarb"),
         )
       } else if line.has_prefix("ldarh\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_atomic_memory(line.substring(start=6), 0x48dffc00U, "ldarh"),
+          encode_atomic_memory(slice_from(line, 6), 0x48dffc00U, "ldarh"),
         )
       } else if line.has_prefix("ldar\t") {
-        let parts = split_operands(line.substring(start=5))
+        let parts = split_operands(slice_from(line, 5))
         let base = if parts.length() > 0 && parts[0].has_prefix("x") {
           0xc8dffc00U
         } else {
@@ -2521,20 +2532,20 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         }
         append_u32_to_section(
           sections[current_section],
-          encode_atomic_memory(line.substring(start=5), base, "ldar"),
+          encode_atomic_memory(slice_from(line, 5), base, "ldar"),
         )
       } else if line.has_prefix("stlrb\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_atomic_memory(line.substring(start=6), 0x089ffc00U, "stlrb"),
+          encode_atomic_memory(slice_from(line, 6), 0x089ffc00U, "stlrb"),
         )
       } else if line.has_prefix("stlrh\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_atomic_memory(line.substring(start=6), 0x489ffc00U, "stlrh"),
+          encode_atomic_memory(slice_from(line, 6), 0x489ffc00U, "stlrh"),
         )
       } else if line.has_prefix("stlr\t") {
-        let parts = split_operands(line.substring(start=5))
+        let parts = split_operands(slice_from(line, 5))
         let base = if parts.length() > 0 && parts[0].has_prefix("x") {
           0xc89ffc00U
         } else {
@@ -2542,20 +2553,20 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         }
         append_u32_to_section(
           sections[current_section],
-          encode_atomic_memory(line.substring(start=5), base, "stlr"),
+          encode_atomic_memory(slice_from(line, 5), base, "stlr"),
         )
       } else if line.has_prefix("stlxrb\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_exclusive_store(line.substring(start=7), 0x0800fc00U, "stlxrb"),
+          encode_exclusive_store(slice_from(line, 7), 0x0800fc00U, "stlxrb"),
         )
       } else if line.has_prefix("stlxrh\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_exclusive_store(line.substring(start=7), 0x4800fc00U, "stlxrh"),
+          encode_exclusive_store(slice_from(line, 7), 0x4800fc00U, "stlxrh"),
         )
       } else if line.has_prefix("stlxr\t") {
-        let parts = split_operands(line.substring(start=6))
+        let parts = split_operands(slice_from(line, 6))
         let base = if parts.length() > 1 && parts[1].has_prefix("x") {
           0xc800fc00U
         } else {
@@ -2563,38 +2574,38 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         }
         append_u32_to_section(
           sections[current_section],
-          encode_exclusive_store(line.substring(start=6), base, "stlxr"),
+          encode_exclusive_store(slice_from(line, 6), base, "stlxr"),
         )
       } else if line.has_prefix("udiv\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_three_register(line.substring(start=5), 0x9ac00800U, "udiv"),
+          encode_three_register(slice_from(line, 5), 0x9ac00800U, "udiv"),
         )
       } else if line.has_prefix("umulh\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_three_register(line.substring(start=6), 0x9bc07c00U, "umulh"),
+          encode_three_register(slice_from(line, 6), 0x9bc07c00U, "umulh"),
         )
       } else if line.has_prefix("smulh\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_three_register(line.substring(start=6), 0x9b407c00U, "smulh"),
+          encode_three_register(slice_from(line, 6), 0x9b407c00U, "smulh"),
         )
       } else if line.has_prefix("and\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_and(line.substring(start=4)),
+          encode_and(slice_from(line, 4)),
         )
       } else if line.has_prefix("bic\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_bic(line.substring(start=4)),
+          encode_bic(slice_from(line, 4)),
         )
       } else if line.has_prefix("orr\t") {
         append_u32_to_section(
           sections[current_section],
           encode_logical_register(
-            line.substring(start=4),
+            slice_from(line, 4),
             0x2a000000U,
             0xaa000000U,
             "orr",
@@ -2604,7 +2615,7 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         append_u32_to_section(
           sections[current_section],
           encode_logical_register(
-            line.substring(start=4),
+            slice_from(line, 4),
             0x4a000000U,
             0xca000000U,
             "eor",
@@ -2613,23 +2624,23 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
       } else if line.has_prefix("lsl\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_shift(line.substring(start=4), "lsl"),
+          encode_shift(slice_from(line, 4), "lsl"),
         )
       } else if line.has_prefix("asr\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_shift(line.substring(start=4), "asr"),
+          encode_shift(slice_from(line, 4), "asr"),
         )
       } else if line.has_prefix("lsr\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_shift(line.substring(start=4), "lsr"),
+          encode_shift(slice_from(line, 4), "lsr"),
         )
       } else if line.has_prefix("clz\t") {
         append_u32_to_section(
           sections[current_section],
           encode_unary_register(
-            line.substring(start=4),
+            slice_from(line, 4),
             0x5ac01000U,
             0xdac01000U,
             "clz",
@@ -2639,7 +2650,7 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         append_u32_to_section(
           sections[current_section],
           encode_unary_register(
-            line.substring(start=5),
+            slice_from(line, 5),
             0x5ac00000U,
             0xdac00000U,
             "rbit",
@@ -2649,7 +2660,7 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         append_u32_to_section(
           sections[current_section],
           encode_unary_register(
-            line.substring(start=4),
+            slice_from(line, 4),
             0x5ac00800U,
             0xdac00c00U,
             "rev",
@@ -2658,23 +2669,23 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
       } else if line.has_prefix("cmp\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_cmp(line.substring(start=4)),
+          encode_cmp(slice_from(line, 4)),
         )
       } else if line.has_prefix("cset\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_cset(line.substring(start=5)),
+          encode_cset(slice_from(line, 5)),
         )
       } else if line.has_prefix("str\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_str(line.substring(start=4)),
+          encode_str(slice_from(line, 4)),
         )
       } else if line.has_prefix("strb\t") {
         append_u32_to_section(
           sections[current_section],
           encode_byte_halfword_memory(
-            line.substring(start=5),
+            slice_from(line, 5),
             0x39000000U,
             1,
             "strb",
@@ -2684,7 +2695,7 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         append_u32_to_section(
           sections[current_section],
           encode_byte_halfword_memory(
-            line.substring(start=5),
+            slice_from(line, 5),
             0x79000000U,
             2,
             "strh",
@@ -2694,7 +2705,7 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         append_u32_to_section(
           sections[current_section],
           encode_byte_halfword_memory(
-            line.substring(start=5),
+            slice_from(line, 5),
             0x39400000U,
             1,
             "ldrb",
@@ -2704,14 +2715,14 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         append_u32_to_section(
           sections[current_section],
           encode_byte_halfword_memory(
-            line.substring(start=5),
+            slice_from(line, 5),
             0x79400000U,
             2,
             "ldrh",
           ),
         )
       } else if line.has_prefix("ldr\t") {
-        let parts = split_operands(line.substring(start=4))
+        let parts = split_operands(slice_from(line, 4))
         if parts.length() == 3 &&
           (parts[2].contains("@GOTPAGEOFF") || parts[2].contains("@PAGEOFF")) {
           let reloc_type = if parts[2].contains("@GOTPAGEOFF") { 6 } else { 4 }
@@ -2735,11 +2746,11 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         } else {
           append_u32_to_section(
             sections[current_section],
-            encode_ldr(line.substring(start=4)),
+            encode_ldr(slice_from(line, 4)),
           )
         }
       } else if line.has_prefix("cbz\t") {
-        let parts = split_operands(line.substring(start=4))
+        let parts = split_operands(slice_from(line, 4))
         if parts.length() != 2 {
           abort("malformed cbz instruction")
         }
@@ -2752,7 +2763,7 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         })
         append_u32_to_section(sections[current_section], 0U)
       } else if line.has_prefix("cbnz\t") {
-        let parts = split_operands(line.substring(start=5))
+        let parts = split_operands(slice_from(line, 5))
         if parts.length() != 2 {
           abort("malformed cbnz instruction")
         }
@@ -2766,8 +2777,8 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         append_u32_to_section(sections[current_section], 0U)
       } else if line.has_prefix("b.") {
         let parts : Array[String] = []
-        for part in line.substring(start=2).trim().to_string().split("\t") {
-          parts.push(part.to_string().trim().to_string())
+        for part in trim_to_owned(slice_from(line, 2)).split("\t") {
+          parts.push(part.trim().to_owned())
         }
         if parts.length() != 2 {
           abort("malformed conditional branch instruction: " + line)
@@ -2783,7 +2794,7 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         pending.push({
           section_index: current_section,
           offset: sections[current_section].bytes.length(),
-          label: line.substring(start=2).trim().to_string(),
+          label: trim_to_owned(slice_from(line, 2)),
           link: false,
         })
         append_u32_to_section(sections[current_section], 0U)
@@ -2791,19 +2802,19 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         pending.push({
           section_index: current_section,
           offset: sections[current_section].bytes.length(),
-          label: line.substring(start=3).trim().to_string(),
+          label: trim_to_owned(slice_from(line, 3)),
           link: true,
         })
         append_u32_to_section(sections[current_section], 0U)
       } else if line.has_prefix("blr\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_blr(line.substring(start=4)),
+          encode_blr(slice_from(line, 4)),
         )
       } else if line.has_prefix("br\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_br(line.substring(start=3)),
+          encode_br(slice_from(line, 3)),
         )
       } else {
         abort("unsupported instruction in Mach-O object backend: " + line)
