@@ -28,6 +28,66 @@ test "jit calls internal helper" {
 }
 
 ///|
+test "jit reads initialized global" {
+  let source = "int g = 40; int entry(void) { return g + 2; }"
+  match call_i32_0(source, "entry") {
+    Some(value) => if value != 42 { abort("expected 42") }
+    None => abort("JIT call failed")
+  }
+}
+
+///|
+test "jit reads string literal" {
+  let source = "int entry(void) { char *s = \"AZ\"; return s[1] - 48; }"
+  match call_i32_0(source, "entry") {
+    Some(value) => if value != 42 { abort("expected 42") }
+    None => abort("JIT call failed")
+  }
+}
+
+///|
+test "jit patches pointer data initializer" {
+  let source = "int g = 41; int *p = &g; int entry(void) { return *p + 1; }"
+  match call_i32_0(source, "entry") {
+    Some(value) => if value != 42 { abort("expected 42") }
+    None => abort("JIT call failed")
+  }
+}
+
+///|
+test "jit writes uninitialized global" {
+  let source = "int g; int entry(void) { g = 40; return g + 2; }"
+  match call_i32_0(source, "entry") {
+    Some(value) => if value != 42 { abort("expected 42") }
+    None => abort("JIT call failed")
+  }
+}
+
+///|
+test "jit preserves writable data across calls" {
+  let source = "int g; int entry(void) { g = g + 20; return g + 2; }"
+  match compile(source) {
+    Some(module_) => {
+      match module_.call_i32_0("entry") {
+        Some(value) =>
+          if value != 22 {
+            abort("expected first call to return 22")
+          }
+        None => abort("JIT call failed")
+      }
+      match module_.call_i32_0("entry") {
+        Some(value) =>
+          if value != 42 {
+            abort("expected second call to return 42")
+          }
+        None => abort("JIT call failed")
+      }
+    }
+    None => abort("JIT allocation failed")
+  }
+}
+
+///|
 test "jit missing symbol returns none" {
   let source = "int answer(void) { return 42; }"
   match compile(source) {

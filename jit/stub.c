@@ -1,4 +1,4 @@
-#include <errno.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 #include <sys/mman.h>
@@ -27,8 +27,47 @@ static KimiccJitMemory *kimicc_jit_memory_make_empty(void) {
   return memory;
 }
 
+static uint32_t kimicc_jit_read_u32_le(const uint8_t *bytes) {
+  return ((uint32_t)bytes[0]) |
+         ((uint32_t)bytes[1] << 8) |
+         ((uint32_t)bytes[2] << 16) |
+         ((uint32_t)bytes[3] << 24);
+}
+
+static int kimicc_jit_apply_base_relocations(
+  uint8_t *ptr,
+  size_t mapped_size,
+  moonbit_bytes_t base_relocations
+) {
+  size_t reloc_size = Moonbit_array_length(base_relocations);
+  if (reloc_size % 4 != 0) {
+    return -1;
+  }
+  uintptr_t base = (uintptr_t)ptr;
+  for (size_t i = 0; i < reloc_size; i += 4) {
+    uint32_t offset = kimicc_jit_read_u32_le(
+      (const uint8_t *)base_relocations + i
+    );
+    if (
+      (size_t)offset > mapped_size ||
+      mapped_size - (size_t)offset < sizeof(uint64_t)
+    ) {
+      return -1;
+    }
+    uint64_t value = 0;
+    memcpy(&value, ptr + offset, sizeof(value));
+    value += (uint64_t)base;
+    memcpy(ptr + offset, &value, sizeof(value));
+  }
+  return 0;
+}
+
 MOONBIT_FFI_EXPORT
-KimiccJitMemory *kimicc_jit_memory_new(moonbit_bytes_t code) {
+KimiccJitMemory *kimicc_jit_memory_new(
+  moonbit_bytes_t code,
+  int32_t executable_size,
+  moonbit_bytes_t base_relocations
+) {
   size_t code_size = Moonbit_array_length(code);
   if (code_size == 0) {
     return kimicc_jit_memory_make_empty();
@@ -51,11 +90,27 @@ KimiccJitMemory *kimicc_jit_memory_new(moonbit_bytes_t code) {
   }
 
   memcpy(ptr, code, code_size);
-  __builtin___clear_cache((char *)ptr, (char *)ptr + code_size);
-
-  if (mprotect(ptr, mapped_size, PROT_READ | PROT_EXEC) != 0) {
+  if (kimicc_jit_apply_base_relocations(
+        (uint8_t *)ptr,
+        mapped_size,
+        base_relocations
+      ) != 0) {
     munmap(ptr, mapped_size);
     return kimicc_jit_memory_make_empty();
+  }
+  __builtin___clear_cache((char *)ptr, (char *)ptr + code_size);
+
+  if (executable_size > 0) {
+    size_t exec_size = (size_t)executable_size;
+    if (exec_size > mapped_size) {
+      munmap(ptr, mapped_size);
+      return kimicc_jit_memory_make_empty();
+    }
+    size_t exec_mprotect_size = (exec_size + page_size - 1) & ~(page_size - 1);
+    if (mprotect(ptr, exec_mprotect_size, PROT_READ | PROT_EXEC) != 0) {
+      munmap(ptr, mapped_size);
+      return kimicc_jit_memory_make_empty();
+    }
   }
 
   KimiccJitMemory *memory = (KimiccJitMemory *)moonbit_make_external_object(

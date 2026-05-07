@@ -2,8 +2,12 @@
 priv type ExecutableMemory
 
 ///|
-#borrow(code)
-extern "c" fn executable_memory_new(code : Bytes) -> ExecutableMemory = "kimicc_jit_memory_new"
+#borrow(code, base_relocations)
+extern "c" fn executable_memory_new(
+  code : Bytes,
+  executable_size : Int,
+  base_relocations : Bytes,
+) -> ExecutableMemory = "kimicc_jit_memory_new"
 
 ///|
 #borrow(memory)

@@ -17,7 +17,11 @@ fn normalize_symbol_name(name : String) -> String {
 pub fn compile(source : String) -> Module? {
   let prog = @parser.parse(source)
   let image = @codegen.generate_jit_image(prog)
-  let memory = executable_memory_new(image.code)
+  let memory = executable_memory_new(
+    image.code,
+    image.executable_size,
+    image.base_relocations,
+  )
   if executable_memory_is_valid(memory) {
     Some({ image, memory })
   } else {

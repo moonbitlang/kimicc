@@ -92,6 +92,8 @@ pub struct JitSymbol {
 ///|
 pub struct JitImage {
   code : Bytes
+  executable_size : Int
+  base_relocations : Bytes
   symbols : Array[JitSymbol]
 }
 
@@ -206,6 +208,46 @@ fn patch_u32_in_section(
   section.bytes[offset + 1] = ((value >> 8) & 0xffU).reinterpret_as_int()
   section.bytes[offset + 2] = ((value >> 16) & 0xffU).reinterpret_as_int()
   section.bytes[offset + 3] = ((value >> 24) & 0xffU).reinterpret_as_int()
+}
+
+///|
+fn patch_u32_in_array(values : Array[Int], offset : Int, value : UInt) -> Unit {
+  values[offset] = (value & 0xffU).reinterpret_as_int()
+  values[offset + 1] = ((value >> 8) & 0xffU).reinterpret_as_int()
+  values[offset + 2] = ((value >> 16) & 0xffU).reinterpret_as_int()
+  values[offset + 3] = ((value >> 24) & 0xffU).reinterpret_as_int()
+}
+
+///|
+fn read_u32_from_array(values : Array[Int], offset : Int) -> UInt {
+  values[offset].reinterpret_as_uint() |
+  (values[offset + 1].reinterpret_as_uint() << 8) |
+  (values[offset + 2].reinterpret_as_uint() << 16) |
+  (values[offset + 3].reinterpret_as_uint() << 24)
+}
+
+///|
+fn read_i64_from_array(values : Array[Int], offset : Int) -> Int64 {
+  ((values[offset].to_int64() & 0xffL) << 0) |
+  ((values[offset + 1].to_int64() & 0xffL) << 8) |
+  ((values[offset + 2].to_int64() & 0xffL) << 16) |
+  ((values[offset + 3].to_int64() & 0xffL) << 24) |
+  ((values[offset + 4].to_int64() & 0xffL) << 32) |
+  ((values[offset + 5].to_int64() & 0xffL) << 40) |
+  ((values[offset + 6].to_int64() & 0xffL) << 48) |
+  ((values[offset + 7].to_int64() & 0xffL) << 56)
+}
+
+///|
+fn patch_i64_in_array(values : Array[Int], offset : Int, value : Int64) -> Unit {
+  values[offset] = ((value >> 0) & 0xffL).to_int()
+  values[offset + 1] = ((value >> 8) & 0xffL).to_int()
+  values[offset + 2] = ((value >> 16) & 0xffL).to_int()
+  values[offset + 3] = ((value >> 24) & 0xffL).to_int()
+  values[offset + 4] = ((value >> 32) & 0xffL).to_int()
+  values[offset + 5] = ((value >> 40) & 0xffL).to_int()
+  values[offset + 6] = ((value >> 48) & 0xffL).to_int()
+  values[offset + 7] = ((value >> 56) & 0xffL).to_int()
 }
 
 ///|
@@ -3237,6 +3279,15 @@ fn section_bytes_to_bytes(values : Array[Int]) -> Bytes {
 }
 
 ///|
+fn u32_offsets_to_bytes(values : Array[Int]) -> Bytes {
+  let buf = @buffer.new(size_hint=values.length() * 4)
+  for value in values {
+    write_i32_le(buf, value)
+  }
+  buf.to_bytes()
+}
+
+///|
 fn find_text_section(obj : AssembledObject) -> Int {
   for i = 0; i < obj.sections.length(); i = i + 1 {
     if section_is_text(obj.sections[i]) {
@@ -3247,29 +3298,250 @@ fn find_text_section(obj : AssembledObject) -> Int {
 }
 
 ///|
-fn jit_image_from_assembled(obj : AssembledObject) -> JitImage {
-  let text_index = find_text_section(obj)
+fn section_is_jit_executable(section : ObjectSection) -> Bool {
+  section.segname == "__TEXT"
+}
+
+///|
+fn jit_page_size() -> Int {
+  16384
+}
+
+///|
+fn collect_jit_got_symbols(obj : AssembledObject) -> Array[String] {
+  let symbols : Array[String] = []
   for section in obj.sections {
-    if section.relocs.length() > 0 {
-      abort("JIT image does not support relocations yet")
-    }
-    if section.bytes.length() > 0 && !section_is_text(section) {
-      abort("JIT image does not support non-text sections yet")
+    for reloc in section.relocs {
+      if reloc.type_ == 5 || reloc.type_ == 6 {
+        push_string_once(symbols, reloc.symbol)
+      }
     }
   }
+  symbols
+}
+
+///|
+fn layout_jit_sections(
+  sections : Array[ObjectSection],
+  got_symbols : Array[String],
+) -> (Int, Map[String, Int], Int) {
+  let mut cursor = 0
+  for section in sections {
+    if section_is_jit_executable(section) {
+      let align = 1 << section.align_power
+      cursor = align_int(cursor, align)
+      section.addr = cursor
+      section.offset = cursor
+      cursor = cursor + section.bytes.length()
+    }
+  }
+  let executable_size = align_int(cursor, jit_page_size())
+  cursor = executable_size
+  for section in sections {
+    if !section_is_jit_executable(section) {
+      let align = 1 << section.align_power
+      cursor = align_int(cursor, align)
+      section.addr = cursor
+      section.offset = cursor
+      cursor = cursor + section.bytes.length()
+    }
+  }
+  cursor = align_int(cursor, 8)
+  let got_offsets : Map[String, Int] = {}
+  for symbol in got_symbols {
+    got_offsets[symbol] = cursor
+    cursor = cursor + 8
+  }
+  (
+    if cursor < executable_size {
+      executable_size
+    } else {
+      cursor
+    },
+    got_offsets,
+    executable_size,
+  )
+}
+
+///|
+fn symbol_image_addr(obj : AssembledObject, symbol : String) -> Int {
+  match obj.symbols.get(symbol) {
+    Some(loc) => obj.sections[loc.section_index].addr + loc.offset
+    None => abort("JIT image does not support external symbol yet: " + symbol)
+  }
+}
+
+///|
+fn copy_jit_sections(
+  image : Array[Int],
+  sections : Array[ObjectSection],
+) -> Unit {
+  for section in sections {
+    for i = 0; i < section.bytes.length(); i = i + 1 {
+      image[section.addr + i] = section.bytes[i]
+    }
+  }
+}
+
+///|
+fn patch_jit_adrp(image : Array[Int], offset : Int, target : Int) -> Unit {
+  let delta_pages = target / 4096 - offset / 4096
+  if delta_pages < -(1 << 20) || delta_pages >= 1 << 20 {
+    abort("JIT adrp relocation target out of range")
+  }
+  let encoded = if delta_pages < 0 {
+    delta_pages + (1 << 21)
+  } else {
+    delta_pages
+  }
+  let immlo = encoded & 3
+  let immhi = (encoded >> 2) & 0x7ffff
+  let insn = read_u32_from_array(image, offset)
+  patch_u32_in_array(
+    image,
+    offset,
+    (insn & 0x9f00001fU) |
+    (immlo.reinterpret_as_uint() << 29) |
+    (immhi.reinterpret_as_uint() << 5),
+  )
+}
+
+///|
+fn jit_pageoff_scale(insn : UInt, reloc_type : Int) -> Int {
+  if reloc_type == 6 {
+    8
+  } else if (insn & 0xffc00000U) == 0xf9400000U {
+    8
+  } else if (insn & 0xffc00000U) == 0xb9400000U {
+    4
+  } else if (insn & 0xffc00000U) == 0x79400000U {
+    2
+  } else {
+    1
+  }
+}
+
+///|
+fn patch_jit_pageoff(
+  image : Array[Int],
+  offset : Int,
+  target : Int,
+  reloc_type : Int,
+) -> Unit {
+  let pageoff = target & 0xfff
+  let insn = read_u32_from_array(image, offset)
+  let scale = jit_pageoff_scale(insn, reloc_type)
+  if pageoff % scale != 0 {
+    abort("JIT pageoff relocation is not aligned")
+  }
+  let imm = pageoff / scale
+  if imm < 0 || imm > 4095 {
+    abort("JIT pageoff relocation out of range")
+  }
+  patch_u32_in_array(
+    image,
+    offset,
+    (insn & 0xffc003ffU) | (imm.reinterpret_as_uint() << 10),
+  )
+}
+
+///|
+fn patch_jit_branch(image : Array[Int], offset : Int, target : Int) -> Unit {
+  let insn = read_u32_from_array(image, offset)
+  let delta = (target - offset) / 4
+  if delta < -(1 << 25) || delta >= 1 << 25 {
+    abort("JIT branch relocation target out of range")
+  }
+  let imm = if delta < 0 { delta + (1 << 26) } else { delta }
+  patch_u32_in_array(
+    image,
+    offset,
+    (insn & 0xfc000000U) | imm.reinterpret_as_uint(),
+  )
+}
+
+///|
+fn patch_jit_relocations(
+  obj : AssembledObject,
+  image : Array[Int],
+  got_symbols : Array[String],
+  got_offsets : Map[String, Int],
+) -> Array[Int] {
+  let base_relocations : Array[Int] = []
+  for got_symbol in got_symbols {
+    patch_i64_in_array(
+      image,
+      got_offsets[got_symbol],
+      symbol_image_addr(obj, got_symbol).to_int64(),
+    )
+    base_relocations.push(got_offsets[got_symbol])
+  }
+  for section in obj.sections {
+    for reloc in section.relocs {
+      let offset = section.addr + reloc.address
+      let target = if reloc.type_ == 5 || reloc.type_ == 6 {
+        got_offsets[reloc.symbol]
+      } else {
+        symbol_image_addr(obj, reloc.symbol)
+      }
+      match reloc.type_ {
+        0 => {
+          let addend = read_i64_from_array(image, offset)
+          patch_i64_in_array(image, offset, target.to_int64() + addend)
+          base_relocations.push(offset)
+        }
+        2 => patch_jit_branch(image, offset, target)
+        3 | 5 => patch_jit_adrp(image, offset, target)
+        4 | 6 => patch_jit_pageoff(image, offset, target, reloc.type_)
+        _ => abort("unsupported JIT relocation type")
+      }
+    }
+  }
+  base_relocations
+}
+
+///|
+fn jit_symbols_from_assembled(
+  obj : AssembledObject,
+  text_index : Int,
+) -> Array[JitSymbol] {
   let symbols : Array[JitSymbol] = []
   for name in obj.defined_symbols {
     if !is_temporary_label(name) {
       match obj.symbols.get(name) {
         Some(loc) =>
           if loc.section_index == text_index {
-            symbols.push({ name, offset: loc.offset })
+            symbols.push({
+              name,
+              offset: obj.sections[loc.section_index].addr + loc.offset,
+            })
           }
         None => ()
       }
     }
   }
-  { code: section_bytes_to_bytes(obj.sections[text_index].bytes), symbols }
+  symbols
+}
+
+///|
+fn jit_image_from_assembled(obj : AssembledObject) -> JitImage {
+  let text_index = find_text_section(obj)
+  let got_symbols = collect_jit_got_symbols(obj)
+  let (image_size, got_offsets, executable_size) = layout_jit_sections(
+    obj.sections,
+    got_symbols,
+  )
+  let image = Array::make(image_size, 0)
+  copy_jit_sections(image, obj.sections)
+  let base_relocations = patch_jit_relocations(
+    obj, image, got_symbols, got_offsets,
+  )
+  {
+    code: section_bytes_to_bytes(image),
+    executable_size,
+    base_relocations: u32_offsets_to_bytes(base_relocations),
+    symbols: jit_symbols_from_assembled(obj, text_index),
+  }
 }
 
 ///|
