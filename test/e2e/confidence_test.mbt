@@ -941,6 +941,88 @@ async test "e2e direct Mach-O scalar control differential corpus matches clang" 
 }
 
 ///|
+fn deterministic_floating_differential_source(case_index : Int) -> String {
+  let seed_a = case_index * 13 + 5
+  let seed_b = case_index * 7 + 3
+  let rounds = case_index % 5 + 4
+  let source = StringBuilder::new()
+  source.write_string("#include <stdio.h>\n")
+  source.write_string(
+    "typedef struct Sample { double d; float f; int tag; } Sample;\n",
+  )
+  source.write_string(
+    "static Sample make_sample(double d, float f, int tag) { Sample s = { d, f, tag }; return s; }\n",
+  )
+  source.write_string("static long scale(double value) {\n")
+  source.write_string(
+    "  return value < 0.0 ? (long)(value * 1000.0 - 0.5) : (long)(value * 1000.0 + 0.5);\n",
+  )
+  source.write_string("}\n")
+  source.write_string("static double fold(Sample s, int rounds) {\n")
+  source.write_string(
+    "  double acc = s.d + (double)s.f + (double)s.tag * 0.125;\n",
+  )
+  source.write_string("  for (int i = 0; i < rounds; i = i + 1) {\n")
+  source.write_string("    double delta = (double)((s.tag + i) & 7) * 0.375;\n")
+  source.write_string("    if (acc > 25.0) acc = acc * 0.5 - delta;\n")
+  source.write_string("    else if (acc < -10.0) acc = -acc + delta;\n")
+  source.write_string("    else acc = acc * 1.25 + delta;\n")
+  source.write_string("    s.f = (float)((double)s.f * -0.5 + (double)i);\n")
+  source.write_string("  }\n")
+  source.write_string("  return acc + (double)s.f;\n")
+  source.write_string("}\n")
+  source.write_string("int main(void) {\n")
+  source.write_string("  Sample a = make_sample(")
+  source.write_string(seed_a.to_string())
+  source.write_string(".25, ")
+  source.write_string(seed_b.to_string())
+  source.write_string(".5f, ")
+  source.write_string((case_index - 4).to_string())
+  source.write_string(");\n")
+  source.write_string("  Sample b = make_sample(-")
+  source.write_string((seed_b + 1).to_string())
+  source.write_string(".75, ")
+  source.write_string((seed_a % 9 + 1).to_string())
+  source.write_string(".25f, ")
+  source.write_string((case_index * 3 - 5).to_string())
+  source.write_string(");\n")
+  source.write_string("  double total = fold(a, ")
+  source.write_string(rounds.to_string())
+  source.write_string(") - fold(b, ")
+  source.write_string((rounds + 1).to_string())
+  source.write_string(");\n")
+  source.write_string("  long scaled = scale(total);\n")
+  source.write_string("  printf(\"case=%d scaled=%ld sign=%d\\n\", ")
+  source.write_string(case_index.to_string())
+  source.write_string(", scaled, scaled < 0 ? -1 : 1);\n")
+  source.write_string("  return (int)((unsigned long)scaled & 127u);\n")
+  source.write_string("}\n")
+  source.to_string()
+}
+
+///|
+async test "e2e deterministic floating differential corpus matches clang" {
+  for case_index in [0, 1, 2, 3, 4, 5, 6, 7] {
+    let result = run_source_against_clang_baseline(
+      deterministic_floating_differential_source(case_index),
+      "floating_differential_" + case_index.to_string(),
+    )
+    assert_true(result.output.contains("case=" + case_index.to_string()))
+  }
+}
+
+///|
+async test "e2e direct Mach-O floating differential corpus matches clang" {
+  for case_index in [0, 1, 2, 3] {
+    let result = run_source_direct_object_against_clang_baseline(
+      deterministic_floating_differential_source(case_index),
+      "direct_floating_differential_" + case_index.to_string(),
+    )
+    assert_true(result.output.contains("case=" + case_index.to_string()))
+  }
+}
+
+///|
 async test "e2e bitfields pack after byte fields like clang" {
   let source =
     #|typedef unsigned int Pgno;
