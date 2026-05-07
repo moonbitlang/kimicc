@@ -1,0 +1,13 @@
+import {
+  "bobzhang/kimicc/parser",
+  "bobzhang/kimicc/codegen",
+}
+
+options(
+  "native-stub": [ "stub.c" ],
+  targets: {
+    "ffi.mbt": [ "native" ],
+    "jit.mbt": [ "native" ],
+    "jit_test.mbt": [ "native" ],
+  },
+)

@@ -6,6 +6,8 @@ import {
 }
 
 // Values
+pub fn generate_jit_image(@parser.Program) -> JitImage
+
 pub fn generate_macho_object(@parser.Program) -> Bytes
 
 // Errors
@@ -39,6 +41,16 @@ pub struct Codegen {
 }
 pub fn Codegen::generate(Self, @parser.Program) -> String
 pub fn Codegen::new() -> Self
+
+pub struct JitImage {
+  code : Bytes
+  symbols : Array[JitSymbol]
+}
+
+pub struct JitSymbol {
+  name : String
+  offset : Int
+}
 
 // Type aliases
 

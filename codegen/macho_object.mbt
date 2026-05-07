@@ -84,6 +84,18 @@ priv struct SymbolLayout {
 }
 
 ///|
+pub struct JitSymbol {
+  name : String
+  offset : Int
+}
+
+///|
+pub struct JitImage {
+  code : Bytes
+  symbols : Array[JitSymbol]
+}
+
+///|
 fn write_u32_le(buf : @buffer.Buffer, value : UInt) -> Unit {
   buf.write_byte((value & 0xffU).reinterpret_as_int().to_byte())
   buf.write_byte(((value >> 8) & 0xffU).reinterpret_as_int().to_byte())
@@ -3216,7 +3228,58 @@ fn macho_object_from_assembled(obj : AssembledObject) -> Bytes {
 }
 
 ///|
+fn section_bytes_to_bytes(values : Array[Int]) -> Bytes {
+  let buf = @buffer.new(size_hint=values.length())
+  for value in values {
+    buf.write_byte(value.to_byte())
+  }
+  buf.to_bytes()
+}
+
+///|
+fn find_text_section(obj : AssembledObject) -> Int {
+  for i = 0; i < obj.sections.length(); i = i + 1 {
+    if section_is_text(obj.sections[i]) {
+      return i
+    }
+  }
+  abort("JIT image requires a __TEXT,__text section")
+}
+
+///|
+fn jit_image_from_assembled(obj : AssembledObject) -> JitImage {
+  let text_index = find_text_section(obj)
+  for section in obj.sections {
+    if section.relocs.length() > 0 {
+      abort("JIT image does not support relocations yet")
+    }
+    if section.bytes.length() > 0 && !section_is_text(section) {
+      abort("JIT image does not support non-text sections yet")
+    }
+  }
+  let symbols : Array[JitSymbol] = []
+  for name in obj.defined_symbols {
+    if !is_temporary_label(name) {
+      match obj.symbols.get(name) {
+        Some(loc) =>
+          if loc.section_index == text_index {
+            symbols.push({ name, offset: loc.offset })
+          }
+        None => ()
+      }
+    }
+  }
+  { code: section_bytes_to_bytes(obj.sections[text_index].bytes), symbols }
+}
+
+///|
 pub fn generate_macho_object(prog : @parser.Program) -> Bytes {
   let assembly = Codegen::new().generate(prog)
   macho_object_from_assembled(assemble_object_from_darwin_arm64(assembly))
+}
+
+///|
+pub fn generate_jit_image(prog : @parser.Program) -> JitImage {
+  let assembly = Codegen::new().generate(prog)
+  jit_image_from_assembled(assemble_object_from_darwin_arm64(assembly))
 }
