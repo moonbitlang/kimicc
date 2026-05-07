@@ -440,17 +440,55 @@ fn assert_sqlite_full_residuals(output : String, compiler : String) -> Unit {
 ///|
 fn sqlite_residual_failure_signature(output : String) -> String {
   let signature = StringBuilder::new()
+  let seen_failed : Map[String, Bool] = {}
   for raw in output.split("\n") {
-    let line = raw.to_owned()
-    if line.has_prefix("### ") ||
-      line.has_prefix("! ") ||
-      line.contains(" errors out of ") ||
-      line.contains("FAILED: ") {
-      signature.write_string(line)
-      signature.write_string("\n")
+    for part in raw.split("\r") {
+      let line = part.trim()
+      if line.has_prefix("### ") || line.has_prefix("! ") {
+        signature.write_string(line.to_owned())
+        signature.write_string("\n")
+      } else if line.contains("FAILED: ") {
+        let failed = match line.rev_split_once("FAILED: ") {
+          Some((_, failed)) => failed.trim()
+          None => line
+        }
+        let script = match failed.split_once(" ") {
+          Some((script, _)) => script
+          None => failed
+        }
+        let normalized = "FAILED: " + script.to_owned()
+        if !seen_failed.contains(normalized) {
+          seen_failed[normalized] = true
+          signature.write_string(normalized)
+          signature.write_string("\n")
+        }
+      } else if line.contains(" errors out of ") {
+        match line.split_once(" errors out of ") {
+          Some((count, _)) => {
+            signature.write_string(count.trim().to_owned())
+            signature.write_string(" errors\n")
+          }
+          None => ()
+        }
+      }
     }
   }
   signature.to_string()
+}
+
+///|
+test "sqlite residual signature normalizes full runner progress fields" {
+  let kimicc = "00:01 tcl(1/2) r4\rFAILED: test/json101.test (3)\n6 failures:\nFAILED: test/json101.test\n26 errors out of 1016609 tests in 14:28 on host"
+  let clang = "00:01 tcl(1/2) r4\rFAILED: test/json101.test (1)\n6 failures:\nFAILED: test/json101.test\n26 errors out of 1016630 tests in 10:39 on host"
+  inspect(
+    sqlite_residual_failure_signature(kimicc),
+    content="FAILED: test/json101.test\n26 errors\n",
+  )
+  inspect(
+    sqlite_residual_failure_signature(kimicc) ==
+    sqlite_residual_failure_signature(clang),
+    content="true",
+  )
 }
 
 ///|
