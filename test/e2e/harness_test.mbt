@@ -82,6 +82,43 @@ async fn run_source_against_clang_baseline(
 }
 
 ///|
+async fn run_source_direct_object_against_clang_baseline(
+  source : String,
+  tag : String,
+) -> CommandResult {
+  let source_path = temp_file_path(tag + "_source", source, ".c")
+  let obj_path = compile_source_to_direct_object_path(source, tag + "_direct")
+  let direct_bin = temp_file_path(tag + "_direct", source, "")
+  let clang_bin = temp_file_path(tag + "_clang", source, "")
+  write_text_file(source_path, source)
+  run_command_checked(
+    "clang -o " + shell_quote(direct_bin) + " " + shell_quote(obj_path),
+    "link direct object differential " + tag,
+  )
+  run_command_checked(
+    "clang -o " + shell_quote(clang_bin) + " " + shell_quote(source_path),
+    "build clang direct object differential " + tag,
+  )
+  let direct = run_command_capture(shell_quote(direct_bin), tag + "_direct_run")
+  let clang = run_command_capture(shell_quote(clang_bin), tag + "_clang_run")
+  if direct.code != clang.code || direct.output != clang.output {
+    abort(
+      "Direct object C differential mismatch for " +
+      tag +
+      ":\nclang code=" +
+      clang.code.to_string() +
+      "\nclang output:\n" +
+      clang.output +
+      "\ndirect object code=" +
+      direct.code.to_string() +
+      "\ndirect object output:\n" +
+      direct.output,
+    )
+  }
+  direct
+}
+
+///|
 priv struct CommandResult {
   code : Int
   output : String

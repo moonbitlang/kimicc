@@ -919,6 +919,17 @@ async test "e2e deterministic scalar control differential corpus matches clang" 
 }
 
 ///|
+async test "e2e direct Mach-O scalar control differential corpus matches clang" {
+  for case_index in [0, 1, 2, 3, 4, 5, 6, 7] {
+    let result = run_source_direct_object_against_clang_baseline(
+      deterministic_scalar_control_differential_source(case_index),
+      "direct_scalar_control_differential_" + case_index.to_string(),
+    )
+    assert_true(result.output.contains("case=" + case_index.to_string()))
+  }
+}
+
+///|
 async test "e2e bitfields pack after byte fields like clang" {
   let source =
     #|typedef unsigned int Pgno;
