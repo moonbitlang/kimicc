@@ -897,6 +897,53 @@ async test "sqlite public platform-adjusted residual scripts pass with clang and
 }
 
 ///|
+async test "sqlite public platform-adjusted full suite passes with clang and direct when enabled" {
+  if !sqlite_public_conformance_enabled("platform-full") {
+    return
+  }
+  let root = sqlite_public_platform_adjusted_source_root()
+  let kimicc = run_sqlite_public_tcl_runner_tail_with_root(
+    "--jobs 4 full",
+    "sqlite_public_platform_full",
+    Kimicc,
+    320,
+    root,
+  )
+  if kimicc.output == "sqlite-public-tests-skipped\n" {
+    return
+  }
+  let clang = run_sqlite_public_tcl_runner_tail_with_root(
+    "--jobs 4 full",
+    "sqlite_public_platform_full",
+    Clang,
+    320,
+    root,
+  )
+  let direct = run_sqlite_public_tcl_runner_tail_with_root(
+    "--jobs 4 full",
+    "sqlite_public_platform_full",
+    DirectObject,
+    320,
+    root,
+  )
+  if kimicc.code != 0 ||
+    clang.code != 0 ||
+    direct.code != 0 ||
+    kimicc.output.contains("FAILED:") ||
+    clang.output.contains("FAILED:") ||
+    direct.output.contains("FAILED:") {
+    abort(
+      "SQLite platform-adjusted full suite failed:\nkimicc:\n" +
+      kimicc.output +
+      "\nclang:\n" +
+      clang.output +
+      "\ndirect:\n" +
+      direct.output,
+    )
+  }
+}
+
+///|
 async test "sqlite public full residual failures match clang and direct when enabled" {
   if !sqlite_public_conformance_enabled("full") {
     return
