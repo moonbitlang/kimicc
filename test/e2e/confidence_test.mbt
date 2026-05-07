@@ -1135,6 +1135,151 @@ async test "e2e direct Mach-O memory differential corpus matches clang" {
 }
 
 ///|
+fn write_variadic_differential_arg(
+  source : StringBuilder,
+  tag_value : Int,
+  arg_index : Int,
+) -> Unit {
+  match (tag_value + arg_index) % 4 {
+    0 => {
+      source.write_string("(")
+      source.write_string((tag_value * 31 + arg_index * 7 - 40).to_string())
+      source.write_string(")")
+    }
+    1 => {
+      source.write_string("(")
+      source.write_string(
+        (tag_value * 100003 + arg_index * 1009 - 70000).to_string(),
+      )
+      source.write_string("LL)")
+    }
+    2 => {
+      source.write_string("(")
+      source.write_string(
+        (tag_value * 65537 + arg_index * 257 + 123).to_string(),
+      )
+      source.write_string("u)")
+    }
+    _ => {
+      source.write_string("(")
+      if (tag_value + arg_index) % 3 == 0 {
+        source.write_string("-")
+      }
+      source.write_string((tag_value * 5 + arg_index * 3 + 1).to_string())
+      source.write_string(".75)")
+    }
+  }
+}
+
+///|
+fn write_variadic_differential_call(
+  source : StringBuilder,
+  tag_value : Int,
+  count : Int,
+) -> Unit {
+  source.write_string("read_variadic(")
+  source.write_string(tag_value.to_string())
+  source.write_string(", ")
+  source.write_string(count.to_string())
+  for arg_index in [0, 1, 2, 3, 4, 5, 6, 7] {
+    if arg_index < count {
+      source.write_string(", ")
+      write_variadic_differential_arg(source, tag_value, arg_index)
+    }
+  }
+  source.write_string(")")
+}
+
+///|
+fn deterministic_variadic_differential_source(case_index : Int) -> String {
+  let tag = case_index * 3 + 2
+  let first_count = case_index % 4 + 4
+  let second_count = (case_index + 1) % 4 + 3
+  let source = StringBuilder::new()
+  source.write_string("#include <stdio.h>\n")
+  source.write_string("typedef __builtin_va_list va_list;\n")
+  source.write_string("static long long scale(double value) {\n")
+  source.write_string(
+    "  return value < 0.0 ? (long long)(value * 100.0 - 0.5) : (long long)(value * 100.0 + 0.5);\n",
+  )
+  source.write_string("}\n")
+  source.write_string("static long long read_variadic(int tag, int n, ...) {\n")
+  source.write_string("  va_list ap;\n")
+  source.write_string("  __builtin_va_start(ap, n);\n")
+  source.write_string(
+    "  long long total = (long long)tag * 17LL + (long long)n;\n",
+  )
+  source.write_string("  for (int i = 0; i < n; i = i + 1) {\n")
+  source.write_string("    switch ((tag + i) & 3) {\n")
+  source.write_string("      case 0: {\n")
+  source.write_string("        int v = __builtin_va_arg(ap, int);\n")
+  source.write_string("        total += (long long)v * (long long)(i + 1);\n")
+  source.write_string("        break;\n")
+  source.write_string("      }\n")
+  source.write_string("      case 1: {\n")
+  source.write_string(
+    "        long long v = __builtin_va_arg(ap, long long);\n",
+  )
+  source.write_string("        total ^= v + (long long)(tag - i);\n")
+  source.write_string("        break;\n")
+  source.write_string("      }\n")
+  source.write_string("      case 2: {\n")
+  source.write_string(
+    "        unsigned int v = __builtin_va_arg(ap, unsigned int);\n",
+  )
+  source.write_string(
+    "        total += (long long)(v & 65535u) - (long long)i;\n",
+  )
+  source.write_string("        break;\n")
+  source.write_string("      }\n")
+  source.write_string("      default: {\n")
+  source.write_string("        double v = __builtin_va_arg(ap, double);\n")
+  source.write_string("        total += scale(v) ^ (long long)(tag + i);\n")
+  source.write_string("        break;\n")
+  source.write_string("      }\n")
+  source.write_string("    }\n")
+  source.write_string("  }\n")
+  source.write_string("  __builtin_va_end(ap);\n")
+  source.write_string("  return total;\n")
+  source.write_string("}\n")
+  source.write_string("int main(void) {\n")
+  source.write_string("  long long total = ")
+  write_variadic_differential_call(source, tag, first_count)
+  source.write_string(";\n")
+  source.write_string("  total ^= ")
+  write_variadic_differential_call(source, tag + 1, second_count)
+  source.write_string(";\n")
+  source.write_string("  printf(\"case=%d total=%lld low=%d\\n\", ")
+  source.write_string(case_index.to_string())
+  source.write_string(", total, (int)(total & 255LL));\n")
+  source.write_string("  return (int)((unsigned long long)total & 127ULL);\n")
+  source.write_string("}\n")
+  source.to_string()
+}
+
+///|
+async test "e2e deterministic variadic differential corpus matches clang" {
+  for case_index in [0, 1, 2, 3, 4, 5, 6, 7] {
+    let result = run_source_against_clang_baseline(
+      deterministic_variadic_differential_source(case_index),
+      "variadic_differential_" + case_index.to_string(),
+    )
+    assert_true(result.output.contains("case=" + case_index.to_string()))
+  }
+}
+
+///|
+async test "e2e direct Mach-O variadic differential corpus matches clang" {
+  for case_index in [0, 1, 2, 3] {
+    let result = run_source_direct_object_against_clang_baseline(
+      deterministic_variadic_differential_source(case_index),
+      "direct_variadic_differential_" + case_index.to_string(),
+    )
+    assert_true(result.output.contains("case=" + case_index.to_string()))
+  }
+}
+
+///|
 async test "e2e bitfields pack after byte fields like clang" {
   let source =
     #|typedef unsigned int Pgno;
