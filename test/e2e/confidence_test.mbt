@@ -1023,6 +1023,118 @@ async test "e2e direct Mach-O floating differential corpus matches clang" {
 }
 
 ///|
+fn deterministic_memory_differential_source(case_index : Int) -> String {
+  let seed = case_index * 17 + 11
+  let stride = case_index % 5 + 1
+  let byte_offset = case_index % 5
+  let byte_probe = case_index % 17
+  let matrix_row = case_index % 3
+  let matrix_col = (case_index + 1) % 4
+  let source = StringBuilder::new()
+  source.write_string("#include <stdio.h>\n")
+  source.write_string(
+    "typedef struct Cell { int key; long value; unsigned char flag; } Cell;\n",
+  )
+  source.write_string("static long walk(Cell *cells, int n, int stride) {\n")
+  source.write_string("  long acc = 0;\n")
+  source.write_string("  for (int i = 0; i < n * 2 + 3; i = i + 1) {\n")
+  source.write_string("    int idx = (i * stride + cells[i % n].key) % n;\n")
+  source.write_string("    Cell *p = cells + idx;\n")
+  source.write_string(
+    "    p->value = p->value + (long)(p->flag + i) * (long)(idx + 1);\n",
+  )
+  source.write_string(
+    "    p->flag = (unsigned char)(p->flag + (unsigned char)(p->key + i));\n",
+  )
+  source.write_string("    acc += p->value ^ (long)(unsigned long)p->flag;\n")
+  source.write_string("    acc += (long)(p - cells);\n")
+  source.write_string("  }\n")
+  source.write_string("  return acc;\n")
+  source.write_string("}\n")
+  source.write_string("int main(void) {\n")
+  source.write_string("  Cell cells[6];\n")
+  source.write_string("  unsigned char bytes[24];\n")
+  source.write_string("  int matrix[3][4];\n")
+  source.write_string("  for (int i = 0; i < 6; i = i + 1) {\n")
+  source.write_string("    cells[i].key = ")
+  source.write_string(seed.to_string())
+  source.write_string(" + i * 3;\n")
+  source.write_string(
+    "    cells[i].value = (long)(cells[i].key * 11 - i * 7);\n",
+  )
+  source.write_string(
+    "    cells[i].flag = (unsigned char)(cells[i].key + i * 5);\n",
+  )
+  source.write_string("  }\n")
+  source.write_string("  for (int i = 0; i < 24; i = i + 1) {\n")
+  source.write_string("    bytes[i] = (unsigned char)(")
+  source.write_string((seed * 2).to_string())
+  source.write_string(" + i * 9);\n")
+  source.write_string("  }\n")
+  source.write_string("  for (int r = 0; r < 3; r = r + 1) {\n")
+  source.write_string("    for (int c = 0; c < 4; c = c + 1) {\n")
+  source.write_string("      matrix[r][c] = ")
+  source.write_string(seed.to_string())
+  source.write_string(" + r * 13 - c * 5;\n")
+  source.write_string("    }\n")
+  source.write_string("  }\n")
+  source.write_string("  long total = walk(cells, 6, ")
+  source.write_string(stride.to_string())
+  source.write_string(");\n")
+  source.write_string("  unsigned char *bp = bytes + ")
+  source.write_string(byte_offset.to_string())
+  source.write_string(";\n")
+  source.write_string("  for (int i = 0; i < 12; i = i + 1) {\n")
+  source.write_string(
+    "    bp[i] = (unsigned char)(bp[i] ^ (unsigned char)(i + cells[i % 6].flag));\n",
+  )
+  source.write_string("    total += (long)bp[i];\n")
+  source.write_string("  }\n")
+  source.write_string("  int *mp = &matrix[0][0];\n")
+  source.write_string("  for (int i = 0; i < 12; i = i + 1) {\n")
+  source.write_string("    total += (long)*(mp + i) * (long)((i % 3) + 1);\n")
+  source.write_string("    *(mp + i) = *(mp + i) + (int)(total & 15L);\n")
+  source.write_string("  }\n")
+  source.write_string(
+    "  total += (cells + 5)->value - (cells + 1)->value + (long)((cells + 4) - cells);\n",
+  )
+  source.write_string("  printf(\"case=%d total=%ld byte=%u matrix=%d\\n\", ")
+  source.write_string(case_index.to_string())
+  source.write_string(", total, (unsigned)bytes[")
+  source.write_string(byte_probe.to_string())
+  source.write_string("], matrix[")
+  source.write_string(matrix_row.to_string())
+  source.write_string("][")
+  source.write_string(matrix_col.to_string())
+  source.write_string("]);\n")
+  source.write_string("  return (int)((unsigned long)total & 127u);\n")
+  source.write_string("}\n")
+  source.to_string()
+}
+
+///|
+async test "e2e deterministic memory differential corpus matches clang" {
+  for case_index in [0, 1, 2, 3, 4, 5, 6, 7] {
+    let result = run_source_against_clang_baseline(
+      deterministic_memory_differential_source(case_index),
+      "memory_differential_" + case_index.to_string(),
+    )
+    assert_true(result.output.contains("case=" + case_index.to_string()))
+  }
+}
+
+///|
+async test "e2e direct Mach-O memory differential corpus matches clang" {
+  for case_index in [0, 1, 2, 3] {
+    let result = run_source_direct_object_against_clang_baseline(
+      deterministic_memory_differential_source(case_index),
+      "direct_memory_differential_" + case_index.to_string(),
+    )
+    assert_true(result.output.contains("case=" + case_index.to_string()))
+  }
+}
+
+///|
 async test "e2e bitfields pack after byte fields like clang" {
   let source =
     #|typedef unsigned int Pgno;
