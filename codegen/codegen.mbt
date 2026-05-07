@@ -939,8 +939,8 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   // Emit initialized global variables
   let mut has_data = false
   for g in globals {
-    if g.init.is_some() {
-      if not(has_data) {
+    if g.init is Some(_) {
+      if !has_data {
         self.emit("	.section	__DATA,__data")
         has_data = true
       }
@@ -973,8 +973,8 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   // Emit uninitialized global variables
   let mut has_bss = false
   for g in globals {
-    if g.init.is_none() && !g.is_extern {
-      if not(has_bss) {
+    if g.init is None && !g.is_extern {
+      if !has_bss {
         self.emit("	.section	__DATA,__bss")
         has_bss = true
       }

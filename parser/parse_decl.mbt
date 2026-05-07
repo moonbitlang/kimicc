@@ -15,7 +15,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
   let decl = self.parse_declarator(spec.base_type)
   self.skip_attributes()
   // If no name and no function suffix, skip to semicolon
-  if decl.name == "" && decl.func_params.is_none() {
+  if decl.name == "" && decl.func_params is None {
     while self.token != Semicolon && self.token != EOF {
       self.advance()
     }

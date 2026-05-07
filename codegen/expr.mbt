@@ -1706,19 +1706,6 @@ fn Codegen::emit_builtin_call(
       // On macOS ARM64, va_list is char* and va_start always sets ap = FP + 16
       // (caller SP), which points to the first variadic arg in the save area.
       // The caller stores variadic register args starting at [sp, #0].
-      let mut last_idx = -1
-      if args.length() >= 2 {
-        match args[1] {
-          Var(last_name) =>
-            for i = 0; i < self.func_params.length(); i = i + 1 {
-              if self.func_params[i].name == last_name {
-                last_idx = i
-                break
-              }
-            }
-          _ => ()
-        }
-      }
       if args.length() >= 1 {
         match args[0] {
           Var(ap_name) =>
@@ -2811,7 +2798,7 @@ fn Codegen::gen_expr(
         _ => false
       }
       let is_ptr_op = has_ptr_operand
-      let is_fp = not(is_ptr_op) &&
+      let is_fp = !is_ptr_op &&
         op != "," &&
         (left_ty.is_floating() || right_ty.is_floating())
       let is_double = is_fp && (left_ty == Double || right_ty == Double)
@@ -3094,7 +3081,7 @@ fn Codegen::gen_expr(
         Var(name) => self.emit_builtin_call(name, args, frame_size)
         _ => false
       }
-      if not(is_builtin) {
+      if !is_builtin {
         // Check if callee is variadic
         let signature_func = call_signature_expr(func)
         let callee_ty = self.type_of(signature_func, frame_size)

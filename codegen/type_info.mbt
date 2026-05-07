@@ -17,7 +17,7 @@ fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
     Atomic(ty) => self.type_size(ty)
     Aligned(ty, _) => self.type_size(ty)
     Struct(name) => {
-      if not(self.struct_layouts.contains(name)) {
+      if !self.struct_layouts.contains(name) {
         if self.struct_decls.contains(name) {
           self.compute_struct_layout(self.struct_decls[name])
         } else {
@@ -43,7 +43,7 @@ fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
       max_end + padding
     }
     Union(name) => {
-      if not(self.struct_layouts.contains(name)) {
+      if !self.struct_layouts.contains(name) {
         if self.struct_decls.contains(name) {
           self.compute_struct_layout(self.struct_decls[name])
         } else {
@@ -90,7 +90,7 @@ fn Codegen::type_align(self : Codegen, ty : @parser.Type) -> Int {
       }
     }
     Struct(name) => {
-      if not(self.struct_layouts.contains(name)) {
+      if !self.struct_layouts.contains(name) {
         if self.struct_decls.contains(name) {
           self.compute_struct_layout(self.struct_decls[name])
         } else {
@@ -108,7 +108,7 @@ fn Codegen::type_align(self : Codegen, ty : @parser.Type) -> Int {
       max_align
     }
     Union(name) => {
-      if not(self.struct_layouts.contains(name)) {
+      if !self.struct_layouts.contains(name) {
         if self.struct_decls.contains(name) {
           self.compute_struct_layout(self.struct_decls[name])
         } else {
@@ -129,7 +129,7 @@ fn Codegen::type_align(self : Codegen, ty : @parser.Type) -> Int {
 }
 
 ///|
-fn Codegen::is_anon_type(self : Codegen, ty : @parser.Type) -> Bool {
+fn is_anon_type(ty : @parser.Type) -> Bool {
   match ty {
     Struct(name) | Union(name) => name.has_prefix("__anon_")
     _ => false
@@ -146,7 +146,7 @@ fn Codegen::flatten_anon_fields(
     Struct(n) | Union(n) => n
     _ => return []
   }
-  if not(self.struct_layouts.contains(name)) {
+  if !self.struct_layouts.contains(name) {
     if self.struct_decls.contains(name) {
       self.compute_struct_layout(self.struct_decls[name])
     } else {
@@ -155,7 +155,7 @@ fn Codegen::flatten_anon_fields(
   }
   let result = []
   for f in self.struct_layouts[name] {
-    if f.0 == "" && self.is_anon_type(f.1) {
+    if f.0 == "" && is_anon_type(f.1) {
       // Nested anonymous struct/union: recursively flatten
       for inner in self.flatten_anon_fields(f.1, base_offset + f.2) {
         result.push(inner)
@@ -176,11 +176,6 @@ fn Codegen::compute_struct_layout(
     self.compute_union_layout(decl)
     return
   }
-  if decl.name == "Expr" {
-    for i = 0; i < decl.fields.length(); i = i + 1 {
-      let f = decl.fields[i]
-    }
-  }
   let mut offset = 0
   let layout = []
   // Bit-field packing state
@@ -188,7 +183,7 @@ fn Codegen::compute_struct_layout(
   let mut current_bit_offset = 0
   for field in decl.fields {
     // Anonymous struct/union member: flatten its fields into parent
-    if field.name == "" && self.is_anon_type(field.ty) {
+    if field.name == "" && is_anon_type(field.ty) {
       let align = self.type_align(field.ty)
       let padding = (align - offset % align) % align
       offset += padding
@@ -264,11 +259,6 @@ fn Codegen::compute_struct_layout(
     }
   }
   self.struct_layouts[decl.name] = layout
-  if decl.name == "Expr" || decl.name == "Parse" {
-    for f in layout {
-
-    }
-  }
 }
 
 ///|
@@ -279,7 +269,7 @@ fn Codegen::compute_union_layout(
   let layout = []
   for field in decl.fields {
     // Anonymous struct/union member: flatten its fields into parent
-    if field.name == "" && self.is_anon_type(field.ty) {
+    if field.name == "" && is_anon_type(field.ty) {
       for f in self.flatten_anon_fields(field.ty, 0) {
         layout.push(f)
       }
@@ -305,7 +295,7 @@ fn Codegen::find_field_layout(
   struct_name : String,
   field : String,
 ) -> (String, @parser.Type, Int, Int, Int, Int)? {
-  if not(self.struct_layouts.contains(struct_name)) {
+  if !self.struct_layouts.contains(struct_name) {
     return None
   }
   for f in self.struct_layouts[struct_name] {

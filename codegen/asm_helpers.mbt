@@ -179,11 +179,11 @@ fn is_digit_char(ch : UInt16) -> Bool {
 
 ///|
 fn is_numeric_case_label(name : String) -> Bool {
-  if not(name.starts_with("case_")) {
+  if !name.has_prefix("case_") {
     return false
   }
   for i = 5; i < name.length(); i = i + 1 {
-    if not(is_digit_char(name[i])) {
+    if !is_digit_char(name[i]) {
       return false
     }
   }
@@ -199,8 +199,8 @@ fn Codegen::label_ref(self : Codegen, name : String) -> String {
     None => {
       let label = if name == "default" ||
         is_numeric_case_label(name) ||
-        name.starts_with("__kimicc_case_") ||
-        name.starts_with("__kimicc_default_") {
+        name.has_prefix("__kimicc_case_") ||
+        name.has_prefix("__kimicc_default_") {
         self.new_label()
       } else {
         "_" + self.func_name + "_label_" + sanitize_label(name)

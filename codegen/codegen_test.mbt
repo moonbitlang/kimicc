@@ -71,9 +71,9 @@ test "generate switch statement" {
   // No label in the assembly should contain a space
   let lines = assembly.split("\n")
   for line in lines {
-    let s = line.to_string()
+    let s = line.to_owned()
     // Labels end with ':'
-    if s.ends_with(":") && s.contains(" ") {
+    if s.has_suffix(":") && s.contains(" ") {
       abort("Label contains space: " + s)
     }
   }

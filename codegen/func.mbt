@@ -209,7 +209,7 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
       self.emit("\tmov\tsp, x29")
       // Emit any referenced-but-not-defined labels to satisfy assembler
       for name, label in self.emitted_labels {
-        if not(self.defined_labels.contains(name)) {
+        if !self.defined_labels.contains(name) {
           self.emit(label + ":")
           self.emit("\tb\t_" + self.func_name + "_ret")
         }

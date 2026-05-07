@@ -1,12 +1,9 @@
 ///|
 priv struct DeclSpec {
   mut base_type : Type
-  mut is_typedef : Bool
   mut is_static : Bool
   mut is_extern : Bool
   mut is_inline : Bool
-  mut is_register : Bool
-  mut is_auto : Bool
   mut align : Int?
 }
 
@@ -30,12 +27,9 @@ priv struct AbstractDeclaratorResult {
 fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
   let spec : DeclSpec = {
     base_type: SInt,
-    is_typedef: false,
     is_static: false,
     is_extern: false,
     is_inline: false,
-    is_register: false,
-    is_auto: false,
     align: None,
   }
   self.skip_attributes()
@@ -64,10 +58,9 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     self.skip_attributes()
     let mut consumed = false
     // Storage class specifiers
-    if not(consumed) {
+    if !consumed {
       match self.token {
         Typedef => {
-          spec.is_typedef = true
           self.advance()
           consumed = true
         }
@@ -82,12 +75,10 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
           consumed = true
         }
         Auto => {
-          spec.is_auto = true
           self.advance()
           consumed = true
         }
         Register => {
-          spec.is_register = true
           self.advance()
           consumed = true
         }
@@ -95,13 +86,13 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
       }
     }
     // Function specifier
-    if not(consumed) && self.token == Inline {
+    if !consumed && self.token == Inline {
       spec.is_inline = true
       self.advance()
       consumed = true
     }
     // Type qualifiers and GCC attributes
-    if not(consumed) {
+    if !consumed {
       match self.token {
         Const | Restrict | Volatile => {
           self.advance()
@@ -145,7 +136,7 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
       }
     }
     // Primitive type specifiers (can be combined: long long, unsigned int, etc.)
-    if not(consumed) {
+    if !consumed {
       match self.token {
         Void => {
           has_void = true
@@ -260,8 +251,8 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
             self.advance()
             saw_primitive = true
             consumed = true
-          } else if not(saw_primitive) &&
-            not(saw_typedef_name) &&
+          } else if !saw_primitive &&
+            !saw_typedef_name &&
             self.typedefs.contains(name) {
             has_typedef_name = true
             typedef_type = self.typedefs[name]
@@ -272,7 +263,7 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
         _ => ()
       }
     }
-    if not(consumed) {
+    if !consumed {
       break
     }
   }
@@ -689,7 +680,7 @@ fn DeclaratorResult::set_func_info(
   self : DeclaratorResult,
   inner : DeclaratorResult,
 ) -> DeclaratorResult {
-  if inner.func_params.is_some() {
+  if inner.func_params is Some(_) {
     {
       ..self,
       func_params: inner.func_params,

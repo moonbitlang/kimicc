@@ -502,9 +502,9 @@ fn Parser::parse_continue_stmt(self : Parser) -> Stmt {
 
 ///|
 fn extract_case_value(name : String) -> Int64? {
-  let prefix_len = if name.starts_with("__kimicc_case_") {
+  let prefix_len = if name.has_prefix("__kimicc_case_") {
     "__kimicc_case_".length()
-  } else if name.starts_with("case_") {
+  } else if name.has_prefix("case_") {
     5
   } else {
     return None
@@ -531,7 +531,7 @@ fn extract_case_value(name : String) -> Int64? {
 
 ///|
 fn is_default_label(name : String) -> Bool {
-  name == "default" || name.starts_with("__kimicc_default_")
+  name == "default" || name.has_prefix("__kimicc_default_")
 }
 
 ///|

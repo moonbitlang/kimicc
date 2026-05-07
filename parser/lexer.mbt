@@ -350,7 +350,7 @@ pub fn Lexer::next_token(self : Lexer) -> Token {
           self.advance()
         }
         let fs = self.input[fstart:fend]
-        let v = @strconv.parse_double(fs) catch { _ => 0.0 }
+        let v = @string.parse_double(fs) catch { _ => 0.0 }
         FloatLiteral(v)
       } else {
         Dot
@@ -566,7 +566,7 @@ fn hex_float_pow2(exp : Int) -> Double {
       result = result * base
     }
     base = base * base
-    e = e.lsr(1)
+    e = e / 2
   }
   result
 }
@@ -715,7 +715,7 @@ fn Lexer::read_number(self : Lexer) -> Token {
       self.advance()
     }
     let fs = self.input[start:fend]
-    let v = @strconv.parse_double(fs) catch { _ => 0.0 }
+    let v = @string.parse_double(fs) catch { _ => 0.0 }
     return FloatLiteral(v)
   }
   // Skip integer suffixes: u, U, l, L, ll, LL, ul, UL, lu, LU, ull, ULL, llu, LLU
