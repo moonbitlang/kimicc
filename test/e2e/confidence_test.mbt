@@ -852,6 +852,17 @@ async test "e2e deterministic scalar aggregate differential corpus matches clang
 }
 
 ///|
+async test "e2e direct Mach-O scalar aggregate differential corpus matches clang" {
+  for case_index in [0, 1, 2, 3, 4, 5] {
+    let result = run_source_direct_object_against_clang_baseline(
+      deterministic_scalar_aggregate_differential_source(case_index),
+      "direct_scalar_aggregate_differential_" + case_index.to_string(),
+    )
+    assert_true(result.output.contains("case=" + case_index.to_string()))
+  }
+}
+
+///|
 fn deterministic_scalar_control_differential_source(case_index : Int) -> String {
   let seed_a = case_index * 9973 + 123
   let seed_b = case_index * 7919 + 4567
