@@ -478,11 +478,11 @@ fn sqlite_residual_failure_signature(output : String) -> String {
 
 ///|
 test "sqlite residual signature normalizes full runner progress fields" {
-  let kimicc = "00:01 tcl(1/2) r4\rFAILED: test/json101.test (3)\n6 failures:\nFAILED: test/json101.test\n26 errors out of 1016609 tests in 14:28 on host"
-  let clang = "00:01 tcl(1/2) r4\rFAILED: test/json101.test (1)\n6 failures:\nFAILED: test/json101.test\n26 errors out of 1016630 tests in 10:39 on host"
+  let kimicc = "00:01 tcl(1/2) r4\rFAILED: test/json101.test (3)\n6 failures:\nFAILED: test/json101.test\n26 errors out of 1016609 tests in 14:28 on host\n### testrunner-errors\n! json101-20.2 expected: [Inf]\n! json101-20.2 got:      [inf]\nTotal 26 errors out of 1016609 tests"
+  let clang = "00:01 tcl(1/2) r4\rFAILED: test/json101.test (1)\n6 failures:\nFAILED: test/json101.test\n26 errors out of 1016630 tests in 10:39 on host\n### testrunner-errors\n! json101-20.2 expected: [Inf]\n! json101-20.2 got:      [inf]\nTotal 26 errors out of 1016630 tests"
   inspect(
     sqlite_residual_failure_signature(kimicc),
-    content="FAILED: test/json101.test\n26 errors\n",
+    content="FAILED: test/json101.test\n26 errors\n### testrunner-errors\n! json101-20.2 expected: [Inf]\n! json101-20.2 got:      [inf]\nTotal 26 errors\n",
   )
   inspect(
     sqlite_residual_failure_signature(kimicc) ==
@@ -574,6 +574,30 @@ fn assert_sqlite_residual_script_outputs(
         "SQLite " +
         compiler +
         " residual script output missing " +
+        marker +
+        ":\n" +
+        output,
+      )
+    }
+  }
+}
+
+///|
+fn assert_sqlite_runner_error_details(
+  output : String,
+  compiler : String,
+) -> Unit {
+  for
+    marker in [
+      "FAILED: test/json101.test", "### testrunner-errors", "! json101-20.2 expected: [Inf]",
+      "! json101-20.2 got:      [inf]", "! json101-20.3 expected: [-Inf]", "! json101-20.3 got:      [-inf]",
+      "!Failures on these tests: json101-20.2 json101-20.3",
+    ] {
+    if !output.contains(marker) {
+      abort(
+        "SQLite " +
+        compiler +
+        " runner residual detail missing " +
         marker +
         ":\n" +
         output,
@@ -733,6 +757,44 @@ async test "sqlite public residual scripts match clang and direct when enabled" 
     clang.output,
     direct.output,
     "residual scripts",
+  )
+  let kimicc_runner = run_sqlite_public_tcl_runner_tail_with(
+    "--jobs 1 full json101",
+    "sqlite_public_residual_runner",
+    Kimicc,
+    80,
+  )
+  let clang_runner = run_sqlite_public_tcl_runner_tail_with(
+    "--jobs 1 full json101",
+    "sqlite_public_residual_runner",
+    Clang,
+    80,
+  )
+  let direct_runner = run_sqlite_public_tcl_runner_tail_with(
+    "--jobs 1 full json101",
+    "sqlite_public_residual_runner",
+    DirectObject,
+    80,
+  )
+  if kimicc_runner.code != clang_runner.code ||
+    kimicc_runner.code != direct_runner.code {
+    abort(
+      "SQLite runner residual exit code differs:\nkimicc:\n" +
+      kimicc_runner.output +
+      "\nclang:\n" +
+      clang_runner.output +
+      "\ndirect:\n" +
+      direct_runner.output,
+    )
+  }
+  assert_sqlite_runner_error_details(kimicc_runner.output, "kimicc")
+  assert_sqlite_runner_error_details(clang_runner.output, "clang")
+  assert_sqlite_runner_error_details(direct_runner.output, "direct object")
+  assert_sqlite_residual_signatures_match(
+    kimicc_runner.output,
+    clang_runner.output,
+    direct_runner.output,
+    "runner residual detail",
   )
 }
 

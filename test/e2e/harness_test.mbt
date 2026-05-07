@@ -646,7 +646,7 @@ async fn run_sqlite_public_tcl_runner_tail_with(
     "rm -rf " + shell_quote(run_dir) + " && mkdir -p " + shell_quote(run_dir),
     "prepare sqlite public tcl runner work dir",
   )
-  run_command_capture_tail(
+  let result = run_command_capture_tail(
     "cd " +
     shell_quote(run_dir) +
     " && " +
@@ -658,6 +658,24 @@ async fn run_sqlite_public_tcl_runner_tail_with(
     run_tag,
     tail_lines,
   )
+  if result.code == 0 && !result.output.contains("FAILED:") {
+    result
+  } else {
+    let errors = run_command_capture(
+      "cd " +
+      shell_quote(run_dir) +
+      " && " +
+      shell_quote(testfixture) +
+      " " +
+      shell_quote(root + "/test/testrunner.tcl") +
+      " errors",
+      run_tag + "_errors",
+    )
+    {
+      code: result.code,
+      output: result.output + "### testrunner-errors\n" + errors.output,
+    }
+  }
 }
 
 ///|
