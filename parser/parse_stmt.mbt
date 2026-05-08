@@ -1,43 +1,13 @@
 ///|
-fn Parser::skip_brace_initializer(self : Parser) -> Unit {
-  if self.token == LBrace {
-    let mut depth = 1
-    self.advance()
-    while depth > 0 && self.token != EOF {
-      if self.token == LBrace {
-        depth += 1
-      } else if self.token == RBrace {
-        depth -= 1
-      }
-      if depth > 0 {
-        self.advance()
-      } else {
-        self.advance()
-        break
-      }
-    }
-  }
-}
-
-///|
 /// Parse expressions inside a brace initializer: { expr1, expr2, ... }
-fn Parser::parse_brace_init_exprs(
-  self : Parser,
-  flatten_nested? : Bool = false,
-) -> Array[Expr] {
+fn Parser::parse_brace_init_exprs(self : Parser) -> Array[Expr] {
   let exprs = []
   self.expect(LBrace)
   while self.token != RBrace && self.token != EOF {
     if self.token == LBrace {
-      if flatten_nested {
-        // Recursively parse nested brace initializer and wrap as Expr::Array
-        let nested = self.parse_brace_init_exprs(flatten_nested=true)
-        exprs.push(Expr::Array(nested))
-      } else {
-        // Nested initializer: skip for now, treat as zero
-        self.skip_brace_initializer()
-        exprs.push(Number(0))
-      }
+      // Recursively parse nested brace initializer and wrap as Expr::Array
+      let nested = self.parse_brace_init_exprs()
+      exprs.push(Expr::Array(nested))
     } else if self.token == Dot {
       self.advance()
       let fields = []
@@ -61,7 +31,7 @@ fn Parser::parse_brace_init_exprs(
       }
       self.expect(Assign)
       let mut value = if self.token == LBrace {
-        Expr::Array(self.parse_brace_init_exprs(flatten_nested=true))
+        Expr::Array(self.parse_brace_init_exprs())
       } else {
         self.parse_assign()
       }
@@ -87,7 +57,7 @@ fn Parser::parse_brace_init_exprs(
       self.expect(RBracket)
       self.expect(Assign)
       let value = if self.token == LBrace {
-        Expr::Array(self.parse_brace_init_exprs(flatten_nested=true))
+        Expr::Array(self.parse_brace_init_exprs())
       } else {
         self.parse_assign()
       }
@@ -711,7 +681,7 @@ fn Parser::parse_static_initializer(
   if self.token == Assign {
     self.advance()
     if self.token == LBrace {
-      let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
+      let init_exprs = self.parse_brace_init_exprs()
       let init_count = initializer_element_count(init_exprs)
       let final_ty = match ty {
         Array(elem_ty, 0) => Type::Array(elem_ty, init_count)
@@ -944,7 +914,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
       }
       if is_struct {
         // Parse brace initializer expressions and create field assignments
-        let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
+        let init_exprs = self.parse_brace_init_exprs()
         stmts.push(VarDecl(decl_ty, decl.name, Some(Number(0))))
         self.push_struct_init_assignments(
           stmts,
@@ -954,7 +924,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
         )
         decl_ty
       } else {
-        let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
+        let init_exprs = self.parse_brace_init_exprs()
         let init_count = initializer_element_count(init_exprs)
         // Update array type if size was inferred
         let ty = match decl_ty {
@@ -1024,7 +994,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
         }
         if is_struct {
           stmts.push(VarDecl(extra_decl_ty, extra_decl.name, Some(Number(0))))
-          let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
+          let init_exprs = self.parse_brace_init_exprs()
           self.push_struct_init_assignments(
             stmts,
             Var(extra_decl.name),
@@ -1032,7 +1002,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
             init_exprs,
           )
         } else {
-          let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
+          let init_exprs = self.parse_brace_init_exprs()
           let init_count = initializer_element_count(init_exprs)
           let extra_ty = match extra_decl_ty {
             Array(elem_ty, 0) => Type::Array(elem_ty, init_count)

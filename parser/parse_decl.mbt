@@ -171,7 +171,7 @@ fn Parser::parse_global_var_tail(
   if self.token == Assign {
     self.advance()
     if self.token == LBrace {
-      let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
+      let init_exprs = self.parse_brace_init_exprs()
       let init_count = initializer_element_count(init_exprs)
       ty = match ty {
         Array(elem_ty, 0) => Array(elem_ty, init_count)
@@ -216,7 +216,7 @@ fn Parser::parse_global_var_tail(
     if self.token == Assign {
       self.advance()
       if self.token == LBrace {
-        let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
+        let init_exprs = self.parse_brace_init_exprs()
         let init_count = initializer_element_count(init_exprs)
         extra_ty = match extra_ty {
           Array(elem_ty, 0) => Array(elem_ty, init_count)
