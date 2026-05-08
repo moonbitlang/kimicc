@@ -10,9 +10,9 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
       self.advance()
       if self.token == LBrace {
         let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
-        init = Some(GlobalInit::Array(init_exprs))
+        init = Some(Array(init_exprs))
       } else {
-        init = Some(GlobalInit::Scalar(self.parse_assign()))
+        init = Some(Scalar(self.parse_assign()))
       }
     }
     self.globals.push({
@@ -35,9 +35,9 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
         self.advance()
         if self.token == LBrace {
           let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
-          extra_init = Some(GlobalInit::Array(init_exprs))
+          extra_init = Some(Array(init_exprs))
         } else {
-          extra_init = Some(GlobalInit::Scalar(self.parse_assign()))
+          extra_init = Some(Scalar(self.parse_assign()))
         }
       }
       self.globals.push({

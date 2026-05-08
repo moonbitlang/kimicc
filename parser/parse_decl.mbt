@@ -174,23 +174,23 @@ fn Parser::parse_global_var_tail(
       let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
       let init_count = initializer_element_count(init_exprs)
       ty = match ty {
-        Array(elem_ty, 0) => Type::Array(elem_ty, init_count)
+        Array(elem_ty, 0) => Array(elem_ty, init_count)
         other => other
       }
-      init = Some(GlobalInit::Array(init_exprs))
+      init = Some(Array(init_exprs))
     } else {
       let expr = self.parse_assign()
       match (ty, expr) {
-        (Array(elem_ty, 0), Expr::String(s)) => {
-          ty = Type::Array(elem_ty, s.length() + 1)
+        (Array(elem_ty, 0), String(s)) => {
+          ty = Array(elem_ty, s.length() + 1)
           let char_exprs = Array::make(s.length() + 1, Expr::Number(0))
           for i = 0; i < s.length(); i = i + 1 {
-            char_exprs[i] = Expr::Number(s[i].to_int().to_int64())
+            char_exprs[i] = Number(s[i].to_int().to_int64())
           }
-          char_exprs[s.length()] = Expr::Number(0)
-          init = Some(GlobalInit::Array(char_exprs))
+          char_exprs[s.length()] = Number(0)
+          init = Some(Array(char_exprs))
         }
-        _ => init = Some(GlobalInit::Scalar(expr))
+        _ => init = Some(Scalar(expr))
       }
     }
   }
@@ -219,23 +219,23 @@ fn Parser::parse_global_var_tail(
         let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
         let init_count = initializer_element_count(init_exprs)
         extra_ty = match extra_ty {
-          Array(elem_ty, 0) => Type::Array(elem_ty, init_count)
+          Array(elem_ty, 0) => Array(elem_ty, init_count)
           other => other
         }
-        extra_init = Some(GlobalInit::Array(init_exprs))
+        extra_init = Some(Array(init_exprs))
       } else {
         let expr = self.parse_assign()
         match (extra_ty, expr) {
-          (Array(elem_ty, 0), Expr::String(s)) => {
-            extra_ty = Type::Array(elem_ty, s.length() + 1)
+          (Array(elem_ty, 0), String(s)) => {
+            extra_ty = Array(elem_ty, s.length() + 1)
             let char_exprs = Array::make(s.length() + 1, Expr::Number(0))
             for i = 0; i < s.length(); i = i + 1 {
-              char_exprs[i] = Expr::Number(s[i].to_int().to_int64())
+              char_exprs[i] = Number(s[i].to_int().to_int64())
             }
-            char_exprs[s.length()] = Expr::Number(0)
-            extra_init = Some(GlobalInit::Array(char_exprs))
+            char_exprs[s.length()] = Number(0)
+            extra_init = Some(Array(char_exprs))
           }
-          _ => extra_init = Some(GlobalInit::Scalar(expr))
+          _ => extra_init = Some(Scalar(expr))
         }
       }
     }

@@ -32,15 +32,13 @@ fn main {
   let cmd = @argparse.Command(
     "kimicc",
     flags=[
-      @argparse.FlagArg("version", short='v', long="version"),
-      @argparse.FlagArg("compile", short='c', long="compile"),
+      FlagArg("version", short='v', long="version"),
+      FlagArg("compile", short='c', long="compile"),
     ],
     options=[
-      @argparse.OptionArg("output", short='o', long="output", default_values=[
-        "-",
-      ]),
+      OptionArg("output", short='o', long="output", default_values=["-"]),
     ],
-    positionals=[@argparse.PositionArg("input")],
+    positionals=[PositionArg("input")],
     about="A simple C compiler",
   )
   let matches = cmd.parse() catch {

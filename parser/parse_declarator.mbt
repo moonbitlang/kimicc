@@ -340,9 +340,9 @@ fn Parser::parse_struct_type_specifier(self : Parser) -> Type {
         let decl = { name: n, fields, is_union: false }
         self.anonymous_structs.push(decl)
         self.struct_decls[n] = decl
-        Type::Struct(n)
+        Struct(n)
       } else {
-        Type::Struct(n)
+        Struct(n)
       }
     }
     LBrace => {
@@ -354,7 +354,7 @@ fn Parser::parse_struct_type_specifier(self : Parser) -> Type {
       let decl = { name, fields, is_union: false }
       self.anonymous_structs.push(decl)
       self.struct_decls[name] = decl
-      Type::Struct(name)
+      Struct(name)
     }
     _ => abort("Expected struct name or {\n")
   }
@@ -374,9 +374,9 @@ fn Parser::parse_union_type_specifier(self : Parser) -> Type {
         let decl = { name: n, fields, is_union: true }
         self.anonymous_structs.push(decl)
         self.struct_decls[n] = decl
-        Type::Union(n)
+        Union(n)
       } else {
-        Type::Union(n)
+        Union(n)
       }
     }
     LBrace => {
@@ -388,7 +388,7 @@ fn Parser::parse_union_type_specifier(self : Parser) -> Type {
       let decl = { name, fields, is_union: true }
       self.anonymous_structs.push(decl)
       self.struct_decls[name] = decl
-      Type::Union(name)
+      Union(name)
     }
     _ => abort("Expected union name or {\n")
   }
@@ -444,7 +444,7 @@ fn Parser::parse_enum_type_specifier(self : Parser) -> Type {
   }
   match explicit_ty {
     Some(ty) => ty
-    None => if has_negative { Type::SInt } else { Type::UInt }
+    None => if has_negative { SInt } else { UInt }
   }
 }
 
@@ -821,7 +821,7 @@ fn Parser::parse_abstract_declarator_suffixes(
 fn apply_array_suffixes(ty : Type, sizes : Array[Int]) -> Type {
   let mut result = ty
   for i = sizes.length() - 1; i >= 0; i = i - 1 {
-    result = Type::Array(result, sizes[i])
+    result = Array(result, sizes[i])
   }
   result
 }

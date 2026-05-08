@@ -36,7 +36,7 @@ fn Parser::parse_brace_init_exprs(
       } else {
         // Nested initializer: skip for now, treat as zero
         self.skip_brace_initializer()
-        exprs.push(Expr::Number(0))
+        exprs.push(Number(0))
       }
     } else if self.token == Dot {
       self.advance()
@@ -66,7 +66,7 @@ fn Parser::parse_brace_init_exprs(
         self.parse_assign()
       }
       for i = fields.length() - 1; i >= 0; i = i - 1 {
-        value = Expr::DesignatedField(fields[i], value)
+        value = DesignatedField(fields[i], value)
       }
       exprs.push(value)
     } else if self.token == LBracket {
@@ -92,9 +92,9 @@ fn Parser::parse_brace_init_exprs(
         self.parse_assign()
       }
       if start == end {
-        exprs.push(Expr::DesignatedIndex(start, value))
+        exprs.push(DesignatedIndex(start, value))
       } else {
-        exprs.push(Expr::DesignatedRange(start, end, value))
+        exprs.push(DesignatedRange(start, end, value))
       }
     } else {
       exprs.push(self.parse_assign())
@@ -143,7 +143,7 @@ fn Parser::parse_compound_literal_init_exprs(self : Parser) -> Array[Expr] {
         self.parse_assign()
       }
       for i = fields.length() - 1; i >= 0; i = i - 1 {
-        value = Expr::DesignatedField(fields[i], value)
+        value = DesignatedField(fields[i], value)
       }
       exprs.push(value)
     } else if self.token == LBracket {
@@ -169,9 +169,9 @@ fn Parser::parse_compound_literal_init_exprs(self : Parser) -> Array[Expr] {
         self.parse_assign()
       }
       if start == end {
-        exprs.push(Expr::DesignatedIndex(start, value))
+        exprs.push(DesignatedIndex(start, value))
       } else {
-        exprs.push(Expr::DesignatedRange(start, end, value))
+        exprs.push(DesignatedRange(start, end, value))
       }
     } else {
       exprs.push(self.parse_assign())
@@ -203,13 +203,13 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
     LBrace => self.parse_compound_stmt()
     Semicolon => {
       self.advance()
-      ExprStmt(Expr::Number(0))
+      ExprStmt(Number(0))
     }
     Ident("_Static_assert")
     | Ident("__Static_assert")
     | Ident("static_assert") => {
       self.parse_static_assert_decl()
-      ExprStmt(Expr::Number(0))
+      ExprStmt(Number(0))
     }
     Int
     | Void
@@ -234,7 +234,7 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
     | Auto => self.parse_var_decl_stmt()
     Typedef => {
       self.parse_typedef()
-      ExprStmt(Expr::Number(0))
+      ExprStmt(Number(0))
     }
     Ident("_Alignas") | Ident("alignas") => self.parse_var_decl_stmt()
     Ident("_Atomic") => self.parse_var_decl_stmt()
@@ -295,7 +295,7 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
           }
         }
         self.expect(Semicolon)
-        return ExprStmt(Expr::Number(0))
+        return ExprStmt(Number(0))
       }
       // Handle __attribute__((...)); as a no-op statement
       if name == "__attribute__" || name == "__attribute" {
@@ -321,7 +321,7 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
           return self.parse_var_decl_stmt()
         }
         self.expect(Semicolon)
-        return ExprStmt(Expr::Number(0))
+        return ExprStmt(Number(0))
       }
       // Check if this is a label: name:
       let saved_pos = self.lexer.pos
@@ -332,7 +332,7 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
         // If labeled statement is case/default, don't consume it
         // Let parse_switch_stmt handle it
         if self.token == Case || self.token == Default {
-          return Label(name, ExprStmt(Expr::Number(0)))
+          return Label(name, ExprStmt(Number(0)))
         }
         let stmt = self.parse_stmt()
         return Label(name, stmt)
@@ -717,21 +717,21 @@ fn Parser::parse_static_initializer(
         Array(elem_ty, 0) => Type::Array(elem_ty, init_count)
         other => other
       }
-      (final_ty, Some(GlobalInit::Array(init_exprs)))
+      (final_ty, Some(Array(init_exprs)))
     } else {
       let expr = self.parse_assign()
       match (ty, expr) {
-        (Array(elem_ty, 0), Expr::String(s)) => {
+        (Array(elem_ty, 0), String(s)) => {
           let len = s.length()
           let arr_ty = Type::Array(elem_ty, len + 1)
           let init_exprs = Array::make(len + 1, Expr::Number(0))
           for i = 0; i < len; i = i + 1 {
-            init_exprs[i] = Expr::Number(s[i].to_int().to_int64())
+            init_exprs[i] = Number(s[i].to_int().to_int64())
           }
-          init_exprs[len] = Expr::Number(0)
-          (arr_ty, Some(GlobalInit::Array(init_exprs)))
+          init_exprs[len] = Number(0)
+          (arr_ty, Some(Array(init_exprs)))
         }
-        _ => (ty, Some(GlobalInit::Scalar(expr)))
+        _ => (ty, Some(Scalar(expr)))
       }
     }
   } else {
@@ -788,17 +788,17 @@ fn Parser::push_struct_init_assignments(
     let field = fields[field_index]
     let field_target = Expr::MemberAccess(target, field.name)
     match (field.ty, value) {
-      (Struct(_) | Union(_), Expr::Array(field_exprs)) =>
+      (Struct(_) | Union(_), Array(field_exprs)) =>
         self.push_struct_init_assignments(
           stmts,
           field_target,
           field.ty,
           field_exprs,
         )
-      (Struct(_) | Union(_), Expr::DesignatedField(_, _)) =>
+      (Struct(_) | Union(_), DesignatedField(_, _)) =>
         self.push_struct_init_assignments(stmts, field_target, field.ty, [value])
-      (Struct(_) | Union(_), Expr::Number(0)) => ()
-      _ => stmts.push(ExprStmt(Expr::Assign(field_target, value)))
+      (Struct(_) | Union(_), Number(0)) => ()
+      _ => stmts.push(ExprStmt(Assign(field_target, value)))
     }
   }
 }
@@ -838,12 +838,12 @@ fn Parser::push_array_init_assignments(
       }
     }
     for i = start; i <= end; i = i + 1 {
-      let elem = Expr::ArrayAccess(Expr::Var(name), Expr::Number(i.to_int64()))
+      let elem = Expr::ArrayAccess(Var(name), Number(i.to_int64()))
       match (elem_ty, value) {
-        (Struct(_) | Union(_), Expr::Array(field_exprs)) =>
+        (Struct(_) | Union(_), Array(field_exprs)) =>
           self.push_struct_init_assignments(stmts, elem, elem_ty, field_exprs)
-        (Struct(_) | Union(_), Expr::Number(0)) => ()
-        _ => stmts.push(ExprStmt(Expr::Assign(elem, value)))
+        (Struct(_) | Union(_), Number(0)) => ()
+        _ => stmts.push(ExprStmt(Assign(elem, value)))
       }
     }
   }
@@ -855,7 +855,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
   // Local struct/union/enum definition without variable: struct Foo { ... };
   if self.token == Semicolon {
     self.advance()
-    return ExprStmt(Expr::Number(0))
+    return ExprStmt(Number(0))
   }
   let stmts = []
   // Parse first declarator
@@ -864,7 +864,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
   // Local function prototype inside a function body: int foo(void);
   if decl.is_func_decl && self.token == Semicolon {
     self.expect(Semicolon)
-    return ExprStmt(Expr::Number(0))
+    return ExprStmt(Number(0))
   }
   // Handle static / extern locals: promote to globals
   if spec.is_static || spec.is_extern {
@@ -931,7 +931,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
       self.remember_value_type(extra_decl.name, extra_ty)
     }
     self.expect(Semicolon)
-    return ExprStmt(Expr::Number(0))
+    return ExprStmt(Number(0))
   }
   // Handle initializer
   let ty = if self.token == Assign {
@@ -945,10 +945,10 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
       if is_struct {
         // Parse brace initializer expressions and create field assignments
         let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
-        stmts.push(VarDecl(decl_ty, decl.name, Some(Expr::Number(0))))
+        stmts.push(VarDecl(decl_ty, decl.name, Some(Number(0))))
         self.push_struct_init_assignments(
           stmts,
-          Expr::Var(decl.name),
+          Var(decl.name),
           decl_ty,
           init_exprs,
         )
@@ -961,7 +961,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
           Array(elem_ty, 0) => Type::Array(elem_ty, init_count)
           other => other
         }
-        stmts.push(VarDecl(ty, decl.name, Some(Expr::Number(0))))
+        stmts.push(VarDecl(ty, decl.name, Some(Number(0))))
         self.push_array_init_assignments(stmts, decl.name, ty, init_exprs)
         ty
       }
@@ -969,7 +969,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
       let expr = self.parse_assign()
       // Handle string literal initializer for char arrays: char s[] = "abc"
       match (decl_ty, expr) {
-        (Array(elem_ty, 0), Expr::String(s)) => {
+        (Array(elem_ty, 0), String(s)) => {
           let len = s.length()
           let arr_ty = Type::Array(elem_ty, len + 1) // +1 for null terminator
           stmts.push(VarDecl(arr_ty, decl.name, None))
@@ -977,12 +977,9 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
             let ch = s[i]
             stmts.push(
               ExprStmt(
-                Expr::Assign(
-                  Expr::ArrayAccess(
-                    Expr::Var(decl.name),
-                    Expr::Number(i.to_int64()),
-                  ),
-                  Expr::Number(ch.to_int().to_int64()),
+                Assign(
+                  ArrayAccess(Var(decl.name), Number(i.to_int64())),
+                  Number(ch.to_int().to_int64()),
                 ),
               ),
             )
@@ -990,12 +987,9 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
           // Null terminator
           stmts.push(
             ExprStmt(
-              Expr::Assign(
-                Expr::ArrayAccess(
-                  Expr::Var(decl.name),
-                  Expr::Number(len.to_int64()),
-                ),
-                Expr::Number(0),
+              Assign(
+                ArrayAccess(Var(decl.name), Number(len.to_int64())),
+                Number(0),
               ),
             ),
           )
@@ -1029,13 +1023,11 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
           _ => false
         }
         if is_struct {
-          stmts.push(
-            VarDecl(extra_decl_ty, extra_decl.name, Some(Expr::Number(0))),
-          )
+          stmts.push(VarDecl(extra_decl_ty, extra_decl.name, Some(Number(0))))
           let init_exprs = self.parse_brace_init_exprs(flatten_nested=true)
           self.push_struct_init_assignments(
             stmts,
-            Expr::Var(extra_decl.name),
+            Var(extra_decl.name),
             extra_decl_ty,
             init_exprs,
           )
@@ -1047,7 +1039,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
             other => other
           }
           remembered_extra_ty = extra_ty
-          stmts.push(VarDecl(extra_ty, extra_decl.name, Some(Expr::Number(0))))
+          stmts.push(VarDecl(extra_ty, extra_decl.name, Some(Number(0))))
           self.push_array_init_assignments(
             stmts,
             extra_decl.name,
@@ -1058,7 +1050,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
       } else {
         let expr = self.parse_assign()
         match (extra_decl_ty, expr) {
-          (Array(elem_ty, 0), Expr::String(s)) => {
+          (Array(elem_ty, 0), String(s)) => {
             let len = s.length()
             let arr_ty = Type::Array(elem_ty, len + 1)
             remembered_extra_ty = arr_ty
@@ -1067,24 +1059,18 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
               let ch = s[i]
               stmts.push(
                 ExprStmt(
-                  Expr::Assign(
-                    Expr::ArrayAccess(
-                      Expr::Var(extra_decl.name),
-                      Expr::Number(i.to_int64()),
-                    ),
-                    Expr::Number(ch.to_int().to_int64()),
+                  Assign(
+                    ArrayAccess(Var(extra_decl.name), Number(i.to_int64())),
+                    Number(ch.to_int().to_int64()),
                   ),
                 ),
               )
             }
             stmts.push(
               ExprStmt(
-                Expr::Assign(
-                  Expr::ArrayAccess(
-                    Expr::Var(extra_decl.name),
-                    Expr::Number(len.to_int64()),
-                  ),
-                  Expr::Number(0),
+                Assign(
+                  ArrayAccess(Var(extra_decl.name), Number(len.to_int64())),
+                  Number(0),
                 ),
               ),
             )
