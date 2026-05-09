@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Show toolchain versions
+        run: |
+          moon version --all
+          clang --version
+
+      - name: Update dependencies
+        run: moon update
+
+      - name: Check formatting
+        run: |
+          moon fmt
+          if ! git diff --exit-code; then
+            echo "::error::moon fmt produced changes — run 'moon fmt' locally and commit the result"
+            exit 1
+          fi
+
+      - name: moon check
+        run: moon check
+
+      - name: Fetch external e2e fixtures
+        run: |
+          set -euo pipefail
+          # tinycc preprocessed (used by test "parse tinycc stripped")
+          git clone --depth=1 https://repo.or.cz/tinycc.git /tmp/tinycc-src
+          (cd /tmp/tinycc-src && ./configure --cc=clang)
+          clang -E -P -I/tmp/tinycc-src /tmp/tinycc-src/tcc.c > /tmp/tinycc_stripped.c
+
+          # quickjs preprocessed (used by test "parse quickjs preprocessed")
+          git clone --depth=1 https://github.com/bellard/quickjs.git /tmp/quickjs-src
+          clang -E -P -I/tmp/quickjs-src \
+            -DCONFIG_VERSION=\"ci-snapshot\" \
+            /tmp/quickjs-src/quickjs.c > /tmp/quickjs_preprocessed.c
+
+          wc -l /tmp/tinycc_stripped.c /tmp/quickjs_preprocessed.c
+
+      - name: moon test
+        run: moon test
