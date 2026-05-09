@@ -28,15 +28,67 @@ fn write_bytes_file(path : String, content : Bytes) -> Bool {
 }
 
 ///|
+fn values_or_empty(matches : @argparse.Matches, name : String) -> Array[String] {
+  match matches.values.get(name) {
+    Some(values) => values
+    None => []
+  }
+}
+
+///|
+fn split_define_arg(arg : String) -> (String, String) {
+  let mut eq = -1
+  for i = 0; i < arg.length(); i = i + 1 {
+    if arg[i] == '=' {
+      eq = i
+      break
+    }
+  }
+  if eq < 0 {
+    (arg, "1")
+  } else {
+    (arg[0:eq].to_owned(), arg[eq + 1:].to_owned())
+  }
+}
+
+///|
+fn preprocess_options(
+  input_path : String,
+  matches : @argparse.Matches,
+) -> @preprocessor.PreprocessOptions {
+  let defines : Map[String, String] = {}
+  for raw in values_or_empty(matches, "define") {
+    let (name, value) = split_define_arg(raw)
+    if name != "" {
+      defines[name] = value
+    }
+  }
+  {
+    filename: input_path,
+    include_paths: values_or_empty(matches, "include"),
+    system_include_paths: values_or_empty(matches, "system_include"),
+    defines,
+    undefines: values_or_empty(matches, "undefine"),
+    emit_line_markers: false,
+  }
+}
+
+///|
 fn main {
   let cmd = @argparse.Command(
     "kimicc",
     flags=[
       FlagArg("version", short='v', long="version"),
       FlagArg("compile", short='c', long="compile"),
+      FlagArg("preprocess_only", short='E', long="preprocess-only"),
+      FlagArg("preprocessed", long="preprocessed"),
     ],
     options=[
       OptionArg("output", short='o', long="output", default_values=["-"]),
+      OptionArg("include", short='I', long="include", action=Append),
+      OptionArg("system_include", long="isystem", action=Append),
+      OptionArg("define", short='D', long="define", action=Append),
+      OptionArg("undefine", short='U', long="undefine", action=Append),
     ],
     positionals=[PositionArg("input")],
     about="A simple C compiler",
@@ -52,6 +104,8 @@ fn main {
     return
   }
   let compile_object = matches.flags.get("compile") == Some(true)
+  let preprocess_only = matches.flags.get("preprocess_only") == Some(true)
+  let already_preprocessed = matches.flags.get("preprocessed") == Some(true)
   let input_path = match matches.values.get("input") {
     Some(arr) =>
       if arr.length() > 0 {
@@ -76,7 +130,27 @@ fn main {
       return
     }
   }
-  let prog = @parser.parse(source)
+  let parser_input = if already_preprocessed {
+    source
+  } else {
+    match
+      @preprocessor.preprocess(source, preprocess_options(input_path, matches)) {
+      Ok(text) => text
+      Err(err) => {
+        println("error: " + err.to_string())
+        return
+      }
+    }
+  }
+  if preprocess_only {
+    if output_path == "-" {
+      println(parser_input)
+    } else if !write_file(output_path, parser_input) {
+      println("error: cannot write file: " + output_path)
+    }
+    return
+  }
+  let prog = @parser.parse(parser_input)
   if compile_object && output_path == "-" {
     println("error: direct object output requires -o")
   } else if compile_object {

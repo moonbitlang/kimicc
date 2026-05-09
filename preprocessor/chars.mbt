@@ -51,7 +51,11 @@ fn pp_is_absolute_path(path : String) -> Bool {
 ///|
 fn pp_join_path(dir : String, name : String) -> String {
   if pp_is_absolute_path(name) || dir == "" || dir == "." {
-    if pp_is_absolute_path(name) { name } else { "./" + name }
+    if pp_is_absolute_path(name) {
+      name
+    } else {
+      "./" + name
+    }
   } else if dir.has_suffix("/") {
     dir + name
   } else {

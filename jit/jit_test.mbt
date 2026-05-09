@@ -35,6 +35,24 @@ test "jit calls three-argument int function" {
 }
 
 ///|
+test "jit compile_c preprocesses macros" {
+  let source =
+    #|#define BASE 40
+    #|#define ADD2(x) ((x) + 2)
+    #|int entry(void) { return ADD2(BASE); }
+  match
+    @jit.compile_c(source, @preprocessor.PreprocessOptions::new("jit-input.c")) {
+    Ok(Some(module_)) =>
+      match module_.call_i32_0("entry") {
+        Some(value) => if value != 42 { abort("expected 42") }
+        None => abort("JIT call failed")
+      }
+    Ok(None) => abort("JIT allocation failed")
+    Err(err) => abort(err.to_string())
+  }
+}
+
+///|
 test "jit calls internal helper" {
   let source =
     #|int helper(int x) { return x * 2; }

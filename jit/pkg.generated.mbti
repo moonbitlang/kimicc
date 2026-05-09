@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "bobzhang/kimicc/jit"
 
+import {
+  "bobzhang/kimicc/preprocessor",
+}
+
 // Values
 pub fn call_i32_0(String, String) -> Int?
 
@@ -11,6 +15,8 @@ pub fn call_i32_2(String, String, Int, Int) -> Int?
 pub fn call_i32_3(String, String, Int, Int, Int) -> Int?
 
 pub fn compile(String) -> Module?
+
+pub fn compile_c(String, @preprocessor.PreprocessOptions) -> Result[Module?, @preprocessor.PreprocessError]
 
 // Errors
 

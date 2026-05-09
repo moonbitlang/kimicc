@@ -1,20 +1,17 @@
 # bobzhang/kimicc
 
 `kimicc` is a small C compiler written in MoonBit. The project currently
-targets native ARM64 macOS. It can parse C source, lower the parsed program to
-Darwin ARM64 assembly, emit a Mach-O relocatable object, and run selected C
-functions in memory through the native `jit` package.
-
-The compiler does not include a C preprocessor. For real C programs, run the
-source through an external preprocessor such as `clang -E` before passing it to
-the parser, code generator, or JIT package.
+targets native ARM64 macOS. It can preprocess and parse C source, lower the
+parsed program to Darwin ARM64 assembly, emit a Mach-O relocatable object, and
+run selected C functions in memory through the native `jit` package.
 
 ## Package Layout
 
-The module exports three public packages:
+The module exports four public packages:
 
 | Package | Purpose |
 |---|---|
+| `bobzhang/kimicc/preprocessor` | Expands C preprocessing directives into ordinary C source. |
 | `bobzhang/kimicc/parser` | Tokenizes and parses preprocessed C source into the public AST. |
 | `bobzhang/kimicc/codegen` | Converts the parser AST into Darwin ARM64 assembly, Mach-O object bytes, or a JIT image. |
 | `bobzhang/kimicc/jit` | Native-only convenience API that compiles C source and calls `int` returning functions in memory. |
@@ -30,21 +27,50 @@ moon build --target native
 moon test --target native
 ```
 
-The command-line compiler accepts one C source string as its first argument and
-prints assembly:
+The command-line compiler accepts one C source file path as its first argument
+and prints assembly:
 
 ```bash
-moon run cmd/main --target native -- "$(cat input.c)" > out.s
+moon run cmd/main --target native -- input.c > out.s
 clang -o out out.s
 ./out
 ```
 
-For preprocessed source:
+The CLI preprocesses by default. Use `-E` to print the preprocessed source, and
+`--preprocessed` when the input has already been preprocessed:
 
 ```bash
-clang -E -P input.c > input.i
-moon run cmd/main --target native -- "$(cat input.i)" > out.s
+moon run cmd/main --target native -- -E -D FEATURE=1 -I include input.c
+moon run cmd/main --target native -- --preprocessed input.i > out.s
 ```
+
+Include search is explicit: quote includes search the including file directory
+and `-I` paths, while angle includes search `-isystem` paths and then `-I`
+paths. The compiler does not auto-discover macOS SDK include directories.
+
+## Preprocessor API
+
+Import the preprocessor package from `moon.pkg`:
+
+```moonbit nocheck
+import {
+  "bobzhang/kimicc/preprocessor"
+}
+```
+
+The main entry point is:
+
+```moonbit nocheck
+@preprocessor.preprocess(
+  source : String,
+  options : @preprocessor.PreprocessOptions,
+) -> Result[String, @preprocessor.PreprocessError]
+```
+
+`preprocess` expands macros, conditionals, and configured includes, returning
+source text suitable for `@parser.parse`. The convenience
+`@preprocessor.parse(source, options)` preprocesses and then parses, but callers
+that need a strict phase boundary should call the two packages separately.
 
 ## Parser API
 
@@ -62,9 +88,10 @@ The main entry point is:
 @parser.parse(source : String) -> @parser.Program
 ```
 
-`parse` consumes a complete C translation unit and returns a `Program`. It does
-not return a recoverable error value. Invalid or unsupported C syntax aborts.
-Callers that need fault isolation should run parsing in a separate process.
+`parse` consumes a complete, already preprocessed C translation unit and returns
+a `Program`. It does not return a recoverable error value. Invalid or
+unsupported C syntax aborts. Callers that need fault isolation should run
+parsing in a separate process.
 
 The parser exposes its AST so tests, tooling, and alternate backends can inspect
 or transform it:
@@ -207,6 +234,9 @@ match @jit.compile(source) {
 }
 ```
 
+`compile` expects already-preprocessed source. Use `compile_c(source, options)`
+when the input may contain preprocessor directives.
+
 Or use one-shot helpers that compile and call immediately:
 
 ```moonbit nocheck
@@ -238,7 +268,8 @@ recompiled on every invocation.
 ## Current Limitations
 
 - The project targets native ARM64 macOS.
-- The parser expects preprocessed C source.
+- The parser expects preprocessed C source. Use the preprocessor package or CLI
+  default mode for source containing directives.
 - Parser and codegen failures generally abort instead of returning structured
   diagnostics.
 - The JIT public call surface currently covers only `int` returns with 0 to 3

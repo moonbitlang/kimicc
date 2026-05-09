@@ -42,7 +42,10 @@ test "stringizing and token paste" {
     #|const char *name = STR(alpha beta);
     #|int CAT(fo, o)(void) { return 3; }
   let text = expect_preprocess(source)
-  inspect(text, content="const char*name=\"alpha beta\";\nint foo(void){return 3;}\n")
+  inspect(
+    text,
+    content="const char*name=\"alpha beta\";\nint foo(void){return 3;}\n",
+  )
 }
 
 ///|
@@ -52,6 +55,26 @@ test "quote include searches including directory" {
     #|int main(void) { return HEADER_ADD(HEADER_VALUE, 25); }
   let text = expect_preprocess(source)
   inspect(text, content="int main(void){return((17)+(25));}\n")
+}
+
+///|
+test "include paths are explicit" {
+  let options : @preprocessor.PreprocessOptions = {
+    filename: "input.c",
+    include_paths: ["preprocessor/testdata/include_path"],
+    system_include_paths: ["preprocessor/testdata/system_path"],
+    defines: {},
+    undefines: [],
+    emit_line_markers: false,
+  }
+  let source =
+    #|#include "path_header.h"
+    #|#include <system_header.h>
+    #|int main(void) { return PATH_VALUE + SYSTEM_VALUE; }
+  match @preprocessor.preprocess(source, options) {
+    Ok(text) => inspect(text, content="int main(void){return 9+11;}\n")
+    Err(err) => fail(err.to_string())
+  }
 }
 
 ///|

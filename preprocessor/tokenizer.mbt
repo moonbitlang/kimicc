@@ -64,29 +64,75 @@ fn pp_read_quoted(input : String, start : Int, quote : Char) -> Int {
 
 ///|
 fn pp_punct_at(input : String, pos : Int) -> String {
-  if pp_starts_with_at(input, pos, "<<=") { return "<<=" }
-  if pp_starts_with_at(input, pos, ">>=") { return ">>=" }
-  if pp_starts_with_at(input, pos, "...") { return "..." }
-  if pp_starts_with_at(input, pos, "##") { return "##" }
-  if pp_starts_with_at(input, pos, "->") { return "->" }
-  if pp_starts_with_at(input, pos, "++") { return "++" }
-  if pp_starts_with_at(input, pos, "--") { return "--" }
-  if pp_starts_with_at(input, pos, "&&") { return "&&" }
-  if pp_starts_with_at(input, pos, "||") { return "||" }
-  if pp_starts_with_at(input, pos, "==") { return "==" }
-  if pp_starts_with_at(input, pos, "!=") { return "!=" }
-  if pp_starts_with_at(input, pos, "<=") { return "<=" }
-  if pp_starts_with_at(input, pos, ">=") { return ">=" }
-  if pp_starts_with_at(input, pos, "<<") { return "<<" }
-  if pp_starts_with_at(input, pos, ">>") { return ">>" }
-  if pp_starts_with_at(input, pos, "+=") { return "+=" }
-  if pp_starts_with_at(input, pos, "-=") { return "-=" }
-  if pp_starts_with_at(input, pos, "*=") { return "*=" }
-  if pp_starts_with_at(input, pos, "/=") { return "/=" }
-  if pp_starts_with_at(input, pos, "%=") { return "%=" }
-  if pp_starts_with_at(input, pos, "&=") { return "&=" }
-  if pp_starts_with_at(input, pos, "|=") { return "|=" }
-  if pp_starts_with_at(input, pos, "^=") { return "^=" }
+  if pp_starts_with_at(input, pos, "<<=") {
+    return "<<="
+  }
+  if pp_starts_with_at(input, pos, ">>=") {
+    return ">>="
+  }
+  if pp_starts_with_at(input, pos, "...") {
+    return "..."
+  }
+  if pp_starts_with_at(input, pos, "##") {
+    return "##"
+  }
+  if pp_starts_with_at(input, pos, "->") {
+    return "->"
+  }
+  if pp_starts_with_at(input, pos, "++") {
+    return "++"
+  }
+  if pp_starts_with_at(input, pos, "--") {
+    return "--"
+  }
+  if pp_starts_with_at(input, pos, "&&") {
+    return "&&"
+  }
+  if pp_starts_with_at(input, pos, "||") {
+    return "||"
+  }
+  if pp_starts_with_at(input, pos, "==") {
+    return "=="
+  }
+  if pp_starts_with_at(input, pos, "!=") {
+    return "!="
+  }
+  if pp_starts_with_at(input, pos, "<=") {
+    return "<="
+  }
+  if pp_starts_with_at(input, pos, ">=") {
+    return ">="
+  }
+  if pp_starts_with_at(input, pos, "<<") {
+    return "<<"
+  }
+  if pp_starts_with_at(input, pos, ">>") {
+    return ">>"
+  }
+  if pp_starts_with_at(input, pos, "+=") {
+    return "+="
+  }
+  if pp_starts_with_at(input, pos, "-=") {
+    return "-="
+  }
+  if pp_starts_with_at(input, pos, "*=") {
+    return "*="
+  }
+  if pp_starts_with_at(input, pos, "/=") {
+    return "/="
+  }
+  if pp_starts_with_at(input, pos, "%=") {
+    return "%="
+  }
+  if pp_starts_with_at(input, pos, "&=") {
+    return "&="
+  }
+  if pp_starts_with_at(input, pos, "|=") {
+    return "|="
+  }
+  if pp_starts_with_at(input, pos, "^=") {
+    return "^="
+  }
   input[pos:pos + 1].to_owned()
 }
 
@@ -114,17 +160,25 @@ fn pp_tokenize(input : String) -> Array[PpToken] {
     } else if pp_is_ident_start(ch.unsafe_to_char()) {
       let start = i
       i += 1
-      while i < source.length() && pp_is_ident_continue(source[i].unsafe_to_char()) {
+      while i < source.length() &&
+            pp_is_ident_continue(source[i].unsafe_to_char()) {
         i += 1
       }
       tokens.push(pp_token(PpIdent, source[start:i].to_owned()))
     } else if pp_is_digit(ch.unsafe_to_char()) ||
-      (ch == '.' && i + 1 < source.length() && pp_is_digit(source[i + 1].unsafe_to_char())) {
+      (
+        ch == '.' &&
+        i + 1 < source.length() &&
+        pp_is_digit(source[i + 1].unsafe_to_char())
+      ) {
       let start = i
       i += 1
       while i < source.length() {
         let c = source[i]
-        if pp_is_ident_continue(c.unsafe_to_char()) || c == '.' || c == '+' || c == '-' {
+        if pp_is_ident_continue(c.unsafe_to_char()) ||
+          c == '.' ||
+          c == '+' ||
+          c == '-' {
           i += 1
         } else {
           break
@@ -144,7 +198,14 @@ fn pp_tokenize(input : String) -> Array[PpToken] {
       (source[i + 1] == '"' || source[i + 1] == '\'') {
       let end = pp_read_quoted(source, i + 1, source[i + 1].unsafe_to_char())
       tokens.push(
-        pp_token(if source[i + 1] == '"' { PpString } else { PpChar }, source[i:end].to_owned()),
+        pp_token(
+          if source[i + 1] == '"' {
+            PpString
+          } else {
+            PpChar
+          },
+          source[i:end].to_owned(),
+        ),
       )
       i = end
     } else if ch == 'u' &&
@@ -153,7 +214,14 @@ fn pp_tokenize(input : String) -> Array[PpToken] {
       (source[i + 2] == '"' || source[i + 2] == '\'') {
       let end = pp_read_quoted(source, i + 2, source[i + 2].unsafe_to_char())
       tokens.push(
-        pp_token(if source[i + 2] == '"' { PpString } else { PpChar }, source[i:end].to_owned()),
+        pp_token(
+          if source[i + 2] == '"' {
+            PpString
+          } else {
+            PpChar
+          },
+          source[i:end].to_owned(),
+        ),
       )
       i = end
     } else {
@@ -187,17 +255,23 @@ fn pp_first_non_space(tokens : Array[PpToken]) -> Int {
 
 ///|
 fn pp_tokens_need_space(left : PpToken, right : PpToken) -> Bool {
-  let left_word = left.kind == PpIdent || left.kind == PpNumber ||
+  let left_word = left.kind == PpIdent ||
+    left.kind == PpNumber ||
     left.kind == PpString ||
     left.kind == PpChar
-  let right_word = right.kind == PpIdent || right.kind == PpNumber ||
+  let right_word = right.kind == PpIdent ||
+    right.kind == PpNumber ||
     right.kind == PpString ||
     right.kind == PpChar
   if left_word && right_word {
     return true
   }
-  if left.text == "+" && right.text == "+" { return true }
-  if left.text == "-" && right.text == "-" { return true }
+  if left.text == "+" && right.text == "+" {
+    return true
+  }
+  if left.text == "-" && right.text == "-" {
+    return true
+  }
   false
 }
 
@@ -210,10 +284,7 @@ fn pp_tokens_to_source(tokens : Array[PpToken]) -> String {
       continue
     }
     match previous {
-      Some(prev) =>
-        if pp_tokens_need_space(prev, token) {
-          buf.write_char(' ')
-        }
+      Some(prev) => if pp_tokens_need_space(prev, token) { buf.write_char(' ') }
       None => ()
     }
     buf.write_string(token.text)

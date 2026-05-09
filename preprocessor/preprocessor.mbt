@@ -6,7 +6,10 @@ fn Preprocessor::set_error(self : Preprocessor, message : String) -> Unit {
 }
 
 ///|
-fn Preprocessor::is_active(_self : Preprocessor, stack : Array[ConditionalFrame]) -> Bool {
+fn Preprocessor::is_active(
+  _self : Preprocessor,
+  stack : Array[ConditionalFrame],
+) -> Bool {
   match stack.last() {
     Some(frame) => frame.branch_active
     None => true
@@ -14,7 +17,11 @@ fn Preprocessor::is_active(_self : Preprocessor, stack : Array[ConditionalFrame]
 }
 
 ///|
-fn Preprocessor::seed_macro(self : Preprocessor, name : String, replacement : String) -> Unit {
+fn Preprocessor::seed_macro(
+  self : Preprocessor,
+  name : String,
+  replacement : String,
+) -> Unit {
   self.macros[name] = {
     function_like: false,
     params: [],
@@ -56,7 +63,10 @@ fn pp_line_after(tokens : Array[PpToken], start : Int) -> Array[PpToken] {
 }
 
 ///|
-fn Preprocessor::define_macro(self : Preprocessor, tokens : Array[PpToken]) -> Unit {
+fn Preprocessor::define_macro(
+  self : Preprocessor,
+  tokens : Array[PpToken],
+) -> Unit {
   let start = pp_first_non_space(tokens)
   if start >= tokens.length() || tokens[start].kind != PpIdent {
     self.set_error("expected macro name after #define")
@@ -66,7 +76,8 @@ fn Preprocessor::define_macro(self : Preprocessor, tokens : Array[PpToken]) -> U
   let mut function_like = false
   let params : Array[String] = []
   let mut replacement_start = start + 1
-  if replacement_start < tokens.length() && tokens[replacement_start].is_punct("(") {
+  if replacement_start < tokens.length() &&
+    tokens[replacement_start].is_punct("(") {
     function_like = true
     let mut i = replacement_start + 1
     while i < tokens.length() {
@@ -95,16 +106,17 @@ fn Preprocessor::define_macro(self : Preprocessor, tokens : Array[PpToken]) -> U
       }
     }
   }
-  let replacement = pp_without_whitespace(pp_line_after(tokens, replacement_start))
-  self.macros[name] = {
-    function_like,
-    params,
-    replacement,
-  }
+  let replacement = pp_without_whitespace(
+    pp_line_after(tokens, replacement_start),
+  )
+  self.macros[name] = { function_like, params, replacement }
 }
 
 ///|
-fn Preprocessor::replace_defined_operators(self : Preprocessor, tokens : Array[PpToken]) -> Array[PpToken] {
+fn Preprocessor::replace_defined_operators(
+  self : Preprocessor,
+  tokens : Array[PpToken],
+) -> Array[PpToken] {
   let clean = pp_without_whitespace(tokens)
   let result : Array[PpToken] = []
   let mut i = 0
@@ -114,7 +126,16 @@ fn Preprocessor::replace_defined_operators(self : Preprocessor, tokens : Array[P
       if i + 1 < clean.length() && clean[i + 1].is_punct("(") {
         if i + 2 < clean.length() && clean[i + 2].kind == PpIdent {
           let name = clean[i + 2].text
-          result.push(pp_token(PpNumber, if self.macros.contains(name) { "1" } else { "0" }))
+          result.push(
+            pp_token(
+              PpNumber,
+              if self.macros.contains(name) {
+                "1"
+              } else {
+                "0"
+              },
+            ),
+          )
           i += 3
           if i < clean.length() && clean[i].is_punct(")") {
             i += 1
@@ -125,7 +146,9 @@ fn Preprocessor::replace_defined_operators(self : Preprocessor, tokens : Array[P
         }
       } else if i + 1 < clean.length() && clean[i + 1].kind == PpIdent {
         let name = clean[i + 1].text
-        result.push(pp_token(PpNumber, if self.macros.contains(name) { "1" } else { "0" }))
+        result.push(
+          pp_token(PpNumber, if self.macros.contains(name) { "1" } else { "0" }),
+        )
         i += 2
       } else {
         result.push(pp_token(PpNumber, "0"))
@@ -140,7 +163,12 @@ fn Preprocessor::replace_defined_operators(self : Preprocessor, tokens : Array[P
 }
 
 ///|
-fn Preprocessor::eval_if(self : Preprocessor, tokens : Array[PpToken], file : String, line : Int) -> Bool {
+fn Preprocessor::eval_if(
+  self : Preprocessor,
+  tokens : Array[PpToken],
+  file : String,
+  line : Int,
+) -> Bool {
   let defined_replaced = self.replace_defined_operators(tokens)
   let expanded = self.expand_tokens(defined_replaced, {}, file, line, 0)
   let normalized : Array[PpToken] = []
@@ -290,7 +318,7 @@ fn Preprocessor::process_directive(
         else_seen: false,
       })
     }
-    "elif" => {
+    "elif" =>
       if stack.length() == 0 {
         self.set_error("#elif without matching #if")
       } else {
@@ -310,8 +338,7 @@ fn Preprocessor::process_directive(
           }
         }
       }
-    }
-    "else" => {
+    "else" =>
       if stack.length() == 0 {
         self.set_error("#else without matching #if")
       } else {
@@ -329,18 +356,13 @@ fn Preprocessor::process_directive(
           }
         }
       }
-    }
-    "endif" => {
+    "endif" =>
       if stack.length() == 0 {
         self.set_error("#endif without matching #if")
       } else {
         ignore(stack.remove(stack.length() - 1))
       }
-    }
-    "define" =>
-      if active {
-        self.define_macro(rest)
-      }
+    "define" => if active { self.define_macro(rest) }
     "undef" =>
       if active {
         let idx = pp_first_non_space(rest)
@@ -348,10 +370,7 @@ fn Preprocessor::process_directive(
           self.macros.remove(rest[idx].text)
         }
       }
-    "include" =>
-      if active {
-        return self.process_include(rest, file, line)
-      }
+    "include" => if active { return self.process_include(rest, file, line) }
     "error" =>
       if active {
         self.set_error("#error " + pp_tokens_to_source(rest))
@@ -374,7 +393,11 @@ fn pp_is_directive_line(tokens : Array[PpToken]) -> Bool {
 }
 
 ///|
-fn Preprocessor::process_source(self : Preprocessor, source : String, file : String) -> String {
+fn Preprocessor::process_source(
+  self : Preprocessor,
+  source : String,
+  file : String,
+) -> String {
   for active_file in self.include_stack {
     if active_file == file {
       self.set_error("recursive include detected: " + file)
@@ -395,7 +418,9 @@ fn Preprocessor::process_source(self : Preprocessor, source : String, file : Str
   for tok in tokens {
     if tok.is_newline() {
       if pp_is_directive_line(line_tokens) {
-        output.write_string(self.process_directive(line_tokens, stack, file, line))
+        output.write_string(
+          self.process_directive(line_tokens, stack, file, line),
+        )
       } else if self.is_active(stack) {
         let expanded = self.expand_tokens(line_tokens, {}, file, line, 0)
         output.write_string(pp_tokens_to_source(expanded))
@@ -413,7 +438,9 @@ fn Preprocessor::process_source(self : Preprocessor, source : String, file : Str
   }
   if line_tokens.length() > 0 {
     if pp_is_directive_line(line_tokens) {
-      output.write_string(self.process_directive(line_tokens, stack, file, line))
+      output.write_string(
+        self.process_directive(line_tokens, stack, file, line),
+      )
     } else if self.is_active(stack) {
       let expanded = self.expand_tokens(line_tokens, {}, file, line, 0)
       output.write_string(pp_tokens_to_source(expanded))

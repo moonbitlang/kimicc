@@ -32,6 +32,7 @@ pub(all) enum PreprocessError {
   Message(String)
 } derive(Eq)
 
+///|
 /// Returns a human-readable preprocessing error message.
 pub fn PreprocessError::to_string(self : PreprocessError) -> String {
   match self {

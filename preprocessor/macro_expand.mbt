@@ -146,7 +146,9 @@ fn Preprocessor::substitute_macro(
       if next.kind == PpIdent {
         let param_index = pp_macro_param_index(macro_, next.text)
         if param_index >= 0 {
-          result.push(pp_stringize_tokens(self.macro_argument(args, param_index)))
+          result.push(
+            pp_stringize_tokens(self.macro_argument(args, param_index)),
+          )
           i += 2
           continue
         }
@@ -184,7 +186,9 @@ fn Preprocessor::substitute_macro(
     if tok.kind == PpIdent {
       let param_index = pp_macro_param_index(macro_, tok.text)
       if param_index >= 0 {
-        let arg = self.expanded_macro_argument(args, param_index, file, line, depth)
+        let arg = self.expanded_macro_argument(
+          args, param_index, file, line, depth,
+        )
         for arg_tok in arg {
           result.push(arg_tok)
         }
@@ -235,11 +239,7 @@ fn Preprocessor::expand_tokens(
                   Some((args, end_index)) => {
                     let disabled_next = self.disabled_with(disabled, tok.text)
                     let substituted = self.substitute_macro(
-                      macro_,
-                      args,
-                      file,
-                      line,
-                      depth,
+                      macro_, args, file, line, depth,
                     )
                     let expanded = self.expand_tokens(
                       substituted,

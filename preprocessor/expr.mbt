@@ -86,7 +86,11 @@ fn IfExprParser::parse_unary(self : IfExprParser) -> Int64 {
   } else if self.match_punct("-") {
     -self.parse_unary()
   } else if self.match_punct("!") {
-    if self.parse_unary() == 0L { 1L } else { 0L }
+    if self.parse_unary() == 0L {
+      1L
+    } else {
+      0L
+    }
   } else if self.match_punct("~") {
     self.parse_unary().lnot()
   } else {
@@ -231,7 +235,11 @@ fn IfExprParser::parse_conditional(self : IfExprParser) -> Int64 {
     let then_value = self.parse_conditional()
     ignore(self.match_punct(":"))
     let else_value = self.parse_conditional()
-    if cond != 0L { then_value } else { else_value }
+    if cond != 0L {
+      then_value
+    } else {
+      else_value
+    }
   } else {
     cond
   }
