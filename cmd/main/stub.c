@@ -17,6 +17,14 @@ moonbit_bytes_t moonbit_read_file(moonbit_bytes_t path) {
 }
 
 MOONBIT_FFI_EXPORT
+int moonbit_file_exists(moonbit_bytes_t path) {
+  FILE *f = fopen((const char *)path, "r");
+  if (!f) return 0;
+  fclose(f);
+  return 1;
+}
+
+MOONBIT_FFI_EXPORT
 int moonbit_write_file(moonbit_bytes_t path, moonbit_bytes_t content) {
   FILE *f = fopen((const char *)path, "wb");
   if (!f) return -1;
@@ -24,4 +32,14 @@ int moonbit_write_file(moonbit_bytes_t path, moonbit_bytes_t content) {
   size_t written = fwrite(content, 1, len, f);
   fclose(f);
   return written == len ? 0 : -1;
+}
+
+MOONBIT_FFI_EXPORT
+int moonbit_system(moonbit_bytes_t cmd) {
+  return system((const char *)cmd);
+}
+
+MOONBIT_FFI_EXPORT
+void moonbit_exit(int code) {
+  exit(code);
 }

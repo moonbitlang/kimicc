@@ -2,7 +2,7 @@ import {
   "bobzhang/kimicc/parser",
   "bobzhang/kimicc/preprocessor",
   "bobzhang/kimicc/codegen",
-  "moonbitlang/core/argparse",
+  "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
 }
 

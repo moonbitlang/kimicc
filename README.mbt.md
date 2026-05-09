@@ -27,26 +27,31 @@ moon build --target native
 moon test --target native
 ```
 
-The command-line compiler accepts one C source file path as its first argument
-and prints assembly:
+The command-line compiler accepts one C source file path and behaves like a
+small compiler driver. By default it compiles the source with kimicc and
+delegates final linking to `clang`:
 
 ```bash
-moon run cmd/main --target native -- input.c > out.s
-clang -o out out.s
+moon run cmd/main --target native -- input.c -o out
 ./out
 ```
 
-The CLI preprocesses by default. Use `-E` to print the preprocessed source, and
-`--preprocessed` when the input has already been preprocessed:
+Use `-S` to write assembly, `-c` to write a Mach-O relocatable object, `-E` to
+print preprocessed source, and `--preprocessed` when the input has already been
+preprocessed:
 
 ```bash
 moon run cmd/main --target native -- -E -D FEATURE=1 -I include input.c
-moon run cmd/main --target native -- --preprocessed input.i > out.s
+moon run cmd/main --target native -- -S input.c
+moon run cmd/main --target native -- -c input.c
+moon run cmd/main --target native -- -S --preprocessed input.i -o out.s
 ```
 
 Include search is explicit: quote includes search the including file directory
 and `-I` paths, while angle includes search `-isystem` paths and then `-I`
-paths. The compiler does not auto-discover macOS SDK include directories.
+paths. The driver also adds common macOS Command Line Tools include directories
+by default so system headers such as `<stddef.h>` are available on the target
+platform. Use `-nostdinc` to disable those built-in system include paths.
 
 ## Preprocessor API
 
