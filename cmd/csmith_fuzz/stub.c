@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/wait.h>
 #include <moonbit.h>
 
@@ -26,4 +25,9 @@ int moonbit_system(moonbit_bytes_t cmd) {
 MOONBIT_FFI_EXPORT
 void moonbit_flush_stdout(void) {
   fflush(stdout);
+}
+
+MOONBIT_FFI_EXPORT
+void moonbit_exit(int code) {
+  exit(code);
 }

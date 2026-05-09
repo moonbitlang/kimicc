@@ -1,0 +1,13 @@
+import {
+  "bobzhang/kimicc/csmith_fuzz" @fuzz,
+  "moonbitlang/core/env",
+  "moonbitlang/core/string",
+  "moonbitlang/async",
+}
+
+supported_targets = "+native"
+
+options(
+  "is-main": true,
+  "native-stub": [ "stub.c" ],
+)

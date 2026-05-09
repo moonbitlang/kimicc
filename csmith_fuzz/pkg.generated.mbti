@@ -1,0 +1,37 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/kimicc/csmith_fuzz"
+
+// Values
+pub const DEFAULT_COUNT : Int = 20
+
+pub const DEFAULT_SEED : Int = 7
+
+pub fn config_from_env() -> Config
+
+pub fn format_failures(Array[String]) -> String
+
+pub fn require_toolchain(Config) -> Unit
+
+pub async fn run_batch(Config, Int, Int) -> BatchResult
+
+// Errors
+
+// Types and methods
+pub(all) struct BatchResult {
+  failures : Array[String]
+}
+
+pub(all) struct Config {
+  csmith_command : String
+  clang_command : String
+  timeout_command : String
+  kimicc_command : String?
+  include_root : String?
+  record_root : String
+  bug_dir : String
+}
+
+// Type aliases
+
+// Traits
+
