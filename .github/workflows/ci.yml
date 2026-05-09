@@ -40,15 +40,17 @@ jobs:
       - name: Fetch external e2e fixtures
         run: |
           set -euo pipefail
-          # tinycc preprocessed (used by test "parse tinycc stripped")
+          # tinycc preprocessed (used by test "parse tinycc stripped").
+          # configure + a partial build are required so that generated headers
+          # like tccdefs_.h exist before we preprocess tcc.c.
           git clone --depth=1 https://repo.or.cz/tinycc.git /tmp/tinycc-src
-          (cd /tmp/tinycc-src && ./configure --cc=clang)
+          (cd /tmp/tinycc-src && ./configure --cc=clang && make tccdefs_.h)
           clang -E -P -I/tmp/tinycc-src /tmp/tinycc-src/tcc.c > /tmp/tinycc_stripped.c
 
-          # quickjs preprocessed (used by test "parse quickjs preprocessed")
+          # quickjs preprocessed (used by test "parse quickjs preprocessed").
           git clone --depth=1 https://github.com/bellard/quickjs.git /tmp/quickjs-src
           clang -E -P -I/tmp/quickjs-src \
-            -DCONFIG_VERSION=\"ci-snapshot\" \
+            -DCONFIG_VERSION='"ci-snapshot"' \
             /tmp/quickjs-src/quickjs.c > /tmp/quickjs_preprocessed.c
 
           wc -l /tmp/tinycc_stripped.c /tmp/quickjs_preprocessed.c
