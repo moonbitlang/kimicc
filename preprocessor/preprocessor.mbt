@@ -24,9 +24,18 @@ fn Preprocessor::seed_macro(
 ) -> Unit {
   self.macros[name] = {
     function_like: false,
+    variadic: false,
     params: [],
     replacement: pp_without_whitespace(pp_tokenize(replacement)),
   }
+}
+
+///|
+fn Preprocessor::seed_macro_definition(
+  self : Preprocessor,
+  definition : String,
+) -> Unit {
+  self.define_macro(pp_tokenize(definition))
 }
 
 ///|
@@ -36,11 +45,56 @@ fn Preprocessor::new(options : PreprocessOptions) -> Preprocessor {
   pp.seed_macro("__STDC_VERSION__", "201112L")
   pp.seed_macro("__STDC_HOSTED__", "1")
   pp.seed_macro("__APPLE__", "1")
+  pp.seed_macro("__APPLE_CC__", "6000")
   pp.seed_macro("__MACH__", "1")
+  pp.seed_macro("__GNUC__", "4")
+  pp.seed_macro("__GNUC_MINOR__", "2")
+  pp.seed_macro("__GNUC_PATCHLEVEL__", "1")
+  pp.seed_macro("__clang__", "1")
   pp.seed_macro("__aarch64__", "1")
   pp.seed_macro("__arm64__", "1")
   pp.seed_macro("__LP64__", "1")
+  pp.seed_macro("__ORDER_LITTLE_ENDIAN__", "1234")
+  pp.seed_macro("__ORDER_BIG_ENDIAN__", "4321")
+  pp.seed_macro("__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__")
   pp.seed_macro("__SIZEOF_POINTER__", "8")
+  pp.seed_macro("__SIZE_TYPE__", "long unsigned int")
+  pp.seed_macro("__PTRDIFF_TYPE__", "long int")
+  pp.seed_macro("__INTPTR_TYPE__", "long int")
+  pp.seed_macro("__UINTPTR_TYPE__", "long unsigned int")
+  pp.seed_macro("__INTMAX_TYPE__", "long int")
+  pp.seed_macro("__UINTMAX_TYPE__", "long unsigned int")
+  pp.seed_macro("__INT8_TYPE__", "signed char")
+  pp.seed_macro("__UINT8_TYPE__", "unsigned char")
+  pp.seed_macro("__INT16_TYPE__", "short")
+  pp.seed_macro("__UINT16_TYPE__", "unsigned short")
+  pp.seed_macro("__INT32_TYPE__", "int")
+  pp.seed_macro("__UINT32_TYPE__", "unsigned int")
+  pp.seed_macro("__INT64_TYPE__", "long long int")
+  pp.seed_macro("__UINT64_TYPE__", "long long unsigned int")
+  pp.seed_macro("__INT_LEAST8_TYPE__", "signed char")
+  pp.seed_macro("__UINT_LEAST8_TYPE__", "unsigned char")
+  pp.seed_macro("__INT_LEAST16_TYPE__", "short")
+  pp.seed_macro("__UINT_LEAST16_TYPE__", "unsigned short")
+  pp.seed_macro("__INT_LEAST32_TYPE__", "int")
+  pp.seed_macro("__UINT_LEAST32_TYPE__", "unsigned int")
+  pp.seed_macro("__INT_LEAST64_TYPE__", "long long int")
+  pp.seed_macro("__UINT_LEAST64_TYPE__", "long long unsigned int")
+  pp.seed_macro("__INT_FAST8_TYPE__", "signed char")
+  pp.seed_macro("__UINT_FAST8_TYPE__", "unsigned char")
+  pp.seed_macro("__INT_FAST16_TYPE__", "short")
+  pp.seed_macro("__UINT_FAST16_TYPE__", "unsigned short")
+  pp.seed_macro("__INT_FAST32_TYPE__", "int")
+  pp.seed_macro("__UINT_FAST32_TYPE__", "unsigned int")
+  pp.seed_macro("__INT_FAST64_TYPE__", "long long int")
+  pp.seed_macro("__UINT_FAST64_TYPE__", "long long unsigned int")
+  pp.seed_macro("__WCHAR_TYPE__", "int")
+  pp.seed_macro("__WINT_TYPE__", "int")
+  pp.seed_macro("__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__", "150500")
+  pp.seed_macro_definition("__has_builtin(x) 0")
+  pp.seed_macro_definition("__has_attribute(x) 0")
+  pp.seed_macro_definition("__has_feature(x) 0")
+  pp.seed_macro_definition("__has_extension(x) 0")
   pp.seed_macro("__DATE__", pp_quote_string("May  9 2026"))
   pp.seed_macro("__TIME__", pp_quote_string("00:00:00"))
   for pair in options.defines {
@@ -74,6 +128,7 @@ fn Preprocessor::define_macro(
   }
   let name = tokens[start].text
   let mut function_like = false
+  let mut variadic = false
   let params : Array[String] = []
   let mut replacement_start = start + 1
   if replacement_start < tokens.length() &&
@@ -88,10 +143,12 @@ fn Preprocessor::define_macro(
       } else if tok.is_punct(",") {
         i += 1
       } else if tok.is_punct("...") {
+        variadic = true
         params.push("__VA_ARGS__")
         i += 1
       } else if tok.kind == PpIdent {
         if i + 1 < tokens.length() && tokens[i + 1].is_punct("...") {
+          variadic = true
           params.push(tok.text)
           i += 2
         } else {
@@ -109,7 +166,7 @@ fn Preprocessor::define_macro(
   let replacement = pp_without_whitespace(
     pp_line_after(tokens, replacement_start),
   )
-  self.macros[name] = { function_like, params, replacement }
+  self.macros[name] = { function_like, variadic, params, replacement }
 }
 
 ///|
@@ -232,7 +289,7 @@ fn Preprocessor::resolve_include(
   let search_paths = if system {
     self.options.system_include_paths + self.options.include_paths
   } else {
-    self.options.include_paths
+    self.options.include_paths + self.options.system_include_paths
   }
   for dir in search_paths {
     let candidate = pp_join_path(dir, name)
@@ -375,6 +432,7 @@ fn Preprocessor::process_directive(
       if active {
         self.set_error("#error " + pp_tokens_to_source(rest))
       }
+    "warning" => ()
     "pragma" => ()
     "line" => ()
     _ =>
@@ -390,6 +448,40 @@ fn Preprocessor::process_directive(
 fn pp_is_directive_line(tokens : Array[PpToken]) -> Bool {
   let idx = pp_first_non_space(tokens)
   idx < tokens.length() && tokens[idx].is_punct("#")
+}
+
+///|
+fn pp_is_unterminated_macro_error(error : PreprocessError?) -> Bool {
+  match error {
+    Some(Message(message)) =>
+      message.has_prefix("unterminated macro invocation")
+    None => false
+  }
+}
+
+///|
+fn Preprocessor::flush_pending_tokens(
+  self : Preprocessor,
+  pending : Array[PpToken],
+  output : StringBuilder,
+  file : String,
+  line : Int,
+  is_final : Bool,
+) -> (Array[PpToken], Bool) {
+  if pending.length() == 0 {
+    return (pending, true)
+  }
+  let expanded = self.expand_tokens(pending, {}, file, line, 0)
+  if pp_is_unterminated_macro_error(self.error) && !is_final {
+    self.error = None
+    (pending, false)
+  } else if self.error is Some(_) {
+    (pending, false)
+  } else {
+    output.write_string(pp_tokens_to_source(expanded))
+    output.write_char('\n')
+    ([], true)
+  }
 }
 
 ///|
@@ -414,17 +506,35 @@ fn Preprocessor::process_source(
   let tokens = pp_tokenize(source)
   let stack : Array[ConditionalFrame] = []
   let mut line_tokens : Array[PpToken] = []
+  let mut pending_tokens : Array[PpToken] = []
+  let mut pending_line = 1
   let mut line = 1
   for tok in tokens {
     if tok.is_newline() {
       if pp_is_directive_line(line_tokens) {
+        let (next_pending, _) = self.flush_pending_tokens(
+          pending_tokens, output, file, pending_line, true,
+        )
+        pending_tokens = next_pending
+        if self.error is Some(_) {
+          ignore(self.include_stack.remove(self.include_stack.length() - 1))
+          return output.to_string()
+        }
         output.write_string(
           self.process_directive(line_tokens, stack, file, line),
         )
       } else if self.is_active(stack) {
-        let expanded = self.expand_tokens(line_tokens, {}, file, line, 0)
-        output.write_string(pp_tokens_to_source(expanded))
-        output.write_char('\n')
+        if pending_tokens.length() == 0 {
+          pending_line = line
+        }
+        for pending_token in line_tokens {
+          pending_tokens.push(pending_token)
+        }
+        pending_tokens.push(pp_token(PpWhitespace, " "))
+        let (next_pending, _) = self.flush_pending_tokens(
+          pending_tokens, output, file, pending_line, false,
+        )
+        pending_tokens = next_pending
       }
       line_tokens = []
       line += 1
@@ -438,15 +548,31 @@ fn Preprocessor::process_source(
   }
   if line_tokens.length() > 0 {
     if pp_is_directive_line(line_tokens) {
+      let (next_pending, _) = self.flush_pending_tokens(
+        pending_tokens, output, file, pending_line, true,
+      )
+      pending_tokens = next_pending
+      if self.error is Some(_) {
+        ignore(self.include_stack.remove(self.include_stack.length() - 1))
+        return output.to_string()
+      }
       output.write_string(
         self.process_directive(line_tokens, stack, file, line),
       )
     } else if self.is_active(stack) {
-      let expanded = self.expand_tokens(line_tokens, {}, file, line, 0)
-      output.write_string(pp_tokens_to_source(expanded))
-      output.write_char('\n')
+      if pending_tokens.length() == 0 {
+        pending_line = line
+      }
+      for pending_token in line_tokens {
+        pending_tokens.push(pending_token)
+      }
     }
   }
+  let (next_pending, _) = self.flush_pending_tokens(
+    pending_tokens, output, file, pending_line, true,
+  )
+  pending_tokens = next_pending
+  ignore(pending_tokens)
   if stack.length() > 0 && self.error is None {
     self.set_error("unterminated conditional directive")
   }

@@ -18,6 +18,11 @@ fn pp_macro_param_index(macro_ : Macro, name : String) -> Int {
 }
 
 ///|
+fn pp_macro_param_is_variadic(macro_ : Macro, index : Int) -> Bool {
+  macro_.variadic && index == macro_.params.length() - 1
+}
+
+///|
 fn pp_stringize_tokens(tokens : Array[PpToken]) -> PpToken {
   let buf = StringBuilder::new()
   let mut first = true
@@ -47,6 +52,24 @@ fn pp_paste_token(left : PpToken, right : PpToken) -> PpToken {
 }
 
 ///|
+fn pp_skip_parenthesized(tokens : Array[PpToken], lparen : Int) -> Int {
+  let mut depth = 0
+  let mut i = lparen
+  while i < tokens.length() {
+    if tokens[i].is_punct("(") {
+      depth += 1
+    } else if tokens[i].is_punct(")") {
+      depth -= 1
+      if depth == 0 {
+        return i + 1
+      }
+    }
+    i += 1
+  }
+  tokens.length()
+}
+
+///|
 fn Preprocessor::disabled_with(
   _self : Preprocessor,
   disabled : Map[String, Bool],
@@ -62,6 +85,7 @@ fn Preprocessor::parse_macro_invocation(
   self : Preprocessor,
   tokens : Array[PpToken],
   lparen : Int,
+  name : String,
 ) -> (Array[Array[PpToken]], Int)? {
   if lparen >= tokens.length() || !tokens[lparen].is_punct("(") {
     return None
@@ -92,17 +116,29 @@ fn Preprocessor::parse_macro_invocation(
     }
     i += 1
   }
-  self.set_error("unterminated macro invocation")
+  self.set_error("unterminated macro invocation for " + name)
   None
 }
 
 ///|
 fn Preprocessor::macro_argument(
   _self : Preprocessor,
+  macro_ : Macro,
   args : Array[Array[PpToken]],
   index : Int,
 ) -> Array[PpToken] {
-  if index >= 0 && index < args.length() {
+  if pp_macro_param_is_variadic(macro_, index) {
+    let result : Array[PpToken] = []
+    for i = index; i < args.length(); i = i + 1 {
+      if i > index {
+        result.push(pp_token(PpPunct, ","))
+      }
+      for tok in args[i] {
+        result.push(tok)
+      }
+    }
+    result
+  } else if index >= 0 && index < args.length() {
     args[index]
   } else {
     []
@@ -112,15 +148,17 @@ fn Preprocessor::macro_argument(
 ///|
 fn Preprocessor::expanded_macro_argument(
   self : Preprocessor,
+  macro_ : Macro,
   args : Array[Array[PpToken]],
   index : Int,
+  disabled : Map[String, Bool],
   file : String,
   line : Int,
   depth : Int,
 ) -> Array[PpToken] {
   self.expand_tokens(
-    self.macro_argument(args, index),
-    {},
+    self.macro_argument(macro_, args, index),
+    disabled,
     file,
     line,
     depth + 1,
@@ -132,6 +170,7 @@ fn Preprocessor::substitute_macro(
   self : Preprocessor,
   macro_ : Macro,
   args : Array[Array[PpToken]],
+  disabled : Map[String, Bool],
   file : String,
   line : Int,
   depth : Int,
@@ -147,7 +186,7 @@ fn Preprocessor::substitute_macro(
         let param_index = pp_macro_param_index(macro_, next.text)
         if param_index >= 0 {
           result.push(
-            pp_stringize_tokens(self.macro_argument(args, param_index)),
+            pp_stringize_tokens(self.macro_argument(macro_, args, param_index)),
           )
           i += 2
           continue
@@ -164,14 +203,21 @@ fn Preprocessor::substitute_macro(
       let right_tokens = if next.kind == PpIdent {
         let param_index = pp_macro_param_index(macro_, next.text)
         if param_index >= 0 {
-          self.macro_argument(args, param_index)
+          self.macro_argument(macro_, args, param_index)
         } else {
           [next]
         }
       } else {
         [next]
       }
-      if right_tokens.length() == 0 {
+      if right_tokens.length() == 0 && next.kind == PpIdent {
+        let param_index = pp_macro_param_index(macro_, next.text)
+        if pp_macro_param_is_variadic(macro_, param_index) && left.is_punct(",") {
+          i += 2
+          continue
+        }
+        result.push(left)
+      } else if right_tokens.length() == 0 {
         result.push(left)
       } else {
         let pasted = pp_paste_token(left, right_tokens[0])
@@ -187,7 +233,7 @@ fn Preprocessor::substitute_macro(
       let param_index = pp_macro_param_index(macro_, tok.text)
       if param_index >= 0 {
         let arg = self.expanded_macro_argument(
-          args, param_index, file, line, depth,
+          macro_, args, param_index, disabled, file, line, depth,
         )
         for arg_tok in arg {
           result.push(arg_tok)
@@ -230,16 +276,22 @@ fn Preprocessor::expand_tokens(
         i += 1
         continue
       }
+      if tok.text == "_Pragma" &&
+        i + 1 < clean.length() &&
+        clean[i + 1].is_punct("(") {
+        i = pp_skip_parenthesized(clean, i + 1)
+        continue
+      }
       match self.macros.get(tok.text) {
         Some(macro_) =>
           if !disabled.contains(tok.text) {
             if macro_.function_like {
               if i + 1 < clean.length() && clean[i + 1].is_punct("(") {
-                match self.parse_macro_invocation(clean, i + 1) {
+                match self.parse_macro_invocation(clean, i + 1, tok.text) {
                   Some((args, end_index)) => {
                     let disabled_next = self.disabled_with(disabled, tok.text)
                     let substituted = self.substitute_macro(
-                      macro_, args, file, line, depth,
+                      macro_, args, disabled, file, line, depth,
                     )
                     let expanded = self.expand_tokens(
                       substituted,

@@ -49,6 +49,45 @@ test "stringizing and token paste" {
 }
 
 ///|
+test "variadic macros bind all remaining arguments" {
+  let source =
+    #|#define CALL(fn, ...) fn(__VA_ARGS__)
+    #|int value = CALL(add3, 1, 2, 3);
+  let text = expect_preprocess(source)
+  inspect(text, content="int value=add3(1,2,3);\n")
+}
+
+///|
+test "gnu variadic comma paste drops empty varargs comma" {
+  let source =
+    #|#define LOG(fmt, ...) log(fmt, ## __VA_ARGS__)
+    #|LOG("only")
+    #|LOG("pair", 1, 2)
+  let text = expect_preprocess(source)
+  inspect(text, content="log(\"only\")\nlog(\"pair\",1,2)\n")
+}
+
+///|
+test "nested macro argument expansion preserves outer disabled names" {
+  let source =
+    #|#define GLOBAL(t, v) v
+    #|#define vfsList GLOBAL(sqlite3_vfs *, vfsList)
+    #|int *p = vfsList;
+  let text = expect_preprocess(source)
+  inspect(text, content="int*p=vfsList;\n")
+}
+
+///|
+test "_Pragma operator is consumed during preprocessing" {
+  let source =
+    #|#define PUSH _Pragma("clang diagnostic push")
+    #|PUSH
+    #|int value = 1;
+  let text = expect_preprocess(source)
+  inspect(text, content="\nint value=1;\n")
+}
+
+///|
 test "quote include searches including directory" {
   let source =
     #|#include "local_header.h"

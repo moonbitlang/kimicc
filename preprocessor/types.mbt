@@ -86,6 +86,7 @@ fn PpToken::is_ident(self : PpToken, text : String) -> Bool {
 ///|
 priv struct Macro {
   function_like : Bool
+  variadic : Bool
   params : Array[String]
   replacement : Array[PpToken]
 }
