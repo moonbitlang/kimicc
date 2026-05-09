@@ -88,6 +88,25 @@ test "_Pragma operator is consumed during preprocessing" {
 }
 
 ///|
+test "function-like macro invocation may span newline before paren" {
+  let source =
+    #|#define AVAIL(...)
+    #|enum { VALUE AVAIL
+    #|(macos(10.14)) = 7 };
+  let text = expect_preprocess(source)
+  inspect(text, content="enum{VALUE=7};\n")
+}
+
+///|
+test "prefixed character and string literals stay single tokens" {
+  let source =
+    #|int ch = L'a';
+    #|const char *s = u8"ok";
+  let text = expect_preprocess(source)
+  inspect(text, content="int ch=L'a';\nconst char*s=u8\"ok\";\n")
+}
+
+///|
 test "quote include searches including directory" {
   let source =
     #|#include "local_header.h"
@@ -112,6 +131,46 @@ test "include paths are explicit" {
     #|int main(void) { return PATH_VALUE + SYSTEM_VALUE; }
   match @preprocessor.preprocess(source, options) {
     Ok(text) => inspect(text, content="int main(void){return 9+11;}\n")
+    Err(err) => fail(err.to_string())
+  }
+}
+
+///|
+test "include_next resumes after current include directory" {
+  let options : @preprocessor.PreprocessOptions = {
+    filename: "input.c",
+    include_paths: [],
+    system_include_paths: [
+      "preprocessor/testdata/next_first", "preprocessor/testdata/next_second",
+    ],
+    defines: {},
+    undefines: [],
+    emit_line_markers: false,
+  }
+  let source =
+    #|#include <next_value.h>
+    #|int value = NEXT_VALUE;
+  match @preprocessor.preprocess(source, options) {
+    Ok(text) => inspect(text, content="int value=123;\n")
+    Err(err) => fail(err.to_string())
+  }
+}
+
+///|
+test "guarded recursive include is ignored" {
+  let options : @preprocessor.PreprocessOptions = {
+    filename: "input.c",
+    include_paths: ["preprocessor/testdata/self_guard"],
+    system_include_paths: [],
+    defines: {},
+    undefines: [],
+    emit_line_markers: false,
+  }
+  let source =
+    #|#include "self.h"
+    #|int value = SELF_GUARD_VALUE;
+  match @preprocessor.preprocess(source, options) {
+    Ok(text) => inspect(text, content="int value=77;\n")
     Err(err) => fail(err.to_string())
   }
 }

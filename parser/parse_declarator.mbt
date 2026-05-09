@@ -435,6 +435,9 @@ fn Parser::parse_enum_type_specifier(self : Parser) -> Type {
           next_value = value + 1
           if self.token == Comma {
             self.advance()
+            if self.token == RBrace {
+              break
+            }
           }
         }
         _ => abort("Expected enum constant name")

@@ -157,6 +157,37 @@ fn pp_tokenize(input : String) -> Array[PpToken] {
         }
       }
       tokens.push(pp_token(PpWhitespace, source[start:i].to_owned()))
+    } else if ch == 'u' &&
+      i + 2 < source.length() &&
+      source[i + 1] == '8' &&
+      (source[i + 2] == '"' || source[i + 2] == '\'') {
+      let end = pp_read_quoted(source, i + 2, source[i + 2].unsafe_to_char())
+      tokens.push(
+        pp_token(
+          if source[i + 2] == '"' {
+            PpString
+          } else {
+            PpChar
+          },
+          source[i:end].to_owned(),
+        ),
+      )
+      i = end
+    } else if (ch == 'L' || ch == 'u' || ch == 'U') &&
+      i + 1 < source.length() &&
+      (source[i + 1] == '"' || source[i + 1] == '\'') {
+      let end = pp_read_quoted(source, i + 1, source[i + 1].unsafe_to_char())
+      tokens.push(
+        pp_token(
+          if source[i + 1] == '"' {
+            PpString
+          } else {
+            PpChar
+          },
+          source[i:end].to_owned(),
+        ),
+      )
+      i = end
     } else if pp_is_ident_start(ch.unsafe_to_char()) {
       let start = i
       i += 1
@@ -192,37 +223,6 @@ fn pp_tokenize(input : String) -> Array[PpToken] {
     } else if ch == '\'' {
       let end = pp_read_quoted(source, i, '\'')
       tokens.push(pp_token(PpChar, source[i:end].to_owned()))
-      i = end
-    } else if (ch == 'L' || ch == 'u' || ch == 'U') &&
-      i + 1 < source.length() &&
-      (source[i + 1] == '"' || source[i + 1] == '\'') {
-      let end = pp_read_quoted(source, i + 1, source[i + 1].unsafe_to_char())
-      tokens.push(
-        pp_token(
-          if source[i + 1] == '"' {
-            PpString
-          } else {
-            PpChar
-          },
-          source[i:end].to_owned(),
-        ),
-      )
-      i = end
-    } else if ch == 'u' &&
-      i + 2 < source.length() &&
-      source[i + 1] == '8' &&
-      (source[i + 2] == '"' || source[i + 2] == '\'') {
-      let end = pp_read_quoted(source, i + 2, source[i + 2].unsafe_to_char())
-      tokens.push(
-        pp_token(
-          if source[i + 2] == '"' {
-            PpString
-          } else {
-            PpChar
-          },
-          source[i:end].to_owned(),
-        ),
-      )
       i = end
     } else {
       let punct = pp_punct_at(source, i)

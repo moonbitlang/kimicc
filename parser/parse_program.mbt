@@ -185,6 +185,9 @@ fn Parser::parse_enum(self : Parser) -> Unit {
     next_value = value + 1
     if self.token == Comma {
       self.advance()
+      if self.token == RBrace {
+        break
+      }
     }
   }
   self.expect(RBrace)

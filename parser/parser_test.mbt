@@ -306,6 +306,17 @@ test "parse enum with values" {
 }
 
 ///|
+test "parse enum trailing comma" {
+  let source = "enum Top { TopA, TopB, }; typedef enum { LocalA = 4, LocalB, } Local; int main() { return TopB + LocalB; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound([Return(Some(Binary("+", Number(1), Number(5))))])) => ()
+    _ => fail("Expected trailing-comma enum constants")
+  }
+}
+
+///|
 test "parse for loop" {
   let source = "int main() { int s = 0; for (int i = 0; i < 3; i = i + 1) s = s + i; return s; }"
   let prog = @parser.parse(source)

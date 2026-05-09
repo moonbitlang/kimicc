@@ -301,6 +301,41 @@ fn Preprocessor::resolve_include(
 }
 
 ///|
+fn Preprocessor::resolve_include_next(
+  self : Preprocessor,
+  name : String,
+  system : Bool,
+  including_file : String,
+) -> String? {
+  let search_paths = if system {
+    self.options.system_include_paths + self.options.include_paths
+  } else {
+    self.options.include_paths + self.options.system_include_paths
+  }
+  let current_dir = pp_dirname(including_file)
+  let mut found_current = false
+  for dir in search_paths {
+    let candidate = pp_join_path(dir, name)
+    if found_current {
+      if pp_file_exists(candidate) {
+        return Some(candidate)
+      }
+    } else if candidate == including_file || dir == current_dir {
+      found_current = true
+    }
+  }
+  if !found_current {
+    for dir in search_paths {
+      let candidate = pp_join_path(dir, name)
+      if candidate != including_file && pp_file_exists(candidate) {
+        return Some(candidate)
+      }
+    }
+  }
+  None
+}
+
+///|
 fn Preprocessor::process_include(
   self : Preprocessor,
   tokens : Array[PpToken],
@@ -320,6 +355,33 @@ fn Preprocessor::process_include(
           }
         None => {
           self.set_error("include file not found: " + name)
+          ""
+        }
+      }
+    None => ""
+  }
+}
+
+///|
+fn Preprocessor::process_include_next(
+  self : Preprocessor,
+  tokens : Array[PpToken],
+  including_file : String,
+  line : Int,
+) -> String {
+  match self.parse_include_name(tokens, including_file, line) {
+    Some((name, system)) =>
+      match self.resolve_include_next(name, system, including_file) {
+        Some(path) =>
+          match pp_read_file(path) {
+            Some(content) => self.process_source(content, path)
+            None => {
+              self.set_error("cannot read include file: " + path)
+              ""
+            }
+          }
+        None => {
+          self.set_error("include_next file not found: " + name)
           ""
         }
       }
@@ -428,6 +490,10 @@ fn Preprocessor::process_directive(
         }
       }
     "include" => if active { return self.process_include(rest, file, line) }
+    "include_next" =>
+      if active {
+        return self.process_include_next(rest, file, line)
+      }
     "error" =>
       if active {
         self.set_error("#error " + pp_tokens_to_source(rest))
@@ -460,6 +526,29 @@ fn pp_is_unterminated_macro_error(error : PreprocessError?) -> Bool {
 }
 
 ///|
+fn Preprocessor::pending_ends_with_function_macro(
+  self : Preprocessor,
+  pending : Array[PpToken],
+) -> Bool {
+  let mut i = pending.length() - 1
+  while i >= 0 {
+    let tok = pending[i]
+    if tok.is_whitespace() || tok.is_newline() {
+      i -= 1
+      continue
+    }
+    if tok.kind == PpIdent {
+      match self.macros.get(tok.text) {
+        Some(macro_) => return macro_.function_like
+        None => return false
+      }
+    }
+    return false
+  }
+  false
+}
+
+///|
 fn Preprocessor::flush_pending_tokens(
   self : Preprocessor,
   pending : Array[PpToken],
@@ -470,6 +559,9 @@ fn Preprocessor::flush_pending_tokens(
 ) -> (Array[PpToken], Bool) {
   if pending.length() == 0 {
     return (pending, true)
+  }
+  if !is_final && self.pending_ends_with_function_macro(pending) {
+    return (pending, false)
   }
   let expanded = self.expand_tokens(pending, {}, file, line, 0)
   if pp_is_unterminated_macro_error(self.error) && !is_final {
@@ -492,7 +584,6 @@ fn Preprocessor::process_source(
 ) -> String {
   for active_file in self.include_stack {
     if active_file == file {
-      self.set_error("recursive include detected: " + file)
       return ""
     }
   }
