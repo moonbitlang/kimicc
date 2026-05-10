@@ -264,4 +264,6 @@ typedefs and macros from `stddef.h`, `stdint.h`, `stdalign.h`, `stdbool.h`,
 `stdarg.h`, and `limits.h`. Before compiling that probe, it also preprocesses
 the same source and checks that libc typedefs such as `uint8_t`, `uintptr_t`,
 `size_t`, `ptrdiff_t`, and `va_list` survived the Clang-resource
-`#include_next` chain.
+`#include_next` chain. The script also checks that the built compiler returns a
+nonzero status for an invalid Linux/amd64 translation unit, so compiler
+failures are not masked by the test harness.

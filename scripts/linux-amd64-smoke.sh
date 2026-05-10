@@ -46,6 +46,15 @@ if ! command -v git >/dev/null 2>&1; then
   fi
 fi
 
+if ! command -v python3 >/dev/null 2>&1; then
+  if command -v apt-get >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
+    apt_install python3
+  else
+    echo "python3 is required for the expected-failure smoke probe" >&2
+    exit 1
+  fi
+fi
+
 if ! command -v moon >/dev/null 2>&1; then
   if ! command -v curl >/dev/null 2>&1; then
     if command -v apt-get >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
@@ -78,6 +87,10 @@ source_path="/tmp/kimicc-linux-amd64-smoke.c"
 object_path="/tmp/kimicc-linux-amd64-smoke.o"
 binary_path="/tmp/kimicc-linux-amd64-smoke"
 probe_include_dir="/tmp/kimicc-linux-amd64-include"
+bad_source_path="/tmp/kimicc-linux-amd64-bad.c"
+bad_asm_path="/tmp/kimicc-linux-amd64-bad.s"
+bad_stdout_path="/tmp/kimicc-linux-amd64-bad.out"
+bad_stderr_path="/tmp/kimicc-linux-amd64-bad.err"
 old_source_path="/tmp/kimicc-linux-amd64-oldstyle.c"
 old_helper_path="/tmp/kimicc-linux-amd64-oldstyle-helper.c"
 old_object_path="/tmp/kimicc-linux-amd64-oldstyle.o"
@@ -101,6 +114,39 @@ cat > "$probe_include_dir/pragma_once_header.h" <<'H'
 #pragma once
 int pragma_once_global = 7;
 H
+
+cat > "$bad_source_path" <<'C'
+_Static_assert(0, "linux smoke expects this failure");
+int main(void) { return 0; }
+C
+rm -f "$bad_asm_path"
+set +e
+python3 - "$kimicc" "$bad_asm_path" "$bad_source_path" "$bad_stdout_path" "$bad_stderr_path" <<'PY'
+import subprocess
+import sys
+
+compiler, asm_path, source_path, stdout_path, stderr_path = sys.argv[1:]
+with open(stdout_path, "wb") as stdout, open(stderr_path, "wb") as stderr:
+    proc = subprocess.run(
+        [compiler, "-S", "-target", "linux-amd64", "-o", asm_path, source_path],
+        stdout=stdout,
+        stderr=stderr,
+    )
+code = proc.returncode
+if code < 0:
+    code = 128 + (-code)
+sys.exit(code)
+PY
+compile_status=$?
+set -e
+if [ "$compile_status" -eq 0 ]; then
+  echo "expected invalid C smoke source to fail compilation" >&2
+  exit 1
+fi
+if [ -e "$bad_asm_path" ]; then
+  echo "invalid C smoke source unexpectedly produced assembly" >&2
+  exit 1
+fi
 
 cat > "$source_path" <<'C'
 #include "pragma_once_header.h"
