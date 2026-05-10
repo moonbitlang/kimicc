@@ -1543,6 +1543,7 @@ cat > "$asm_source_path" <<'ASM'
 main:
   mov eax, 42
   ret
+.section .note.GNU-stack,"",@progbits
 ASM
 
 "$kimicc" -c -target linux-amd64 -o "$asm_object_path" "$asm_source_path"
