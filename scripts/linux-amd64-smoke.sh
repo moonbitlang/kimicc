@@ -88,6 +88,9 @@ object_path="/tmp/kimicc-linux-amd64-smoke.o"
 dependency_path="/tmp/kimicc-linux-amd64-smoke.d"
 dependency_stdout_path="/tmp/kimicc-linux-amd64-smoke-mm.out"
 binary_path="/tmp/kimicc-linux-amd64-smoke"
+multi_main_source_path="/tmp/kimicc-linux-amd64-multi-main.c"
+multi_helper_source_path="/tmp/kimicc-linux-amd64-multi-helper.c"
+multi_binary_path="/tmp/kimicc-linux-amd64-multi"
 probe_include_dir="/tmp/kimicc-linux-amd64-include"
 driver_stdout_path="/tmp/kimicc-linux-amd64-driver.out"
 driver_stderr_path="/tmp/kimicc-linux-amd64-driver.err"
@@ -1502,6 +1505,26 @@ status=$?
 set -e
 if [ "$status" -ne 42 ]; then
   echo "expected smoke binary to exit 42, got $status" >&2
+  exit 1
+fi
+
+cat > "$multi_main_source_path" <<'C'
+int helper(void);
+int main(void) { return helper() + 2; }
+C
+
+cat > "$multi_helper_source_path" <<'C'
+int helper(void) { return 40; }
+C
+
+"$kimicc" -target linux-amd64 -o "$multi_binary_path" \
+  "$multi_main_source_path" "$multi_helper_source_path"
+set +e
+"$multi_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 42 ]; then
+  echo "expected multi-source smoke binary to exit 42, got $status" >&2
   exit 1
 fi
 

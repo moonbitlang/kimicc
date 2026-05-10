@@ -180,6 +180,8 @@ the target split real and testable without claiming full C ABI coverage yet.
 - `-target linux-amd64 -c` writes assembly and delegates object assembly to
   `clang -target x86_64-linux-gnu`, producing an ELF64 relocatable object when
   the local Clang supports that target.
+- Default link mode accepts one or more C source inputs, emits temporary
+  assembly for each input, and delegates the final Linux/amd64 link to Clang.
 - Dependency flags `-M`, `-MM`, `-MD`, `-MMD`, `-MP`, `-MF`, `-MT`, and `-MQ`
   are handled by the driver using headers resolved by kimicc's preprocessor.
   Full dependency modes include system headers; `-MM` and `-MMD` keep only the
@@ -222,6 +224,9 @@ the compiler's `__builtin_va_*` lowering and is not a complete system-header
 `va_list` interoperability claim. The system-header smoke proves that common
 glibc typedefs and macros from the probed Ubuntu 24.04 headers can be
 preprocessed and compiled, but it is not a complete libc compatibility claim.
+Dependency sidecar output is still single-source oriented; multi-source link
+mode currently rejects dependency-output options rather than guessing at
+Clang-compatible sidecar naming.
 Integer constants also still use the parser's signed `Int64` representation, so
 unsigned max-value macros such as `UINTPTR_MAX` are not a reliable basis for
 `_Static_assert` comparisons yet. The existing Darwin ARM64 Mach-O object writer

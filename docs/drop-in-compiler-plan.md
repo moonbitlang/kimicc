@@ -70,8 +70,8 @@ fixtures locally. It writes `/tmp/tinycc_stripped.c` and
 Make default `kimicc input.c -o program` useful while still keeping native
 kimicc code generation auditable.
 
-- For a single C input, generate temporary assembly or an object and delegate
-  final linking to the platform toolchain.
+- For C source inputs in link mode, generate temporary assembly or objects and
+  delegate final linking to the platform toolchain.
 - Preserve linker-facing arguments such as object files, libraries, frameworks,
   and `-Wl,*`.
 - Support link-only invocations by delegating directly to `clang` when no C
