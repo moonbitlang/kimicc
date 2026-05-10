@@ -46,6 +46,7 @@ input path. `@response-file` arguments are expanded before option parsing:
 
 ```bash
 moon run cmd/main --target native -- -E -D FEATURE=1 -I include input.c
+moon run cmd/main --target native -- -E '-DADD(x,y)=((x)+(y))' input.c
 moon run cmd/main --target native -- -S input.c
 moon run cmd/main --target native -- -c input.c
 moon run cmd/main --target native -- -fsyntax-only input.c

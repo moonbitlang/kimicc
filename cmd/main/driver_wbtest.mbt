@@ -20,6 +20,23 @@ test "driver parses compile-only flags" {
 }
 
 ///|
+test "driver command-line defines support function-like and empty macros" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-DADD(x,y)=((x)+(y))", "-DEMPTY=", "-E", "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_eq(opts.defines["ADD(x,y)"], "((x)+(y))")
+  assert_eq(opts.defines["EMPTY"], "")
+  let result = preprocess_source_with_dependencies(
+    "int a = ADD(1, 2);\nint b = 3 EMPTY;\n", "foo.c", opts,
+  )
+  assert_eq(result.text, "int a=((1)+(2));\nint b=3;\n")
+}
+
+///|
 test "driver consumes ignored flags with separate values" {
   let opts = match
     parse_driver_args([

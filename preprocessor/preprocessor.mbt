@@ -52,6 +52,29 @@ fn Preprocessor::seed_macro_definition(
 }
 
 ///|
+fn pp_is_function_like_define_name(name : String) -> Bool {
+  for ch in name {
+    if ch == '(' {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn Preprocessor::seed_command_line_macro(
+  self : Preprocessor,
+  name : String,
+  replacement : String,
+) -> Unit {
+  if pp_is_function_like_define_name(name) {
+    self.seed_macro_definition(name + " " + replacement)
+  } else {
+    self.seed_macro(name, replacement)
+  }
+}
+
+///|
 fn Preprocessor::seed_common_target_macros(self : Preprocessor) -> Unit {
   self.seed_macro("__STDC__", "1")
   self.seed_macro("__STDC_VERSION__", "201112L")
@@ -212,8 +235,7 @@ fn Preprocessor::new(options : PreprocessOptions) -> Preprocessor {
   pp.seed_macro("__DATE__", pp_quote_string("May  9 2026"))
   pp.seed_macro("__TIME__", pp_quote_string("00:00:00"))
   for pair in options.defines {
-    let replacement = if pair.1 == "" { "1" } else { pair.1 }
-    pp.seed_macro(pair.0, replacement)
+    pp.seed_command_line_macro(pair.0, pair.1)
   }
   for name in options.undefines {
     pp.macros.remove(name)
