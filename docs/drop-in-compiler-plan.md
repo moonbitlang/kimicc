@@ -60,6 +60,11 @@ Current CI fixture pins:
 - QuickJS parser fixture: `d7ae12ae71dfd6ab2997527d295014a8996fa0f9`, fetched
   from `https://github.com/bellard/quickjs.git`.
 
+Use `scripts/fetch-external-parser-fixtures.sh` to reproduce the CI parser
+fixtures locally. It writes `/tmp/tinycc_stripped.c` and
+`/tmp/quickjs_preprocessed.c` by default and accepts `TINYCC_REF` and
+`QUICKJS_REF` overrides when intentionally refreshing the pins.
+
 ## Phase 3: Link Driver
 
 Make default `kimicc input.c -o program` useful while still keeping native

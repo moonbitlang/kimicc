@@ -49,34 +49,7 @@ jobs:
           fi
 
       - name: Fetch external e2e fixtures
-        run: |
-          set -euo pipefail
-          fetch_ref() {
-            local url="$1"
-            local ref="$2"
-            local dir="$3"
-            rm -rf "$dir"
-            git init "$dir"
-            git -C "$dir" remote add origin "$url"
-            git -C "$dir" fetch --depth=1 origin "$ref"
-            git -C "$dir" checkout --detach FETCH_HEAD
-            test "$(git -C "$dir" rev-parse HEAD)" = "$ref"
-          }
-
-          # tinycc preprocessed (used by test "parse tinycc stripped").
-          # configure + a partial build are required so that generated headers
-          # like tccdefs_.h exist before we preprocess tcc.c.
-          fetch_ref https://repo.or.cz/tinycc.git "$TINYCC_REF" /tmp/tinycc-src
-          (cd /tmp/tinycc-src && ./configure --cc=clang && make tccdefs_.h)
-          clang -E -P -I/tmp/tinycc-src /tmp/tinycc-src/tcc.c > /tmp/tinycc_stripped.c
-
-          # quickjs preprocessed (used by test "parse quickjs preprocessed").
-          fetch_ref https://github.com/bellard/quickjs.git "$QUICKJS_REF" /tmp/quickjs-src
-          clang -E -P -I/tmp/quickjs-src \
-            -DCONFIG_VERSION='"ci-snapshot"' \
-            /tmp/quickjs-src/quickjs.c > /tmp/quickjs_preprocessed.c
-
-          wc -l /tmp/tinycc_stripped.c /tmp/quickjs_preprocessed.c
+        run: scripts/fetch-external-parser-fixtures.sh
 
       - name: moon test
         run: moon test --target native
