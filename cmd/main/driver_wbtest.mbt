@@ -370,8 +370,7 @@ test "driver parses isystem after include path" {
 test "driver consumes unsupported include options with values" {
   let opts = match
     parse_driver_args([
-      "kimicc", "-fsyntax-only", "-iframeworkwithsysroot", "/SDK/Frameworks", "-iprefix",
-      "/tools", "-iwithprefix", "include", "-iwithprefixbefore", "quote", "-iwithsysroot",
+      "kimicc", "-fsyntax-only", "-iframeworkwithsysroot", "/SDK/Frameworks", "-iwithsysroot",
       "/usr/include", "-ivfsoverlay", "overlay.yaml", "-ivfsstatcache", "stat.cache",
       "-iapinotes-path", "api.notes", "-iapinotes-modules", "api-mods", "-index-store-path",
       "index", "-index-unit-output-path", "unit", "foo.c",
@@ -381,6 +380,30 @@ test "driver consumes unsupported include options with values" {
   }
   assert_true(opts.input_path is Some("foo.c"))
   assert_eq(opts.extra_input_paths.length(), 0)
+}
+
+///|
+test "driver applies include prefix options" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-fsyntax-only", "-iprefix", "/tools/", "-iwithprefixbefore", "include",
+      "-iwithprefix", "system", "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_eq(opts.include_paths, ["/tools/include"])
+  assert_eq(opts.system_include_paths, ["/tools/system"])
+  let attached_opts = match
+    parse_driver_args([
+      "kimicc", "-fsyntax-only", "-iprefix/opt/", "-iwithprefixbeforeheaders", "-iwithprefixsys",
+      "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_eq(attached_opts.include_paths, ["/opt/headers"])
+  assert_eq(attached_opts.system_include_paths, ["/opt/sys"])
 }
 
 ///|

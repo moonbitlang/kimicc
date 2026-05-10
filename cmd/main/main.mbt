@@ -57,6 +57,7 @@ priv struct DriverOptions {
   system_include_paths : Array[String]
   after_system_include_paths : Array[String]
   sysroot_paths : Array[String]
+  mut include_prefix : String?
   forced_includes : Array[String]
   macro_ops : Array[DriverMacroOp]
   defines : Map[String, String]
@@ -103,6 +104,7 @@ fn DriverOptions::new() -> DriverOptions {
     system_include_paths: [],
     after_system_include_paths: [],
     sysroot_paths: [],
+    include_prefix: None,
     forced_includes: [],
     macro_ops: [],
     defines: {},
@@ -264,6 +266,14 @@ fn add_resource_dir(opts : DriverOptions, path : String) -> Unit {
   opts.system_include_paths.push(path + "/include")
   opts.toolchain_args.push("-resource-dir")
   opts.toolchain_args.push(path)
+}
+
+///|
+fn prefixed_include_path(opts : DriverOptions, path : String) -> String {
+  match opts.include_prefix {
+    Some(prefix) => prefix + path
+    None => path
+  }
 }
 
 ///|
@@ -882,11 +892,8 @@ fn consume_ignored_option(
     | "-iframeworkwithsysroot"
     | "-index-store-path"
     | "-index-unit-output-path"
-    | "-iprefix"
     | "-ivfsoverlay"
     | "-ivfsstatcache"
-    | "-iwithprefix"
-    | "-iwithprefixbefore"
     | "-iwithsysroot"
     | "-meabi"
     | "-mmlir"
@@ -947,6 +954,29 @@ fn consume_ignored_option(
       } else {
         Err("missing argument after " + arg)
       }
+    "-iprefix" =>
+      if index + 1 < argv.length() {
+        opts.include_prefix = Some(argv[index + 1])
+        Ok(index + 1)
+      } else {
+        Err("missing argument after " + arg)
+      }
+    "-iwithprefixbefore" =>
+      if index + 1 < argv.length() {
+        opts.include_paths.push(prefixed_include_path(opts, argv[index + 1]))
+        Ok(index + 1)
+      } else {
+        Err("missing argument after " + arg)
+      }
+    "-iwithprefix" =>
+      if index + 1 < argv.length() {
+        opts.system_include_paths.push(
+          prefixed_include_path(opts, argv[index + 1]),
+        )
+        Ok(index + 1)
+      } else {
+        Err("missing argument after " + arg)
+      }
     "-B" =>
       if index + 1 < argv.length() {
         opts.toolchain_args.push(arg)
@@ -981,6 +1011,25 @@ fn consume_ignored_option(
       } else if starts_with(arg, "-resource-dir") &&
         arg.length() > "-resource-dir".length() {
         add_resource_dir(opts, arg["-resource-dir".length():].to_owned())
+        Ok(index)
+      } else if starts_with(arg, "-iprefix") &&
+        arg.length() > "-iprefix".length() {
+        opts.include_prefix = Some(arg["-iprefix".length():].to_owned())
+        Ok(index)
+      } else if starts_with(arg, "-iwithprefixbefore") &&
+        arg.length() > "-iwithprefixbefore".length() {
+        opts.include_paths.push(
+          prefixed_include_path(
+            opts,
+            arg["-iwithprefixbefore".length():].to_owned(),
+          ),
+        )
+        Ok(index)
+      } else if starts_with(arg, "-iwithprefix") &&
+        arg.length() > "-iwithprefix".length() {
+        opts.system_include_paths.push(
+          prefixed_include_path(opts, arg["-iwithprefix".length():].to_owned()),
+        )
         Ok(index)
       } else if starts_with(arg, "-serialize-diagnostics=") ||
         starts_with(arg, "--serialize-diagnostics=") ||
