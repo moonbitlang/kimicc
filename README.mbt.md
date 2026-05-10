@@ -81,9 +81,10 @@ rules. Headers may use `#pragma once` to suppress repeated inclusion. Use
 `-nostdinc` to disable those built-in system include paths. Clang-style feature
 probes are conservative: covered C feature probes, GNU `packed`/numeric
 `aligned` attributes, C11/GNU alignment query operators, and parser-accepted
-no-op `unused`/`fallthrough` attributes report true; unsupported
-feature/attribute/warning probes report false, and `__is_identifier(name)`
-tracks parser-recognized keywords and extension tokens. Variadic macros support
+no-op GNU diagnostic, optimization, allocation, and sanitizer attributes report
+true; unsupported feature/attribute/warning probes report false, and
+`__is_identifier(name)` tracks parser-recognized keywords and extension tokens.
+Variadic macros support
 `__VA_ARGS__`, GNU comma-paste
 elision, and `__VA_OPT__(...)`; `__COUNTER__`, `#elifdef`, and `#elifndef` are
 supported for generated/config headers. `#line` updates the logical source

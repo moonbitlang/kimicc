@@ -255,10 +255,11 @@ aggregates with unaligned fields become System V memory-class arguments and
 returns. The same unaligned-field rule is applied when a non-packed outer
 aggregate contains a packed member at an unaligned offset. Integer bit-fields
 use packed storage-unit layout for the covered cases and are lowered with
-read-modify-write updates. Parser-accepted no-op GNU `unused` and `fallthrough`
-attributes are ignored during lowering. Switch dispatch emits explicit case
-comparisons, uses the promoted control expression type, preserves default and
-fallthrough behavior, and compares 32-bit integer switches through `eax`.
+read-modify-write updates. Parser-accepted no-op GNU diagnostic, optimization,
+allocation, and sanitizer attributes are ignored during lowering. Switch
+dispatch emits explicit case comparisons, uses the promoted control expression
+type, preserves default and fallthrough behavior, and compares 32-bit integer
+switches through `eax`.
 Vector, x87/complex, vector varargs, direct ELF object emission, and Linux JIT
 loading are still future work. See
 [`docs/linux-amd64-target.md`](linux-amd64-target.md) for the current test

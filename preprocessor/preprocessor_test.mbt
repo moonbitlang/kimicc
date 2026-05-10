@@ -264,11 +264,31 @@ test "has attribute reflects supported packed layout" {
     #|#else
     #|int fallthrough_attr = 0;
     #|#endif
+    #|#if __has_attribute(noreturn) && __has_attribute(__noreturn__) && __has_attribute(noinline) && __has_attribute(__always_inline__)
+    #|int function_hint_attrs = 1;
+    #|#else
+    #|int function_hint_attrs = 0;
+    #|#endif
+    #|#if __has_attribute(format) && __has_attribute(__format__) && __has_attribute(nonnull) && __has_attribute(warn_unused_result)
+    #|int diagnostic_attrs = 1;
+    #|#else
+    #|int diagnostic_attrs = 0;
+    #|#endif
+    #|#if __has_attribute(malloc) && __has_attribute(alloc_size) && __has_attribute(alloc_align)
+    #|int allocation_attrs = 1;
+    #|#else
+    #|int allocation_attrs = 0;
+    #|#endif
+    #|#if __has_attribute(no_sanitize_thread) && __has_attribute(__no_sanitize_address__)
+    #|int sanitizer_attrs = 1;
+    #|#else
+    #|int sanitizer_attrs = 0;
+    #|#endif
   match @preprocessor.preprocess(source, linux_options) {
     Ok(text) =>
       inspect(
         text,
-        content="int packed_attr=1;\nint aligned_attr=1;\nint unused_attr=1;\nint fallthrough_attr=1;\n",
+        content="int packed_attr=1;\nint aligned_attr=1;\nint unused_attr=1;\nint fallthrough_attr=1;\nint function_hint_attrs=1;\nint diagnostic_attrs=1;\nint allocation_attrs=1;\nint sanitizer_attrs=1;\n",
       )
     Err(err) => fail(err.to_string())
   }

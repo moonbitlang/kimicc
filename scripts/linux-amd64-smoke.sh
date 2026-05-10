@@ -515,6 +515,26 @@ int target_predefines(void) {
 #else
   return 535;
 #endif
+#if __has_attribute(noreturn) && __has_attribute(__noreturn__) && __has_attribute(noinline) && __has_attribute(__always_inline__)
+  target = target + 0;
+#else
+  return 559;
+#endif
+#if __has_attribute(format) && __has_attribute(__format__) && __has_attribute(nonnull) && __has_attribute(warn_unused_result)
+  target = target + 0;
+#else
+  return 560;
+#endif
+#if __has_attribute(malloc) && __has_attribute(alloc_size) && __has_attribute(alloc_align)
+  target = target + 0;
+#else
+  return 561;
+#endif
+#if __has_attribute(no_sanitize_thread) && __has_attribute(__no_sanitize_address__)
+  target = target + 0;
+#else
+  return 562;
+#endif
 #if __has_include("probe_header.h")
   target = target + 0;
 #else
@@ -1227,8 +1247,27 @@ int gnu_classify_type_selection(void) {
   return 0;
 }
 
+__attribute__((format(printf, 1, 2)))
+int attr_printf_like(const char *fmt, ...) { return fmt[0]; }
+
+__attribute__((malloc, alloc_size(1), alloc_align(2)))
+void *attr_alloc_like(unsigned long n, unsigned long align);
+
+__attribute__((returns_nonnull, nonnull(1)))
+char *attr_identity(char *p) { return p; }
+
+__attribute__((always_inline, hot))
+static inline int attr_inline(int x) { return x + 1; }
+
+__attribute__((noinline, warn_unused_result, cold, no_sanitize_thread))
+int attr_helper(void) { return attr_printf_like("*"); }
+
 int gnu_noop_attributes(void) {
   __attribute__((unused)) int ignored = 3;
+  char buf[1];
+  if (attr_helper() != 42) return 563;
+  if (attr_identity(buf) != buf) return 564;
+  if (attr_inline(-1) != 0) return 565;
   int x = 0;
   switch (x) {
   case 0:

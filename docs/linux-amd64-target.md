@@ -16,8 +16,8 @@ the target split real and testable without claiming full C ABI coverage yet.
   supports, and false for unsupported builtin names. `__has_attribute(name)`
   reports true for GNU `packed`/`__packed__` and numeric
   `aligned`/`__aligned__` attributes, matching the layout attributes the
-  parser and backend currently honor, plus parser-accepted no-op
-  `unused`/`__unused__` and `fallthrough`/`__fallthrough__` attributes.
+  parser and backend currently honor, plus parser-accepted no-op GNU
+  diagnostic, optimization, allocation, and sanitizer attributes.
   Clang-style feature probes
   report true only for the covered `c_alignas`, `c_alignof`,
   `c_static_assert`, `c_atomic`, and `c_generic_selections` language features;
@@ -146,6 +146,12 @@ the target split real and testable without claiming full C ABI coverage yet.
   initializer for the covered scalar and pointer expression types.
 - C11 `_Alignof(type)` and GNU `alignof`/`__alignof__` type or expression
   operands are folded to the covered parser type model's alignment.
+- GNU `__has_attribute` reports true for semantic layout attributes that are
+  implemented (`packed` and numeric `aligned`) and for parser-accepted no-op
+  diagnostic, optimization, allocation, and sanitizer attributes such as
+  `format`, `nonnull`, `warn_unused_result`, `noreturn`, `noinline`,
+  `always_inline`, `cold`, `hot`, `malloc`, `alloc_size`, `alloc_align`, and
+  `no_sanitize_*`.
 - GNU `__builtin_classify_type` is folded to GCC-compatible category codes for
   covered scalar, pointer, array, string, struct, and union expressions.
 - Covered integer-width atomic builtins lower without external calls:
