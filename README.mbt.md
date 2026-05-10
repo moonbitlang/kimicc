@@ -54,6 +54,7 @@ moon run cmd/main --target native -- -S --preprocessed input.i -o out.s
 moon run cmd/main --target native -- @args.rsp
 moon run cmd/main --target native -- -dumpmachine
 moon run cmd/main --target native -- -print-target-triple
+moon run cmd/main --target native -- -print-resource-dir
 ```
 
 Object, library, shared-library, and assembly inputs are delegated to the

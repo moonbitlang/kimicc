@@ -61,6 +61,10 @@ priv struct DriverOptions {
   mut dump_machine : Bool
   mut dump_version : Bool
   mut print_target_triple : Bool
+  mut print_resource_dir : Bool
+  mut print_search_dirs : Bool
+  mut print_prog_name : String?
+  mut print_file_name : String?
 }
 
 ///|
@@ -91,6 +95,10 @@ fn DriverOptions::new() -> DriverOptions {
     dump_machine: false,
     dump_version: false,
     print_target_triple: false,
+    print_resource_dir: false,
+    print_search_dirs: false,
+    print_prog_name: None,
+    print_file_name: None,
   }
 }
 
@@ -703,6 +711,8 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
       "-dumpmachine" => opts.dump_machine = true
       "-dumpversion" => opts.dump_version = true
       "-print-target-triple" => opts.print_target_triple = true
+      "-print-resource-dir" => opts.print_resource_dir = true
+      "-print-search-dirs" => opts.print_search_dirs = true
       "-E" | "--preprocess-only" => opts.output = EmitPreprocessed
       "-S" => opts.output = EmitAssembly
       "-c" | "--compile" => opts.output = EmitObject
@@ -727,6 +737,14 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
           }
         } else if starts_with(arg, "-o") && arg.length() > 2 {
           opts.output_path = Some(arg[2:].to_owned())
+        } else if starts_with(arg, "-print-prog-name=") {
+          opts.print_prog_name = Some(
+            arg["-print-prog-name=".length():].to_owned(),
+          )
+        } else if starts_with(arg, "-print-file-name=") {
+          opts.print_file_name = Some(
+            arg["-print-file-name=".length():].to_owned(),
+          )
         } else if arg == "-fpreprocessed" {
           opts.already_preprocessed = true
         } else if apply_dependency_mode(opts, arg) {
@@ -1292,6 +1310,32 @@ fn link_args_with_inputs(
 }
 
 ///|
+fn clang_query_args(opts : DriverOptions, query : String) -> Array[String] {
+  let args : Array[String] = ["clang"]
+  match opts.target {
+    DarwinArm64 => ()
+    LinuxAmd64 => {
+      args.push("-target")
+      args.push(opts.target.triple())
+    }
+  }
+  for arg in opts.toolchain_args {
+    args.push(arg)
+  }
+  args.push(query)
+  args
+}
+
+///|
+fn run_clang_query(opts : DriverOptions, query : String) -> Unit {
+  let args = clang_query_args(opts, query)
+  let rc = moonbit_system(@utf8.encode(shell_join_quoted(args)))
+  if rc != 0 {
+    fail("clang query failed with code " + rc.to_string())
+  }
+}
+
+///|
 fn link_args(
   opts : DriverOptions,
   output_path : String,
@@ -1587,6 +1631,28 @@ fn main {
   if opts.dump_version {
     println("0.1.4")
     return
+  }
+  if opts.print_resource_dir {
+    run_clang_query(opts, "-print-resource-dir")
+    return
+  }
+  if opts.print_search_dirs {
+    run_clang_query(opts, "-print-search-dirs")
+    return
+  }
+  match opts.print_prog_name {
+    Some(name) => {
+      run_clang_query(opts, "-print-prog-name=" + name)
+      return
+    }
+    None => ()
+  }
+  match opts.print_file_name {
+    Some(name) => {
+      run_clang_query(opts, "-print-file-name=" + name)
+      return
+    }
+    None => ()
   }
   match opts.input_path {
     Some(input_path) =>

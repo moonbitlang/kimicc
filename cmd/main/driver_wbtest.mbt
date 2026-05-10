@@ -52,13 +52,21 @@ test "driver parses configure query flags" {
   let opts = match
     parse_driver_args([
       "kimicc", "-target", "linux-amd64", "-dumpmachine", "-print-target-triple",
+      "-print-resource-dir", "-print-search-dirs", "-print-prog-name=ld", "-print-file-name=crt1.o",
     ]) {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
   assert_true(opts.dump_machine)
   assert_true(opts.print_target_triple)
+  assert_true(opts.print_resource_dir)
+  assert_true(opts.print_search_dirs)
+  assert_true(opts.print_prog_name is Some("ld"))
+  assert_true(opts.print_file_name is Some("crt1.o"))
   assert_eq(opts.target.triple(), "x86_64-linux-gnu")
+  assert_eq(clang_query_args(opts, "-print-file-name=crt1.o"), [
+    "clang", "-target", "x86_64-linux-gnu", "-print-file-name=crt1.o",
+  ])
   let version_opts = match parse_driver_args(["kimicc", "-dumpversion"]) {
     Ok(opts) => opts
     Err(err) => abort(err)
