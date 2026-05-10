@@ -103,6 +103,7 @@ asm_binary_path="/tmp/kimicc-linux-amd64-asm"
 probe_include_dir="/tmp/kimicc-linux-amd64-include"
 driver_stdout_path="/tmp/kimicc-linux-amd64-driver.out"
 driver_stderr_path="/tmp/kimicc-linux-amd64-driver.err"
+driver_query_path="/tmp/kimicc-linux-amd64-driver-query.out"
 bad_source_path="/tmp/kimicc-linux-amd64-bad.c"
 bad_asm_path="/tmp/kimicc-linux-amd64-bad.s"
 bad_stdout_path="/tmp/kimicc-linux-amd64-bad.out"
@@ -148,6 +149,14 @@ if [ -s "$driver_stdout_path" ]; then
   exit 1
 fi
 grep -F 'error: no input file' "$driver_stderr_path" >/dev/null
+
+"$kimicc" -target linux-amd64 -dumpmachine >"$driver_query_path"
+grep -Fx 'x86_64-linux-gnu' "$driver_query_path" >/dev/null
+"$kimicc" -target linux-amd64 -print-multiarch >"$driver_query_path"
+grep -Fx 'x86_64-linux-gnu' "$driver_query_path" >/dev/null
+"$kimicc" -target linux-amd64 -print-multi-directory >"$driver_query_path"
+grep -Fx '.' "$driver_query_path" >/dev/null
+"$kimicc" -target linux-amd64 -print-multi-lib >"$driver_query_path"
 
 cat > "$bad_source_path" <<'C'
 _Static_assert(0, "linux smoke expects this failure");
