@@ -452,6 +452,25 @@ test "driver parses forced include spellings" {
 }
 
 ///|
+test "driver applies macro options before forced includes" {
+  let header = "/tmp/kimicc-driver-forced-include.h"
+  assert_true(
+    write_file(header, "#ifdef VALUE\nint from_header = VALUE;\n#endif\n"),
+  )
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-include", header, "-UVALUE", "-DVALUE=11", "-E", "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  let result = preprocess_source_with_dependencies(
+    "int body = VALUE;\n", "foo.c", opts,
+  )
+  assert_eq(result.text, "int from_header=11;\nint body=11;\n")
+}
+
+///|
 test "driver parses dependency-only options and filters system headers" {
   let opts = match
     parse_driver_args([
