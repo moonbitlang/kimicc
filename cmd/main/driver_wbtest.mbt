@@ -263,7 +263,11 @@ test "driver parses isystem after include path" {
   }
   assert_true(opts.input_path is Some("foo.c"))
   assert_eq(opts.extra_input_paths.length(), 0)
-  assert_eq(opts.system_include_paths, ["after-sys", "sys"])
+  assert_eq(opts.system_include_paths, ["sys"])
+  assert_eq(opts.after_system_include_paths, ["after-sys"])
+  let full_paths = full_system_include_paths(opts)
+  assert_eq(full_paths[0], "sys")
+  assert_eq(full_paths[full_paths.length() - 1], "after-sys")
   let attached_opts = match
     parse_driver_args([
       "kimicc", "-fsyntax-only", "-isystem-afterafter-attached", "foo.c",
@@ -271,7 +275,24 @@ test "driver parses isystem after include path" {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
-  assert_eq(attached_opts.system_include_paths, ["after-attached"])
+  assert_eq(attached_opts.after_system_include_paths, ["after-attached"])
+  let idir_opts = match
+    parse_driver_args([
+      "kimicc", "-fsyntax-only", "-idirafter", "after-std", "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_eq(idir_opts.after_system_include_paths, ["after-std"])
+  let xpreprocessor_opts = match
+    parse_driver_args([
+      "kimicc", "-fsyntax-only", "-Xpreprocessor", "-isystem-after", "-Xpreprocessor",
+      "after-x", "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_eq(xpreprocessor_opts.after_system_include_paths, ["after-x"])
 }
 
 ///|

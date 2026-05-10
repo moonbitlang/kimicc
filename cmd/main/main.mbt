@@ -55,6 +55,7 @@ priv struct DriverOptions {
   dependency_targets : Array[String]
   include_paths : Array[String]
   system_include_paths : Array[String]
+  after_system_include_paths : Array[String]
   sysroot_paths : Array[String]
   forced_includes : Array[String]
   macro_ops : Array[DriverMacroOp]
@@ -99,6 +100,7 @@ fn DriverOptions::new() -> DriverOptions {
     dependency_targets: [],
     include_paths: [],
     system_include_paths: [],
+    after_system_include_paths: [],
     sysroot_paths: [],
     forced_includes: [],
     macro_ops: [],
@@ -489,10 +491,29 @@ fn consume_xpreprocessor_option(
       }
       Err(err) => Err(err)
     }
+  } else if part == "-isystem-after" || starts_with(part, "-isystem-after") {
+    match
+      xpreprocessor_option_value(
+        argv, index, "-isystem-after", "-isystem-after",
+      ) {
+      Ok((value, next_i)) => {
+        opts.after_system_include_paths.push(value)
+        Ok(next_i)
+      }
+      Err(err) => Err(err)
+    }
   } else if part == "-isystem" || starts_with(part, "-isystem") {
     match xpreprocessor_option_value(argv, index, "-isystem", "-isystem") {
       Ok((value, next_i)) => {
         opts.system_include_paths.push(value)
+        Ok(next_i)
+      }
+      Err(err) => Err(err)
+    }
+  } else if part == "-idirafter" || starts_with(part, "-idirafter") {
+    match xpreprocessor_option_value(argv, index, "-idirafter", "-idirafter") {
+      Ok((value, next_i)) => {
+        opts.after_system_include_paths.push(value)
         Ok(next_i)
       }
       Err(err) => Err(err)
@@ -1128,7 +1149,7 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
         } else if arg == "-isystem-after" || starts_with(arg, "-isystem-after") {
           match option_value(argv, i, "-isystem-after", "-isystem-after") {
             Ok((value, next_i)) => {
-              opts.system_include_paths.push(value)
+              opts.after_system_include_paths.push(value)
               i = next_i
             }
             Err(err) => return Err(err)
@@ -1160,7 +1181,7 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
         } else if arg == "-idirafter" || starts_with(arg, "-idirafter") {
           match option_value(argv, i, "-idirafter", "-idirafter") {
             Ok((value, next_i)) => {
-              opts.system_include_paths.push(value)
+              opts.after_system_include_paths.push(value)
               i = next_i
             }
             Err(err) => return Err(err)
@@ -1277,6 +1298,9 @@ fn full_system_include_paths(opts : DriverOptions) -> Array[String] {
           paths.push(path)
         }
     }
+  }
+  for path in opts.after_system_include_paths {
+    paths.push(path)
   }
   paths
 }
