@@ -566,6 +566,18 @@ int scalar_conversions(void) {
   return 0;
 }
 
+int floating_inc_dec(void) {
+  double d = 1.5;
+  double old_d = d++;
+  float f = 3.5f;
+  float new_f = --f;
+  if ((int)(old_d * 10.0) != 15) return 574;
+  if ((int)(d * 10.0) != 25) return 575;
+  if ((int)(new_f * 10.0f) != 25) return 576;
+  if ((int)(f * 10.0f) != 25) return 577;
+  return 0;
+}
+
 int var_pair(int tag, ...) {
   va_list ap;
   struct Pair p;
@@ -1517,6 +1529,7 @@ int main(void) {
          bitfields() +
          unsigned_ops() +
          scalar_conversions() +
+         floating_inc_dec() +
          default_promotions() +
          target_predefines() +
          memory_builtins() +
