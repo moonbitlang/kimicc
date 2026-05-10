@@ -208,6 +208,13 @@ fn add_sysroot(opts : DriverOptions, spelling : String, path : String) -> Unit {
 }
 
 ///|
+fn add_resource_dir(opts : DriverOptions, path : String) -> Unit {
+  opts.system_include_paths.push(path + "/include")
+  opts.toolchain_args.push("-resource-dir")
+  opts.toolchain_args.push(path)
+}
+
+///|
 fn add_pthread(opts : DriverOptions) -> Unit {
   opts.linker_args.push("-pthread")
   add_define(opts, "_REENTRANT=1")
@@ -465,6 +472,13 @@ fn consume_ignored_option(
       } else {
         Err("missing argument after " + arg)
       }
+    "-resource-dir" =>
+      if index + 1 < argv.length() {
+        add_resource_dir(opts, argv[index + 1])
+        Ok(index + 1)
+      } else {
+        Err("missing argument after " + arg)
+      }
     "-target" =>
       if index + 1 < argv.length() {
         match @target.Target::parse(argv[index + 1]) {
@@ -496,6 +510,13 @@ fn consume_ignored_option(
         Ok(index)
       } else if starts_with(arg, "--sysroot=") {
         add_sysroot(opts, "--sysroot", arg["--sysroot=".length():].to_owned())
+        Ok(index)
+      } else if starts_with(arg, "-resource-dir=") {
+        add_resource_dir(opts, arg["-resource-dir=".length():].to_owned())
+        Ok(index)
+      } else if starts_with(arg, "-resource-dir") &&
+        arg.length() > "-resource-dir".length() {
+        add_resource_dir(opts, arg["-resource-dir".length():].to_owned())
         Ok(index)
       } else if starts_with(arg, "--target=") {
         let value = arg["--target=".length():].to_owned()

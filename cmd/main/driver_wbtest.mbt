@@ -83,6 +83,20 @@ test "driver forwards separated isysroot spelling" {
 }
 
 ///|
+test "driver uses resource dir for preprocessing and clang" {
+  let opts = match
+    parse_driver_args(["kimicc", "-resource-dir", "/clang/lib", "foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  let paths = full_system_include_paths(opts)
+  assert_eq(paths[0], "/clang/lib/include")
+  assert_eq(link_args(opts, "out", Some("foo.s")), [
+    "clang", "-o", "out", "-resource-dir", "/clang/lib", "foo.s",
+  ])
+}
+
+///|
 test "driver chooses compiler-style default output names" {
   let opts = DriverOptions::new()
   opts.output = EmitAssembly

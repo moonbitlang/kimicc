@@ -35,7 +35,8 @@ compile-only modes that C projects normally use.
 - Choose standard output names when `-o` is omitted: `<input>.s` for `-S`,
   `<input>.o` for `-c`, and `a.out` for link mode.
 - Add macOS system include defaults for the local Command Line Tools SDK while
-  preserving `-nostdinc` for reproducible preprocessing.
+  preserving `-nostdinc` for reproducible preprocessing, and honor explicit
+  Clang resource-directory overrides for builtin headers.
 - Keep preprocessing, parsing, assembly emission, object emission, and link
   delegation separable inside the driver.
 
