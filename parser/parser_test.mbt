@@ -1110,3 +1110,30 @@ test "parse GNU typeof comma expression uses rhs type" {
     _ => fail("Expected typeof comma expression to use right operand type")
   }
 }
+
+///|
+test "parse GNU auto type local declarations" {
+  let source =
+    #|int main(void) {
+    #|  unsigned long x = 40;
+    #|  __auto_type y = x;
+    #|  int *p;
+    #|  __auto_type q = p;
+    #|  return (int)y;
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [
+          VarDecl(ULong, "x", Some(Number(40))),
+          VarDecl(ULong, "y", Some(Var("x"))),
+          VarDecl(Pointer(SInt), "p", None),
+          VarDecl(Pointer(SInt), "q", Some(Var("p"))),
+          Return(Some(Cast(SInt, Var("y")))),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected __auto_type locals to infer initializer type")
+  }
+}

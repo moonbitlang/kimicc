@@ -147,6 +147,22 @@ async test "e2e generic selection uses comma expression result type" {
 }
 
 ///|
+async test "e2e GNU auto type locals infer scalar and pointer types" {
+  let source =
+    #|int main(void) {
+    #|  unsigned long x = 40;
+    #|  __auto_type y = x;
+    #|  int bonus = 2;
+    #|  __auto_type p = &bonus;
+    #|  int total = 0;
+    #|  for (__auto_type i = 0; i < *p; i++) total = total + 1;
+    #|  return (int)y + total;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "run logic fixture" {
   let source =
     #|int main() {

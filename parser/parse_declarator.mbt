@@ -4,6 +4,7 @@ priv struct DeclSpec {
   mut is_static : Bool
   mut is_extern : Bool
   mut is_inline : Bool
+  mut is_auto_type : Bool
   mut align : Int?
 }
 
@@ -30,6 +31,7 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     is_static: false,
     is_extern: false,
     is_inline: false,
+    is_auto_type: false,
     align: None,
   }
   spec.align = merge_align(spec.align, self.skip_attributes_align())
@@ -243,6 +245,11 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
             name == "typeof" {
             typeof_type = self.parse_typeof_specifier()
             has_typeof = true
+            saw_primitive = true
+            consumed = true
+          } else if name == "__auto_type" {
+            spec.is_auto_type = true
+            self.advance()
             saw_primitive = true
             consumed = true
           } else if name == "__uint128_t" {

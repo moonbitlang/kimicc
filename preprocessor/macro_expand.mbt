@@ -166,6 +166,7 @@ fn pp_is_identifier_query(name : String) -> Bool {
     | "__typeof"
     | "__typeof__"
     | "typeof"
+    | "__auto_type"
     | "__builtin_va_list"
     | "__int128"
     | "__int128_t"

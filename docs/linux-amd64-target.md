@@ -136,6 +136,8 @@ the target split real and testable without claiming full C ABI coverage yet.
 - GNU `typeof`, `__typeof`, and `__typeof__` type specifiers infer expression
   or type operands in the parser. Expression operands are parsed for type only
   and are not emitted or evaluated.
+- GNU `__auto_type` local declarations infer the declared type from the
+  initializer for the covered scalar and pointer expression types.
 - Covered integer-width atomic builtins lower without external calls:
   `__atomic_load`, `__atomic_load_n`, `__atomic_store`,
   `__atomic_store_n`, `__atomic_exchange`, `__atomic_exchange_n`,
@@ -177,8 +179,8 @@ compound literals, initialized global arrays/structs/unions and covered global
 bit-field storage units, global pointer/function-pointer address relocations,
 switch dispatch with fallthrough/default behavior, pointers, arrays, simple
 globals, string literals, covered C11 `_Generic` selections, GNU `typeof`
-specifiers, GNU compile-time selection builtins, and common memory, string,
-bit-manipulation, dynamic stack
+specifiers, GNU `__auto_type` locals, GNU compile-time selection builtins, and
+common memory, string, bit-manipulation, dynamic stack
 allocation, integer atomic, integer overflow-checking, fortified
 formatted-output, and floating and scalar hint/query builtins.
 

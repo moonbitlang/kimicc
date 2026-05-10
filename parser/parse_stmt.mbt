@@ -355,6 +355,7 @@ fn Parser::is_stmt_decl_start(self : Parser) -> Bool {
       name == "__typeof" ||
       name == "__typeof__" ||
       name == "typeof" ||
+      name == "__auto_type" ||
       self.typedefs.contains(name)
     _ => false
   }
@@ -432,6 +433,7 @@ fn Parser::parse_for_stmt(self : Parser) -> Stmt {
         name == "__typeof" ||
         name == "__typeof__" ||
         name == "typeof" ||
+        name == "__auto_type" ||
         self.typedefs.contains(name)
       _ => false
     }
@@ -843,6 +845,21 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
     apply_decl_align(resolve_var_type(decl), spec.align),
     post_decl_align,
   )
+  if spec.is_auto_type {
+    if spec.is_static ||
+      spec.is_extern ||
+      decl.name == "" ||
+      decl.ptr_depth != 0 {
+      abort("__auto_type requires one initialized local identifier")
+    }
+    self.expect(Assign)
+    let expr = self.parse_assign()
+    let inferred_ty = auto_decl_type(self.const_expr_type(expr))
+    let ty = apply_decl_align(inferred_ty, post_decl_align)
+    self.expect(Semicolon)
+    self.remember_value_type(decl.name, ty)
+    return VarDecl(ty, decl.name, Some(expr))
+  }
   // Local function prototype inside a function body: int foo(void);
   if decl.is_func_decl && self.token == Semicolon {
     self.expect(Semicolon)
@@ -1072,6 +1089,15 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
     stmts[0]
   } else {
     StmtList(stmts)
+  }
+}
+
+///|
+fn auto_decl_type(ty : Type) -> Type {
+  match ty {
+    Array(elem, _) => Pointer(elem)
+    Aligned(inner, _) => auto_decl_type(inner)
+    other => other
   }
 }
 

@@ -521,7 +521,7 @@ int target_predefines(void) {
 #else
   return 521;
 #endif
-#if __is_identifier(kimicc_probe_identifier) && !__is_identifier(int) && !__is_identifier(_Static_assert) && !__is_identifier(__typeof__)
+#if __is_identifier(kimicc_probe_identifier) && !__is_identifier(int) && !__is_identifier(_Static_assert) && !__is_identifier(__typeof__) && !__is_identifier(__auto_type)
   target = target + 0;
 #else
   return 522;
@@ -1185,6 +1185,16 @@ int gnu_typeof_selection(void) {
   return x + y + (int)z + (int)w == 42 ? 0 : 537;
 }
 
+int gnu_auto_type_selection(void) {
+  unsigned long x = 40;
+  __auto_type y = x;
+  int bonus = 2;
+  __auto_type p = &bonus;
+  int total = 0;
+  for (__auto_type i = 0; i < *p; i++) total = total + 1;
+  return (int)y + total == 42 ? 0 : 538;
+}
+
 int main(void) {
   struct Pair p;
   struct DPair q;
@@ -1254,6 +1264,7 @@ int main(void) {
          generic_selection() +
          compile_time_selection() +
          gnu_typeof_selection() +
+         gnu_auto_type_selection() +
          var_pair(0, make_pair(0, 1)) +
          var_dpair(0, make_dpair(0.5, 0.5)) +
          var_big(0, make_big(0, 1, 0)) +

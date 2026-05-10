@@ -238,6 +238,8 @@ association expression before backend lowering; the controlling expression is
 parsed for type selection but not emitted or evaluated.
 GNU `typeof`/`__typeof__` type specifiers are similarly resolved in the parser;
 expression operands are parsed only to infer their type.
+GNU `__auto_type` locals are resolved in the parser from their initializer type
+for covered scalar and pointer expressions.
 GNU `__builtin_choose_expr` and `__builtin_types_compatible_p` are handled the
 same way for the covered parser type model.
 `_Alignas` and numeric GNU `__attribute__((aligned(N)))` participate in x86-64
