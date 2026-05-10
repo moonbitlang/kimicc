@@ -207,7 +207,7 @@ test "linux amd64 has builtin reflects supported lowering" {
     #|#else
     #|int atomic_and_overflow = 0;
     #|#endif
-    #|#if __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p)
+    #|#if __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p) && __has_builtin(__builtin_classify_type)
     #|int compile_time_selection = 1;
     #|#else
     #|int compile_time_selection = 0;

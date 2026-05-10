@@ -242,6 +242,7 @@ GNU `__auto_type` locals are resolved in the parser from their initializer type
 for covered scalar and pointer expressions.
 GNU `__builtin_choose_expr` and `__builtin_types_compatible_p` are handled the
 same way for the covered parser type model.
+GNU `__builtin_classify_type` is also folded before backend lowering.
 `_Alignas` and numeric GNU `__attribute__((aligned(N)))` participate in x86-64
 aggregate layout, ELF global alignment, and stack-local frame realignment. GNU
 `__attribute__((packed))` participates in aggregate layout, and packed

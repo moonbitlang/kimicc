@@ -199,6 +199,7 @@ fn pp_linux_amd64_has_builtin(name : String) -> Bool {
     | "__builtin_offsetof"
     | "__builtin_choose_expr"
     | "__builtin_types_compatible_p"
+    | "__builtin_classify_type"
     | "__builtin_abs"
     | "__builtin_labs"
     | "__builtin_llabs"

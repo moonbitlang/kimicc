@@ -485,7 +485,7 @@ int target_predefines(void) {
 #else
   return 511;
 #endif
-#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_return_address) && __has_builtin(__atomic_load_n) && __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p)
+#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_return_address) && __has_builtin(__atomic_load_n) && __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p) && __has_builtin(__builtin_classify_type)
   target = target + 0;
 #else
   return 513;
@@ -1195,6 +1195,25 @@ int gnu_auto_type_selection(void) {
   return (int)y + total == 42 ? 0 : 538;
 }
 
+int gnu_classify_type_selection(void) {
+  union ClassifyBits { int i; double d; };
+  int x = 0;
+  double d = 0.0;
+  int a[2];
+  struct Pair p;
+  union ClassifyBits u;
+  if (__builtin_classify_type(x++) != 1) return 539;
+  if (x != 0) return 540;
+  if (__builtin_classify_type((_Bool)0) != 4) return 541;
+  if (__builtin_classify_type(d) != 8) return 542;
+  if (__builtin_classify_type(&x) != 5) return 543;
+  if (__builtin_classify_type(a) != 5) return 544;
+  if (__builtin_classify_type("x") != 5) return 545;
+  if (__builtin_classify_type(p) != 12) return 546;
+  if (__builtin_classify_type(u) != 13) return 547;
+  return 0;
+}
+
 int main(void) {
   struct Pair p;
   struct DPair q;
@@ -1265,6 +1284,7 @@ int main(void) {
          compile_time_selection() +
          gnu_typeof_selection() +
          gnu_auto_type_selection() +
+         gnu_classify_type_selection() +
          var_pair(0, make_pair(0, 1)) +
          var_dpair(0, make_dpair(0.5, 0.5)) +
          var_big(0, make_big(0, 1, 0)) +

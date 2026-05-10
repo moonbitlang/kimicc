@@ -1137,3 +1137,50 @@ test "parse GNU auto type local declarations" {
     _ => fail("Expected __auto_type locals to infer initializer type")
   }
 }
+
+///|
+test "parse builtin classify type folds covered categories" {
+  let source =
+    #|struct S { int x; };
+    #|union U { int x; double y; };
+    #|int main(void) {
+    #|  int x = 0;
+    #|  double d = 0.0;
+    #|  int a[2];
+    #|  struct S s;
+    #|  union U u;
+    #|  return __builtin_classify_type(x++) +
+    #|         __builtin_classify_type(d) +
+    #|         __builtin_classify_type(a) +
+    #|         __builtin_classify_type(s) +
+    #|         __builtin_classify_type(u);
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [
+          VarDecl(SInt, "x", Some(Number(0))),
+          VarDecl(Double, "d", Some(FloatLiteral(0.0))),
+          VarDecl(Array(SInt, 2), "a", None),
+          VarDecl(Struct("S"), "s", None),
+          VarDecl(Union("U"), "u", None),
+          Return(
+            Some(
+              Binary(
+                "+",
+                Binary(
+                  "+",
+                  Binary("+", Binary("+", Number(1), Number(8)), Number(5)),
+                  Number(12)
+                ),
+                Number(13)
+              )
+            )
+          ),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected __builtin_classify_type to fold covered categories")
+  }
+}

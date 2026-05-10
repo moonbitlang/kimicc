@@ -612,6 +612,40 @@ fn Parser::parse_builtin_types_compatible_p(self : Parser) -> Expr {
 }
 
 ///|
+fn classify_type_code(ty : Type) -> Int64 {
+  match generic_strip_type(ty) {
+    Atomic(inner) => classify_type_code(inner)
+    Void => 0
+    Bool => 4
+    Float | Double => 8
+    Pointer(_) | Array(_, _) | FuncPtr(_, _, _) => 5
+    Struct(_) => 12
+    Union(_) => 13
+    SChar
+    | UChar
+    | SShort
+    | UShort
+    | SInt
+    | UInt
+    | SLong
+    | ULong
+    | SLongLong
+    | ULongLong
+    | SInt128
+    | UInt128 => 1
+    Aligned(inner, _) => classify_type_code(inner)
+  }
+}
+
+///|
+fn Parser::parse_builtin_classify_type(self : Parser) -> Expr {
+  self.expect(LParen)
+  let expr = self.parse_assign()
+  self.expect(RParen)
+  Number(classify_type_code(self.const_expr_type(expr)))
+}
+
+///|
 fn Parser::parse_primary(self : Parser) -> Expr {
   match self.token {
     Number(n) => {
@@ -640,6 +674,8 @@ fn Parser::parse_primary(self : Parser) -> Expr {
           self.parse_builtin_choose_expr()
         } else if name == "__builtin_types_compatible_p" {
           self.parse_builtin_types_compatible_p()
+        } else if name == "__builtin_classify_type" {
+          self.parse_builtin_classify_type()
         } else {
           self.advance()
           if name == "__builtin_va_arg" {

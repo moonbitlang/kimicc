@@ -163,6 +163,32 @@ async test "e2e GNU auto type locals infer scalar and pointer types" {
 }
 
 ///|
+async test "e2e builtin classify type folds without evaluating operand" {
+  let source =
+    #|struct S { int x; };
+    #|union U { int x; double y; };
+    #|int main(void) {
+    #|  int x = 0;
+    #|  double d = 0.0;
+    #|  int a[2];
+    #|  struct S s;
+    #|  union U u;
+    #|  if (__builtin_classify_type(x++) != 1) return 1;
+    #|  if (x != 0) return 2;
+    #|  if (__builtin_classify_type((_Bool)0) != 4) return 3;
+    #|  if (__builtin_classify_type(d) != 8) return 4;
+    #|  if (__builtin_classify_type(&x) != 5) return 5;
+    #|  if (__builtin_classify_type(a) != 5) return 6;
+    #|  if (__builtin_classify_type("x") != 5) return 7;
+    #|  if (__builtin_classify_type(s) != 12) return 8;
+    #|  if (__builtin_classify_type(u) != 13) return 9;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "run logic fixture" {
   let source =
     #|int main() {
