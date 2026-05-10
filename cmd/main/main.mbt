@@ -74,6 +74,7 @@ priv struct DriverOptions {
   mut print_search_dirs : Bool
   mut print_sysroot : Bool
   mut print_multiarch : Bool
+  mut print_multi_directory : Bool
   mut print_libgcc_file_name : Bool
   mut print_prog_name : String?
   mut print_file_name : String?
@@ -113,6 +114,7 @@ fn DriverOptions::new() -> DriverOptions {
     print_search_dirs: false,
     print_sysroot: false,
     print_multiarch: false,
+    print_multi_directory: false,
     print_libgcc_file_name: false,
     print_prog_name: None,
     print_file_name: None,
@@ -926,6 +928,7 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
       "-print-search-dirs" => opts.print_search_dirs = true
       "-print-sysroot" => opts.print_sysroot = true
       "-print-multiarch" => opts.print_multiarch = true
+      "-print-multi-directory" => opts.print_multi_directory = true
       "-print-libgcc-file-name" => opts.print_libgcc_file_name = true
       "-E" | "--preprocess-only" => opts.output = EmitPreprocessed
       "-S" => opts.output = EmitAssembly
@@ -1938,6 +1941,10 @@ fn main {
   }
   if opts.print_multiarch {
     println(driver_multiarch(opts))
+    return
+  }
+  if opts.print_multi_directory {
+    println(".")
     return
   }
   if opts.print_libgcc_file_name {
