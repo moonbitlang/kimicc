@@ -4911,6 +4911,7 @@ fn X64Codegen::gen_inc_dec(
   delta : Int,
   postfix : Bool,
 ) -> Unit {
+  let expr_ty = self.type_of(expr)
   match self.bitfield_info(expr) {
     Some(info) => {
       self.gen_addr(expr)
@@ -4932,13 +4933,53 @@ fn X64Codegen::gen_inc_dec(
     }
     None => ()
   }
+  if x64_is_fp_type(expr_ty) {
+    let suffix = x64_fp_suffix(expr_ty)
+    self.gen_addr(expr)
+    self.emit_push_rax()
+    self.emit_load_indirect(expr_ty)
+    if postfix {
+      self.emit("\tsub\trsp, 8")
+      if x64_core_type(expr_ty) == Float {
+        self.emit("\tmovss\tDWORD PTR [rsp], xmm0")
+      } else {
+        self.emit("\tmovsd\tQWORD PTR [rsp], xmm0")
+      }
+    }
+    self.emit("\tmov\teax, 1")
+    if x64_core_type(expr_ty) == Float {
+      self.emit("\tcvtsi2ss\txmm1, rax")
+    } else {
+      self.emit("\tcvtsi2sd\txmm1, rax")
+    }
+    if delta > 0 {
+      self.emit("\tadd" + suffix + "\txmm0, xmm1")
+    } else {
+      self.emit("\tsub" + suffix + "\txmm0, xmm1")
+    }
+    if postfix {
+      self.emit("\tmov\tr10, QWORD PTR [rsp + 8]")
+    } else {
+      self.emit("\tpop\tr10")
+    }
+    self.emit_store_indirect(expr_ty)
+    if postfix {
+      if x64_core_type(expr_ty) == Float {
+        self.emit("\tmovss\txmm0, DWORD PTR [rsp]")
+      } else {
+        self.emit("\tmovsd\txmm0, QWORD PTR [rsp]")
+      }
+      self.emit("\tadd\trsp, 16")
+    }
+    return
+  }
   self.gen_addr(expr)
   self.emit_push_rax()
-  self.emit_load_indirect(self.type_of(expr))
+  self.emit_load_indirect(expr_ty)
   if postfix {
     self.emit_push_rax()
   }
-  let step = match x64_pointer_element(self.type_of(expr)) {
+  let step = match x64_pointer_element(expr_ty) {
     Some(elem) => self.type_size(elem)
     None => 1
   }
@@ -4954,7 +4995,7 @@ fn X64Codegen::gen_inc_dec(
   }
   self.emit("\tpop\tr10")
   self.emit("\tmov\trax, r11")
-  self.emit_store_indirect(self.type_of(expr))
+  self.emit_store_indirect(expr_ty)
   if postfix {
     self.emit("\tmov\trax, rdx")
   }

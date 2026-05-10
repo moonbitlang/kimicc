@@ -54,6 +54,29 @@ test "generate linux amd64 postfix increment stores new value and returns old va
 }
 
 ///|
+test "generate linux amd64 floating inc dec uses fp arithmetic" {
+  let source =
+    #|double post_double(void) {
+    #|  double x = 1.5;
+    #|  return x++;
+    #|}
+    #|float pre_float(void) {
+    #|  float x = 2;
+    #|  return --x;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(assembly.contains("addsd\txmm0, xmm1"), content="true")
+  inspect(assembly.contains("subss\txmm0, xmm1"), content="true")
+  inspect(assembly.contains("movsd\tQWORD PTR [rsp], xmm0"), content="true")
+  inspect(assembly.contains("movsd\txmm0, QWORD PTR [rsp]"), content="true")
+}
+
+///|
 test "generate linux amd64 double params and arithmetic" {
   let source = "double add(double a, double b) { return a + b; }"
   let prog = @parser.parse(source)
