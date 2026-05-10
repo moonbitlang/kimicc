@@ -182,6 +182,8 @@ the target split real and testable without claiming full C ABI coverage yet.
   the local Clang supports that target.
 - Default link mode accepts one or more C source inputs, emits temporary
   assembly for each input, and delegates the final Linux/amd64 link to Clang.
+- `--sysroot` and `-isysroot` add target-specific system include roots for
+  preprocessing and are forwarded to Clang for object assembly and linking.
 - Dependency flags `-M`, `-MM`, `-MD`, `-MMD`, `-MP`, `-MF`, `-MT`, and `-MQ`
   are handled by the driver using headers resolved by kimicc's preprocessor.
   Full dependency modes include system headers; `-MM` and `-MMD` keep only the

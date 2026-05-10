@@ -50,6 +50,39 @@ test "linux amd64 include paths keep clang fallbacks after libc" {
 }
 
 ///|
+test "driver forwards linux sysroot to includes and clang" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-target", "linux-amd64", "--sysroot=/opt/sysroot", "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_eq(opts.toolchain_args.length(), 1)
+  assert_eq(opts.toolchain_args[0], "--sysroot=/opt/sysroot")
+  let paths = full_system_include_paths(opts)
+  assert_eq(paths[0], "/opt/sysroot/usr/include/x86_64-linux-gnu")
+  assert_eq(paths[1], "/opt/sysroot/usr/include")
+  assert_eq(link_args(opts, "out", Some("foo.s")), [
+    "clang", "-o", "out", "-target", "x86_64-linux-gnu", "--sysroot=/opt/sysroot",
+    "foo.s",
+  ])
+}
+
+///|
+test "driver forwards separated isysroot spelling" {
+  let opts = match parse_driver_args(["kimicc", "-isysroot", "/SDK", "foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_eq(opts.toolchain_args.length(), 2)
+  assert_eq(opts.toolchain_args[0], "-isysroot")
+  assert_eq(opts.toolchain_args[1], "/SDK")
+  let paths = full_system_include_paths(opts)
+  assert_eq(paths[0], "/SDK/usr/include")
+}
+
+///|
 test "driver chooses compiler-style default output names" {
   let opts = DriverOptions::new()
   opts.output = EmitAssembly

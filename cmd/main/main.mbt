@@ -48,10 +48,12 @@ priv struct DriverOptions {
   dependency_targets : Array[String]
   include_paths : Array[String]
   system_include_paths : Array[String]
+  sysroot_paths : Array[String]
   forced_includes : Array[String]
   defines : Map[String, String]
   undefines : Array[String]
   linker_args : Array[String]
+  toolchain_args : Array[String]
   mut already_preprocessed : Bool
   mut no_standard_includes : Bool
   mut show_help : Bool
@@ -73,10 +75,12 @@ fn DriverOptions::new() -> DriverOptions {
     dependency_targets: [],
     include_paths: [],
     system_include_paths: [],
+    sysroot_paths: [],
     forced_includes: [],
     defines: {},
     undefines: [],
     linker_args: [],
+    toolchain_args: [],
     already_preprocessed: false,
     no_standard_includes: false,
     show_help: false,
@@ -189,6 +193,17 @@ fn add_define(opts : DriverOptions, raw : String) -> Unit {
   let (name, value) = split_define_arg(raw)
   if name != "" {
     opts.defines[name] = value
+  }
+}
+
+///|
+fn add_sysroot(opts : DriverOptions, spelling : String, path : String) -> Unit {
+  opts.sysroot_paths.push(path)
+  if spelling == "--sysroot" {
+    opts.toolchain_args.push("--sysroot=" + path)
+  } else {
+    opts.toolchain_args.push(spelling)
+    opts.toolchain_args.push(path)
   }
 }
 
@@ -374,7 +389,7 @@ fn consume_ignored_option(
       }
     "-isysroot" | "--sysroot" =>
       if index + 1 < argv.length() {
-        opts.system_include_paths.push(argv[index + 1] + "/usr/include")
+        add_sysroot(opts, arg, argv[index + 1])
         Ok(index + 1)
       } else {
         Err("missing argument after " + arg)
@@ -387,14 +402,10 @@ fn consume_ignored_option(
       }
     _ =>
       if starts_with(arg, "-isysroot") && arg.length() > "-isysroot".length() {
-        opts.system_include_paths.push(
-          arg["-isysroot".length():].to_owned() + "/usr/include",
-        )
+        add_sysroot(opts, "-isysroot", arg["-isysroot".length():].to_owned())
         Ok(index)
       } else if starts_with(arg, "--sysroot=") {
-        opts.system_include_paths.push(
-          arg["--sysroot=".length():].to_owned() + "/usr/include",
-        )
+        add_sysroot(opts, "--sysroot", arg["--sysroot=".length():].to_owned())
         Ok(index)
       } else if starts_with(arg, "--target=") {
         let value = arg["--target=".length():].to_owned()
@@ -695,6 +706,15 @@ fn full_system_include_paths(opts : DriverOptions) -> Array[String] {
   let paths : Array[String] = []
   for path in opts.system_include_paths {
     paths.push(path)
+  }
+  for sysroot in opts.sysroot_paths {
+    match opts.target {
+      DarwinArm64 => paths.push(sysroot + "/usr/include")
+      LinuxAmd64 => {
+        paths.push(sysroot + "/usr/include/x86_64-linux-gnu")
+        paths.push(sysroot + "/usr/include")
+      }
+    }
   }
   if !opts.no_standard_includes {
     match opts.target {
@@ -1066,6 +1086,9 @@ fn link_args_with_inputs(
       args.push(opts.target.triple())
     }
   }
+  for arg in opts.toolchain_args {
+    args.push(arg)
+  }
   for path in primary_inputs {
     args.push(path)
   }
@@ -1128,6 +1151,9 @@ fn assemble_with_clang(
       args.push("-target")
       args.push(opts.target.triple())
     }
+  }
+  for arg in opts.toolchain_args {
+    args.push(arg)
   }
   args.push("-c")
   args.push(asm_path)
