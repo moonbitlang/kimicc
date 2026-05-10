@@ -65,6 +65,9 @@ Object, library, shared-library, and assembly inputs are delegated to the
 platform toolchain for link-only flows. Compile-only assembly inputs are
 delegated to `clang -c`. Use `-x c` for extensionless C inputs and `-x none`
 before returning to extension-based input classification.
+Compile-style modes such as `-S`, `-c`, `-E`, `-M`/`-MM`, and
+`-fsyntax-only` accept multiple C sources when kimicc can choose per-input
+outputs; single-output forms such as `-c -o one.o a.c b.c` are rejected.
 
 Dependency flags `-M`, `-MM`, `-MD`, `-MMD`, `-MP`, `-MF`, `-MT`, and `-MQ`
 are accepted. `-M`/`-MD` include system headers in generated Makefile rules,
@@ -72,6 +75,8 @@ while `-MM`/`-MMD` keep only the main source and user headers resolved by
 kimicc's preprocessor. Repeated `-MT`/`-MQ` options add multiple rule targets;
 `-MF -` writes the dependency rule to stdout. In dependency-only `-M`/`-MM`
 mode, `-o PATH` is accepted as a dependency output path when `-MF` is absent.
+For multiple compile-style inputs, dependency sidecars are per-input when
+`-MF` is omitted; a single `-MF` path with multiple outputs is rejected.
 In multi-source link mode, `-MD`/`-MMD` emit one dependency sidecar for the
 linked output target using the union of dependencies from the compiled C inputs.
 The driver also recognizes dependency and simple macro options tunneled through

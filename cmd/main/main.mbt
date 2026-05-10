@@ -573,13 +573,15 @@ fn add_positional(opts : DriverOptions, value : String) -> Result[Unit, String] 
           (is_linker_input(value) && !treats_as_c_source(opts, value))
         ) {
         opts.linker_args.push(value)
-      } else if opts.output == LinkExecutable && treats_as_c_source(opts, value) {
+      } else if treats_as_c_source(opts, value) {
         opts.extra_input_paths.push(value)
       } else if opts.output == LinkExecutable &&
         !treats_as_c_source(opts, value) {
         opts.linker_args.push(value)
       } else {
-        return Err("multiple C source inputs are not supported yet: " + value)
+        return Err(
+          "multiple input files are not supported for this mode: " + value,
+        )
       }
   }
   Ok(())
@@ -879,7 +881,15 @@ fn consume_linker_option(
 ///|
 fn validate_driver_options(opts : DriverOptions) -> Result[Unit, String] {
   if opts.output != LinkExecutable && opts.extra_input_paths.length() > 0 {
-    Err("multiple C source inputs are only supported when linking")
+    match opts.output_path {
+      Some(_) => Err("cannot specify -o when generating multiple output files")
+      None =>
+        if opts.emit_dependencies && opts.dependency_output_path is Some(_) {
+          Err("cannot specify -MF with multiple input files")
+        } else {
+          Ok(())
+        }
+    }
   } else {
     Ok(())
   }
@@ -1745,6 +1755,14 @@ fn compile_link_inputs(opts : DriverOptions, input_path : String) -> Unit {
 }
 
 ///|
+fn compile_multiple_inputs(opts : DriverOptions, input_path : String) -> Unit {
+  compile_input(opts, input_path)
+  for path in opts.extra_input_paths {
+    compile_input(opts, path)
+  }
+}
+
+///|
 fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
   let source = match read_file(input_path) {
     Some(content) => content
@@ -1942,8 +1960,12 @@ fn main {
   }
   match opts.input_path {
     Some(input_path) =>
-      if opts.output == LinkExecutable && opts.extra_input_paths.length() > 0 {
-        compile_link_inputs(opts, input_path)
+      if opts.extra_input_paths.length() > 0 {
+        if opts.output == LinkExecutable {
+          compile_link_inputs(opts, input_path)
+        } else {
+          compile_multiple_inputs(opts, input_path)
+        }
       } else {
         compile_input(opts, input_path)
       }

@@ -180,8 +180,11 @@ the target split real and testable without claiming full C ABI coverage yet.
 - `-target linux-amd64 -c` writes assembly and delegates object assembly to
   `clang -target x86_64-linux-gnu`, producing an ELF64 relocatable object when
   the local Clang supports that target.
-- Default link mode accepts one or more C source inputs, emits temporary
-  assembly for each input, and delegates the final Linux/amd64 link to Clang.
+- Compile-style modes such as `-S`, `-c`, `-E`, `-M`/`-MM`, and
+  `-fsyntax-only` accept multiple C sources when kimicc can choose per-input
+  outputs. Default link mode accepts one or more C source inputs, emits
+  temporary assembly for each input, and delegates the final Linux/amd64 link to
+  Clang.
 - `--sysroot` and `-isysroot` add target-specific system include roots for
   preprocessing and are forwarded to Clang for object assembly and linking.
 - Dependency flags `-M`, `-MM`, `-MD`, `-MMD`, `-MP`, `-MF`, `-MT`, and `-MQ`
@@ -190,6 +193,8 @@ the target split real and testable without claiming full C ABI coverage yet.
   main source and user headers. Repeated `-MT`/`-MQ` options add multiple rule
   targets, `-MF -` writes the dependency rule to stdout, and dependency-only
   `-o PATH` is treated as a dependency output path when `-MF` is absent.
+  Multiple compile-style inputs emit per-input dependency sidecars when `-MF`
+  is omitted; a single `-MF` path with multiple outputs is rejected.
   Multi-source link mode with `-MD`/`-MMD` emits one dependency sidecar for the
   linked output target using the union of dependencies from all compiled C
   inputs.

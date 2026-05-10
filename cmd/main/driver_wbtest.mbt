@@ -417,11 +417,47 @@ test "driver expands nested response files" {
 }
 
 ///|
-test "driver rejects multiple C sources outside link mode" {
-  match parse_driver_args(["kimicc", "main.c", "helper.c", "-c"]) {
-    Ok(_) => abort("expected multiple compile-only sources to fail")
+test "driver accepts multiple C sources in compile-only modes" {
+  let opts = match parse_driver_args(["kimicc", "main.c", "helper.c", "-c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.output == EmitObject)
+  assert_true(opts.input_path is Some("main.c"))
+  assert_eq(opts.extra_input_paths, ["helper.c"])
+  assert_eq(default_output_path(opts, "main.c"), "main.o")
+  assert_eq(default_output_path(opts, "helper.c"), "helper.o")
+
+  let asm_opts = match
+    parse_driver_args(["kimicc", "-S", "main.c", "helper.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(asm_opts.output == EmitAssembly)
+  assert_true(asm_opts.input_path is Some("main.c"))
+  assert_eq(asm_opts.extra_input_paths, ["helper.c"])
+  assert_eq(default_output_path(asm_opts, "main.c"), "main.s")
+  assert_eq(default_output_path(asm_opts, "helper.c"), "helper.s")
+}
+
+///|
+test "driver rejects single output path with multiple compile inputs" {
+  match
+    parse_driver_args(["kimicc", "main.c", "helper.c", "-c", "-o", "out.o"]) {
+    Ok(_) => abort("expected multiple compile-only sources with -o to fail")
     Err(err) =>
-      assert_eq(err, "multiple C source inputs are only supported when linking")
+      assert_eq(err, "cannot specify -o when generating multiple output files")
+  }
+}
+
+///|
+test "driver rejects single dependency path with multiple compile inputs" {
+  match
+    parse_driver_args([
+      "kimicc", "main.c", "helper.c", "-c", "-MMD", "-MF", "deps.d",
+    ]) {
+    Ok(_) => abort("expected multiple compile-only sources with -MF to fail")
+    Err(err) => assert_eq(err, "cannot specify -MF with multiple input files")
   }
 }
 
