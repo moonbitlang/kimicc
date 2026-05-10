@@ -1034,6 +1034,24 @@ test "parse static assertions at declaration scopes" {
 }
 
 ///|
+test "parse static assertions compare unsigned constant values" {
+  let source =
+    #|_Static_assert(18446744073709551615UL > 9223372036854775807L, "uint64 max");
+    #|_Static_assert((unsigned long)-1 > 0, "unsigned long max");
+    #|_Static_assert((unsigned int)-1 == 4294967295U, "unsigned int max");
+    #|_Static_assert((int)4294967295U == -1, "signed cast");
+    #|_Static_assert((unsigned int)-1 == -1, "usual equality conversion");
+    #|_Static_assert((unsigned int)-1 + 1U == 0, "unsigned wrap");
+    #|_Static_assert((unsigned int)-1 >> 31 == 1, "unsigned shift");
+    #|_Static_assert((long)-1 < (unsigned int)1, "lp64 signed compare");
+    #|int main(void) {
+    #|  return 0;
+    #|}
+  let prog = @parser.parse(source)
+  inspect(prog.decls.length(), content="1")
+}
+
+///|
 test "parse builtin 128-bit declarations in block scope" {
   let source =
     #|int main(void) {

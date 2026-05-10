@@ -236,10 +236,7 @@ the compiler's `__builtin_va_*` lowering and is not a complete system-header
 `va_list` interoperability claim. The system-header smoke proves that common
 glibc typedefs and macros from the probed Ubuntu 24.04 headers can be
 preprocessed and compiled, but it is not a complete libc compatibility claim.
-Integer constants also still use the parser's signed `Int64` representation, so
-unsigned max-value macros such as `UINTPTR_MAX` are not a reliable basis for
-`_Static_assert` comparisons yet. The existing Darwin ARM64 Mach-O object writer
-and JIT remain Darwin-specific.
+The existing Darwin ARM64 Mach-O object writer and JIT remain Darwin-specific.
 
 ## Local Smoke Test On ARM64 macOS
 
@@ -291,6 +288,8 @@ typedefs and macros from `stddef.h`, `stdint.h`, `stdalign.h`, `stdbool.h`,
 `stdarg.h`, `limits.h`, and `float.h`. Before compiling that probe, it also
 preprocesses the same source and checks that libc typedefs such as `uint8_t`,
 `uintptr_t`, `size_t`, `ptrdiff_t`, and `va_list` survived the Clang-resource
-`#include_next` chain. The script also checks that the built compiler returns a
-nonzero status for an invalid Linux/amd64 translation unit, so compiler
-failures are not masked by the test harness.
+`#include_next` chain. The compiled probe also checks representative unsigned
+max-value macros such as `UINTPTR_MAX` and `SIZE_MAX` in `_Static_assert`
+expressions. The script also checks that the built compiler returns a nonzero
+status for an invalid Linux/amd64 translation unit, so compiler failures are
+not masked by the test harness.

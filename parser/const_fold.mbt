@@ -135,139 +135,471 @@ pub fn fold_const(expr : Expr) -> Int64? {
 }
 
 ///|
-fn Parser::fold_const(self : Parser, expr : Expr) -> Int64? {
+priv struct ConstIntValue {
+  bits : Int64
+  ty : Type
+}
+
+///|
+fn const_int(bits : Int64, ty : Type) -> ConstIntValue {
+  { bits, ty }
+}
+
+///|
+fn const_bool(value : Bool) -> ConstIntValue {
+  { bits: if value { 1L } else { 0L }, ty: SInt }
+}
+
+///|
+fn const_type_core(ty : Type) -> Type {
+  match ty {
+    Atomic(inner) | Aligned(inner, _) => const_type_core(inner)
+    _ => ty
+  }
+}
+
+///|
+fn const_number_type(bits : Int64) -> Type {
+  if bits < 0L {
+    ULongLong
+  } else if bits > 2147483647L {
+    SLongLong
+  } else {
+    SInt
+  }
+}
+
+///|
+fn const_type_is_integer(ty : Type) -> Bool {
+  match const_type_core(ty) {
+    Bool
+    | SChar
+    | UChar
+    | SShort
+    | UShort
+    | SInt
+    | UInt
+    | SLong
+    | ULong
+    | SLongLong
+    | ULongLong
+    | SInt128
+    | UInt128 => true
+    _ => false
+  }
+}
+
+///|
+fn const_type_is_unsigned(ty : Type) -> Bool {
+  match const_type_core(ty) {
+    Bool | UChar | UShort | UInt | ULong | ULongLong | UInt128 => true
+    _ => false
+  }
+}
+
+///|
+fn const_type_int_width(ty : Type) -> Int? {
+  match const_type_core(ty) {
+    Bool => Some(1)
+    SChar | UChar => Some(8)
+    SShort | UShort => Some(16)
+    SInt | UInt => Some(32)
+    SLong | ULong | SLongLong | ULongLong | Pointer(_) => Some(64)
+    SInt128 | UInt128 => Some(128)
+    _ => None
+  }
+}
+
+///|
+fn const_type_int_rank(ty : Type) -> Int {
+  match const_type_core(ty) {
+    Bool | SChar | UChar => 1
+    SShort | UShort => 2
+    SInt | UInt => 3
+    SLong | ULong => 4
+    SLongLong | ULongLong => 5
+    SInt128 | UInt128 => 6
+    _ => 0
+  }
+}
+
+///|
+fn const_unsigned_type_for_rank(rank : Int) -> Type {
+  if rank >= 6 {
+    UInt128
+  } else if rank == 5 {
+    ULongLong
+  } else if rank == 4 {
+    ULong
+  } else {
+    UInt
+  }
+}
+
+///|
+fn const_signed_type_for_rank(rank : Int) -> Type {
+  if rank >= 6 {
+    SInt128
+  } else if rank == 5 {
+    SLongLong
+  } else if rank == 4 {
+    SLong
+  } else {
+    SInt
+  }
+}
+
+///|
+fn const_integer_promote(ty : Type) -> Type {
+  match const_type_core(ty) {
+    Bool | SChar | UChar | SShort | UShort => SInt
+    other => other
+  }
+}
+
+///|
+fn const_integer_common_type(left_ty : Type, right_ty : Type) -> Type {
+  let lhs_ty = const_integer_promote(left_ty)
+  let rhs_ty = const_integer_promote(right_ty)
+  if lhs_ty == rhs_ty {
+    return lhs_ty
+  }
+  if !const_type_is_integer(lhs_ty) || !const_type_is_integer(rhs_ty) {
+    return lhs_ty
+  }
+  let lhs_unsigned = const_type_is_unsigned(lhs_ty)
+  let rhs_unsigned = const_type_is_unsigned(rhs_ty)
+  let lhs_rank = const_type_int_rank(lhs_ty)
+  let rhs_rank = const_type_int_rank(rhs_ty)
+  if lhs_unsigned == rhs_unsigned {
+    let rank = if lhs_rank > rhs_rank { lhs_rank } else { rhs_rank }
+    if lhs_unsigned {
+      const_unsigned_type_for_rank(rank)
+    } else {
+      const_signed_type_for_rank(rank)
+    }
+  } else {
+    let unsigned_ty = if lhs_unsigned { lhs_ty } else { rhs_ty }
+    let signed_ty = if lhs_unsigned { rhs_ty } else { lhs_ty }
+    let unsigned_rank = const_type_int_rank(unsigned_ty)
+    let signed_rank = const_type_int_rank(signed_ty)
+    let unsigned_width = const_type_int_width(unsigned_ty).unwrap_or(0)
+    let signed_width = const_type_int_width(signed_ty).unwrap_or(0)
+    if unsigned_rank >= signed_rank {
+      unsigned_ty
+    } else if signed_width > unsigned_width {
+      signed_ty
+    } else {
+      const_unsigned_type_for_rank(signed_rank)
+    }
+  }
+}
+
+///|
+fn const_cast_int(value : ConstIntValue, ty : Type) -> ConstIntValue {
+  let core_ty = const_type_core(ty)
+  let unsigned = const_type_is_unsigned(core_ty)
+  match const_type_int_width(ty) {
+    None => const_int(value.bits, core_ty)
+    Some(1) => const_int(if value.bits == 0L { 0L } else { 1L }, core_ty)
+    Some(width) =>
+      if width >= 64 {
+        const_int(value.bits, core_ty)
+      } else {
+        let mask = (1L << width) - 1L
+        let bits = value.bits & mask
+        if unsigned {
+          const_int(bits, core_ty)
+        } else {
+          let sign = 1L << (width - 1)
+          if (bits & sign) != 0L {
+            const_int(bits | mask.lnot(), core_ty)
+          } else {
+            const_int(bits, core_ty)
+          }
+        }
+      }
+  }
+}
+
+///|
+fn const_apply_binary_type(
+  left : ConstIntValue,
+  right : ConstIntValue,
+) -> (ConstIntValue, ConstIntValue, Type) {
+  let ty = const_integer_common_type(left.ty, right.ty)
+  (const_cast_int(left, ty), const_cast_int(right, ty), ty)
+}
+
+///|
+fn const_binary_arith(
+  op : String,
+  left : ConstIntValue,
+  right : ConstIntValue,
+) -> ConstIntValue? {
+  let (x, y, ty) = const_apply_binary_type(left, right)
+  let bits = match op {
+    "+" => x.bits + y.bits
+    "-" => x.bits - y.bits
+    "*" => x.bits * y.bits
+    "|" => x.bits | y.bits
+    "&" => x.bits & y.bits
+    "^" => x.bits ^ y.bits
+    _ => return None
+  }
+  Some(const_cast_int(const_int(bits, ty), ty))
+}
+
+///|
+fn const_equal_compare(left : ConstIntValue, right : ConstIntValue) -> Bool {
+  let (x, y, _) = const_apply_binary_type(left, right)
+  x.bits == y.bits
+}
+
+///|
+fn const_rel_compare(
+  op : String,
+  left : ConstIntValue,
+  right : ConstIntValue,
+) -> Bool {
+  let (left, right, ty) = const_apply_binary_type(left, right)
+  if const_type_is_unsigned(ty) {
+    let x = left.bits.reinterpret_as_uint64()
+    let y = right.bits.reinterpret_as_uint64()
+    match op {
+      "<" => x < y
+      ">" => x > y
+      "<=" => x <= y
+      ">=" => x >= y
+      _ => false
+    }
+  } else {
+    match op {
+      "<" => left.bits < right.bits
+      ">" => left.bits > right.bits
+      "<=" => left.bits <= right.bits
+      ">=" => left.bits >= right.bits
+      _ => false
+    }
+  }
+}
+
+///|
+fn const_divide(
+  op : String,
+  left : ConstIntValue,
+  right : ConstIntValue,
+) -> ConstIntValue? {
+  let (left, right, ty) = const_apply_binary_type(left, right)
+  if right.bits == 0L {
+    return None
+  }
+  if const_type_is_unsigned(ty) {
+    let x = left.bits.reinterpret_as_uint64()
+    let y = right.bits.reinterpret_as_uint64()
+    let result = if op == "/" { x / y } else { x % y }
+    Some(const_cast_int(const_int(result.reinterpret_as_int64(), ty), ty))
+  } else {
+    let result = if op == "/" {
+      left.bits / right.bits
+    } else {
+      left.bits % right.bits
+    }
+    Some(const_cast_int(const_int(result, ty), ty))
+  }
+}
+
+///|
+fn const_shift(
+  op : String,
+  left : ConstIntValue,
+  right : ConstIntValue,
+) -> ConstIntValue? {
+  let lhs_ty = const_integer_promote(left.ty)
+  let x = const_cast_int(left, lhs_ty)
+  let y = const_cast_int(right, const_integer_promote(right.ty))
+  let shift = y.bits.to_int()
+  if op == "<<" {
+    Some(const_cast_int(const_int(x.bits << shift, lhs_ty), lhs_ty))
+  } else if const_type_is_unsigned(lhs_ty) {
+    Some(
+      const_cast_int(
+        const_int(
+          (x.bits.reinterpret_as_uint64() >> shift).reinterpret_as_int64(),
+          lhs_ty,
+        ),
+        lhs_ty,
+      ),
+    )
+  } else {
+    Some(const_cast_int(const_int(x.bits >> shift, lhs_ty), lhs_ty))
+  }
+}
+
+///|
+fn Parser::fold_const_int(self : Parser, expr : Expr) -> ConstIntValue? {
   match expr {
-    Number(n) => Some(n)
+    Number(n) =>
+      Some(
+        const_cast_int(const_int(n, const_number_type(n)), const_number_type(n)),
+      )
     Binary("+", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x + y)
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => const_binary_arith("+", x, y)
         _ => None
       }
     Binary("-", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x - y)
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => const_binary_arith("-", x, y)
         _ => None
       }
     Binary("*", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x * y)
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => const_binary_arith("*", x, y)
         _ => None
       }
     Binary("/", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => if y != 0 { Some(x / y) } else { None }
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => const_divide("/", x, y)
         _ => None
       }
     Binary("%", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => if y != 0 { Some(x % y) } else { None }
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => const_divide("%", x, y)
         _ => None
       }
     Binary("|", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x | y)
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => const_binary_arith("|", x, y)
         _ => None
       }
     Binary("&", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x & y)
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => const_binary_arith("&", x, y)
         _ => None
       }
     Binary("^", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x ^ y)
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => const_binary_arith("^", x, y)
         _ => None
       }
     Binary("<<", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x << y.to_int())
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => const_shift("<<", x, y)
         _ => None
       }
     Binary(">>", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x >> y.to_int())
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => const_shift(">>", x, y)
         _ => None
       }
     Binary("==", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x == y { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => Some(const_bool(const_equal_compare(x, y)))
         _ => None
       }
     Binary("!=", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x != y { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => Some(const_bool(!const_equal_compare(x, y)))
         _ => None
       }
     Binary("<", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x < y { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => Some(const_bool(const_rel_compare("<", x, y)))
         _ => None
       }
     Binary(">", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x > y { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => Some(const_bool(const_rel_compare(">", x, y)))
         _ => None
       }
     Binary("<=", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x <= y { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => Some(const_bool(const_rel_compare("<=", x, y)))
         _ => None
       }
     Binary(">=", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x >= y { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => Some(const_bool(const_rel_compare(">=", x, y)))
         _ => None
       }
     Binary("&&", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x != 0L && y != 0L { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => Some(const_bool(x.bits != 0L && y.bits != 0L))
         _ => None
       }
     Binary("||", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x != 0L || y != 0L { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => Some(const_bool(x.bits != 0L || y.bits != 0L))
         _ => None
       }
     Ternary(cond, a, b) =>
-      match self.fold_const(cond) {
-        Some(0L) => self.fold_const(b)
-        Some(_) => self.fold_const(a)
+      match self.fold_const_int(cond) {
+        Some({ bits: 0L, .. }) => self.fold_const_int(b)
+        Some(_) => self.fold_const_int(a)
         None => None
       }
     Unary("-", e) =>
-      match self.fold_const(e) {
-        Some(x) => Some(-x)
+      match self.fold_const_int(e) {
+        Some(x) => {
+          let ty = const_integer_promote(x.ty)
+          Some(const_cast_int(const_int(-x.bits, ty), ty))
+        }
         _ => None
       }
     Unary("~", e) =>
-      match self.fold_const(e) {
-        Some(x) => Some(x.lnot())
+      match self.fold_const_int(e) {
+        Some(x) => {
+          let ty = const_integer_promote(x.ty)
+          Some(const_cast_int(const_int(x.bits.lnot(), ty), ty))
+        }
         _ => None
       }
     Unary("!", e) =>
-      match self.fold_const(e) {
-        Some(0L) => Some(1L)
-        Some(_) => Some(0L)
+      match self.fold_const_int(e) {
+        Some(x) => Some(const_bool(x.bits == 0L))
         _ => None
       }
-    Cast(_, e) => self.fold_const(e)
-    Sizeof(ty) => Some(self.const_type_size(ty).to_int64())
-    SizeofExpr(e) =>
-      Some(self.const_type_size(self.const_expr_type(e)).to_int64())
-    Alignof(ty) => Some(self.const_type_align(ty).to_int64())
-    AlignofExpr(e) =>
-      Some(self.const_type_align(self.const_expr_type(e)).to_int64())
-    OffsetOf(ty, path) =>
-      match self.const_offset_of(ty, path) {
-        Some(offset) => Some(offset.to_int64())
+    Cast(ty, e) =>
+      match self.fold_const_int(e) {
+        Some(value) => Some(const_cast_int(value, ty))
         None => None
       }
-    DesignatedField(_, e) => self.fold_const(e)
-    DesignatedIndex(_, e) => self.fold_const(e)
-    DesignatedRange(_, _, e) => self.fold_const(e)
+    Sizeof(ty) => Some(const_int(self.const_type_size(ty).to_int64(), ULong))
+    SizeofExpr(e) =>
+      Some(
+        const_int(
+          self.const_type_size(self.const_expr_type(e)).to_int64(),
+          ULong,
+        ),
+      )
+    Alignof(ty) => Some(const_int(self.const_type_align(ty).to_int64(), ULong))
+    AlignofExpr(e) =>
+      Some(
+        const_int(
+          self.const_type_align(self.const_expr_type(e)).to_int64(),
+          ULong,
+        ),
+      )
+    OffsetOf(ty, path) =>
+      match self.const_offset_of(ty, path) {
+        Some(offset) => Some(const_int(offset.to_int64(), ULong))
+        None => None
+      }
+    DesignatedField(_, e) => self.fold_const_int(e)
+    DesignatedIndex(_, e) => self.fold_const_int(e)
+    DesignatedRange(_, _, e) => self.fold_const_int(e)
     Array(_) => None
     CompoundLiteral(_, _, _) => None
     _ => None
+  }
+}
+
+///|
+fn Parser::fold_const(self : Parser, expr : Expr) -> Int64? {
+  match self.fold_const_int(expr) {
+    Some(value) => Some(value.bits)
+    None => None
   }
 }
 

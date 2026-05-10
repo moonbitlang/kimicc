@@ -1593,6 +1593,10 @@ struct HeaderPair {
 
 _Static_assert(CHAR_BIT == 8, "char bit width");
 _Static_assert(UINT8_MAX == 255, "stdint uint8 max");
+_Static_assert(UINT32_MAX == (uint32_t)-1, "stdint uint32 max");
+_Static_assert(UINT64_MAX > UINT32_MAX, "stdint uint64 max");
+_Static_assert(UINTPTR_MAX > PTRDIFF_MAX, "stdint uintptr max");
+_Static_assert(SIZE_MAX > PTRDIFF_MAX, "stddef size max");
 _Static_assert(FLT_EVAL_METHOD == 0, "float eval method");
 _Static_assert(FLT_RADIX == 2, "float radix");
 _Static_assert(FLT_MANT_DIG == 24, "float mantissa");
