@@ -211,8 +211,13 @@ This is not complete Linux C ABI compliance yet. The new backend does not yet
 handle vector or x87/complex ABI classes, direct ELF object writing, or a Linux
 JIT loader. Variadic support is limited to
 the compiler's `__builtin_va_*` lowering and is not a complete system-header
-`va_list` interoperability claim. The existing Darwin ARM64 Mach-O object
-writer and JIT remain Darwin-specific.
+`va_list` interoperability claim. The system-header smoke proves that common
+glibc typedefs and macros from the probed Ubuntu 24.04 headers can be
+preprocessed and compiled, but it is not a complete libc compatibility claim.
+Integer constants also still use the parser's signed `Int64` representation, so
+unsigned max-value macros such as `UINTPTR_MAX` are not a reliable basis for
+`_Static_assert` comparisons yet. The existing Darwin ARM64 Mach-O object writer
+and JIT remain Darwin-specific.
 
 ## Local Smoke Test On ARM64 macOS
 

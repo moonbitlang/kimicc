@@ -215,6 +215,11 @@ unsigned typed spellings such as `__builtin_sadd_overflow` and
 `__builtin_umulll_overflow`, lower directly for integer result pointer types up
 to 64 bits, using x86-64 carry/overflow flags and storing the truncated result
 through the supplied pointer.
+The Docker smoke also verifies that common Ubuntu 24.04 system headers
+preprocess far enough to expose glibc typedefs such as `uint8_t`, `uintptr_t`,
+`size_t`, `ptrdiff_t`, and `va_list`, then compiles and links a small
+Linux/amd64 executable using those typedefs. That is a targeted system-header
+gate, not a complete libc or System V ABI conformance claim.
 Small scalar-field
 `struct`/`union` arguments and returns up to 16 bytes are
 classified recursively by eightbyte, including nested structs/unions and arrays
@@ -261,7 +266,9 @@ dispatch emits explicit case comparisons, uses the promoted control expression
 type, preserves default and fallthrough behavior, and compares 32-bit integer
 switches through `eax`.
 Vector, x87/complex, vector varargs, direct ELF object emission, and Linux JIT
-loading are still future work. See
+loading are still future work. Complete libc `va_list` interoperability and
+unsigned integer constant folding for max-value macros above signed 64-bit range
+are also open. See
 [`docs/linux-amd64-target.md`](linux-amd64-target.md) for the current test
 workflow.
 
