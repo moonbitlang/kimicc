@@ -1695,7 +1695,9 @@ fn print_usage() -> Unit {
     #|  -D NAME[=VALUE]     define a macro
     #|  -U NAME             undefine a macro
     #|  -include FILE       include a file before the main source
-    #|  -nostdinc           disable built-in macOS system include paths
+    #|  -Wp,OPTS            forward supported comma-separated preprocessor options
+    #|  -Xpreprocessor OPT  forward one supported preprocessor option
+    #|  -nostdinc           disable built-in system include paths
     #|  --preprocessed      skip preprocessing and parse input as already preprocessed C
     #|
     #|Output options:
