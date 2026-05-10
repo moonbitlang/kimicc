@@ -112,6 +112,7 @@ the target split real and testable without claiming full C ABI coverage yet.
   `__builtin_expect`, `__builtin_expect_with_probability`,
   `__builtin_assume`, `__builtin_assume_aligned`, `__builtin_prefetch`,
   `__builtin_constant_p`, `__builtin_object_size`,
+  `__builtin_dynamic_object_size`,
   `__builtin_frame_address`, `__builtin_return_address`,
   `__builtin_extract_return_addr`, `__builtin_frob_return_addr`,
   `__builtin_trap`, and `__builtin_unreachable`.

@@ -492,7 +492,7 @@ int target_predefines(void) {
 #else
   return 511;
 #endif
-#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_return_address) && __has_builtin(__atomic_load_n) && __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p) && __has_builtin(__builtin_classify_type)
+#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_return_address) && __has_builtin(__builtin_dynamic_object_size) && __has_builtin(__atomic_load_n) && __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p) && __has_builtin(__builtin_classify_type)
   target = target + 0;
 #else
   return 513;
@@ -600,6 +600,7 @@ int scalar_hint_builtins(void) {
   __builtin_prefetch(&x, 0, 3);
   if (__builtin_constant_p(x) != 0) return 280;
   if (__builtin_object_size(&x, 0) + 1 != 0) return 281;
+  if (__builtin_dynamic_object_size(&x, 0) + 1 != 0) return 559;
   if (__builtin_frame_address(1) != 0) return 282;
   if (__builtin_frame_address(0) == 0) return 283;
   if (__builtin_assume_aligned(&x, 16) != &x) return 434;

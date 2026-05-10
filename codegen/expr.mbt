@@ -707,6 +707,7 @@ fn Codegen::call_return_type(
             | "__builtin_infl" => Double
             "__builtin_rotateleft32" | "__builtin_rotateright32" => UInt
             "__builtin_rotateleft64" | "__builtin_rotateright64" => ULongLong
+            "__builtin_object_size" | "__builtin_dynamic_object_size" => ULong
             _ => self.func_rets.get_or_default(name, SInt)
           }
         _ => SInt
@@ -1527,7 +1528,7 @@ fn Codegen::emit_builtin_call(
       self.emit("\tmov\tx9, #0")
       true
     }
-    "__builtin_object_size" => {
+    "__builtin_object_size" | "__builtin_dynamic_object_size" => {
       // Return -1 (unknown size) cast to size_t
       self.emit("\tmov\tx9, #-1")
       true

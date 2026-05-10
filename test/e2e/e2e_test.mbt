@@ -2283,15 +2283,16 @@ async test "__builtin_constant_p" {
 }
 
 ///|
-async test "__builtin_object_size" {
+async test "__builtin_object_size stubs" {
   let source =
     #|int main() {
     #|  int x;
-    #|  return (int)__builtin_object_size(&x, 0);
+    #|  if (__builtin_object_size(&x, 0) + 1 != 0) return 1;
+    #|  if (__builtin_dynamic_object_size(&x, 0) + 1 != 0) return 2;
+    #|  return 42;
     #|}
   let exit_code = run_source_async(source)
-  // __builtin_object_size returns -1 (SIZE_MAX) as stub; exit code is 255
-  inspect(exit_code, content="255")
+  inspect(exit_code, content="42")
 }
 
 ///|

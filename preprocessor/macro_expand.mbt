@@ -199,6 +199,7 @@ fn pp_linux_amd64_has_builtin(name : String) -> Bool {
     | "__builtin_prefetch"
     | "__builtin_constant_p"
     | "__builtin_object_size"
+    | "__builtin_dynamic_object_size"
     | "__builtin_frame_address"
     | "__builtin_return_address"
     | "__builtin_extract_return_addr"

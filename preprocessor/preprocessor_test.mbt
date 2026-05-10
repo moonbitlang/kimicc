@@ -197,7 +197,7 @@ test "linux amd64 has builtin reflects supported lowering" {
     emit_line_markers: options.emit_line_markers,
   }
   let source =
-    #|#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_return_address)
+    #|#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_return_address) && __has_builtin(__builtin_dynamic_object_size)
     #|int memory_and_return_address = 1;
     #|#else
     #|int memory_and_return_address = 0;

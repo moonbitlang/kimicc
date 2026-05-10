@@ -188,7 +188,8 @@ implemented for scalar values plus the covered small and memory-class aggregate
 calls before normal x86-64 call lowering; fortified `strlcpy`/`strlcat`
 checked builtins drop their object-size argument before the libc call. Common
 scalar hint/query and bit-manipulation builtins lower directly without
-external calls. `__builtin_frame_address` exposes `rbp`;
+external calls; object-size query builtins conservatively report unknown size.
+`__builtin_frame_address` exposes `rbp`;
 `__builtin_return_address(0)` loads `[rbp + 8]`, nonzero depths return null,
 and return-address extract/frob helpers are identity operations on x86-64.
 Common signed integer absolute-value builtins `__builtin_abs`,

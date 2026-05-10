@@ -2457,7 +2457,7 @@ fn X64Codegen::builtin_return_type(
         Some(Pointer(Void))
       }
     "__builtin_constant_p" => Some(SInt)
-    "__builtin_object_size" => Some(ULong)
+    "__builtin_object_size" | "__builtin_dynamic_object_size" => Some(ULong)
     "__builtin_frame_address"
     | "__builtin_return_address"
     | "__builtin_extract_return_addr"
@@ -2708,7 +2708,7 @@ fn X64Codegen::emit_builtin_call(
       self.emit("\tmov\trax, 0")
       true
     }
-    "__builtin_object_size" => {
+    "__builtin_object_size" | "__builtin_dynamic_object_size" => {
       self.emit("\tmov\trax, -1")
       true
     }
