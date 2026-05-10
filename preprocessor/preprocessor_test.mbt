@@ -175,13 +175,33 @@ test "linux amd64 predefined macros cover system header probes" {
     #|#else
     #|int float_probes = 2;
     #|#endif
+    #|#if __INT64_MAX__ == 9223372036854775807L && __UINT64_MAX__ == 18446744073709551615UL
+    #|int int64_probes = 1;
+    #|#else
+    #|int int64_probes = 2;
+    #|#endif
     #|int prefix = __USER_LABEL_PREFIX__ 9;
     #|__WINT_TYPE__ wint_value;
+    #|__INT64_TYPE__ int64_value;
+    #|__UINT64_TYPE__ uint64_value;
+    #|__INT_LEAST64_TYPE__ least64_value;
+    #|__UINT_FAST64_TYPE__ fast64_value;
   match @preprocessor.preprocess(source, linux_options) {
     Ok(text) =>
       inspect(
         text,
-        content="int probes=1;\nint float_probes=1;\nint prefix=9;\nunsigned int wint_value;\n",
+        content=(
+          #|int probes=1;
+          #|int float_probes=1;
+          #|int int64_probes=1;
+          #|int prefix=9;
+          #|unsigned int wint_value;
+          #|long int int64_value;
+          #|long unsigned int uint64_value;
+          #|long int least64_value;
+          #|long unsigned int fast64_value;
+          #|
+        ),
       )
     Err(err) => fail(err.to_string())
   }
