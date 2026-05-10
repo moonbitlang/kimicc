@@ -177,6 +177,24 @@ test "driver pthread seeds reentrant define and linker flag" {
 }
 
 ///|
+test "driver recognizes preprocessed inputs" {
+  let opts = match parse_driver_args(["kimicc", "-fpreprocessed", "foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.already_preprocessed)
+  let text = "#define X 1\nint value = X;\n"
+  let result = preprocess_source_with_dependencies(
+    text,
+    "foo.i",
+    DriverOptions::new(),
+  )
+  assert_eq(result.text, text)
+  assert_eq(result.dependency_records.length(), 1)
+  assert_eq(result.dependency_records[0].path, "foo.i")
+}
+
+///|
 test "driver splits response file content" {
   let args = match
     split_response_file_content(

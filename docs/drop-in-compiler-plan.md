@@ -23,7 +23,7 @@ compile-only modes that C projects normally use.
 
 - Accept common compiler spellings: `-E`, `-S`, `-c`, `-o`, `-I`, `-isystem`,
   `-D`, `-U`, `-include`, `@response-file`, `--preprocessed`, and
-  `-nostdinc`.
+  `-fpreprocessed`/`.i` preprocessed inputs, and `-nostdinc`.
 - Tolerate common build flags that do not yet affect code generation:
   `-std=*`, `-O*`, `-g*`, `-W*`, `-f*`, `-m*`, dependency-output options, and
   target/architecture options. Preserve relevant driver-facing flags such as

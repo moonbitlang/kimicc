@@ -337,6 +337,11 @@ fn is_c_source_path(path : String) -> Bool {
 }
 
 ///|
+fn is_preprocessed_source_path(path : String) -> Bool {
+  ends_with(path, ".i")
+}
+
+///|
 fn is_linker_input(path : String) -> Bool {
   ends_with(path, ".o") ||
   ends_with(path, ".a") ||
@@ -695,6 +700,8 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
           }
         } else if starts_with(arg, "-o") && arg.length() > 2 {
           opts.output_path = Some(arg[2:].to_owned())
+        } else if arg == "-fpreprocessed" {
+          opts.already_preprocessed = true
         } else if apply_dependency_mode(opts, arg) {
           ()
         } else if arg == "-MF" || starts_with(arg, "-MF") {
@@ -1200,7 +1207,7 @@ fn preprocess_source_with_dependencies(
   input_path : String,
   opts : DriverOptions,
 ) -> DriverPreprocessResult {
-  if opts.already_preprocessed {
+  if opts.already_preprocessed || is_preprocessed_source_path(input_path) {
     if opts.forced_includes.length() > 0 {
       fail("--preprocessed cannot be combined with -include")
     }
