@@ -254,9 +254,22 @@ test "has attribute reflects supported packed layout" {
     #|#else
     #|int aligned_attr = 0;
     #|#endif
+    #|#if __has_attribute(unused) && __has_attribute(__unused__)
+    #|int unused_attr = 1;
+    #|#else
+    #|int unused_attr = 0;
+    #|#endif
+    #|#if __has_attribute(fallthrough) && __has_attribute(__fallthrough__)
+    #|int fallthrough_attr = 1;
+    #|#else
+    #|int fallthrough_attr = 0;
+    #|#endif
   match @preprocessor.preprocess(source, linux_options) {
     Ok(text) =>
-      inspect(text, content="int packed_attr=1;\nint aligned_attr=1;\n")
+      inspect(
+        text,
+        content="int packed_attr=1;\nint aligned_attr=1;\nint unused_attr=1;\nint fallthrough_attr=1;\n",
+      )
     Err(err) => fail(err.to_string())
   }
 }

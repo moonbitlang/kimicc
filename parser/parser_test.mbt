@@ -240,6 +240,25 @@ test "parse switch" {
 }
 
 ///|
+test "parse fallthrough attribute statement as no-op" {
+  let source =
+    #|int main() {
+    #|  switch (0) {
+    #|    case 0:
+    #|      __attribute__((fallthrough));
+    #|    case 1:
+    #|      return 42;
+    #|  }
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(Compound([Switch(_, Compound(_), cases)])) =>
+      inspect(cases.length(), content="2")
+    _ => fail("Expected fallthrough attribute statement to parse in switch")
+  }
+}
+
+///|
 test "parse cast" {
   let source = "int main() { return (char)256; }"
   let prog = @parser.parse(source)

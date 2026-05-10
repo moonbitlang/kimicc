@@ -503,6 +503,11 @@ int target_predefines(void) {
 #else
   return 516;
 #endif
+#if __has_attribute(unused) && __has_attribute(__unused__) && __has_attribute(fallthrough) && __has_attribute(__fallthrough__)
+  target = target + 0;
+#else
+  return 535;
+#endif
 #if __has_include("probe_header.h")
   target = target + 0;
 #else
@@ -1214,6 +1219,20 @@ int gnu_classify_type_selection(void) {
   return 0;
 }
 
+int gnu_noop_attributes(void) {
+  __attribute__((unused)) int ignored = 3;
+  int x = 0;
+  switch (x) {
+  case 0:
+    x = x + 1;
+    __attribute__((fallthrough));
+  case 1:
+    return x == 1 ? 0 : 548;
+  default:
+    return 549;
+  }
+}
+
 int main(void) {
   struct Pair p;
   struct DPair q;
@@ -1285,6 +1304,7 @@ int main(void) {
          gnu_typeof_selection() +
          gnu_auto_type_selection() +
          gnu_classify_type_selection() +
+         gnu_noop_attributes() +
          var_pair(0, make_pair(0, 1)) +
          var_dpair(0, make_dpair(0.5, 0.5)) +
          var_big(0, make_big(0, 1, 0)) +

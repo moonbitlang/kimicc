@@ -2312,6 +2312,25 @@ async test "e2e statement attribute before local declaration" {
 }
 
 ///|
+async test "e2e fallthrough attribute statement is a no-op" {
+  let source =
+    #|int main(void) {
+    #|  int x = 0;
+    #|  switch (x) {
+    #|  case 0:
+    #|    x = x + 1;
+    #|    __attribute__((fallthrough));
+    #|  case 1:
+    #|    return x == 1 ? 42 : 2;
+    #|  default:
+    #|    return 3;
+    #|  }
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e large struct parameter is copied from hidden pointer" {
   let source =
     #|struct InputLike {

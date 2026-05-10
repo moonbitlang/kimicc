@@ -84,7 +84,14 @@ fn pp_query_name(args : Array[Array[PpToken]]) -> String? {
 ///|
 fn pp_has_attribute(name : String) -> Bool {
   match name {
-    "packed" | "__packed__" | "aligned" | "__aligned__" => true
+    "packed"
+    | "__packed__"
+    | "aligned"
+    | "__aligned__"
+    | "unused"
+    | "__unused__"
+    | "fallthrough"
+    | "__fallthrough__" => true
     _ => false
   }
 }

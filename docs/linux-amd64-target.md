@@ -16,7 +16,9 @@ the target split real and testable without claiming full C ABI coverage yet.
   supports, and false for unsupported builtin names. `__has_attribute(name)`
   reports true for GNU `packed`/`__packed__` and numeric
   `aligned`/`__aligned__` attributes, matching the layout attributes the
-  parser and backend currently honor. Clang-style feature probes
+  parser and backend currently honor, plus parser-accepted no-op
+  `unused`/`__unused__` and `fallthrough`/`__fallthrough__` attributes.
+  Clang-style feature probes
   report true only for the covered `c_alignas`, `c_static_assert`, `c_atomic`,
   and `c_generic_selections` language features; unsupported feature, C
   attribute, declspec attribute, and warning probes report false.
@@ -182,9 +184,9 @@ bit-field storage units, global pointer/function-pointer address relocations,
 switch dispatch with fallthrough/default behavior, pointers, arrays, simple
 globals, string literals, covered C11 `_Generic` selections, GNU `typeof`
 specifiers, GNU `__auto_type` locals, GNU compile-time selection builtins, GNU
-type-classification builtins, and common memory, string, bit-manipulation,
-dynamic stack
-allocation, integer atomic, integer overflow-checking, fortified
+type-classification builtins, parser-accepted no-op GNU attributes, and common
+memory, string, bit-manipulation, dynamic stack allocation, integer atomic,
+integer overflow-checking, fortified
 formatted-output, and floating and scalar hint/query builtins.
 
 ## Known Gaps
