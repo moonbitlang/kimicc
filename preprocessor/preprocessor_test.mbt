@@ -161,10 +161,12 @@ test "linux amd64 predefined macros cover system header probes" {
   let source =
     #|#if defined(__gnu_linux__) && defined(__ELF__) && defined(_LP64)
     #|#if __SIZEOF_POINTER__ == 8 && __SIZEOF_LONG__ == 8 && __CHAR_BIT__ == 8
+    #|#if __SIZE_MAX__ == 18446744073709551615UL && __UINTPTR_MAX__ == 18446744073709551615UL && __PTRDIFF_MAX__ == 9223372036854775807L
     #|#if __ATOMIC_SEQ_CST == 5 && __GCC_ATOMIC_POINTER_LOCK_FREE == 2
     #|int probes = 1;
     #|#else
     #|int probes = 2;
+    #|#endif
     #|#endif
     #|#endif
     #|#endif

@@ -10,8 +10,8 @@ the target split real and testable without claiming full C ABI coverage yet.
   `_main`.
 - The preprocessor seeds Linux/x86-64 target macros such as `__linux__`,
   `__gnu_linux__`, `__ELF__`, `__x86_64__`, `__amd64__`, `_LP64`, basic
-  `__SIZEOF_*`/width macros, atomic memory-order constants, and ELF empty
-  label/register prefix macros. `__has_builtin(name)` reports true for the
+  `__SIZEOF_*`/width/max-value macros, atomic memory-order constants, and ELF
+  empty label/register prefix macros. `__has_builtin(name)` reports true for the
   builtin functions and atomic intrinsics the Linux/amd64 lowering currently
   supports, and false for unsupported builtin names. `__has_attribute(name)`
   reports true for GNU `packed`/`__packed__` and numeric

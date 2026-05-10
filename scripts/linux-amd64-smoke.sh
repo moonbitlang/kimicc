@@ -596,6 +596,11 @@ int target_predefines(void) {
 #else
   return 510;
 #endif
+#if __SIZE_MAX__ == 18446744073709551615UL && __UINTPTR_MAX__ == 18446744073709551615UL && __PTRDIFF_MAX__ == 9223372036854775807L
+  target = target + 0;
+#else
+  return 512;
+#endif
 #if __ATOMIC_SEQ_CST == 5 && __GCC_ATOMIC_POINTER_LOCK_FREE == 2
   target = target + 0;
 #else
