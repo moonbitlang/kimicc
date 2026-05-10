@@ -1029,6 +1029,15 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
             }
             Err(err) => return Err(err)
           }
+        } else if starts_with(arg, "--include-directory=") ||
+          arg == "--include-directory" {
+          match long_option_value(argv, i, "--include-directory") {
+            Ok((value, next_i)) => {
+              opts.include_paths.push(value)
+              i = next_i
+            }
+            Err(err) => return Err(err)
+          }
         } else if starts_with(arg, "--include=") || arg == "--include" {
           match long_option_value(argv, i, "--include") {
             Ok((value, next_i)) => {

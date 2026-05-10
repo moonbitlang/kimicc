@@ -3,15 +3,18 @@ test "driver parses compile-only flags" {
   let opts = match
     parse_driver_args([
       "kimicc", "-c", "-Wall", "-std=c11", "-O2", "-Iinclude", "-isystem", "sys",
-      "-DVALUE=3", "-UOLD", "foo.c",
+      "--include-directory=include2", "--include-directory", "include3", "-DVALUE=3",
+      "-UOLD", "foo.c",
     ]) {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
   assert_true(opts.output == EmitObject)
   assert_true(opts.input_path is Some("foo.c"))
-  assert_eq(opts.include_paths.length(), 1)
+  assert_eq(opts.include_paths.length(), 3)
   assert_eq(opts.include_paths[0], "include")
+  assert_eq(opts.include_paths[1], "include2")
+  assert_eq(opts.include_paths[2], "include3")
   assert_eq(opts.system_include_paths.length(), 1)
   assert_eq(opts.system_include_paths[0], "sys")
   assert_eq(opts.defines["VALUE"], "3")
