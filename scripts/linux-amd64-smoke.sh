@@ -91,6 +91,9 @@ binary_path="/tmp/kimicc-linux-amd64-smoke"
 multi_main_source_path="/tmp/kimicc-linux-amd64-multi-main.c"
 multi_helper_source_path="/tmp/kimicc-linux-amd64-multi-helper.c"
 multi_binary_path="/tmp/kimicc-linux-amd64-multi"
+asm_source_path="/tmp/kimicc-linux-amd64-asm.s"
+asm_object_path="/tmp/kimicc-linux-amd64-asm.o"
+asm_binary_path="/tmp/kimicc-linux-amd64-asm"
 probe_include_dir="/tmp/kimicc-linux-amd64-include"
 driver_stdout_path="/tmp/kimicc-linux-amd64-driver.out"
 driver_stderr_path="/tmp/kimicc-linux-amd64-driver.err"
@@ -1525,6 +1528,25 @@ status=$?
 set -e
 if [ "$status" -ne 42 ]; then
   echo "expected multi-source smoke binary to exit 42, got $status" >&2
+  exit 1
+fi
+
+cat > "$asm_source_path" <<'ASM'
+.intel_syntax noprefix
+.globl main
+main:
+  mov eax, 42
+  ret
+ASM
+
+"$kimicc" -c -target linux-amd64 -o "$asm_object_path" "$asm_source_path"
+clang -o "$asm_binary_path" "$asm_object_path"
+set +e
+"$asm_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 42 ]; then
+  echo "expected assembly smoke binary to exit 42, got $status" >&2
   exit 1
 fi
 
