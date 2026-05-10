@@ -107,6 +107,8 @@ priv struct Preprocessor {
   macros : Map[String, Macro]
   include_stack : Array[String]
   once_files : Map[String, Bool]
+  mut line_control_file : String?
+  mut line_control_line : Int?
   mut counter : Int
   mut error : PreprocessError?
 }

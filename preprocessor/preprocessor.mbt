@@ -178,6 +178,8 @@ fn Preprocessor::new(options : PreprocessOptions) -> Preprocessor {
     macros: {},
     include_stack: [],
     once_files: {},
+    line_control_file: None,
+    line_control_line: None,
     counter: 0,
     error: None,
   }
@@ -329,16 +331,17 @@ fn Preprocessor::parse_include_query_name(
 fn Preprocessor::has_include_query(
   self : Preprocessor,
   tokens : Array[PpToken],
-  file : String,
+  including_file : String,
+  logical_file : String,
   line : Int,
   next : Bool,
 ) -> Bool {
-  match self.parse_include_query_name(tokens, file, line) {
+  match self.parse_include_query_name(tokens, logical_file, line) {
     Some((name, system)) =>
       if next {
-        self.resolve_include_next(name, system, file) is Some(_)
+        self.resolve_include_next(name, system, including_file) is Some(_)
       } else {
-        self.resolve_include(name, system, file) is Some(_)
+        self.resolve_include(name, system, including_file) is Some(_)
       }
     None => false
   }
@@ -348,7 +351,8 @@ fn Preprocessor::has_include_query(
 fn Preprocessor::replace_defined_operators(
   self : Preprocessor,
   tokens : Array[PpToken],
-  file : String,
+  including_file : String,
+  logical_file : String,
   line : Int,
 ) -> Array[PpToken] {
   let clean = pp_without_whitespace(tokens)
@@ -362,7 +366,8 @@ fn Preprocessor::replace_defined_operators(
           Some((body, end_index)) => {
             let found = self.has_include_query(
               body,
-              file,
+              including_file,
+              logical_file,
               line,
               tok.is_ident("__has_include_next"),
             )
@@ -422,11 +427,14 @@ fn Preprocessor::replace_defined_operators(
 fn Preprocessor::eval_if(
   self : Preprocessor,
   tokens : Array[PpToken],
-  file : String,
+  including_file : String,
+  logical_file : String,
   line : Int,
 ) -> Bool {
-  let defined_replaced = self.replace_defined_operators(tokens, file, line)
-  let expanded = self.expand_tokens(defined_replaced, {}, file, line, 0)
+  let defined_replaced = self.replace_defined_operators(
+    tokens, including_file, logical_file, line,
+  )
+  let expanded = self.expand_tokens(defined_replaced, {}, logical_file, line, 0)
   let normalized : Array[PpToken] = []
   for tok in expanded {
     if tok.kind == PpIdent {
@@ -539,9 +547,10 @@ fn Preprocessor::process_include(
   self : Preprocessor,
   tokens : Array[PpToken],
   including_file : String,
+  logical_file : String,
   line : Int,
 ) -> String {
-  match self.parse_include_name(tokens, including_file, line) {
+  match self.parse_include_name(tokens, logical_file, line) {
     Some((name, system)) =>
       match self.resolve_include(name, system, including_file) {
         Some(path) =>
@@ -570,9 +579,10 @@ fn Preprocessor::process_include_next(
   self : Preprocessor,
   tokens : Array[PpToken],
   including_file : String,
+  logical_file : String,
   line : Int,
 ) -> String {
-  match self.parse_include_name(tokens, including_file, line) {
+  match self.parse_include_name(tokens, logical_file, line) {
     Some((name, system)) =>
       match self.resolve_include_next(name, system, including_file) {
         Some(path) =>
@@ -597,11 +607,36 @@ fn Preprocessor::process_include_next(
 }
 
 ///|
+fn Preprocessor::process_line_directive(
+  self : Preprocessor,
+  tokens : Array[PpToken],
+  logical_file : String,
+  line : Int,
+) -> Unit {
+  let expanded = self.expand_tokens(tokens, {}, logical_file, line, 0)
+  let clean = pp_without_whitespace(expanded)
+  if clean.length() == 0 || clean[0].kind != PpNumber {
+    self.set_error("invalid #line directive")
+    return
+  }
+  let next_line = pp_parse_int_literal(clean[0].text).to_int()
+  if next_line <= 0 {
+    self.set_error("invalid #line directive")
+    return
+  }
+  self.line_control_line = Some(next_line)
+  if clean.length() > 1 && clean[1].kind == PpString {
+    self.line_control_file = Some(pp_unquote_string_literal(clean[1].text))
+  }
+}
+
+///|
 fn Preprocessor::process_directive(
   self : Preprocessor,
   tokens : Array[PpToken],
   stack : Array[ConditionalFrame],
-  file : String,
+  physical_file : String,
+  logical_file : String,
   line : Int,
 ) -> String {
   let hash = pp_first_non_space(tokens)
@@ -623,7 +658,11 @@ fn Preprocessor::process_directive(
   let active = self.is_active(stack)
   match directive.text {
     "if" => {
-      let cond = if active { self.eval_if(rest, file, line) } else { false }
+      let cond = if active {
+        self.eval_if(rest, physical_file, logical_file, line)
+      } else {
+        false
+      }
       stack.push({
         parent_active: active,
         branch_active: active && cond,
@@ -682,7 +721,7 @@ fn Preprocessor::process_directive(
         } else {
           let cond = frame.parent_active &&
             !frame.taken &&
-            self.eval_if(rest, file, line)
+            self.eval_if(rest, physical_file, logical_file, line)
           stack[idx] = {
             parent_active: frame.parent_active,
             branch_active: cond,
@@ -723,10 +762,15 @@ fn Preprocessor::process_directive(
           self.macros.remove(rest[idx].text)
         }
       }
-    "include" => if active { return self.process_include(rest, file, line) }
+    "include" =>
+      if active {
+        return self.process_include(rest, physical_file, logical_file, line)
+      }
     "include_next" =>
       if active {
-        return self.process_include_next(rest, file, line)
+        return self.process_include_next(
+          rest, physical_file, logical_file, line,
+        )
       }
     "error" =>
       if active {
@@ -737,10 +781,13 @@ fn Preprocessor::process_directive(
       if active {
         let idx = pp_first_non_space(rest)
         if idx < rest.length() && rest[idx].is_ident("once") {
-          self.once_files[file] = true
+          self.once_files[physical_file] = true
         }
       }
-    "line" => ()
+    "line" =>
+      if active {
+        self.process_line_directive(rest, logical_file, line)
+      }
     _ =>
       if active {
         self.set_error("unsupported preprocessor directive: #" + directive.text)
@@ -839,12 +886,13 @@ fn Preprocessor::process_source(
   let mut line_tokens : Array[PpToken] = []
   let mut pending_tokens : Array[PpToken] = []
   let mut pending_line = 1
+  let mut logical_file = file
   let mut line = 1
   for tok in tokens {
     if tok.is_newline() {
       if pp_is_directive_line(line_tokens) {
         let (next_pending, _) = self.flush_pending_tokens(
-          pending_tokens, output, file, pending_line, true,
+          pending_tokens, output, logical_file, pending_line, true,
         )
         pending_tokens = next_pending
         if self.error is Some(_) {
@@ -852,8 +900,22 @@ fn Preprocessor::process_source(
           return output.to_string()
         }
         output.write_string(
-          self.process_directive(line_tokens, stack, file, line),
+          self.process_directive(line_tokens, stack, file, logical_file, line),
         )
+        match self.line_control_file {
+          Some(next_file) => {
+            logical_file = next_file
+            self.line_control_file = None
+          }
+          None => ()
+        }
+        match self.line_control_line {
+          Some(next_line) => {
+            line = next_line - 1
+            self.line_control_line = None
+          }
+          None => ()
+        }
       } else if self.is_active(stack) {
         if pending_tokens.length() == 0 {
           pending_line = line
@@ -863,7 +925,7 @@ fn Preprocessor::process_source(
         }
         pending_tokens.push(pp_token(PpWhitespace, " "))
         let (next_pending, _) = self.flush_pending_tokens(
-          pending_tokens, output, file, pending_line, false,
+          pending_tokens, output, logical_file, pending_line, false,
         )
         pending_tokens = next_pending
       }
@@ -880,7 +942,7 @@ fn Preprocessor::process_source(
   if line_tokens.length() > 0 {
     if pp_is_directive_line(line_tokens) {
       let (next_pending, _) = self.flush_pending_tokens(
-        pending_tokens, output, file, pending_line, true,
+        pending_tokens, output, logical_file, pending_line, true,
       )
       pending_tokens = next_pending
       if self.error is Some(_) {
@@ -888,8 +950,22 @@ fn Preprocessor::process_source(
         return output.to_string()
       }
       output.write_string(
-        self.process_directive(line_tokens, stack, file, line),
+        self.process_directive(line_tokens, stack, file, logical_file, line),
       )
+      match self.line_control_file {
+        Some(next_file) => {
+          logical_file = next_file
+          self.line_control_file = None
+        }
+        None => ()
+      }
+      match self.line_control_line {
+        Some(next_line) => {
+          line = next_line - 1
+          self.line_control_line = None
+        }
+        None => ()
+      }
     } else if self.is_active(stack) {
       if pending_tokens.length() == 0 {
         pending_line = line
@@ -900,7 +976,7 @@ fn Preprocessor::process_source(
     }
   }
   let (next_pending, _) = self.flush_pending_tokens(
-    pending_tokens, output, file, pending_line, true,
+    pending_tokens, output, logical_file, pending_line, true,
   )
   pending_tokens = next_pending
   ignore(pending_tokens)

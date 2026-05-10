@@ -84,7 +84,8 @@ probes are conservative: covered C feature probes and the GNU `packed`/numeric
 report false, and `__is_identifier(name)` tracks parser-recognized keywords and
 extension tokens. Variadic macros support `__VA_ARGS__`, GNU comma-paste
 elision, and `__VA_OPT__(...)`; `__COUNTER__`, `#elifdef`, and `#elifndef` are
-supported for generated/config headers.
+supported for generated/config headers. `#line` updates the logical source
+coordinates used by `__FILE__` and `__LINE__`.
 
 ## Preprocessor API
 

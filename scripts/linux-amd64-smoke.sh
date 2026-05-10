@@ -548,6 +548,10 @@ int target_predefines(void) {
 #define VAOPT_NAMED(base, rest...) (base __VA_OPT__(+ rest))
   if (VAOPT_SUM(7) != 7 || VAOPT_SUM(7, 5) != 12) return 529;
   if (VAOPT_NAMED(9) != 9 || VAOPT_NAMED(9, 2) != 11) return 530;
+#line 700 "kimicc-line-probe.c"
+  if (__LINE__ != 700) return 531;
+  const char *line_file = __FILE__;
+  if (line_file[0] != 'k' || line_file[7] != 'l') return 532;
   int prefix = __USER_LABEL_PREFIX__ 0;
   __WINT_TYPE__ wint_value = 0;
   if (prefix != 0 || wint_value != 0) return 512;

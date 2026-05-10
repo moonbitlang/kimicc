@@ -72,6 +72,36 @@ test "counter macro increments per expansion" {
 }
 
 ///|
+test "line directive updates logical file and line macros" {
+  let source =
+    #|#line 100 "virtual.c"
+    #|int first = __LINE__;
+    #|const char *file = __FILE__;
+    #|#line 7
+    #|int second = __LINE__;
+  let text = expect_preprocess(source)
+  inspect(
+    text,
+    content="int first=100;\nconst char*file=\"virtual.c\";\nint second=7;\n",
+  )
+}
+
+///|
+test "line directive expands macro arguments" {
+  let source =
+    #|#define LINE_VALUE 23
+    #|#define FILE_VALUE "macro-line.c"
+    #|#line LINE_VALUE FILE_VALUE
+    #|int line_value = __LINE__;
+    #|const char *file_value = __FILE__;
+  let text = expect_preprocess(source)
+  inspect(
+    text,
+    content="int line_value=23;\nconst char*file_value=\"macro-line.c\";\n",
+  )
+}
+
+///|
 test "target macros follow selected target" {
   let linux = match @target.Target::parse("linux-amd64") {
     Some(target) => target
