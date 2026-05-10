@@ -502,6 +502,14 @@ fn consume_ignored_option(
       } else {
         Err("missing argument after " + arg)
       }
+    "-Xassembler" =>
+      if index + 1 < argv.length() {
+        opts.toolchain_args.push(arg)
+        opts.toolchain_args.push(argv[index + 1])
+        Ok(index + 1)
+      } else {
+        Err("missing argument after " + arg)
+      }
     "-resource-dir" =>
       if index + 1 < argv.length() {
         add_resource_dir(opts, argv[index + 1])
@@ -548,6 +556,9 @@ fn consume_ignored_option(
         arg.length() > "-resource-dir".length() {
         add_resource_dir(opts, arg["-resource-dir".length():].to_owned())
         Ok(index)
+      } else if starts_with(arg, "-Wa,") {
+        opts.toolchain_args.push(arg)
+        Ok(index)
       } else if starts_with(arg, "--target=") {
         let value = arg["--target=".length():].to_owned()
         match @target.Target::parse(value) {
@@ -578,7 +589,6 @@ fn consume_ignored_option(
         starts_with(arg, "-m") ||
         starts_with(arg, "-M") ||
         starts_with(arg, "-Wp,") ||
-        starts_with(arg, "-Wa,") ||
         arg == "-pipe" ||
         arg == "-pedantic" ||
         arg == "-ansi" ||

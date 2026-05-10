@@ -76,7 +76,7 @@ kimicc code generation auditable.
 - For C source inputs in link mode, generate temporary assembly or objects and
   delegate final linking to the platform toolchain.
 - Preserve linker-facing arguments such as object files, libraries, frameworks,
-  and `-Wl,*`.
+  `-Wl,*`, and assembler-facing `-Wa,*`/`-Xassembler` options.
 - Support link-only invocations by delegating directly to `clang` when no C
   translation unit is present, and delegate compile-only assembly inputs to
   `clang -c`.

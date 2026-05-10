@@ -143,6 +143,20 @@ test "driver treats assembly compile input as delegated input" {
 }
 
 ///|
+test "driver preserves assembler options for clang steps" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-c", "-Wa,-fatal-warnings", "-Xassembler", "--noexecstack", "start.s",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_eq(opts.toolchain_args, [
+    "-Wa,-fatal-warnings", "-Xassembler", "--noexecstack",
+  ])
+}
+
+///|
 test "driver accepts multiple C sources in link mode" {
   let opts = match
     parse_driver_args([
