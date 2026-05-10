@@ -762,6 +762,7 @@ fn consume_ignored_option(
     | "-iapinotes-path"
     | "-include-pch"
     | "-imacros"
+    | "-fdebug-compilation-dir"
     | "-iframework"
     | "-iframeworkwithsysroot"
     | "-index-store-path"
@@ -865,6 +866,7 @@ fn consume_ignored_option(
         starts_with(arg, "--serialize-diagnostics=") ||
         starts_with(arg, "-working-directory=") ||
         starts_with(arg, "--working-directory=") ||
+        starts_with(arg, "-fdebug-compilation-dir=") ||
         starts_with(arg, "-fmodule-map-file=") {
         Ok(index)
       } else if starts_with(arg, "--gcc-toolchain=") ||
