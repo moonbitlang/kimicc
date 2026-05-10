@@ -224,6 +224,11 @@ test "linux amd64 has builtin reflects supported lowering" {
     #|#else
     #|int compile_time_selection = 0;
     #|#endif
+    #|#if __has_builtin(__builtin_flt_rounds)
+    #|int floating_environment_query = 1;
+    #|#else
+    #|int floating_environment_query = 0;
+    #|#endif
     #|#if __has_builtin(__builtin_unsupported_vector_thing)
     #|int unsupported = 1;
     #|#else
@@ -233,7 +238,7 @@ test "linux amd64 has builtin reflects supported lowering" {
     Ok(text) =>
       inspect(
         text,
-        content="int memory_and_return_address=1;\nint gnu_copy_builtins=1;\nint atomic_and_overflow=1;\nint compile_time_selection=1;\nint unsupported=0;\n",
+        content="int memory_and_return_address=1;\nint gnu_copy_builtins=1;\nint atomic_and_overflow=1;\nint compile_time_selection=1;\nint floating_environment_query=1;\nint unsupported=0;\n",
       )
     Err(err) => fail(err.to_string())
   }

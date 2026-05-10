@@ -231,6 +231,7 @@ fn pp_linux_amd64_has_builtin(name : String) -> Bool {
     | "__builtin_assume"
     | "__builtin_assume_aligned"
     | "__builtin_prefetch"
+    | "__builtin_flt_rounds"
     | "__builtin_constant_p"
     | "__builtin_object_size"
     | "__builtin_dynamic_object_size"

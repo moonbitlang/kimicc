@@ -116,6 +116,7 @@ the target split real and testable without claiming full C ABI coverage yet.
   `__builtin_assume`, `__builtin_assume_aligned`, `__builtin_prefetch`,
   `__builtin_constant_p`, `__builtin_object_size`,
   `__builtin_dynamic_object_size`,
+  `__builtin_flt_rounds`,
   `__builtin_frame_address`, `__builtin_return_address`,
   `__builtin_extract_return_addr`, `__builtin_frob_return_addr`,
   `__builtin_trap`, and `__builtin_unreachable`.
@@ -287,9 +288,9 @@ Linux assembly, assembles an ELF object, links a Linux executable, checks that
 the executable exits with code 42, and compiles an additional common
 system-header probe using the container's Linux include directories, including
 typedefs and macros from `stddef.h`, `stdint.h`, `stdalign.h`, `stdbool.h`,
-`stdarg.h`, and `limits.h`. Before compiling that probe, it also preprocesses
-the same source and checks that libc typedefs such as `uint8_t`, `uintptr_t`,
-`size_t`, `ptrdiff_t`, and `va_list` survived the Clang-resource
+`stdarg.h`, `limits.h`, and `float.h`. Before compiling that probe, it also
+preprocesses the same source and checks that libc typedefs such as `uint8_t`,
+`uintptr_t`, `size_t`, `ptrdiff_t`, and `va_list` survived the Clang-resource
 `#include_next` chain. The script also checks that the built compiler returns a
 nonzero status for an invalid Linux/amd64 translation unit, so compiler
 failures are not masked by the test harness.

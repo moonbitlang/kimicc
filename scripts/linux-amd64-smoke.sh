@@ -606,7 +606,7 @@ int target_predefines(void) {
 #else
   return 511;
 #endif
-#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_return_address) && __has_builtin(__builtin_dynamic_object_size) && __has_builtin(__atomic_load_n) && __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p) && __has_builtin(__builtin_classify_type)
+#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_return_address) && __has_builtin(__builtin_dynamic_object_size) && __has_builtin(__builtin_flt_rounds) && __has_builtin(__atomic_load_n) && __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p) && __has_builtin(__builtin_classify_type)
   target = target + 0;
 #else
   return 513;
@@ -749,6 +749,7 @@ int scalar_hint_builtins(void) {
   if (__builtin_return_address(1) != 0) return 506;
   if (__builtin_extract_return_addr(ra) != ra) return 507;
   if (__builtin_frob_return_addr(ra) != ra) return 508;
+  if (__builtin_flt_rounds() != 1) return 560;
   return 0;
 }
 
@@ -1622,6 +1623,7 @@ int main(void) {
   bool ok = true;
   if ((addr & 15) != 0) return 31;
   if (!ok) return 32;
+  if (FLT_ROUNDS != 1) return 33;
   return header_sum(4, 10, 20, 5, 7);
 }
 C

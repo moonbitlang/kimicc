@@ -2463,6 +2463,7 @@ fn X64Codegen::builtin_return_type(
     | "__builtin_extract_return_addr"
     | "__builtin_frob_return_addr" => Some(Pointer(Void))
     "__builtin_alloca" => Some(Pointer(Void))
+    "__builtin_flt_rounds" => Some(SInt)
     "__builtin_fabsf"
     | "__builtin_copysignf"
     | "__builtin_sqrtf"
@@ -2712,6 +2713,10 @@ fn X64Codegen::emit_builtin_call(
     }
     "__builtin_constant_p" => {
       self.emit("\tmov\trax, 0")
+      true
+    }
+    "__builtin_flt_rounds" => {
+      self.emit("\tmov\trax, 1")
       true
     }
     "__builtin_object_size" | "__builtin_dynamic_object_size" => {

@@ -238,6 +238,7 @@ test "generate linux amd64 lowers scalar hint builtins" {
     #|  if (__builtin_return_address(1) != 0) return 9;
     #|  if (__builtin_extract_return_addr(ra) != ra) return 10;
     #|  if (__builtin_frob_return_addr(ra) != ra) return 11;
+    #|  if (__builtin_flt_rounds() != 1) return 12;
     #|  return 0;
     #|}
     #|int trapper(void) {
@@ -271,6 +272,7 @@ test "generate linux amd64 lowers scalar hint builtins" {
     assembly.contains("call\t__builtin_frob_return_addr"),
     content="false",
   )
+  inspect(assembly.contains("call\t__builtin_flt_rounds"), content="false")
 }
 
 ///|
