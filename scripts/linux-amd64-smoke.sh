@@ -305,6 +305,13 @@ int aligned_global(void) { return (int)global_aligned; }
 int gnu_aligned_offset(void) { return __builtin_offsetof(struct GnuAlignedBytes, c); }
 int gnu_aligned_global(void) { return (int)gnu_global_aligned; }
 
+int offsetof_designators(void) {
+  if (__builtin_offsetof(struct NestedMix, i.a) != 0) return 556;
+  if (__builtin_offsetof(struct IArray, v[1]) != 4) return 557;
+  if (__builtin_offsetof(struct GlobalOuter, inner.x) != 8) return 558;
+  return 0;
+}
+
 int aligned_local(void) {
   _Alignas(32) char buf[32];
   long p;
@@ -1320,6 +1327,7 @@ int main(void) {
          gnu_classify_type_selection() +
          gnu_noop_attributes() +
          alignof_selection() +
+         offsetof_designators() +
          var_pair(0, make_pair(0, 1)) +
          var_dpair(0, make_dpair(0.5, 0.5)) +
          var_big(0, make_big(0, 1, 0)) +

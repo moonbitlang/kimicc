@@ -227,12 +227,18 @@ pub(all) enum Expr {
   Ternary(Expr, Expr, Expr)
   LabelAddr(String)
   VaArg(Expr, Type)
-  OffsetOf(Type, String)
+  OffsetOf(Type, Array[OffsetDesignator])
   Array(Array[Expr])
   CompoundLiteral(Type, Array[Expr], Int)
   DesignatedField(String, Expr)
   DesignatedIndex(Int64, Expr)
   DesignatedRange(Int64, Int64, Expr)
+} derive(Eq)
+
+///|
+pub(all) enum OffsetDesignator {
+  OffsetField(String)
+  OffsetIndex(Int64)
 } derive(Eq)
 
 ///|

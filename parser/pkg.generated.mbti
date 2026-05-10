@@ -35,7 +35,7 @@ pub(all) enum Expr {
   Ternary(Expr, Expr, Expr)
   LabelAddr(String)
   VaArg(Expr, Type)
-  OffsetOf(Type, String)
+  OffsetOf(Type, Array[OffsetDesignator])
   Array(Array[Expr])
   CompoundLiteral(Type, Array[Expr], Int)
   DesignatedField(String, Expr)
@@ -72,6 +72,11 @@ pub struct Lexer {
 }
 pub fn Lexer::new(String) -> Self
 pub fn Lexer::next_token(Self) -> Token
+
+pub(all) enum OffsetDesignator {
+  OffsetField(String)
+  OffsetIndex(Int64)
+} derive(Eq)
 
 pub(all) struct Param {
   ty : Type

@@ -519,6 +519,34 @@ test "parse GNU alignof unparenthesized expression" {
 }
 
 ///|
+test "parse builtin offsetof member designators" {
+  let source =
+    #|struct Inner { int x; };
+    #|struct Outer { char tag; struct Inner items[3]; };
+    #|int main() {
+    #|  return __builtin_offsetof(struct Outer, items[2].x);
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [
+          Return(
+            Some(
+              OffsetOf(
+                Struct("Outer"),
+                [OffsetField("items"), OffsetIndex(2L), OffsetField("x")]
+              )
+            )
+          ),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected offsetof member-designator path")
+  }
+}
+
+///|
 test "parse struct definition and member access" {
   let source =
     #|struct Point { int x; int y; };

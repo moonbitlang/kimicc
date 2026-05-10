@@ -3313,6 +3313,45 @@ fn X64Codegen::field_layout(
 }
 
 ///|
+fn X64Codegen::offset_of_path(
+  self : X64Codegen,
+  ty : @parser.Type,
+  path : Array[@parser.OffsetDesignator],
+) -> Int? {
+  let mut current_ty = ty
+  let mut offset = 0
+  for designator in path {
+    match designator {
+      OffsetField(field) =>
+        match self.field_layout(current_ty, field) {
+          Some((_, field_ty, field_offset, _, _, _)) => {
+            offset += field_offset
+            current_ty = field_ty
+          }
+          None => return None
+        }
+      OffsetIndex(index) =>
+        match x64_offset_array_element_type(current_ty) {
+          Some(elem) => {
+            offset += index.to_int() * self.type_size(elem)
+            current_ty = elem
+          }
+          None => return None
+        }
+    }
+  }
+  Some(offset)
+}
+
+///|
+fn x64_offset_array_element_type(ty : @parser.Type) -> @parser.Type? {
+  match x64_core_type(ty) {
+    Array(elem, _) => Some(elem)
+    _ => None
+  }
+}
+
+///|
 fn X64Codegen::bitfield_info(
   self : X64Codegen,
   expr : @parser.Expr,
@@ -5578,8 +5617,11 @@ fn X64Codegen::gen_expr(self : X64Codegen, expr : @parser.Expr) -> Unit {
     }
     LabelAddr(name) =>
       self.emit("\tlea\trax, [rip + " + self.label_ref(name) + "]")
-    OffsetOf(ty, field) => {
-      let (_, offset) = self.field_info(ty, field)
+    OffsetOf(ty, path) => {
+      let offset = match self.offset_of_path(ty, path) {
+        Some(value) => value
+        None => 0
+      }
       self.emit("\tmov\trax, " + offset.to_string())
     }
     VaArg(ap_expr, ty) => self.emit_va_arg(ap_expr, ty)
@@ -6328,14 +6370,10 @@ fn X64Codegen::fold_const(self : X64Codegen, expr : @parser.Expr) -> Int64? {
     SizeofExpr(e) => Some(self.type_size(self.global_expr_type(e)).to_int64())
     Alignof(ty) => Some(self.type_align(ty).to_int64())
     AlignofExpr(e) => Some(self.type_align(self.global_expr_type(e)).to_int64())
-    OffsetOf(ty, field) =>
-      match peel_aligned_type(ty) {
-        Struct(_) | Union(_) =>
-          match self.field_layout(ty, field) {
-            Some((_, _, offset, _, _, _)) => Some(offset.to_int64())
-            None => None
-          }
-        _ => None
+    OffsetOf(ty, path) =>
+      match self.offset_of_path(ty, path) {
+        Some(offset) => Some(offset.to_int64())
+        None => None
       }
     _ => None
   }

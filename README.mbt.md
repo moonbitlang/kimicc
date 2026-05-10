@@ -341,9 +341,9 @@ recompiled on every invocation.
   memory-class aggregate calls and returns, ELF assembly emission, and
   Clang-delegated object emission. The shared parser also folds covered C11
   `_Generic` selections, GNU `typeof` specifiers, GNU `__auto_type` locals, and
-  C11/GNU alignment query operators, GNU compile-time selection and
-  type-classification builtins before target code generation, and accepts
-  covered no-op GNU attributes.
+  C11/GNU alignment query operators, `__builtin_offsetof` member designators,
+  GNU compile-time selection and type-classification builtins before target
+  code generation, and accepts covered no-op GNU attributes.
 - The JIT public call surface currently covers only `int` returns with 0 to 3
   `int` arguments.
 - The public AST is useful for tooling, but it is still compiler-internal in

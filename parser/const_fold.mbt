@@ -257,8 +257,8 @@ fn Parser::fold_const(self : Parser, expr : Expr) -> Int64? {
     Alignof(ty) => Some(self.const_type_align(ty).to_int64())
     AlignofExpr(e) =>
       Some(self.const_type_align(self.const_expr_type(e)).to_int64())
-    OffsetOf(ty, field) =>
-      match self.const_offset_of(ty, field) {
+    OffsetOf(ty, path) =>
+      match self.const_offset_of(ty, path) {
         Some(offset) => Some(offset.to_int64())
         None => None
       }
@@ -610,9 +610,15 @@ fn Parser::const_union_layout(
 }
 
 ///|
-fn Parser::const_offset_of(self : Parser, ty : Type, field : String) -> Int? {
+fn Parser::const_field_layout(
+  self : Parser,
+  ty : Type,
+  field : String,
+) -> (String, Type, Int, Int, Int, Int)? {
   let name = match ty {
     Struct(n) | Union(n) => n
+    Aligned(inner, _) | Atomic(inner) =>
+      return self.const_field_layout(inner, field)
     _ => return None
   }
   if !self.struct_decls.contains(name) {
@@ -626,34 +632,62 @@ fn Parser::const_offset_of(self : Parser, ty : Type, field : String) -> Int? {
   }
   for item in layout {
     if item.0 == field {
-      return Some(item.2)
+      return Some(item)
     }
   }
   None
 }
 
 ///|
-fn Parser::const_member_type(self : Parser, ty : Type, field : String) -> Type? {
-  let name = match ty {
-    Struct(n) | Union(n) => n
-    Pointer(Struct(n)) | Pointer(Union(n)) => n
-    _ => return None
-  }
-  if !self.struct_decls.contains(name) {
-    return None
-  }
-  let decl = self.struct_decls[name]
-  let layout = if decl.is_union {
-    self.const_union_layout(decl)
-  } else {
-    self.const_struct_layout(decl)
-  }
-  for item in layout {
-    if item.0 == field {
-      return Some(item.1)
+fn Parser::const_offset_of(
+  self : Parser,
+  ty : Type,
+  path : Array[OffsetDesignator],
+) -> Int? {
+  let mut current_ty = ty
+  let mut offset = 0
+  for designator in path {
+    match designator {
+      OffsetField(field) =>
+        match self.const_field_layout(current_ty, field) {
+          Some((_, field_ty, field_offset, _, _, _)) => {
+            offset += field_offset
+            current_ty = field_ty
+          }
+          None => return None
+        }
+      OffsetIndex(index) =>
+        match const_offset_array_element(current_ty) {
+          Some(elem) => {
+            offset += index.to_int() * self.const_type_size(elem)
+            current_ty = elem
+          }
+          None => return None
+        }
     }
   }
-  None
+  Some(offset)
+}
+
+///|
+fn const_offset_array_element(ty : Type) -> Type? {
+  match ty {
+    Array(elem, _) => Some(elem)
+    Aligned(inner, _) | Atomic(inner) => const_offset_array_element(inner)
+    _ => None
+  }
+}
+
+///|
+fn Parser::const_member_type(self : Parser, ty : Type, field : String) -> Type? {
+  match ty {
+    Pointer(inner) => self.const_member_type(inner, field)
+    _ =>
+      match self.const_field_layout(ty, field) {
+        Some((_, field_ty, _, _, _, _)) => Some(field_ty)
+        None => None
+      }
+  }
 }
 
 ///|

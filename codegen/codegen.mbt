@@ -436,14 +436,10 @@ fn Codegen::fold_const(self : Codegen, expr : @parser.Expr) -> Int64? {
     SizeofExpr(e) => Some(self.type_size(self.global_expr_type(e)).to_int64())
     Alignof(ty) => Some(self.type_align(ty).to_int64())
     AlignofExpr(e) => Some(self.type_align(self.global_expr_type(e)).to_int64())
-    OffsetOf(ty, field) =>
-      match ty {
-        Struct(name) | Union(name) =>
-          match self.find_field_layout(name, field) {
-            Some((_, _, offset, _, _, _)) => Some(offset.to_int64())
-            None => None
-          }
-        _ => None
+    OffsetOf(ty, path) =>
+      match self.offset_of_path(ty, path) {
+        Some(offset) => Some(offset.to_int64())
+        None => None
       }
     _ => None
   }

@@ -4028,18 +4028,10 @@ fn Codegen::gen_expr(
         }
       }
     }
-    OffsetOf(ty, field) => {
-      let offset = match ty {
-        Struct(name) | Union(name) =>
-          if self.struct_layouts.contains(name) {
-            match self.find_field_layout(name, field) {
-              Some((_, _, field_offset, _, _, _)) => field_offset
-              None => 0
-            }
-          } else {
-            0
-          }
-        _ => 0
+    OffsetOf(ty, path) => {
+      let offset = match self.offset_of_path(ty, path) {
+        Some(value) => value
+        None => 0
       }
       self.emit_load_int("x9", offset.to_int64())
     }

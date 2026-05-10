@@ -666,21 +666,12 @@ fn Parser::parse_primary(self : Parser) -> Expr {
             self.expect(RParen)
             VaArg(ap_expr, ty)
           } else if name == "__builtin_offsetof" {
-            // Parse __builtin_offsetof(type, field)
+            // Parse __builtin_offsetof(type, member-designator)
             let ty = self.parse_type_name()
             self.expect(Comma)
-            let field_name = match self.token {
-              Ident(n) => {
-                self.advance()
-                n
-              }
-              _ => {
-                self.advance()
-                ""
-              }
-            }
+            let path = self.parse_offset_designators()
             self.expect(RParen)
-            OffsetOf(ty, field_name)
+            OffsetOf(ty, path)
           } else {
             let args = []
             if self.token != RParen {
@@ -726,4 +717,41 @@ fn Parser::parse_primary(self : Parser) -> Expr {
     }
     _ => abort("Unexpected token in primary: " + self.token.to_string())
   }
+}
+
+///|
+fn Parser::parse_offset_designators(self : Parser) -> Array[OffsetDesignator] {
+  let path = []
+  match self.token {
+    Ident(name) => {
+      path.push(OffsetField(name))
+      self.advance()
+    }
+    _ => abort("expected field name in __builtin_offsetof")
+  }
+  while true {
+    match self.token {
+      Dot => {
+        self.advance()
+        match self.token {
+          Ident(name) => {
+            path.push(OffsetField(name))
+            self.advance()
+          }
+          _ => abort("expected field name after . in __builtin_offsetof")
+        }
+      }
+      LBracket => {
+        self.advance()
+        let index = self.parse_expr()
+        self.expect(RBracket)
+        match self.fold_const(index) {
+          Some(value) => path.push(OffsetIndex(value))
+          None => abort("array index in __builtin_offsetof must be constant")
+        }
+      }
+      _ => return path
+    }
+  }
+  path
 }

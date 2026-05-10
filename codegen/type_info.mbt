@@ -328,3 +328,54 @@ fn Codegen::find_field_layout(
   }
   None
 }
+
+///|
+fn Codegen::find_field_layout_for_type(
+  self : Codegen,
+  ty : @parser.Type,
+  field : String,
+) -> (String, @parser.Type, Int, Int, Int, Int)? {
+  match peel_aligned_type(ty) {
+    Struct(name) | Union(name) => self.find_field_layout(name, field)
+    _ => None
+  }
+}
+
+///|
+fn Codegen::offset_of_path(
+  self : Codegen,
+  ty : @parser.Type,
+  path : Array[@parser.OffsetDesignator],
+) -> Int? {
+  let mut current_ty = ty
+  let mut offset = 0
+  for designator in path {
+    match designator {
+      OffsetField(field) =>
+        match self.find_field_layout_for_type(current_ty, field) {
+          Some((_, field_ty, field_offset, _, _, _)) => {
+            offset += field_offset
+            current_ty = field_ty
+          }
+          None => return None
+        }
+      OffsetIndex(index) =>
+        match offset_array_element_type(current_ty) {
+          Some(elem) => {
+            offset += index.to_int() * self.type_size(elem)
+            current_ty = elem
+          }
+          None => return None
+        }
+    }
+  }
+  Some(offset)
+}
+
+///|
+fn offset_array_element_type(ty : @parser.Type) -> @parser.Type? {
+  match peel_aligned_type(ty) {
+    Array(elem, _) => Some(elem)
+    _ => None
+  }
+}

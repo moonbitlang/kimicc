@@ -608,6 +608,22 @@ async test "alignof type and expression operators fold to alignment" {
 }
 
 ///|
+async test "offsetof nested and array member designators fold to offsets" {
+  let source =
+    #|struct Inner { char c; int x; };
+    #|struct Outer { char tag; struct Inner items[3]; int tail; };
+    #|int main() {
+    #|  if (__builtin_offsetof(struct Outer, items) != 4) return 1;
+    #|  if (__builtin_offsetof(struct Outer, items[1]) != 12) return 2;
+    #|  if (__builtin_offsetof(struct Outer, items[2].x) != 24) return 3;
+    #|  if (__builtin_offsetof(struct Outer, tail) != 28) return 4;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "parse quickjs preprocessed" {
   let data = @fs.read_file("/tmp/quickjs_preprocessed.c")
   let source = data.text()

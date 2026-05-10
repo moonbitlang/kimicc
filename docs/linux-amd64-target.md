@@ -77,6 +77,8 @@ the target split real and testable without claiming full C ABI coverage yet.
   including bit-field storage units that do not overlap earlier streamed
   scalar fields and pointer/function-pointer relocations to globals, functions,
   and aggregate subobjects.
+- `__builtin_offsetof` folds simple, nested, and constant array-index member
+  designators using the covered aggregate layout model.
 - `_Alignas` and numeric GNU `__attribute__((aligned(N)))`/`__aligned__(N)`
   are honored for x86-64 struct/union layout, ELF global alignment, and stack
   locals. Functions with locals requiring more than 16-byte alignment keep
@@ -184,8 +186,9 @@ struct/array fields, memory-class aggregate arguments/returns, integer
 bit-fields, GNU packed aggregate layout, local aggregate initializers,
 compound literals, initialized global arrays/structs/unions and covered global
 bit-field storage units, global pointer/function-pointer address relocations,
-switch dispatch with fallthrough/default behavior, pointers, arrays, simple
-globals, string literals, covered C11 `_Generic` selections, GNU `typeof`
+`__builtin_offsetof` member designators, switch dispatch with
+fallthrough/default behavior, pointers, arrays, simple globals, string
+literals, covered C11 `_Generic` selections, GNU `typeof`
 specifiers, GNU `__auto_type` locals, C11/GNU alignment query operators, GNU
 compile-time selection builtins, GNU type-classification builtins,
 parser-accepted no-op GNU attributes, and common
