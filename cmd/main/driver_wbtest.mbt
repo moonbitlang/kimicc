@@ -80,3 +80,14 @@ test "driver keeps link-only inputs and framework flags" {
   assert_eq(opts.linker_args[2], "CoreFoundation")
   assert_eq(opts.linker_args[3], "-Wl,-rpath,/tmp")
 }
+
+///|
+test "driver shell quotes tool arguments" {
+  assert_eq(shell_quote("plain"), "'plain'")
+  assert_eq(shell_quote("two words"), "'two words'")
+  assert_eq(shell_quote("can't"), "'can'\\''t'")
+  assert_eq(
+    shell_join_quoted(["clang", "-o", "/tmp/can't run/out", "input file.s"]),
+    "'clang' '-o' '/tmp/can'\\''t run/out' 'input file.s'",
+  )
+}
