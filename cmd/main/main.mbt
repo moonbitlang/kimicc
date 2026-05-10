@@ -40,6 +40,7 @@ priv struct DriverOptions {
   mut target : @target.Target
   mut output_path : String?
   mut input_path : String?
+  extra_input_paths : Array[String]
   mut emit_dependencies : Bool
   mut dependency_include_system : Bool
   mut dependency_phony_targets : Bool
@@ -64,6 +65,7 @@ fn DriverOptions::new() -> DriverOptions {
     target: @target.Target::default(),
     output_path: None,
     input_path: None,
+    extra_input_paths: [],
     emit_dependencies: false,
     dependency_include_system: true,
     dependency_phony_targets: false,
@@ -326,6 +328,8 @@ fn add_positional(opts : DriverOptions, value : String) -> Result[Unit, String] 
     Some(_) =>
       if opts.output == LinkExecutable && is_linker_input(value) {
         opts.linker_args.push(value)
+      } else if opts.output == LinkExecutable && is_c_source_path(value) {
+        opts.extra_input_paths.push(value)
       } else if opts.output == LinkExecutable && !is_c_source_path(value) {
         opts.linker_args.push(value)
       } else {
@@ -465,6 +469,15 @@ fn consume_linker_option(
       } else {
         consume_ignored_option(opts, argv, index, arg)
       }
+  }
+}
+
+///|
+fn validate_driver_options(opts : DriverOptions) -> Result[Unit, String] {
+  if opts.output != LinkExecutable && opts.extra_input_paths.length() > 0 {
+    Err("multiple C source inputs are only supported when linking")
+  } else {
+    Ok(())
   }
 }
 
@@ -650,7 +663,10 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
     }
     i = i + 1
   }
-  Ok(opts)
+  match validate_driver_options(opts) {
+    Ok(_) => Ok(opts)
+    Err(err) => Err(err)
+  }
 }
 
 ///|
@@ -1037,10 +1053,10 @@ fn generate_assembly_from_preprocessed(
 }
 
 ///|
-fn link_args(
+fn link_args_with_inputs(
   opts : DriverOptions,
   output_path : String,
-  primary_input : String?,
+  primary_inputs : Array[String],
 ) -> Array[String] {
   let args : Array[String] = ["clang", "-o", output_path]
   match opts.target {
@@ -1050,14 +1066,27 @@ fn link_args(
       args.push(opts.target.triple())
     }
   }
-  match primary_input {
-    Some(path) => args.push(path)
-    None => ()
+  for path in primary_inputs {
+    args.push(path)
   }
   for arg in opts.linker_args {
     args.push(arg)
   }
   args
+}
+
+///|
+fn link_args(
+  opts : DriverOptions,
+  output_path : String,
+  primary_input : String?,
+) -> Array[String] {
+  let inputs : Array[String] = []
+  match primary_input {
+    Some(path) => inputs.push(path)
+    None => ()
+  }
+  link_args_with_inputs(opts, output_path, inputs)
 }
 
 ///|
@@ -1067,6 +1096,19 @@ fn run_link(
   primary_input : String?,
 ) -> Unit {
   let args = link_args(opts, output_path, primary_input)
+  let rc = moonbit_system(@utf8.encode(shell_join_quoted(args)))
+  if rc != 0 {
+    fail("link failed with code " + rc.to_string())
+  }
+}
+
+///|
+fn run_link_with_inputs(
+  opts : DriverOptions,
+  output_path : String,
+  primary_inputs : Array[String],
+) -> Unit {
+  let args = link_args_with_inputs(opts, output_path, primary_inputs)
   let rc = moonbit_system(@utf8.encode(shell_join_quoted(args)))
   if rc != 0 {
     fail("link failed with code " + rc.to_string())
@@ -1100,14 +1142,14 @@ fn assemble_with_clang(
 ///|
 fn print_usage() -> Unit {
   let text =
-    #|usage: kimicc [options] input.c
+    #|usage: kimicc [options] input.c [input2.c ...] [objects/libraries]
     #|
     #|Modes:
     #|  -E                  preprocess only
     #|  -S                  compile to assembly
     #|  -c                  compile to a relocatable object
     #|  -M, -MM             write dependencies only
-    #|  default             compile one C source and delegate final linking to clang
+    #|  default             compile C source inputs and delegate final linking to clang
     #|
     #|Preprocessor options:
     #|  -I DIR              add a quote include path
@@ -1126,6 +1168,36 @@ fn print_usage() -> Unit {
     #|  -MT TARGET          set dependency rule target
     #|  -MQ TARGET          set and Makefile-quote dependency rule target
   println(text)
+}
+
+///|
+fn compile_link_inputs(opts : DriverOptions, input_path : String) -> Unit {
+  if opts.emit_dependencies {
+    fail("dependency output with multiple C source inputs is not supported yet")
+  }
+  let output_path = default_output_path(opts, input_path)
+  let source_paths : Array[String] = [input_path]
+  for path in opts.extra_input_paths {
+    source_paths.push(path)
+  }
+  let asm_paths : Array[String] = []
+  for path in source_paths {
+    let source = match read_file(path) {
+      Some(content) => content
+      None => {
+        fail("cannot read file: " + path)
+        ""
+      }
+    }
+    let preprocessed = preprocess_source_with_dependencies(source, path, opts)
+    let assembly = generate_assembly_from_preprocessed(preprocessed.text, opts)
+    let asm_path = temp_file_path("driver", path + source, ".s")
+    if !write_file(asm_path, assembly) {
+      fail("cannot write temporary assembly: " + asm_path)
+    }
+    asm_paths.push(asm_path)
+  }
+  run_link_with_inputs(opts, output_path, asm_paths)
 }
 
 ///|
@@ -1271,7 +1343,12 @@ fn main {
     return
   }
   match opts.input_path {
-    Some(input_path) => compile_input(opts, input_path)
+    Some(input_path) =>
+      if opts.output == LinkExecutable && opts.extra_input_paths.length() > 0 {
+        compile_link_inputs(opts, input_path)
+      } else {
+        compile_input(opts, input_path)
+      }
     None =>
       if opts.output == LinkExecutable && opts.linker_args.length() > 0 {
         let output_path = match opts.output_path {

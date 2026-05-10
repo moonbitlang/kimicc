@@ -82,6 +82,36 @@ test "driver keeps link-only inputs and framework flags" {
 }
 
 ///|
+test "driver accepts multiple C sources in link mode" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "main.c", "helper.c", "support.o", "-o", "tool",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.output == LinkExecutable)
+  assert_true(opts.input_path is Some("main.c"))
+  assert_eq(opts.extra_input_paths.length(), 1)
+  assert_eq(opts.extra_input_paths[0], "helper.c")
+  assert_eq(opts.linker_args.length(), 1)
+  assert_eq(opts.linker_args[0], "support.o")
+  assert_eq(
+    link_args_with_inputs(opts, "tool", ["/tmp/main.s", "/tmp/helper.s"]),
+    ["clang", "-o", "tool", "/tmp/main.s", "/tmp/helper.s", "support.o"],
+  )
+}
+
+///|
+test "driver rejects multiple C sources outside link mode" {
+  match parse_driver_args(["kimicc", "main.c", "helper.c", "-c"]) {
+    Ok(_) => abort("expected multiple compile-only sources to fail")
+    Err(err) =>
+      assert_eq(err, "multiple C source inputs are only supported when linking")
+  }
+}
+
+///|
 test "driver shell quotes tool arguments" {
   assert_eq(shell_quote("plain"), "'plain'")
   assert_eq(shell_quote("two words"), "'two words'")
