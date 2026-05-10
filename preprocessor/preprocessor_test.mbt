@@ -170,13 +170,18 @@ test "linux amd64 predefined macros cover system header probes" {
     #|#endif
     #|#endif
     #|#endif
+    #|#if __FLT_EVAL_METHOD__ == 0 && __FLT_RADIX__ == 2 && __FLT_MANT_DIG__ == 24 && __DBL_MANT_DIG__ == 53 && __LDBL_MANT_DIG__ == 64 && __DECIMAL_DIG__ == 21
+    #|int float_probes = 1;
+    #|#else
+    #|int float_probes = 2;
+    #|#endif
     #|int prefix = __USER_LABEL_PREFIX__ 9;
     #|__WINT_TYPE__ wint_value;
   match @preprocessor.preprocess(source, linux_options) {
     Ok(text) =>
       inspect(
         text,
-        content="int probes=1;\nint prefix=9;\nunsigned int wint_value;\n",
+        content="int probes=1;\nint float_probes=1;\nint prefix=9;\nunsigned int wint_value;\n",
       )
     Err(err) => fail(err.to_string())
   }

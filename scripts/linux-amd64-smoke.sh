@@ -1583,6 +1583,7 @@ cat > "$system_header_source_path" <<'C'
 #include <stdbool.h>
 #include <stdarg.h>
 #include <limits.h>
+#include <float.h>
 
 struct HeaderPair {
   uint8_t tag;
@@ -1591,6 +1592,12 @@ struct HeaderPair {
 
 _Static_assert(CHAR_BIT == 8, "char bit width");
 _Static_assert(UINT8_MAX == 255, "stdint uint8 max");
+_Static_assert(FLT_EVAL_METHOD == 0, "float eval method");
+_Static_assert(FLT_RADIX == 2, "float radix");
+_Static_assert(FLT_MANT_DIG == 24, "float mantissa");
+_Static_assert(DBL_MANT_DIG == 53, "double mantissa");
+_Static_assert(LDBL_MANT_DIG == 64, "long double mantissa");
+_Static_assert(DECIMAL_DIG == 21, "decimal digits");
 _Static_assert(sizeof(uintptr_t) == 8, "stdint uintptr width");
 _Static_assert(sizeof(size_t) == 8, "stddef size_t width");
 _Static_assert(sizeof(ptrdiff_t) == 8, "stddef ptrdiff_t width");
