@@ -91,6 +91,7 @@ binary_path="/tmp/kimicc-linux-amd64-smoke"
 multi_main_source_path="/tmp/kimicc-linux-amd64-multi-main.c"
 multi_helper_source_path="/tmp/kimicc-linux-amd64-multi-helper.c"
 multi_binary_path="/tmp/kimicc-linux-amd64-multi"
+multi_dependency_path="/tmp/kimicc-linux-amd64-multi.d"
 extensionless_source_path="/tmp/kimicc-linux-amd64-extensionless"
 asm_source_path="/tmp/kimicc-linux-amd64-asm.s"
 asm_object_path="/tmp/kimicc-linux-amd64-asm.o"
@@ -1526,8 +1527,11 @@ cat > "$multi_helper_source_path" <<'C'
 int helper(void) { return 40; }
 C
 
-"$kimicc" -target linux-amd64 -o "$multi_binary_path" \
+"$kimicc" -target linux-amd64 -MMD -MP -MF "$multi_dependency_path" \
+  -o "$multi_binary_path" \
   "$multi_main_source_path" "$multi_helper_source_path"
+grep -F "$multi_binary_path: $multi_main_source_path $multi_helper_source_path" "$multi_dependency_path" >/dev/null
+grep -F "$multi_helper_source_path:" "$multi_dependency_path" >/dev/null
 set +e
 "$multi_binary_path"
 status=$?
