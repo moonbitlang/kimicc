@@ -85,8 +85,9 @@ The driver also recognizes dependency and simple macro options tunneled through
 `-Xpreprocessor` spellings such as `-Xpreprocessor -DVALUE=1` or
 `-Xpreprocessor -D -Xpreprocessor VALUE=1`.
 
-The default output target is `darwin-arm64`. Use `-target linux-amd64` to select
-the experimental Linux/amd64 backend:
+The default output target is `darwin-arm64`. Use `-target linux-amd64`, or the
+Docker-style alias `-target linux/amd64`, to select the experimental
+Linux/amd64 backend:
 
 ```bash
 moon run cmd/main --target native -- -S -target linux-amd64 input.c -o out.s
@@ -271,6 +272,9 @@ For target dispatch, use:
 ```moonbit nocheck
 ///|
 let target = @target.Target::parse("linux-amd64").unwrap()
+
+///|
+let docker_style_target = @target.Target::parse("linux/amd64").unwrap()
 
 ///|
 let assembly = @codegen.generate_assembly_for_target(program, target)
