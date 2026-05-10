@@ -516,7 +516,7 @@ int target_predefines(void) {
 #if __has_include("missing_probe_header.h")
   return 518;
 #endif
-#if __has_feature(c_static_assert) && __has_extension(c_alignas) && __has_feature(c_atomic)
+#if __has_feature(c_static_assert) && __has_extension(c_alignas) && __has_feature(c_alignof) && __has_feature(c_atomic)
   target = target + 0;
 #else
   return 520;
@@ -526,7 +526,7 @@ int target_predefines(void) {
 #else
   return 521;
 #endif
-#if __is_identifier(kimicc_probe_identifier) && !__is_identifier(int) && !__is_identifier(_Static_assert) && !__is_identifier(__typeof__) && !__is_identifier(__auto_type)
+#if __is_identifier(kimicc_probe_identifier) && !__is_identifier(int) && !__is_identifier(_Static_assert) && !__is_identifier(__typeof__) && !__is_identifier(__auto_type) && !__is_identifier(_Alignof) && !__is_identifier(__alignof__)
   target = target + 0;
 #else
   return 522;
@@ -1233,6 +1233,20 @@ int gnu_noop_attributes(void) {
   }
 }
 
+int alignof_selection(void) {
+  struct AlignS { char c; int x; };
+  union AlignU { char c; double d; };
+  long y;
+  int a[2];
+  if (_Alignof(int) != 4) return 550;
+  if (alignof(struct AlignS) != 4) return 551;
+  if (__alignof__(union AlignU) != 8) return 552;
+  if (__alignof__(y) != 8) return 553;
+  if (__alignof__(a) != 4) return 554;
+  if (__alignof__ y != 8) return 555;
+  return 0;
+}
+
 int main(void) {
   struct Pair p;
   struct DPair q;
@@ -1305,6 +1319,7 @@ int main(void) {
          gnu_auto_type_selection() +
          gnu_classify_type_selection() +
          gnu_noop_attributes() +
+         alignof_selection() +
          var_pair(0, make_pair(0, 1)) +
          var_dpair(0, make_dpair(0.5, 0.5)) +
          var_big(0, make_big(0, 1, 0)) +

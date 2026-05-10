@@ -157,6 +157,7 @@ fn collect_static_inline_expr(
     | FloatLiteral(_)
     | String(_)
     | Sizeof(_)
+    | Alignof(_)
     | LabelAddr(_)
     | OffsetOf(_, _) => ()
     Binary(_, left, right)
@@ -169,6 +170,7 @@ fn collect_static_inline_expr(
     Unary(_, inner)
     | Deref(inner)
     | SizeofExpr(inner)
+    | AlignofExpr(inner)
     | Cast(_, inner)
     | PrefixInc(inner)
     | PrefixDec(inner)
@@ -432,6 +434,8 @@ fn Codegen::fold_const(self : Codegen, expr : @parser.Expr) -> Int64? {
     DesignatedRange(_, _, e) => self.fold_const(e)
     Sizeof(ty) => Some(self.type_size(ty).to_int64())
     SizeofExpr(e) => Some(self.type_size(self.global_expr_type(e)).to_int64())
+    Alignof(ty) => Some(self.type_align(ty).to_int64())
+    AlignofExpr(e) => Some(self.type_align(self.global_expr_type(e)).to_int64())
     OffsetOf(ty, field) =>
       match ty {
         Struct(name) | Union(name) =>

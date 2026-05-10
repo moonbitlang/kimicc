@@ -329,34 +329,7 @@ fn Parser::parse_unary(self : Parser) -> Expr {
         let saved_pos = self.lexer.pos
         let saved_token = self.token
         self.advance() // past (
-        // Try to parse as type
-        let is_type = match self.token {
-          Int
-          | Void
-          | Char
-          | Struct
-          | Union
-          | Signed
-          | Unsigned
-          | Short
-          | Long
-          | Float
-          | Double
-          | Bool
-          | Enum
-          | Const
-          | Restrict
-          | Volatile => true
-          Ident("__typeof") => true
-          Ident("__typeof__") => true
-          Ident("typeof") => true
-          Ident("_Atomic") => true
-          Ident("_Alignas") => true
-          Ident("alignas") => true
-          Ident(name) => self.typedefs.contains(name)
-          _ => false
-        }
-        if is_type {
+        if self.is_type_name_start() {
           let ty = self.parse_type_name()
           if self.token == RParen {
             self.advance()
@@ -383,41 +356,7 @@ fn Parser::parse_unary(self : Parser) -> Expr {
       let saved_pos = self.lexer.pos
       let saved_token = self.token
       self.advance() // past (
-      // Try to parse as type
-      let is_cast = match self.token {
-        Int
-        | Void
-        | Char
-        | Struct
-        | Union
-        | Signed
-        | Unsigned
-        | Short
-        | Long
-        | Float
-        | Double
-        | Bool
-        | Enum
-        | Const
-        | Restrict
-        | Volatile
-        | Static
-        | Extern
-        | Inline => true
-        Ident("_Float16") => true
-        Ident("__int128") => true
-        Ident("__int128_t") => true
-        Ident("__uint128_t") => true
-        Ident("_Atomic") => true
-        Ident("_Alignas") => true
-        Ident("alignas") => true
-        Ident("__typeof") => true
-        Ident("__typeof__") => true
-        Ident("typeof") => true
-        Ident(name) => self.typedefs.contains(name)
-        _ => false
-      }
-      if is_cast {
+      if self.is_type_name_start() {
         let ty = self.parse_type_name()
         if self.token == RParen {
           self.advance() // past )
@@ -446,8 +385,49 @@ fn Parser::parse_unary(self : Parser) -> Expr {
         self.apply_postfix(expr)
       }
     }
+    Ident(name) =>
+      if is_alignof_operator(name) {
+        self.parse_alignof_operator(name)
+      } else {
+        self.parse_postfix()
+      }
     _ => self.parse_postfix()
   }
+}
+
+///|
+fn is_alignof_operator(name : String) -> Bool {
+  match name {
+    "_Alignof" | "alignof" | "__alignof" | "__alignof__" => true
+    _ => false
+  }
+}
+
+///|
+fn Parser::parse_alignof_operator(self : Parser, name : String) -> Expr {
+  self.advance()
+  if self.token != LParen {
+    match name {
+      "__alignof" | "__alignof__" | "_Alignof" =>
+        return AlignofExpr(self.parse_unary())
+      _ => abort("expected '(' after alignof")
+    }
+  }
+  self.expect(LParen)
+  let saved_pos = self.lexer.pos
+  let saved_token = self.token
+  if self.is_type_name_start() {
+    let ty = self.parse_type_name()
+    if self.token == RParen {
+      self.advance()
+      return Alignof(ty)
+    }
+    self.lexer.pos = saved_pos
+    self.token = saved_token
+  }
+  let expr = self.parse_assign()
+  self.expect(RParen)
+  AlignofExpr(expr)
 }
 
 ///|

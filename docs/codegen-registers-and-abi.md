@@ -240,6 +240,8 @@ GNU `typeof`/`__typeof__` type specifiers are similarly resolved in the parser;
 expression operands are parsed only to infer their type.
 GNU `__auto_type` locals are resolved in the parser from their initializer type
 for covered scalar and pointer expressions.
+C11 `_Alignof(type)` and GNU `alignof`/`__alignof__` type or expression
+operands are folded to the covered parser type model's alignment.
 GNU `__builtin_choose_expr` and `__builtin_types_compatible_p` are handled the
 same way for the covered parser type model.
 GNU `__builtin_classify_type` is also folded before backend lowering.

@@ -349,6 +349,7 @@ fn Codegen::collect_expr_locals(self : Codegen, expr : @parser.Expr) -> Unit {
     | Deref(e)
     | AddrOf(e)
     | SizeofExpr(e)
+    | AlignofExpr(e)
     | Cast(_, e)
     | PrefixInc(e)
     | PrefixDec(e)

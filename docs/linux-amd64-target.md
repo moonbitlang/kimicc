@@ -19,9 +19,10 @@ the target split real and testable without claiming full C ABI coverage yet.
   parser and backend currently honor, plus parser-accepted no-op
   `unused`/`__unused__` and `fallthrough`/`__fallthrough__` attributes.
   Clang-style feature probes
-  report true only for the covered `c_alignas`, `c_static_assert`, `c_atomic`,
-  and `c_generic_selections` language features; unsupported feature, C
-  attribute, declspec attribute, and warning probes report false.
+  report true only for the covered `c_alignas`, `c_alignof`,
+  `c_static_assert`, `c_atomic`, and `c_generic_selections` language features;
+  unsupported feature, C attribute, declspec attribute, and warning probes
+  report false.
   `__is_identifier(name)` reflects the parser's C keywords and recognized
   extension tokens. `__COUNTER__`
   increments on each macro expansion. Variadic macros support `__VA_ARGS__`,
@@ -140,6 +141,8 @@ the target split real and testable without claiming full C ABI coverage yet.
   and are not emitted or evaluated.
 - GNU `__auto_type` local declarations infer the declared type from the
   initializer for the covered scalar and pointer expression types.
+- C11 `_Alignof(type)` and GNU `alignof`/`__alignof__` type or expression
+  operands are folded to the covered parser type model's alignment.
 - GNU `__builtin_classify_type` is folded to GCC-compatible category codes for
   covered scalar, pointer, array, string, struct, and union expressions.
 - Covered integer-width atomic builtins lower without external calls:
@@ -183,8 +186,9 @@ compound literals, initialized global arrays/structs/unions and covered global
 bit-field storage units, global pointer/function-pointer address relocations,
 switch dispatch with fallthrough/default behavior, pointers, arrays, simple
 globals, string literals, covered C11 `_Generic` selections, GNU `typeof`
-specifiers, GNU `__auto_type` locals, GNU compile-time selection builtins, GNU
-type-classification builtins, parser-accepted no-op GNU attributes, and common
+specifiers, GNU `__auto_type` locals, C11/GNU alignment query operators, GNU
+compile-time selection builtins, GNU type-classification builtins,
+parser-accepted no-op GNU attributes, and common
 memory, string, bit-manipulation, dynamic stack allocation, integer atomic,
 integer overflow-checking, fortified
 formatted-output, and floating and scalar hint/query builtins.

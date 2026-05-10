@@ -467,6 +467,58 @@ test "parse sizeof type" {
 }
 
 ///|
+test "parse alignof type and expression" {
+  let source =
+    #|struct S { char c; int x; };
+    #|int main() {
+    #|  long y;
+    #|  int a[2];
+    #|  return _Alignof(int) + alignof(struct S) + __alignof__(y) + __alignof__(a);
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [
+          VarDecl(SLong, "y", None),
+          VarDecl(Array(SInt, 2), "a", None),
+          Return(
+            Some(
+              Binary(
+                "+",
+                Binary(
+                  "+",
+                  Binary("+", Alignof(SInt), Alignof(Struct("S"))),
+                  AlignofExpr(Var("y"))
+                ),
+                AlignofExpr(Var("a"))
+              )
+            )
+          ),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected alignof operators to parse")
+  }
+}
+
+///|
+test "parse GNU alignof unparenthesized expression" {
+  let source =
+    #|int main() {
+    #|  long y;
+    #|  return __alignof__ y;
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(
+      Compound([VarDecl(SLong, "y", None), Return(Some(AlignofExpr(Var("y"))))])
+    ) => ()
+    _ => fail("Expected GNU alignof expression")
+  }
+}
+
+///|
 test "parse struct definition and member access" {
   let source =
     #|struct Point { int x; int y; };

@@ -588,6 +588,26 @@ async test "sizeof string literal includes nul terminator" {
 }
 
 ///|
+async test "alignof type and expression operators fold to alignment" {
+  let source =
+    #|struct S { char c; int x; };
+    #|union U { char c; double d; };
+    #|int main() {
+    #|  long y;
+    #|  int a[2];
+    #|  if (_Alignof(int) != 4) return 1;
+    #|  if (alignof(struct S) != 4) return 2;
+    #|  if (__alignof__(union U) != 8) return 3;
+    #|  if (__alignof__(y) != 8) return 4;
+    #|  if (__alignof__(a) != 4) return 5;
+    #|  if (__alignof__ y != 8) return 6;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "parse quickjs preprocessed" {
   let data = @fs.read_file("/tmp/quickjs_preprocessed.c")
   let source = data.text()

@@ -80,10 +80,11 @@ platform. `__has_include(...)` and `__has_include_next(...)` use the same search
 rules. Headers may use `#pragma once` to suppress repeated inclusion. Use
 `-nostdinc` to disable those built-in system include paths. Clang-style feature
 probes are conservative: covered C feature probes, GNU `packed`/numeric
-`aligned` attributes, and parser-accepted no-op `unused`/`fallthrough`
-attributes report true; unsupported feature/attribute/warning probes report
-false, and `__is_identifier(name)` tracks parser-recognized keywords and
-extension tokens. Variadic macros support `__VA_ARGS__`, GNU comma-paste
+`aligned` attributes, C11/GNU alignment query operators, and parser-accepted
+no-op `unused`/`fallthrough` attributes report true; unsupported
+feature/attribute/warning probes report false, and `__is_identifier(name)`
+tracks parser-recognized keywords and extension tokens. Variadic macros support
+`__VA_ARGS__`, GNU comma-paste
 elision, and `__VA_OPT__(...)`; `__COUNTER__`, `#elifdef`, and `#elifndef` are
 supported for generated/config headers. `#line` updates the logical source
 coordinates used by `__FILE__` and `__LINE__`; GCC-style linemarkers such as
@@ -340,8 +341,9 @@ recompiled on every invocation.
   memory-class aggregate calls and returns, ELF assembly emission, and
   Clang-delegated object emission. The shared parser also folds covered C11
   `_Generic` selections, GNU `typeof` specifiers, GNU `__auto_type` locals, and
-  GNU compile-time selection and type-classification builtins before target
-  code generation, and accepts covered no-op GNU attributes.
+  C11/GNU alignment query operators, GNU compile-time selection and
+  type-classification builtins before target code generation, and accepts
+  covered no-op GNU attributes.
 - The JIT public call surface currently covers only `int` returns with 0 to 3
   `int` arguments.
 - The public AST is useful for tooling, but it is still compiler-internal in

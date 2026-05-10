@@ -141,6 +141,8 @@ fn Codegen::type_of(
       }
     Sizeof(_) => SInt
     SizeofExpr(_) => SInt
+    Alignof(_) => SInt
+    AlignofExpr(_) => SInt
     PrefixInc(e) => self.type_of(e, frame_size)
     PrefixDec(e) => self.type_of(e, frame_size)
     PostfixInc(e) => self.type_of(e, frame_size)
@@ -3842,6 +3844,14 @@ fn Codegen::gen_expr(
         _ => self.type_size(self.type_of(expr, frame_size))
       }
       self.emit_load_int("x9", size.to_int64())
+    }
+    Alignof(ty) => {
+      let align = self.type_align(ty)
+      self.emit_load_int("x9", align.to_int64())
+    }
+    AlignofExpr(expr) => {
+      let align = self.type_align(self.type_of(expr, frame_size))
+      self.emit_load_int("x9", align.to_int64())
     }
     Cast(ty, expr) => {
       self.gen_expr(expr, frame_size)

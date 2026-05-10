@@ -217,6 +217,8 @@ pub(all) enum Expr {
   ArrayAccess(Expr, Expr)
   Sizeof(Type)
   SizeofExpr(Expr)
+  Alignof(Type)
+  AlignofExpr(Expr)
   Cast(Type, Expr)
   PrefixInc(Expr)
   PrefixDec(Expr)

@@ -99,8 +99,11 @@ fn pp_has_attribute(name : String) -> Bool {
 ///|
 fn pp_has_feature(name : String) -> Bool {
   match name {
-    "c_alignas" | "c_static_assert" | "c_atomic" | "c_generic_selections" =>
-      true
+    "c_alignas"
+    | "c_alignof"
+    | "c_static_assert"
+    | "c_atomic"
+    | "c_generic_selections" => true
     _ => false
   }
 }
@@ -143,7 +146,9 @@ fn pp_is_identifier_query(name : String) -> Bool {
     | "volatile"
     | "while"
     | "_Alignas"
+    | "_Alignof"
     | "alignas"
+    | "alignof"
     | "_Atomic"
     | "_Bool"
     | "_Generic"
@@ -173,6 +178,8 @@ fn pp_is_identifier_query(name : String) -> Bool {
     | "__typeof"
     | "__typeof__"
     | "typeof"
+    | "__alignof"
+    | "__alignof__"
     | "__auto_type"
     | "__builtin_va_list"
     | "__int128"

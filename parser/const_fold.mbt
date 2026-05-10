@@ -123,6 +123,8 @@ pub fn fold_const(expr : Expr) -> Int64? {
     Sizeof(ty) => Some(basic_type_size(ty).to_int64())
     SizeofExpr(String(s)) => Some((s.length() + 1).to_int64())
     SizeofExpr(e) => Some(basic_type_size(type_of_expr(e)).to_int64())
+    Alignof(ty) => Some(basic_type_align(ty).to_int64())
+    AlignofExpr(e) => Some(basic_type_align(type_of_expr(e)).to_int64())
     DesignatedField(_, e) => fold_const(e)
     DesignatedIndex(_, e) => fold_const(e)
     DesignatedRange(_, _, e) => fold_const(e)
@@ -252,6 +254,9 @@ fn Parser::fold_const(self : Parser, expr : Expr) -> Int64? {
     Sizeof(ty) => Some(self.const_type_size(ty).to_int64())
     SizeofExpr(e) =>
       Some(self.const_type_size(self.const_expr_type(e)).to_int64())
+    Alignof(ty) => Some(self.const_type_align(ty).to_int64())
+    AlignofExpr(e) =>
+      Some(self.const_type_align(self.const_expr_type(e)).to_int64())
     OffsetOf(ty, field) =>
       match self.const_offset_of(ty, field) {
         Some(offset) => Some(offset.to_int64())
@@ -286,6 +291,36 @@ fn basic_type_size(ty : Type) -> Int {
     Union(_) => 8 // unknown union size, assume pointer-sized
     Atomic(inner) => basic_type_size(inner)
     Aligned(inner, _) => basic_type_size(inner)
+  }
+}
+
+///|
+fn basic_type_align(ty : Type) -> Int {
+  match ty {
+    Void => 1
+    Bool | SChar | UChar => 1
+    SShort | UShort => 2
+    SInt | UInt | Float => 4
+    SLong
+    | ULong
+    | SLongLong
+    | ULongLong
+    | Double
+    | Pointer(_)
+    | FuncPtr(_, _, _) => 8
+    SInt128 | UInt128 => 16
+    Array(elem, _) => basic_type_align(elem)
+    Struct(_) => 8
+    Union(_) => 8
+    Atomic(inner) => basic_type_align(inner)
+    Aligned(inner, align) => {
+      let inner_align = basic_type_align(inner)
+      if align > inner_align {
+        align
+      } else {
+        inner_align
+      }
+    }
   }
 }
 
@@ -639,6 +674,8 @@ fn type_of_expr(expr : Expr) -> Type {
     ArrayAccess(_, _) => SInt
     Sizeof(_) => SInt
     SizeofExpr(_) => SInt
+    Alignof(_) => SInt
+    AlignofExpr(_) => SInt
     Cast(ty, _) => ty
     PrefixInc(_) => SInt
     PrefixDec(_) => SInt
@@ -659,7 +696,8 @@ fn type_of_expr(expr : Expr) -> Type {
 ///|
 fn Parser::const_expr_type(self : Parser, expr : Expr) -> Type {
   match expr {
-    Sizeof(_) | SizeofExpr(_) | OffsetOf(_, _) => ULong
+    Sizeof(_) | SizeofExpr(_) | Alignof(_) | AlignofExpr(_) | OffsetOf(_, _) =>
+      ULong
     Cast(ty, _) => ty
     Var(name) =>
       if self.value_types.contains(name) {

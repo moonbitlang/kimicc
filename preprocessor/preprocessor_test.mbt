@@ -277,7 +277,7 @@ test "has attribute reflects supported packed layout" {
 ///|
 test "clang feature probes are conservative" {
   let source =
-    #|#if __has_feature(c_static_assert) && __has_extension(c_alignas)
+    #|#if __has_feature(c_static_assert) && __has_extension(c_alignas) && __has_feature(c_alignof)
     #|int core_features = 1;
     #|#else
     #|int core_features = 0;
@@ -312,7 +312,7 @@ test "is identifier reflects parser keywords and extensions" {
     #|#else
     #|int c_keywords = 0;
     #|#endif
-    #|#if !__is_identifier(_Static_assert) && !__is_identifier(__int128) && !__is_identifier(_Generic) && !__is_identifier(__typeof__) && !__is_identifier(__auto_type)
+    #|#if !__is_identifier(_Static_assert) && !__is_identifier(__int128) && !__is_identifier(_Generic) && !__is_identifier(__typeof__) && !__is_identifier(__auto_type) && !__is_identifier(_Alignof) && !__is_identifier(__alignof__)
     #|int extensions = 1;
     #|#else
     #|int extensions = 0;

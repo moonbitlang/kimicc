@@ -3509,7 +3509,8 @@ fn X64Codegen::type_of(self : X64Codegen, expr : @parser.Expr) -> @parser.Type {
         Some(elem) => elem
         None => SInt
       }
-    Sizeof(_) | SizeofExpr(_) | OffsetOf(_, _) => SLong
+    Sizeof(_) | SizeofExpr(_) | Alignof(_) | AlignofExpr(_) | OffsetOf(_, _) =>
+      SLong
     Cast(ty, _) => ty
     PrefixInc(e) | PrefixDec(e) | PostfixInc(e) | PostfixDec(e) =>
       self.type_of(e)
@@ -5557,6 +5558,9 @@ fn X64Codegen::gen_expr(self : X64Codegen, expr : @parser.Expr) -> Unit {
     Sizeof(ty) => self.emit("\tmov\trax, " + self.type_size(ty).to_string())
     SizeofExpr(e) =>
       self.emit("\tmov\trax, " + self.type_size(self.type_of(e)).to_string())
+    Alignof(ty) => self.emit("\tmov\trax, " + self.type_align(ty).to_string())
+    AlignofExpr(e) =>
+      self.emit("\tmov\trax, " + self.type_align(self.type_of(e)).to_string())
     Cast(ty, e) => self.gen_expr_as_scalar(e, ty)
     PrefixInc(e) => self.gen_inc_dec(e, 1, false)
     PrefixDec(e) => self.gen_inc_dec(e, -1, false)
@@ -5605,6 +5609,7 @@ fn X64Codegen::collect_expr_locals(
     | Deref(e)
     | AddrOf(e)
     | SizeofExpr(e)
+    | AlignofExpr(e)
     | Cast(_, e)
     | PrefixInc(e)
     | PrefixDec(e)
@@ -6321,6 +6326,8 @@ fn X64Codegen::fold_const(self : X64Codegen, expr : @parser.Expr) -> Int64? {
     | DesignatedRange(_, _, e) => self.fold_const(e)
     Sizeof(ty) => Some(self.type_size(ty).to_int64())
     SizeofExpr(e) => Some(self.type_size(self.global_expr_type(e)).to_int64())
+    Alignof(ty) => Some(self.type_align(ty).to_int64())
+    AlignofExpr(e) => Some(self.type_align(self.global_expr_type(e)).to_int64())
     OffsetOf(ty, field) =>
       match peel_aligned_type(ty) {
         Struct(_) | Union(_) =>
