@@ -113,19 +113,20 @@ test "driver chooses compiler-style default output names" {
 test "driver keeps link-only inputs and framework flags" {
   let opts = match
     parse_driver_args([
-      "kimicc", "foo.o", "-framework", "CoreFoundation", "-Wl,-rpath,/tmp", "-o",
-      "tool",
+      "kimicc", "foo.o", "start.s", "-framework", "CoreFoundation", "-Wl,-rpath,/tmp",
+      "-o", "tool",
     ]) {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
   assert_true(opts.input_path is None)
   assert_true(opts.output_path is Some("tool"))
-  assert_eq(opts.linker_args.length(), 4)
+  assert_eq(opts.linker_args.length(), 5)
   assert_eq(opts.linker_args[0], "foo.o")
-  assert_eq(opts.linker_args[1], "-framework")
-  assert_eq(opts.linker_args[2], "CoreFoundation")
-  assert_eq(opts.linker_args[3], "-Wl,-rpath,/tmp")
+  assert_eq(opts.linker_args[1], "start.s")
+  assert_eq(opts.linker_args[2], "-framework")
+  assert_eq(opts.linker_args[3], "CoreFoundation")
+  assert_eq(opts.linker_args[4], "-Wl,-rpath,/tmp")
 }
 
 ///|

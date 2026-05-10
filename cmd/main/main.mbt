@@ -345,6 +345,9 @@ fn is_preprocessed_source_path(path : String) -> Bool {
 fn is_linker_input(path : String) -> Bool {
   ends_with(path, ".o") ||
   ends_with(path, ".a") ||
+  ends_with(path, ".s") ||
+  ends_with(path, ".S") ||
+  ends_with(path, ".asm") ||
   ends_with(path, ".dylib") ||
   ends_with(path, ".so")
 }
