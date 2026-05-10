@@ -108,7 +108,9 @@ forced_asm_source_path="/tmp/kimicc-linux-amd64-forced-asm"
 forced_asm_object_path="/tmp/kimicc-linux-amd64-forced-asm.o"
 probe_include_dir="/tmp/kimicc-linux-amd64-include"
 probe_after_include_dir="/tmp/kimicc-linux-amd64-include-after"
+probe_prefix_dir="/tmp/kimicc-linux-amd64-prefix"
 after_include_source_path="/tmp/kimicc-linux-amd64-include-after.c"
+prefix_include_source_path="/tmp/kimicc-linux-amd64-prefix-include.c"
 driver_stdout_path="/tmp/kimicc-linux-amd64-driver.out"
 driver_stderr_path="/tmp/kimicc-linux-amd64-driver.err"
 driver_query_path="/tmp/kimicc-linux-amd64-driver-query.out"
@@ -135,7 +137,7 @@ system_header_preprocessed_path="/tmp/kimicc-linux-amd64-system-headers.i"
 system_header_object_path="/tmp/kimicc-linux-amd64-system-headers.o"
 system_header_binary_path="/tmp/kimicc-linux-amd64-system-headers"
 
-mkdir -p "$probe_include_dir" "$probe_after_include_dir"
+mkdir -p "$probe_include_dir" "$probe_after_include_dir" "$probe_prefix_dir/headers"
 cat > "$probe_include_dir/probe_header.h" <<'H'
 #define KIMICC_PROBE_HEADER 1
 H
@@ -145,6 +147,9 @@ H
 cat > "$probe_include_dir/pragma_once_header.h" <<'H'
 #pragma once
 int pragma_once_global = 7;
+H
+cat > "$probe_prefix_dir/headers/prefix_header.h" <<'H'
+#define KIMICC_PREFIX_HEADER 7
 H
 
 set +e
@@ -1586,12 +1591,21 @@ cat > "$after_include_source_path" <<'C'
 #endif
 int after_include_probe(void) { return KIMICC_AFTER_HEADER; }
 C
+cat > "$prefix_include_source_path" <<'C'
+#include <prefix_header.h>
+#if KIMICC_PREFIX_HEADER != 7
+#error expected prefixed include header
+#endif
+int prefix_include_probe(void) { return KIMICC_PREFIX_HEADER; }
+C
 "$kimicc" -fsyntax-only -target linux-amd64 -x c "$extensionless_source_path"
 "$kimicc" -fsyntax-only --target x86_64-pc-linux-gnu -I "$probe_include_dir" "$source_path"
 "$kimicc" -fsyntax-only -target linux/amd64 -I "$probe_include_dir" "$source_path"
 "$kimicc" -fsyntax-only -target linux-amd64 --include-directory "$probe_include_dir" "$source_path"
 "$kimicc" -fsyntax-only -target linux-amd64 -idirafter "$probe_after_include_dir" \
   "$after_include_source_path"
+"$kimicc" -fsyntax-only -target linux-amd64 -iprefix "$probe_prefix_dir/" \
+  -iwithprefixbefore headers "$prefix_include_source_path"
 
 cat > "$multi_main_source_path" <<'C'
 int helper(void);
