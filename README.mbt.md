@@ -337,7 +337,8 @@ recompiled on every invocation.
   scalar varargs, small integer/SSE/mixed aggregate calls and returns,
   recursive nested/array aggregate classification in that small subset,
   memory-class aggregate calls and returns, ELF assembly emission, and
-  Clang-delegated object emission.
+  Clang-delegated object emission. The shared parser also folds covered C11
+  `_Generic` selections before target code generation.
 - The JIT public call surface currently covers only `int` returns with 0 to 3
   `int` arguments.
 - The public AST is useful for tooling, but it is still compiler-internal in

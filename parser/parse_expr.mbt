@@ -519,6 +519,64 @@ fn Parser::parse_postfix(self : Parser) -> Expr {
 }
 
 ///|
+fn generic_strip_type(ty : Type) -> Type {
+  match ty {
+    Aligned(inner, _) => generic_strip_type(inner)
+    _ => ty
+  }
+}
+
+///|
+fn generic_control_type(ty : Type) -> Type {
+  match generic_strip_type(ty) {
+    Array(elem, _) => Pointer(elem)
+    other => other
+  }
+}
+
+///|
+fn generic_types_compatible(control_ty : Type, assoc_ty : Type) -> Bool {
+  generic_strip_type(control_ty) == generic_strip_type(assoc_ty)
+}
+
+///|
+fn Parser::parse_generic_selection(self : Parser) -> Expr {
+  self.expect(LParen)
+  let control = self.parse_assign()
+  let control_ty = generic_control_type(self.const_expr_type(control))
+  let mut selected : Expr? = None
+  let mut default_expr : Expr? = None
+  while self.token == Comma {
+    self.advance()
+    match self.token {
+      Default => {
+        self.advance()
+        self.expect(Colon)
+        let expr = self.parse_assign()
+        default_expr = Some(expr)
+      }
+      _ => {
+        let assoc_ty = self.parse_type_name()
+        self.expect(Colon)
+        let expr = self.parse_assign()
+        if selected is None && generic_types_compatible(control_ty, assoc_ty) {
+          selected = Some(expr)
+        }
+      }
+    }
+  }
+  self.expect(RParen)
+  match selected {
+    Some(expr) => expr
+    None =>
+      match default_expr {
+        Some(expr) => expr
+        None => abort("_Generic selection has no matching association")
+      }
+  }
+}
+
+///|
 fn Parser::parse_primary(self : Parser) -> Expr {
   match self.token {
     Number(n) => {
@@ -541,41 +599,45 @@ fn Parser::parse_primary(self : Parser) -> Expr {
         name
       }
       if self.token == LParen {
-        self.advance()
-        if name == "__builtin_va_arg" {
-          // Parse __builtin_va_arg(ap, type)
-          let ap_expr = self.parse_assign()
-          self.expect(Comma)
-          let ty = self.parse_type_name()
-          self.expect(RParen)
-          VaArg(ap_expr, ty)
-        } else if name == "__builtin_offsetof" {
-          // Parse __builtin_offsetof(type, field)
-          let ty = self.parse_type_name()
-          self.expect(Comma)
-          let field_name = match self.token {
-            Ident(n) => {
-              self.advance()
-              n
-            }
-            _ => {
-              self.advance()
-              ""
-            }
-          }
-          self.expect(RParen)
-          OffsetOf(ty, field_name)
+        if name == "_Generic" {
+          self.parse_generic_selection()
         } else {
-          let args = []
-          if self.token != RParen {
-            args.push(self.parse_assign())
-            while self.token == Comma {
-              self.advance()
-              args.push(self.parse_assign())
+          self.advance()
+          if name == "__builtin_va_arg" {
+            // Parse __builtin_va_arg(ap, type)
+            let ap_expr = self.parse_assign()
+            self.expect(Comma)
+            let ty = self.parse_type_name()
+            self.expect(RParen)
+            VaArg(ap_expr, ty)
+          } else if name == "__builtin_offsetof" {
+            // Parse __builtin_offsetof(type, field)
+            let ty = self.parse_type_name()
+            self.expect(Comma)
+            let field_name = match self.token {
+              Ident(n) => {
+                self.advance()
+                n
+              }
+              _ => {
+                self.advance()
+                ""
+              }
             }
+            self.expect(RParen)
+            OffsetOf(ty, field_name)
+          } else {
+            let args = []
+            if self.token != RParen {
+              args.push(self.parse_assign())
+              while self.token == Comma {
+                self.advance()
+                args.push(self.parse_assign())
+              }
+            }
+            self.expect(RParen)
+            Call(Var(resolved_name), args)
           }
-          self.expect(RParen)
-          Call(Var(resolved_name), args)
         }
       } else if name == "__func__" || name == "__FUNCTION__" {
         if self.current_func_name != "" {

@@ -233,6 +233,9 @@ and designated-initializer holes for the covered aggregate cases, including
 bit-field storage units that do not overlap earlier streamed scalar fields and
 pointer/function-pointer relocations to globals, functions, and aggregate
 subobjects.
+The shared frontend also folds covered C11 `_Generic` selections to the chosen
+association expression before backend lowering; the controlling expression is
+parsed for type selection but not emitted or evaluated.
 `_Alignas` and numeric GNU `__attribute__((aligned(N)))` participate in x86-64
 aggregate layout, ELF global alignment, and stack-local frame realignment. GNU
 `__attribute__((packed))` participates in aggregate layout, and packed

@@ -282,7 +282,7 @@ test "clang feature probes are conservative" {
   let text = expect_preprocess(source)
   inspect(
     text,
-    content="int core_features=1;\nint atomic_feature=1;\nint generic_feature=0;\nint unsupported_probe=0;\n",
+    content="int core_features=1;\nint atomic_feature=1;\nint generic_feature=1;\nint unsupported_probe=0;\n",
   )
 }
 
@@ -294,7 +294,7 @@ test "is identifier reflects parser keywords and extensions" {
     #|#else
     #|int c_keywords = 0;
     #|#endif
-    #|#if !__is_identifier(_Static_assert) && !__is_identifier(__int128)
+    #|#if !__is_identifier(_Static_assert) && !__is_identifier(__int128) && !__is_identifier(_Generic)
     #|int extensions = 1;
     #|#else
     #|int extensions = 0;

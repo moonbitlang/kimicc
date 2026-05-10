@@ -1034,3 +1034,16 @@ test "parse non-variadic function declaration" {
   inspect(decl.variadic, content="false")
   inspect(decl.params.length(), content="1")
 }
+
+///|
+test "parse generic selection chooses matching association" {
+  let source =
+    #|int main(void) {
+    #|  return _Generic(1.0, int: 1, double: 2, default: 3);
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(Compound([Return(Some(Number(2)))])) => ()
+    _ => fail("Expected generic selection to fold to selected expression")
+  }
+}

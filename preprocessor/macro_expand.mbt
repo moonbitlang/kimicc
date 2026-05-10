@@ -92,7 +92,8 @@ fn pp_has_attribute(name : String) -> Bool {
 ///|
 fn pp_has_feature(name : String) -> Bool {
   match name {
-    "c_alignas" | "c_static_assert" | "c_atomic" => true
+    "c_alignas" | "c_static_assert" | "c_atomic" | "c_generic_selections" =>
+      true
     _ => false
   }
 }
@@ -138,6 +139,7 @@ fn pp_is_identifier_query(name : String) -> Bool {
     | "alignas"
     | "_Atomic"
     | "_Bool"
+    | "_Generic"
     | "bool"
     | "_Noreturn"
     | "_Static_assert"

@@ -17,10 +17,11 @@ the target split real and testable without claiming full C ABI coverage yet.
   reports true for GNU `packed`/`__packed__` and numeric
   `aligned`/`__aligned__` attributes, matching the layout attributes the
   parser and backend currently honor. Clang-style feature probes
-  report true only for the covered `c_alignas`, `c_static_assert`, and
-  `c_atomic` language features; unsupported feature, C attribute, declspec
-  attribute, and warning probes report false. `__is_identifier(name)` reflects
-  the parser's C keywords and recognized extension tokens. `__COUNTER__`
+  report true only for the covered `c_alignas`, `c_static_assert`, `c_atomic`,
+  and `c_generic_selections` language features; unsupported feature, C
+  attribute, declspec attribute, and warning probes report false.
+  `__is_identifier(name)` reflects the parser's C keywords and recognized
+  extension tokens. `__COUNTER__`
   increments on each macro expansion. Variadic macros support `__VA_ARGS__`,
   GNU comma-paste elision, and `__VA_OPT__(...)`. `#elifdef`/`#elifndef` are
   accepted in conditional groups. `#line` and GCC-style linemarkers such as
@@ -127,6 +128,9 @@ the target split real and testable without claiming full C ABI coverage yet.
   `__builtin_isunordered`, plus floating classification predicates
   `__builtin_isnan*`, `__builtin_isinf*`, `__builtin_isfinite*`,
   `__builtin_isnormal*`, and `__builtin_signbit*`.
+- C11 `_Generic` selections are parsed and folded to the selected association
+  expression using the covered parser type model; the controlling expression is
+  not emitted or evaluated.
 - Covered integer-width atomic builtins lower without external calls:
   `__atomic_load`, `__atomic_load_n`, `__atomic_store`,
   `__atomic_store_n`, `__atomic_exchange`, `__atomic_exchange_n`,
@@ -167,9 +171,10 @@ bit-fields, GNU packed aggregate layout, local aggregate initializers,
 compound literals, initialized global arrays/structs/unions and covered global
 bit-field storage units, global pointer/function-pointer address relocations,
 switch dispatch with fallthrough/default behavior, pointers, arrays, simple
-globals, string literals, and common memory, string, bit-manipulation, dynamic
-stack allocation, integer atomic, integer overflow-checking, fortified
-formatted-output, and floating and scalar hint/query builtins.
+globals, string literals, covered C11 `_Generic` selections, and common memory,
+string, bit-manipulation, dynamic stack allocation, integer atomic, integer
+overflow-checking, fortified formatted-output, and floating and scalar
+hint/query builtins.
 
 ## Known Gaps
 

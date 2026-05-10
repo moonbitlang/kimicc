@@ -93,6 +93,25 @@ async test "run arrays fixture" {
 }
 
 ///|
+async test "e2e c11 generic selection chooses compatible type" {
+  let source =
+    #|int main(void) {
+    #|  int x = 0;
+    #|  int arr[3];
+    #|  double d = 0.0;
+    #|  int score = 0;
+    #|  score = score + _Generic(x, int: 10, default: 100);
+    #|  score = score + _Generic(d, double: 20, default: 100);
+    #|  score = score + _Generic("x", char *: 12, char[2]: 100, default: 100);
+    #|  score = score + _Generic(arr, int *: 0, int[3]: 100, default: 100);
+    #|  score = score + _Generic(x++, int: 0, default: 100);
+    #|  return score + x;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "run logic fixture" {
   let source =
     #|int main() {
