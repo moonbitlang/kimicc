@@ -305,6 +305,32 @@ test "driver accepts multiple C sources in link mode" {
 }
 
 ///|
+test "driver emits one dependency sidecar for multi-source links" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-MMD", "-MP", "-o", "tool", "main.c", "helper.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.output == LinkExecutable)
+  assert_true(opts.emit_dependencies)
+  assert_true(opts.input_path is Some("main.c"))
+  assert_eq(opts.extra_input_paths, ["helper.c"])
+  assert_eq(dependency_output_path(opts, "main.c", "tool"), "tool.d")
+  assert_eq(
+    dependency_rule_content(opts, "main.c", "tool", [
+      { path: "main.c", system: false },
+      { path: "include/main.h", system: false },
+      { path: "helper.c", system: false },
+      { path: "/usr/include/stdio.h", system: true },
+      { path: "include/main.h", system: false },
+    ]),
+    "tool: main.c include/main.h helper.c\n\ninclude/main.h:\n\nhelper.c:\n",
+  )
+}
+
+///|
 test "driver preserves common linker flags" {
   let opts = match
     parse_driver_args([

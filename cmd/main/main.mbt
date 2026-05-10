@@ -1712,15 +1712,13 @@ fn print_usage() -> Unit {
 
 ///|
 fn compile_link_inputs(opts : DriverOptions, input_path : String) -> Unit {
-  if opts.emit_dependencies {
-    fail("dependency output with multiple C source inputs is not supported yet")
-  }
   let output_path = default_output_path(opts, input_path)
   let source_paths : Array[String] = [input_path]
   for path in opts.extra_input_paths {
     source_paths.push(path)
   }
   let asm_paths : Array[String] = []
+  let dependency_records : Array[@preprocessor.PreprocessDependency] = []
   for path in source_paths {
     let source = match read_file(path) {
       Some(content) => content
@@ -1730,6 +1728,11 @@ fn compile_link_inputs(opts : DriverOptions, input_path : String) -> Unit {
       }
     }
     let preprocessed = preprocess_source_with_dependencies(source, path, opts)
+    if opts.emit_dependencies {
+      for dep in preprocessed.dependency_records {
+        dependency_records.push(dep)
+      }
+    }
     let assembly = generate_assembly_from_preprocessed(preprocessed.text, opts)
     let asm_path = temp_file_path("driver", path + source, ".s")
     if !write_file(asm_path, assembly) {
@@ -1738,6 +1741,7 @@ fn compile_link_inputs(opts : DriverOptions, input_path : String) -> Unit {
     asm_paths.push(asm_path)
   }
   run_link_with_inputs(opts, output_path, asm_paths)
+  write_dependency_file(opts, input_path, output_path, dependency_records)
 }
 
 ///|

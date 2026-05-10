@@ -190,6 +190,9 @@ the target split real and testable without claiming full C ABI coverage yet.
   main source and user headers. Repeated `-MT`/`-MQ` options add multiple rule
   targets, `-MF -` writes the dependency rule to stdout, and dependency-only
   `-o PATH` is treated as a dependency output path when `-MF` is absent.
+  Multi-source link mode with `-MD`/`-MMD` emits one dependency sidecar for the
+  linked output target using the union of dependencies from all compiled C
+  inputs.
   Dependency and simple macro options tunneled through `-Wp,` lists or common
   `-Xpreprocessor` spellings are also recognized.
 
@@ -226,9 +229,6 @@ the compiler's `__builtin_va_*` lowering and is not a complete system-header
 `va_list` interoperability claim. The system-header smoke proves that common
 glibc typedefs and macros from the probed Ubuntu 24.04 headers can be
 preprocessed and compiled, but it is not a complete libc compatibility claim.
-Dependency sidecar output is still single-source oriented; multi-source link
-mode currently rejects dependency-output options rather than guessing at
-Clang-compatible sidecar naming.
 Integer constants also still use the parser's signed `Int64` representation, so
 unsigned max-value macros such as `UINTPTR_MAX` are not a reliable basis for
 `_Static_assert` comparisons yet. The existing Darwin ARM64 Mach-O object writer
