@@ -76,6 +76,7 @@ priv struct DriverOptions {
   mut print_sysroot : Bool
   mut print_multiarch : Bool
   mut print_multi_directory : Bool
+  mut print_multi_os_directory : Bool
   mut print_multi_lib : Bool
   mut print_libgcc_file_name : Bool
   mut print_prog_name : String?
@@ -118,6 +119,7 @@ fn DriverOptions::new() -> DriverOptions {
     print_sysroot: false,
     print_multiarch: false,
     print_multi_directory: false,
+    print_multi_os_directory: false,
     print_multi_lib: false,
     print_libgcc_file_name: false,
     print_prog_name: None,
@@ -992,6 +994,8 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
       "-print-multiarch" | "--print-multiarch" => opts.print_multiarch = true
       "-print-multi-directory" | "--print-multi-directory" =>
         opts.print_multi_directory = true
+      "-print-multi-os-directory" | "--print-multi-os-directory" =>
+        opts.print_multi_os_directory = true
       "-print-multi-lib" | "--print-multi-lib" => opts.print_multi_lib = true
       "-print-libgcc-file-name" | "--print-libgcc-file-name" =>
         opts.print_libgcc_file_name = true
@@ -1711,6 +1715,14 @@ fn driver_multiarch(opts : DriverOptions) -> String {
 }
 
 ///|
+fn driver_multi_os_directory(opts : DriverOptions) -> String {
+  match opts.target {
+    LinuxAmd64 => "../lib"
+    DarwinArm64 => "."
+  }
+}
+
+///|
 fn link_args(
   opts : DriverOptions,
   output_path : String,
@@ -2053,6 +2065,10 @@ fn main {
   }
   if opts.print_multi_directory {
     println(".")
+    return
+  }
+  if opts.print_multi_os_directory {
+    println(driver_multi_os_directory(opts))
     return
   }
   if opts.print_multi_lib {

@@ -158,8 +158,8 @@ test "driver parses configure query flags" {
     parse_driver_args([
       "kimicc", "-target", "linux-amd64", "-dumpmachine", "-print-target-triple",
       "-print-resource-dir", "-print-search-dirs", "--sysroot=/opt/sysroot", "-print-sysroot",
-      "-print-multiarch", "-print-multi-directory", "-print-multi-lib", "-print-libgcc-file-name",
-      "-print-prog-name=ld", "-print-file-name=crt1.o",
+      "-print-multiarch", "-print-multi-directory", "-print-multi-os-directory",
+      "-print-multi-lib", "-print-libgcc-file-name", "-print-prog-name=ld", "-print-file-name=crt1.o",
     ]) {
     Ok(opts) => opts
     Err(err) => abort(err)
@@ -171,6 +171,7 @@ test "driver parses configure query flags" {
   assert_true(opts.print_sysroot)
   assert_true(opts.print_multiarch)
   assert_true(opts.print_multi_directory)
+  assert_true(opts.print_multi_os_directory)
   assert_true(opts.print_multi_lib)
   assert_true(opts.print_libgcc_file_name)
   assert_true(opts.print_prog_name is Some("ld"))
@@ -178,6 +179,7 @@ test "driver parses configure query flags" {
   assert_eq(opts.target.triple(), "x86_64-linux-gnu")
   assert_eq(driver_sysroot(opts), "/opt/sysroot")
   assert_eq(driver_multiarch(opts), "x86_64-linux-gnu")
+  assert_eq(driver_multi_os_directory(opts), "../lib")
   assert_eq(clang_query_args(opts, "-print-file-name=crt1.o"), [
     "clang", "-target", "x86_64-linux-gnu", "--sysroot=/opt/sysroot", "-print-file-name=crt1.o",
   ])
@@ -200,8 +202,8 @@ test "driver parses long configure query flags" {
     parse_driver_args([
       "kimicc", "--target", "linux/amd64", "--dumpmachine", "--print-target-triple",
       "--print-resource-dir", "--print-search-dirs", "--print-sysroot", "--print-multiarch",
-      "--print-multi-directory", "--print-multi-lib", "--print-libgcc-file-name",
-      "--print-prog-name=ld", "--print-file-name=crt1.o",
+      "--print-multi-directory", "--print-multi-os-directory", "--print-multi-lib",
+      "--print-libgcc-file-name", "--print-prog-name=ld", "--print-file-name=crt1.o",
     ]) {
     Ok(opts) => opts
     Err(err) => abort(err)
@@ -213,6 +215,7 @@ test "driver parses long configure query flags" {
   assert_true(opts.print_sysroot)
   assert_true(opts.print_multiarch)
   assert_true(opts.print_multi_directory)
+  assert_true(opts.print_multi_os_directory)
   assert_true(opts.print_multi_lib)
   assert_true(opts.print_libgcc_file_name)
   assert_true(opts.print_prog_name is Some("ld"))
