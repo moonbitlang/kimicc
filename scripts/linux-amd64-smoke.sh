@@ -93,6 +93,10 @@ bad_source_path="/tmp/kimicc-linux-amd64-bad.c"
 bad_asm_path="/tmp/kimicc-linux-amd64-bad.s"
 bad_stdout_path="/tmp/kimicc-linux-amd64-bad.out"
 bad_stderr_path="/tmp/kimicc-linux-amd64-bad.err"
+link_fail_source_path="/tmp/kimicc-linux-amd64-link-fail.c"
+link_fail_binary_path="/tmp/kimicc-linux-amd64-link-fail"
+link_fail_stdout_path="/tmp/kimicc-linux-amd64-link-fail.out"
+link_fail_stderr_path="/tmp/kimicc-linux-amd64-link-fail.err"
 old_source_path="/tmp/kimicc-linux-amd64-oldstyle.c"
 old_helper_path="/tmp/kimicc-linux-amd64-oldstyle-helper.c"
 old_object_path="/tmp/kimicc-linux-amd64-oldstyle.o"
@@ -163,6 +167,26 @@ if [ -e "$bad_asm_path" ]; then
   echo "invalid C smoke source unexpectedly produced assembly" >&2
   exit 1
 fi
+
+cat > "$link_fail_source_path" <<'C'
+int missing(void);
+int main(void) { return missing(); }
+C
+rm -f "$link_fail_binary_path"
+set +e
+"$kimicc" -target linux-amd64 -o "$link_fail_binary_path" "$link_fail_source_path" \
+  >"$link_fail_stdout_path" 2>"$link_fail_stderr_path"
+link_status=$?
+set -e
+if [ "$link_status" -eq 0 ]; then
+  echo "expected unresolved symbol smoke source to fail linking" >&2
+  exit 1
+fi
+if [ -s "$link_fail_stdout_path" ]; then
+  echo "expected unresolved symbol smoke source to keep stdout empty" >&2
+  exit 1
+fi
+grep -F 'error: link failed with code 1' "$link_fail_stderr_path" >/dev/null
 
 cat > "$source_path" <<'C'
 #include "pragma_once_header.h"
