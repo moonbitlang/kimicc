@@ -91,6 +91,7 @@ binary_path="/tmp/kimicc-linux-amd64-smoke"
 multi_main_source_path="/tmp/kimicc-linux-amd64-multi-main.c"
 multi_helper_source_path="/tmp/kimicc-linux-amd64-multi-helper.c"
 multi_binary_path="/tmp/kimicc-linux-amd64-multi"
+extensionless_source_path="/tmp/kimicc-linux-amd64-extensionless"
 asm_source_path="/tmp/kimicc-linux-amd64-asm.s"
 asm_object_path="/tmp/kimicc-linux-amd64-asm.o"
 asm_binary_path="/tmp/kimicc-linux-amd64-asm"
@@ -1510,6 +1511,11 @@ if [ "$status" -ne 42 ]; then
   echo "expected smoke binary to exit 42, got $status" >&2
   exit 1
 fi
+
+cat > "$extensionless_source_path" <<'C'
+int main(void) { return 42; }
+C
+"$kimicc" -fsyntax-only -target linux-amd64 -x c "$extensionless_source_path"
 
 cat > "$multi_main_source_path" <<'C'
 int helper(void);
