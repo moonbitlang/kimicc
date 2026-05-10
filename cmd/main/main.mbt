@@ -36,6 +36,12 @@ priv enum DriverOutput {
 } derive(Eq)
 
 ///|
+priv enum DriverMacroOp {
+  Define(String, String)
+  Undef(String)
+}
+
+///|
 priv struct DriverOptions {
   mut output : DriverOutput
   mut target : @target.Target
@@ -51,6 +57,7 @@ priv struct DriverOptions {
   system_include_paths : Array[String]
   sysroot_paths : Array[String]
   forced_includes : Array[String]
+  macro_ops : Array[DriverMacroOp]
   defines : Map[String, String]
   undefines : Array[String]
   linker_args : Array[String]
@@ -89,6 +96,7 @@ fn DriverOptions::new() -> DriverOptions {
     system_include_paths: [],
     sysroot_paths: [],
     forced_includes: [],
+    macro_ops: [],
     defines: {},
     undefines: [],
     linker_args: [],
@@ -216,7 +224,14 @@ fn add_define(opts : DriverOptions, raw : String) -> Unit {
   let (name, value) = split_define_arg(raw)
   if name != "" {
     opts.defines[name] = value
+    opts.macro_ops.push(Define(name, value))
   }
+}
+
+///|
+fn add_undefine(opts : DriverOptions, name : String) -> Unit {
+  opts.undefines.push(name)
+  opts.macro_ops.push(Undef(name))
 }
 
 ///|
@@ -340,13 +355,13 @@ fn apply_wp_options(opts : DriverOptions, arg : String) -> Result[Unit, String] 
       let value = part[2:].to_owned()
       if value == "" {
         if i + 1 < parts.length() {
-          opts.undefines.push(parts[i + 1])
+          add_undefine(opts, parts[i + 1])
           i += 1
         } else {
           return Err("missing argument after -Wp,-U")
         }
       } else {
-        opts.undefines.push(value)
+        add_undefine(opts, value)
       }
     }
     i += 1
@@ -908,7 +923,7 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
         } else if arg == "-U" || starts_with(arg, "-U") {
           match option_value(argv, i, "-U", "-U") {
             Ok((value, next_i)) => {
-              opts.undefines.push(value)
+              add_undefine(opts, value)
               i = next_i
             }
             Err(err) => return Err(err)
@@ -916,7 +931,7 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
         } else if starts_with(arg, "--undefine=") || arg == "--undefine" {
           match long_option_value(argv, i, "--undefine") {
             Ok((value, next_i)) => {
-              opts.undefines.push(value)
+              add_undefine(opts, value)
               i = next_i
             }
             Err(err) => return Err(err)
@@ -1015,8 +1030,8 @@ fn preprocess_options(
     target: opts.target,
     include_paths: opts.include_paths,
     system_include_paths: full_system_include_paths(opts),
-    defines: opts.defines,
-    undefines: opts.undefines,
+    defines: {},
+    undefines: [],
     emit_line_markers: false,
   }
 }
@@ -1044,6 +1059,30 @@ fn forced_include_prefix(opts : DriverOptions) -> String {
     buf.write_string("#include ")
     buf.write_string(c_string_literal(path))
     buf.write_char('\n')
+  }
+  buf.to_string()
+}
+
+///|
+fn command_line_macro_prefix(opts : DriverOptions) -> String {
+  let buf = StringBuilder::new()
+  for op in opts.macro_ops {
+    match op {
+      Define(name, replacement) => {
+        buf.write_string("#define ")
+        buf.write_string(name)
+        if replacement != "" {
+          buf.write_char(' ')
+          buf.write_string(replacement)
+        }
+        buf.write_char('\n')
+      }
+      Undef(name) => {
+        buf.write_string("#undef ")
+        buf.write_string(name)
+        buf.write_char('\n')
+      }
+    }
   }
   buf.to_string()
 }
@@ -1322,7 +1361,9 @@ fn preprocess_source_with_dependencies(
     }
     { text: source, dependency_records: [{ path: input_path, system: false }] }
   } else {
-    let preprocessed_source = forced_include_prefix(opts) + source
+    let preprocessed_source = command_line_macro_prefix(opts) +
+      forced_include_prefix(opts) +
+      source
     match
       @preprocessor.preprocess_with_dependencies(
         preprocessed_source,

@@ -37,6 +37,30 @@ test "driver command-line defines support function-like and empty macros" {
 }
 
 ///|
+test "driver applies command-line macro operations in order" {
+  let remove_opts = match
+    parse_driver_args(["kimicc", "-DVALUE=1", "-UVALUE", "-E", "foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  let remove_result = preprocess_source_with_dependencies(
+    "#ifdef VALUE\nint value = VALUE;\n#else\nint value = 0;\n#endif\n", "foo.c",
+    remove_opts,
+  )
+  assert_eq(remove_result.text, "int value=0;\n")
+  let restore_opts = match
+    parse_driver_args(["kimicc", "-UVALUE", "-DVALUE=7", "-E", "foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  let restore_result = preprocess_source_with_dependencies(
+    "#ifdef VALUE\nint value = VALUE;\n#else\nint value = 0;\n#endif\n", "foo.c",
+    restore_opts,
+  )
+  assert_eq(restore_result.text, "int value=7;\n")
+}
+
+///|
 test "driver consumes ignored flags with separate values" {
   let opts = match
     parse_driver_args([
