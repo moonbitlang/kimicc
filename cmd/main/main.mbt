@@ -496,7 +496,9 @@ fn consume_ignored_option(
     | "-Xpreprocessor"
     | "-include-pch"
     | "-imacros"
-    | "-iframework" =>
+    | "-iframework"
+    | "-mllvm"
+    | "--param" =>
       if index + 1 < argv.length() {
         Ok(index + 1)
       } else {

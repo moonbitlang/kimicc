@@ -20,6 +20,20 @@ test "driver parses compile-only flags" {
 }
 
 ///|
+test "driver consumes ignored flags with separate values" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-mllvm", "inline-threshold=10", "--param", "ssp-buffer-size=4",
+      "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.input_path is Some("foo.c"))
+  assert_eq(opts.extra_input_paths.length(), 0)
+}
+
+///|
 test "driver parses linux amd64 target" {
   let opts = match
     parse_driver_args(["kimicc", "-target", "linux-amd64", "-S", "foo.c"]) {
