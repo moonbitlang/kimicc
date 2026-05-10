@@ -191,6 +191,117 @@ fn add_define(opts : DriverOptions, raw : String) -> Unit {
 }
 
 ///|
+fn apply_dependency_mode(opts : DriverOptions, mode : String) -> Bool {
+  match mode {
+    "-M" => {
+      opts.output = EmitDependencies
+      opts.emit_dependencies = true
+      opts.dependency_include_system = true
+      true
+    }
+    "-MM" => {
+      opts.output = EmitDependencies
+      opts.emit_dependencies = true
+      opts.dependency_include_system = false
+      true
+    }
+    "-MD" => {
+      opts.emit_dependencies = true
+      opts.dependency_include_system = true
+      true
+    }
+    "-MMD" => {
+      opts.emit_dependencies = true
+      opts.dependency_include_system = false
+      true
+    }
+    "-MP" => {
+      opts.dependency_phony_targets = true
+      true
+    }
+    _ => false
+  }
+}
+
+///|
+fn is_wp_option_name(value : String) -> Bool {
+  apply_dependency_mode(DriverOptions::new(), value) ||
+  value == "-MF" ||
+  value == "-MT" ||
+  value == "-MQ" ||
+  starts_with(value, "-D") ||
+  starts_with(value, "-U")
+}
+
+///|
+fn apply_wp_options(opts : DriverOptions, arg : String) -> Result[Unit, String] {
+  let body = arg["-Wp,".length():].to_owned()
+  let parts : Array[String] = []
+  for part in body.split(",") {
+    parts.push(part.to_owned())
+  }
+  let mut i = 0
+  while i < parts.length() {
+    let part = parts[i]
+    if apply_dependency_mode(opts, part) {
+      if (part == "-MD" || part == "-MMD") &&
+        i + 1 < parts.length() &&
+        !is_wp_option_name(parts[i + 1]) {
+        opts.dependency_output_path = Some(parts[i + 1])
+        i += 1
+      }
+    } else if part == "-MF" {
+      if i + 1 < parts.length() {
+        opts.dependency_output_path = Some(parts[i + 1])
+        i += 1
+      } else {
+        return Err("missing argument after -Wp,-MF")
+      }
+    } else if part == "-MT" {
+      if i + 1 < parts.length() {
+        opts.dependency_targets.push(parts[i + 1])
+        i += 1
+      } else {
+        return Err("missing argument after -Wp,-MT")
+      }
+    } else if part == "-MQ" {
+      if i + 1 < parts.length() {
+        opts.dependency_targets.push(makefile_escape_path(parts[i + 1]))
+        i += 1
+      } else {
+        return Err("missing argument after -Wp,-MQ")
+      }
+    } else if starts_with(part, "-D") {
+      let value = part[2:].to_owned()
+      if value == "" {
+        if i + 1 < parts.length() {
+          add_define(opts, parts[i + 1])
+          i += 1
+        } else {
+          return Err("missing argument after -Wp,-D")
+        }
+      } else {
+        add_define(opts, value)
+      }
+    } else if starts_with(part, "-U") {
+      let value = part[2:].to_owned()
+      if value == "" {
+        if i + 1 < parts.length() {
+          opts.undefines.push(parts[i + 1])
+          i += 1
+        } else {
+          return Err("missing argument after -Wp,-U")
+        }
+      } else {
+        opts.undefines.push(value)
+      }
+    }
+    i += 1
+  }
+  Ok(())
+}
+
+///|
 fn is_c_source_path(path : String) -> Bool {
   ends_with(path, ".c") || ends_with(path, ".i")
 }
@@ -401,22 +512,8 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
           }
         } else if starts_with(arg, "-o") && arg.length() > 2 {
           opts.output_path = Some(arg[2:].to_owned())
-        } else if arg == "-M" {
-          opts.output = EmitDependencies
-          opts.emit_dependencies = true
-          opts.dependency_include_system = true
-        } else if arg == "-MM" {
-          opts.output = EmitDependencies
-          opts.emit_dependencies = true
-          opts.dependency_include_system = false
-        } else if arg == "-MD" {
-          opts.emit_dependencies = true
-          opts.dependency_include_system = true
-        } else if arg == "-MMD" {
-          opts.emit_dependencies = true
-          opts.dependency_include_system = false
-        } else if arg == "-MP" {
-          opts.dependency_phony_targets = true
+        } else if apply_dependency_mode(opts, arg) {
+          ()
         } else if arg == "-MF" || starts_with(arg, "-MF") {
           match option_value(argv, i, "-MF", "-MF") {
             Ok((value, next_i)) => {
@@ -439,6 +536,11 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
               opts.dependency_targets.push(makefile_escape_path(value))
               i = next_i
             }
+            Err(err) => return Err(err)
+          }
+        } else if starts_with(arg, "-Wp,") {
+          match apply_wp_options(opts, arg) {
+            Ok(_) => ()
             Err(err) => return Err(err)
           }
         } else if arg == "-I" || starts_with(arg, "-I") {

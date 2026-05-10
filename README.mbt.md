@@ -58,6 +58,8 @@ while `-MM`/`-MMD` keep only the main source and user headers resolved by
 kimicc's preprocessor. Repeated `-MT`/`-MQ` options add multiple rule targets;
 `-MF -` writes the dependency rule to stdout. In dependency-only `-M`/`-MM`
 mode, `-o PATH` is accepted as a dependency output path when `-MF` is absent.
+The driver also recognizes dependency and simple macro options tunneled through
+`-Wp,` lists, such as `-Wp,-MMD,dep.d,-MP`.
 
 The default output target is `darwin-arm64`. Use `-target linux-amd64` to select
 the experimental Linux/amd64 backend:
