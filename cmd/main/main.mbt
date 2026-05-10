@@ -924,7 +924,10 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
       "-h" | "--help" => opts.show_help = true
       "-v" | "--version" => opts.show_version = true
       "-dumpmachine" | "--dumpmachine" => opts.dump_machine = true
-      "-dumpversion" | "--dumpversion" => opts.dump_version = true
+      "-dumpversion"
+      | "--dumpversion"
+      | "-dumpfullversion"
+      | "--dumpfullversion" => opts.dump_version = true
       "-print-target-triple" | "--print-target-triple" =>
         opts.print_target_triple = true
       "-print-resource-dir" | "--print-resource-dir" =>

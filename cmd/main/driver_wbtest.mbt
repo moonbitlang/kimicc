@@ -177,6 +177,12 @@ test "driver parses configure query flags" {
     Err(err) => abort(err)
   }
   assert_true(version_opts.dump_version)
+  let full_version_opts = match
+    parse_driver_args(["kimicc", "-dumpfullversion"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(full_version_opts.dump_version)
 }
 
 ///|
