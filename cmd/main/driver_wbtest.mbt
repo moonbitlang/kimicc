@@ -522,7 +522,9 @@ test "driver preserves common linker flags" {
     parse_driver_args([
       "kimicc", "foo.o", "-static", "-pie", "-nostdlib", "-u", "entry", "-z", "now",
       "-B", "/tools", "-l", "m", "--library-directory=/extra", "--library-directory",
-      "/more", "-fuse-ld=lld", "-rtlib=compiler-rt", "-o", "tool",
+      "/more", "-rpath", "/runtime/lib", "-e", "entry_point", "-install_name", "@rpath/libfoo.dylib",
+      "-compatibility_version", "1.0", "-current_version", "1.2", "-fuse-ld=lld",
+      "-rtlib=compiler-rt", "-o", "tool",
     ]) {
     Ok(opts) => opts
     Err(err) => abort(err)
@@ -530,7 +532,9 @@ test "driver preserves common linker flags" {
   assert_true(opts.input_path is None)
   assert_eq(opts.linker_args, [
     "foo.o", "-static", "-pie", "-nostdlib", "-u", "entry", "-z", "now", "-B", "/tools",
-    "-l", "m", "-L", "/extra", "-L", "/more", "-fuse-ld=lld", "-rtlib=compiler-rt",
+    "-l", "m", "-L", "/extra", "-L", "/more", "-rpath", "/runtime/lib", "-e", "entry_point",
+    "-install_name", "@rpath/libfoo.dylib", "-compatibility_version", "1.0", "-current_version",
+    "1.2", "-fuse-ld=lld", "-rtlib=compiler-rt",
   ])
 }
 
@@ -620,6 +624,21 @@ test "driver expands nested response files" {
   }
   assert_true(opts.input_path is Some("foo.c"))
   assert_eq(opts.defines["VALUE"], "7")
+}
+
+///|
+test "driver preserves darwin loader paths while expanding response files" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "foo.o", "-install_name", "@rpath/libfoo.dylib", "-Xlinker", "@loader_path/lib",
+      "-o", "tool",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_eq(opts.linker_args, [
+    "foo.o", "-install_name", "@rpath/libfoo.dylib", "-Xlinker", "@loader_path/lib",
+  ])
 }
 
 ///|

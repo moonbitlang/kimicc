@@ -692,7 +692,11 @@ fn expand_response_arg_into(
   arg : String,
   depth : Int,
 ) -> Result[Unit, String] {
-  if starts_with(arg, "@") && arg.length() > 1 {
+  if starts_with(arg, "@rpath/") ||
+    starts_with(arg, "@loader_path/") ||
+    starts_with(arg, "@executable_path/") {
+    expanded.push(arg)
+  } else if starts_with(arg, "@") && arg.length() > 1 {
     if depth >= 16 {
       return Err("response file nesting too deep: " + arg)
     }
@@ -900,7 +904,12 @@ fn consume_linker_option(
     | "-L"
     | "-B"
     | "-Xlinker"
+    | "-compatibility_version"
+    | "-current_version"
+    | "-e"
     | "-filelist"
+    | "-install_name"
+    | "-rpath"
     | "-u"
     | "-z"
     | "-T" =>

@@ -68,6 +68,10 @@ platform toolchain for link-only flows. Compile-only assembly inputs are
 delegated to `clang -c`, including multiple assembly inputs when kimicc can
 choose per-input outputs. Use `-x c` for extensionless C inputs and `-x none`
 before returning to extension-based input classification.
+Common linker options such as `-L`, `-l`, `-Wl,`, `-Xlinker`, `-rpath PATH`,
+and `-e SYMBOL` are preserved for the delegated link step. Darwin loader path
+tokens such as `@rpath/...` remain literal linker arguments rather than
+response-file references.
 Compile-style modes such as `-S`, `-c`, `-E`, `-M`/`-MM`, and
 `-fsyntax-only` accept multiple C sources when kimicc can choose per-input
 outputs; single-output forms such as `-c -o one.o a.c b.c` are rejected.

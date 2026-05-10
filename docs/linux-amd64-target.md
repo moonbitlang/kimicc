@@ -192,7 +192,8 @@ the target split real and testable without claiming full C ABI coverage yet.
   `-fsyntax-only` accept multiple C sources when kimicc can choose per-input
   outputs. Default link mode accepts one or more C source inputs, emits
   temporary assembly for each input, and delegates the final Linux/amd64 link to
-  Clang.
+  Clang. Common linker options such as `-L`, `-l`, `-Wl,`, `-Xlinker`,
+  `-rpath PATH`, and `-e SYMBOL` are preserved for that delegated link step.
 - `--sysroot` and `-isysroot` add target-specific system include roots for
   preprocessing and are forwarded to Clang for object assembly and linking.
   User include path spellings include `-I`, `--include-directory`,
