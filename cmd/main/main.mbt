@@ -2017,7 +2017,7 @@ fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
         source, input_path, opts,
       )
       if output_path == "-" {
-        println(preprocessed.text)
+        write_stdout(preprocessed.text)
       } else if !write_file(output_path, preprocessed.text) {
         fail("cannot write file: " + output_path)
       }
@@ -2049,7 +2049,7 @@ fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
         opts,
       )
       if output_path == "-" {
-        println(assembly)
+        write_stdout(assembly)
       } else if !write_file(output_path, assembly) {
         fail("cannot write file: " + output_path)
       }
