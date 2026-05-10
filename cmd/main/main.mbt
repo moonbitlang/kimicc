@@ -826,6 +826,14 @@ fn consume_ignored_option(
       } else {
         Err("missing argument after " + arg)
       }
+    "-B" =>
+      if index + 1 < argv.length() {
+        opts.toolchain_args.push(arg)
+        opts.toolchain_args.push(argv[index + 1])
+        Ok(index + 1)
+      } else {
+        Err("missing argument after " + arg)
+      }
     "-MF" | "-MT" | "-MQ" =>
       if index + 1 < argv.length() {
         Ok(index + 1)
@@ -867,6 +875,9 @@ fn consume_ignored_option(
         set_input_language(opts, arg[2:].to_owned())
         Ok(index)
       } else if starts_with(arg, "-Wa,") {
+        opts.toolchain_args.push(arg)
+        Ok(index)
+      } else if starts_with(arg, "-B") && arg.length() > "-B".length() {
         opts.toolchain_args.push(arg)
         Ok(index)
       } else if starts_with(arg, "--target=") {
@@ -922,7 +933,6 @@ fn consume_linker_option(
     | "-l"
     | "-F"
     | "-L"
-    | "-B"
     | "-Xlinker"
     | "-compatibility_version"
     | "-current_version"
@@ -959,7 +969,6 @@ fn consume_linker_option(
       } else if starts_with(arg, "-l") ||
         starts_with(arg, "-L") ||
         starts_with(arg, "-F") ||
-        starts_with(arg, "-B") ||
         starts_with(arg, "-Wl,") ||
         starts_with(arg, "-fuse-ld=") ||
         starts_with(arg, "-rtlib=") ||
