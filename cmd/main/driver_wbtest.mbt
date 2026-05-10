@@ -50,11 +50,14 @@ test "driver parses linux amd64 target" {
 ///|
 test "driver parses configure query flags" {
   let opts = match
-    parse_driver_args(["kimicc", "-target", "linux-amd64", "-dumpmachine"]) {
+    parse_driver_args([
+      "kimicc", "-target", "linux-amd64", "-dumpmachine", "-print-target-triple",
+    ]) {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
   assert_true(opts.dump_machine)
+  assert_true(opts.print_target_triple)
   assert_eq(opts.target.triple(), "x86_64-linux-gnu")
   let version_opts = match parse_driver_args(["kimicc", "-dumpversion"]) {
     Ok(opts) => opts

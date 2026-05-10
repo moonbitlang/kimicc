@@ -60,6 +60,7 @@ priv struct DriverOptions {
   mut show_version : Bool
   mut dump_machine : Bool
   mut dump_version : Bool
+  mut print_target_triple : Bool
 }
 
 ///|
@@ -89,6 +90,7 @@ fn DriverOptions::new() -> DriverOptions {
     show_version: false,
     dump_machine: false,
     dump_version: false,
+    print_target_triple: false,
   }
 }
 
@@ -700,6 +702,7 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
       "-v" | "--version" => opts.show_version = true
       "-dumpmachine" => opts.dump_machine = true
       "-dumpversion" => opts.dump_version = true
+      "-print-target-triple" => opts.print_target_triple = true
       "-E" | "--preprocess-only" => opts.output = EmitPreprocessed
       "-S" => opts.output = EmitAssembly
       "-c" | "--compile" => opts.output = EmitObject
@@ -1577,7 +1580,7 @@ fn main {
     println("kimicc 0.1.4")
     return
   }
-  if opts.dump_machine {
+  if opts.dump_machine || opts.print_target_triple {
     println(opts.target.triple())
     return
   }
