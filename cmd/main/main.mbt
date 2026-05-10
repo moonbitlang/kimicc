@@ -969,18 +969,28 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
           opts.print_prog_name = Some(
             arg["-print-prog-name=".length():].to_owned(),
           )
-        } else if starts_with(arg, "--print-prog-name=") {
-          opts.print_prog_name = Some(
-            arg["--print-prog-name=".length():].to_owned(),
-          )
+        } else if starts_with(arg, "--print-prog-name=") ||
+          arg == "--print-prog-name" {
+          match long_option_value(argv, i, "--print-prog-name") {
+            Ok((value, next_i)) => {
+              opts.print_prog_name = Some(value)
+              i = next_i
+            }
+            Err(err) => return Err(err)
+          }
         } else if starts_with(arg, "-print-file-name=") {
           opts.print_file_name = Some(
             arg["-print-file-name=".length():].to_owned(),
           )
-        } else if starts_with(arg, "--print-file-name=") {
-          opts.print_file_name = Some(
-            arg["--print-file-name=".length():].to_owned(),
-          )
+        } else if starts_with(arg, "--print-file-name=") ||
+          arg == "--print-file-name" {
+          match long_option_value(argv, i, "--print-file-name") {
+            Ok((value, next_i)) => {
+              opts.print_file_name = Some(value)
+              i = next_i
+            }
+            Err(err) => return Err(err)
+          }
         } else if arg == "-fsyntax-only" {
           opts.output = CheckSyntax
         } else if arg == "-fpreprocessed" {

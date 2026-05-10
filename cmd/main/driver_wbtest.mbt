@@ -212,6 +212,15 @@ test "driver parses long configure query flags" {
   assert_true(opts.print_prog_name is Some("ld"))
   assert_true(opts.print_file_name is Some("crt1.o"))
   assert_true(opts.target == LinuxAmd64)
+  let separated_opts = match
+    parse_driver_args([
+      "kimicc", "--print-prog-name", "ld", "--print-file-name", "crt1.o",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(separated_opts.print_prog_name is Some("ld"))
+  assert_true(separated_opts.print_file_name is Some("crt1.o"))
 }
 
 ///|
