@@ -734,7 +734,7 @@ fn consume_ignored_option(
       } else {
         Err("missing argument after " + arg)
       }
-    "-target" =>
+    "-target" | "--target" =>
       if index + 1 < argv.length() {
         match @target.Target::parse(argv[index + 1]) {
           Some(t) => {
