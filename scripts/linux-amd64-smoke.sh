@@ -90,6 +90,10 @@ dependency_stdout_path="/tmp/kimicc-linux-amd64-smoke-mm.out"
 binary_path="/tmp/kimicc-linux-amd64-smoke"
 multi_main_source_path="/tmp/kimicc-linux-amd64-multi-main.c"
 multi_helper_source_path="/tmp/kimicc-linux-amd64-multi-helper.c"
+multi_main_object_path="/tmp/kimicc-linux-amd64-multi-main.o"
+multi_helper_object_path="/tmp/kimicc-linux-amd64-multi-helper.o"
+multi_main_dependency_path="/tmp/kimicc-linux-amd64-multi-main.d"
+multi_helper_dependency_path="/tmp/kimicc-linux-amd64-multi-helper.d"
 multi_binary_path="/tmp/kimicc-linux-amd64-multi"
 multi_dependency_path="/tmp/kimicc-linux-amd64-multi.d"
 extensionless_source_path="/tmp/kimicc-linux-amd64-extensionless"
@@ -1526,6 +1530,12 @@ C
 cat > "$multi_helper_source_path" <<'C'
 int helper(void) { return 40; }
 C
+
+"$kimicc" -c -target linux-amd64 -MMD -MP \
+  "$multi_main_source_path" "$multi_helper_source_path"
+file "$multi_main_object_path" "$multi_helper_object_path" | grep -E 'ELF 64-bit.*x86-64'
+grep -F "$multi_main_object_path: $multi_main_source_path" "$multi_main_dependency_path" >/dev/null
+grep -F "$multi_helper_object_path: $multi_helper_source_path" "$multi_helper_dependency_path" >/dev/null
 
 "$kimicc" -target linux-amd64 -MMD -MP -MF "$multi_dependency_path" \
   -o "$multi_binary_path" \
