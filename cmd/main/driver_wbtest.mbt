@@ -614,6 +614,24 @@ test "driver parses dependency sidecar options" {
 }
 
 ///|
+test "driver parses clang dependency file option" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-c", "-MMD", "-dependency-file", "build/foo.d", "-dependency-dot",
+      "build/foo.dot", "-module-dependency-dir", "build/modules", "-o", "build/foo.o",
+      "src/foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.emit_dependencies)
+  assert_true(!opts.dependency_include_system)
+  assert_true(opts.dependency_output_path is Some("build/foo.d"))
+  assert_true(opts.input_path is Some("src/foo.c"))
+  assert_eq(opts.extra_input_paths.length(), 0)
+}
+
+///|
 test "driver parses forced include spellings" {
   let opts = match
     parse_driver_args([

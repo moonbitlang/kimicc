@@ -720,10 +720,13 @@ fn consume_ignored_option(
     | "--std"
     | "-Xclang"
     | "-Xpreprocessor"
+    | "-cc1-args"
+    | "-dependency-dot"
     | "-include-pch"
     | "-imacros"
     | "-iframework"
     | "-mllvm"
+    | "-module-dependency-dir"
     | "--param" =>
       if index + 1 < argv.length() {
         Ok(index + 1)
@@ -1044,6 +1047,13 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
               i = next_i
             }
             Err(err) => return Err(err)
+          }
+        } else if arg == "-dependency-file" {
+          if i + 1 < argv.length() {
+            opts.dependency_output_path = Some(argv[i + 1])
+            i = i + 1
+          } else {
+            return Err("missing argument after " + arg)
           }
         } else if arg == "-MT" || starts_with(arg, "-MT") {
           match option_value(argv, i, "-MT", "-MT") {
