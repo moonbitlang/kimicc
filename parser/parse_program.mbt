@@ -64,6 +64,10 @@ fn Parser::parse_program(self : Parser) -> Program {
   let decls = []
   while self.token != EOF {
     self.skip_attributes()
+    while self.token == Ident("__extension__") {
+      self.advance()
+      self.skip_attributes()
+    }
     if self.is_static_assert_token() {
       self.parse_static_assert_decl()
     } else if self.token == Struct || self.token == Union {

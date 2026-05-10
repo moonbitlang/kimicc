@@ -39,6 +39,18 @@ test "parse variable declaration" {
 }
 
 ///|
+test "parse block-scope builtin va list declaration" {
+  let source = "int main() { __builtin_va_list ap; return 0; }"
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(
+      Compound([VarDecl(Pointer(SChar), "ap", None), Return(Some(Number(0)))])
+    ) => ()
+    _ => fail("Expected __builtin_va_list declaration")
+  }
+}
+
+///|
 test "parse if statement" {
   let source = "int main() { if (1) return 2; else return 3; }"
   let prog = @parser.parse(source)
@@ -570,6 +582,20 @@ test "parse struct definition and member access" {
       }
     }
     _ => fail("Expected compound body")
+  }
+}
+
+///|
+test "top-level GNU extension typedef is recorded" {
+  let source =
+    #|__extension__ typedef unsigned char uint8_t;
+    #|__extension__ typedef unsigned long uintptr_t;
+    #|struct HeaderPair { uint8_t tag; uintptr_t value; };
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  match prog.structs[0].fields {
+    [{ ty: UChar, name: "tag", .. }, { ty: ULong, name: "value", .. }] => ()
+    _ => fail("Expected typedef names from top-level __extension__ typedefs")
   }
 }
 

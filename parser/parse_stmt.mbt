@@ -352,6 +352,7 @@ fn Parser::is_stmt_decl_start(self : Parser) -> Bool {
       name == "__int128_t" ||
       name == "__uint128_t" ||
       name == "_Float16" ||
+      name == "__builtin_va_list" ||
       name == "__typeof" ||
       name == "__typeof__" ||
       name == "typeof" ||
@@ -398,52 +399,12 @@ fn Parser::parse_for_stmt(self : Parser) -> Stmt {
   let init = if self.token == Semicolon {
     self.advance()
     None
-  } else if self.token == Int ||
-    self.token == Void ||
-    self.token == Char ||
-    self.token == Struct ||
-    self.token == Union ||
-    self.token == Signed ||
-    self.token == Unsigned ||
-    self.token == Short ||
-    self.token == Long ||
-    self.token == Float ||
-    self.token == Double ||
-    self.token == Bool ||
-    self.token == Enum ||
-    self.token == Const ||
-    self.token == Restrict ||
-    self.token == Volatile ||
-    self.token == Extern ||
-    self.token == Static ||
-    self.token == Inline ||
-    self.token == Register ||
-    self.token == Auto {
+  } else if self.is_stmt_decl_start() {
     Some(self.parse_var_decl_stmt())
   } else {
-    let is_typedef = match self.token {
-      Ident(name) =>
-        name == "_Atomic" ||
-        name == "_Alignas" ||
-        name == "alignas" ||
-        name == "__int128" ||
-        name == "__int128_t" ||
-        name == "__uint128_t" ||
-        name == "_Float16" ||
-        name == "__typeof" ||
-        name == "__typeof__" ||
-        name == "typeof" ||
-        name == "__auto_type" ||
-        self.typedefs.contains(name)
-      _ => false
-    }
-    if is_typedef {
-      Some(self.parse_var_decl_stmt())
-    } else {
-      let expr = self.parse_expr()
-      self.expect(Semicolon)
-      Some(ExprStmt(expr))
-    }
+    let expr = self.parse_expr()
+    self.expect(Semicolon)
+    Some(ExprStmt(expr))
   }
   // Parse condition
   let cond = if self.token == Semicolon {

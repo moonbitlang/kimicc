@@ -83,6 +83,9 @@ int128_helper_path="/tmp/kimicc-linux-amd64-int128-helper.c"
 int128_object_path="/tmp/kimicc-linux-amd64-int128.o"
 int128_helper_object_path="/tmp/kimicc-linux-amd64-int128-helper.o"
 int128_binary_path="/tmp/kimicc-linux-amd64-int128"
+system_header_source_path="/tmp/kimicc-linux-amd64-system-headers.c"
+system_header_object_path="/tmp/kimicc-linux-amd64-system-headers.o"
+system_header_binary_path="/tmp/kimicc-linux-amd64-system-headers"
 
 mkdir -p "$probe_include_dir"
 cat > "$probe_include_dir/probe_header.h" <<'H'
@@ -1400,6 +1403,57 @@ status=$?
 set -e
 if [ "$status" -ne 42 ]; then
   echo "expected smoke binary to exit 42, got $status" >&2
+  exit 1
+fi
+
+cat > "$system_header_source_path" <<'C'
+#include <stddef.h>
+#include <stdint.h>
+#include <stdalign.h>
+#include <stdbool.h>
+#include <stdarg.h>
+#include <limits.h>
+
+struct HeaderPair {
+  unsigned char tag;
+  unsigned long value;
+};
+
+_Static_assert(CHAR_BIT == 8, "char bit width");
+_Static_assert(UINT8_MAX == 255, "stdint uint8 max");
+_Static_assert(UINTPTR_MAX > 0xffffffffUL, "stdint uintptr max");
+_Static_assert(alignof(unsigned long) == 8, "unsigned long alignment");
+_Static_assert(offsetof(struct HeaderPair, value) == 8, "offsetof header pair");
+
+int header_sum(int n, ...) {
+  __builtin_va_list ap;
+  int total = 0;
+  va_start(ap, n);
+  for (int i = 0; i < n; i++) {
+    total = total + va_arg(ap, int);
+  }
+  va_end(ap);
+  return total;
+}
+
+int main(void) {
+  alignas(16) char buf[16];
+  unsigned long addr = (unsigned long)buf;
+  bool ok = true;
+  if ((addr & 15) != 0) return 31;
+  if (!ok) return 32;
+  return header_sum(4, 10, 20, 5, 7);
+}
+C
+
+moon run cmd/main --target native -- -c -target linux-amd64 -o "$system_header_object_path" "$system_header_source_path"
+clang -o "$system_header_binary_path" "$system_header_object_path"
+set +e
+"$system_header_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 42 ]; then
+  echo "expected system-header smoke binary to exit 42, got $status" >&2
   exit 1
 fi
 
