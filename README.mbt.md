@@ -75,8 +75,10 @@ Dependency flags `-M`, `-MM`, `-MD`, `-MMD`, `-MP`, `-MF`, `-MT`, and `-MQ`
 are accepted. `-M`/`-MD` include system headers in generated Makefile rules,
 while `-MM`/`-MMD` keep only the main source and user headers resolved by
 kimicc's preprocessor. Repeated `-MT`/`-MQ` options add multiple rule targets;
-`-MF -` writes the dependency rule to stdout. In dependency-only `-M`/`-MM`
-mode, `-o PATH` is accepted as a dependency output path when `-MF` is absent.
+`-MF -` writes the dependency rule to stdout, and Clang's
+`-dependency-file PATH` is accepted as a depfile destination alias. In
+dependency-only `-M`/`-MM` mode, `-o PATH` is accepted as a dependency output
+path when `-MF` is absent.
 For multiple compile-style inputs, dependency sidecars are per-input when
 `-MF` is omitted; a single `-MF` path with multiple outputs is rejected.
 In multi-source link mode, `-MD`/`-MMD` emit one dependency sidecar for the

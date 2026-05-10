@@ -192,12 +192,16 @@ the target split real and testable without claiming full C ABI coverage yet.
   Clang.
 - `--sysroot` and `-isysroot` add target-specific system include roots for
   preprocessing and are forwarded to Clang for object assembly and linking.
+  User include path spellings include `-I`, `--include-directory`,
+  `-isystem`, `--isystem`, `-isystem-after`, `-iquote`, and `-idirafter`.
 - Dependency flags `-M`, `-MM`, `-MD`, `-MMD`, `-MP`, `-MF`, `-MT`, and `-MQ`
   are handled by the driver using headers resolved by kimicc's preprocessor.
   Full dependency modes include system headers; `-MM` and `-MMD` keep only the
   main source and user headers. Repeated `-MT`/`-MQ` options add multiple rule
-  targets, `-MF -` writes the dependency rule to stdout, and dependency-only
-  `-o PATH` is treated as a dependency output path when `-MF` is absent.
+  targets, `-MF -` writes the dependency rule to stdout, Clang's
+  `-dependency-file PATH` is accepted as a depfile destination alias, and
+  dependency-only `-o PATH` is treated as a dependency output path when `-MF`
+  is absent.
   Multiple compile-style inputs emit per-input dependency sidecars when `-MF`
   is omitted; a single `-MF` path with multiple outputs is rejected.
   Multi-source link mode with `-MD`/`-MMD` emits one dependency sidecar for the
@@ -205,6 +209,12 @@ the target split real and testable without claiming full C ABI coverage yet.
   inputs.
   Dependency and simple macro options tunneled through `-Wp,` lists or common
   `-Xpreprocessor` spellings are also recognized.
+- GCC-style configure queries include `-dumpmachine`, `-print-target-triple`,
+  `-print-sysroot`, `-print-multiarch`, `-print-multi-directory`,
+  `-print-multi-os-directory`, `-print-multi-lib`,
+  `-print-libgcc-file-name`, `-print-prog-name=NAME`, and
+  `-print-file-name=NAME`, with long `--print-*` spellings accepted for the
+  corresponding driver-owned queries.
 
 The backend currently covers a practical scalar subset: signed and unsigned
 integer arithmetic/comparisons, narrow integer and `_Bool` scalar conversions
