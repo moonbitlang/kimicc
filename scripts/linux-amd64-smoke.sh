@@ -1540,6 +1540,7 @@ C
 "$kimicc" -fsyntax-only -target linux-amd64 -x c "$extensionless_source_path"
 "$kimicc" -fsyntax-only --target x86_64-pc-linux-gnu -I "$probe_include_dir" "$source_path"
 "$kimicc" -fsyntax-only -target linux/amd64 -I "$probe_include_dir" "$source_path"
+"$kimicc" -fsyntax-only -target linux-amd64 --include-directory "$probe_include_dir" "$source_path"
 
 cat > "$multi_main_source_path" <<'C'
 int helper(void);
