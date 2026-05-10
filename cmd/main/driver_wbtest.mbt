@@ -48,6 +48,22 @@ test "driver parses linux amd64 target" {
 }
 
 ///|
+test "driver parses configure query flags" {
+  let opts = match
+    parse_driver_args(["kimicc", "-target", "linux-amd64", "-dumpmachine"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.dump_machine)
+  assert_eq(opts.target.triple(), "x86_64-linux-gnu")
+  let version_opts = match parse_driver_args(["kimicc", "-dumpversion"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(version_opts.dump_version)
+}
+
+///|
 test "linux amd64 include paths keep clang fallbacks after libc" {
   let paths = linux_amd64_system_include_paths()
   let mut usr_include = -1

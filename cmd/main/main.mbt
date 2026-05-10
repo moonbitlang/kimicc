@@ -58,6 +58,8 @@ priv struct DriverOptions {
   mut no_standard_includes : Bool
   mut show_help : Bool
   mut show_version : Bool
+  mut dump_machine : Bool
+  mut dump_version : Bool
 }
 
 ///|
@@ -85,6 +87,8 @@ fn DriverOptions::new() -> DriverOptions {
     no_standard_includes: false,
     show_help: false,
     show_version: false,
+    dump_machine: false,
+    dump_version: false,
   }
 }
 
@@ -694,6 +698,8 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
     match arg {
       "-h" | "--help" => opts.show_help = true
       "-v" | "--version" => opts.show_version = true
+      "-dumpmachine" => opts.dump_machine = true
+      "-dumpversion" => opts.dump_version = true
       "-E" | "--preprocess-only" => opts.output = EmitPreprocessed
       "-S" => opts.output = EmitAssembly
       "-c" | "--compile" => opts.output = EmitObject
@@ -1569,6 +1575,14 @@ fn main {
   }
   if opts.show_version {
     println("kimicc 0.1.4")
+    return
+  }
+  if opts.dump_machine {
+    println(opts.target.triple())
+    return
+  }
+  if opts.dump_version {
+    println("0.1.4")
     return
   }
   match opts.input_path {
