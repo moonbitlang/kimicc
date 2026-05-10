@@ -219,8 +219,8 @@ the target split real and testable without claiming full C ABI coverage yet.
   Dependency, include, forced-include, and simple macro options tunneled
   through `-Wp,` lists or common `-Xpreprocessor` spellings are also
   recognized. Diagnostic metadata and driver path options such as `-MJ PATH`,
-  `-serialize-diagnostics PATH`, `--config PATH`, and `-dumpdir PATH` are
-  accepted and ignored.
+  `-serialize-diagnostics PATH`, `--config PATH`, `-dumpdir PATH`, and
+  `-dumpbase PATH` are accepted and ignored.
 - GCC-style configure queries include `-dumpmachine`, `-print-target-triple`,
   `-print-sysroot`, `-print-multiarch`, `-print-multi-directory`,
   `-print-multi-os-directory`, `-print-multi-lib`,
