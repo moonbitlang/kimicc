@@ -68,14 +68,20 @@ test "driver consumes ignored flags with separate values" {
   let opts = match
     parse_driver_args([
       "kimicc", "-mllvm", "inline-threshold=10", "--param", "ssp-buffer-size=4",
-      "--std", "c11", "foo.c",
+      "--std", "c11", "-MJ", "compile.json", "-serialize-diagnostics", "diag.dia",
+      "--serialize-diagnostics", "diag2.dia", "-working-directory", "/tmp/build",
+      "-fmodule-map-file", "module.modulemap", "foo.c",
     ]) {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
   assert_true(opts.input_path is Some("foo.c"))
   assert_eq(opts.extra_input_paths.length(), 0)
-  let eq_opts = match parse_driver_args(["kimicc", "--std=c11", "foo.c"]) {
+  let eq_opts = match
+    parse_driver_args([
+      "kimicc", "--std=c11", "-MJcompile2.json", "--serialize-diagnostics=diag.dia",
+      "--working-directory=/tmp/build", "-fmodule-map-file=module.modulemap", "foo.c",
+    ]) {
     Ok(opts) => opts
     Err(err) => abort(err)
   }

@@ -738,6 +738,7 @@ fn consume_ignored_option(
 ) -> Result[Int, String] {
   match arg {
     "-arch"
+    | "-MJ"
     | "-std"
     | "--std"
     | "-Xclang"
@@ -760,6 +761,11 @@ fn consume_ignored_option(
     | "-iwithsysroot"
     | "-mllvm"
     | "-module-dependency-dir"
+    | "-serialize-diagnostics"
+    | "--serialize-diagnostics"
+    | "-working-directory"
+    | "--working-directory"
+    | "-fmodule-map-file"
     | "--param" =>
       if index + 1 < argv.length() {
         Ok(index + 1)
@@ -826,6 +832,12 @@ fn consume_ignored_option(
       } else if starts_with(arg, "-resource-dir") &&
         arg.length() > "-resource-dir".length() {
         add_resource_dir(opts, arg["-resource-dir".length():].to_owned())
+        Ok(index)
+      } else if starts_with(arg, "-serialize-diagnostics=") ||
+        starts_with(arg, "--serialize-diagnostics=") ||
+        starts_with(arg, "-working-directory=") ||
+        starts_with(arg, "--working-directory=") ||
+        starts_with(arg, "-fmodule-map-file=") {
         Ok(index)
       } else if starts_with(arg, "-x") && arg.length() > 2 {
         set_input_language(opts, arg[2:].to_owned())
