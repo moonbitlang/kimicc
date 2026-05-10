@@ -161,6 +161,10 @@ if [ -s "$driver_stdout_path" ]; then
 fi
 grep -F 'error: no input file' "$driver_stderr_path" >/dev/null
 
+"$kimicc" -v >"$driver_query_path"
+grep -Fx 'kimicc 0.1.4' "$driver_query_path" >/dev/null
+"$kimicc" --version >"$driver_query_path"
+grep -Fx 'kimicc 0.1.4' "$driver_query_path" >/dev/null
 "$kimicc" -target linux-amd64 -dumpmachine >"$driver_query_path"
 grep -Fx 'x86_64-linux-gnu' "$driver_query_path" >/dev/null
 "$kimicc" --target linux/amd64 --print-target-triple >"$driver_query_path"
@@ -1544,7 +1548,7 @@ int main(void) {
 }
 C
 
-"$kimicc" -S -target linux-amd64 -I "$probe_include_dir" -o /tmp/kimicc-linux-amd64-smoke.s "$source_path"
+"$kimicc" -v -S -target linux-amd64 -I "$probe_include_dir" -o /tmp/kimicc-linux-amd64-smoke.s "$source_path"
 "$kimicc" -c -target linux-amd64 -MMD -MP -MF "$dependency_path" -I "$probe_include_dir" -o "$object_path" "$source_path"
 file "$object_path" | grep -E 'ELF 64-bit.*x86-64'
 grep -F "$object_path: $source_path $probe_include_dir/pragma_once_header.h" "$dependency_path" >/dev/null

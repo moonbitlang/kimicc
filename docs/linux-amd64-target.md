@@ -227,7 +227,8 @@ the target split real and testable without claiming full C ABI coverage yet.
   `-print-file-name=NAME`, with long `--print-*` spellings accepted for the
   corresponding driver-owned queries. `-print-sysroot-headers-suffix` is
   recognized and exits nonzero because kimicc does not configure a sysroot
-  headers suffix.
+  headers suffix. The short `-v` verbose flag is accepted without replacing
+  compilation; `--version` remains the version-only query.
 
 The backend currently covers a practical scalar subset: signed and unsigned
 integer arithmetic/comparisons, narrow integer and `_Bool` scalar conversions
