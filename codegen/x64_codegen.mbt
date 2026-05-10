@@ -2613,6 +2613,8 @@ fn X64Codegen::builtin_return_type(
     | "__builtin_bzero" => Some(Void)
     "__builtin_memcpy"
     | "__builtin___memcpy_chk"
+    | "__builtin_mempcpy"
+    | "__builtin___mempcpy_chk"
     | "__builtin_memmove"
     | "__builtin___memmove_chk"
     | "__builtin_memset"
@@ -2624,8 +2626,12 @@ fn X64Codegen::builtin_return_type(
     | "__builtin___strcpy_chk"
     | "__builtin_strcat"
     | "__builtin___strcat_chk"
+    | "__builtin_stpcpy"
+    | "__builtin___stpcpy_chk"
     | "__builtin_strncpy"
     | "__builtin___strncpy_chk"
+    | "__builtin_stpncpy"
+    | "__builtin___stpncpy_chk"
     | "__builtin_strncat"
     | "__builtin___strncat_chk"
     | "__builtin_strchr"
@@ -3079,6 +3085,14 @@ fn X64Codegen::emit_builtin_call(
       ])
       true
     }
+    "__builtin_mempcpy" | "__builtin___mempcpy_chk" => {
+      self.emit_builtin_lib_call("mempcpy", args, 3, Pointer(Void), [
+        Pointer(Void),
+        Pointer(Void),
+        ULong,
+      ])
+      true
+    }
     "__builtin_memmove" | "__builtin___memmove_chk" => {
       self.emit_builtin_lib_call("memmove", args, 3, Pointer(Void), [
         Pointer(Void),
@@ -3169,8 +3183,23 @@ fn X64Codegen::emit_builtin_call(
       ])
       true
     }
+    "__builtin_stpcpy" | "__builtin___stpcpy_chk" => {
+      self.emit_builtin_lib_call("stpcpy", args, 2, Pointer(SChar), [
+        Pointer(SChar),
+        Pointer(SChar),
+      ])
+      true
+    }
     "__builtin_strncpy" | "__builtin___strncpy_chk" => {
       self.emit_builtin_lib_call("strncpy", args, 3, Pointer(SChar), [
+        Pointer(SChar),
+        Pointer(SChar),
+        ULong,
+      ])
+      true
+    }
+    "__builtin_stpncpy" | "__builtin___stpncpy_chk" => {
+      self.emit_builtin_lib_call("stpncpy", args, 3, Pointer(SChar), [
         Pointer(SChar),
         Pointer(SChar),
         ULong,

@@ -98,8 +98,10 @@ the target split real and testable without claiming full C ABI coverage yet.
   `__builtin_strcmp`, `__builtin_strncmp`, `__builtin_strchr`,
   `__builtin_strrchr`, `__builtin_strstr`, `__builtin_memcmp`,
   `__builtin_memchr`, plus `__builtin_strcpy`, `__builtin_strcat`,
-  `__builtin_strncpy`, `__builtin_strncat`, and their covered checked variants
-  lower to the corresponding Linux libc calls.
+  `__builtin_strncpy`, `__builtin_strncat`, GNU `__builtin_mempcpy`,
+  `__builtin_stpcpy`, `__builtin_stpncpy`, and their covered checked variants
+  lower to the corresponding Linux libc calls with fortify object-size operands
+  dropped.
 - Fortified BSD string builtins `__builtin___strlcpy_chk` and
   `__builtin___strlcat_chk` drop the object-size argument and lower to
   `strlcpy` and `strlcat`.

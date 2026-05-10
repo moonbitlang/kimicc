@@ -497,6 +497,11 @@ int target_predefines(void) {
 #else
   return 513;
 #endif
+#if __has_builtin(__builtin_mempcpy) && __has_builtin(__builtin___mempcpy_chk) && __has_builtin(__builtin_stpcpy) && __has_builtin(__builtin___stpncpy_chk)
+  target = target + 0;
+#else
+  return 573;
+#endif
 #if __has_builtin(__builtin_unsupported_vector_thing)
   return 514;
 #endif
@@ -637,6 +642,7 @@ int string_builtins(void) {
   char dst[16];
   char small[4];
   char cat[8];
+  char copy[16];
   __builtin_strcpy(dst, "ab");
   __builtin___strcat_chk(dst, "c", 16);
   if (__builtin_strlen(dst) != 3) return 284;
@@ -656,6 +662,13 @@ int string_builtins(void) {
   __builtin_strcpy(cat, "ab");
   if (__builtin___strlcat_chk(cat, "cdef", 8, 8) != 6) return 503;
   if (__builtin_strcmp(cat, "abcdef") != 0) return 504;
+  if (__builtin_mempcpy(copy, "uv", 2) != copy + 2) return 566;
+  if (__builtin___mempcpy_chk(copy + 2, "wx", 2, 14) != copy + 4) return 567;
+  if (__builtin_memcmp(copy, "uvwx", 4) != 0) return 568;
+  if (__builtin_stpcpy(copy, "hi") != copy + 2) return 569;
+  if (__builtin___stpcpy_chk(copy, "ok", 16) != copy + 2) return 570;
+  if (__builtin_stpncpy(copy, "ab", 2) != copy + 2) return 571;
+  if (__builtin___stpncpy_chk(copy, "cd", 2, 16) != copy + 2) return 572;
   return 0;
 }
 
