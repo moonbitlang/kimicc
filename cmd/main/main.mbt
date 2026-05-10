@@ -44,7 +44,7 @@ priv struct DriverOptions {
   mut dependency_include_system : Bool
   mut dependency_phony_targets : Bool
   mut dependency_output_path : String?
-  mut dependency_target : String?
+  dependency_targets : Array[String]
   include_paths : Array[String]
   system_include_paths : Array[String]
   forced_includes : Array[String]
@@ -68,7 +68,7 @@ fn DriverOptions::new() -> DriverOptions {
     dependency_include_system: true,
     dependency_phony_targets: false,
     dependency_output_path: None,
-    dependency_target: None,
+    dependency_targets: [],
     include_paths: [],
     system_include_paths: [],
     forced_includes: [],
@@ -428,7 +428,7 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
         } else if arg == "-MT" || starts_with(arg, "-MT") {
           match option_value(argv, i, "-MT", "-MT") {
             Ok((value, next_i)) => {
-              opts.dependency_target = Some(value)
+              opts.dependency_targets.push(value)
               i = next_i
             }
             Err(err) => return Err(err)
@@ -436,7 +436,7 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
         } else if arg == "-MQ" || starts_with(arg, "-MQ") {
           match option_value(argv, i, "-MQ", "-MQ") {
             Ok((value, next_i)) => {
-              opts.dependency_target = Some(makefile_escape_path(value))
+              opts.dependency_targets.push(makefile_escape_path(value))
               i = next_i
             }
             Err(err) => return Err(err)
@@ -721,14 +721,19 @@ fn dependency_target(
   input_path : String,
   output_path : String,
 ) -> String {
-  match opts.dependency_target {
-    Some(target) => target
-    None =>
-      if output_path == "-" {
-        makefile_escape_path(input_path)
-      } else {
-        makefile_escape_path(output_path)
+  if opts.dependency_targets.length() > 0 {
+    let buf = StringBuilder::new()
+    for i = 0; i < opts.dependency_targets.length(); i = i + 1 {
+      if i > 0 {
+        buf.write_char(' ')
       }
+      buf.write_string(opts.dependency_targets[i])
+    }
+    buf.to_string()
+  } else if output_path == "-" {
+    makefile_escape_path(input_path)
+  } else {
+    makefile_escape_path(output_path)
   }
 }
 

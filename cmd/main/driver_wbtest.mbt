@@ -106,7 +106,8 @@ test "driver parses dependency sidecar options" {
   assert_true(!opts.dependency_include_system)
   assert_true(opts.dependency_phony_targets)
   assert_true(opts.dependency_output_path is Some("build/foo.d"))
-  assert_true(opts.dependency_target is Some("build\\ dir/foo.o"))
+  assert_eq(opts.dependency_targets.length(), 1)
+  assert_eq(opts.dependency_targets[0], "build\\ dir/foo.o")
   assert_eq(
     dependency_file_content(opts, "src/foo.c", "build dir/foo.o", [
       "src/foo.c", "include/config header.h", "src/foo.c",
@@ -136,5 +137,21 @@ test "driver parses dependency-only options and filters system headers" {
       { path: "/usr/include/stdio.h", system: true },
     ]),
     "foo.o: src/foo.c include/local.h\n\ninclude/local.h:\n",
+  )
+}
+
+///|
+test "driver accumulates dependency targets" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-M", "-MT", "foo.o", "-MQ", "build dir/foo.d", "src/foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_eq(opts.dependency_targets.length(), 2)
+  assert_eq(
+    dependency_file_content(opts, "src/foo.c", "src/foo.o", ["src/foo.c"]),
+    "foo.o build\\ dir/foo.d: src/foo.c\n",
   )
 }

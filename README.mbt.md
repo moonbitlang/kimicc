@@ -55,7 +55,7 @@ moon run cmd/main --target native -- -S --preprocessed input.i -o out.s
 Dependency flags `-M`, `-MM`, `-MD`, `-MMD`, `-MP`, `-MF`, `-MT`, and `-MQ`
 are accepted. `-M`/`-MD` include system headers in generated Makefile rules,
 while `-MM`/`-MMD` keep only the main source and user headers resolved by
-kimicc's preprocessor.
+kimicc's preprocessor. Repeated `-MT`/`-MQ` options add multiple rule targets.
 
 The default output target is `darwin-arm64`. Use `-target linux-amd64` to select
 the experimental Linux/amd64 backend:
