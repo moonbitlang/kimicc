@@ -329,6 +329,11 @@ test "driver pthread seeds reentrant define and linker flag" {
   }
   assert_eq(opts.defines["_REENTRANT"], "1")
   assert_eq(opts.linker_args, ["-pthread"])
+  let result = preprocess_source_with_dependencies(
+    "#ifdef _REENTRANT\nint threaded = _REENTRANT;\n#else\nint threaded = 0;\n#endif\n",
+    "foo.c", opts,
+  )
+  assert_eq(result.text, "int threaded=1;\n")
 }
 
 ///|
