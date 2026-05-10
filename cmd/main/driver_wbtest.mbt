@@ -130,6 +130,19 @@ test "driver keeps link-only inputs and framework flags" {
 }
 
 ///|
+test "driver treats assembly compile input as delegated input" {
+  let opts = match
+    parse_driver_args(["kimicc", "-c", "start.s", "-o", "start.o"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.output == EmitObject)
+  assert_true(opts.input_path is None)
+  assert_eq(opts.linker_args, ["start.s"])
+  assert_eq(assembly_output_path(opts, "start.s"), "start.o")
+}
+
+///|
 test "driver accepts multiple C sources in link mode" {
   let opts = match
     parse_driver_args([

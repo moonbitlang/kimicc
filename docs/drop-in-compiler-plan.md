@@ -78,7 +78,8 @@ kimicc code generation auditable.
 - Preserve linker-facing arguments such as object files, libraries, frameworks,
   and `-Wl,*`.
 - Support link-only invocations by delegating directly to `clang` when no C
-  translation unit is present.
+  translation unit is present, and delegate compile-only assembly inputs to
+  `clang -c`.
 - Emit nonzero process statuses for driver, preprocessing, parsing, codegen,
   assembler, and linker failures.
 

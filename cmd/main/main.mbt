@@ -342,12 +342,15 @@ fn is_preprocessed_source_path(path : String) -> Bool {
 }
 
 ///|
+fn is_assembly_input(path : String) -> Bool {
+  ends_with(path, ".s") || ends_with(path, ".S") || ends_with(path, ".asm")
+}
+
+///|
 fn is_linker_input(path : String) -> Bool {
   ends_with(path, ".o") ||
   ends_with(path, ".a") ||
-  ends_with(path, ".s") ||
-  ends_with(path, ".S") ||
-  ends_with(path, ".asm") ||
+  is_assembly_input(path) ||
   ends_with(path, ".dylib") ||
   ends_with(path, ".so")
 }
@@ -1335,6 +1338,25 @@ fn assemble_with_clang(
 }
 
 ///|
+fn assembly_output_path(opts : DriverOptions, input_path : String) -> String {
+  match opts.output_path {
+    Some(path) => path
+    None => replace_extension(input_path, ".o")
+  }
+}
+
+///|
+fn compile_assembly_input(opts : DriverOptions, input_path : String) -> Unit {
+  if opts.linker_args.length() != 1 {
+    fail("assembly compile mode supports one input file")
+  }
+  if !is_assembly_input(input_path) {
+    fail("no C input file")
+  }
+  assemble_with_clang(opts, input_path, assembly_output_path(opts, input_path))
+}
+
+///|
 fn print_usage() -> Unit {
   let text =
     #|usage: kimicc [options] input.c [input2.c ...] [objects/libraries]
@@ -1545,7 +1567,9 @@ fn main {
         compile_input(opts, input_path)
       }
     None =>
-      if opts.output == LinkExecutable && opts.linker_args.length() > 0 {
+      if opts.output == EmitObject && opts.linker_args.length() > 0 {
+        compile_assembly_input(opts, opts.linker_args[0])
+      } else if opts.output == LinkExecutable && opts.linker_args.length() > 0 {
         let output_path = match opts.output_path {
           Some(path) => path
           None => "a.out"
