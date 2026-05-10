@@ -269,6 +269,23 @@ test "driver parses isystem after include path" {
 }
 
 ///|
+test "driver consumes unsupported include options with values" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-fsyntax-only", "-iframeworkwithsysroot", "/SDK/Frameworks", "-iprefix",
+      "/tools", "-iwithprefix", "include", "-iwithprefixbefore", "quote", "-iwithsysroot",
+      "/usr/include", "-ivfsoverlay", "overlay.yaml", "-ivfsstatcache", "stat.cache",
+      "-iapinotes-path", "api.notes", "-iapinotes-modules", "api-mods", "-index-store-path",
+      "index", "-index-unit-output-path", "unit", "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.input_path is Some("foo.c"))
+  assert_eq(opts.extra_input_paths.length(), 0)
+}
+
+///|
 test "driver forwards linux sysroot to includes and clang" {
   let opts = match
     parse_driver_args([
