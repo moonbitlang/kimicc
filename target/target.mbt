@@ -19,7 +19,9 @@ pub fn Target::parse(text : String) -> Target? {
     | "aarch64-apple-macos"
     | "arm64-apple-macos" => Some(DarwinArm64)
     "linux-amd64"
+    | "linux/amd64"
     | "linux-x86_64"
+    | "linux/x86_64"
     | "x86_64-linux-gnu"
     | "x86_64-pc-linux-gnu"
     | "x86_64-redhat-linux"

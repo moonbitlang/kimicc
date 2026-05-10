@@ -12,6 +12,10 @@ test "parse target aliases" {
     Some(target) => assert_eq(target.name(), "linux-amd64")
     None => abort("linux target did not parse")
   }
+  match @target.Target::parse("linux/amd64") {
+    Some(target) => assert_eq(target.name(), "linux-amd64")
+    None => abort("linux docker-style target did not parse")
+  }
   match @target.Target::parse("x86_64-linux-gnu") {
     Some(target) => assert_eq(target.name(), "linux-amd64")
     None => abort("linux alias did not parse")
