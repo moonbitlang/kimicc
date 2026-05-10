@@ -54,6 +54,7 @@ priv struct DriverOptions {
   undefines : Array[String]
   linker_args : Array[String]
   toolchain_args : Array[String]
+  mut input_language : String?
   mut already_preprocessed : Bool
   mut no_standard_includes : Bool
   mut show_help : Bool
@@ -88,6 +89,7 @@ fn DriverOptions::new() -> DriverOptions {
     undefines: [],
     linker_args: [],
     toolchain_args: [],
+    input_language: None,
     already_preprocessed: false,
     no_standard_includes: false,
     show_help: false,
@@ -361,6 +363,41 @@ fn is_assembly_input(path : String) -> Bool {
 }
 
 ///|
+fn set_input_language(opts : DriverOptions, language : String) -> Unit {
+  if language == "none" {
+    opts.input_language = None
+  } else {
+    opts.input_language = Some(language)
+  }
+}
+
+///|
+fn language_is_c_source(language : String) -> Bool {
+  language == "c" || language == "c-header" || language == "cpp-output"
+}
+
+///|
+fn language_is_assembler(language : String) -> Bool {
+  language == "assembler" || language == "assembler-with-cpp"
+}
+
+///|
+fn treats_as_c_source(opts : DriverOptions, path : String) -> Bool {
+  match opts.input_language {
+    Some(language) => language_is_c_source(language)
+    None => is_c_source_path(path)
+  }
+}
+
+///|
+fn treats_as_assembly_input(opts : DriverOptions, path : String) -> Bool {
+  match opts.input_language {
+    Some(language) => language_is_assembler(language)
+    None => is_assembly_input(path)
+  }
+}
+
+///|
 fn is_linker_input(path : String) -> Bool {
   ends_with(path, ".o") ||
   ends_with(path, ".a") ||
@@ -373,17 +410,23 @@ fn is_linker_input(path : String) -> Bool {
 fn add_positional(opts : DriverOptions, value : String) -> Result[Unit, String] {
   match opts.input_path {
     None =>
-      if is_linker_input(value) {
+      if treats_as_assembly_input(opts, value) ||
+        (is_linker_input(value) && !treats_as_c_source(opts, value)) {
         opts.linker_args.push(value)
       } else {
         opts.input_path = Some(value)
       }
     Some(_) =>
-      if opts.output == LinkExecutable && is_linker_input(value) {
+      if opts.output == LinkExecutable &&
+        (
+          treats_as_assembly_input(opts, value) ||
+          (is_linker_input(value) && !treats_as_c_source(opts, value))
+        ) {
         opts.linker_args.push(value)
-      } else if opts.output == LinkExecutable && is_c_source_path(value) {
+      } else if opts.output == LinkExecutable && treats_as_c_source(opts, value) {
         opts.extra_input_paths.push(value)
-      } else if opts.output == LinkExecutable && !is_c_source_path(value) {
+      } else if opts.output == LinkExecutable &&
+        !treats_as_c_source(opts, value) {
         opts.linker_args.push(value)
       } else {
         return Err("multiple C source inputs are not supported yet: " + value)
@@ -505,7 +548,6 @@ fn consume_ignored_option(
   match arg {
     "-arch"
     | "-std"
-    | "-x"
     | "-Xclang"
     | "-Xpreprocessor"
     | "-include-pch"
@@ -514,6 +556,13 @@ fn consume_ignored_option(
     | "-mllvm"
     | "--param" =>
       if index + 1 < argv.length() {
+        Ok(index + 1)
+      } else {
+        Err("missing argument after " + arg)
+      }
+    "-x" =>
+      if index + 1 < argv.length() {
+        set_input_language(opts, argv[index + 1])
         Ok(index + 1)
       } else {
         Err("missing argument after " + arg)
@@ -572,6 +621,9 @@ fn consume_ignored_option(
         arg.length() > "-resource-dir".length() {
         add_resource_dir(opts, arg["-resource-dir".length():].to_owned())
         Ok(index)
+      } else if starts_with(arg, "-x") && arg.length() > 2 {
+        set_input_language(opts, arg[2:].to_owned())
+        Ok(index)
       } else if starts_with(arg, "-Wa,") {
         opts.toolchain_args.push(arg)
         Ok(index)
@@ -597,7 +649,6 @@ fn consume_ignored_option(
         starts_with(arg, "-MT") ||
         starts_with(arg, "-MQ") ||
         starts_with(arg, "-std=") ||
-        starts_with(arg, "-x") ||
         starts_with(arg, "-O") ||
         starts_with(arg, "-g") ||
         starts_with(arg, "-W") ||
@@ -1415,7 +1466,7 @@ fn compile_assembly_input(opts : DriverOptions, input_path : String) -> Unit {
   if opts.linker_args.length() != 1 {
     fail("assembly compile mode supports one input file")
   }
-  if !is_assembly_input(input_path) {
+  if !treats_as_assembly_input(opts, input_path) {
     fail("no C input file")
   }
   assemble_with_clang(opts, input_path, assembly_output_path(opts, input_path))

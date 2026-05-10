@@ -59,7 +59,8 @@ moon run cmd/main --target native -- -print-resource-dir
 
 Object, library, shared-library, and assembly inputs are delegated to the
 platform toolchain for link-only flows. Compile-only assembly inputs are
-delegated to `clang -c`.
+delegated to `clang -c`. Use `-x c` for extensionless C inputs and `-x none`
+before returning to extension-based input classification.
 
 Dependency flags `-M`, `-MM`, `-MD`, `-MMD`, `-MP`, `-MF`, `-MT`, and `-MQ`
 are accepted. `-M`/`-MD` include system headers in generated Makefile rules,

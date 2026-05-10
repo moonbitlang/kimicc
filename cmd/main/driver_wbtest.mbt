@@ -34,6 +34,33 @@ test "driver consumes ignored flags with separate values" {
 }
 
 ///|
+test "driver language flag classifies extensionless inputs" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-x", "c", "main", "helper", "-x", "none", "support.o", "-o", "tool",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.input_path is Some("main"))
+  assert_eq(opts.extra_input_paths, ["helper"])
+  assert_eq(opts.linker_args, ["support.o"])
+  assert_true(opts.input_language is None)
+}
+
+///|
+test "driver language flag delegates extensionless assembler" {
+  let opts = match
+    parse_driver_args(["kimicc", "-c", "-xassembler", "start", "-o", "start.o"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.input_path is None)
+  assert_eq(opts.linker_args, ["start"])
+  assert_true(treats_as_assembly_input(opts, "start"))
+}
+
+///|
 test "driver parses linux amd64 target" {
   let opts = match
     parse_driver_args(["kimicc", "-target", "linux-amd64", "-S", "foo.c"]) {
