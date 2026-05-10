@@ -114,6 +114,28 @@ test "driver consumes clang pass-through flags with separate values" {
 }
 
 ///|
+test "driver verbose flag does not replace compilation" {
+  let opts = match parse_driver_args(["kimicc", "-v", "-S", "foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.verbose)
+  assert_true(!opts.show_version)
+  assert_true(opts.output == EmitAssembly)
+  assert_true(opts.input_path is Some("foo.c"))
+}
+
+///|
+test "driver long version flag remains terminal" {
+  let opts = match parse_driver_args(["kimicc", "--version"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.show_version)
+  assert_true(!opts.verbose)
+}
+
+///|
 test "driver language flag classifies extensionless inputs" {
   let opts = match
     parse_driver_args([

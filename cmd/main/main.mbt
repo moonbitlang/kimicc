@@ -69,6 +69,7 @@ priv struct DriverOptions {
   mut no_standard_includes : Bool
   mut show_help : Bool
   mut show_version : Bool
+  mut verbose : Bool
   mut dump_machine : Bool
   mut dump_version : Bool
   mut print_target_triple : Bool
@@ -114,6 +115,7 @@ fn DriverOptions::new() -> DriverOptions {
     no_standard_includes: false,
     show_help: false,
     show_version: false,
+    verbose: false,
     dump_machine: false,
     dump_version: false,
     print_target_triple: false,
@@ -1093,7 +1095,8 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
     }
     match arg {
       "-h" | "--help" => opts.show_help = true
-      "-v" | "--version" => opts.show_version = true
+      "-v" => opts.verbose = true
+      "--version" => opts.show_version = true
       "-dumpmachine" | "--dumpmachine" => opts.dump_machine = true
       "-dumpversion"
       | "--dumpversion"
@@ -2264,6 +2267,8 @@ fn main {
           None => "a.out"
         }
         run_link(opts, output_path, None)
+      } else if opts.verbose && opts.output == LinkExecutable {
+        println("kimicc 0.1.4")
       } else {
         fail("no input file")
       }
