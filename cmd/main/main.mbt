@@ -885,19 +885,31 @@ fn consume_linker_option(
         starts_with(arg, "-fuse-ld=") ||
         starts_with(arg, "-rtlib=") ||
         starts_with(arg, "-stdlib=") ||
+        starts_with(arg, "-unwindlib=") ||
+        starts_with(arg, "--rtlib=") ||
+        starts_with(arg, "--stdlib=") ||
+        starts_with(arg, "--unwindlib=") ||
         arg == "-shared" ||
+        arg == "--shared" ||
         arg == "-dynamiclib" ||
         arg == "-bundle" ||
         arg == "-rdynamic" ||
+        arg == "--rdynamic" ||
         arg == "-static" ||
+        arg == "--static" ||
         arg == "-static-pie" ||
+        arg == "--static-pie" ||
         arg == "-static-libgcc" ||
         arg == "-static-libstdc++" ||
         arg == "-pie" ||
         arg == "-no-pie" ||
+        arg == "--no-pie" ||
         arg == "-nostdlib" ||
+        arg == "--nostdlib" ||
         arg == "-nodefaultlibs" ||
+        arg == "--nodefaultlibs" ||
         arg == "-nostartfiles" ||
+        arg == "--nostartfiles" ||
         arg == "-r" ||
         arg == "-s" {
         opts.linker_args.push(arg)

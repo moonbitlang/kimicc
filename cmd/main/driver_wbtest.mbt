@@ -440,6 +440,25 @@ test "driver preserves common linker flags" {
 }
 
 ///|
+test "driver preserves long linker flag spellings" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "foo.o", "--shared", "--rdynamic", "--static", "--static-pie", "--no-pie",
+      "--nostdlib", "--nodefaultlibs", "--nostartfiles", "--rtlib=compiler-rt", "--stdlib=libc++",
+      "--unwindlib=libunwind", "-unwindlib=libgcc", "-o", "tool",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.input_path is None)
+  assert_eq(opts.linker_args, [
+    "foo.o", "--shared", "--rdynamic", "--static", "--static-pie", "--no-pie", "--nostdlib",
+    "--nodefaultlibs", "--nostartfiles", "--rtlib=compiler-rt", "--stdlib=libc++",
+    "--unwindlib=libunwind", "-unwindlib=libgcc",
+  ])
+}
+
+///|
 test "driver pthread seeds reentrant define and linker flag" {
   let opts = match parse_driver_args(["kimicc", "-c", "-pthread", "foo.c"]) {
     Ok(opts) => opts
