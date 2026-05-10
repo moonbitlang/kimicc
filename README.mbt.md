@@ -83,6 +83,17 @@ docker run --rm --platform linux/amd64 \
 See [`docs/linux-amd64-target.md`](docs/linux-amd64-target.md) for current
 coverage, gaps, and the Docker test workflow.
 
+The CI parser tests use pinned external TinyCC and QuickJS snapshots. Regenerate
+the matching preprocessed files locally with:
+
+```bash
+scripts/fetch-external-parser-fixtures.sh
+moon test test/e2e/e2e_test.mbt --target native \
+  --filter 'parse tinycc stripped'
+moon test test/e2e/e2e_test.mbt --target native \
+  --filter 'parse quickjs preprocessed'
+```
+
 Include search is explicit: quote includes search the including file directory
 and `-I` paths, while angle includes search `-isystem` paths and then `-I`
 paths. The driver also adds common macOS Command Line Tools include directories
