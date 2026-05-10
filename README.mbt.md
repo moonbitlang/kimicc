@@ -71,7 +71,9 @@ before returning to extension-based input classification.
 Common linker options such as `-L`, `-l`, `-Wl,`, `-Xlinker`, `-rpath PATH`,
 and `-e SYMBOL` are preserved for the delegated link step. Darwin loader path
 tokens such as `@rpath/...` remain literal linker arguments rather than
-response-file references.
+response-file references. Toolchain discovery options such as
+`--gcc-toolchain=PATH` and `--gcc-install-dir=PATH` are forwarded to Clang;
+their separated spellings are normalized to the joined form Clang accepts.
 Compile-style modes such as `-S`, `-c`, `-E`, `-M`/`-MM`, and
 `-fsyntax-only` accept multiple C sources when kimicc can choose per-input
 outputs; single-output forms such as `-c -o one.o a.c b.c` are rejected.

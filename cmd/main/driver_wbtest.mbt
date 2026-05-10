@@ -382,6 +382,29 @@ test "driver uses resource dir for preprocessing and clang" {
 }
 
 ///|
+test "driver forwards gcc toolchain discovery options to clang" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-target", "linux-amd64", "--gcc-toolchain", "/opt/gcc", "--gcc-install-dir=/opt/gcc/lib/gcc/x86_64-linux-gnu/13",
+      "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_eq(opts.toolchain_args, [
+    "--gcc-toolchain=/opt/gcc", "--gcc-install-dir=/opt/gcc/lib/gcc/x86_64-linux-gnu/13",
+  ])
+  assert_eq(link_args(opts, "out", Some("foo.s")), [
+    "clang", "-o", "out", "-target", "x86_64-linux-gnu", "--gcc-toolchain=/opt/gcc",
+    "--gcc-install-dir=/opt/gcc/lib/gcc/x86_64-linux-gnu/13", "foo.s",
+  ])
+  assert_eq(clang_query_args(opts, "-print-file-name=crt1.o"), [
+    "clang", "-target", "x86_64-linux-gnu", "--gcc-toolchain=/opt/gcc", "--gcc-install-dir=/opt/gcc/lib/gcc/x86_64-linux-gnu/13",
+    "-print-file-name=crt1.o",
+  ])
+}
+
+///|
 test "driver chooses compiler-style default output names" {
   let opts = DriverOptions::new()
   opts.output = EmitAssembly

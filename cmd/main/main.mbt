@@ -265,6 +265,15 @@ fn add_resource_dir(opts : DriverOptions, path : String) -> Unit {
 }
 
 ///|
+fn add_joined_toolchain_arg(
+  opts : DriverOptions,
+  spelling : String,
+  value : String,
+) -> Unit {
+  opts.toolchain_args.push(spelling + "=" + value)
+}
+
+///|
 fn add_pthread(opts : DriverOptions) -> Unit {
   opts.linker_args.push("-pthread")
   add_define(opts, "_REENTRANT=1")
@@ -823,6 +832,13 @@ fn consume_ignored_option(
       } else {
         Err("missing argument after " + arg)
       }
+    "--gcc-toolchain" | "--gcc-install-dir" =>
+      if index + 1 < argv.length() {
+        add_joined_toolchain_arg(opts, arg, argv[index + 1])
+        Ok(index + 1)
+      } else {
+        Err("missing argument after " + arg)
+      }
     _ =>
       if starts_with(arg, "-isysroot") && arg.length() > "-isysroot".length() {
         add_sysroot(opts, "-isysroot", arg["-isysroot".length():].to_owned())
@@ -842,6 +858,10 @@ fn consume_ignored_option(
         starts_with(arg, "-working-directory=") ||
         starts_with(arg, "--working-directory=") ||
         starts_with(arg, "-fmodule-map-file=") {
+        Ok(index)
+      } else if starts_with(arg, "--gcc-toolchain=") ||
+        starts_with(arg, "--gcc-install-dir=") {
+        opts.toolchain_args.push(arg)
         Ok(index)
       } else if starts_with(arg, "-x") && arg.length() > 2 {
         set_input_language(opts, arg[2:].to_owned())

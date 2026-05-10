@@ -196,6 +196,9 @@ the target split real and testable without claiming full C ABI coverage yet.
   `-rpath PATH`, and `-e SYMBOL` are preserved for that delegated link step.
 - `--sysroot` and `-isysroot` add target-specific system include roots for
   preprocessing and are forwarded to Clang for object assembly and linking.
+  Toolchain discovery options such as `--gcc-toolchain=PATH` and
+  `--gcc-install-dir=PATH` are forwarded to Clang; separated spellings are
+  normalized to the joined form accepted by Clang.
   User include path spellings include `-I`, `--include-directory`,
   `-isystem`, `--isystem`, `-isystem-after`, `-iquote`, and `-idirafter`.
   The `-isystem-after` and `-idirafter` paths are searched after the configured
