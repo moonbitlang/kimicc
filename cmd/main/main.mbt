@@ -428,24 +428,43 @@ fn split_response_file_content(
 }
 
 ///|
+fn expand_response_arg_into(
+  expanded : Array[String],
+  arg : String,
+  depth : Int,
+) -> Result[Unit, String] {
+  if starts_with(arg, "@") && arg.length() > 1 {
+    if depth >= 16 {
+      return Err("response file nesting too deep: " + arg)
+    }
+    let path = arg[1:].to_owned()
+    match read_file(path) {
+      Some(content) =>
+        match split_response_file_content(content) {
+          Ok(parts) =>
+            for part in parts {
+              match expand_response_arg_into(expanded, part, depth + 1) {
+                Ok(_) => ()
+                Err(err) => return Err(err)
+              }
+            }
+          Err(err) => return Err(err + ": " + path)
+        }
+      None => return Err("cannot read response file: " + path)
+    }
+  } else {
+    expanded.push(arg)
+  }
+  Ok(())
+}
+
+///|
 fn expand_response_args(argv : Array[String]) -> Result[Array[String], String] {
   let expanded : Array[String] = []
   for arg in argv {
-    if starts_with(arg, "@") && arg.length() > 1 {
-      let path = arg[1:].to_owned()
-      match read_file(path) {
-        Some(content) =>
-          match split_response_file_content(content) {
-            Ok(parts) =>
-              for part in parts {
-                expanded.push(part)
-              }
-            Err(err) => return Err(err + ": " + path)
-          }
-        None => return Err("cannot read response file: " + path)
-      }
-    } else {
-      expanded.push(arg)
+    match expand_response_arg_into(expanded, arg, 0) {
+      Ok(_) => ()
+      Err(err) => return Err(err)
     }
   }
   Ok(expanded)

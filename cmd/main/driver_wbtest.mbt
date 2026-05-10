@@ -199,6 +199,20 @@ test "driver reports unterminated response quotes" {
 }
 
 ///|
+test "driver expands nested response files" {
+  let inner = "/tmp/kimicc-driver-inner.rsp"
+  let outer = "/tmp/kimicc-driver-outer.rsp"
+  assert_true(write_file(inner, "-DVALUE=7"))
+  assert_true(write_file(outer, "@" + inner + " foo.c"))
+  let opts = match parse_driver_args(["kimicc", "@" + outer]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.input_path is Some("foo.c"))
+  assert_eq(opts.defines["VALUE"], "7")
+}
+
+///|
 test "driver rejects multiple C sources outside link mode" {
   match parse_driver_args(["kimicc", "main.c", "helper.c", "-c"]) {
     Ok(_) => abort("expected multiple compile-only sources to fail")
