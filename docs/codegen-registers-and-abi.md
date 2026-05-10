@@ -236,6 +236,8 @@ subobjects.
 The shared frontend also folds covered C11 `_Generic` selections to the chosen
 association expression before backend lowering; the controlling expression is
 parsed for type selection but not emitted or evaluated.
+GNU `__builtin_choose_expr` and `__builtin_types_compatible_p` are handled the
+same way for the covered parser type model.
 `_Alignas` and numeric GNU `__attribute__((aligned(N)))` participate in x86-64
 aggregate layout, ELF global alignment, and stack-local frame realignment. GNU
 `__attribute__((packed))` participates in aggregate layout, and packed

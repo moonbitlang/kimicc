@@ -1047,3 +1047,17 @@ test "parse generic selection chooses matching association" {
     _ => fail("Expected generic selection to fold to selected expression")
   }
 }
+
+///|
+test "parse builtin choose expr and types compatible fold constants" {
+  let source =
+    #|int main(void) {
+    #|  return __builtin_choose_expr(__builtin_types_compatible_p(int, signed int), 7, missing()) +
+    #|         __builtin_choose_expr(__builtin_types_compatible_p(int, unsigned int), missing(), 5);
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(Compound([Return(Some(Binary("+", Number(7), Number(5))))])) => ()
+    _ => fail("Expected builtin compile-time selection to fold constants")
+  }
+}

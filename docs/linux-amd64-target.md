@@ -131,6 +131,8 @@ the target split real and testable without claiming full C ABI coverage yet.
 - C11 `_Generic` selections are parsed and folded to the selected association
   expression using the covered parser type model; the controlling expression is
   not emitted or evaluated.
+- GNU `__builtin_choose_expr` and `__builtin_types_compatible_p` are parsed and
+  folded at compile time for the covered parser type model.
 - Covered integer-width atomic builtins lower without external calls:
   `__atomic_load`, `__atomic_load_n`, `__atomic_store`,
   `__atomic_store_n`, `__atomic_exchange`, `__atomic_exchange_n`,
@@ -171,10 +173,10 @@ bit-fields, GNU packed aggregate layout, local aggregate initializers,
 compound literals, initialized global arrays/structs/unions and covered global
 bit-field storage units, global pointer/function-pointer address relocations,
 switch dispatch with fallthrough/default behavior, pointers, arrays, simple
-globals, string literals, covered C11 `_Generic` selections, and common memory,
-string, bit-manipulation, dynamic stack allocation, integer atomic, integer
-overflow-checking, fortified formatted-output, and floating and scalar
-hint/query builtins.
+globals, string literals, covered C11 `_Generic` selections, GNU compile-time
+selection builtins, and common memory, string, bit-manipulation, dynamic stack
+allocation, integer atomic, integer overflow-checking, fortified
+formatted-output, and floating and scalar hint/query builtins.
 
 ## Known Gaps
 

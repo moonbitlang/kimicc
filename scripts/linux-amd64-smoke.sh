@@ -485,7 +485,7 @@ int target_predefines(void) {
 #else
   return 511;
 #endif
-#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_return_address) && __has_builtin(__atomic_load_n)
+#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_return_address) && __has_builtin(__atomic_load_n) && __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p)
   target = target + 0;
 #else
   return 513;
@@ -1160,6 +1160,20 @@ int generic_selection(void) {
   return score + x == 42 ? 0 : 535;
 }
 
+int compile_time_selection(void) {
+  int selected = __builtin_choose_expr(
+    __builtin_types_compatible_p(int, signed int),
+    40,
+    missing_compile_time_selection()
+  );
+  int fallback = __builtin_choose_expr(
+    __builtin_types_compatible_p(int, unsigned int),
+    missing_compile_time_selection(),
+    2
+  );
+  return selected + fallback == 42 ? 0 : 536;
+}
+
 int main(void) {
   struct Pair p;
   struct DPair q;
@@ -1227,6 +1241,7 @@ int main(void) {
          nested_packed_aggregates() +
          pragma_once_probe() +
          generic_selection() +
+         compile_time_selection() +
          var_pair(0, make_pair(0, 1)) +
          var_dpair(0, make_dpair(0.5, 0.5)) +
          var_big(0, make_big(0, 1, 0)) +

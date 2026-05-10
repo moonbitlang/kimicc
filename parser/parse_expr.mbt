@@ -577,6 +577,35 @@ fn Parser::parse_generic_selection(self : Parser) -> Expr {
 }
 
 ///|
+fn Parser::parse_builtin_choose_expr(self : Parser) -> Expr {
+  self.expect(LParen)
+  let cond = self.parse_assign()
+  self.expect(Comma)
+  let then_expr = self.parse_assign()
+  self.expect(Comma)
+  let else_expr = self.parse_assign()
+  self.expect(RParen)
+  match self.fold_const(cond) {
+    Some(n) => if n != 0 { then_expr } else { else_expr }
+    None => abort("__builtin_choose_expr condition must be constant")
+  }
+}
+
+///|
+fn Parser::parse_builtin_types_compatible_p(self : Parser) -> Expr {
+  self.expect(LParen)
+  let lhs_ty = self.parse_type_name()
+  self.expect(Comma)
+  let rhs_ty = self.parse_type_name()
+  self.expect(RParen)
+  if generic_types_compatible(lhs_ty, rhs_ty) {
+    Number(1)
+  } else {
+    Number(0)
+  }
+}
+
+///|
 fn Parser::parse_primary(self : Parser) -> Expr {
   match self.token {
     Number(n) => {
@@ -601,6 +630,10 @@ fn Parser::parse_primary(self : Parser) -> Expr {
       if self.token == LParen {
         if name == "_Generic" {
           self.parse_generic_selection()
+        } else if name == "__builtin_choose_expr" {
+          self.parse_builtin_choose_expr()
+        } else if name == "__builtin_types_compatible_p" {
+          self.parse_builtin_types_compatible_p()
         } else {
           self.advance()
           if name == "__builtin_va_arg" {

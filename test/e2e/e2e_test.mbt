@@ -112,6 +112,17 @@ async test "e2e c11 generic selection chooses compatible type" {
 }
 
 ///|
+async test "e2e builtin compile-time selection skips unchosen calls" {
+  let source =
+    #|int main(void) {
+    #|  return __builtin_choose_expr(__builtin_types_compatible_p(int, signed int), 40, missing()) +
+    #|         __builtin_choose_expr(__builtin_types_compatible_p(int, unsigned int), missing(), 2);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "run logic fixture" {
   let source =
     #|int main() {
