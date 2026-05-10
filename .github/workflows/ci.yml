@@ -29,6 +29,9 @@ jobs:
       - name: Update dependencies
         run: moon update
 
+      - name: Check shell scripts
+        run: bash -n scripts/fetch-external-parser-fixtures.sh scripts/linux-amd64-smoke.sh
+
       - name: Check formatting
         run: |
           moon fmt
