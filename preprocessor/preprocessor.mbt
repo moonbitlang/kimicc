@@ -651,11 +651,21 @@ fn Preprocessor::process_directive(
   }
   let directive = directive_tokens[directive_index]
   let rest = pp_line_after(directive_tokens, directive_index + 1)
+  let active = self.is_active(stack)
+  if directive.kind == PpNumber {
+    if active {
+      self.process_line_directive(
+        pp_line_after(directive_tokens, directive_index),
+        logical_file,
+        line,
+      )
+    }
+    return ""
+  }
   if directive.kind != PpIdent {
     self.set_error("invalid preprocessor directive")
     return ""
   }
-  let active = self.is_active(stack)
   match directive.text {
     "if" => {
       let cond = if active {

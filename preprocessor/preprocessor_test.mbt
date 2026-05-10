@@ -102,6 +102,19 @@ test "line directive expands macro arguments" {
 }
 
 ///|
+test "gcc line marker updates logical file and line macros" {
+  let source =
+    #|# 42 "marker.c" 1 3
+    #|int marker_line = __LINE__;
+    #|const char *marker_file = __FILE__;
+  let text = expect_preprocess(source)
+  inspect(
+    text,
+    content="int marker_line=42;\nconst char*marker_file=\"marker.c\";\n",
+  )
+}
+
+///|
 test "target macros follow selected target" {
   let linux = match @target.Target::parse("linux-amd64") {
     Some(target) => target

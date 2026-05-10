@@ -23,11 +23,12 @@ the target split real and testable without claiming full C ABI coverage yet.
   the parser's C keywords and recognized extension tokens. `__COUNTER__`
   increments on each macro expansion. Variadic macros support `__VA_ARGS__`,
   GNU comma-paste elision, and `__VA_OPT__(...)`. `#elifdef`/`#elifndef` are
-  accepted in conditional groups. `#line` updates the logical source
-  coordinates used by `__FILE__` and `__LINE__`. `__has_include(...)` and
-  `__has_include_next(...)` use the same explicit quote/system include search
-  rules as `#include` and `#include_next`, and `#pragma once` suppresses
-  repeated inclusion of the same resolved header path.
+  accepted in conditional groups. `#line` and GCC-style linemarkers such as
+  `# 42 "file.c"` update the logical source coordinates used by `__FILE__`
+  and `__LINE__`. `__has_include(...)` and `__has_include_next(...)` use the
+  same explicit quote/system include search rules as `#include` and
+  `#include_next`, and `#pragma once` suppresses repeated inclusion of the same
+  resolved header path.
 - Integer and pointer arguments use the first six System V registers:
   `rdi`, `rsi`, `rdx`, `rcx`, `r8`, and `r9`.
 - `__int128` and `__uint128_t` values use two integer eightbytes for the

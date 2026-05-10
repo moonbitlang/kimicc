@@ -552,6 +552,10 @@ int target_predefines(void) {
   if (__LINE__ != 700) return 531;
   const char *line_file = __FILE__;
   if (line_file[0] != 'k' || line_file[7] != 'l') return 532;
+# 900 "kimicc-marker-probe.c" 1 3
+  if (__LINE__ != 900) return 533;
+  const char *marker_file = __FILE__;
+  if (marker_file[0] != 'k' || marker_file[7] != 'm') return 534;
   int prefix = __USER_LABEL_PREFIX__ 0;
   __WINT_TYPE__ wint_value = 0;
   if (prefix != 0 || wint_value != 0) return 512;

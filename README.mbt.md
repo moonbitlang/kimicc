@@ -85,7 +85,8 @@ report false, and `__is_identifier(name)` tracks parser-recognized keywords and
 extension tokens. Variadic macros support `__VA_ARGS__`, GNU comma-paste
 elision, and `__VA_OPT__(...)`; `__COUNTER__`, `#elifdef`, and `#elifndef` are
 supported for generated/config headers. `#line` updates the logical source
-coordinates used by `__FILE__` and `__LINE__`.
+coordinates used by `__FILE__` and `__LINE__`; GCC-style linemarkers such as
+`# 42 "file.c"` are accepted as line control too.
 
 ## Preprocessor API
 
