@@ -759,8 +759,16 @@ fn consume_ignored_option(
     | "--std"
     | "-Xclang"
     | "-Xpreprocessor"
+    | "-Xanalyzer"
+    | "-Xarch_device"
+    | "-Xarch_host"
+    | "-Xcuda-fatbinary"
+    | "-Xcuda-ptxas"
+    | "-Xopenmp-target"
     | "-cc1-args"
     | "-cxx-isystem"
+    | "-darwin-target-variant"
+    | "-darwin-target-variant-triple"
     | "-dependency-dot"
     | "-dsym-dir"
     | "-dumpdir"
@@ -782,10 +790,15 @@ fn consume_ignored_option(
     | "-iwithprefix"
     | "-iwithprefixbefore"
     | "-iwithsysroot"
+    | "-meabi"
+    | "-mmlir"
     | "-mllvm"
     | "-module-dependency-dir"
+    | "-mthread-model"
     | "-serialize-diagnostics"
+    | "-stdlib++-isystem"
     | "--serialize-diagnostics"
+    | "-vfsoverlay"
     | "-working-directory"
     | "--working-directory"
     | "-fmodule-map-file"
@@ -891,6 +904,12 @@ fn consume_ignored_option(
       } else if starts_with(arg, "-B") && arg.length() > "-B".length() {
         opts.toolchain_args.push(arg)
         Ok(index)
+      } else if starts_with(arg, "-Xopenmp-target=") {
+        if index + 1 < argv.length() {
+          Ok(index + 1)
+        } else {
+          Err("missing argument after " + arg)
+        }
       } else if starts_with(arg, "--target=") {
         let value = arg["--target=".length():].to_owned()
         match @target.Target::parse(value) {

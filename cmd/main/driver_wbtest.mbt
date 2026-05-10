@@ -95,6 +95,25 @@ test "driver consumes ignored flags with separate values" {
 }
 
 ///|
+test "driver consumes clang pass-through flags with separate values" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-fsyntax-only", "-Xanalyzer", "check", "-Xarch_host", "-DHOST",
+      "-Xarch_device", "-DDEVICE", "-Xcuda-fatbinary", "--compress-all", "-Xcuda-ptxas",
+      "-v", "-Xopenmp-target", "-march=x86-64", "-Xopenmp-target=x86_64-linux-gnu",
+      "-march=x86-64-v2", "-darwin-target-variant", "macos13", "-darwin-target-variant-triple",
+      "x86_64-apple-macos13", "-meabi", "gnu", "-mmlir", "--mlir-print-ir-after-all",
+      "-mthread-model", "posix", "-stdlib++-isystem", "cxx-stdlib", "-vfsoverlay",
+      "overlay.yaml", "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.input_path is Some("foo.c"))
+  assert_eq(opts.extra_input_paths.length(), 0)
+}
+
+///|
 test "driver language flag classifies extensionless inputs" {
   let opts = match
     parse_driver_args([
