@@ -34,6 +34,22 @@ test "driver parses linux amd64 target" {
 }
 
 ///|
+test "linux amd64 include paths keep clang fallbacks after libc" {
+  let paths = linux_amd64_system_include_paths()
+  let mut usr_include = -1
+  let mut clang_fallback = -1
+  for i = 0; i < paths.length(); i = i + 1 {
+    if paths[i] == "/usr/include" {
+      usr_include = i
+    } else if paths[i] == "/usr/lib/clang/18/include" {
+      clang_fallback = i
+    }
+  }
+  assert_true(usr_include >= 0)
+  assert_true(clang_fallback > usr_include)
+}
+
+///|
 test "driver chooses compiler-style default output names" {
   let opts = DriverOptions::new()
   opts.output = EmitAssembly

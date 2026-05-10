@@ -502,9 +502,9 @@ fn linux_amd64_system_include_paths() -> Array[String] {
   [
     "/usr/lib/llvm-20/lib/clang/20/include", "/usr/lib/llvm-19/lib/clang/19/include",
     "/usr/lib/llvm-18/lib/clang/18/include", "/usr/lib/llvm-17/lib/clang/17/include",
-    "/usr/lib/llvm-16/lib/clang/16/include", "/usr/lib/clang/18/include", "/usr/lib/clang/17/include",
-    "/usr/lib/clang/16/include", "/usr/lib/gcc/x86_64-linux-gnu/14/include", "/usr/lib/gcc/x86_64-linux-gnu/13/include",
-    "/usr/local/include", "/usr/include/x86_64-linux-gnu", "/usr/include",
+    "/usr/lib/llvm-16/lib/clang/16/include", "/usr/lib/gcc/x86_64-linux-gnu/14/include",
+    "/usr/lib/gcc/x86_64-linux-gnu/13/include", "/usr/local/include", "/usr/include/x86_64-linux-gnu",
+    "/usr/include", "/usr/lib/clang/18/include", "/usr/lib/clang/17/include", "/usr/lib/clang/16/include",
   ]
 }
 

@@ -1415,18 +1415,21 @@ cat > "$system_header_source_path" <<'C'
 #include <limits.h>
 
 struct HeaderPair {
-  unsigned char tag;
-  unsigned long value;
+  uint8_t tag;
+  uintptr_t value;
 };
 
 _Static_assert(CHAR_BIT == 8, "char bit width");
 _Static_assert(UINT8_MAX == 255, "stdint uint8 max");
-_Static_assert(UINTPTR_MAX > 0xffffffffUL, "stdint uintptr max");
+_Static_assert(sizeof(uintptr_t) == 8, "stdint uintptr width");
+_Static_assert(sizeof(size_t) == 8, "stddef size_t width");
+_Static_assert(sizeof(ptrdiff_t) == 8, "stddef ptrdiff_t width");
+_Static_assert((ptrdiff_t)-1 < 0, "stddef ptrdiff_t signedness");
 _Static_assert(alignof(unsigned long) == 8, "unsigned long alignment");
 _Static_assert(offsetof(struct HeaderPair, value) == 8, "offsetof header pair");
 
 int header_sum(int n, ...) {
-  __builtin_va_list ap;
+  va_list ap;
   int total = 0;
   va_start(ap, n);
   for (int i = 0; i < n; i++) {
@@ -1437,8 +1440,8 @@ int header_sum(int n, ...) {
 }
 
 int main(void) {
-  alignas(16) char buf[16];
-  unsigned long addr = (unsigned long)buf;
+  alignas(16) uint8_t buf[16];
+  uintptr_t addr = (uintptr_t)buf;
   bool ok = true;
   if ((addr & 15) != 0) return 31;
   if (!ok) return 32;

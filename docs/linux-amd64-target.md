@@ -258,5 +258,6 @@ The script copies the repository to a temporary directory inside the container,
 installs missing tools when needed, runs the target/codegen/driver/preprocessor
 tests, emits Linux assembly, assembles an ELF object, links a Linux executable,
 checks that the executable exits with code 42, and compiles an additional
-common system-header macro probe using the container's Linux include
-directories.
+common system-header probe using the container's Linux include directories,
+including typedefs and macros from `stddef.h`, `stdint.h`, `stdalign.h`,
+`stdbool.h`, `stdarg.h`, and `limits.h`.
