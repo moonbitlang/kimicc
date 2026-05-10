@@ -832,6 +832,7 @@ fn consume_linker_option(
 ) -> Result[Int, String] {
   match arg {
     "-framework"
+    | "-l"
     | "-F"
     | "-L"
     | "-B"
@@ -851,6 +852,18 @@ fn consume_linker_option(
       if arg == "-pthread" {
         add_pthread(opts)
         Ok(index)
+      } else if starts_with(arg, "--library-directory=") {
+        opts.linker_args.push("-L")
+        opts.linker_args.push(arg["--library-directory=".length():].to_owned())
+        Ok(index)
+      } else if arg == "--library-directory" {
+        if index + 1 < argv.length() {
+          opts.linker_args.push("-L")
+          opts.linker_args.push(argv[index + 1])
+          Ok(index + 1)
+        } else {
+          Err("missing argument after " + arg)
+        }
       } else if starts_with(arg, "-l") ||
         starts_with(arg, "-L") ||
         starts_with(arg, "-F") ||

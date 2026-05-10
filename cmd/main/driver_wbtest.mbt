@@ -410,7 +410,8 @@ test "driver preserves common linker flags" {
   let opts = match
     parse_driver_args([
       "kimicc", "foo.o", "-static", "-pie", "-nostdlib", "-u", "entry", "-z", "now",
-      "-B", "/tools", "-fuse-ld=lld", "-rtlib=compiler-rt", "-o", "tool",
+      "-B", "/tools", "-l", "m", "--library-directory=/extra", "--library-directory",
+      "/more", "-fuse-ld=lld", "-rtlib=compiler-rt", "-o", "tool",
     ]) {
     Ok(opts) => opts
     Err(err) => abort(err)
@@ -418,7 +419,7 @@ test "driver preserves common linker flags" {
   assert_true(opts.input_path is None)
   assert_eq(opts.linker_args, [
     "foo.o", "-static", "-pie", "-nostdlib", "-u", "entry", "-z", "now", "-B", "/tools",
-    "-fuse-ld=lld", "-rtlib=compiler-rt",
+    "-l", "m", "-L", "/extra", "-L", "/more", "-fuse-ld=lld", "-rtlib=compiler-rt",
   ])
 }
 
