@@ -190,8 +190,8 @@ the target split real and testable without claiming full C ABI coverage yet.
   main source and user headers. Repeated `-MT`/`-MQ` options add multiple rule
   targets, `-MF -` writes the dependency rule to stdout, and dependency-only
   `-o PATH` is treated as a dependency output path when `-MF` is absent.
-  Dependency and simple macro options tunneled through `-Wp,` lists are also
-  recognized.
+  Dependency and simple macro options tunneled through `-Wp,` lists or common
+  `-Xpreprocessor` spellings are also recognized.
 
 The backend currently covers a practical scalar subset: signed and unsigned
 integer arithmetic/comparisons, narrow integer and `_Bool` scalar conversions

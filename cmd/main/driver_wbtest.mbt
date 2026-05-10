@@ -560,3 +560,23 @@ test "driver parses preprocessor dependency options" {
   assert_eq(opts.undefines.length(), 1)
   assert_eq(opts.undefines[0], "OLD")
 }
+
+///|
+test "driver parses Xpreprocessor macro and include options" {
+  let header = "/tmp/kimicc-driver-xpreprocessor-include.h"
+  assert_true(write_file(header, "int from_xpreprocessor = VALUE;\n"))
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-E", "-Xpreprocessor", "-D", "-Xpreprocessor", "VALUE=19", "-Xpreprocessor",
+      "-include", "-Xpreprocessor", header, "-Xpreprocessor", "-UOLD", "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_eq(opts.defines["VALUE"], "19")
+  assert_eq(opts.undefines, ["OLD"])
+  let result = preprocess_source_with_dependencies(
+    "int body = VALUE;\n", "foo.c", opts,
+  )
+  assert_eq(result.text, "int from_xpreprocessor=19;\nint body=19;\n")
+}

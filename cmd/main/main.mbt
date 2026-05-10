@@ -370,6 +370,134 @@ fn apply_wp_options(opts : DriverOptions, arg : String) -> Result[Unit, String] 
 }
 
 ///|
+fn xpreprocessor_value(
+  argv : Array[String],
+  index : Int,
+  option : String,
+) -> Result[(String, Int), String] {
+  if index + 3 < argv.length() && argv[index + 2] == "-Xpreprocessor" {
+    Ok((argv[index + 3], index + 3))
+  } else {
+    Err("missing argument after -Xpreprocessor " + option)
+  }
+}
+
+///|
+fn xpreprocessor_option_value(
+  argv : Array[String],
+  index : Int,
+  prefix : String,
+  option : String,
+) -> Result[(String, Int), String] {
+  let arg = argv[index + 1]
+  let value = arg[prefix.length():].to_owned()
+  if value != "" {
+    Ok((value, index + 1))
+  } else {
+    xpreprocessor_value(argv, index, option)
+  }
+}
+
+///|
+fn consume_xpreprocessor_option(
+  opts : DriverOptions,
+  argv : Array[String],
+  index : Int,
+) -> Result[Int, String] {
+  if index + 1 >= argv.length() {
+    return Err("missing argument after -Xpreprocessor")
+  }
+  let part = argv[index + 1]
+  if apply_dependency_mode(opts, part) {
+    if (part == "-MD" || part == "-MMD") &&
+      index + 3 < argv.length() &&
+      argv[index + 2] == "-Xpreprocessor" &&
+      !is_wp_option_name(argv[index + 3]) {
+      opts.dependency_output_path = Some(argv[index + 3])
+      Ok(index + 3)
+    } else {
+      Ok(index + 1)
+    }
+  } else if part == "-MF" || starts_with(part, "-MF") {
+    match xpreprocessor_option_value(argv, index, "-MF", "-MF") {
+      Ok((value, next_i)) => {
+        opts.dependency_output_path = Some(value)
+        Ok(next_i)
+      }
+      Err(err) => Err(err)
+    }
+  } else if part == "-MT" || starts_with(part, "-MT") {
+    match xpreprocessor_option_value(argv, index, "-MT", "-MT") {
+      Ok((value, next_i)) => {
+        opts.dependency_targets.push(value)
+        Ok(next_i)
+      }
+      Err(err) => Err(err)
+    }
+  } else if part == "-MQ" || starts_with(part, "-MQ") {
+    match xpreprocessor_option_value(argv, index, "-MQ", "-MQ") {
+      Ok((value, next_i)) => {
+        opts.dependency_targets.push(makefile_escape_path(value))
+        Ok(next_i)
+      }
+      Err(err) => Err(err)
+    }
+  } else if part == "-D" || starts_with(part, "-D") {
+    match xpreprocessor_option_value(argv, index, "-D", "-D") {
+      Ok((value, next_i)) => {
+        add_define(opts, value)
+        Ok(next_i)
+      }
+      Err(err) => Err(err)
+    }
+  } else if part == "-U" || starts_with(part, "-U") {
+    match xpreprocessor_option_value(argv, index, "-U", "-U") {
+      Ok((value, next_i)) => {
+        add_undefine(opts, value)
+        Ok(next_i)
+      }
+      Err(err) => Err(err)
+    }
+  } else if part == "-include-pch" {
+    match xpreprocessor_value(argv, index, "-include-pch") {
+      Ok((_value, next_i)) => Ok(next_i)
+      Err(err) => Err(err)
+    }
+  } else if part == "-include" || starts_with(part, "-include") {
+    match xpreprocessor_option_value(argv, index, "-include", "-include") {
+      Ok((value, next_i)) => {
+        opts.forced_includes.push(value)
+        Ok(next_i)
+      }
+      Err(err) => Err(err)
+    }
+  } else if part == "-I" || starts_with(part, "-I") {
+    match xpreprocessor_option_value(argv, index, "-I", "-I") {
+      Ok((value, next_i)) => {
+        opts.include_paths.push(value)
+        Ok(next_i)
+      }
+      Err(err) => Err(err)
+    }
+  } else if part == "-isystem" || starts_with(part, "-isystem") {
+    match xpreprocessor_option_value(argv, index, "-isystem", "-isystem") {
+      Ok((value, next_i)) => {
+        opts.system_include_paths.push(value)
+        Ok(next_i)
+      }
+      Err(err) => Err(err)
+    }
+  } else if starts_with(part, "-Wp,") {
+    match apply_wp_options(opts, part) {
+      Ok(_) => Ok(index + 1)
+      Err(err) => Err(err)
+    }
+  } else {
+    Ok(index + 1)
+  }
+}
+
+///|
 fn is_c_source_path(path : String) -> Bool {
   ends_with(path, ".c") || ends_with(path, ".i")
 }
@@ -849,6 +977,11 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
               opts.dependency_targets.push(makefile_escape_path(value))
               i = next_i
             }
+            Err(err) => return Err(err)
+          }
+        } else if arg == "-Xpreprocessor" {
+          match consume_xpreprocessor_option(opts, argv, i) {
+            Ok(next_i) => i = next_i
             Err(err) => return Err(err)
           }
         } else if starts_with(arg, "-Wp,") {
