@@ -136,6 +136,23 @@ test "driver accepts multiple C sources in link mode" {
 }
 
 ///|
+test "driver preserves common linker flags" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "foo.o", "-static", "-pie", "-nostdlib", "-u", "entry", "-z", "now",
+      "-B", "/tools", "-fuse-ld=lld", "-rtlib=compiler-rt", "-o", "tool",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.input_path is None)
+  assert_eq(opts.linker_args, [
+    "foo.o", "-static", "-pie", "-nostdlib", "-u", "entry", "-z", "now", "-B", "/tools",
+    "-fuse-ld=lld", "-rtlib=compiler-rt",
+  ])
+}
+
+///|
 test "driver rejects multiple C sources outside link mode" {
   match parse_driver_args(["kimicc", "main.c", "helper.c", "-c"]) {
     Ok(_) => abort("expected multiple compile-only sources to fail")

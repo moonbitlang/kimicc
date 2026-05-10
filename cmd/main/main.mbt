@@ -457,7 +457,15 @@ fn consume_linker_option(
   arg : String,
 ) -> Result[Int, String] {
   match arg {
-    "-framework" | "-F" | "-L" | "-Xlinker" | "-filelist" =>
+    "-framework"
+    | "-F"
+    | "-L"
+    | "-B"
+    | "-Xlinker"
+    | "-filelist"
+    | "-u"
+    | "-z"
+    | "-T" =>
       if index + 1 < argv.length() {
         opts.linker_args.push(arg)
         opts.linker_args.push(argv[index + 1])
@@ -469,12 +477,27 @@ fn consume_linker_option(
       if starts_with(arg, "-l") ||
         starts_with(arg, "-L") ||
         starts_with(arg, "-F") ||
+        starts_with(arg, "-B") ||
         starts_with(arg, "-Wl,") ||
+        starts_with(arg, "-fuse-ld=") ||
+        starts_with(arg, "-rtlib=") ||
+        starts_with(arg, "-stdlib=") ||
         arg == "-pthread" ||
         arg == "-shared" ||
         arg == "-dynamiclib" ||
         arg == "-bundle" ||
-        arg == "-rdynamic" {
+        arg == "-rdynamic" ||
+        arg == "-static" ||
+        arg == "-static-pie" ||
+        arg == "-static-libgcc" ||
+        arg == "-static-libstdc++" ||
+        arg == "-pie" ||
+        arg == "-no-pie" ||
+        arg == "-nostdlib" ||
+        arg == "-nodefaultlibs" ||
+        arg == "-nostartfiles" ||
+        arg == "-r" ||
+        arg == "-s" {
         opts.linker_args.push(arg)
         Ok(index)
       } else {
