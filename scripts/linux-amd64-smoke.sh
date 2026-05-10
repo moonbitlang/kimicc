@@ -571,10 +571,22 @@ int floating_inc_dec(void) {
   double old_d = d++;
   float f = 3.5f;
   float new_f = --f;
+  double d_compound = 2.0;
+  float f_compound = 2.0f;
   if ((int)(old_d * 10.0) != 15) return 574;
   if ((int)(d * 10.0) != 25) return 575;
   if ((int)(new_f * 10.0f) != 25) return 576;
   if ((int)(f * 10.0f) != 25) return 577;
+  d_compound += 0.5;
+  d_compound *= 2.0;
+  d_compound /= 5.0;
+  d_compound -= 0.5;
+  if ((int)(d_compound * 10.0) != 5) return 578;
+  f_compound += 0.25f;
+  f_compound *= 4.0f;
+  f_compound /= 3.0f;
+  f_compound -= 1.0f;
+  if ((int)(f_compound * 100.0f) != 200) return 579;
   return 0;
 }
 

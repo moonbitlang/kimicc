@@ -77,6 +77,33 @@ test "generate linux amd64 floating inc dec uses fp arithmetic" {
 }
 
 ///|
+test "generate linux amd64 floating compound assignment operators" {
+  let source =
+    #|double mutate_double(void) {
+    #|  double x = 1.5;
+    #|  x += 0.5;
+    #|  x *= 2.0;
+    #|  return x;
+    #|}
+    #|float mutate_float(void) {
+    #|  float x = 3.5f;
+    #|  x -= 1.0f;
+    #|  x /= 2.0f;
+    #|  return x;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(assembly.contains("addsd\txmm0, xmm1"), content="true")
+  inspect(assembly.contains("mulsd\txmm0, xmm1"), content="true")
+  inspect(assembly.contains("subss\txmm0, xmm1"), content="true")
+  inspect(assembly.contains("divss\txmm0, xmm1"), content="true")
+}
+
+///|
 test "generate linux amd64 double params and arithmetic" {
   let source = "double add(double a, double b) { return a + b; }"
   let prog = @parser.parse(source)
