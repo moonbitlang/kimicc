@@ -117,6 +117,23 @@ test "driver parses dependency sidecar options" {
 }
 
 ///|
+test "driver parses forced include spellings" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-include", "config.h", "--include=prefix.h", "--include", "late.h",
+      "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_eq(opts.include_paths.length(), 0)
+  assert_eq(opts.forced_includes.length(), 3)
+  assert_eq(opts.forced_includes[0], "config.h")
+  assert_eq(opts.forced_includes[1], "prefix.h")
+  assert_eq(opts.forced_includes[2], "late.h")
+}
+
+///|
 test "driver parses dependency-only options and filters system headers" {
   let opts = match
     parse_driver_args([
