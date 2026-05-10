@@ -690,6 +690,7 @@ fn Parser::const_expr_type(self : Parser, expr : Expr) -> Type {
     DesignatedField(_, e) => self.const_expr_type(e)
     DesignatedIndex(_, e) => self.const_expr_type(e)
     DesignatedRange(_, _, e) => self.const_expr_type(e)
+    Binary(",", _, rhs) => self.const_expr_type(rhs)
     Ternary(_, a, _) => self.const_expr_type(a)
     Assign(_, rhs) => self.const_expr_type(rhs)
     CompoundAssign(_, lhs, _) => self.const_expr_type(lhs)

@@ -1087,3 +1087,26 @@ test "parse GNU typeof type specifiers" {
       fail("Expected typeof specifiers to resolve expression and type operands")
   }
 }
+
+///|
+test "parse GNU typeof comma expression uses rhs type" {
+  let source =
+    #|int main(void) {
+    #|  unsigned long *p;
+    #|  __typeof__((void)0, *p) y = 5;
+    #|  return (int)y;
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [
+          VarDecl(Pointer(ULong), "p", None),
+          VarDecl(ULong, "y", Some(Number(5))),
+          Return(Some(Cast(SInt, Var("y")))),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected typeof comma expression to use right operand type")
+  }
+}

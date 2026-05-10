@@ -136,6 +136,17 @@ async test "e2e GNU typeof specifier infers without evaluating operand" {
 }
 
 ///|
+async test "e2e generic selection uses comma expression result type" {
+  let source =
+    #|int main(void) {
+    #|  unsigned long x = 0;
+    #|  return _Generic((0, x), unsigned long: 42, default: 1);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "run logic fixture" {
   let source =
     #|int main() {
