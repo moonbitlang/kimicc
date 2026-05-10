@@ -494,7 +494,7 @@ test "dependency-only mode treats output as dependency destination" {
 test "driver parses preprocessor dependency options" {
   let opts = match
     parse_driver_args([
-      "kimicc", "-c", "-Wp,-MMD,build/foo.d,-MP,-MQ,build dir/foo.o,-DVALUE=3,-UOLD",
+      "kimicc", "-c", "-Wp,-MMD,build/foo.d,-MP,-MQ,build dir/foo.o,-DVALUE=3,-DINC(x)=((x)+1),-DEMPTY=,-UOLD",
       "-o", "build/foo.o", "src/foo.c",
     ]) {
     Ok(opts) => opts
@@ -507,6 +507,8 @@ test "driver parses preprocessor dependency options" {
   assert_eq(opts.dependency_targets.length(), 1)
   assert_eq(opts.dependency_targets[0], "build\\ dir/foo.o")
   assert_eq(opts.defines["VALUE"], "3")
+  assert_eq(opts.defines["INC(x)"], "((x)+1)")
+  assert_eq(opts.defines["EMPTY"], "")
   assert_eq(opts.undefines.length(), 1)
   assert_eq(opts.undefines[0], "OLD")
 }
