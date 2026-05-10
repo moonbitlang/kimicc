@@ -15,6 +15,10 @@ extern "c" fn moonbit_write_file(path : Bytes, content : Bytes) -> Int = "moonbi
 extern "c" fn moonbit_system(cmd : Bytes) -> Int = "moonbit_system"
 
 ///|
+#borrow(message)
+extern "c" fn moonbit_write_stderr(message : Bytes) -> Unit = "moonbit_write_stderr"
+
+///|
 extern "c" fn moonbit_exit(code : Int) -> Unit = "moonbit_exit"
 
 ///|
@@ -88,7 +92,7 @@ fn write_bytes_file(path : String, content : Bytes) -> Bool {
 
 ///|
 fn fail(message : String) -> Unit {
-  println("error: " + message)
+  moonbit_write_stderr(@utf8.encode("error: " + message + "\n"))
   moonbit_exit(1)
 }
 

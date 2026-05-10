@@ -87,6 +87,8 @@ source_path="/tmp/kimicc-linux-amd64-smoke.c"
 object_path="/tmp/kimicc-linux-amd64-smoke.o"
 binary_path="/tmp/kimicc-linux-amd64-smoke"
 probe_include_dir="/tmp/kimicc-linux-amd64-include"
+driver_stdout_path="/tmp/kimicc-linux-amd64-driver.out"
+driver_stderr_path="/tmp/kimicc-linux-amd64-driver.err"
 bad_source_path="/tmp/kimicc-linux-amd64-bad.c"
 bad_asm_path="/tmp/kimicc-linux-amd64-bad.s"
 bad_stdout_path="/tmp/kimicc-linux-amd64-bad.out"
@@ -114,6 +116,20 @@ cat > "$probe_include_dir/pragma_once_header.h" <<'H'
 #pragma once
 int pragma_once_global = 7;
 H
+
+set +e
+"$kimicc" >"$driver_stdout_path" 2>"$driver_stderr_path"
+driver_status=$?
+set -e
+if [ "$driver_status" -eq 0 ]; then
+  echo "expected no-input compiler invocation to fail" >&2
+  exit 1
+fi
+if [ -s "$driver_stdout_path" ]; then
+  echo "expected no-input compiler invocation to keep stdout empty" >&2
+  exit 1
+fi
+grep -F 'error: no input file' "$driver_stderr_path" >/dev/null
 
 cat > "$bad_source_path" <<'C'
 _Static_assert(0, "linux smoke expects this failure");
