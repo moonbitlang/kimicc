@@ -65,6 +65,8 @@ priv struct DriverOptions {
   mut print_target_triple : Bool
   mut print_resource_dir : Bool
   mut print_search_dirs : Bool
+  mut print_sysroot : Bool
+  mut print_multiarch : Bool
   mut print_prog_name : String?
   mut print_file_name : String?
 }
@@ -100,6 +102,8 @@ fn DriverOptions::new() -> DriverOptions {
     print_target_triple: false,
     print_resource_dir: false,
     print_search_dirs: false,
+    print_sysroot: false,
+    print_multiarch: false,
     print_prog_name: None,
     print_file_name: None,
   }
@@ -765,6 +769,8 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
       "-print-target-triple" => opts.print_target_triple = true
       "-print-resource-dir" => opts.print_resource_dir = true
       "-print-search-dirs" => opts.print_search_dirs = true
+      "-print-sysroot" => opts.print_sysroot = true
+      "-print-multiarch" => opts.print_multiarch = true
       "-E" | "--preprocess-only" => opts.output = EmitPreprocessed
       "-S" => opts.output = EmitAssembly
       "-c" | "--compile" => opts.output = EmitObject
@@ -1391,6 +1397,23 @@ fn run_clang_query(opts : DriverOptions, query : String) -> Unit {
 }
 
 ///|
+fn driver_sysroot(opts : DriverOptions) -> String {
+  if opts.sysroot_paths.length() == 0 {
+    ""
+  } else {
+    opts.sysroot_paths[opts.sysroot_paths.length() - 1]
+  }
+}
+
+///|
+fn driver_multiarch(opts : DriverOptions) -> String {
+  match opts.target {
+    LinuxAmd64 => "x86_64-linux-gnu"
+    DarwinArm64 => ""
+  }
+}
+
+///|
 fn link_args(
   opts : DriverOptions,
   output_path : String,
@@ -1706,6 +1729,14 @@ fn main {
   }
   if opts.print_search_dirs {
     run_clang_query(opts, "-print-search-dirs")
+    return
+  }
+  if opts.print_sysroot {
+    println(driver_sysroot(opts))
+    return
+  }
+  if opts.print_multiarch {
+    println(driver_multiarch(opts))
     return
   }
   match opts.print_prog_name {
