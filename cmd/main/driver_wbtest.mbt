@@ -68,13 +68,19 @@ test "driver consumes ignored flags with separate values" {
   let opts = match
     parse_driver_args([
       "kimicc", "-mllvm", "inline-threshold=10", "--param", "ssp-buffer-size=4",
-      "foo.c",
+      "--std", "c11", "foo.c",
     ]) {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
   assert_true(opts.input_path is Some("foo.c"))
   assert_eq(opts.extra_input_paths.length(), 0)
+  let eq_opts = match parse_driver_args(["kimicc", "--std=c11", "foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(eq_opts.input_path is Some("foo.c"))
+  assert_eq(eq_opts.extra_input_paths.length(), 0)
 }
 
 ///|

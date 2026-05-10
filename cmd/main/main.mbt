@@ -717,6 +717,7 @@ fn consume_ignored_option(
   match arg {
     "-arch"
     | "-std"
+    | "--std"
     | "-Xclang"
     | "-Xpreprocessor"
     | "-include-pch"
@@ -818,6 +819,7 @@ fn consume_ignored_option(
         starts_with(arg, "-MT") ||
         starts_with(arg, "-MQ") ||
         starts_with(arg, "-std=") ||
+        starts_with(arg, "--std=") ||
         starts_with(arg, "-O") ||
         starts_with(arg, "-g") ||
         starts_with(arg, "-W") ||
