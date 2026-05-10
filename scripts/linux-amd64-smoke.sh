@@ -102,6 +102,8 @@ extensionless_source_path="/tmp/kimicc-linux-amd64-extensionless"
 asm_source_path="/tmp/kimicc-linux-amd64-asm.s"
 asm_object_path="/tmp/kimicc-linux-amd64-asm.o"
 asm_binary_path="/tmp/kimicc-linux-amd64-asm"
+second_asm_source_path="/tmp/kimicc-linux-amd64-asm-second.s"
+second_asm_object_path="/tmp/kimicc-linux-amd64-asm-second.o"
 forced_asm_source_path="/tmp/kimicc-linux-amd64-forced-asm"
 forced_asm_object_path="/tmp/kimicc-linux-amd64-forced-asm.o"
 probe_include_dir="/tmp/kimicc-linux-amd64-include"
@@ -1625,6 +1627,7 @@ main:
 .section .note.GNU-stack,"",@progbits
 ASM
 cp "$asm_source_path" "$forced_asm_source_path"
+cp "$asm_source_path" "$second_asm_source_path"
 
 "$kimicc" -c -target linux-amd64 -o "$asm_object_path" "$asm_source_path"
 "$kimicc" -c -target linux-amd64 -x assembler \
@@ -1639,6 +1642,8 @@ if [ "$status" -ne 42 ]; then
   echo "expected assembly smoke binary to exit 42, got $status" >&2
   exit 1
 fi
+"$kimicc" -c -target linux-amd64 "$asm_source_path" "$second_asm_source_path"
+file "$asm_object_path" "$second_asm_object_path" | grep -E 'ELF 64-bit.*x86-64'
 
 cat > "$system_header_source_path" <<'C'
 #include <stddef.h>

@@ -605,16 +605,13 @@ fn add_positional(opts : DriverOptions, value : String) -> Result[Unit, String] 
         opts.input_path = Some(value)
       }
     Some(_) =>
-      if opts.output == LinkExecutable &&
-        (
-          treats_as_assembly_input(opts, value) ||
-          (is_linker_input(value) && !treats_as_c_source(opts, value))
-        ) {
-        if treats_as_assembly_input(opts, value) {
-          add_delegated_assembly_input(opts, value)
-        } else {
-          opts.linker_args.push(value)
-        }
+      if (opts.output == LinkExecutable || opts.output == EmitObject) &&
+        treats_as_assembly_input(opts, value) {
+        add_delegated_assembly_input(opts, value)
+      } else if opts.output == LinkExecutable &&
+        is_linker_input(value) &&
+        !treats_as_c_source(opts, value) {
+        opts.linker_args.push(value)
       } else if treats_as_c_source(opts, value) {
         opts.extra_input_paths.push(value)
       } else if opts.output == LinkExecutable &&
@@ -962,8 +959,23 @@ fn consume_linker_option(
 }
 
 ///|
+fn compile_only_input_count(opts : DriverOptions) -> Int {
+  let mut count = opts.extra_input_paths.length() +
+    opts.assembly_input_paths.length()
+  match opts.input_path {
+    Some(_) => count += 1
+    None => ()
+  }
+  count
+}
+
+///|
 fn validate_driver_options(opts : DriverOptions) -> Result[Unit, String] {
-  if opts.output != LinkExecutable && opts.extra_input_paths.length() > 0 {
+  if opts.output != LinkExecutable &&
+    opts.output != EmitObject &&
+    opts.assembly_input_paths.length() > 0 {
+    Err("assembly inputs are only supported with -c or link mode")
+  } else if opts.output != LinkExecutable && compile_only_input_count(opts) > 1 {
     match opts.output_path {
       Some(_) => Err("cannot specify -o when generating multiple output files")
       None =>
@@ -1844,15 +1856,20 @@ fn assembly_output_path(opts : DriverOptions, input_path : String) -> String {
 }
 
 ///|
-fn compile_assembly_input(opts : DriverOptions) -> Unit {
-  if opts.assembly_input_paths.length() != 1 {
-    fail("assembly compile mode supports one input file")
+fn compile_assembly_inputs(opts : DriverOptions) -> Unit {
+  if opts.assembly_input_paths.length() == 0 {
+    fail("no input file")
   }
-  let input_path = opts.assembly_input_paths[0]
-  if !treats_as_assembly_input(opts, input_path) {
-    fail("no C input file")
+  for input_path in opts.assembly_input_paths {
+    if !treats_as_assembly_input(opts, input_path) {
+      fail("no C input file")
+    }
+    assemble_with_clang(
+      opts,
+      input_path,
+      assembly_output_path(opts, input_path),
+    )
   }
-  assemble_with_clang(opts, input_path, assembly_output_path(opts, input_path))
 }
 
 ///|
@@ -1928,6 +1945,9 @@ fn compile_multiple_inputs(opts : DriverOptions, input_path : String) -> Unit {
   compile_input(opts, input_path)
   for path in opts.extra_input_paths {
     compile_input(opts, path)
+  }
+  for path in opts.assembly_input_paths {
+    assemble_with_clang(opts, path, assembly_output_path(opts, path))
   }
 }
 
@@ -2145,7 +2165,8 @@ fn main {
   }
   match opts.input_path {
     Some(input_path) =>
-      if opts.extra_input_paths.length() > 0 {
+      if opts.extra_input_paths.length() > 0 ||
+        opts.assembly_input_paths.length() > 0 {
         if opts.output == LinkExecutable {
           compile_link_inputs(opts, input_path)
         } else {
@@ -2155,8 +2176,8 @@ fn main {
         compile_input(opts, input_path)
       }
     None =>
-      if opts.output == EmitObject && opts.linker_args.length() > 0 {
-        compile_assembly_input(opts)
+      if opts.output == EmitObject && opts.assembly_input_paths.length() > 0 {
+        compile_assembly_inputs(opts)
       } else if opts.output == LinkExecutable && opts.linker_args.length() > 0 {
         let output_path = match opts.output_path {
           Some(path) => path

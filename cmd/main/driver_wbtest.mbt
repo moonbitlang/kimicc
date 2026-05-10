@@ -641,10 +641,50 @@ test "driver accepts multiple C sources in compile-only modes" {
 }
 
 ///|
+test "driver accepts multiple assembly sources in object mode" {
+  let opts = match parse_driver_args(["kimicc", "one.s", "two.s", "-c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.output == EmitObject)
+  assert_true(opts.input_path is None)
+  assert_eq(opts.assembly_input_paths, ["one.s", "two.s"])
+  assert_eq(assembly_output_path(opts, "one.s"), "one.o")
+  assert_eq(assembly_output_path(opts, "two.s"), "two.o")
+}
+
+///|
+test "driver accepts mixed C and assembly sources in object mode" {
+  let opts = match parse_driver_args(["kimicc", "main.c", "start.s", "-c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.output == EmitObject)
+  assert_true(opts.input_path is Some("main.c"))
+  assert_eq(opts.extra_input_paths.length(), 0)
+  assert_eq(opts.assembly_input_paths, ["start.s"])
+  assert_eq(default_output_path(opts, "main.c"), "main.o")
+  assert_eq(assembly_output_path(opts, "start.s"), "start.o")
+  let early_mode_opts = match
+    parse_driver_args(["kimicc", "-c", "main.c", "start.s"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(early_mode_opts.input_path is Some("main.c"))
+  assert_eq(early_mode_opts.assembly_input_paths, ["start.s"])
+}
+
+///|
 test "driver rejects single output path with multiple compile inputs" {
   match
     parse_driver_args(["kimicc", "main.c", "helper.c", "-c", "-o", "out.o"]) {
     Ok(_) => abort("expected multiple compile-only sources with -o to fail")
+    Err(err) =>
+      assert_eq(err, "cannot specify -o when generating multiple output files")
+  }
+  match
+    parse_driver_args(["kimicc", "main.c", "start.s", "-c", "-o", "out.o"]) {
+    Ok(_) => abort("expected mixed compile-only inputs with -o to fail")
     Err(err) =>
       assert_eq(err, "cannot specify -o when generating multiple output files")
   }
@@ -658,6 +698,15 @@ test "driver rejects single dependency path with multiple compile inputs" {
     ]) {
     Ok(_) => abort("expected multiple compile-only sources with -MF to fail")
     Err(err) => assert_eq(err, "cannot specify -MF with multiple input files")
+  }
+}
+
+///|
+test "driver rejects assembly inputs outside object and link modes" {
+  match parse_driver_args(["kimicc", "-S", "start.s"]) {
+    Ok(_) => abort("expected assembly input in -S mode to fail")
+    Err(err) =>
+      assert_eq(err, "assembly inputs are only supported with -c or link mode")
   }
 }
 

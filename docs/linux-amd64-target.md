@@ -185,7 +185,9 @@ the target split real and testable without claiming full C ABI coverage yet.
 - `-target linux-amd64 -c` writes assembly and delegates object assembly to
   `clang -target x86_64-linux-gnu`, producing an ELF64 relocatable object when
   the local Clang supports that target. Compile-only assembly inputs, including
-  extensionless inputs selected with `-x assembler`, are delegated to Clang.
+  extensionless inputs selected with `-x assembler`, are delegated to Clang,
+  with multiple assembly inputs accepted when kimicc can choose per-input
+  outputs.
 - Compile-style modes such as `-S`, `-c`, `-E`, `-M`/`-MM`, and
   `-fsyntax-only` accept multiple C sources when kimicc can choose per-input
   outputs. Default link mode accepts one or more C source inputs, emits
