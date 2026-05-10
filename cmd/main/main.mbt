@@ -923,16 +923,21 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
     match arg {
       "-h" | "--help" => opts.show_help = true
       "-v" | "--version" => opts.show_version = true
-      "-dumpmachine" => opts.dump_machine = true
-      "-dumpversion" => opts.dump_version = true
-      "-print-target-triple" => opts.print_target_triple = true
-      "-print-resource-dir" => opts.print_resource_dir = true
-      "-print-search-dirs" => opts.print_search_dirs = true
-      "-print-sysroot" => opts.print_sysroot = true
-      "-print-multiarch" => opts.print_multiarch = true
-      "-print-multi-directory" => opts.print_multi_directory = true
-      "-print-multi-lib" => opts.print_multi_lib = true
-      "-print-libgcc-file-name" => opts.print_libgcc_file_name = true
+      "-dumpmachine" | "--dumpmachine" => opts.dump_machine = true
+      "-dumpversion" | "--dumpversion" => opts.dump_version = true
+      "-print-target-triple" | "--print-target-triple" =>
+        opts.print_target_triple = true
+      "-print-resource-dir" | "--print-resource-dir" =>
+        opts.print_resource_dir = true
+      "-print-search-dirs" | "--print-search-dirs" =>
+        opts.print_search_dirs = true
+      "-print-sysroot" | "--print-sysroot" => opts.print_sysroot = true
+      "-print-multiarch" | "--print-multiarch" => opts.print_multiarch = true
+      "-print-multi-directory" | "--print-multi-directory" =>
+        opts.print_multi_directory = true
+      "-print-multi-lib" | "--print-multi-lib" => opts.print_multi_lib = true
+      "-print-libgcc-file-name" | "--print-libgcc-file-name" =>
+        opts.print_libgcc_file_name = true
       "-E" | "--preprocess-only" => opts.output = EmitPreprocessed
       "-S" => opts.output = EmitAssembly
       "-c" | "--compile" => opts.output = EmitObject
@@ -961,9 +966,17 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
           opts.print_prog_name = Some(
             arg["-print-prog-name=".length():].to_owned(),
           )
+        } else if starts_with(arg, "--print-prog-name=") {
+          opts.print_prog_name = Some(
+            arg["--print-prog-name=".length():].to_owned(),
+          )
         } else if starts_with(arg, "-print-file-name=") {
           opts.print_file_name = Some(
             arg["-print-file-name=".length():].to_owned(),
+          )
+        } else if starts_with(arg, "--print-file-name=") {
+          opts.print_file_name = Some(
+            arg["--print-file-name=".length():].to_owned(),
           )
         } else if arg == "-fsyntax-only" {
           opts.output = CheckSyntax

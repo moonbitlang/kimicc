@@ -180,6 +180,32 @@ test "driver parses configure query flags" {
 }
 
 ///|
+test "driver parses long configure query flags" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "--target", "linux/amd64", "--dumpmachine", "--print-target-triple",
+      "--print-resource-dir", "--print-search-dirs", "--print-sysroot", "--print-multiarch",
+      "--print-multi-directory", "--print-multi-lib", "--print-libgcc-file-name",
+      "--print-prog-name=ld", "--print-file-name=crt1.o",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.dump_machine)
+  assert_true(opts.print_target_triple)
+  assert_true(opts.print_resource_dir)
+  assert_true(opts.print_search_dirs)
+  assert_true(opts.print_sysroot)
+  assert_true(opts.print_multiarch)
+  assert_true(opts.print_multi_directory)
+  assert_true(opts.print_multi_lib)
+  assert_true(opts.print_libgcc_file_name)
+  assert_true(opts.print_prog_name is Some("ld"))
+  assert_true(opts.print_file_name is Some("crt1.o"))
+  assert_true(opts.target == LinuxAmd64)
+}
+
+///|
 test "linux amd64 include paths keep clang fallbacks after libc" {
   let paths = linux_amd64_system_include_paths()
   let mut usr_include = -1
