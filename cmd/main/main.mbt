@@ -1791,11 +1791,11 @@ fn run_link_with_inputs(
 }
 
 ///|
-fn assemble_with_clang(
+fn assemble_args(
   opts : DriverOptions,
   asm_path : String,
   output_path : String,
-) -> Unit {
+) -> Array[String] {
   let args : Array[String] = ["clang"]
   match opts.target {
     DarwinArm64 => ()
@@ -1807,10 +1807,28 @@ fn assemble_with_clang(
   for arg in opts.toolchain_args {
     args.push(arg)
   }
+  match opts.input_language {
+    Some(language) =>
+      if language_is_assembler(language) {
+        args.push("-x")
+        args.push(language)
+      }
+    None => ()
+  }
   args.push("-c")
   args.push(asm_path)
   args.push("-o")
   args.push(output_path)
+  args
+}
+
+///|
+fn assemble_with_clang(
+  opts : DriverOptions,
+  asm_path : String,
+  output_path : String,
+) -> Unit {
+  let args = assemble_args(opts, asm_path, output_path)
   let rc = moonbit_system(@utf8.encode(shell_join_quoted(args)))
   if rc != 0 {
     fail("assemble failed with code " + rc.to_string())

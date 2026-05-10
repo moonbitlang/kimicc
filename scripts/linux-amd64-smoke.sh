@@ -102,6 +102,8 @@ extensionless_source_path="/tmp/kimicc-linux-amd64-extensionless"
 asm_source_path="/tmp/kimicc-linux-amd64-asm.s"
 asm_object_path="/tmp/kimicc-linux-amd64-asm.o"
 asm_binary_path="/tmp/kimicc-linux-amd64-asm"
+forced_asm_source_path="/tmp/kimicc-linux-amd64-forced-asm"
+forced_asm_object_path="/tmp/kimicc-linux-amd64-forced-asm.o"
 probe_include_dir="/tmp/kimicc-linux-amd64-include"
 probe_after_include_dir="/tmp/kimicc-linux-amd64-include-after"
 after_include_source_path="/tmp/kimicc-linux-amd64-include-after.c"
@@ -1622,8 +1624,12 @@ main:
   ret
 .section .note.GNU-stack,"",@progbits
 ASM
+cp "$asm_source_path" "$forced_asm_source_path"
 
 "$kimicc" -c -target linux-amd64 -o "$asm_object_path" "$asm_source_path"
+"$kimicc" -c -target linux-amd64 -x assembler \
+  -o "$forced_asm_object_path" "$forced_asm_source_path"
+file "$forced_asm_object_path" | grep -E 'ELF 64-bit.*x86-64'
 clang -o "$asm_binary_path" "$asm_object_path"
 set +e
 "$asm_binary_path"

@@ -111,6 +111,22 @@ test "driver language flag delegates extensionless assembler" {
 }
 
 ///|
+test "driver forwards forced assembler language to clang" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-c", "-target", "linux-amd64", "-x", "assembler-with-cpp", "start",
+      "-o", "start.o",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_eq(assemble_args(opts, "start", "start.o"), [
+    "clang", "-target", "x86_64-linux-gnu", "-x", "assembler-with-cpp", "-c", "start",
+    "-o", "start.o",
+  ])
+}
+
+///|
 test "driver parses linux amd64 target" {
   let opts = match
     parse_driver_args(["kimicc", "-target", "linux-amd64", "-S", "foo.c"]) {
