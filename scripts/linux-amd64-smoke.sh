@@ -64,6 +64,11 @@ cd "$workdir"
 
 moon update
 moon build --target native
+kimicc="./_build/native/debug/build/cmd/main/main.exe"
+if [ ! -x "$kimicc" ]; then
+  echo "expected built compiler at $kimicc" >&2
+  exit 1
+fi
 moon test target --target native
 moon test codegen --target native
 moon test cmd/main --target native
@@ -1393,11 +1398,11 @@ int main(void) {
 }
 C
 
-moon run cmd/main --target native -- -S -target linux-amd64 -I "$probe_include_dir" -o /tmp/kimicc-linux-amd64-smoke.s "$source_path"
-moon run cmd/main --target native -- -c -target linux-amd64 -I "$probe_include_dir" -o "$object_path" "$source_path"
+"$kimicc" -S -target linux-amd64 -I "$probe_include_dir" -o /tmp/kimicc-linux-amd64-smoke.s "$source_path"
+"$kimicc" -c -target linux-amd64 -I "$probe_include_dir" -o "$object_path" "$source_path"
 file "$object_path" | grep -E 'ELF 64-bit.*x86-64'
 
-moon run cmd/main --target native -- -target linux-amd64 -I "$probe_include_dir" -o "$binary_path" "$source_path"
+"$kimicc" -target linux-amd64 -I "$probe_include_dir" -o "$binary_path" "$source_path"
 set +e
 "$binary_path"
 status=$?
@@ -1450,13 +1455,13 @@ int main(void) {
 }
 C
 
-moon run cmd/main --target native -- -E -target linux-amd64 -o "$system_header_preprocessed_path" "$system_header_source_path"
+"$kimicc" -E -target linux-amd64 -o "$system_header_preprocessed_path" "$system_header_source_path"
 grep -E 'typedef[[:space:]][^;]*[[:space:]]uint8_t;' "$system_header_preprocessed_path" >/dev/null
 grep -E 'typedef[[:space:]][^;]*[[:space:]]uintptr_t;' "$system_header_preprocessed_path" >/dev/null
 grep -E 'typedef[[:space:]][^;]*[[:space:]]size_t;' "$system_header_preprocessed_path" >/dev/null
 grep -E 'typedef[[:space:]][^;]*[[:space:]]ptrdiff_t;' "$system_header_preprocessed_path" >/dev/null
 grep -E 'typedef[[:space:]][^;]*[[:space:]]va_list;' "$system_header_preprocessed_path" >/dev/null
-moon run cmd/main --target native -- -c -target linux-amd64 -o "$system_header_object_path" "$system_header_source_path"
+"$kimicc" -c -target linux-amd64 -o "$system_header_object_path" "$system_header_source_path"
 clang -o "$system_header_binary_path" "$system_header_object_path"
 set +e
 "$system_header_binary_path"
@@ -1480,7 +1485,7 @@ cat > "$old_helper_path" <<'C'
 int old_mix(int a, double b) { return a + (int)b + 39; }
 C
 
-moon run cmd/main --target native -- -c -target linux-amd64 -o "$old_object_path" "$old_source_path"
+"$kimicc" -c -target linux-amd64 -o "$old_object_path" "$old_source_path"
 clang -target x86_64-linux-gnu -c -o "$old_helper_object_path" "$old_helper_path"
 clang -o "$old_binary_path" "$old_object_path" "$old_helper_object_path"
 set +e
@@ -1594,7 +1599,7 @@ int check_parts(__uint128_t x, unsigned long expected_hi, unsigned long expected
 }
 C
 
-moon run cmd/main --target native -- -c -target linux-amd64 -o "$int128_object_path" "$int128_source_path"
+"$kimicc" -c -target linux-amd64 -o "$int128_object_path" "$int128_source_path"
 clang -target x86_64-linux-gnu -c -o "$int128_helper_object_path" "$int128_helper_path"
 clang -o "$int128_binary_path" "$int128_object_path" "$int128_helper_object_path"
 set +e
