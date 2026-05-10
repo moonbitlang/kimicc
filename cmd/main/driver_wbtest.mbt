@@ -80,7 +80,7 @@ test "driver parses configure query flags" {
     parse_driver_args([
       "kimicc", "-target", "linux-amd64", "-dumpmachine", "-print-target-triple",
       "-print-resource-dir", "-print-search-dirs", "--sysroot=/opt/sysroot", "-print-sysroot",
-      "-print-multiarch", "-print-prog-name=ld", "-print-file-name=crt1.o",
+      "-print-multiarch", "-print-libgcc-file-name", "-print-prog-name=ld", "-print-file-name=crt1.o",
     ]) {
     Ok(opts) => opts
     Err(err) => abort(err)
@@ -91,6 +91,7 @@ test "driver parses configure query flags" {
   assert_true(opts.print_search_dirs)
   assert_true(opts.print_sysroot)
   assert_true(opts.print_multiarch)
+  assert_true(opts.print_libgcc_file_name)
   assert_true(opts.print_prog_name is Some("ld"))
   assert_true(opts.print_file_name is Some("crt1.o"))
   assert_eq(opts.target.triple(), "x86_64-linux-gnu")

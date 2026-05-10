@@ -57,6 +57,7 @@ moon run cmd/main --target native -- -dumpmachine
 moon run cmd/main --target native -- -print-target-triple
 moon run cmd/main --target native -- -print-resource-dir
 moon run cmd/main --target native -- -target linux-amd64 -print-multiarch
+moon run cmd/main --target native -- -print-libgcc-file-name
 ```
 
 Object, library, shared-library, and assembly inputs are delegated to the
