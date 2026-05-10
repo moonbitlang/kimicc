@@ -155,3 +155,15 @@ test "driver accumulates dependency targets" {
     "foo.o build\\ dir/foo.d: src/foo.c\n",
   )
 }
+
+///|
+test "driver accepts dash dependency destination" {
+  let opts = match
+    parse_driver_args(["kimicc", "-MM", "-MF", "-", "src/foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.output == EmitDependencies)
+  assert_true(opts.dependency_output_path is Some("-"))
+  assert_eq(dependency_output_path(opts, "src/foo.c", "src/foo.o"), "-")
+}

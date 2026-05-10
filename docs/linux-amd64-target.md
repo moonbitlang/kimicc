@@ -184,7 +184,7 @@ the target split real and testable without claiming full C ABI coverage yet.
   are handled by the driver using headers resolved by kimicc's preprocessor.
   Full dependency modes include system headers; `-MM` and `-MMD` keep only the
   main source and user headers. Repeated `-MT`/`-MQ` options add multiple rule
-  targets.
+  targets, and `-MF -` writes the dependency rule to stdout.
 
 The backend currently covers a practical scalar subset: signed and unsigned
 integer arithmetic/comparisons, narrow integer and `_Bool` scalar conversions

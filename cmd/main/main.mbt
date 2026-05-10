@@ -815,7 +815,9 @@ fn write_dependency_file(
     let content = dependency_rule_content(
       opts, input_path, output_path, dependency_records,
     )
-    if !write_file(path, content) {
+    if path == "-" {
+      write_stdout(content)
+    } else if !write_file(path, content) {
       fail("cannot write dependency file: " + path)
     }
   }
@@ -833,7 +835,9 @@ fn emit_dependency_output(
   )
   match opts.dependency_output_path {
     Some(path) =>
-      if !write_file(path, content) {
+      if path == "-" {
+        write_stdout(content)
+      } else if !write_file(path, content) {
         fail("cannot write dependency file: " + path)
       }
     None => write_stdout(content)
