@@ -94,9 +94,9 @@ For multiple compile-style inputs, dependency sidecars are per-input when
 `-MF` is omitted; a single `-MF` path with multiple outputs is rejected.
 In multi-source link mode, `-MD`/`-MMD` emit one dependency sidecar for the
 linked output target using the union of dependencies from the compiled C inputs.
-The driver also recognizes dependency and simple macro options tunneled through
-`-Wp,` lists, such as `-Wp,-MMD,dep.d,-MP`, and common
-`-Xpreprocessor` spellings such as `-Xpreprocessor -DVALUE=1` or
+The driver also recognizes dependency, include, forced-include, and simple
+macro options tunneled through `-Wp,` lists, such as `-Wp,-MMD,dep.d,-MP`,
+and common `-Xpreprocessor` spellings such as `-Xpreprocessor -DVALUE=1` or
 `-Xpreprocessor -D -Xpreprocessor VALUE=1`.
 Diagnostic metadata and driver path options such as `-MJ PATH`,
 `-serialize-diagnostics PATH`, `--config PATH`, and `-dumpdir PATH` are

@@ -320,8 +320,38 @@ fn is_wp_option_name(value : String) -> Bool {
   value == "-MF" ||
   value == "-MT" ||
   value == "-MQ" ||
+  value == "-I" ||
+  starts_with(value, "-I") ||
+  value == "-include" ||
+  starts_with(value, "-include") ||
+  value == "-isystem-after" ||
+  starts_with(value, "-isystem-after") ||
+  value == "-isystem" ||
+  starts_with(value, "-isystem") ||
+  value == "-idirafter" ||
+  starts_with(value, "-idirafter") ||
+  value == "-iquote" ||
+  starts_with(value, "-iquote") ||
   starts_with(value, "-D") ||
   starts_with(value, "-U")
+}
+
+///|
+fn wp_option_value(
+  parts : Array[String],
+  index : Int,
+  prefix : String,
+  option : String,
+) -> Result[(String, Int), String] {
+  let part = parts[index]
+  let value = part[prefix.length():].to_owned()
+  if value != "" {
+    Ok((value, index))
+  } else if index + 1 < parts.length() {
+    Ok((parts[index + 1], index + 1))
+  } else {
+    Err("missing argument after -Wp," + option)
+  }
 }
 
 ///|
@@ -385,6 +415,59 @@ fn apply_wp_options(opts : DriverOptions, arg : String) -> Result[Unit, String] 
         }
       } else {
         add_undefine(opts, value)
+      }
+    } else if part == "-I" || starts_with(part, "-I") {
+      match wp_option_value(parts, i, "-I", "-I") {
+        Ok((value, next_i)) => {
+          opts.include_paths.push(value)
+          i = next_i
+        }
+        Err(err) => return Err(err)
+      }
+    } else if part == "-include-pch" {
+      match wp_option_value(parts, i, "-include-pch", "-include-pch") {
+        Ok((_value, next_i)) => i = next_i
+        Err(err) => return Err(err)
+      }
+    } else if part == "-include" || starts_with(part, "-include") {
+      match wp_option_value(parts, i, "-include", "-include") {
+        Ok((value, next_i)) => {
+          opts.forced_includes.push(value)
+          i = next_i
+        }
+        Err(err) => return Err(err)
+      }
+    } else if part == "-isystem-after" || starts_with(part, "-isystem-after") {
+      match wp_option_value(parts, i, "-isystem-after", "-isystem-after") {
+        Ok((value, next_i)) => {
+          opts.after_system_include_paths.push(value)
+          i = next_i
+        }
+        Err(err) => return Err(err)
+      }
+    } else if part == "-isystem" || starts_with(part, "-isystem") {
+      match wp_option_value(parts, i, "-isystem", "-isystem") {
+        Ok((value, next_i)) => {
+          opts.system_include_paths.push(value)
+          i = next_i
+        }
+        Err(err) => return Err(err)
+      }
+    } else if part == "-idirafter" || starts_with(part, "-idirafter") {
+      match wp_option_value(parts, i, "-idirafter", "-idirafter") {
+        Ok((value, next_i)) => {
+          opts.after_system_include_paths.push(value)
+          i = next_i
+        }
+        Err(err) => return Err(err)
+      }
+    } else if part == "-iquote" || starts_with(part, "-iquote") {
+      match wp_option_value(parts, i, "-iquote", "-iquote") {
+        Ok((value, next_i)) => {
+          opts.include_paths.push(value)
+          i = next_i
+        }
+        Err(err) => return Err(err)
       }
     }
     i += 1
@@ -496,6 +579,14 @@ fn consume_xpreprocessor_option(
     }
   } else if part == "-I" || starts_with(part, "-I") {
     match xpreprocessor_option_value(argv, index, "-I", "-I") {
+      Ok((value, next_i)) => {
+        opts.include_paths.push(value)
+        Ok(next_i)
+      }
+      Err(err) => Err(err)
+    }
+  } else if part == "-iquote" || starts_with(part, "-iquote") {
+    match xpreprocessor_option_value(argv, index, "-iquote", "-iquote") {
       Ok((value, next_i)) => {
         opts.include_paths.push(value)
         Ok(next_i)

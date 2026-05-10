@@ -355,11 +355,12 @@ test "driver parses isystem after include path" {
   let xpreprocessor_opts = match
     parse_driver_args([
       "kimicc", "-fsyntax-only", "-Xpreprocessor", "-isystem-after", "-Xpreprocessor",
-      "after-x", "foo.c",
+      "after-x", "-Xpreprocessor", "-iquote", "-Xpreprocessor", "quote-x", "foo.c",
     ]) {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
+  assert_eq(xpreprocessor_opts.include_paths, ["quote-x"])
   assert_eq(xpreprocessor_opts.after_system_include_paths, ["after-x"])
 }
 
@@ -987,18 +988,40 @@ test "driver parses preprocessor dependency options" {
 }
 
 ///|
+test "driver parses Wp include options" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-c", "-Wp,-MMD,-Iinclude,-isystem,sys,-isystem-after,after-sys,-idirafter,late-sys,-iquote,quote,-include,config.h",
+      "-o", "build/foo.o", "src/foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.emit_dependencies)
+  assert_true(!opts.dependency_include_system)
+  assert_true(opts.dependency_output_path is None)
+  assert_eq(opts.include_paths, ["include", "quote"])
+  assert_eq(opts.system_include_paths, ["sys"])
+  assert_eq(opts.after_system_include_paths, ["after-sys", "late-sys"])
+  assert_eq(opts.forced_includes, ["config.h"])
+}
+
+///|
 test "driver parses Xpreprocessor macro and include options" {
   let header = "/tmp/kimicc-driver-xpreprocessor-include.h"
   assert_true(write_file(header, "int from_xpreprocessor = VALUE;\n"))
   let opts = match
     parse_driver_args([
       "kimicc", "-E", "-Xpreprocessor", "-D", "-Xpreprocessor", "VALUE=19", "-Xpreprocessor",
-      "-include", "-Xpreprocessor", header, "-Xpreprocessor", "-UOLD", "foo.c",
+      "-include", "-Xpreprocessor", header, "-Xpreprocessor", "-I", "-Xpreprocessor",
+      "include-x", "-Xpreprocessor", "-iquote", "-Xpreprocessor", "quote-x", "-Xpreprocessor",
+      "-UOLD", "foo.c",
     ]) {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
   assert_eq(opts.defines["VALUE"], "19")
+  assert_eq(opts.include_paths, ["include-x", "quote-x"])
   assert_eq(opts.undefines, ["OLD"])
   let result = preprocess_source_with_dependencies(
     "int body = VALUE;\n", "foo.c", opts,
