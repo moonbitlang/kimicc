@@ -88,6 +88,8 @@ object_path="/tmp/kimicc-linux-amd64-smoke.o"
 dependency_path="/tmp/kimicc-linux-amd64-smoke.d"
 dependency_stdout_path="/tmp/kimicc-linux-amd64-smoke-mm.out"
 binary_path="/tmp/kimicc-linux-amd64-smoke"
+libm_source_path="/tmp/kimicc-linux-amd64-libm.c"
+libm_binary_path="/tmp/kimicc-linux-amd64-libm"
 multi_main_source_path="/tmp/kimicc-linux-amd64-multi-main.c"
 multi_helper_source_path="/tmp/kimicc-linux-amd64-multi-helper.c"
 multi_main_object_path="/tmp/kimicc-linux-amd64-multi-main.o"
@@ -1535,6 +1537,15 @@ if [ "$status" -ne 42 ]; then
   echo "expected smoke binary to exit 42, got $status" >&2
   exit 1
 fi
+
+cat > "$libm_source_path" <<'C'
+double cos(double);
+int main(void) { return cos(0.0) == 1.0 ? 0 : 1; }
+C
+
+"$kimicc" -target linux-amd64 --library-directory /usr/lib/x86_64-linux-gnu \
+  -o "$libm_binary_path" "$libm_source_path" -l m
+"$libm_binary_path"
 
 cat > "$extensionless_source_path" <<'C'
 int main(void) { return 42; }
