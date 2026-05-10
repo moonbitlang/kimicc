@@ -61,6 +61,7 @@ priv struct DriverOptions {
   defines : Map[String, String]
   undefines : Array[String]
   linker_args : Array[String]
+  assembly_input_paths : Array[String]
   toolchain_args : Array[String]
   mut input_language : String?
   mut already_preprocessed : Bool
@@ -102,6 +103,7 @@ fn DriverOptions::new() -> DriverOptions {
     defines: {},
     undefines: [],
     linker_args: [],
+    assembly_input_paths: [],
     toolchain_args: [],
     input_language: None,
     already_preprocessed: false,
@@ -561,11 +563,18 @@ fn is_linker_input(path : String) -> Bool {
 }
 
 ///|
+fn add_delegated_assembly_input(opts : DriverOptions, value : String) -> Unit {
+  opts.linker_args.push(value)
+  opts.assembly_input_paths.push(value)
+}
+
+///|
 fn add_positional(opts : DriverOptions, value : String) -> Result[Unit, String] {
   match opts.input_path {
     None =>
-      if treats_as_assembly_input(opts, value) ||
-        (is_linker_input(value) && !treats_as_c_source(opts, value)) {
+      if treats_as_assembly_input(opts, value) {
+        add_delegated_assembly_input(opts, value)
+      } else if is_linker_input(value) && !treats_as_c_source(opts, value) {
         opts.linker_args.push(value)
       } else {
         opts.input_path = Some(value)
@@ -576,7 +585,11 @@ fn add_positional(opts : DriverOptions, value : String) -> Result[Unit, String] 
           treats_as_assembly_input(opts, value) ||
           (is_linker_input(value) && !treats_as_c_source(opts, value))
         ) {
-        opts.linker_args.push(value)
+        if treats_as_assembly_input(opts, value) {
+          add_delegated_assembly_input(opts, value)
+        } else {
+          opts.linker_args.push(value)
+        }
       } else if treats_as_c_source(opts, value) {
         opts.extra_input_paths.push(value)
       } else if opts.output == LinkExecutable &&
@@ -1730,10 +1743,11 @@ fn assembly_output_path(opts : DriverOptions, input_path : String) -> String {
 }
 
 ///|
-fn compile_assembly_input(opts : DriverOptions, input_path : String) -> Unit {
-  if opts.linker_args.length() != 1 {
+fn compile_assembly_input(opts : DriverOptions) -> Unit {
+  if opts.assembly_input_paths.length() != 1 {
     fail("assembly compile mode supports one input file")
   }
+  let input_path = opts.assembly_input_paths[0]
   if !treats_as_assembly_input(opts, input_path) {
     fail("no C input file")
   }
@@ -2033,7 +2047,7 @@ fn main {
       }
     None =>
       if opts.output == EmitObject && opts.linker_args.length() > 0 {
-        compile_assembly_input(opts, opts.linker_args[0])
+        compile_assembly_input(opts)
       } else if opts.output == LinkExecutable && opts.linker_args.length() > 0 {
         let output_path = match opts.output_path {
           Some(path) => path

@@ -341,7 +341,23 @@ test "driver treats assembly compile input as delegated input" {
   assert_true(opts.output == EmitObject)
   assert_true(opts.input_path is None)
   assert_eq(opts.linker_args, ["start.s"])
+  assert_eq(opts.assembly_input_paths, ["start.s"])
   assert_eq(assembly_output_path(opts, "start.s"), "start.o")
+}
+
+///|
+test "driver separates assembly compile inputs from linker flags" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-c", "-pthread", "start.s", "-l", "m", "-o", "start.o",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.output == EmitObject)
+  assert_true(opts.input_path is None)
+  assert_eq(opts.assembly_input_paths, ["start.s"])
+  assert_eq(opts.linker_args, ["-pthread", "start.s", "-l", "m"])
 }
 
 ///|
