@@ -171,6 +171,8 @@ test "driver chooses compiler-style default output names" {
   assert_eq(default_output_path(opts, "src/foo.c"), "src/foo.s")
   opts.output = EmitObject
   assert_eq(default_output_path(opts, "src/foo.c"), "src/foo.o")
+  opts.output = CheckSyntax
+  assert_eq(default_output_path(opts, "src/foo.c"), "src/foo.o")
   opts.output = LinkExecutable
   assert_eq(default_output_path(opts, "src/foo.c"), "a.out")
   opts.output = EmitPreprocessed
@@ -195,6 +197,16 @@ test "driver keeps link-only inputs and framework flags" {
   assert_eq(opts.linker_args[2], "-framework")
   assert_eq(opts.linker_args[3], "CoreFoundation")
   assert_eq(opts.linker_args[4], "-Wl,-rpath,/tmp")
+}
+
+///|
+test "driver parses syntax-only mode" {
+  let opts = match parse_driver_args(["kimicc", "-fsyntax-only", "foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.output == CheckSyntax)
+  assert_true(opts.input_path is Some("foo.c"))
 }
 
 ///|

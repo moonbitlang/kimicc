@@ -48,6 +48,7 @@ input path. `@response-file` arguments are expanded before option parsing:
 moon run cmd/main --target native -- -E -D FEATURE=1 -I include input.c
 moon run cmd/main --target native -- -S input.c
 moon run cmd/main --target native -- -c input.c
+moon run cmd/main --target native -- -fsyntax-only input.c
 moon run cmd/main --target native -- -MM -MP input.c
 moon run cmd/main --target native -- -c -MMD -MP -MF input.d input.c
 moon run cmd/main --target native -- -S --preprocessed input.i -o out.s

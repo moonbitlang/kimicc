@@ -32,6 +32,7 @@ priv enum DriverOutput {
   EmitObject
   EmitPreprocessed
   EmitDependencies
+  CheckSyntax
 } derive(Eq)
 
 ///|
@@ -796,6 +797,8 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
           opts.print_file_name = Some(
             arg["-print-file-name=".length():].to_owned(),
           )
+        } else if arg == "-fsyntax-only" {
+          opts.output = CheckSyntax
         } else if arg == "-fpreprocessed" {
           opts.already_preprocessed = true
         } else if apply_dependency_mode(opts, arg) {
@@ -1286,6 +1289,7 @@ fn default_output_path(opts : DriverOptions, input_path : String) -> String {
         EmitAssembly => replace_extension(input_path, ".s")
         EmitObject => replace_extension(input_path, ".o")
         EmitDependencies => "-"
+        CheckSyntax => replace_extension(input_path, ".o")
         LinkExecutable => "a.out"
       }
   }
@@ -1481,6 +1485,7 @@ fn print_usage() -> Unit {
     #|  -E                  preprocess only
     #|  -S                  compile to assembly
     #|  -c                  compile to a relocatable object
+    #|  -fsyntax-only       preprocess and parse without emitting output
     #|  -M, -MM             write dependencies only
     #|  default             compile C source inputs and delegate final linking to clang
     #|
@@ -1634,6 +1639,18 @@ fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
           )
         }
       }
+    }
+    CheckSyntax => {
+      let preprocessed = preprocess_source_with_dependencies(
+        source, input_path, opts,
+      )
+      let _ = @parser.parse(preprocessed.text)
+      write_dependency_file(
+        opts,
+        input_path,
+        output_path,
+        preprocessed.dependency_records,
+      )
     }
     LinkExecutable => {
       let preprocessed = preprocess_source_with_dependencies(
