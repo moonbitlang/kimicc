@@ -106,7 +106,8 @@ test "driver consumes clang pass-through flags with separate values" {
       "-march=x86-64-v2", "-darwin-target-variant", "macos13", "-darwin-target-variant-triple",
       "x86_64-apple-macos13", "-meabi", "gnu", "-mmlir", "--mlir-print-ir-after-all",
       "-mthread-model", "posix", "-stdlib++-isystem", "cxx-stdlib", "-vfsoverlay",
-      "overlay.yaml", "foo.c",
+      "overlay.yaml", "-Xarch_x86_64", "-DCPU", "-Xoffload-linkerx86_64-linux-gnu",
+      "--as-needed", "-b", "elf64-x86-64", "-hlsl-entry", "main", "foo.c",
     ]) {
     Ok(opts) => opts
     Err(err) => abort(err)

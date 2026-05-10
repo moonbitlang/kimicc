@@ -860,6 +860,7 @@ fn consume_ignored_option(
     | "-aux-info"
     | "-auxbase"
     | "-auxbase-strip"
+    | "-b"
     | "-MJ"
     | "-std"
     | "--std"
@@ -907,6 +908,7 @@ fn consume_ignored_option(
     | "-working-directory"
     | "--working-directory"
     | "-fmodule-map-file"
+    | "-hlsl-entry"
     | "--param" =>
       if index + 1 < argv.length() {
         Ok(index + 1)
@@ -1051,6 +1053,13 @@ fn consume_ignored_option(
       } else if starts_with(arg, "-B") && arg.length() > "-B".length() {
         opts.toolchain_args.push(arg)
         Ok(index)
+      } else if starts_with(arg, "-Xarch_") ||
+        starts_with(arg, "-Xoffload-linker") {
+        if index + 1 < argv.length() {
+          Ok(index + 1)
+        } else {
+          Err("missing argument after " + arg)
+        }
       } else if starts_with(arg, "-Xopenmp-target=") {
         if index + 1 < argv.length() {
           Ok(index + 1)
