@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <moonbit.h>
 
 MOONBIT_FFI_EXPORT
@@ -36,7 +37,11 @@ int moonbit_write_file(moonbit_bytes_t path, moonbit_bytes_t content) {
 
 MOONBIT_FFI_EXPORT
 int moonbit_system(moonbit_bytes_t cmd) {
-  return system((const char *)cmd);
+  int status = system((const char *)cmd);
+  if (status == -1) return -1;
+  if (WIFEXITED(status)) return WEXITSTATUS(status);
+  if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+  return status;
 }
 
 MOONBIT_FFI_EXPORT
