@@ -84,6 +84,7 @@ int128_object_path="/tmp/kimicc-linux-amd64-int128.o"
 int128_helper_object_path="/tmp/kimicc-linux-amd64-int128-helper.o"
 int128_binary_path="/tmp/kimicc-linux-amd64-int128"
 system_header_source_path="/tmp/kimicc-linux-amd64-system-headers.c"
+system_header_preprocessed_path="/tmp/kimicc-linux-amd64-system-headers.i"
 system_header_object_path="/tmp/kimicc-linux-amd64-system-headers.o"
 system_header_binary_path="/tmp/kimicc-linux-amd64-system-headers"
 
@@ -1449,6 +1450,12 @@ int main(void) {
 }
 C
 
+moon run cmd/main --target native -- -E -target linux-amd64 -o "$system_header_preprocessed_path" "$system_header_source_path"
+grep -E 'typedef[[:space:]][^;]*[[:space:]]uint8_t;' "$system_header_preprocessed_path" >/dev/null
+grep -E 'typedef[[:space:]][^;]*[[:space:]]uintptr_t;' "$system_header_preprocessed_path" >/dev/null
+grep -E 'typedef[[:space:]][^;]*[[:space:]]size_t;' "$system_header_preprocessed_path" >/dev/null
+grep -E 'typedef[[:space:]][^;]*[[:space:]]ptrdiff_t;' "$system_header_preprocessed_path" >/dev/null
+grep -E 'typedef[[:space:]][^;]*[[:space:]]va_list;' "$system_header_preprocessed_path" >/dev/null
 moon run cmd/main --target native -- -c -target linux-amd64 -o "$system_header_object_path" "$system_header_source_path"
 clang -o "$system_header_binary_path" "$system_header_object_path"
 set +e

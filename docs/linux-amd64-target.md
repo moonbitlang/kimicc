@@ -260,4 +260,7 @@ tests, emits Linux assembly, assembles an ELF object, links a Linux executable,
 checks that the executable exits with code 42, and compiles an additional
 common system-header probe using the container's Linux include directories,
 including typedefs and macros from `stddef.h`, `stdint.h`, `stdalign.h`,
-`stdbool.h`, `stdarg.h`, and `limits.h`.
+`stdbool.h`, `stdarg.h`, and `limits.h`. Before compiling that probe, it also
+preprocesses the same source and checks that libc typedefs such as `uint8_t`,
+`uintptr_t`, `size_t`, `ptrdiff_t`, and `va_list` survived the Clang-resource
+`#include_next` chain.
