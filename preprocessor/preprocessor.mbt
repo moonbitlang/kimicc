@@ -6,10 +6,15 @@ fn Preprocessor::set_error(self : Preprocessor, message : String) -> Unit {
 }
 
 ///|
-fn Preprocessor::record_dependency(self : Preprocessor, path : String) -> Unit {
+fn Preprocessor::record_dependency(
+  self : Preprocessor,
+  path : String,
+  system : Bool,
+) -> Unit {
   if !self.dependency_seen.contains(path) {
     self.dependency_seen[path] = true
     self.dependencies.push(path)
+    self.dependency_records.push({ path, system })
   }
 }
 
@@ -187,13 +192,14 @@ fn Preprocessor::new(options : PreprocessOptions) -> Preprocessor {
     include_stack: [],
     once_files: {},
     dependencies: [],
+    dependency_records: [],
     dependency_seen: {},
     line_control_file: None,
     line_control_line: None,
     counter: 0,
     error: None,
   }
-  pp.record_dependency(options.filename)
+  pp.record_dependency(options.filename, false)
   pp.seed_target_macros()
   pp.seed_macro_definition("__has_builtin(x) 0")
   pp.seed_macro_definition("__has_attribute(x) 0")
@@ -489,30 +495,55 @@ fn Preprocessor::parse_include_name(
 }
 
 ///|
+priv struct IncludeSearchDir {
+  dir : String
+  system : Bool
+}
+
+///|
+fn Preprocessor::include_search_dirs(
+  self : Preprocessor,
+  system : Bool,
+) -> Array[IncludeSearchDir] {
+  let paths : Array[IncludeSearchDir] = []
+  if system {
+    for dir in self.options.system_include_paths {
+      paths.push({ dir, system: true })
+    }
+    for dir in self.options.include_paths {
+      paths.push({ dir, system: false })
+    }
+  } else {
+    for dir in self.options.include_paths {
+      paths.push({ dir, system: false })
+    }
+    for dir in self.options.system_include_paths {
+      paths.push({ dir, system: true })
+    }
+  }
+  paths
+}
+
+///|
 fn Preprocessor::resolve_include(
   self : Preprocessor,
   name : String,
   system : Bool,
   including_file : String,
-) -> String? {
+) -> (String, Bool)? {
   if pp_is_absolute_path(name) && pp_file_exists(name) {
-    return Some(name)
+    return Some((name, system))
   }
   if !system {
     let candidate = pp_join_path(pp_dirname(including_file), name)
     if pp_file_exists(candidate) {
-      return Some(candidate)
+      return Some((candidate, false))
     }
   }
-  let search_paths = if system {
-    self.options.system_include_paths + self.options.include_paths
-  } else {
-    self.options.include_paths + self.options.system_include_paths
-  }
-  for dir in search_paths {
-    let candidate = pp_join_path(dir, name)
+  for entry in self.include_search_dirs(system) {
+    let candidate = pp_join_path(entry.dir, name)
     if pp_file_exists(candidate) {
-      return Some(candidate)
+      return Some((candidate, entry.system))
     }
   }
   None
@@ -524,29 +555,25 @@ fn Preprocessor::resolve_include_next(
   name : String,
   system : Bool,
   including_file : String,
-) -> String? {
-  let search_paths = if system {
-    self.options.system_include_paths + self.options.include_paths
-  } else {
-    self.options.include_paths + self.options.system_include_paths
-  }
+) -> (String, Bool)? {
+  let search_paths = self.include_search_dirs(system)
   let current_dir = pp_dirname(including_file)
   let mut found_current = false
-  for dir in search_paths {
-    let candidate = pp_join_path(dir, name)
+  for entry in search_paths {
+    let candidate = pp_join_path(entry.dir, name)
     if found_current {
       if pp_file_exists(candidate) {
-        return Some(candidate)
+        return Some((candidate, entry.system))
       }
-    } else if candidate == including_file || dir == current_dir {
+    } else if candidate == including_file || entry.dir == current_dir {
       found_current = true
     }
   }
   if !found_current {
-    for dir in search_paths {
-      let candidate = pp_join_path(dir, name)
+    for entry in search_paths {
+      let candidate = pp_join_path(entry.dir, name)
       if candidate != including_file && pp_file_exists(candidate) {
-        return Some(candidate)
+        return Some((candidate, entry.system))
       }
     }
   }
@@ -564,11 +591,11 @@ fn Preprocessor::process_include(
   match self.parse_include_name(tokens, logical_file, line) {
     Some((name, system)) =>
       match self.resolve_include(name, system, including_file) {
-        Some(path) =>
+        Some((path, dependency_system)) =>
           if self.once_files.contains(path) {
             ""
           } else {
-            self.record_dependency(path)
+            self.record_dependency(path, dependency_system)
             match pp_read_file(path) {
               Some(content) => self.process_source(content, path)
               None => {
@@ -597,11 +624,11 @@ fn Preprocessor::process_include_next(
   match self.parse_include_name(tokens, logical_file, line) {
     Some((name, system)) =>
       match self.resolve_include_next(name, system, including_file) {
-        Some(path) =>
+        Some((path, dependency_system)) =>
           if self.once_files.contains(path) {
             ""
           } else {
-            self.record_dependency(path)
+            self.record_dependency(path, dependency_system)
             match pp_read_file(path) {
               Some(content) => self.process_source(content, path)
               None => {
@@ -1020,7 +1047,12 @@ pub fn preprocess_with_dependencies(
   let text = pp.process_source(source, options.filename)
   match pp.error {
     Some(err) => Err(err)
-    None => Ok({ text, dependencies: pp.dependencies })
+    None =>
+      Ok({
+        text,
+        dependencies: pp.dependencies,
+        dependency_records: pp.dependency_records,
+      })
   }
 }
 

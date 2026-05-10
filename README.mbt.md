@@ -47,13 +47,15 @@ preprocessed:
 moon run cmd/main --target native -- -E -D FEATURE=1 -I include input.c
 moon run cmd/main --target native -- -S input.c
 moon run cmd/main --target native -- -c input.c
+moon run cmd/main --target native -- -MM -MP input.c
 moon run cmd/main --target native -- -c -MMD -MP -MF input.d input.c
 moon run cmd/main --target native -- -S --preprocessed input.i -o out.s
 ```
 
-Dependency sidecar flags `-MD`, `-MMD`, `-MP`, `-MF`, `-MT`, and `-MQ` are
-accepted for compile-style invocations. The generated Makefile rule lists the
-main source and resolved headers read by kimicc's preprocessor.
+Dependency flags `-M`, `-MM`, `-MD`, `-MMD`, `-MP`, `-MF`, `-MT`, and `-MQ`
+are accepted. `-M`/`-MD` include system headers in generated Makefile rules,
+while `-MM`/`-MMD` keep only the main source and user headers resolved by
+kimicc's preprocessor.
 
 The default output target is `darwin-arm64`. Use `-target linux-amd64` to select
 the experimental Linux/amd64 backend:

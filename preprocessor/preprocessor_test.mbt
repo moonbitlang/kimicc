@@ -512,15 +512,20 @@ test "preprocess with dependencies records resolved includes" {
       let mut saw_local = false
       let mut saw_quote_path = false
       let mut saw_system = false
-      for path in result.dependencies {
-        if path == "preprocessor/testdata/input.c" {
+      for dep in result.dependency_records {
+        if dep.path == "preprocessor/testdata/input.c" {
           saw_main = true
-        } else if path == "preprocessor/testdata/local_header.h" {
+          assert_true(!dep.system)
+        } else if dep.path == "preprocessor/testdata/local_header.h" {
           saw_local = true
-        } else if path == "preprocessor/testdata/include_path/path_header.h" {
+          assert_true(!dep.system)
+        } else if dep.path == "preprocessor/testdata/include_path/path_header.h" {
           saw_quote_path = true
-        } else if path == "preprocessor/testdata/system_path/system_header.h" {
+          assert_true(!dep.system)
+        } else if dep.path ==
+          "preprocessor/testdata/system_path/system_header.h" {
           saw_system = true
+          assert_true(dep.system)
         }
       }
       assert_true(saw_main)

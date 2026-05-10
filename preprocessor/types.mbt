@@ -35,13 +35,26 @@ pub(all) enum PreprocessError {
 } derive(Eq)
 
 ///|
+/// One physical file read while preprocessing.
+///
+/// `system` is true when the file was resolved from a system include search
+/// directory or by an angle-form absolute include.
+pub(all) struct PreprocessDependency {
+  path : String
+  system : Bool
+} derive(Eq)
+
+///|
 /// Preprocessed source plus the physical files read while preprocessing.
 ///
 /// `dependencies` starts with the main translation-unit filename and then lists
 /// resolved include paths in first-seen order.
+/// `dependency_records` carries the same paths with system-header classification
+/// for compiler-driver dependency output.
 pub(all) struct PreprocessResult {
   text : String
   dependencies : Array[String]
+  dependency_records : Array[PreprocessDependency]
 } derive(Eq)
 
 ///|
@@ -118,6 +131,7 @@ priv struct Preprocessor {
   include_stack : Array[String]
   once_files : Map[String, Bool]
   dependencies : Array[String]
+  dependency_records : Array[PreprocessDependency]
   dependency_seen : Map[String, Bool]
   mut line_control_file : String?
   mut line_control_line : Int?

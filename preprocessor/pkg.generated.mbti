@@ -16,6 +16,11 @@ pub fn preprocess_with_dependencies(String, PreprocessOptions) -> Result[Preproc
 // Errors
 
 // Types and methods
+pub(all) struct PreprocessDependency {
+  path : String
+  system : Bool
+} derive(Eq)
+
 pub(all) enum PreprocessError {
   Message(String)
 } derive(Eq)
@@ -35,6 +40,7 @@ pub fn PreprocessOptions::new(String) -> Self
 pub(all) struct PreprocessResult {
   text : String
   dependencies : Array[String]
+  dependency_records : Array[PreprocessDependency]
 } derive(Eq)
 
 // Type aliases

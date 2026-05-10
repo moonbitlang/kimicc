@@ -19,6 +19,10 @@ extern "c" fn moonbit_system(cmd : Bytes) -> Int = "moonbit_system"
 extern "c" fn moonbit_write_stderr(message : Bytes) -> Unit = "moonbit_write_stderr"
 
 ///|
+#borrow(message)
+extern "c" fn moonbit_write_stdout(message : Bytes) -> Unit = "moonbit_write_stdout"
+
+///|
 extern "c" fn moonbit_exit(code : Int) -> Unit = "moonbit_exit"
 
 ///|
@@ -27,6 +31,7 @@ priv enum DriverOutput {
   EmitAssembly
   EmitObject
   EmitPreprocessed
+  EmitDependencies
 } derive(Eq)
 
 ///|
@@ -36,6 +41,7 @@ priv struct DriverOptions {
   mut output_path : String?
   mut input_path : String?
   mut emit_dependencies : Bool
+  mut dependency_include_system : Bool
   mut dependency_phony_targets : Bool
   mut dependency_output_path : String?
   mut dependency_target : String?
@@ -59,6 +65,7 @@ fn DriverOptions::new() -> DriverOptions {
     output_path: None,
     input_path: None,
     emit_dependencies: false,
+    dependency_include_system: true,
     dependency_phony_targets: false,
     dependency_output_path: None,
     dependency_target: None,
@@ -96,6 +103,11 @@ fn write_file(path : String, content : String) -> Bool {
 fn write_bytes_file(path : String, content : Bytes) -> Bool {
   let rc = moonbit_write_file(@utf8.encode(path), content)
   rc == 0
+}
+
+///|
+fn write_stdout(content : String) -> Unit {
+  moonbit_write_stdout(@utf8.encode(content))
 }
 
 ///|
@@ -389,8 +401,20 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
           }
         } else if starts_with(arg, "-o") && arg.length() > 2 {
           opts.output_path = Some(arg[2:].to_owned())
-        } else if arg == "-MD" || arg == "-MMD" {
+        } else if arg == "-M" {
+          opts.output = EmitDependencies
           opts.emit_dependencies = true
+          opts.dependency_include_system = true
+        } else if arg == "-MM" {
+          opts.output = EmitDependencies
+          opts.emit_dependencies = true
+          opts.dependency_include_system = false
+        } else if arg == "-MD" {
+          opts.emit_dependencies = true
+          opts.dependency_include_system = true
+        } else if arg == "-MMD" {
+          opts.emit_dependencies = true
+          opts.dependency_include_system = false
         } else if arg == "-MP" {
           opts.dependency_phony_targets = true
         } else if arg == "-MF" || starts_with(arg, "-MF") {
@@ -746,20 +770,68 @@ fn dependency_file_content(
 }
 
 ///|
+fn dependency_paths(
+  opts : DriverOptions,
+  dependency_records : Array[@preprocessor.PreprocessDependency],
+) -> Array[String] {
+  let paths : Array[String] = []
+  for dep in dependency_records {
+    if opts.dependency_include_system || !dep.system {
+      paths.push(dep.path)
+    }
+  }
+  paths
+}
+
+///|
+fn dependency_rule_content(
+  opts : DriverOptions,
+  input_path : String,
+  output_path : String,
+  dependency_records : Array[@preprocessor.PreprocessDependency],
+) -> String {
+  dependency_file_content(
+    opts,
+    input_path,
+    output_path,
+    dependency_paths(opts, dependency_records),
+  )
+}
+
+///|
 fn write_dependency_file(
   opts : DriverOptions,
   input_path : String,
   output_path : String,
-  dependencies : Array[String],
+  dependency_records : Array[@preprocessor.PreprocessDependency],
 ) -> Unit {
   if opts.emit_dependencies {
     let path = dependency_output_path(opts, input_path, output_path)
-    let content = dependency_file_content(
-      opts, input_path, output_path, dependencies,
+    let content = dependency_rule_content(
+      opts, input_path, output_path, dependency_records,
     )
     if !write_file(path, content) {
       fail("cannot write dependency file: " + path)
     }
+  }
+}
+
+///|
+fn emit_dependency_output(
+  opts : DriverOptions,
+  input_path : String,
+  output_path : String,
+  dependency_records : Array[@preprocessor.PreprocessDependency],
+) -> Unit {
+  let content = dependency_rule_content(
+    opts, input_path, output_path, dependency_records,
+  )
+  match opts.dependency_output_path {
+    Some(path) =>
+      if !write_file(path, content) {
+        fail("cannot write dependency file: " + path)
+      }
+    None => write_stdout(content)
   }
 }
 
@@ -796,6 +868,7 @@ fn default_output_path(opts : DriverOptions, input_path : String) -> String {
         EmitPreprocessed => "-"
         EmitAssembly => replace_extension(input_path, ".s")
         EmitObject => replace_extension(input_path, ".o")
+        EmitDependencies => "-"
         LinkExecutable => "a.out"
       }
   }
@@ -804,7 +877,7 @@ fn default_output_path(opts : DriverOptions, input_path : String) -> String {
 ///|
 priv struct DriverPreprocessResult {
   text : String
-  dependencies : Array[String]
+  dependency_records : Array[@preprocessor.PreprocessDependency]
 }
 
 ///|
@@ -817,7 +890,7 @@ fn preprocess_source_with_dependencies(
     if opts.forced_includes.length() > 0 {
       fail("--preprocessed cannot be combined with -include")
     }
-    { text: source, dependencies: [input_path] }
+    { text: source, dependency_records: [{ path: input_path, system: false }] }
   } else {
     let preprocessed_source = forced_include_prefix(opts) + source
     match
@@ -825,10 +898,11 @@ fn preprocess_source_with_dependencies(
         preprocessed_source,
         preprocess_options(input_path, opts),
       ) {
-      Ok(result) => { text: result.text, dependencies: result.dependencies }
+      Ok(result) =>
+        { text: result.text, dependency_records: result.dependency_records }
       Err(err) => {
         fail(err.to_string())
-        { text: "", dependencies: [] }
+        { text: "", dependency_records: [] }
       }
     }
   }
@@ -913,6 +987,7 @@ fn print_usage() -> Unit {
     #|  -E                  preprocess only
     #|  -S                  compile to assembly
     #|  -c                  compile to a relocatable object
+    #|  -M, -MM             write dependencies only
     #|  default             compile one C source and delegate final linking to clang
     #|
     #|Preprocessor options:
@@ -958,7 +1033,22 @@ fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
         opts,
         input_path,
         output_path,
-        preprocessed.dependencies,
+        preprocessed.dependency_records,
+      )
+    }
+    EmitDependencies => {
+      let preprocessed = preprocess_source_with_dependencies(
+        source, input_path, opts,
+      )
+      let rule_output_path = match opts.output_path {
+        Some(path) => path
+        None => replace_extension(input_path, ".o")
+      }
+      emit_dependency_output(
+        opts,
+        input_path,
+        rule_output_path,
+        preprocessed.dependency_records,
       )
     }
     EmitAssembly => {
@@ -978,7 +1068,7 @@ fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
         opts,
         input_path,
         output_path,
-        preprocessed.dependencies,
+        preprocessed.dependency_records,
       )
     }
     EmitObject => {
@@ -999,7 +1089,7 @@ fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
             opts,
             input_path,
             output_path,
-            preprocessed.dependencies,
+            preprocessed.dependency_records,
           )
         }
         LinuxAmd64 => {
@@ -1019,7 +1109,7 @@ fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
             opts,
             input_path,
             output_path,
-            preprocessed.dependencies,
+            preprocessed.dependency_records,
           )
         }
       }
@@ -1041,7 +1131,7 @@ fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
         opts,
         input_path,
         output_path,
-        preprocessed.dependencies,
+        preprocessed.dependency_records,
       )
     }
   }

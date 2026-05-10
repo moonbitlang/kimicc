@@ -51,6 +51,12 @@ void moonbit_write_stderr(moonbit_bytes_t message) {
 }
 
 MOONBIT_FFI_EXPORT
+void moonbit_write_stdout(moonbit_bytes_t message) {
+  size_t len = Moonbit_array_length(message);
+  fwrite(message, 1, len, stdout);
+}
+
+MOONBIT_FFI_EXPORT
 void moonbit_exit(int code) {
   exit(code);
 }
