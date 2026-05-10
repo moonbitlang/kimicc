@@ -35,6 +35,10 @@ priv struct DriverOptions {
   mut target : @target.Target
   mut output_path : String?
   mut input_path : String?
+  mut emit_dependencies : Bool
+  mut dependency_phony_targets : Bool
+  mut dependency_output_path : String?
+  mut dependency_target : String?
   include_paths : Array[String]
   system_include_paths : Array[String]
   forced_includes : Array[String]
@@ -54,6 +58,10 @@ fn DriverOptions::new() -> DriverOptions {
     target: @target.Target::default(),
     output_path: None,
     input_path: None,
+    emit_dependencies: false,
+    dependency_phony_targets: false,
+    dependency_output_path: None,
+    dependency_target: None,
     include_paths: [],
     system_include_paths: [],
     forced_includes: [],
@@ -381,6 +389,34 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
           }
         } else if starts_with(arg, "-o") && arg.length() > 2 {
           opts.output_path = Some(arg[2:].to_owned())
+        } else if arg == "-MD" || arg == "-MMD" {
+          opts.emit_dependencies = true
+        } else if arg == "-MP" {
+          opts.dependency_phony_targets = true
+        } else if arg == "-MF" || starts_with(arg, "-MF") {
+          match option_value(argv, i, "-MF", "-MF") {
+            Ok((value, next_i)) => {
+              opts.dependency_output_path = Some(value)
+              i = next_i
+            }
+            Err(err) => return Err(err)
+          }
+        } else if arg == "-MT" || starts_with(arg, "-MT") {
+          match option_value(argv, i, "-MT", "-MT") {
+            Ok((value, next_i)) => {
+              opts.dependency_target = Some(value)
+              i = next_i
+            }
+            Err(err) => return Err(err)
+          }
+        } else if arg == "-MQ" || starts_with(arg, "-MQ") {
+          match option_value(argv, i, "-MQ", "-MQ") {
+            Ok((value, next_i)) => {
+              opts.dependency_target = Some(makefile_escape_path(value))
+              i = next_i
+            }
+            Err(err) => return Err(err)
+          }
         } else if arg == "-I" || starts_with(arg, "-I") {
           match option_value(argv, i, "-I", "-I") {
             Ok((value, next_i)) => {
@@ -616,6 +652,118 @@ fn shell_join_quoted(values : Array[String]) -> String {
 }
 
 ///|
+fn makefile_escape_path(value : String) -> String {
+  let buf = StringBuilder::new()
+  for ch in value {
+    if ch == '$' {
+      buf.write_string("$$")
+    } else if ch == ' ' || ch == '#' || ch == ':' || ch == '\\' {
+      buf.write_char('\\')
+      buf.write_char(ch)
+    } else {
+      buf.write_char(ch)
+    }
+  }
+  buf.to_string()
+}
+
+///|
+fn default_dependency_output_path(
+  output_path : String,
+  input_path : String,
+) -> String {
+  if output_path == "-" {
+    replace_extension(input_path, ".d")
+  } else {
+    replace_extension(output_path, ".d")
+  }
+}
+
+///|
+fn dependency_output_path(
+  opts : DriverOptions,
+  input_path : String,
+  output_path : String,
+) -> String {
+  match opts.dependency_output_path {
+    Some(path) => path
+    None => default_dependency_output_path(output_path, input_path)
+  }
+}
+
+///|
+fn dependency_target(
+  opts : DriverOptions,
+  input_path : String,
+  output_path : String,
+) -> String {
+  match opts.dependency_target {
+    Some(target) => target
+    None =>
+      if output_path == "-" {
+        makefile_escape_path(input_path)
+      } else {
+        makefile_escape_path(output_path)
+      }
+  }
+}
+
+///|
+fn dependency_file_content(
+  opts : DriverOptions,
+  input_path : String,
+  output_path : String,
+  dependencies : Array[String],
+) -> String {
+  let buf = StringBuilder::new()
+  buf.write_string(dependency_target(opts, input_path, output_path))
+  buf.write_string(":")
+  let seen : Map[String, Bool] = {}
+  for dep in dependencies {
+    if !seen.contains(dep) {
+      seen[dep] = true
+      buf.write_char(' ')
+      buf.write_string(makefile_escape_path(dep))
+    }
+  }
+  if dependencies.length() == 0 {
+    buf.write_char(' ')
+    buf.write_string(makefile_escape_path(input_path))
+  }
+  buf.write_char('\n')
+  if opts.dependency_phony_targets {
+    let phony_seen : Map[String, Bool] = {}
+    for dep in dependencies {
+      if dep != input_path && !phony_seen.contains(dep) {
+        phony_seen[dep] = true
+        buf.write_char('\n')
+        buf.write_string(makefile_escape_path(dep))
+        buf.write_string(":\n")
+      }
+    }
+  }
+  buf.to_string()
+}
+
+///|
+fn write_dependency_file(
+  opts : DriverOptions,
+  input_path : String,
+  output_path : String,
+  dependencies : Array[String],
+) -> Unit {
+  if opts.emit_dependencies {
+    let path = dependency_output_path(opts, input_path, output_path)
+    let content = dependency_file_content(
+      opts, input_path, output_path, dependencies,
+    )
+    if !write_file(path, content) {
+      fail("cannot write dependency file: " + path)
+    }
+  }
+}
+
+///|
 fn temp_file_path(prefix : String, seed : String, suffix : String) -> String {
   "/tmp/kimicc_" + prefix + "_" + source_id(seed) + suffix
 }
@@ -654,61 +802,45 @@ fn default_output_path(opts : DriverOptions, input_path : String) -> String {
 }
 
 ///|
-fn generate_assembly(source : String, opts : DriverOptions) -> String {
-  let parser_input = if opts.already_preprocessed {
-    if opts.forced_includes.length() > 0 {
-      fail("--preprocessed cannot be combined with -include")
-    }
-    source
-  } else {
-    let preprocessed_source = forced_include_prefix(opts) + source
-    match
-      @preprocessor.preprocess(
-        preprocessed_source,
-        preprocess_options(
-          match opts.input_path {
-            Some(path) => path
-            None => "<stdin>"
-          },
-          opts,
-        ),
-      ) {
-      Ok(text) => text
-      Err(err) => {
-        fail(err.to_string())
-        ""
-      }
-    }
-  }
-  let prog = @parser.parse(parser_input)
-  @codegen.generate_assembly_for_target(prog, opts.target)
+priv struct DriverPreprocessResult {
+  text : String
+  dependencies : Array[String]
 }
 
 ///|
-fn preprocess_source(
+fn preprocess_source_with_dependencies(
   source : String,
   input_path : String,
   opts : DriverOptions,
-) -> String {
+) -> DriverPreprocessResult {
   if opts.already_preprocessed {
     if opts.forced_includes.length() > 0 {
       fail("--preprocessed cannot be combined with -include")
     }
-    source
+    { text: source, dependencies: [input_path] }
   } else {
     let preprocessed_source = forced_include_prefix(opts) + source
     match
-      @preprocessor.preprocess(
+      @preprocessor.preprocess_with_dependencies(
         preprocessed_source,
         preprocess_options(input_path, opts),
       ) {
-      Ok(text) => text
+      Ok(result) => { text: result.text, dependencies: result.dependencies }
       Err(err) => {
         fail(err.to_string())
-        ""
+        { text: "", dependencies: [] }
       }
     }
   }
+}
+
+///|
+fn generate_assembly_from_preprocessed(
+  parser_input : String,
+  opts : DriverOptions,
+) -> String {
+  let prog = @parser.parse(parser_input)
+  @codegen.generate_assembly_for_target(prog, opts.target)
 }
 
 ///|
@@ -795,6 +927,10 @@ fn print_usage() -> Unit {
     #|Output options:
     #|  -o PATH             set output path
     #|  -target TARGET      choose darwin-arm64 or linux-amd64
+    #|  -MD, -MMD           write a Makefile dependency sidecar
+    #|  -MF PATH            set dependency sidecar path
+    #|  -MT TARGET          set dependency rule target
+    #|  -MQ TARGET          set and Makefile-quote dependency rule target
   println(text)
 }
 
@@ -810,20 +946,40 @@ fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
   let output_path = default_output_path(opts, input_path)
   match opts.output {
     EmitPreprocessed => {
-      let text = preprocess_source(source, input_path, opts)
+      let preprocessed = preprocess_source_with_dependencies(
+        source, input_path, opts,
+      )
       if output_path == "-" {
-        println(text)
-      } else if !write_file(output_path, text) {
+        println(preprocessed.text)
+      } else if !write_file(output_path, preprocessed.text) {
         fail("cannot write file: " + output_path)
       }
+      write_dependency_file(
+        opts,
+        input_path,
+        output_path,
+        preprocessed.dependencies,
+      )
     }
     EmitAssembly => {
-      let assembly = generate_assembly(source, opts)
+      let preprocessed = preprocess_source_with_dependencies(
+        source, input_path, opts,
+      )
+      let assembly = generate_assembly_from_preprocessed(
+        preprocessed.text,
+        opts,
+      )
       if output_path == "-" {
         println(assembly)
       } else if !write_file(output_path, assembly) {
         fail("cannot write file: " + output_path)
       }
+      write_dependency_file(
+        opts,
+        input_path,
+        output_path,
+        preprocessed.dependencies,
+      )
     }
     EmitObject => {
       if output_path == "-" {
@@ -831,30 +987,62 @@ fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
       }
       match opts.target {
         DarwinArm64 => {
-          let parser_input = preprocess_source(source, input_path, opts)
-          let prog = @parser.parse(parser_input)
+          let preprocessed = preprocess_source_with_dependencies(
+            source, input_path, opts,
+          )
+          let prog = @parser.parse(preprocessed.text)
           let object = @codegen.generate_macho_object(prog)
           if !write_bytes_file(output_path, object) {
             fail("cannot write file: " + output_path)
           }
+          write_dependency_file(
+            opts,
+            input_path,
+            output_path,
+            preprocessed.dependencies,
+          )
         }
         LinuxAmd64 => {
-          let assembly = generate_assembly(source, opts)
+          let preprocessed = preprocess_source_with_dependencies(
+            source, input_path, opts,
+          )
+          let assembly = generate_assembly_from_preprocessed(
+            preprocessed.text,
+            opts,
+          )
           let asm_path = temp_file_path("object", input_path + source, ".s")
           if !write_file(asm_path, assembly) {
             fail("cannot write temporary assembly: " + asm_path)
           }
           assemble_with_clang(opts, asm_path, output_path)
+          write_dependency_file(
+            opts,
+            input_path,
+            output_path,
+            preprocessed.dependencies,
+          )
         }
       }
     }
     LinkExecutable => {
-      let assembly = generate_assembly(source, opts)
+      let preprocessed = preprocess_source_with_dependencies(
+        source, input_path, opts,
+      )
+      let assembly = generate_assembly_from_preprocessed(
+        preprocessed.text,
+        opts,
+      )
       let asm_path = temp_file_path("driver", input_path + source, ".s")
       if !write_file(asm_path, assembly) {
         fail("cannot write temporary assembly: " + asm_path)
       }
       run_link(opts, output_path, Some(asm_path))
+      write_dependency_file(
+        opts,
+        input_path,
+        output_path,
+        preprocessed.dependencies,
+      )
     }
   }
 }

@@ -85,6 +85,7 @@ moon test preprocessor --target native
 
 source_path="/tmp/kimicc-linux-amd64-smoke.c"
 object_path="/tmp/kimicc-linux-amd64-smoke.o"
+dependency_path="/tmp/kimicc-linux-amd64-smoke.d"
 binary_path="/tmp/kimicc-linux-amd64-smoke"
 probe_include_dir="/tmp/kimicc-linux-amd64-include"
 driver_stdout_path="/tmp/kimicc-linux-amd64-driver.out"
@@ -1485,8 +1486,10 @@ int main(void) {
 C
 
 "$kimicc" -S -target linux-amd64 -I "$probe_include_dir" -o /tmp/kimicc-linux-amd64-smoke.s "$source_path"
-"$kimicc" -c -target linux-amd64 -I "$probe_include_dir" -o "$object_path" "$source_path"
+"$kimicc" -c -target linux-amd64 -MMD -MP -MF "$dependency_path" -I "$probe_include_dir" -o "$object_path" "$source_path"
 file "$object_path" | grep -E 'ELF 64-bit.*x86-64'
+grep -F "$object_path: $source_path $probe_include_dir/pragma_once_header.h" "$dependency_path" >/dev/null
+grep -F "$probe_include_dir/pragma_once_header.h:" "$dependency_path" >/dev/null
 
 "$kimicc" -target linux-amd64 -I "$probe_include_dir" -o "$binary_path" "$source_path"
 set +e

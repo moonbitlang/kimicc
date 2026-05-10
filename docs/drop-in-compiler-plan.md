@@ -26,6 +26,9 @@ compile-only modes that C projects normally use.
 - Tolerate common build flags that do not yet affect code generation:
   `-std=*`, `-O*`, `-g*`, `-W*`, `-f*`, `-m*`, dependency-output options, and
   target/architecture options.
+- Write Makefile dependency sidecars for compile-style `-MD`/`-MMD` flows,
+  honoring `-MF`, `-MT`, `-MQ`, and `-MP` with dependencies collected from
+  headers that kimicc's preprocessor actually opens.
 - Choose standard output names when `-o` is omitted: `<input>.s` for `-S`,
   `<input>.o` for `-c`, and `a.out` for link mode.
 - Add macOS system include defaults for the local Command Line Tools SDK while

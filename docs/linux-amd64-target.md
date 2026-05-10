@@ -180,6 +180,9 @@ the target split real and testable without claiming full C ABI coverage yet.
 - `-target linux-amd64 -c` writes assembly and delegates object assembly to
   `clang -target x86_64-linux-gnu`, producing an ELF64 relocatable object when
   the local Clang supports that target.
+- Compile-style dependency sidecar flags `-MD`, `-MMD`, `-MP`, `-MF`, `-MT`,
+  and `-MQ` are handled by the driver using headers resolved by kimicc's
+  preprocessor.
 
 The backend currently covers a practical scalar subset: signed and unsigned
 integer arithmetic/comparisons, narrow integer and `_Bool` scalar conversions

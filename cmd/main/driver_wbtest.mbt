@@ -91,3 +91,25 @@ test "driver shell quotes tool arguments" {
     "'clang' '-o' '/tmp/can'\\''t run/out' 'input file.s'",
   )
 }
+
+///|
+test "driver parses dependency sidecar options" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-c", "-MMD", "-MP", "-MF", "build/foo.d", "-MQ", "build dir/foo.o",
+      "-o", "build dir/foo.o", "src/foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.emit_dependencies)
+  assert_true(opts.dependency_phony_targets)
+  assert_true(opts.dependency_output_path is Some("build/foo.d"))
+  assert_true(opts.dependency_target is Some("build\\ dir/foo.o"))
+  assert_eq(
+    dependency_file_content(opts, "src/foo.c", "build dir/foo.o", [
+      "src/foo.c", "include/config header.h", "src/foo.c",
+    ]),
+    "build\\ dir/foo.o: src/foo.c include/config\\ header.h\n\ninclude/config\\ header.h:\n",
+  )
+}

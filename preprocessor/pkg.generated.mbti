@@ -11,6 +11,8 @@ pub fn parse(String, PreprocessOptions) -> Result[@parser.Program, PreprocessErr
 
 pub fn preprocess(String, PreprocessOptions) -> Result[String, PreprocessError]
 
+pub fn preprocess_with_dependencies(String, PreprocessOptions) -> Result[PreprocessResult, PreprocessError]
+
 // Errors
 
 // Types and methods
@@ -29,6 +31,11 @@ pub(all) struct PreprocessOptions {
   emit_line_markers : Bool
 } derive(Eq)
 pub fn PreprocessOptions::new(String) -> Self
+
+pub(all) struct PreprocessResult {
+  text : String
+  dependencies : Array[String]
+} derive(Eq)
 
 // Type aliases
 

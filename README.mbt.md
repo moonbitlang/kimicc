@@ -47,8 +47,13 @@ preprocessed:
 moon run cmd/main --target native -- -E -D FEATURE=1 -I include input.c
 moon run cmd/main --target native -- -S input.c
 moon run cmd/main --target native -- -c input.c
+moon run cmd/main --target native -- -c -MMD -MP -MF input.d input.c
 moon run cmd/main --target native -- -S --preprocessed input.i -o out.s
 ```
+
+Dependency sidecar flags `-MD`, `-MMD`, `-MP`, `-MF`, `-MT`, and `-MQ` are
+accepted for compile-style invocations. The generated Makefile rule lists the
+main source and resolved headers read by kimicc's preprocessor.
 
 The default output target is `darwin-arm64`. Use `-target linux-amd64` to select
 the experimental Linux/amd64 backend:
@@ -114,6 +119,8 @@ The main entry point is:
 source text suitable for `@parser.parse`. The convenience
 `@preprocessor.parse(source, options)` preprocesses and then parses, but callers
 that need a strict phase boundary should call the two packages separately.
+Use `@preprocessor.preprocess_with_dependencies(source, options)` when a caller
+also needs the main file and resolved include paths read during preprocessing.
 
 ## Parser API
 

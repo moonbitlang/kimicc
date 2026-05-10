@@ -35,6 +35,16 @@ pub(all) enum PreprocessError {
 } derive(Eq)
 
 ///|
+/// Preprocessed source plus the physical files read while preprocessing.
+///
+/// `dependencies` starts with the main translation-unit filename and then lists
+/// resolved include paths in first-seen order.
+pub(all) struct PreprocessResult {
+  text : String
+  dependencies : Array[String]
+} derive(Eq)
+
+///|
 /// Returns a human-readable preprocessing error message.
 pub fn PreprocessError::to_string(self : PreprocessError) -> String {
   match self {
@@ -107,6 +117,8 @@ priv struct Preprocessor {
   macros : Map[String, Macro]
   include_stack : Array[String]
   once_files : Map[String, Bool]
+  dependencies : Array[String]
+  dependency_seen : Map[String, Bool]
   mut line_control_file : String?
   mut line_control_line : Int?
   mut counter : Int

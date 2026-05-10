@@ -490,6 +490,49 @@ test "include paths are explicit" {
 }
 
 ///|
+test "preprocess with dependencies records resolved includes" {
+  let options : @preprocessor.PreprocessOptions = {
+    filename: "preprocessor/testdata/input.c",
+    target: @target.Target::default(),
+    include_paths: ["preprocessor/testdata/include_path"],
+    system_include_paths: ["preprocessor/testdata/system_path"],
+    defines: {},
+    undefines: [],
+    emit_line_markers: false,
+  }
+  let source =
+    #|#include "local_header.h"
+    #|#include "path_header.h"
+    #|#include <system_header.h>
+    #|int main(void) { return HEADER_ADD(PATH_VALUE, SYSTEM_VALUE); }
+  match @preprocessor.preprocess_with_dependencies(source, options) {
+    Ok(result) => {
+      inspect(result.text, content="int main(void){return((9)+(11));}\n")
+      let mut saw_main = false
+      let mut saw_local = false
+      let mut saw_quote_path = false
+      let mut saw_system = false
+      for path in result.dependencies {
+        if path == "preprocessor/testdata/input.c" {
+          saw_main = true
+        } else if path == "preprocessor/testdata/local_header.h" {
+          saw_local = true
+        } else if path == "preprocessor/testdata/include_path/path_header.h" {
+          saw_quote_path = true
+        } else if path == "preprocessor/testdata/system_path/system_header.h" {
+          saw_system = true
+        }
+      }
+      assert_true(saw_main)
+      assert_true(saw_local)
+      assert_true(saw_quote_path)
+      assert_true(saw_system)
+    }
+    Err(err) => fail(err.to_string())
+  }
+}
+
+///|
 test "has include follows quote and system include search" {
   let options : @preprocessor.PreprocessOptions = {
     filename: "preprocessor/testdata/input.c",

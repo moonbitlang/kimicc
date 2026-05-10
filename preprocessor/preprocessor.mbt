@@ -6,6 +6,14 @@ fn Preprocessor::set_error(self : Preprocessor, message : String) -> Unit {
 }
 
 ///|
+fn Preprocessor::record_dependency(self : Preprocessor, path : String) -> Unit {
+  if !self.dependency_seen.contains(path) {
+    self.dependency_seen[path] = true
+    self.dependencies.push(path)
+  }
+}
+
+///|
 fn Preprocessor::is_active(
   _self : Preprocessor,
   stack : Array[ConditionalFrame],
@@ -178,11 +186,14 @@ fn Preprocessor::new(options : PreprocessOptions) -> Preprocessor {
     macros: {},
     include_stack: [],
     once_files: {},
+    dependencies: [],
+    dependency_seen: {},
     line_control_file: None,
     line_control_line: None,
     counter: 0,
     error: None,
   }
+  pp.record_dependency(options.filename)
   pp.seed_target_macros()
   pp.seed_macro_definition("__has_builtin(x) 0")
   pp.seed_macro_definition("__has_attribute(x) 0")
@@ -557,6 +568,7 @@ fn Preprocessor::process_include(
           if self.once_files.contains(path) {
             ""
           } else {
+            self.record_dependency(path)
             match pp_read_file(path) {
               Some(content) => self.process_source(content, path)
               None => {
@@ -589,6 +601,7 @@ fn Preprocessor::process_include_next(
           if self.once_files.contains(path) {
             ""
           } else {
+            self.record_dependency(path)
             match pp_read_file(path) {
               Some(content) => self.process_source(content, path)
               None => {
@@ -999,15 +1012,27 @@ fn Preprocessor::process_source(
 
 ///|
 /// Preprocess one C translation unit into ordinary C source for the parser.
-pub fn preprocess(
+pub fn preprocess_with_dependencies(
   source : String,
   options : PreprocessOptions,
-) -> Result[String, PreprocessError] {
+) -> Result[PreprocessResult, PreprocessError] {
   let pp = Preprocessor::new(options)
   let text = pp.process_source(source, options.filename)
   match pp.error {
     Some(err) => Err(err)
-    None => Ok(text)
+    None => Ok({ text, dependencies: pp.dependencies })
+  }
+}
+
+///|
+/// Preprocess one C translation unit into ordinary C source for the parser.
+pub fn preprocess(
+  source : String,
+  options : PreprocessOptions,
+) -> Result[String, PreprocessError] {
+  match preprocess_with_dependencies(source, options) {
+    Ok(result) => Ok(result.text)
+    Err(err) => Err(err)
   }
 }
 
