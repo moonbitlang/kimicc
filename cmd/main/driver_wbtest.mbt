@@ -153,6 +153,28 @@ test "driver preserves common linker flags" {
 }
 
 ///|
+test "driver splits response file content" {
+  let args = match
+    split_response_file_content(
+      "-I include\\ dir -DNAME='two words' \"main file.c\" '' plain\\\\arg",
+    ) {
+    Ok(args) => args
+    Err(err) => abort(err)
+  }
+  assert_eq(args, [
+    "-I", "include dir", "-DNAME=two words", "main file.c", "", "plain\\arg",
+  ])
+}
+
+///|
+test "driver reports unterminated response quotes" {
+  match split_response_file_content("-DNAME=\"unterminated") {
+    Ok(_) => abort("expected unterminated quote to fail")
+    Err(err) => assert_eq(err, "unterminated quote in response file")
+  }
+}
+
+///|
 test "driver rejects multiple C sources outside link mode" {
   match parse_driver_args(["kimicc", "main.c", "helper.c", "-c"]) {
     Ok(_) => abort("expected multiple compile-only sources to fail")

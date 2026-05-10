@@ -22,7 +22,8 @@ Make the command-line compiler usable as a build-system participant for the
 compile-only modes that C projects normally use.
 
 - Accept common compiler spellings: `-E`, `-S`, `-c`, `-o`, `-I`, `-isystem`,
-  `-D`, `-U`, `-include`, `--preprocessed`, and `-nostdinc`.
+  `-D`, `-U`, `-include`, `@response-file`, `--preprocessed`, and
+  `-nostdinc`.
 - Tolerate common build flags that do not yet affect code generation:
   `-std=*`, `-O*`, `-g*`, `-W*`, `-f*`, `-m*`, dependency-output options, and
   target/architecture options.

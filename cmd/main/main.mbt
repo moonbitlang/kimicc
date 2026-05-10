@@ -355,6 +355,90 @@ fn add_positional(opts : DriverOptions, value : String) -> Result[Unit, String] 
 }
 
 ///|
+fn response_arg_is_space(ch : Char) -> Bool {
+  ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'
+}
+
+///|
+fn split_response_file_content(
+  content : String,
+) -> Result[Array[String], String] {
+  let args : Array[String] = []
+  let mut current = StringBuilder::new()
+  let mut has_current = false
+  let mut quote : Char? = None
+  let mut i = 0
+  while i < content.length() {
+    let ch = content[i].unsafe_to_char()
+    match quote {
+      Some(q) =>
+        if ch == q {
+          quote = None
+        } else if ch == '\\' && i + 1 < content.length() {
+          i += 1
+          current.write_char(content[i].unsafe_to_char())
+          has_current = true
+        } else {
+          current.write_char(ch)
+          has_current = true
+        }
+      None =>
+        if response_arg_is_space(ch) {
+          if has_current {
+            args.push(current.to_string())
+            current = StringBuilder::new()
+            has_current = false
+          }
+        } else if ch == '"' || ch == '\'' {
+          quote = Some(ch)
+          has_current = true
+        } else if ch == '\\' && i + 1 < content.length() {
+          i += 1
+          current.write_char(content[i].unsafe_to_char())
+          has_current = true
+        } else {
+          current.write_char(ch)
+          has_current = true
+        }
+    }
+    i += 1
+  }
+  match quote {
+    Some(_) => Err("unterminated quote in response file")
+    None => {
+      if has_current {
+        args.push(current.to_string())
+      }
+      Ok(args)
+    }
+  }
+}
+
+///|
+fn expand_response_args(argv : Array[String]) -> Result[Array[String], String] {
+  let expanded : Array[String] = []
+  for arg in argv {
+    if starts_with(arg, "@") && arg.length() > 1 {
+      let path = arg[1:].to_owned()
+      match read_file(path) {
+        Some(content) =>
+          match split_response_file_content(content) {
+            Ok(parts) =>
+              for part in parts {
+                expanded.push(part)
+              }
+            Err(err) => return Err(err + ": " + path)
+          }
+        None => return Err("cannot read response file: " + path)
+      }
+    } else {
+      expanded.push(arg)
+    }
+  }
+  Ok(expanded)
+}
+
+///|
 fn consume_ignored_option(
   opts : DriverOptions,
   argv : Array[String],
@@ -517,6 +601,10 @@ fn validate_driver_options(opts : DriverOptions) -> Result[Unit, String] {
 
 ///|
 fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
+  let argv = match expand_response_args(argv) {
+    Ok(args) => args
+    Err(err) => return Err(err)
+  }
   let opts = DriverOptions::new()
   let mut i = 1
   while i < argv.length() {
