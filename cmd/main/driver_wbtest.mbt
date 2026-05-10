@@ -246,6 +246,29 @@ test "linux amd64 include paths keep clang fallbacks after libc" {
 }
 
 ///|
+test "driver parses isystem after include path" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-fsyntax-only", "-isystem-after", "after-sys", "-isystem", "sys",
+      "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.input_path is Some("foo.c"))
+  assert_eq(opts.extra_input_paths.length(), 0)
+  assert_eq(opts.system_include_paths, ["after-sys", "sys"])
+  let attached_opts = match
+    parse_driver_args([
+      "kimicc", "-fsyntax-only", "-isystem-afterafter-attached", "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_eq(attached_opts.system_include_paths, ["after-attached"])
+}
+
+///|
 test "driver forwards linux sysroot to includes and clang" {
   let opts = match
     parse_driver_args([

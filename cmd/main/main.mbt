@@ -1106,6 +1106,14 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
             }
             Err(err) => return Err(err)
           }
+        } else if arg == "-isystem-after" || starts_with(arg, "-isystem-after") {
+          match option_value(argv, i, "-isystem-after", "-isystem-after") {
+            Ok((value, next_i)) => {
+              opts.system_include_paths.push(value)
+              i = next_i
+            }
+            Err(err) => return Err(err)
+          }
         } else if arg == "-isystem" || starts_with(arg, "-isystem") {
           match option_value(argv, i, "-isystem", "-isystem") {
             Ok((value, next_i)) => {
