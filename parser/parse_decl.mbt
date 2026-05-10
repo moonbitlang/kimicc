@@ -13,7 +13,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
     spec.is_inline = true
   }
   let decl = self.parse_declarator(spec.base_type)
-  self.skip_attributes()
+  let post_decl_align = self.skip_attributes_align()
   // If no name and no function suffix, skip to semicolon
   if decl.name == "" && decl.func_params is None {
     while self.token != Semicolon && self.token != EOF {
@@ -112,7 +112,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
     self.token == Assign ||
     self.token == Comma ||
     self.token == LBracket {
-    self.parse_global_var_tail(spec, decl)
+    self.parse_global_var_tail(spec, decl, post_decl_align)
     return {
       ret: Void,
       name: "",
@@ -162,8 +162,12 @@ fn Parser::parse_global_var_tail(
   self : Parser,
   spec : DeclSpec,
   decl : DeclaratorResult,
+  post_decl_align : Int?,
 ) -> Unit {
-  let mut ty = apply_decl_align(resolve_var_type(decl), spec.align)
+  let mut ty = apply_decl_align(
+    apply_decl_align(resolve_var_type(decl), spec.align),
+    post_decl_align,
+  )
   let name = decl.name
   let mut init : GlobalInit? = None
   self.skip_attributes()
@@ -207,10 +211,10 @@ fn Parser::parse_global_var_tail(
   while self.token == Comma {
     self.advance()
     let extra_decl = self.parse_declarator(spec.base_type)
-    self.skip_attributes()
+    let extra_post_decl_align = self.skip_attributes_align()
     let mut extra_ty = apply_decl_align(
-      resolve_var_type(extra_decl),
-      spec.align,
+      apply_decl_align(resolve_var_type(extra_decl), spec.align),
+      extra_post_decl_align,
     )
     let mut extra_init : GlobalInit? = None
     if self.token == Assign {
@@ -261,9 +265,9 @@ fn Parser::parse_param(self : Parser) -> Param {
   }
   let spec = self.parse_decl_specifiers()
   let decl = self.parse_declarator(spec.base_type)
-  self.skip_attributes()
+  let post_decl_align = self.skip_attributes_align()
   {
-    ty: apply_decl_align(decl.ty, spec.align),
+    ty: apply_decl_align(apply_decl_align(decl.ty, spec.align), post_decl_align),
     name: decl.name,
     bit_width: None,
   }

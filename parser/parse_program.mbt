@@ -3,8 +3,9 @@
 fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
   // Parse first declarator
   let decl = self.parse_declarator(base_ty)
+  let post_decl_align = self.skip_attributes_align()
   if decl.name != "" {
-    let decl_ty = resolve_var_type(decl)
+    let decl_ty = apply_decl_align(resolve_var_type(decl), post_decl_align)
     let mut init : GlobalInit? = None
     if self.token == Assign {
       self.advance()
@@ -28,8 +29,12 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
   while self.token == Comma {
     self.advance()
     let extra = self.parse_declarator(base_ty)
+    let extra_post_decl_align = self.skip_attributes_align()
     if extra.name != "" {
-      let extra_ty = resolve_var_type(extra)
+      let extra_ty = apply_decl_align(
+        resolve_var_type(extra),
+        extra_post_decl_align,
+      )
       let mut extra_init : GlobalInit? = None
       if self.token == Assign {
         self.advance()
@@ -67,23 +72,33 @@ fn Parser::parse_program(self : Parser) -> Program {
       let saved_token = self.token
       let is_union = self.token == Union
       self.advance() // past struct/union
+      let leading_packed = self.skip_attributes_packed()
       match self.token {
         Ident(name) => {
           self.advance()
+          let after_name_packed = self.skip_attributes_packed()
           if self.token == LBrace {
             // Struct/union definition
             self.expect(LBrace)
             let fields = self.parse_struct_body()
             self.expect(RBrace)
-            self.skip_attributes()
+            let is_packed = leading_packed ||
+              after_name_packed ||
+              self.skip_attributes_packed()
+            let decl = { name, fields, is_union, is_packed }
+            structs.push(decl)
+            self.struct_decls[name] = decl
             // Handle struct definition followed by variable declarations: struct Foo { ... } *ptr;
             if self.token != Semicolon {
-              self.parse_struct_vars(Struct(name))
+              let aggregate_ty = if is_union {
+                Type::Union(name)
+              } else {
+                Type::Struct(name)
+              }
+              self.parse_struct_vars(aggregate_ty)
             } else {
               self.expect(Semicolon)
             }
-            structs.push({ name, fields, is_union })
-            self.struct_decls[name] = { name, fields, is_union }
           } else if self.token == Semicolon {
             // Forward struct declaration: struct Foo;
             self.advance()
@@ -137,16 +152,22 @@ fn Parser::parse_typedef(self : Parser) -> Unit {
   self.skip_attributes()
   // Parse first typedef declarator
   let decl = self.parse_declarator(spec.base_type)
-  self.skip_attributes()
-  self.typedefs[decl.name] = apply_decl_align(decl.ty, spec.align)
+  let post_decl_align = self.skip_attributes_align()
+  self.typedefs[decl.name] = apply_decl_align(
+    apply_decl_align(decl.ty, spec.align),
+    post_decl_align,
+  )
   // Handle comma-separated typedef names: typedef int a, b, c;
   while self.token == Comma {
     self.advance()
     self.skip_attributes()
     self.skip_qualifiers()
     let extra_decl = self.parse_declarator(spec.base_type)
-    self.skip_attributes()
-    self.typedefs[extra_decl.name] = apply_decl_align(extra_decl.ty, spec.align)
+    let extra_post_decl_align = self.skip_attributes_align()
+    self.typedefs[extra_decl.name] = apply_decl_align(
+      apply_decl_align(extra_decl.ty, spec.align),
+      extra_post_decl_align,
+    )
   }
   self.expect(Semicolon)
 }

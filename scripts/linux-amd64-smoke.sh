@@ -1,0 +1,1367 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo="$(cd "${KIMICC_REPO:-$(pwd)}" && pwd)"
+
+host_os="$(uname -s)"
+host_arch="$(uname -m)"
+if { [ "$host_os" != "Linux" ] || { [ "$host_arch" != "x86_64" ] && [ "$host_arch" != "amd64" ]; }; } &&
+  [ "${KIMICC_LINUX_AMD64_SMOKE_IN_DOCKER:-0}" != "1" ]; then
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "linux-amd64 smoke requires Docker on non-linux/amd64 hosts" >&2
+    exit 1
+  fi
+  exec docker run --rm --platform linux/amd64 \
+    -e KIMICC_LINUX_AMD64_SMOKE_IN_DOCKER=1 \
+    -e KIMICC_REPO=/work \
+    -v "$repo:/work" \
+    -w /work \
+    ubuntu:24.04 \
+    bash scripts/linux-amd64-smoke.sh
+fi
+
+workdir="$(mktemp -d /tmp/kimicc-linux-amd64.XXXXXX)"
+trap 'rm -rf "$workdir"' EXIT
+
+apt_install() {
+  DEBIAN_FRONTEND=noninteractive apt-get update
+  DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
+}
+
+if ! command -v clang >/dev/null 2>&1; then
+  if command -v apt-get >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
+    apt_install ca-certificates curl clang file git
+  else
+    echo "clang is required; install clang or run this script in the documented Ubuntu container" >&2
+    exit 1
+  fi
+fi
+
+if ! command -v git >/dev/null 2>&1; then
+  if command -v apt-get >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
+    apt_install git
+  else
+    echo "git is required for moon update" >&2
+    exit 1
+  fi
+fi
+
+if ! command -v moon >/dev/null 2>&1; then
+  if ! command -v curl >/dev/null 2>&1; then
+    if command -v apt-get >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
+      apt_install ca-certificates curl
+    else
+      echo "curl is required to install MoonBit" >&2
+      exit 1
+    fi
+  fi
+  curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+  export PATH="$HOME/.moon/bin:$PATH"
+fi
+
+tar --exclude='.git' --exclude='_build' -cf - -C "$repo" . | tar -xf - -C "$workdir"
+cd "$workdir"
+
+moon update
+moon build --target native
+moon test target --target native
+moon test codegen --target native
+moon test cmd/main --target native
+moon test preprocessor --target native
+
+source_path="/tmp/kimicc-linux-amd64-smoke.c"
+object_path="/tmp/kimicc-linux-amd64-smoke.o"
+binary_path="/tmp/kimicc-linux-amd64-smoke"
+probe_include_dir="/tmp/kimicc-linux-amd64-include"
+old_source_path="/tmp/kimicc-linux-amd64-oldstyle.c"
+old_helper_path="/tmp/kimicc-linux-amd64-oldstyle-helper.c"
+old_object_path="/tmp/kimicc-linux-amd64-oldstyle.o"
+old_helper_object_path="/tmp/kimicc-linux-amd64-oldstyle-helper.o"
+old_binary_path="/tmp/kimicc-linux-amd64-oldstyle"
+int128_source_path="/tmp/kimicc-linux-amd64-int128.c"
+int128_helper_path="/tmp/kimicc-linux-amd64-int128-helper.c"
+int128_object_path="/tmp/kimicc-linux-amd64-int128.o"
+int128_helper_object_path="/tmp/kimicc-linux-amd64-int128-helper.o"
+int128_binary_path="/tmp/kimicc-linux-amd64-int128"
+
+mkdir -p "$probe_include_dir"
+cat > "$probe_include_dir/probe_header.h" <<'H'
+#define KIMICC_PROBE_HEADER 1
+H
+cat > "$probe_include_dir/pragma_once_header.h" <<'H'
+#pragma once
+int pragma_once_global = 7;
+H
+
+cat > "$source_path" <<'C'
+#include "pragma_once_header.h"
+#include "pragma_once_header.h"
+
+typedef __builtin_va_list va_list;
+
+struct Pair {
+  long a;
+  long b;
+};
+
+struct DPair {
+  double a;
+  double b;
+};
+
+struct Mix {
+  long a;
+  double b;
+};
+
+struct RevMix {
+  double a;
+  long b;
+};
+
+struct Big {
+  long a;
+  long b;
+  long c;
+};
+
+struct IArray {
+  int v[2];
+};
+
+struct DArray {
+  double v[2];
+};
+
+struct Inner {
+  long a;
+};
+
+struct NestedMix {
+  struct Inner i;
+  double d;
+};
+
+struct AlignedBytes {
+  char a;
+  _Alignas(16) char b;
+  char c;
+};
+
+_Alignas(32) long global_aligned = 1;
+
+struct GnuAlignedBytes {
+  char a;
+  char b __attribute__((aligned(16)));
+  char c;
+};
+
+long gnu_global_aligned __attribute__((aligned(32))) = 1;
+
+struct GlobalInner {
+  char c;
+  int x;
+};
+
+struct GlobalOuter {
+  char tag;
+  struct GlobalInner inner;
+  int tail;
+};
+
+struct GlobalBits {
+  unsigned a : 3;
+  signed b : 4;
+  unsigned c : 5;
+};
+
+struct GlobalRefs {
+  int *first;
+  int *tail;
+  int (*fn)(int);
+};
+
+struct GlobalNode {
+  int value;
+  struct GlobalNode *next;
+};
+
+union GlobalUnion {
+  int i;
+  char c[4];
+};
+
+union GlobalBitUnion {
+  unsigned a : 3;
+  signed b : 4;
+};
+
+int global_add1(int x) { return x + 1; }
+
+int global_arr[5] = { 1, [3] = 4 };
+int *global_ptr = global_arr + 3;
+int *global_addr = &global_arr[4];
+int (*global_fp)(int) = global_add1;
+int *global_ptrs[3] = { global_arr, global_arr + 2, &global_arr[4] };
+struct GlobalOuter global_outer = { .tail = 9, .inner = { .x = 7, .c = 2 }, .tag = 1 };
+struct GlobalBits global_bits = { .a = 5, .b = -3, .c = 17 };
+struct GlobalRefs global_refs = { .tail = global_arr + 4, .fn = global_add1, .first = &global_arr[1] };
+int *global_member = &global_outer.inner.x;
+int *global_member_next = &global_outer.inner.x + 1;
+struct GlobalNode global_node2 = { 2, 0 };
+struct GlobalNode global_node1 = { .next = &global_node2, .value = 1 };
+struct GlobalNode *global_nodes[2] = { &global_node1, &global_node2 };
+union GlobalUnion global_union = { .c = { 65, 66, 0, 0 } };
+union GlobalBitUnion global_bit_union = { .b = -3 };
+char global_string[6] = "hey";
+
+int seventh(int a, int b, int c, int d, int e, int f, int g) { return g; }
+double ninth(double a, double b, double c, double d, double e, double f, double g, double h, double i) { return i; }
+
+struct Pair make_pair(long a, long b) {
+  struct Pair p;
+  p.a = a;
+  p.b = b;
+  return p;
+}
+
+int pair_sum(struct Pair p) { return (int)(p.a + p.b); }
+int pair_tail(int a, int b, int c, int d, int e, int f, struct Pair p) { return (int)(p.a + p.b); }
+
+struct DPair make_dpair(double a, double b) {
+  struct DPair p;
+  p.a = a;
+  p.b = b;
+  return p;
+}
+
+int dpair_sum(struct DPair p) { return (int)(p.a + p.b); }
+int dpair_tail(double a, double b, double c, double d, double e, double f, double g, double h, struct DPair p) {
+  return (int)(p.a + p.b);
+}
+
+struct Mix make_mix(long a, double b) {
+  struct Mix m;
+  m.a = a;
+  m.b = b;
+  return m;
+}
+
+int mix_sum(struct Mix m) { return (int)m.a + (int)m.b; }
+int mix_tail(int a, int b, int c, int d, int e, int f, struct Mix m) { return (int)m.a + (int)m.b; }
+
+struct RevMix make_rmix(double a, long b) {
+  struct RevMix m;
+  m.a = a;
+  m.b = b;
+  return m;
+}
+
+int rmix_sum(struct RevMix m) { return (int)m.a + (int)m.b; }
+int rmix_tail(double a, double b, double c, double d, double e, double f, double g, double h, struct RevMix m) {
+  return (int)m.a + (int)m.b;
+}
+
+struct Big make_big(long a, long b, long c) {
+  struct Big p;
+  p.a = a;
+  p.b = b;
+  p.c = c;
+  return p;
+}
+
+int big_sum(struct Big p) { return (int)(p.a + p.b + p.c); }
+int big_tail(int a, int b, int c, int d, int e, int f, struct Big p) { return big_sum(p); }
+
+struct IArray make_iarray(int a, int b) {
+  struct IArray p;
+  p.v[0] = a;
+  p.v[1] = b;
+  return p;
+}
+
+int iarray_sum(struct IArray p) { return p.v[0] + p.v[1]; }
+
+struct DArray make_darray(double a, double b) {
+  struct DArray p;
+  p.v[0] = a;
+  p.v[1] = b;
+  return p;
+}
+
+double darray_sum(struct DArray p) { return p.v[0] + p.v[1]; }
+
+struct NestedMix make_nested(long a, double b) {
+  struct NestedMix p;
+  p.i.a = a;
+  p.d = b;
+  return p;
+}
+
+int nested_sum(struct NestedMix p) { return (int)p.i.a + (int)p.d; }
+
+int aligned_offset(void) { return __builtin_offsetof(struct AlignedBytes, c); }
+int aligned_global(void) { return (int)global_aligned; }
+int gnu_aligned_offset(void) { return __builtin_offsetof(struct GnuAlignedBytes, c); }
+int gnu_aligned_global(void) { return (int)gnu_global_aligned; }
+
+int aligned_local(void) {
+  _Alignas(32) char buf[32];
+  long p;
+  buf[0] = 1;
+  p = (long)&buf[0];
+  return (int)((p & 31) + buf[0] - 1);
+}
+
+int indirect_calls(void) {
+  int (*ps)(struct Pair) = pair_sum;
+  int (*ds)(struct DPair) = dpair_sum;
+  struct Pair (*mk)(long, long) = make_pair;
+  return (*ps)(mk(0, 1)) + ds(make_dpair(0.5, 0.5)) - 2;
+}
+
+struct Bits {
+  unsigned int a : 3;
+  int b : 4;
+  unsigned int c : 5;
+};
+
+int bitfields(void) {
+  struct Bits bits;
+  bits.a = 5;
+  bits.b = -3;
+  bits.c = 17;
+  bits.a += 1;
+  bits.c >>= 1;
+  return bits.a == 6 && bits.b == -3 && bits.c == 8 ? 0 : 64;
+}
+
+int unsigned_ops(void) {
+  unsigned int max = 4294967295U;
+  unsigned int wrap = max + 1U;
+  unsigned long one = 1;
+  unsigned long hi = one << 63;
+  return wrap == 0U &&
+             max / 2U == 2147483647U &&
+             max % 2U == 1U &&
+             max > 1U &&
+             !(max < 1U) &&
+             max == -1 &&
+             (max >> 31) == 1U &&
+             hi > 1UL
+           ? 0
+           : 128;
+}
+
+_Bool truthy(long x) { return x; }
+double takes_double(double x) { return x; }
+int takes_int(int x) { return x; }
+_Bool takes_bool(_Bool x) { return x; }
+int takes_schar(signed char x) { return x; }
+_Bool returns_bool(void) { return 256; }
+signed char returns_schar(void) { return (signed char)255; }
+unsigned char returns_uchar(void) { return (unsigned char)-1; }
+short returns_short(void) { return (short)65535; }
+unsigned short returns_ushort(void) { return (unsigned short)-1; }
+unsigned int returns_uint(void) { return 4294967295U; }
+
+int scalar_conversions(void) {
+  _Bool b = 256;
+  _Bool from_fp = 0.5;
+  _Bool zero_fp = 0.0;
+  signed char c = (signed char)255;
+  unsigned char u = (unsigned char)-1;
+  short s = (short)65535;
+  if (!b) return 256;
+  if (!from_fp) return 257;
+  if (zero_fp) return 258;
+  if (c != -1) return 259;
+  if (u != 255) return 260;
+  if (s != -1) return 261;
+  if ((unsigned char)300 != 44) return 262;
+  if (!truthy(256)) return 263;
+  if ((int)takes_double(42) != 42) return 264;
+  if (takes_int(42.9) != 42) return 265;
+  if (!takes_bool(256)) return 266;
+  if (takes_schar(255) != -1) return 267;
+  if (!returns_bool()) return 268;
+  if (returns_schar() != -1) return 269;
+  if (returns_uchar() != 255) return 270;
+  if (returns_short() != -1) return 271;
+  if (returns_ushort() != 65535) return 272;
+  if (!(returns_uint() > 0U)) return 273;
+  {
+    unsigned long one = 1;
+    unsigned long hi = one << 63;
+    double d = (double)hi;
+    float f = (float)hi;
+    if (!(d > 0.0)) return 274;
+    if (!(f > 0.0f)) return 275;
+  }
+  return 0;
+}
+
+int var_pair(int tag, ...) {
+  va_list ap;
+  struct Pair p;
+  __builtin_va_start(ap, tag);
+  p = __builtin_va_arg(ap, struct Pair);
+  __builtin_va_end(ap);
+  return pair_sum(p);
+}
+
+int var_dpair(int tag, ...) {
+  va_list ap;
+  struct DPair p;
+  __builtin_va_start(ap, tag);
+  p = __builtin_va_arg(ap, struct DPair);
+  __builtin_va_end(ap);
+  return dpair_sum(p);
+}
+
+int var_big(int tag, ...) {
+  va_list ap;
+  struct Big p;
+  __builtin_va_start(ap, tag);
+  p = __builtin_va_arg(ap, struct Big);
+  __builtin_va_end(ap);
+  return big_sum(p);
+}
+
+int var_pair_stack(int a, int b, int c, int d, int e, ...) {
+  va_list ap;
+  struct Pair p;
+  __builtin_va_start(ap, e);
+  p = __builtin_va_arg(ap, struct Pair);
+  __builtin_va_end(ap);
+  return pair_sum(p);
+}
+
+int isum(int n, ...) {
+  va_list ap;
+  int total = 0;
+  int i;
+  __builtin_va_start(ap, n);
+  for (i = 0; i < n; i = i + 1) {
+    total = total + __builtin_va_arg(ap, int);
+  }
+  __builtin_va_end(ap);
+  return total;
+}
+
+double dsum(int n, ...) {
+  va_list ap;
+  double total = 0.0;
+  int i;
+  __builtin_va_start(ap, n);
+  for (i = 0; i < n; i = i + 1) {
+    total = total + __builtin_va_arg(ap, double);
+  }
+  __builtin_va_end(ap);
+  return total;
+}
+
+int default_promotions(void) {
+  float f = 1.5f;
+  signed char c = 2;
+  if ((int)dsum(1, f) != 1) return 274;
+  if (isum(1, c) != 2) return 275;
+  return 0;
+}
+
+int target_predefines(void) {
+#if defined(__gnu_linux__) && defined(__linux__) && defined(__ELF__) && defined(__x86_64__) && defined(__amd64__) && defined(_LP64)
+  int target = 0;
+#else
+  return 509;
+#endif
+#if __SIZEOF_POINTER__ == 8 && __SIZEOF_LONG__ == 8 && __CHAR_BIT__ == 8
+  target = target + 0;
+#else
+  return 510;
+#endif
+#if __ATOMIC_SEQ_CST == 5 && __GCC_ATOMIC_POINTER_LOCK_FREE == 2
+  target = target + 0;
+#else
+  return 511;
+#endif
+#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_return_address) && __has_builtin(__atomic_load_n)
+  target = target + 0;
+#else
+  return 513;
+#endif
+#if __has_builtin(__builtin_unsupported_vector_thing)
+  return 514;
+#endif
+#if __has_attribute(packed) && __has_attribute(__packed__)
+  target = target + 0;
+#else
+  return 515;
+#endif
+#if __has_attribute(aligned) && __has_attribute(__aligned__)
+  target = target + 0;
+#else
+  return 516;
+#endif
+#if __has_include("probe_header.h")
+  target = target + 0;
+#else
+  return 517;
+#endif
+#if __has_include("missing_probe_header.h")
+  return 518;
+#endif
+#if __has_feature(c_static_assert) && __has_extension(c_alignas) && __has_feature(c_atomic)
+  target = target + 0;
+#else
+  return 520;
+#endif
+#if __has_feature(c_generic_selections)
+  return 521;
+#endif
+#if __is_identifier(kimicc_probe_identifier) && !__is_identifier(int) && !__is_identifier(_Static_assert)
+  target = target + 0;
+#else
+  return 522;
+#endif
+#if __has_c_attribute(deprecated) || __has_declspec_attribute(dllexport) || __has_warning("-Wunknown")
+  return 523;
+#endif
+#if 0
+  return 524;
+#elifdef __linux__
+  target = target + 0;
+#else
+  return 525;
+#endif
+#if 0
+  return 526;
+#elifndef KIMICC_MISSING_PREDEFINE
+  target = target + 0;
+#else
+  return 527;
+#endif
+  int counter_a = __COUNTER__;
+  int counter_b = __COUNTER__;
+  if (counter_a != 0 || counter_b != 1) return 528;
+#define VAOPT_SUM(base, ...) (base __VA_OPT__(+ __VA_ARGS__))
+#define VAOPT_NAMED(base, rest...) (base __VA_OPT__(+ rest))
+  if (VAOPT_SUM(7) != 7 || VAOPT_SUM(7, 5) != 12) return 529;
+  if (VAOPT_NAMED(9) != 9 || VAOPT_NAMED(9, 2) != 11) return 530;
+  int prefix = __USER_LABEL_PREFIX__ 0;
+  __WINT_TYPE__ wint_value = 0;
+  if (prefix != 0 || wint_value != 0) return 512;
+  return target;
+}
+
+int memory_builtins(void) {
+  char src[4];
+  char dst[4];
+  src[0] = 1;
+  src[1] = 2;
+  src[2] = 3;
+  src[3] = 0;
+  __builtin_memcpy(dst, src, 4);
+  __builtin_memset(src, 0, 4);
+  if (src[2] != 0) return 276;
+  __builtin_memmove(src, dst, 4);
+  if (src[0] != 1 || src[2] != 3) return 277;
+  __builtin_bzero(dst, 4);
+  if (dst[0] != 0 || dst[2] != 0) return 278;
+  return 0;
+}
+
+int scalar_hint_builtins(void) {
+  int x = 41;
+  if (__builtin_expect(x, 1) != 41) return 279;
+  __builtin_assume(x);
+  __builtin_prefetch(&x, 0, 3);
+  if (__builtin_constant_p(x) != 0) return 280;
+  if (__builtin_object_size(&x, 0) + 1 != 0) return 281;
+  if (__builtin_frame_address(1) != 0) return 282;
+  if (__builtin_frame_address(0) == 0) return 283;
+  if (__builtin_assume_aligned(&x, 16) != &x) return 434;
+  if (__builtin_expect_with_probability(x, 41, 0.9) != 41) return 435;
+  void *ra = __builtin_return_address(0);
+  if (ra == 0) return 505;
+  if (__builtin_return_address(1) != 0) return 506;
+  if (__builtin_extract_return_addr(ra) != ra) return 507;
+  if (__builtin_frob_return_addr(ra) != ra) return 508;
+  return 0;
+}
+
+int string_builtins(void) {
+  char dst[16];
+  char small[4];
+  char cat[8];
+  __builtin_strcpy(dst, "ab");
+  __builtin___strcat_chk(dst, "c", 16);
+  if (__builtin_strlen(dst) != 3) return 284;
+  if (__builtin_strcmp(dst, "abc") != 0) return 285;
+  __builtin___strncpy_chk(dst, "xyzz", 2, 16);
+  dst[2] = 0;
+  __builtin___strncat_chk(dst, "pq", 1, 16);
+  if (__builtin_strcmp(dst, "xyp") != 0) return 286;
+  if (__builtin_strncmp(dst, "xyq", 2) != 0) return 421;
+  if (__builtin_memcmp(dst, "xyp", 3) != 0) return 422;
+  if (__builtin_strchr(dst, 121) != dst + 1) return 423;
+  if (__builtin_strrchr(dst, 112) != dst + 2) return 424;
+  if (__builtin_strstr(dst, "yp") != dst + 1) return 425;
+  if (__builtin_memchr(dst, 112, 3) != dst + 2) return 426;
+  if (__builtin___strlcpy_chk(small, "abcdef", 4, 4) != 6) return 501;
+  if (__builtin_strcmp(small, "abc") != 0) return 502;
+  __builtin_strcpy(cat, "ab");
+  if (__builtin___strlcat_chk(cat, "cdef", 8, 8) != 6) return 503;
+  if (__builtin_strcmp(cat, "abcdef") != 0) return 504;
+  return 0;
+}
+
+int formatted_builtins(void) {
+  char dst[64];
+  int n = __builtin___snprintf_chk(dst, 64, 0, 64, "%d-%s", 12, "xy");
+  if (n != 5) return 417;
+  if (__builtin_strcmp(dst, "12-xy") != 0) return 418;
+  n = __builtin___sprintf_chk(dst, 0, 64, "%s:%d", "ok", 7);
+  if (n != 4) return 419;
+  if (__builtin_strcmp(dst, "ok:7") != 0) return 420;
+  return 0;
+}
+
+int bit_builtins(void) {
+  if (__builtin_clz(1u) != 31) return 287;
+  if (__builtin_clzl(1ul) != 63) return 288;
+  if (__builtin_clzll(1ull) != 63) return 289;
+  if (__builtin_ctz(8u) != 3) return 290;
+  if (__builtin_ctzl(16ul) != 4) return 291;
+  if (__builtin_ctzll(32ull) != 5) return 292;
+  if (__builtin_ffs(0u) != 0) return 427;
+  if (__builtin_ffs(8u) != 4) return 428;
+  if (__builtin_ffsl(16ul) != 5) return 429;
+  if (__builtin_ffsll(32ull) != 6) return 430;
+  if ((__builtin_bswap16(0x0102u) & 255) != 1) return 293;
+  if ((__builtin_bswap32(0x01020304u) & 255) != 1) return 294;
+  if ((__builtin_bswap64(0x0102030405060708ull) & 255) != 1) return 295;
+  if ((__builtin_bswap(0x01020304u) & 255) != 1) return 461;
+  if ((__builtin_bswap(0x0102030405060708ull) & 255) != 1) return 462;
+  if (__builtin_rotateleft32(0x12345678u, 8) != 0x34567812u) return 296;
+  if ((__builtin_rotateright32(0x12345678u, 8) & 255) != 0x56) return 297;
+  if ((__builtin_rotateleft64(0x0123456789abcdefull, 16) & 255) != 0x23) return 298;
+  if ((__builtin_rotateright64(0x0123456789abcdefull, 16) & 255) != 0xab) return 299;
+  if (__builtin_rotateleft(0x12345678u, 8) != 0x34567812u) return 463;
+  if ((__builtin_rotateright(0x0123456789abcdefull, 16) & 255) != 0xab) return 464;
+  if (__builtin_popcount(0xf0f0u) != 8) return 300;
+  if (__builtin_popcountl(0x0f0f0f0f0f0f0f0ful) != 32) return 301;
+  if (__builtin_popcountll(0x0f0f0f0f0f0f0f0full) != 32) return 302;
+  if (__builtin_parity(0xf0f1u) != 1) return 431;
+  if (__builtin_parityl(0x0f0f0f0f0f0f0f0ful) != 0) return 432;
+  if (__builtin_parityll(0x0f0f0f0f0f0f0f0eull) != 1) return 433;
+  return 0;
+}
+
+int touch_alloca(char *p) { return p[0] + p[31]; }
+
+int alloca_builtin(void) {
+  int n = 31;
+  char *p = __builtin_alloca(n + 1);
+  char *q;
+  p[0] = 3;
+  p[31] = 4;
+  q = __builtin_alloca(5);
+  q[0] = 5;
+  q[4] = 6;
+  if (((long)p & 15) != 0) return 303;
+  if (((long)q & 15) != 0) return 304;
+  if (p[0] != 3 || p[31] != 4) return 305;
+  if (q[0] != 5 || q[4] != 6) return 306;
+  if (touch_alloca(p) != 7) return 307;
+  return 0;
+}
+
+int atomic_builtins(void) {
+  unsigned char b = 0;
+  unsigned char flag = 0;
+  unsigned short h = 0;
+  unsigned int w = 5;
+  unsigned long x = 0;
+  _Atomic(unsigned int) a = 5;
+  unsigned int expected = 11;
+  unsigned int expected_w = 31;
+  unsigned int loaded = 0;
+  unsigned int desired = 29;
+  unsigned int old = 0;
+  unsigned int expected_ptr = 31;
+  __sync_synchronize();
+  __atomic_thread_fence(5);
+  __atomic_signal_fence(5);
+  __c11_atomic_thread_fence(5);
+  __c11_atomic_signal_fence(5);
+  if (!__atomic_always_lock_free(1, &w)) return 436;
+  if (!__atomic_always_lock_free(2, &w)) return 437;
+  if (!__atomic_is_lock_free(4, &w)) return 438;
+  if (!__c11_atomic_is_lock_free(8)) return 439;
+  if (__atomic_always_lock_free(16, &w)) return 440;
+  __atomic_store_n(&b, 1, 5);
+  __atomic_store_n(&h, 2, 5);
+  __atomic_store_n(&w, 5, 5);
+  __atomic_store_n(&x, 36, 5);
+  __atomic_load(&w, &loaded, 5);
+  if (loaded != 5) return 410;
+  __atomic_store(&w, &desired, 5);
+  if (w != 29) return 411;
+  desired = 31;
+  __atomic_exchange(&w, &desired, &old, 5);
+  if (old != 29) return 412;
+  desired = 37;
+  if (!__atomic_compare_exchange(&w, &expected_ptr, &desired, 0, 5, 5)) return 413;
+  if (w != 37) return 414;
+  expected_ptr = 31;
+  desired = 41;
+  if (__atomic_compare_exchange(&w, &expected_ptr, &desired, 0, 5, 5)) return 415;
+  if (expected_ptr != 37 || w != 37) return 416;
+  __atomic_store_n(&w, 5, 5);
+  if (__atomic_test_and_set(&flag, 5)) return 406;
+  if (!flag) return 407;
+  if (!__atomic_test_and_set(&flag, 5)) return 408;
+  __atomic_clear(&flag, 5);
+  if (flag) return 409;
+  if (__atomic_load_n(&b, 5) != 1) return 308;
+  if (__atomic_load_n(&h, 5) != 2) return 309;
+  if (__atomic_load_n(&w, 5) != 5) return 310;
+  if ((int)__atomic_load_n(&x, 5) != 36) return 311;
+  if (__atomic_add_fetch(&w, 3, 5) != 8) return 312;
+  if (__atomic_sub_fetch(&w, 1, 5) != 7) return 313;
+  if (__atomic_fetch_or(&w, 16, 5) != 7) return 314;
+  if (w != 23) return 315;
+  if (__atomic_fetch_xor(&w, 3, 5) != 23) return 316;
+  if (w != 20) return 317;
+  if (__atomic_exchange_n(&w, 31, 5) != 20) return 394;
+  if (!__atomic_compare_exchange_n(&w, &expected_w, 37, 0, 5, 5)) return 395;
+  if (w != 37) return 396;
+  expected_w = 31;
+  if (__atomic_compare_exchange_n(&w, &expected_w, 41, 1, 5, 5)) return 397;
+  if (expected_w != 37) return 398;
+  if (__atomic_and_fetch(&w, 15, 5) != 5) return 399;
+  if (__atomic_or_fetch(&w, 32, 5) != 37) return 400;
+  if (__atomic_xor_fetch(&w, 7, 5) != 34) return 401;
+  if (__atomic_exchange_n(&w, 10, 5) != 34) return 402;
+  if (__atomic_fetch_nand(&w, 15, 5) != 10) return 403;
+  if (w != ~10u) return 404;
+  __atomic_store_n(&w, 10, 5);
+  if (__atomic_nand_fetch(&w, 15, 5) != ~10u) return 405;
+  if (__c11_atomic_fetch_add(&a, 3, 5) != 5) return 318;
+  if (a != 8) return 319;
+  if (__c11_atomic_fetch_sub(&a, 1, 5) != 8) return 320;
+  if (__c11_atomic_fetch_or(&a, 16, 5) != 7) return 321;
+  if (__c11_atomic_fetch_and(&a, 23, 5) != 23) return 322;
+  if (__c11_atomic_fetch_xor(&a, 3, 5) != 23) return 323;
+  if (__c11_atomic_exchange(&a, 11, 5) != 20) return 324;
+  if (!__c11_atomic_compare_exchange_strong(&a, &expected, 19, 5, 5)) return 325;
+  if (a != 19) return 326;
+  expected = 11;
+  if (__c11_atomic_compare_exchange_strong(&a, &expected, 21, 5, 5)) return 327;
+  if (expected != 19) return 328;
+  if (__c11_atomic_load(&a, 5) != 19) return 329;
+  __c11_atomic_store(&a, 42, 5);
+  if (a != 42) return 330;
+  expected = 42;
+  if (!__c11_atomic_compare_exchange_weak(&a, &expected, 44, 5, 5)) return 441;
+  if (a != 44) return 442;
+  expected = 42;
+  if (__c11_atomic_compare_exchange_weak(&a, &expected, 45, 5, 5)) return 443;
+  if (expected != 44 || a != 44) return 444;
+  return 0;
+}
+
+int overflow_builtins(void) {
+  long long s = 9223372036854775807LL;
+  long long out = 0;
+  long lout = 0;
+  unsigned long long ull = 0;
+  unsigned int u = 0;
+  int i = 0;
+  if (!__builtin_add_overflow(s, 1LL, &out)) return 445;
+  if (out != (-9223372036854775807LL - 1LL)) return 446;
+  if (__builtin_add_overflow(40LL, 2LL, &out)) return 447;
+  if (out != 42) return 448;
+  s = -9223372036854775807LL - 1LL;
+  if (!__builtin_sub_overflow(s, 1LL, &out)) return 449;
+  if (out != 9223372036854775807LL) return 450;
+  if (!__builtin_sub_overflow(0u, 1u, &u)) return 451;
+  if (u != 0xffffffffu) return 452;
+  if (!__builtin_add_overflow(0xffffffffu, 1u, &u)) return 453;
+  if (u != 0) return 454;
+  if (!__builtin_mul_overflow(2000000000, 2, &i)) return 455;
+  if ((unsigned int)i != 4000000000u) return 456;
+  if (__builtin_mul_overflow(1000, 2, &i)) return 457;
+  if (i != 2000) return 458;
+  if (!__builtin_mul_overflow(0xffffffffu, 2u, &u)) return 459;
+  if (u != 0xfffffffeu) return 460;
+  if (!__builtin_sadd_overflow(2147483647, 1, &i)) return 476;
+  if (i != (-2147483647 - 1)) return 477;
+  if (!__builtin_saddl_overflow(9223372036854775807L, 1L, &lout)) return 478;
+  if (lout != (-9223372036854775807L - 1L)) return 479;
+  if (!__builtin_saddll_overflow(9223372036854775807LL, 1LL, &out)) return 480;
+  if (out != (-9223372036854775807LL - 1LL)) return 481;
+  if (!__builtin_uadd_overflow(0xffffffffu, 1u, &u)) return 482;
+  if (u != 0) return 483;
+  if (!__builtin_uaddll_overflow(0xffffffffffffffffull, 1ull, &ull)) return 484;
+  if (ull != 0) return 485;
+  if (!__builtin_ssub_overflow(-2147483647 - 1, 1, &i)) return 486;
+  if (i != 2147483647) return 487;
+  if (!__builtin_ssubll_overflow(-9223372036854775807LL - 1LL, 1LL, &out)) return 488;
+  if (out != 9223372036854775807LL) return 489;
+  if (!__builtin_usub_overflow(0u, 1u, &u)) return 490;
+  if (u != 0xffffffffu) return 491;
+  if (!__builtin_usubll_overflow(0ull, 1ull, &ull)) return 492;
+  if (ull != 0xffffffffffffffffull) return 493;
+  if (!__builtin_smul_overflow(2000000000, 2, &i)) return 494;
+  if ((unsigned int)i != 4000000000u) return 495;
+  if (!__builtin_smulll_overflow(3037000500LL, 3037000500LL, &out)) return 496;
+  if (!__builtin_umul_overflow(0xffffffffu, 2u, &u)) return 497;
+  if (u != 0xfffffffeu) return 498;
+  if (!__builtin_umulll_overflow(0xffffffffffffffffull, 2ull, &ull)) return 499;
+  if (ull != 0xfffffffffffffffeull) return 500;
+  return 0;
+}
+
+int integer_abs_builtins(void) {
+  if (__builtin_abs(-7) != 7) return 472;
+  if (__builtin_abs(5) != 5) return 473;
+  if (__builtin_labs(-1234567890123L) != 1234567890123L) return 474;
+  if (__builtin_llabs(-900000000000000000LL) != 900000000000000000LL) return 475;
+  return 0;
+}
+
+double fabs_double(double x) { return __builtin_fabs(x); }
+float fabs_float(float x) { return __builtin_fabsf(x); }
+
+int floating_builtins(void) {
+  double nanv = __builtin_nan("");
+  float nanf = __builtin_nanf("");
+  double inf = __builtin_huge_val();
+  float inff = __builtin_inff();
+  if ((int)fabs_double(-4.5) != 4) return 331;
+  if ((int)fabs_float(-3.5f) != 3) return 332;
+  if (!(inf > 1000000.0)) return 333;
+  if (!(inff > 1000000.0f)) return 334;
+  if (nanv == nanv) return 335;
+  if (nanf == nanf) return 336;
+  if (!(nanv != nanv)) return 345;
+  if (!nanv) return 346;
+  if (!nanf) return 347;
+  if (nanv) { } else { return 348; }
+  if (!__builtin_isgreater(3.0, 2.0)) return 337;
+  if (!__builtin_isgreaterequal(3.0, 3.0)) return 338;
+  if (!__builtin_isless(2.0, 3.0)) return 339;
+  if (!__builtin_islessequal(3.0, 3.0)) return 340;
+  if (!__builtin_islessgreater(2.0, 3.0)) return 341;
+  if (!__builtin_isunordered(nanv, 1.0)) return 342;
+  if (__builtin_isless(nanv, 1.0)) return 343;
+  if (__builtin_isgreater(nanv, 1.0)) return 344;
+  if (!__builtin_isnan(nanv)) return 349;
+  if (!__builtin_isnanf(nanf)) return 350;
+  if (!__builtin_isinf(inf)) return 351;
+  if (!__builtin_isinff(inff)) return 352;
+  if (!__builtin_isfinite(4.0)) return 353;
+  if (__builtin_isfinite(inf)) return 354;
+  if (!__builtin_isnormal(4.0)) return 355;
+  if (__builtin_isnormal(0.0)) return 356;
+  if (!__builtin_signbit(-0.0)) return 357;
+  if (__builtin_signbit(1.0)) return 358;
+  if (!__builtin_signbitf(-0.0f)) return 359;
+  if ((int)__builtin_copysign(3.0, -1.0) != -3) return 465;
+  if ((int)__builtin_copysign(-3.0, 1.0) != 3) return 466;
+  if ((int)__builtin_copysignf(2.0f, -1.0f) != -2) return 467;
+  if (!__builtin_signbit(__builtin_copysign(0.0, -1.0))) return 468;
+  if ((int)__builtin_sqrt(81.0) != 9) return 469;
+  if ((int)__builtin_sqrtf(25.0f) != 5) return 470;
+  if (!__builtin_isnan(__builtin_sqrt(-1.0))) return 471;
+  return 0;
+}
+
+struct TinyCopy {
+  char c;
+};
+
+struct TinyCopyWrap {
+  struct TinyCopy t;
+  char guard;
+};
+
+struct TwelveCopy {
+  int a;
+  int b;
+  char c;
+};
+
+struct TwelveCopyWrap {
+  struct TwelveCopy t;
+  char guard;
+};
+
+struct TinyCopy make_tiny_copy(char c) {
+  struct TinyCopy t;
+  t.c = c;
+  return t;
+}
+
+struct TwelveCopy make_twelve_copy(int a, int b, char c) {
+  struct TwelveCopy t;
+  t.a = a;
+  t.b = b;
+  t.c = c;
+  return t;
+}
+
+int aggregate_object_copies(void) {
+  struct TinyCopyWrap tiny_wrap;
+  struct TinyCopy tiny;
+  struct TwelveCopyWrap twelve_wrap;
+  struct TwelveCopy twelve;
+  tiny_wrap.t.c = 1;
+  tiny_wrap.guard = 77;
+  tiny.c = 2;
+  tiny_wrap.t = tiny;
+  if (tiny_wrap.guard != 77) return 349;
+  if (tiny_wrap.t.c != 2) return 350;
+  tiny_wrap.t = make_tiny_copy(3);
+  if (tiny_wrap.guard != 77) return 351;
+  if (tiny_wrap.t.c != 3) return 352;
+  twelve_wrap.t.a = 0;
+  twelve_wrap.t.b = 0;
+  twelve_wrap.t.c = 0;
+  twelve_wrap.guard = 88;
+  twelve.a = 1;
+  twelve.b = 2;
+  twelve.c = 3;
+  twelve_wrap.t = twelve;
+  if (twelve_wrap.guard != 88) return 353;
+  if (twelve_wrap.t.a + twelve_wrap.t.b + twelve_wrap.t.c != 6) return 354;
+  twelve_wrap.t = make_twelve_copy(4, 5, 6);
+  if (twelve_wrap.guard != 88) return 355;
+  if (twelve_wrap.t.a + twelve_wrap.t.b + twelve_wrap.t.c != 15) return 356;
+  return 0;
+}
+
+typedef union InitUnion {
+  int int32;
+  void *ptr;
+} InitUnion;
+
+typedef struct InitValue {
+  InitUnion u;
+  long tag;
+} InitValue;
+
+struct InitPair {
+  int a;
+  int b;
+};
+
+struct InitBits {
+  unsigned a : 3;
+  signed b : 4;
+  unsigned c : 5;
+};
+
+int compound_literals_and_initializers(void) {
+  InitValue v;
+  struct InitPair p = { .b = 5, .a = 6 };
+  int arr[5] = { 1, [3] = 4 };
+  int *tmp = (int[5]){ 10, 20, [4] = 30 };
+  int scalar = (int){ 3 };
+  struct InitBits bits = { .a = 5, .b = -3, .c = 17 };
+  v = (InitValue){ (InitUnion){ .int32 = 7 }, 4 };
+  if (v.u.int32 != 7) return 370;
+  if (v.tag != 4) return 371;
+  if (p.a != 6 || p.b != 5) return 372;
+  if (arr[0] != 1 || arr[1] != 0 || arr[2] != 0 || arr[3] != 4 || arr[4] != 0) {
+    return 373;
+  }
+  if (tmp[0] != 10 || tmp[1] != 20 || tmp[2] != 0 || tmp[3] != 0 || tmp[4] != 30) {
+    return 374;
+  }
+  if (scalar != 3) return 375;
+  if (bits.a != 5 || bits.b != -3 || bits.c != 17) return 376;
+  return 0;
+}
+
+int switch_dispatch(void) {
+  int r = 0;
+  int x = 2;
+  unsigned tag = 0xfffffff9u;
+  switch (x) {
+    default: r = 99; break;
+    case 1: r = 10; break;
+    case 2: r = 20; break;
+  }
+  if (r != 20) return 377;
+  switch (tag) {
+    case -7: r = 5; break;
+    default: r = 6; break;
+  }
+  if (r != 5) return 378;
+  switch (3) {
+    case 1: r = 1; break;
+    case 2: r = 2; break;
+  }
+  if (r != 5) return 379;
+  switch (1) {
+    case 1: r = 10;
+    case 2: r += 20; break;
+    default: r = 0; break;
+  }
+  if (r != 30) return 380;
+  return 0;
+}
+
+int global_initializers(void) {
+  if (global_arr[0] != 1 || global_arr[1] != 0 || global_arr[2] != 0 || global_arr[3] != 4 || global_arr[4] != 0) {
+    return 381;
+  }
+  if (global_outer.tag != 1 || global_outer.inner.c != 2 || global_outer.inner.x != 7 || global_outer.tail != 9) {
+    return 382;
+  }
+  if (global_bits.a != 5 || global_bits.b != -3 || global_bits.c != 17) {
+    return 383;
+  }
+  if (global_bit_union.b != -3) {
+    return 384;
+  }
+  if (global_union.c[0] != 65 || global_union.c[1] != 66 || global_union.c[2] != 0 || global_union.c[3] != 0) {
+    return 385;
+  }
+  if (global_string[0] != 104 || global_string[1] != 101 || global_string[2] != 121 || global_string[3] != 0 || global_string[5] != 0) {
+    return 386;
+  }
+  if (global_ptr != &global_arr[3] || *global_ptr != 4 || global_addr != &global_arr[4] || *global_addr != 0) {
+    return 387;
+  }
+  if (global_fp(41) != 42) {
+    return 388;
+  }
+  if (global_ptrs[0] != &global_arr[0] || global_ptrs[1] != &global_arr[2] || global_ptrs[2] != &global_arr[4]) {
+    return 389;
+  }
+  if (global_refs.first != &global_arr[1] || global_refs.tail != &global_arr[4] || global_refs.fn(41) != 42) {
+    return 390;
+  }
+  if (global_member != &global_outer.inner.x || *global_member != 7 || global_member_next != &global_outer.tail) {
+    return 391;
+  }
+  if (global_node1.value != 1 || global_node1.next != &global_node2 || global_node1.next->value != 2 || global_node2.next != 0) {
+    return 392;
+  }
+  if (global_nodes[0] != &global_node1 || global_nodes[1] != &global_node2) {
+    return 393;
+  }
+  return 0;
+}
+
+struct __attribute__((packed)) PackedAggregate {
+  char c;
+  int x;
+};
+
+struct OuterPackedAggregate {
+  char tag;
+  struct PackedAggregate p;
+};
+
+int packed_sum(struct PackedAggregate p) {
+  return p.c + p.x;
+}
+
+struct PackedAggregate make_packed(char c, int x) {
+  struct PackedAggregate p;
+  p.c = c;
+  p.x = x;
+  return p;
+}
+
+int packed_aggregates(void) {
+  struct PackedAggregate p;
+  if (__builtin_offsetof(struct PackedAggregate, x) != 1) return 357;
+  if (sizeof(struct PackedAggregate) != 5) return 358;
+  p = make_packed(4, 38);
+  if (p.c != 4) return 359;
+  if (p.x != 38) return 360;
+  if (packed_sum(p) != 42) return 361;
+  return 0;
+}
+
+int read_packed_stack(int a, int b, int c, int d, int e, int f, ...) {
+  va_list ap;
+  struct PackedAggregate p;
+  __builtin_va_start(ap, f);
+  p = __builtin_va_arg(ap, struct PackedAggregate);
+  __builtin_va_end(ap);
+  return p.c + p.x;
+}
+
+int packed_varargs(void) {
+  struct PackedAggregate p = make_packed(7, 35);
+  if (read_packed_stack(1, 2, 3, 4, 5, 6, p) != 42) return 362;
+  if (read_packed_stack(1, 2, 3, 4, 5, 6, make_packed(8, 34)) != 42) {
+    return 363;
+  }
+  return 0;
+}
+
+int outer_packed_sum(struct OuterPackedAggregate o) {
+  return o.tag + o.p.c + o.p.x;
+}
+
+struct OuterPackedAggregate make_outer_packed(char tag, char c, int x) {
+  struct OuterPackedAggregate o;
+  o.tag = tag;
+  o.p.c = c;
+  o.p.x = x;
+  return o;
+}
+
+int nested_packed_aggregates(void) {
+  struct OuterPackedAggregate o;
+  if (__builtin_offsetof(struct OuterPackedAggregate, p) != 1) return 364;
+  if (sizeof(struct OuterPackedAggregate) != 6) return 365;
+  o = make_outer_packed(1, 2, 39);
+  if (o.tag != 1) return 366;
+  if (o.p.c != 2) return 367;
+  if (o.p.x != 39) return 368;
+  if (outer_packed_sum(o) != 42) return 369;
+  return 0;
+}
+
+int pragma_once_probe(void) {
+  if (pragma_once_global != 7) return 519;
+  return 0;
+}
+
+int main(void) {
+  struct Pair p;
+  struct DPair q;
+  struct Mix r;
+  struct RevMix s;
+  struct Big t;
+  p = make_pair(0, 1);
+  q = make_dpair(0.5, 0.5);
+  r = make_mix(0, 1.0);
+  s = make_rmix(1.0, 0);
+  t = make_big(0, 1, 0);
+  return seventh(1, 2, 3, 4, 5, 6, 7) +
+         (int)ninth(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 5.0) +
+         isum(6, 1, 2, 3, 4, 5, 6) +
+         (int)dsum(9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0) +
+         pair_sum(p) +
+         pair_tail(1, 2, 3, 4, 5, 6, p) -
+         2 +
+         dpair_sum(q) +
+         dpair_tail(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, q) -
+         2 +
+         mix_sum(r) +
+         mix_tail(1, 2, 3, 4, 5, 6, r) -
+         2 +
+         rmix_sum(s) +
+         rmix_tail(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, s) -
+         2 +
+         big_sum(t) +
+         big_tail(1, 2, 3, 4, 5, 6, t) +
+         big_sum(make_big(0, 1, 0)) -
+         3 +
+         iarray_sum(make_iarray(1, 0)) +
+         (int)darray_sum(make_darray(0.5, 0.5)) +
+         nested_sum(make_nested(0, 1.0)) -
+         3 +
+         aligned_offset() +
+         aligned_global() -
+         18 +
+         gnu_aligned_offset() +
+         gnu_aligned_global() -
+         18 +
+         aligned_local() +
+         indirect_calls() +
+         bitfields() +
+         unsigned_ops() +
+         scalar_conversions() +
+         default_promotions() +
+         target_predefines() +
+         memory_builtins() +
+         scalar_hint_builtins() +
+         string_builtins() +
+         formatted_builtins() +
+         bit_builtins() +
+         alloca_builtin() +
+         atomic_builtins() +
+         overflow_builtins() +
+         integer_abs_builtins() +
+         floating_builtins() +
+         aggregate_object_copies() +
+         compound_literals_and_initializers() +
+         switch_dispatch() +
+         global_initializers() +
+         packed_aggregates() +
+         packed_varargs() +
+         nested_packed_aggregates() +
+         pragma_once_probe() +
+         var_pair(0, make_pair(0, 1)) +
+         var_dpair(0, make_dpair(0.5, 0.5)) +
+         var_big(0, make_big(0, 1, 0)) +
+         var_pair_stack(1, 2, 3, 4, 5, make_pair(0, 1)) -
+         4;
+}
+C
+
+moon run cmd/main --target native -- -S -target linux-amd64 -I "$probe_include_dir" -o /tmp/kimicc-linux-amd64-smoke.s "$source_path"
+moon run cmd/main --target native -- -c -target linux-amd64 -I "$probe_include_dir" -o "$object_path" "$source_path"
+file "$object_path" | grep -E 'ELF 64-bit.*x86-64'
+
+moon run cmd/main --target native -- -target linux-amd64 -I "$probe_include_dir" -o "$binary_path" "$source_path"
+set +e
+"$binary_path"
+status=$?
+set -e
+if [ "$status" -ne 42 ]; then
+  echo "expected smoke binary to exit 42, got $status" >&2
+  exit 1
+fi
+
+cat > "$old_source_path" <<'C'
+int old_mix();
+float one(void) { return 1.5f; }
+int main(void) {
+  signed char c = 2;
+  return old_mix(c, one());
+}
+C
+
+cat > "$old_helper_path" <<'C'
+int old_mix(int a, double b) { return a + (int)b + 39; }
+C
+
+moon run cmd/main --target native -- -c -target linux-amd64 -o "$old_object_path" "$old_source_path"
+clang -target x86_64-linux-gnu -c -o "$old_helper_object_path" "$old_helper_path"
+clang -o "$old_binary_path" "$old_object_path" "$old_helper_object_path"
+set +e
+"$old_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 42 ]; then
+  echo "expected old-style promotion smoke binary to exit 42, got $status" >&2
+  exit 1
+fi
+
+cat > "$int128_source_path" <<'C'
+typedef __builtin_va_list va_list;
+
+__uint128_t make_u128(unsigned long hi, unsigned long lo);
+int check_u128(__uint128_t x);
+int check_parts(__uint128_t x, unsigned long hi, unsigned long lo);
+
+__uint128_t id_u128(__uint128_t x) { return x; }
+
+__uint128_t stack_u128(long a, long b, long c, long d, long e, __uint128_t x) {
+  return x;
+}
+
+int read_u128(int tag, ...) {
+  va_list ap;
+  __uint128_t x;
+  __builtin_va_start(ap, tag);
+  x = __builtin_va_arg(ap, __uint128_t);
+  __builtin_va_end(ap);
+  return check_u128(x);
+}
+
+int main(void) {
+  __uint128_t x = id_u128(make_u128(1, 41));
+  __uint128_t high_only = id_u128(make_u128(1, 0));
+  __uint128_t zero = 0;
+  _Bool high_bool = high_only;
+  _Bool zero_bool = zero;
+  if (check_u128(x) != 14) return 1;
+  if (check_u128(stack_u128(1, 2, 3, 4, 5, x)) != 14) return 2;
+  if (read_u128(0, x) != 14) return 3;
+  if (!high_only) return 4;
+  if (!high_bool) return 5;
+  if (zero) return 6;
+  if (zero_bool) return 7;
+  if (!zero) {
+  } else {
+    return 8;
+  }
+
+  __uint128_t a = make_u128(1, 40);
+  __uint128_t b = make_u128(0, 2);
+  if (!check_parts(a + b, 1, 42)) return 9;
+  if (!check_parts(a - b, 1, 38)) return 10;
+  if (!check_parts(a * make_u128(0, 3), 3, 120)) return 11;
+  if (!check_parts((a * make_u128(0, 3)) / make_u128(0, 3), 1, 40)) return 12;
+  if (!check_parts(make_u128(0, 122) % make_u128(0, 5), 0, 2)) return 13;
+  if (!check_parts(make_u128(0, 1) << 65, 2, 0)) return 14;
+  if (!check_parts(make_u128(4, 0) >> 65, 0, 2)) return 15;
+  if (!(make_u128(1, 0) > make_u128(0, 99))) return 16;
+  if (make_u128(0, 99) >= make_u128(1, 0)) return 17;
+
+  __int128_t signed_neg = -((__int128_t)1);
+  if (!(signed_neg < 0)) return 18;
+  if (signed_neg >= 0) return 19;
+  if ((signed_neg >> 65) != signed_neg) return 20;
+  if (((__int128_t)-12345 / (__int128_t)100) != (__int128_t)-123) return 25;
+  if (((__int128_t)-12345 % (__int128_t)100) != (__int128_t)-45) return 26;
+  __int128_t signed_compound = (__int128_t)-1000;
+  signed_compound /= (__int128_t)7;
+  if (signed_compound != (__int128_t)-142) return 27;
+  signed_compound %= (__int128_t)11;
+  if (signed_compound != (__int128_t)-10) return 28;
+
+  unsigned long all = 0;
+  all = ~all;
+  if (!check_parts(~zero, all, all)) return 21;
+
+  __uint128_t compound = make_u128(0, 1);
+  compound += make_u128(1, 0);
+  compound <<= 1;
+  if (!check_parts(compound, 2, 2)) return 22;
+  compound >>= 1;
+  compound *= make_u128(0, 3);
+  if (!check_parts(compound, 3, 3)) return 23;
+  compound /= make_u128(0, 3);
+  compound &= make_u128(0, 1);
+  compound |= make_u128(2, 0);
+  compound ^= make_u128(1, 0);
+  if (!check_parts(compound, 3, 1)) return 24;
+  return 42;
+}
+C
+
+cat > "$int128_helper_path" <<'C'
+int check_parts(__uint128_t x, unsigned long expected_hi, unsigned long expected_lo);
+
+__uint128_t make_u128(unsigned long hi, unsigned long lo) {
+  return ((__uint128_t)hi << 64) | lo;
+}
+
+int check_u128(__uint128_t x) {
+  return check_parts(x, 1, 41) ? 14 : 0;
+}
+
+int check_parts(__uint128_t x, unsigned long expected_hi, unsigned long expected_lo) {
+  unsigned long actual_hi = (unsigned long)(x >> 64);
+  unsigned long actual_lo = (unsigned long)x;
+  return actual_hi == expected_hi && actual_lo == expected_lo;
+}
+C
+
+moon run cmd/main --target native -- -c -target linux-amd64 -o "$int128_object_path" "$int128_source_path"
+clang -target x86_64-linux-gnu -c -o "$int128_helper_object_path" "$int128_helper_path"
+clang -o "$int128_binary_path" "$int128_object_path" "$int128_helper_object_path"
+set +e
+"$int128_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 42 ]; then
+  echo "expected int128 ABI smoke binary to exit 42, got $status" >&2
+  exit 1
+fi
+
+echo "linux-amd64 smoke passed"

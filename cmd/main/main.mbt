@@ -28,6 +28,7 @@ priv enum DriverOutput {
 ///|
 priv struct DriverOptions {
   mut output : DriverOutput
+  mut target : @target.Target
   mut output_path : String?
   mut input_path : String?
   include_paths : Array[String]
@@ -46,6 +47,7 @@ priv struct DriverOptions {
 fn DriverOptions::new() -> DriverOptions {
   {
     output: LinkExecutable,
+    target: @target.Target::default(),
     output_path: None,
     input_path: None,
     include_paths: [],
@@ -207,7 +209,6 @@ fn consume_ignored_option(
 ) -> Result[Int, String] {
   match arg {
     "-arch"
-    | "-target"
     | "-std"
     | "-x"
     | "-Xclang"
@@ -217,6 +218,18 @@ fn consume_ignored_option(
     | "-iframework" =>
       if index + 1 < argv.length() {
         Ok(index + 1)
+      } else {
+        Err("missing argument after " + arg)
+      }
+    "-target" =>
+      if index + 1 < argv.length() {
+        match @target.Target::parse(argv[index + 1]) {
+          Some(t) => {
+            opts.target = t
+            Ok(index + 1)
+          }
+          None => Err("unsupported target: " + argv[index + 1])
+        }
       } else {
         Err("missing argument after " + arg)
       }
@@ -244,6 +257,24 @@ fn consume_ignored_option(
           arg["--sysroot=".length():].to_owned() + "/usr/include",
         )
         Ok(index)
+      } else if starts_with(arg, "--target=") {
+        let value = arg["--target=".length():].to_owned()
+        match @target.Target::parse(value) {
+          Some(t) => {
+            opts.target = t
+            Ok(index)
+          }
+          None => Err("unsupported target: " + value)
+        }
+      } else if starts_with(arg, "-target") && arg.length() > "-target".length() {
+        let value = arg["-target".length():].to_owned()
+        match @target.Target::parse(value) {
+          Some(t) => {
+            opts.target = t
+            Ok(index)
+          }
+          None => Err("unsupported target: " + value)
+        }
       } else if starts_with(arg, "-MF") ||
         starts_with(arg, "-MT") ||
         starts_with(arg, "-MQ") ||
@@ -467,14 +498,32 @@ fn standard_system_include_paths() -> Array[String] {
 }
 
 ///|
+fn linux_amd64_system_include_paths() -> Array[String] {
+  [
+    "/usr/lib/llvm-20/lib/clang/20/include", "/usr/lib/llvm-19/lib/clang/19/include",
+    "/usr/lib/llvm-18/lib/clang/18/include", "/usr/lib/llvm-17/lib/clang/17/include",
+    "/usr/lib/llvm-16/lib/clang/16/include", "/usr/lib/clang/18/include", "/usr/lib/clang/17/include",
+    "/usr/lib/clang/16/include", "/usr/lib/gcc/x86_64-linux-gnu/14/include", "/usr/lib/gcc/x86_64-linux-gnu/13/include",
+    "/usr/local/include", "/usr/include/x86_64-linux-gnu", "/usr/include",
+  ]
+}
+
+///|
 fn full_system_include_paths(opts : DriverOptions) -> Array[String] {
   let paths : Array[String] = []
   for path in opts.system_include_paths {
     paths.push(path)
   }
   if !opts.no_standard_includes {
-    for path in standard_system_include_paths() {
-      paths.push(path)
+    match opts.target {
+      DarwinArm64 =>
+        for path in standard_system_include_paths() {
+          paths.push(path)
+        }
+      LinuxAmd64 =>
+        for path in linux_amd64_system_include_paths() {
+          paths.push(path)
+        }
     }
   }
   paths
@@ -487,6 +536,7 @@ fn preprocess_options(
 ) -> @preprocessor.PreprocessOptions {
   {
     filename: input_path,
+    target: opts.target,
     include_paths: opts.include_paths,
     system_include_paths: full_system_include_paths(opts),
     defines: opts.defines,
@@ -627,8 +677,7 @@ fn generate_assembly(source : String, opts : DriverOptions) -> String {
     }
   }
   let prog = @parser.parse(parser_input)
-  let codegen = @codegen.Codegen::new()
-  codegen.generate(prog)
+  @codegen.generate_assembly_for_target(prog, opts.target)
 }
 
 ///|
@@ -665,6 +714,13 @@ fn link_args(
   primary_input : String?,
 ) -> Array[String] {
   let args : Array[String] = ["clang", "-o", output_path]
+  match opts.target {
+    DarwinArm64 => ()
+    LinuxAmd64 => {
+      args.push("-target")
+      args.push(opts.target.triple())
+    }
+  }
   match primary_input {
     Some(path) => args.push(path)
     None => ()
@@ -689,6 +745,30 @@ fn run_link(
 }
 
 ///|
+fn assemble_with_clang(
+  opts : DriverOptions,
+  asm_path : String,
+  output_path : String,
+) -> Unit {
+  let args : Array[String] = ["clang"]
+  match opts.target {
+    DarwinArm64 => ()
+    LinuxAmd64 => {
+      args.push("-target")
+      args.push(opts.target.triple())
+    }
+  }
+  args.push("-c")
+  args.push(asm_path)
+  args.push("-o")
+  args.push(output_path)
+  let rc = moonbit_system(@utf8.encode(shell_join_quoted(args)))
+  if rc != 0 {
+    fail("assemble failed with code " + rc.to_string())
+  }
+}
+
+///|
 fn print_usage() -> Unit {
   let text =
     #|usage: kimicc [options] input.c
@@ -696,7 +776,7 @@ fn print_usage() -> Unit {
     #|Modes:
     #|  -E                  preprocess only
     #|  -S                  compile to assembly
-    #|  -c                  compile to a Mach-O relocatable object
+    #|  -c                  compile to a relocatable object
     #|  default             compile one C source and delegate final linking to clang
     #|
     #|Preprocessor options:
@@ -710,6 +790,7 @@ fn print_usage() -> Unit {
     #|
     #|Output options:
     #|  -o PATH             set output path
+    #|  -target TARGET      choose darwin-arm64 or linux-amd64
   println(text)
 }
 
@@ -744,11 +825,23 @@ fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
       if output_path == "-" {
         fail("direct object output to stdout is not supported")
       }
-      let parser_input = preprocess_source(source, input_path, opts)
-      let prog = @parser.parse(parser_input)
-      let object = @codegen.generate_macho_object(prog)
-      if !write_bytes_file(output_path, object) {
-        fail("cannot write file: " + output_path)
+      match opts.target {
+        DarwinArm64 => {
+          let parser_input = preprocess_source(source, input_path, opts)
+          let prog = @parser.parse(parser_input)
+          let object = @codegen.generate_macho_object(prog)
+          if !write_bytes_file(output_path, object) {
+            fail("cannot write file: " + output_path)
+          }
+        }
+        LinuxAmd64 => {
+          let assembly = generate_assembly(source, opts)
+          let asm_path = temp_file_path("object", input_path + source, ".s")
+          if !write_file(asm_path, assembly) {
+            fail("cannot write temporary assembly: " + asm_path)
+          }
+          assemble_with_clang(opts, asm_path, output_path)
+        }
       }
     }
     LinkExecutable => {

@@ -1,4 +1,20 @@
 ///|
+priv struct AttributeInfo {
+  mut is_packed : Bool
+  mut align : Int?
+}
+
+///|
+fn merge_align(lhs : Int?, rhs : Int?) -> Int? {
+  match (lhs, rhs) {
+    (Some(a), Some(b)) => Some(if a > b { a } else { b })
+    (Some(_), None) => lhs
+    (None, Some(_)) => rhs
+    (None, None) => None
+  }
+}
+
+///|
 fn Parser::skip_qualifiers(self : Parser) -> Unit {
   while self.token == Const ||
         self.token == Restrict ||
@@ -30,16 +46,43 @@ fn Parser::skip_qualifiers(self : Parser) -> Unit {
 }
 
 ///|
-fn Parser::skip_attributes(self : Parser) -> Unit {
+fn Parser::skip_attributes_info(self : Parser) -> AttributeInfo {
+  let info : AttributeInfo = { is_packed: false, align: None }
   while self.token == Ident("__attribute__") ||
         self.token == Ident("__attribute") ||
         self.token == Ident("__asm") ||
         self.token == Ident("__asm__") {
+    let tracks_packed = self.token == Ident("__attribute__") ||
+      self.token == Ident("__attribute")
     self.advance()
     self.expect(LParen)
     // Skip until balanced RParen
     let mut depth = 1
     while depth > 0 && self.token != EOF {
+      if tracks_packed {
+        match self.token {
+          Ident("packed") | Ident("__packed__") => info.is_packed = true
+          Ident("aligned") | Ident("__aligned__") => {
+            self.advance()
+            if self.token == LParen {
+              self.advance()
+              let expr = self.parse_assign()
+              self.expect(RParen)
+              match self.fold_const(expr) {
+                Some(n) => {
+                  let align = n.to_int()
+                  if align > 0 {
+                    info.align = merge_align(info.align, Some(align))
+                  }
+                }
+                None => ()
+              }
+            }
+            continue
+          }
+          _ => ()
+        }
+      }
       if self.token == LParen {
         depth += 1
       } else if self.token == RParen {
@@ -53,6 +96,22 @@ fn Parser::skip_attributes(self : Parser) -> Unit {
       }
     }
   }
+  info
+}
+
+///|
+fn Parser::skip_attributes_packed(self : Parser) -> Bool {
+  self.skip_attributes_info().is_packed
+}
+
+///|
+fn Parser::skip_attributes_align(self : Parser) -> Int? {
+  self.skip_attributes_info().align
+}
+
+///|
+fn Parser::skip_attributes(self : Parser) -> Unit {
+  let _ = self.skip_attributes_info()
 }
 
 ///|

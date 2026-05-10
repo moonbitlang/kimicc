@@ -6,6 +6,7 @@
 /// preprocessor does not auto-discover SDK paths.
 pub(all) struct PreprocessOptions {
   filename : String
+  target : @target.Target
   include_paths : Array[String]
   system_include_paths : Array[String]
   defines : Map[String, String]
@@ -18,6 +19,7 @@ pub(all) struct PreprocessOptions {
 pub fn PreprocessOptions::new(filename : String) -> PreprocessOptions {
   {
     filename,
+    target: @target.Target::default(),
     include_paths: [],
     system_include_paths: [],
     defines: {},
@@ -104,5 +106,7 @@ priv struct Preprocessor {
   options : PreprocessOptions
   macros : Map[String, Macro]
   include_stack : Array[String]
+  once_files : Map[String, Bool]
+  mut counter : Int
   mut error : PreprocessError?
 }

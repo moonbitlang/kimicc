@@ -1,19 +1,22 @@
 # bobzhang/kimicc
 
-`kimicc` is a small C compiler written in MoonBit. The project currently
-targets native ARM64 macOS. It can preprocess and parse C source, lower the
-parsed program to Darwin ARM64 assembly, emit a Mach-O relocatable object, and
-run selected C functions in memory through the native `jit` package.
+`kimicc` is a small C compiler written in MoonBit. The primary supported host
+is native ARM64 macOS. It can preprocess and parse C source, lower the parsed
+program to Darwin ARM64 assembly, emit a Mach-O relocatable object, and run
+selected C functions in memory through the native `jit` package. It also has an
+experimental Linux/amd64 assembly backend and driver target for smoke testing
+System V x86-64 code generation.
 
 ## Package Layout
 
-The module exports four public packages:
+The module exports five public packages:
 
 | Package | Purpose |
 |---|---|
+| `bobzhang/kimicc/target` | Names supported compiler output targets such as `darwin-arm64` and `linux-amd64`. |
 | `bobzhang/kimicc/preprocessor` | Expands C preprocessing directives into ordinary C source. |
 | `bobzhang/kimicc/parser` | Tokenizes and parses preprocessed C source into the public AST. |
-| `bobzhang/kimicc/codegen` | Converts the parser AST into Darwin ARM64 assembly, Mach-O object bytes, or a JIT image. |
+| `bobzhang/kimicc/codegen` | Converts the parser AST into target assembly, Darwin ARM64 Mach-O object bytes, or a JIT image. |
 | `bobzhang/kimicc/jit` | Native-only convenience API that compiles C source and calls `int` returning functions in memory. |
 
 The root package `bobzhang/kimicc` intentionally exports no values.
@@ -36,8 +39,8 @@ moon run cmd/main --target native -- input.c -o out
 ./out
 ```
 
-Use `-S` to write assembly, `-c` to write a Mach-O relocatable object, `-E` to
-print preprocessed source, and `--preprocessed` when the input has already been
+Use `-S` to write assembly, `-c` to write a relocatable object, `-E` to print
+preprocessed source, and `--preprocessed` when the input has already been
 preprocessed:
 
 ```bash
@@ -47,11 +50,41 @@ moon run cmd/main --target native -- -c input.c
 moon run cmd/main --target native -- -S --preprocessed input.i -o out.s
 ```
 
+The default output target is `darwin-arm64`. Use `-target linux-amd64` to select
+the experimental Linux/amd64 backend:
+
+```bash
+moon run cmd/main --target native -- -S -target linux-amd64 input.c -o out.s
+moon run cmd/main --target native -- -c -target linux-amd64 input.c -o out.o
+```
+
+On ARM64 macOS, `-c -target linux-amd64` delegates assembly to Clang with
+`-target x86_64-linux-gnu` and produces an ELF64 relocatable object when the
+local Clang has that backend. Full Linux executable linking is best tested in an
+amd64 Linux environment:
+
+```bash
+docker run --rm --platform linux/amd64 \
+  -v "$PWD:/work" -w /work ubuntu:24.04 \
+  bash scripts/linux-amd64-smoke.sh
+```
+
+See [`docs/linux-amd64-target.md`](docs/linux-amd64-target.md) for current
+coverage, gaps, and the Docker test workflow.
+
 Include search is explicit: quote includes search the including file directory
 and `-I` paths, while angle includes search `-isystem` paths and then `-I`
 paths. The driver also adds common macOS Command Line Tools include directories
 by default so system headers such as `<stddef.h>` are available on the target
-platform. Use `-nostdinc` to disable those built-in system include paths.
+platform. `__has_include(...)` and `__has_include_next(...)` use the same search
+rules. Headers may use `#pragma once` to suppress repeated inclusion. Use
+`-nostdinc` to disable those built-in system include paths. Clang-style feature
+probes are conservative: covered C feature probes and the GNU `packed`/numeric
+`aligned` attributes report true, unsupported feature/attribute/warning probes
+report false, and `__is_identifier(name)` tracks parser-recognized keywords and
+extension tokens. Variadic macros support `__VA_ARGS__`, GNU comma-paste
+elision, and `__VA_OPT__(...)`; `__COUNTER__`, `#elifdef`, and `#elifndef` are
+supported for generated/config headers.
 
 ## Preprocessor API
 
@@ -106,9 +139,9 @@ or transform it:
 | `Program` | Top-level translation unit: struct or union declarations, global variables, and function declarations. |
 | `FuncDecl` | Function declaration or definition. `body` is `None` for declarations without a body. |
 | `GlobalDecl` | Global variable declaration or definition. `init` is `None` for declarations without an initializer. |
-| `StructDecl` | Struct or union declaration. `is_union` distinguishes unions. |
+| `StructDecl` | Struct or union declaration. `is_union` distinguishes unions; `is_packed` records GNU packed layout attributes. |
 | `Param` | Function parameter or aggregate field. `bit_width` is set for bit-fields. |
-| `Type` | C type model used by the parser and code generator. |
+| `Type` | C type model used by the parser and code generator. `Aligned` records `_Alignas` and numeric GNU aligned attributes. |
 | `Expr` | Expression tree. Operators are stored as source-level operator strings. |
 | `Stmt` | Statement tree. |
 | `GlobalInit` | Global initializer form. |
@@ -161,6 +194,7 @@ Import the parser and codegen packages:
 import {
   "bobzhang/kimicc/parser",
   "bobzhang/kimicc/codegen",
+  "bobzhang/kimicc/target",
 }
 ```
 
@@ -178,6 +212,23 @@ let assembly = @codegen.Codegen::new().generate(program)
 intended to be accepted by the macOS toolchain and can be linked with `clang`.
 The source program must already be parsed; codegen does not preprocess or parse
 text.
+
+For target dispatch, use:
+
+```moonbit nocheck
+///|
+let target = @target.Target::parse("linux-amd64").unwrap()
+
+///|
+let assembly = @codegen.generate_assembly_for_target(program, target)
+```
+
+`generate_assembly_for_target` preserves the existing Darwin ARM64 output for
+`darwin-arm64` and emits GNU assembler syntax for `linux-amd64`.
+
+For the current fixed scratch-register discipline, call lowering, aggregate
+rules, and ABI compliance status, see
+[`docs/codegen-registers-and-abi.md`](docs/codegen-registers-and-abi.md).
 
 For object emission:
 
@@ -277,6 +328,14 @@ recompiled on every invocation.
   default mode for source containing directives.
 - Parser and codegen failures generally abort instead of returning structured
   diagnostics.
+- Codegen is ABI-aware for the supported native ARM64 macOS subset, but it does
+  not yet implement a general register allocator or claim complete C ABI
+  conformance.
+- The Linux/amd64 backend is experimental and currently covers scalar calls,
+  scalar varargs, small integer/SSE/mixed aggregate calls and returns,
+  recursive nested/array aggregate classification in that small subset,
+  memory-class aggregate calls and returns, ELF assembly emission, and
+  Clang-delegated object emission.
 - The JIT public call surface currently covers only `int` returns with 0 to 3
   `int` arguments.
 - The public AST is useful for tooling, but it is still compiler-internal in

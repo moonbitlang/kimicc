@@ -122,6 +122,7 @@ pub(all) struct StructDecl {
   name : String
   fields : Array[Param]
   is_union : Bool
+  is_packed : Bool
 } derive(Eq)
 
 pub(all) enum Token {

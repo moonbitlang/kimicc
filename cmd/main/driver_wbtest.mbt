@@ -20,6 +20,20 @@ test "driver parses compile-only flags" {
 }
 
 ///|
+test "driver parses linux amd64 target" {
+  let opts = match
+    parse_driver_args(["kimicc", "-target", "linux-amd64", "-S", "foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.target == LinuxAmd64)
+  let args = link_args(opts, "out", Some("foo.s"))
+  assert_eq(args[0], "clang")
+  assert_eq(args[3], "-target")
+  assert_eq(args[4], "x86_64-linux-gnu")
+}
+
+///|
 test "driver chooses compiler-style default output names" {
   let opts = DriverOptions::new()
   opts.output = EmitAssembly

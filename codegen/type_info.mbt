@@ -28,14 +28,18 @@ fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
       let fields = self.struct_layouts[name]
       let mut max_end = 0
       let mut max_align = 1
+      let is_packed = self.struct_decls.contains(name) &&
+        self.struct_decls[name].is_packed
       for field in fields {
         let end = field.2 + field.3
         if end > max_end {
           max_end = end
         }
-        let fa = self.type_align(field.1)
-        if fa > max_align {
-          max_align = fa
+        if !is_packed {
+          let fa = self.type_align(field.1)
+          if fa > max_align {
+            max_align = fa
+          }
         }
       }
       // Round up to struct alignment (trailing padding)
@@ -53,13 +57,22 @@ fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
       }
       let fields = self.struct_layouts[name]
       let mut max_size = 0
+      let mut max_align = 1
+      let is_packed = self.struct_decls.contains(name) &&
+        self.struct_decls[name].is_packed
       for field in fields {
         let fs = self.type_size(field.1)
         if fs > max_size {
           max_size = fs
         }
+        if !is_packed {
+          let fa = self.type_align(field.1)
+          if fa > max_align {
+            max_align = fa
+          }
+        }
       }
-      max_size
+      max_size + (max_align - max_size % max_align) % max_align
     }
   }
 }
@@ -90,6 +103,9 @@ fn Codegen::type_align(self : Codegen, ty : @parser.Type) -> Int {
       }
     }
     Struct(name) => {
+      if self.struct_decls.contains(name) && self.struct_decls[name].is_packed {
+        return 1
+      }
       if !self.struct_layouts.contains(name) {
         if self.struct_decls.contains(name) {
           self.compute_struct_layout(self.struct_decls[name])
@@ -108,6 +124,9 @@ fn Codegen::type_align(self : Codegen, ty : @parser.Type) -> Int {
       max_align
     }
     Union(name) => {
+      if self.struct_decls.contains(name) && self.struct_decls[name].is_packed {
+        return 1
+      }
       if !self.struct_layouts.contains(name) {
         if self.struct_decls.contains(name) {
           self.compute_struct_layout(self.struct_decls[name])
@@ -184,7 +203,7 @@ fn Codegen::compute_struct_layout(
   for field in decl.fields {
     // Anonymous struct/union member: flatten its fields into parent
     if field.name == "" && is_anon_type(field.ty) {
-      let align = self.type_align(field.ty)
+      let align = if decl.is_packed { 1 } else { self.type_align(field.ty) }
       let padding = (align - offset % align) % align
       offset += padding
       for f in self.flatten_anon_fields(field.ty, offset) {
@@ -199,7 +218,7 @@ fn Codegen::compute_struct_layout(
       None => {
         // Normal field: align to natural boundary, reset bit packing
         let size = self.type_size(field.ty)
-        let align = self.type_align(field.ty)
+        let align = if decl.is_packed { 1 } else { self.type_align(field.ty) }
         let padding = (align - offset % align) % align
         offset += padding
         layout.push((field.name, field.ty, offset, size, 0, 0))
@@ -209,7 +228,11 @@ fn Codegen::compute_struct_layout(
       }
       Some(w) => {
         let container_size = self.type_size(field.ty)
-        let container_align = self.type_align(field.ty)
+        let container_align = if decl.is_packed {
+          1
+        } else {
+          self.type_align(field.ty)
+        }
         let container_bits = container_size * 8
         if w == 0 {
           // Zero-width bit-field: force alignment to next container boundary

@@ -999,6 +999,21 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
 }
 
 ///|
+/// Generates assembly for `prog` using the requested target backend.
+///
+/// `DarwinArm64` preserves the existing macOS ARM64 assembly output.
+/// `LinuxAmd64` emits GNU assembler syntax for the System V x86-64 ABI.
+pub fn generate_assembly_for_target(
+  prog : @parser.Program,
+  target : @target.Target,
+) -> String {
+  match target {
+    DarwinArm64 => Codegen::new().generate(prog)
+    LinuxAmd64 => X64Codegen::new().generate(prog)
+  }
+}
+
+///|
 fn static_global_owner_name(
   name : String,
   decls : Array[@parser.FuncDecl],

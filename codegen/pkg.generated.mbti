@@ -3,9 +3,12 @@ package "bobzhang/kimicc/codegen"
 
 import {
   "bobzhang/kimicc/parser",
+  "bobzhang/kimicc/target",
 }
 
 // Values
+pub fn generate_assembly_for_target(@parser.Program, @target.Target) -> String
+
 pub fn generate_jit_image(@parser.Program) -> JitImage
 
 pub fn generate_macho_object(@parser.Program) -> Bytes

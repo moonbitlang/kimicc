@@ -3,6 +3,7 @@ package "bobzhang/kimicc/preprocessor"
 
 import {
   "bobzhang/kimicc/parser",
+  "bobzhang/kimicc/target",
 }
 
 // Values
@@ -20,6 +21,7 @@ pub fn PreprocessError::to_string(Self) -> String
 
 pub(all) struct PreprocessOptions {
   filename : String
+  target : @target.Target
   include_paths : Array[String]
   system_include_paths : Array[String]
   defines : Map[String, String]

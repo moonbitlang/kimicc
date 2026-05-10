@@ -32,7 +32,7 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     is_inline: false,
     align: None,
   }
-  self.skip_attributes()
+  spec.align = merge_align(spec.align, self.skip_attributes_align())
   let mut has_void = false
   let mut has_char = false
   let mut has_short = false
@@ -55,7 +55,7 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
   let mut saw_typedef_name = false
   let mut has_va_list = false
   while true {
-    self.skip_attributes()
+    spec.align = merge_align(spec.align, self.skip_attributes_align())
     let mut consumed = false
     // Storage class specifiers
     if !consumed {
@@ -329,15 +329,19 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
 ///|
 fn Parser::parse_struct_type_specifier(self : Parser) -> Type {
   self.expect(Struct)
-  self.skip_attributes()
+  let leading_packed = self.skip_attributes_packed()
   match self.token {
     Ident(n) => {
       self.advance()
+      let after_name_packed = self.skip_attributes_packed()
       if self.token == LBrace {
         self.expect(LBrace)
         let fields = self.parse_struct_body()
         self.expect(RBrace)
-        let decl = { name: n, fields, is_union: false }
+        let is_packed = leading_packed ||
+          after_name_packed ||
+          self.skip_attributes_packed()
+        let decl = { name: n, fields, is_union: false, is_packed }
         self.anonymous_structs.push(decl)
         self.struct_decls[n] = decl
         Struct(n)
@@ -349,9 +353,10 @@ fn Parser::parse_struct_type_specifier(self : Parser) -> Type {
       self.expect(LBrace)
       let fields = self.parse_struct_body()
       self.expect(RBrace)
+      let is_packed = leading_packed || self.skip_attributes_packed()
       let name = "__anon_struct_" + self.anon_counter.to_string()
       self.anon_counter += 1
-      let decl = { name, fields, is_union: false }
+      let decl = { name, fields, is_union: false, is_packed }
       self.anonymous_structs.push(decl)
       self.struct_decls[name] = decl
       Struct(name)
@@ -363,15 +368,19 @@ fn Parser::parse_struct_type_specifier(self : Parser) -> Type {
 ///|
 fn Parser::parse_union_type_specifier(self : Parser) -> Type {
   self.expect(Union)
-  self.skip_attributes()
+  let leading_packed = self.skip_attributes_packed()
   match self.token {
     Ident(n) => {
       self.advance()
+      let after_name_packed = self.skip_attributes_packed()
       if self.token == LBrace {
         self.expect(LBrace)
         let fields = self.parse_struct_body()
         self.expect(RBrace)
-        let decl = { name: n, fields, is_union: true }
+        let is_packed = leading_packed ||
+          after_name_packed ||
+          self.skip_attributes_packed()
+        let decl = { name: n, fields, is_union: true, is_packed }
         self.anonymous_structs.push(decl)
         self.struct_decls[n] = decl
         Union(n)
@@ -383,9 +392,10 @@ fn Parser::parse_union_type_specifier(self : Parser) -> Type {
       self.expect(LBrace)
       let fields = self.parse_struct_body()
       self.expect(RBrace)
+      let is_packed = leading_packed || self.skip_attributes_packed()
       let name = "__anon_union_" + self.anon_counter.to_string()
       self.anon_counter += 1
-      let decl = { name, fields, is_union: true }
+      let decl = { name, fields, is_union: true, is_packed }
       self.anonymous_structs.push(decl)
       self.struct_decls[name] = decl
       Union(name)
@@ -463,7 +473,11 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] {
     self.skip_qualifiers()
     let spec = self.parse_decl_specifiers()
     let decl = self.parse_declarator(spec.base_type)
-    let field_ty = apply_decl_align(decl.ty, spec.align)
+    let post_decl_align = self.skip_attributes_align()
+    let field_ty = apply_decl_align(
+      apply_decl_align(decl.ty, spec.align),
+      post_decl_align,
+    )
     let bit_width = if self.token == Colon {
       self.advance()
       match self.fold_const(self.parse_assign()) {
@@ -479,7 +493,11 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] {
       self.skip_attributes()
       self.skip_qualifiers()
       let extra = self.parse_declarator(spec.base_type)
-      let extra_ty = apply_decl_align(extra.ty, spec.align)
+      let extra_post_decl_align = self.skip_attributes_align()
+      let extra_ty = apply_decl_align(
+        apply_decl_align(extra.ty, spec.align),
+        extra_post_decl_align,
+      )
       let extra_bit_width = if self.token == Colon {
         self.advance()
         match self.fold_const(self.parse_assign()) {

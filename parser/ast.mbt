@@ -271,10 +271,12 @@ pub(all) struct Param {
 /// Struct or union declaration.
 ///
 /// `is_union` distinguishes `union` declarations from `struct` declarations.
+/// `is_packed` records GNU `packed` layout attributes on the aggregate.
 pub(all) struct StructDecl {
   name : String
   fields : Array[Param]
   is_union : Bool
+  is_packed : Bool
 } derive(Eq)
 
 ///|

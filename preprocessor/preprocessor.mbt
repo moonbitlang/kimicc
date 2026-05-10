@@ -39,62 +39,157 @@ fn Preprocessor::seed_macro_definition(
 }
 
 ///|
+fn Preprocessor::seed_common_target_macros(self : Preprocessor) -> Unit {
+  self.seed_macro("__STDC__", "1")
+  self.seed_macro("__STDC_VERSION__", "201112L")
+  self.seed_macro("__STDC_HOSTED__", "1")
+  self.seed_macro("__GNUC__", "4")
+  self.seed_macro("__GNUC_MINOR__", "2")
+  self.seed_macro("__GNUC_PATCHLEVEL__", "1")
+  self.seed_macro("__clang__", "1")
+  self.seed_macro("__LP64__", "1")
+  self.seed_macro("_LP64", "1")
+  self.seed_macro("__ORDER_LITTLE_ENDIAN__", "1234")
+  self.seed_macro("__ORDER_BIG_ENDIAN__", "4321")
+  self.seed_macro("__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__")
+  self.seed_macro("__LITTLE_ENDIAN__", "1")
+  self.seed_macro("__CHAR_BIT__", "8")
+  self.seed_macro("__SCHAR_MAX__", "127")
+  self.seed_macro("__SHRT_MAX__", "32767")
+  self.seed_macro("__INT_MAX__", "2147483647")
+  self.seed_macro("__LONG_MAX__", "9223372036854775807L")
+  self.seed_macro("__LONG_LONG_MAX__", "9223372036854775807LL")
+  self.seed_macro("__SIZEOF_SHORT__", "2")
+  self.seed_macro("__SIZEOF_INT__", "4")
+  self.seed_macro("__SIZEOF_LONG__", "8")
+  self.seed_macro("__SIZEOF_LONG_LONG__", "8")
+  self.seed_macro("__SIZEOF_FLOAT__", "4")
+  self.seed_macro("__SIZEOF_DOUBLE__", "8")
+  self.seed_macro("__SIZEOF_POINTER__", "8")
+  self.seed_macro("__SIZEOF_SIZE_T__", "8")
+  self.seed_macro("__SIZEOF_PTRDIFF_T__", "8")
+  self.seed_macro("__SIZEOF_INT128__", "16")
+  self.seed_macro("__SIZEOF_WCHAR_T__", "4")
+  self.seed_macro("__SIZEOF_WINT_T__", "4")
+  self.seed_macro("__POINTER_WIDTH__", "64")
+  self.seed_macro("__SIZE_WIDTH__", "64")
+  self.seed_macro("__PTRDIFF_WIDTH__", "64")
+  self.seed_macro("__INTPTR_WIDTH__", "64")
+  self.seed_macro("__UINTPTR_WIDTH__", "64")
+  self.seed_macro("__INTMAX_WIDTH__", "64")
+  self.seed_macro("__UINTMAX_WIDTH__", "64")
+  self.seed_macro("__SIZE_TYPE__", "long unsigned int")
+  self.seed_macro("__PTRDIFF_TYPE__", "long int")
+  self.seed_macro("__INTPTR_TYPE__", "long int")
+  self.seed_macro("__UINTPTR_TYPE__", "long unsigned int")
+  self.seed_macro("__INTMAX_TYPE__", "long int")
+  self.seed_macro("__UINTMAX_TYPE__", "long unsigned int")
+  self.seed_macro("__INT8_TYPE__", "signed char")
+  self.seed_macro("__UINT8_TYPE__", "unsigned char")
+  self.seed_macro("__INT16_TYPE__", "short")
+  self.seed_macro("__UINT16_TYPE__", "unsigned short")
+  self.seed_macro("__INT32_TYPE__", "int")
+  self.seed_macro("__UINT32_TYPE__", "unsigned int")
+  self.seed_macro("__INT64_TYPE__", "long long int")
+  self.seed_macro("__UINT64_TYPE__", "long long unsigned int")
+  self.seed_macro("__INT_LEAST8_TYPE__", "signed char")
+  self.seed_macro("__UINT_LEAST8_TYPE__", "unsigned char")
+  self.seed_macro("__INT_LEAST16_TYPE__", "short")
+  self.seed_macro("__UINT_LEAST16_TYPE__", "unsigned short")
+  self.seed_macro("__INT_LEAST32_TYPE__", "int")
+  self.seed_macro("__UINT_LEAST32_TYPE__", "unsigned int")
+  self.seed_macro("__INT_LEAST64_TYPE__", "long long int")
+  self.seed_macro("__UINT_LEAST64_TYPE__", "long long unsigned int")
+  self.seed_macro("__INT_FAST8_TYPE__", "signed char")
+  self.seed_macro("__UINT_FAST8_TYPE__", "unsigned char")
+  self.seed_macro("__INT_FAST16_TYPE__", "short")
+  self.seed_macro("__UINT_FAST16_TYPE__", "unsigned short")
+  self.seed_macro("__INT_FAST32_TYPE__", "int")
+  self.seed_macro("__UINT_FAST32_TYPE__", "unsigned int")
+  self.seed_macro("__INT_FAST64_TYPE__", "long long int")
+  self.seed_macro("__UINT_FAST64_TYPE__", "long long unsigned int")
+  self.seed_macro("__WCHAR_TYPE__", "int")
+  self.seed_macro("__WINT_TYPE__", "int")
+  self.seed_macro("__WCHAR_MAX__", "2147483647")
+  self.seed_macro("__ATOMIC_RELAXED", "0")
+  self.seed_macro("__ATOMIC_CONSUME", "1")
+  self.seed_macro("__ATOMIC_ACQUIRE", "2")
+  self.seed_macro("__ATOMIC_RELEASE", "3")
+  self.seed_macro("__ATOMIC_ACQ_REL", "4")
+  self.seed_macro("__ATOMIC_SEQ_CST", "5")
+  self.seed_macro("__GCC_ATOMIC_BOOL_LOCK_FREE", "2")
+  self.seed_macro("__GCC_ATOMIC_CHAR_LOCK_FREE", "2")
+  self.seed_macro("__GCC_ATOMIC_SHORT_LOCK_FREE", "2")
+  self.seed_macro("__GCC_ATOMIC_INT_LOCK_FREE", "2")
+  self.seed_macro("__GCC_ATOMIC_LONG_LOCK_FREE", "2")
+  self.seed_macro("__GCC_ATOMIC_LLONG_LOCK_FREE", "2")
+  self.seed_macro("__GCC_ATOMIC_POINTER_LOCK_FREE", "2")
+  self.seed_macro("__GCC_ATOMIC_TEST_AND_SET_TRUEVAL", "1")
+  self.seed_macro("__GNUC_STDC_INLINE__", "1")
+  self.seed_macro("__STDC_UTF_16__", "1")
+  self.seed_macro("__STDC_UTF_32__", "1")
+  self.seed_macro("__FINITE_MATH_ONLY__", "0")
+}
+
+///|
+fn Preprocessor::seed_darwin_arm64_macros(self : Preprocessor) -> Unit {
+  self.seed_macro("__APPLE__", "1")
+  self.seed_macro("__APPLE_CC__", "6000")
+  self.seed_macro("__MACH__", "1")
+  self.seed_macro("__aarch64__", "1")
+  self.seed_macro("__arm64__", "1")
+  self.seed_macro("__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__", "150500")
+}
+
+///|
+fn Preprocessor::seed_linux_amd64_macros(self : Preprocessor) -> Unit {
+  self.seed_macro("__gnu_linux__", "1")
+  self.seed_macro("__linux__", "1")
+  self.seed_macro("__linux", "1")
+  self.seed_macro("linux", "1")
+  self.seed_macro("__unix__", "1")
+  self.seed_macro("__unix", "1")
+  self.seed_macro("unix", "1")
+  self.seed_macro("__ELF__", "1")
+  self.seed_macro("__x86_64__", "1")
+  self.seed_macro("__x86_64", "1")
+  self.seed_macro("__amd64__", "1")
+  self.seed_macro("__amd64", "1")
+  self.seed_macro("__REGISTER_PREFIX__", "")
+  self.seed_macro("__USER_LABEL_PREFIX__", "")
+  self.seed_macro("__SIZEOF_LONG_DOUBLE__", "16")
+  self.seed_macro("__WINT_TYPE__", "unsigned int")
+  self.seed_macro("__WINT_MAX__", "4294967295U")
+}
+
+///|
+fn Preprocessor::seed_target_macros(self : Preprocessor) -> Unit {
+  self.seed_common_target_macros()
+  match self.options.target {
+    DarwinArm64 => self.seed_darwin_arm64_macros()
+    LinuxAmd64 => self.seed_linux_amd64_macros()
+  }
+}
+
+///|
 fn Preprocessor::new(options : PreprocessOptions) -> Preprocessor {
-  let pp = { options, macros: {}, include_stack: [], error: None }
-  pp.seed_macro("__STDC__", "1")
-  pp.seed_macro("__STDC_VERSION__", "201112L")
-  pp.seed_macro("__STDC_HOSTED__", "1")
-  pp.seed_macro("__APPLE__", "1")
-  pp.seed_macro("__APPLE_CC__", "6000")
-  pp.seed_macro("__MACH__", "1")
-  pp.seed_macro("__GNUC__", "4")
-  pp.seed_macro("__GNUC_MINOR__", "2")
-  pp.seed_macro("__GNUC_PATCHLEVEL__", "1")
-  pp.seed_macro("__clang__", "1")
-  pp.seed_macro("__aarch64__", "1")
-  pp.seed_macro("__arm64__", "1")
-  pp.seed_macro("__LP64__", "1")
-  pp.seed_macro("__ORDER_LITTLE_ENDIAN__", "1234")
-  pp.seed_macro("__ORDER_BIG_ENDIAN__", "4321")
-  pp.seed_macro("__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__")
-  pp.seed_macro("__SIZEOF_POINTER__", "8")
-  pp.seed_macro("__SIZE_TYPE__", "long unsigned int")
-  pp.seed_macro("__PTRDIFF_TYPE__", "long int")
-  pp.seed_macro("__INTPTR_TYPE__", "long int")
-  pp.seed_macro("__UINTPTR_TYPE__", "long unsigned int")
-  pp.seed_macro("__INTMAX_TYPE__", "long int")
-  pp.seed_macro("__UINTMAX_TYPE__", "long unsigned int")
-  pp.seed_macro("__INT8_TYPE__", "signed char")
-  pp.seed_macro("__UINT8_TYPE__", "unsigned char")
-  pp.seed_macro("__INT16_TYPE__", "short")
-  pp.seed_macro("__UINT16_TYPE__", "unsigned short")
-  pp.seed_macro("__INT32_TYPE__", "int")
-  pp.seed_macro("__UINT32_TYPE__", "unsigned int")
-  pp.seed_macro("__INT64_TYPE__", "long long int")
-  pp.seed_macro("__UINT64_TYPE__", "long long unsigned int")
-  pp.seed_macro("__INT_LEAST8_TYPE__", "signed char")
-  pp.seed_macro("__UINT_LEAST8_TYPE__", "unsigned char")
-  pp.seed_macro("__INT_LEAST16_TYPE__", "short")
-  pp.seed_macro("__UINT_LEAST16_TYPE__", "unsigned short")
-  pp.seed_macro("__INT_LEAST32_TYPE__", "int")
-  pp.seed_macro("__UINT_LEAST32_TYPE__", "unsigned int")
-  pp.seed_macro("__INT_LEAST64_TYPE__", "long long int")
-  pp.seed_macro("__UINT_LEAST64_TYPE__", "long long unsigned int")
-  pp.seed_macro("__INT_FAST8_TYPE__", "signed char")
-  pp.seed_macro("__UINT_FAST8_TYPE__", "unsigned char")
-  pp.seed_macro("__INT_FAST16_TYPE__", "short")
-  pp.seed_macro("__UINT_FAST16_TYPE__", "unsigned short")
-  pp.seed_macro("__INT_FAST32_TYPE__", "int")
-  pp.seed_macro("__UINT_FAST32_TYPE__", "unsigned int")
-  pp.seed_macro("__INT_FAST64_TYPE__", "long long int")
-  pp.seed_macro("__UINT_FAST64_TYPE__", "long long unsigned int")
-  pp.seed_macro("__WCHAR_TYPE__", "int")
-  pp.seed_macro("__WINT_TYPE__", "int")
-  pp.seed_macro("__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__", "150500")
+  let pp = {
+    options,
+    macros: {},
+    include_stack: [],
+    once_files: {},
+    counter: 0,
+    error: None,
+  }
+  pp.seed_target_macros()
   pp.seed_macro_definition("__has_builtin(x) 0")
   pp.seed_macro_definition("__has_attribute(x) 0")
   pp.seed_macro_definition("__has_feature(x) 0")
   pp.seed_macro_definition("__has_extension(x) 0")
+  pp.seed_macro_definition("__has_c_attribute(x) 0")
+  pp.seed_macro_definition("__has_declspec_attribute(x) 0")
+  pp.seed_macro_definition("__has_warning(x) 0")
+  pp.seed_macro_definition("__is_identifier(x) 1")
   pp.seed_macro("__DATE__", pp_quote_string("May  9 2026"))
   pp.seed_macro("__TIME__", pp_quote_string("00:00:00"))
   for pair in options.defines {
@@ -170,16 +265,120 @@ fn Preprocessor::define_macro(
 }
 
 ///|
+fn pp_parenthesized_body(
+  tokens : Array[PpToken],
+  lparen : Int,
+) -> (Array[PpToken], Int)? {
+  if lparen >= tokens.length() || !tokens[lparen].is_punct("(") {
+    return None
+  }
+  let body : Array[PpToken] = []
+  let mut depth = 0
+  let mut i = lparen
+  while i < tokens.length() {
+    let tok = tokens[i]
+    if tok.is_punct("(") {
+      if depth > 0 {
+        body.push(tok)
+      }
+      depth += 1
+    } else if tok.is_punct(")") {
+      depth -= 1
+      if depth == 0 {
+        return Some((body, i + 1))
+      }
+      body.push(tok)
+    } else {
+      body.push(tok)
+    }
+    i += 1
+  }
+  None
+}
+
+///|
+fn Preprocessor::parse_include_query_name(
+  self : Preprocessor,
+  tokens : Array[PpToken],
+  file : String,
+  line : Int,
+) -> (String, Bool)? {
+  let expanded = self.expand_tokens(tokens, {}, file, line, 0)
+  let clean = pp_without_whitespace(expanded)
+  if clean.length() == 0 {
+    return None
+  }
+  if clean[0].kind == PpString {
+    return Some((pp_unquote_string_literal(clean[0].text), false))
+  }
+  if clean[0].is_punct("<") {
+    let buf = StringBuilder::new()
+    let mut i = 1
+    while i < clean.length() && !clean[i].is_punct(">") {
+      buf.write_string(clean[i].text)
+      i += 1
+    }
+    if i < clean.length() && clean[i].is_punct(">") {
+      return Some((buf.to_string(), true))
+    }
+  }
+  None
+}
+
+///|
+fn Preprocessor::has_include_query(
+  self : Preprocessor,
+  tokens : Array[PpToken],
+  file : String,
+  line : Int,
+  next : Bool,
+) -> Bool {
+  match self.parse_include_query_name(tokens, file, line) {
+    Some((name, system)) =>
+      if next {
+        self.resolve_include_next(name, system, file) is Some(_)
+      } else {
+        self.resolve_include(name, system, file) is Some(_)
+      }
+    None => false
+  }
+}
+
+///|
 fn Preprocessor::replace_defined_operators(
   self : Preprocessor,
   tokens : Array[PpToken],
+  file : String,
+  line : Int,
 ) -> Array[PpToken] {
   let clean = pp_without_whitespace(tokens)
   let result : Array[PpToken] = []
   let mut i = 0
   while i < clean.length() {
     let tok = clean[i]
-    if tok.is_ident("defined") {
+    if tok.is_ident("__has_include") || tok.is_ident("__has_include_next") {
+      if i + 1 < clean.length() && clean[i + 1].is_punct("(") {
+        match pp_parenthesized_body(clean, i + 1) {
+          Some((body, end_index)) => {
+            let found = self.has_include_query(
+              body,
+              file,
+              line,
+              tok.is_ident("__has_include_next"),
+            )
+            result.push(pp_token(PpNumber, if found { "1" } else { "0" }))
+            i = end_index
+          }
+          None => {
+            result.push(pp_token(PpNumber, "0"))
+            i += 1
+          }
+        }
+      } else {
+        result.push(pp_token(PpNumber, "0"))
+        i += 1
+      }
+    } else if tok.is_ident("defined") {
       if i + 1 < clean.length() && clean[i + 1].is_punct("(") {
         if i + 2 < clean.length() && clean[i + 2].kind == PpIdent {
           let name = clean[i + 2].text
@@ -226,7 +425,7 @@ fn Preprocessor::eval_if(
   file : String,
   line : Int,
 ) -> Bool {
-  let defined_replaced = self.replace_defined_operators(tokens)
+  let defined_replaced = self.replace_defined_operators(tokens, file, line)
   let expanded = self.expand_tokens(defined_replaced, {}, file, line, 0)
   let normalized : Array[PpToken] = []
   for tok in expanded {
@@ -346,11 +545,15 @@ fn Preprocessor::process_include(
     Some((name, system)) =>
       match self.resolve_include(name, system, including_file) {
         Some(path) =>
-          match pp_read_file(path) {
-            Some(content) => self.process_source(content, path)
-            None => {
-              self.set_error("cannot read include file: " + path)
-              ""
+          if self.once_files.contains(path) {
+            ""
+          } else {
+            match pp_read_file(path) {
+              Some(content) => self.process_source(content, path)
+              None => {
+                self.set_error("cannot read include file: " + path)
+                ""
+              }
             }
           }
         None => {
@@ -373,11 +576,15 @@ fn Preprocessor::process_include_next(
     Some((name, system)) =>
       match self.resolve_include_next(name, system, including_file) {
         Some(path) =>
-          match pp_read_file(path) {
-            Some(content) => self.process_source(content, path)
-            None => {
-              self.set_error("cannot read include file: " + path)
-              ""
+          if self.once_files.contains(path) {
+            ""
+          } else {
+            match pp_read_file(path) {
+              Some(content) => self.process_source(content, path)
+              None => {
+                self.set_error("cannot read include file: " + path)
+                ""
+              }
             }
           }
         None => {
@@ -437,6 +644,33 @@ fn Preprocessor::process_directive(
         else_seen: false,
       })
     }
+    "elifdef" | "elifndef" =>
+      if stack.length() == 0 {
+        self.set_error("#" + directive.text + " without matching #if")
+      } else {
+        let idx = stack.length() - 1
+        let frame = stack[idx]
+        if frame.else_seen {
+          self.set_error("#" + directive.text + " after #else")
+        } else {
+          let name_index = pp_first_non_space(rest)
+          let defined = name_index < rest.length() &&
+            rest[name_index].kind == PpIdent &&
+            self.macros.contains(rest[name_index].text)
+          let branch_cond = if directive.text == "elifdef" {
+            defined
+          } else {
+            !defined
+          }
+          let cond = frame.parent_active && !frame.taken && branch_cond
+          stack[idx] = {
+            parent_active: frame.parent_active,
+            branch_active: cond,
+            taken: frame.taken || cond,
+            else_seen: false,
+          }
+        }
+      }
     "elif" =>
       if stack.length() == 0 {
         self.set_error("#elif without matching #if")
@@ -498,8 +732,14 @@ fn Preprocessor::process_directive(
       if active {
         self.set_error("#error " + pp_tokens_to_source(rest))
       }
-    "warning" => ()
-    "pragma" => ()
+    "warning" | "ident" | "sccs" => ()
+    "pragma" =>
+      if active {
+        let idx = pp_first_non_space(rest)
+        if idx < rest.length() && rest[idx].is_ident("once") {
+          self.once_files[file] = true
+        }
+      }
     "line" => ()
     _ =>
       if active {

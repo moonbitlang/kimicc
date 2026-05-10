@@ -830,7 +830,11 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
   let stmts = []
   // Parse first declarator
   let decl = self.parse_declarator(spec.base_type)
-  let decl_ty = apply_decl_align(resolve_var_type(decl), spec.align)
+  let post_decl_align = self.skip_attributes_align()
+  let decl_ty = apply_decl_align(
+    apply_decl_align(resolve_var_type(decl), spec.align),
+    post_decl_align,
+  )
   // Local function prototype inside a function body: int foo(void);
   if decl.is_func_decl && self.token == Semicolon {
     self.expect(Semicolon)
@@ -869,9 +873,10 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
     while self.token == Comma {
       self.advance()
       let extra_decl = self.parse_declarator(spec.base_type)
+      let extra_post_decl_align = self.skip_attributes_align()
       let extra_decl_ty = apply_decl_align(
-        resolve_var_type(extra_decl),
-        spec.align,
+        apply_decl_align(resolve_var_type(extra_decl), spec.align),
+        extra_post_decl_align,
       )
       let extra_mangled = if spec.is_static {
         self.register_static_local(extra_decl.name)
@@ -980,9 +985,10 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
   while self.token == Comma {
     self.advance()
     let extra_decl = self.parse_declarator(spec.base_type)
+    let extra_post_decl_align = self.skip_attributes_align()
     let extra_decl_ty = apply_decl_align(
-      resolve_var_type(extra_decl),
-      spec.align,
+      apply_decl_align(resolve_var_type(extra_decl), spec.align),
+      extra_post_decl_align,
     )
     let mut remembered_extra_ty = extra_decl_ty
     if self.token == Assign {

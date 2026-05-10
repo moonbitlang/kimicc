@@ -347,7 +347,8 @@ fn Parser::const_struct_size(self : Parser, name : String) -> Int {
   if !self.struct_decls.contains(name) {
     return 8
   }
-  let layout = self.const_struct_layout(self.struct_decls[name])
+  let decl = self.struct_decls[name]
+  let layout = self.const_struct_layout(decl)
   let mut max_end = 0
   let mut max_align = 1
   for field in layout {
@@ -355,9 +356,11 @@ fn Parser::const_struct_size(self : Parser, name : String) -> Int {
     if end > max_end {
       max_end = end
     }
-    let align = self.const_type_align(field.1)
-    if align > max_align {
-      max_align = align
+    if !decl.is_packed {
+      let align = self.const_type_align(field.1)
+      if align > max_align {
+        max_align = align
+      }
     }
   }
   max_end + (max_align - max_end % max_align) % max_align
@@ -368,20 +371,31 @@ fn Parser::const_union_size(self : Parser, name : String) -> Int {
   if !self.struct_decls.contains(name) {
     return 8
   }
+  let decl = self.struct_decls[name]
   let mut max_size = 0
-  for field in self.struct_decls[name].fields {
+  let mut max_align = 1
+  for field in decl.fields {
     let size = self.const_type_size(field.ty)
     if size > max_size {
       max_size = size
     }
+    if !decl.is_packed {
+      let align = self.const_type_align(field.ty)
+      if align > max_align {
+        max_align = align
+      }
+    }
   }
-  max_size
+  max_size + (max_align - max_size % max_align) % max_align
 }
 
 ///|
 fn Parser::const_struct_align(self : Parser, name : String) -> Int {
   if !self.struct_decls.contains(name) {
     return 8
+  }
+  if self.struct_decls[name].is_packed {
+    return 1
   }
   let mut max_align = 1
   for field in self.struct_decls[name].fields {
@@ -452,7 +466,11 @@ fn Parser::const_struct_layout(
   let mut current_bit_offset = 0
   for field in decl.fields {
     if field.name == "" && parser_is_anon_type(field.ty) {
-      let align = self.const_type_align(field.ty)
+      let align = if decl.is_packed {
+        1
+      } else {
+        self.const_type_align(field.ty)
+      }
       offset += (align - offset % align) % align
       for f in self.const_flatten_anon_fields(field.ty, offset) {
         layout.push(f)
@@ -465,7 +483,11 @@ fn Parser::const_struct_layout(
     match field.bit_width {
       None => {
         let size = self.const_type_size(field.ty)
-        let align = self.const_type_align(field.ty)
+        let align = if decl.is_packed {
+          1
+        } else {
+          self.const_type_align(field.ty)
+        }
         offset += (align - offset % align) % align
         layout.push((field.name, field.ty, offset, size, 0, 0))
         offset += size
@@ -474,7 +496,11 @@ fn Parser::const_struct_layout(
       }
       Some(width) => {
         let container_size = self.const_type_size(field.ty)
-        let container_align = self.const_type_align(field.ty)
+        let container_align = if decl.is_packed {
+          1
+        } else {
+          self.const_type_align(field.ty)
+        }
         let container_bits = container_size * 8
         if width == 0 {
           offset += (container_align - offset % container_align) %

@@ -475,6 +475,61 @@ test "parse struct definition and member access" {
 }
 
 ///|
+test "parse packed aggregate attributes" {
+  let source =
+    #|struct __attribute__((packed)) PackedA { char c; int x; };
+    #|struct PackedB { char c; int x; } __attribute__((__packed__));
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  inspect(prog.structs.length(), content="2")
+  inspect(prog.structs[0].is_packed, content="true")
+  inspect(prog.structs[1].is_packed, content="true")
+}
+
+///|
+test "parse GNU aligned attributes" {
+  let source =
+    #|int __attribute__((aligned(32))) global_spec;
+    #|int global_post __attribute__((__aligned__(64)));
+    #|struct AlignedAttr {
+    #|  char c;
+    #|  int x __attribute__((aligned(16)));
+    #|  char y;
+    #|};
+    #|typedef int aligned_int __attribute__((aligned(16)));
+    #|aligned_int typed_global;
+    #|int main(void) {
+    #|  int local __attribute__((aligned(32)));
+    #|  return 0;
+    #|}
+  let prog = @parser.parse(source)
+  match prog.globals {
+    [
+      { ty: Aligned(SInt, 32), name: "global_spec", .. },
+      { ty: Aligned(SInt, 64), name: "global_post", .. },
+      { ty: Aligned(SInt, 16), name: "typed_global", .. },
+    ] => ()
+    _ => fail("Expected GNU aligned globals and typedef")
+  }
+  match prog.structs[0].fields {
+    [
+      { ty: SChar, name: "c", .. },
+      { ty: Aligned(SInt, 16), name: "x", .. },
+      { ty: SChar, name: "y", .. },
+    ] => ()
+    _ => fail("Expected GNU aligned struct field")
+  }
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [VarDecl(Aligned(SInt, 32), "local", None), Return(Some(Number(0)))]
+      )
+    ) => ()
+    _ => fail("Expected GNU aligned local variable")
+  }
+}
+
+///|
 test "parse pointer to struct member access" {
   let source =
     #|struct Node { int val; struct Node *next; };
