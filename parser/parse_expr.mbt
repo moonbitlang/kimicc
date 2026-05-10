@@ -347,6 +347,9 @@ fn Parser::parse_unary(self : Parser) -> Expr {
           | Const
           | Restrict
           | Volatile => true
+          Ident("__typeof") => true
+          Ident("__typeof__") => true
+          Ident("typeof") => true
           Ident("_Atomic") => true
           Ident("_Alignas") => true
           Ident("alignas") => true
@@ -408,6 +411,9 @@ fn Parser::parse_unary(self : Parser) -> Expr {
         Ident("_Atomic") => true
         Ident("_Alignas") => true
         Ident("alignas") => true
+        Ident("__typeof") => true
+        Ident("__typeof__") => true
+        Ident("typeof") => true
         Ident(name) => self.typedefs.contains(name)
         _ => false
       }

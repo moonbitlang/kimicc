@@ -1061,3 +1061,29 @@ test "parse builtin choose expr and types compatible fold constants" {
     _ => fail("Expected builtin compile-time selection to fold constants")
   }
 }
+
+///|
+test "parse GNU typeof type specifiers" {
+  let source =
+    #|int main(void) {
+    #|  int x = 0;
+    #|  __typeof__(x) y = 7;
+    #|  typeof(unsigned long) z = 5;
+    #|  return y + (int)z;
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [
+          VarDecl(SInt, "x", Some(Number(0))),
+          VarDecl(SInt, "y", Some(Number(7))),
+          VarDecl(ULong, "z", Some(Number(5))),
+          Return(Some(Binary("+", Var("y"), Cast(SInt, Var("z"))))),
+        ]
+      )
+    ) => ()
+    _ =>
+      fail("Expected typeof specifiers to resolve expression and type operands")
+  }
+}

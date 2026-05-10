@@ -48,6 +48,8 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
   let mut enum_result = Type::SInt
   let mut has_typedef_name = false
   let mut typedef_type = Type::SInt
+  let mut has_typeof = false
+  let mut typeof_type = Type::SInt
   let mut has_atomic_type = false
   let mut atomic_type = Type::SInt
   let mut has_atomic_qualifier = false
@@ -236,6 +238,13 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
             self.advance()
             saw_primitive = true
             consumed = true
+          } else if name == "__typeof" ||
+            name == "__typeof__" ||
+            name == "typeof" {
+            typeof_type = self.parse_typeof_specifier()
+            has_typeof = true
+            saw_primitive = true
+            consumed = true
           } else if name == "__uint128_t" {
             has_int128 = true
             has_unsigned = true
@@ -273,6 +282,8 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     spec.base_type = struct_result
   } else if has_enum {
     spec.base_type = enum_result
+  } else if has_typeof {
+    spec.base_type = typeof_type
   } else if has_typedef_name {
     spec.base_type = typedef_type
   } else if has_va_list {

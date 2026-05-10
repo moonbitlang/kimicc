@@ -352,6 +352,9 @@ fn Parser::is_stmt_decl_start(self : Parser) -> Bool {
       name == "__int128_t" ||
       name == "__uint128_t" ||
       name == "_Float16" ||
+      name == "__typeof" ||
+      name == "__typeof__" ||
+      name == "typeof" ||
       self.typedefs.contains(name)
     _ => false
   }
@@ -412,7 +415,9 @@ fn Parser::parse_for_stmt(self : Parser) -> Stmt {
     self.token == Volatile ||
     self.token == Extern ||
     self.token == Static ||
-    self.token == Inline {
+    self.token == Inline ||
+    self.token == Register ||
+    self.token == Auto {
     Some(self.parse_var_decl_stmt())
   } else {
     let is_typedef = match self.token {
@@ -424,6 +429,9 @@ fn Parser::parse_for_stmt(self : Parser) -> Stmt {
         name == "__int128_t" ||
         name == "__uint128_t" ||
         name == "_Float16" ||
+        name == "__typeof" ||
+        name == "__typeof__" ||
+        name == "typeof" ||
         self.typedefs.contains(name)
       _ => false
     }

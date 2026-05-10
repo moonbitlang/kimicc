@@ -521,7 +521,7 @@ int target_predefines(void) {
 #else
   return 521;
 #endif
-#if __is_identifier(kimicc_probe_identifier) && !__is_identifier(int) && !__is_identifier(_Static_assert)
+#if __is_identifier(kimicc_probe_identifier) && !__is_identifier(int) && !__is_identifier(_Static_assert) && !__is_identifier(__typeof__)
   target = target + 0;
 #else
   return 522;
@@ -1174,6 +1174,13 @@ int compile_time_selection(void) {
   return selected + fallback == 42 ? 0 : 536;
 }
 
+int gnu_typeof_selection(void) {
+  int x = 0;
+  __typeof__(x++) y = 40;
+  typeof(unsigned long) z = 2;
+  return x + y + (int)z == 42 ? 0 : 537;
+}
+
 int main(void) {
   struct Pair p;
   struct DPair q;
@@ -1242,6 +1249,7 @@ int main(void) {
          pragma_once_probe() +
          generic_selection() +
          compile_time_selection() +
+         gnu_typeof_selection() +
          var_pair(0, make_pair(0, 1)) +
          var_dpair(0, make_dpair(0.5, 0.5)) +
          var_big(0, make_big(0, 1, 0)) +

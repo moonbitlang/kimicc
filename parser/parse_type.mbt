@@ -115,6 +115,61 @@ fn Parser::skip_attributes(self : Parser) -> Unit {
 }
 
 ///|
+fn Parser::is_type_name_start(self : Parser) -> Bool {
+  match self.token {
+    Int
+    | Void
+    | Char
+    | Struct
+    | Union
+    | Signed
+    | Unsigned
+    | Short
+    | Long
+    | Float
+    | Double
+    | Bool
+    | Enum
+    | Const
+    | Restrict
+    | Volatile
+    | Static
+    | Extern
+    | Inline => true
+    Ident("_Float16")
+    | Ident("__int128")
+    | Ident("__int128_t")
+    | Ident("__uint128_t")
+    | Ident("_Atomic")
+    | Ident("_Alignas")
+    | Ident("alignas")
+    | Ident("__typeof")
+    | Ident("__typeof__")
+    | Ident("typeof") => true
+    Ident(name) => self.typedefs.contains(name)
+    _ => false
+  }
+}
+
+///|
+fn Parser::parse_typeof_specifier(self : Parser) -> Type {
+  match self.token {
+    Ident("__typeof") | Ident("__typeof__") | Ident("typeof") => ()
+    _ => abort("Expected typeof specifier")
+  }
+  self.advance()
+  self.expect(LParen)
+  let ty = if self.is_type_name_start() {
+    self.parse_type_name()
+  } else {
+    let expr = self.parse_expr()
+    self.const_expr_type(expr)
+  }
+  self.expect(RParen)
+  ty
+}
+
+///|
 fn Parser::parse_alignas_specifier(self : Parser) -> Int? {
   match self.token {
     Ident("_Alignas") | Ident("alignas") => ()

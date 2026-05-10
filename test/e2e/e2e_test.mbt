@@ -123,6 +123,19 @@ async test "e2e builtin compile-time selection skips unchosen calls" {
 }
 
 ///|
+async test "e2e GNU typeof specifier infers without evaluating operand" {
+  let source =
+    #|int main(void) {
+    #|  int x = 0;
+    #|  __typeof__(x++) y = 40;
+    #|  typeof(unsigned long) z = 2;
+    #|  return x + y + (int)z;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "run logic fixture" {
   let source =
     #|int main() {

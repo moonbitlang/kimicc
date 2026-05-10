@@ -299,7 +299,7 @@ test "is identifier reflects parser keywords and extensions" {
     #|#else
     #|int c_keywords = 0;
     #|#endif
-    #|#if !__is_identifier(_Static_assert) && !__is_identifier(__int128) && !__is_identifier(_Generic)
+    #|#if !__is_identifier(_Static_assert) && !__is_identifier(__int128) && !__is_identifier(_Generic) && !__is_identifier(__typeof__)
     #|int extensions = 1;
     #|#else
     #|int extensions = 0;
