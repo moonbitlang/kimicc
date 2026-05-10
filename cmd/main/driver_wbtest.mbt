@@ -153,6 +153,16 @@ test "driver preserves common linker flags" {
 }
 
 ///|
+test "driver pthread seeds reentrant define and linker flag" {
+  let opts = match parse_driver_args(["kimicc", "-c", "-pthread", "foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_eq(opts.defines["_REENTRANT"], "1")
+  assert_eq(opts.linker_args, ["-pthread"])
+}
+
+///|
 test "driver splits response file content" {
   let args = match
     split_response_file_content(

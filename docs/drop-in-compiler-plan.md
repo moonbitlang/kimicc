@@ -26,7 +26,8 @@ compile-only modes that C projects normally use.
   `-nostdinc`.
 - Tolerate common build flags that do not yet affect code generation:
   `-std=*`, `-O*`, `-g*`, `-W*`, `-f*`, `-m*`, dependency-output options, and
-  target/architecture options.
+  target/architecture options. Preserve relevant driver-facing flags such as
+  `-pthread` for preprocessing and link delegation.
 - Write Makefile dependency output for `-M`/`-MM` and compile-style
   `-MD`/`-MMD` flows, honoring `-MF`, `-MT`, `-MQ`, and `-MP` with
   dependencies collected from headers that kimicc's preprocessor actually

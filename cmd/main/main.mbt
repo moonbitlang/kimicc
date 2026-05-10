@@ -208,6 +208,12 @@ fn add_sysroot(opts : DriverOptions, spelling : String, path : String) -> Unit {
 }
 
 ///|
+fn add_pthread(opts : DriverOptions) -> Unit {
+  opts.linker_args.push("-pthread")
+  add_define(opts, "_REENTRANT=1")
+}
+
+///|
 fn apply_dependency_mode(opts : DriverOptions, mode : String) -> Bool {
   match mode {
     "-M" => {
@@ -558,7 +564,10 @@ fn consume_linker_option(
         Err("missing argument after " + arg)
       }
     _ =>
-      if starts_with(arg, "-l") ||
+      if arg == "-pthread" {
+        add_pthread(opts)
+        Ok(index)
+      } else if starts_with(arg, "-l") ||
         starts_with(arg, "-L") ||
         starts_with(arg, "-F") ||
         starts_with(arg, "-B") ||
@@ -566,7 +575,6 @@ fn consume_linker_option(
         starts_with(arg, "-fuse-ld=") ||
         starts_with(arg, "-rtlib=") ||
         starts_with(arg, "-stdlib=") ||
-        arg == "-pthread" ||
         arg == "-shared" ||
         arg == "-dynamiclib" ||
         arg == "-bundle" ||
