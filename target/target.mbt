@@ -21,8 +21,13 @@ pub fn Target::parse(text : String) -> Target? {
     "linux-amd64"
     | "linux-x86_64"
     | "x86_64-linux-gnu"
+    | "x86_64-pc-linux-gnu"
+    | "x86_64-redhat-linux"
     | "x86_64-unknown-linux-gnu"
-    | "amd64-linux-gnu" => Some(LinuxAmd64)
+    | "x86_64-linux-musl"
+    | "x86_64-unknown-linux-musl"
+    | "amd64-linux-gnu"
+    | "amd64-unknown-linux-gnu" => Some(LinuxAmd64)
     _ => None
   }
 }

@@ -16,6 +16,14 @@ test "parse target aliases" {
     Some(target) => assert_eq(target.name(), "linux-amd64")
     None => abort("linux alias did not parse")
   }
+  match @target.Target::parse("x86_64-pc-linux-gnu") {
+    Some(target) => assert_eq(target.name(), "linux-amd64")
+    None => abort("linux pc alias did not parse")
+  }
+  match @target.Target::parse("x86_64-unknown-linux-musl") {
+    Some(target) => assert_eq(target.name(), "linux-amd64")
+    None => abort("linux musl alias did not parse")
+  }
   assert_true(@target.Target::parse("unknown") is None)
 }
 

@@ -116,6 +116,17 @@ test "driver parses linux amd64 target" {
 }
 
 ///|
+test "driver normalizes common linux amd64 target aliases" {
+  let opts = match
+    parse_driver_args(["kimicc", "--target=x86_64-pc-linux-gnu", "-S", "foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.target == LinuxAmd64)
+  assert_eq(opts.target.triple(), "x86_64-linux-gnu")
+}
+
+///|
 test "driver parses configure query flags" {
   let opts = match
     parse_driver_args([
