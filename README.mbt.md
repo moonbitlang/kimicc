@@ -56,7 +56,8 @@ Dependency flags `-M`, `-MM`, `-MD`, `-MMD`, `-MP`, `-MF`, `-MT`, and `-MQ`
 are accepted. `-M`/`-MD` include system headers in generated Makefile rules,
 while `-MM`/`-MMD` keep only the main source and user headers resolved by
 kimicc's preprocessor. Repeated `-MT`/`-MQ` options add multiple rule targets;
-`-MF -` writes the dependency rule to stdout.
+`-MF -` writes the dependency rule to stdout. In dependency-only `-M`/`-MM`
+mode, `-o PATH` is accepted as a dependency output path when `-MF` is absent.
 
 The default output target is `darwin-arm64`. Use `-target linux-amd64` to select
 the experimental Linux/amd64 backend:

@@ -833,7 +833,7 @@ fn emit_dependency_output(
   let content = dependency_rule_content(
     opts, input_path, output_path, dependency_records,
   )
-  match opts.dependency_output_path {
+  match dependency_only_destination_path(opts) {
     Some(path) =>
       if path == "-" {
         write_stdout(content)
@@ -841,6 +841,14 @@ fn emit_dependency_output(
         fail("cannot write dependency file: " + path)
       }
     None => write_stdout(content)
+  }
+}
+
+///|
+fn dependency_only_destination_path(opts : DriverOptions) -> String? {
+  match opts.dependency_output_path {
+    Some(path) => Some(path)
+    None => opts.output_path
   }
 }
 
@@ -1049,10 +1057,7 @@ fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
       let preprocessed = preprocess_source_with_dependencies(
         source, input_path, opts,
       )
-      let rule_output_path = match opts.output_path {
-        Some(path) => path
-        None => replace_extension(input_path, ".o")
-      }
+      let rule_output_path = replace_extension(input_path, ".o")
       emit_dependency_output(
         opts,
         input_path,

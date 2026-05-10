@@ -167,3 +167,19 @@ test "driver accepts dash dependency destination" {
   assert_true(opts.dependency_output_path is Some("-"))
   assert_eq(dependency_output_path(opts, "src/foo.c", "src/foo.o"), "-")
 }
+
+///|
+test "dependency-only mode treats output as dependency destination" {
+  let opts = match
+    parse_driver_args(["kimicc", "-MM", "-o", "deps/foo.d", "src/foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.output == EmitDependencies)
+  assert_true(opts.output_path is Some("deps/foo.d"))
+  assert_true(dependency_only_destination_path(opts) is Some("deps/foo.d"))
+  assert_eq(
+    dependency_file_content(opts, "src/foo.c", "src/foo.o", ["src/foo.c"]),
+    "src/foo.o: src/foo.c\n",
+  )
+}
