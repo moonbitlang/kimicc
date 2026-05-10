@@ -71,7 +71,10 @@ test "driver consumes ignored flags with separate values" {
       "--std", "c11", "-MJ", "compile.json", "-serialize-diagnostics", "diag.dia",
       "--serialize-diagnostics", "diag2.dia", "-working-directory", "/tmp/build",
       "-fdebug-compilation-dir", "/tmp/build", "-fmodule-map-file", "module.modulemap",
-      "foo.c",
+      "--config", "clang.cfg", "-analyzer-output", "plist", "-arcmt-migrate-report-output",
+      "arcmt.plist", "-cxx-isystem", "cxx/include", "-dsym-dir", "dsym", "-dumpdir",
+      "aux/", "-fmodules-user-build-path", "modules", "-fdepscan-share-identifier",
+      "build-share", "-fexperimental-openacc-macro-override", "202011", "foo.c",
     ]) {
     Ok(opts) => opts
     Err(err) => abort(err)

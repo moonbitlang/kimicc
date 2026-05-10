@@ -95,8 +95,9 @@ The driver also recognizes dependency and simple macro options tunneled through
 `-Wp,` lists, such as `-Wp,-MMD,dep.d,-MP`, and common
 `-Xpreprocessor` spellings such as `-Xpreprocessor -DVALUE=1` or
 `-Xpreprocessor -D -Xpreprocessor VALUE=1`.
-Diagnostic metadata options such as `-MJ PATH` and
-`-serialize-diagnostics PATH` are accepted and ignored.
+Diagnostic metadata and driver path options such as `-MJ PATH`,
+`-serialize-diagnostics PATH`, `--config PATH`, and `-dumpdir PATH` are
+accepted and ignored.
 
 The default output target is `darwin-arm64`. Use `-target linux-amd64`, or the
 Docker-style alias `-target linux/amd64`, to select the experimental
