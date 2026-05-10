@@ -53,6 +53,13 @@ gates.
 - Record exact upstream revisions, configure commands, and expected residual
   failures for every gate.
 
+Current CI fixture pins:
+
+- TinyCC parser fixture: `fad812360ba836b4ca6f52236d867476ff671633`, fetched
+  from `https://repo.or.cz/tinycc.git`.
+- QuickJS parser fixture: `d7ae12ae71dfd6ab2997527d295014a8996fa0f9`, fetched
+  from `https://github.com/bellard/quickjs.git`.
+
 ## Phase 3: Link Driver
 
 Make default `kimicc input.c -o program` useful while still keeping native

@@ -10,6 +10,9 @@ jobs:
   test:
     runs-on: macos-latest
     timeout-minutes: 60
+    env:
+      TINYCC_REF: fad812360ba836b4ca6f52236d867476ff671633
+      QUICKJS_REF: d7ae12ae71dfd6ab2997527d295014a8996fa0f9
     steps:
       - uses: actions/checkout@v5
 
@@ -40,15 +43,27 @@ jobs:
       - name: Fetch external e2e fixtures
         run: |
           set -euo pipefail
+          fetch_ref() {
+            local url="$1"
+            local ref="$2"
+            local dir="$3"
+            rm -rf "$dir"
+            git init "$dir"
+            git -C "$dir" remote add origin "$url"
+            git -C "$dir" fetch --depth=1 origin "$ref"
+            git -C "$dir" checkout --detach FETCH_HEAD
+            test "$(git -C "$dir" rev-parse HEAD)" = "$ref"
+          }
+
           # tinycc preprocessed (used by test "parse tinycc stripped").
           # configure + a partial build are required so that generated headers
           # like tccdefs_.h exist before we preprocess tcc.c.
-          git clone --depth=1 https://repo.or.cz/tinycc.git /tmp/tinycc-src
+          fetch_ref https://repo.or.cz/tinycc.git "$TINYCC_REF" /tmp/tinycc-src
           (cd /tmp/tinycc-src && ./configure --cc=clang && make tccdefs_.h)
           clang -E -P -I/tmp/tinycc-src /tmp/tinycc-src/tcc.c > /tmp/tinycc_stripped.c
 
           # quickjs preprocessed (used by test "parse quickjs preprocessed").
-          git clone --depth=1 https://github.com/bellard/quickjs.git /tmp/quickjs-src
+          fetch_ref https://github.com/bellard/quickjs.git "$QUICKJS_REF" /tmp/quickjs-src
           clang -E -P -I/tmp/quickjs-src \
             -DCONFIG_VERSION='"ci-snapshot"' \
             /tmp/quickjs-src/quickjs.c > /tmp/quickjs_preprocessed.c
