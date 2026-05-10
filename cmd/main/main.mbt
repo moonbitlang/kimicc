@@ -74,6 +74,7 @@ priv struct DriverOptions {
   mut print_resource_dir : Bool
   mut print_search_dirs : Bool
   mut print_sysroot : Bool
+  mut print_sysroot_headers_suffix : Bool
   mut print_multiarch : Bool
   mut print_multi_directory : Bool
   mut print_multi_os_directory : Bool
@@ -117,6 +118,7 @@ fn DriverOptions::new() -> DriverOptions {
     print_resource_dir: false,
     print_search_dirs: false,
     print_sysroot: false,
+    print_sysroot_headers_suffix: false,
     print_multiarch: false,
     print_multi_directory: false,
     print_multi_os_directory: false,
@@ -991,6 +993,8 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
       "-print-search-dirs" | "--print-search-dirs" =>
         opts.print_search_dirs = true
       "-print-sysroot" | "--print-sysroot" => opts.print_sysroot = true
+      "-print-sysroot-headers-suffix" | "--print-sysroot-headers-suffix" =>
+        opts.print_sysroot_headers_suffix = true
       "-print-multiarch" | "--print-multiarch" => opts.print_multiarch = true
       "-print-multi-directory" | "--print-multi-directory" =>
         opts.print_multi_directory = true
@@ -2057,6 +2061,10 @@ fn main {
   }
   if opts.print_sysroot {
     println(driver_sysroot(opts))
+    return
+  }
+  if opts.print_sysroot_headers_suffix {
+    fail("not configured with sysroot headers suffix")
     return
   }
   if opts.print_multiarch {

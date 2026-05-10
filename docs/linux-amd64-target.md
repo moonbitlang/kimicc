@@ -214,7 +214,9 @@ the target split real and testable without claiming full C ABI coverage yet.
   `-print-multi-os-directory`, `-print-multi-lib`,
   `-print-libgcc-file-name`, `-print-prog-name=NAME`, and
   `-print-file-name=NAME`, with long `--print-*` spellings accepted for the
-  corresponding driver-owned queries.
+  corresponding driver-owned queries. `-print-sysroot-headers-suffix` is
+  recognized and exits nonzero because kimicc does not configure a sysroot
+  headers suffix.
 
 The backend currently covers a practical scalar subset: signed and unsigned
 integer arithmetic/comparisons, narrow integer and `_Bool` scalar conversions

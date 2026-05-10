@@ -162,6 +162,20 @@ grep -Fx 'x86_64-linux-gnu' "$driver_query_path" >/dev/null
 grep -Fx '.' "$driver_query_path" >/dev/null
 "$kimicc" -target linux-amd64 -print-multi-os-directory >"$driver_query_path"
 grep -Fx '../lib' "$driver_query_path" >/dev/null
+set +e
+"$kimicc" -target linux-amd64 -print-sysroot-headers-suffix \
+  >"$driver_stdout_path" 2>"$driver_stderr_path"
+driver_status=$?
+set -e
+if [ "$driver_status" -eq 0 ]; then
+  echo "expected sysroot headers suffix query to fail without configured suffix" >&2
+  exit 1
+fi
+if [ -s "$driver_stdout_path" ]; then
+  echo "expected sysroot headers suffix failure to keep stdout empty" >&2
+  exit 1
+fi
+grep -F 'not configured with sysroot headers suffix' "$driver_stderr_path" >/dev/null
 "$kimicc" -target linux-amd64 -print-multi-lib >"$driver_query_path"
 "$kimicc" -target linux-amd64 --print-file-name crt1.o >"$driver_query_path"
 grep -F 'crt1.o' "$driver_query_path" >/dev/null
