@@ -6,6 +6,9 @@ the target split real and testable without claiming full C ABI coverage yet.
 ## What Works
 
 - `-target linux-amd64 -S` emits GNU assembler syntax with Intel operands.
+  Common x86-64 Linux target spellings such as `x86_64-linux-gnu`,
+  `x86_64-pc-linux-gnu`, and `x86_64-unknown-linux-musl` are accepted and
+  normalized to the same backend.
 - External C symbols use ELF spelling, so `main` is emitted as `main`, not
   `_main`.
 - The preprocessor seeds Linux/x86-64 target macros such as `__linux__`,
