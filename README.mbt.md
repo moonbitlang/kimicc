@@ -58,6 +58,7 @@ moon run cmd/main --target native -- -dumpmachine
 moon run cmd/main --target native -- -print-target-triple
 moon run cmd/main --target native -- -print-resource-dir
 moon run cmd/main --target native -- -target linux-amd64 -print-multiarch
+moon run cmd/main --target native -- -target linux-amd64 -print-multi-os-directory
 moon run cmd/main --target native -- -target linux-amd64 -print-multi-lib
 moon run cmd/main --target native -- -print-libgcc-file-name
 ```

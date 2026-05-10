@@ -160,6 +160,8 @@ grep -Fx 'x86_64-linux-gnu' "$driver_query_path" >/dev/null
 grep -Fx 'x86_64-linux-gnu' "$driver_query_path" >/dev/null
 "$kimicc" -target linux-amd64 -print-multi-directory >"$driver_query_path"
 grep -Fx '.' "$driver_query_path" >/dev/null
+"$kimicc" -target linux-amd64 -print-multi-os-directory >"$driver_query_path"
+grep -Fx '../lib' "$driver_query_path" >/dev/null
 "$kimicc" -target linux-amd64 -print-multi-lib >"$driver_query_path"
 "$kimicc" -target linux-amd64 --print-file-name crt1.o >"$driver_query_path"
 grep -F 'crt1.o' "$driver_query_path" >/dev/null
