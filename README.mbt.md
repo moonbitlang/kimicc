@@ -30,18 +30,19 @@ moon build --target native
 moon test --target native
 ```
 
-The command-line compiler accepts one C source file path and behaves like a
-small compiler driver. By default it compiles the source with kimicc and
-delegates final linking to `clang`:
+The command-line compiler behaves like a small compiler driver. By default it
+compiles C source inputs with kimicc and delegates final linking to `clang`:
 
 ```bash
 moon run cmd/main --target native -- input.c -o out
+moon run cmd/main --target native -- main.c helper.c support.o -o out
 ./out
 ```
 
 Use `-S` to write assembly, `-c` to write a relocatable object, `-E` to print
-preprocessed source, and `--preprocessed` when the input has already been
-preprocessed:
+preprocessed source, and `--preprocessed` or `-fpreprocessed` when the input
+has already been preprocessed. `.i` inputs are treated as preprocessed per
+input path. `@response-file` arguments are expanded before option parsing:
 
 ```bash
 moon run cmd/main --target native -- -E -D FEATURE=1 -I include input.c
@@ -50,7 +51,12 @@ moon run cmd/main --target native -- -c input.c
 moon run cmd/main --target native -- -MM -MP input.c
 moon run cmd/main --target native -- -c -MMD -MP -MF input.d input.c
 moon run cmd/main --target native -- -S --preprocessed input.i -o out.s
+moon run cmd/main --target native -- @args.rsp
 ```
+
+Object, library, shared-library, and assembly inputs are delegated to the
+platform toolchain for link-only flows. Compile-only assembly inputs are
+delegated to `clang -c`.
 
 Dependency flags `-M`, `-MM`, `-MD`, `-MMD`, `-MP`, `-MF`, `-MT`, and `-MQ`
 are accepted. `-M`/`-MD` include system headers in generated Makefile rules,
