@@ -147,6 +147,7 @@ feature set. Several high-risk ABI areas have focused tests, including:
 - large aggregate arguments and hidden result pointers;
 - variadic calls and `va_arg` layout;
 - global scalar constant initializers;
+- global aggregate, pointer-relocation, and bit-field initializers;
 - direct Mach-O object mode versus assembly mode.
 
 The project also keeps broader Clang differential corpora and external-project
