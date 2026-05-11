@@ -1062,6 +1062,15 @@ fn Codegen::emit_global_scalar(
         Bool | SChar | UChar => self.emit("\t.byte\t" + n.to_string())
         SShort | UShort => self.emit("\t.short\t" + n.to_string())
         SInt | UInt => self.emit("\t.long\t" + n.to_string())
+        SInt128 => {
+          self.emit("\t.quad\t" + n.to_string())
+          let high = if n < 0L { "-1" } else { "0" }
+          self.emit("\t.quad\t" + high)
+        }
+        UInt128 => {
+          self.emit("\t.quad\t" + n.to_string())
+          self.emit("\t.quad\t0")
+        }
         Float | Double => self.emit_global_float(ty, n.to_double())
         Struct(_) | Union(_) | Array(_, _) => {
           // Zero-initialize aggregate type

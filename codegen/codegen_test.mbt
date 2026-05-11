@@ -72,6 +72,22 @@ test "generate darwin arm64 global unsigned constants use C conversions" {
 }
 
 ///|
+test "generate darwin arm64 global int128 constants use two eightbytes" {
+  let source =
+    #|__int128 ds128 = -1;
+    #|__uint128_t du128 = (unsigned long)-1;
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(
+    assembly.contains("_ds128:\n\t.quad\t-1\n\t.quad\t-1"),
+    content="true",
+  )
+  inspect(assembly.contains("_du128:\n\t.quad\t-1\n\t.quad\t0"), content="true")
+}
+
+///|
 test "generate linux amd64 simple function" {
   let source = "int main() { return 42; }"
   let prog = @parser.parse(source)
