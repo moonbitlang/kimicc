@@ -420,6 +420,9 @@ struct Mix make_mix(long a, double b) {
 
 int mix_sum(struct Mix m) { return (int)m.a + (int)m.b; }
 int mix_tail(int a, int b, int c, int d, int e, int f, struct Mix m) { return (int)m.a + (int)m.b; }
+int mix_tail_then_double(int a, int b, int c, int d, int e, int f, struct Mix m, double z) {
+  return (int)m.a + (int)m.b + (int)z;
+}
 
 struct RevMix make_rmix(double a, long b) {
   struct RevMix m;
@@ -497,6 +500,18 @@ struct F3 make_f3(float a, float b, float c) {
 
 float f3_sum(struct F3 f) { return f.v[0] + f.v[1] + f.v[2]; }
 
+int nine_tail(int a, int b, int c, int d, int e, int f, struct Nine n) {
+  return nine_sum(n);
+}
+
+float f3_tail(
+  double a, double b, double c, double d,
+  double e, double f, double g, double h,
+  struct F3 p
+) {
+  return f3_sum(p);
+}
+
 int var_nine(int tag, ...) {
   va_list ap;
   struct Nine n;
@@ -524,6 +539,10 @@ int partial_aggregate_eightbytes(void) {
   if ((int)f3_sum(f) != 42) return 588;
   if (var_nine(0, n) != 42) return 589;
   if (var_f3(0, f) != 42) return 590;
+  if (nine_tail(1, 2, 3, 4, 5, 6, n) != 42) return 591;
+  if ((int)f3_tail(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, f) != 42) {
+    return 592;
+  }
   return 0;
 }
 
@@ -1605,6 +1624,8 @@ int main(void) {
          mix_sum(r) +
          mix_tail(1, 2, 3, 4, 5, 6, r) -
          2 +
+         mix_tail_then_double(1, 2, 3, 4, 5, 6, r, 5.0) -
+         6 +
          rmix_sum(s) +
          rmix_tail(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, s) -
          2 +

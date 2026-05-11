@@ -66,7 +66,8 @@ the target split real and testable without claiming full C ABI coverage yet.
   through `r9`, `xmm0` through `xmm7`, or the overflow stack area as required by
   the covered System V aggregate subset. Partial final eightbytes are loaded
   and stored at their actual object width when moving between memory, ABI
-  registers, and `va_arg` register-save scratch storage.
+  registers, overflow-stack aggregate slots, and `va_arg` register-save scratch
+  storage.
 - Memory-class `struct`/`union` arguments are copied by value into the overflow
   stack argument area. Memory-class aggregate returns use the System V hidden
   result pointer in `rdi` and return that pointer in `rax`.

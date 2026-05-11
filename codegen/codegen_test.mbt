@@ -1512,6 +1512,61 @@ test "generate linux amd64 partial sse aggregate eightbytes" {
 }
 
 ///|
+test "generate linux amd64 partial integer aggregate stack eightbytes" {
+  let source =
+    #|struct Nine { char v[9]; };
+    #|int stack_nine(int a, int b, int c, int d, int e, int f, struct Nine n) {
+    #|  return n.v[0] + n.v[8];
+    #|}
+    #|int main(void) {
+    #|  struct Nine n;
+    #|  n.v[0] = 3;
+    #|  n.v[8] = 39;
+    #|  return stack_nine(1, 2, 3, 4, 5, 6, n);
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(assembly.contains("movzx\teax, BYTE PTR [rbp + 24]"), content="true")
+  inspect(assembly.contains("mov\tBYTE PTR [rbp -"), content="true")
+  inspect(assembly.contains("movzx\teax, BYTE PTR [rsp +"), content="true")
+  inspect(assembly.contains("mov\tBYTE PTR [rsp + 8], al"), content="true")
+}
+
+///|
+test "generate linux amd64 partial sse aggregate stack eightbytes" {
+  let source =
+    #|struct F3 { float v[3]; };
+    #|float stack_f3(
+    #|  double a, double b, double c, double d,
+    #|  double e, double f, double g, double h,
+    #|  struct F3 p
+    #|) {
+    #|  return p.v[0] + p.v[1] + p.v[2];
+    #|}
+    #|int main(void) {
+    #|  struct F3 f;
+    #|  f.v[0] = 1.0f;
+    #|  f.v[1] = 2.0f;
+    #|  f.v[2] = 39.0f;
+    #|  return (int)stack_f3(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, f);
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(assembly.contains("mov\teax, DWORD PTR [rbp + 24]"), content="true")
+  inspect(assembly.contains("mov\tDWORD PTR [rbp - 72], eax"), content="true")
+  inspect(assembly.contains("mov\teax, DWORD PTR [rsp +"), content="true")
+  inspect(assembly.contains("mov\tDWORD PTR [rsp + 8], eax"), content="true")
+}
+
+///|
 test "generate linux amd64 honors alignas layout" {
   let source =
     #|struct AlignedBytes { char a; _Alignas(16) char b; char c; };

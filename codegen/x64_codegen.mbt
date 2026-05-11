@@ -5646,11 +5646,29 @@ fn X64Codegen::gen_call(
     if stack_index >= 0 {
       let src_off = call_area + save_area + arg_temp_index[i] * 8
       let dst_off = stack_index * 8
-      for word in 0..<arg_words[i] {
-        self.emit("\tmov\trax, QWORD PTR " + x64_rsp_ref(src_off + word * 8))
-        self.emit(
-          "\tmov\tQWORD PTR " + x64_rsp_ref(dst_off + word * 8) + ", rax",
-        )
+      if arg_is_aggregate[i] && arg_classes[i].length() > 0 {
+        for word in 0..<arg_words[i] {
+          let width = self.aggregate_word_width(arg_types[i], word)
+          self.emit_load_int_bytes_from_mem_reg(
+            "rax",
+            "rsp",
+            src_off + word * 8,
+            width,
+          )
+          self.emit_store_int_bytes_to_mem_reg(
+            "rax",
+            "rsp",
+            dst_off + word * 8,
+            width,
+          )
+        }
+      } else {
+        for word in 0..<arg_words[i] {
+          self.emit("\tmov\trax, QWORD PTR " + x64_rsp_ref(src_off + word * 8))
+          self.emit(
+            "\tmov\tQWORD PTR " + x64_rsp_ref(dst_off + word * 8) + ", rax",
+          )
+        }
       }
     }
   }
@@ -6546,15 +6564,12 @@ fn X64Codegen::emit_function(
             fp_idx += fp_needed
           } else {
             for word in 0..<classes.length() {
+              let width = self.aggregate_word_width(param.ty, word)
               let stack_off = 16 + (stack_idx + word) * 8
-              self.emit(
-                "\tmov\trax, QWORD PTR [rbp + " + stack_off.to_string() + "]",
+              self.emit_load_int_bytes_from_mem_reg(
+                "rax", "rbp", stack_off, width,
               )
-              self.emit(
-                "\tmov\tQWORD PTR " +
-                self.local_neg_ref(offset, word * 8) +
-                ", rax",
-              )
+              self.emit_store_int_bytes_to_local("rax", offset, word * 8, width)
             }
             stack_idx += classes.length()
           }
