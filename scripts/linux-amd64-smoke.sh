@@ -632,6 +632,12 @@ int bitfields(void) {
     bits.c += factor;
   }
   if (bits.c != 3) return 67;
+  bits.a = 1;
+  bits.a /= -1;
+  if (bits.a != 7) return 68;
+  bits.c = 2;
+  bits.c %= -2;
+  if (bits.c != 0) return 69;
   return 0;
 }
 

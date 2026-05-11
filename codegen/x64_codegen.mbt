@@ -3761,6 +3761,15 @@ fn X64Codegen::bitfield_info(
 }
 
 ///|
+fn x64_bitfield_promoted_type(info : X64BitfieldInfo) -> @parser.Type {
+  match x64_core_type(info.ty) {
+    Bool | SChar | UChar | SShort | UShort | SInt => SInt
+    UInt => if info.bit_width <= 31 { SInt } else { UInt }
+    _ => info.ty
+  }
+}
+
+///|
 fn X64Codegen::emit_load_container_to_rax(
   self : X64Codegen,
   addr_reg : String,
@@ -5357,11 +5366,36 @@ fn X64Codegen::gen_compound_assign(
       if self.gen_bitfield_fp_compound_assign(op, lhs, rhs, info) {
         return
       }
+      let rhs_ty = self.type_of(rhs)
+      let lhs_promoted_ty = x64_bitfield_promoted_type(info)
+      let is_integer_compound = lhs_promoted_ty.is_integer() &&
+        rhs_ty.is_integer()
+      let lhs_eval_ty = if is_integer_compound {
+        x64_binary_int_type(op, lhs_promoted_ty, rhs_ty)
+      } else {
+        lhs_promoted_ty
+      }
+      let rhs_eval_ty = if is_integer_compound {
+        x64_binary_rhs_int_type(op, lhs_promoted_ty, rhs_ty)
+      } else {
+        rhs_ty
+      }
+      let unsigned_op = if is_integer_compound {
+        is_unsigned_integer_type(lhs_eval_ty)
+      } else {
+        false
+      }
       self.gen_addr(lhs)
       self.emit_push_rax()
       self.emit_load_bitfield_from_addr("rax", info)
+      if is_integer_compound {
+        self.emit_int_conversion_to(lhs_eval_ty)
+      }
       self.emit_push_rax()
       self.gen_expr_as_int(rhs)
+      if is_integer_compound {
+        self.emit_int_conversion_to(rhs_eval_ty)
+      }
       self.emit("\tmov\tr10, rax")
       self.emit_pop_rax()
       match op {
@@ -5369,21 +5403,21 @@ fn X64Codegen::gen_compound_assign(
         "-" => self.emit("\tsub\trax, r10")
         "*" => self.emit("\timul\trax, r10")
         "/" =>
-          if info.ty.is_signed() {
-            self.emit("\tcqo")
-            self.emit("\tidiv\tr10")
-          } else {
+          if unsigned_op {
             self.emit("\txor\trdx, rdx")
             self.emit("\tdiv\tr10")
+          } else {
+            self.emit("\tcqo")
+            self.emit("\tidiv\tr10")
           }
         "%" =>
-          if info.ty.is_signed() {
-            self.emit("\tcqo")
-            self.emit("\tidiv\tr10")
-            self.emit("\tmov\trax, rdx")
-          } else {
+          if unsigned_op {
             self.emit("\txor\trdx, rdx")
             self.emit("\tdiv\tr10")
+            self.emit("\tmov\trax, rdx")
+          } else {
+            self.emit("\tcqo")
+            self.emit("\tidiv\tr10")
             self.emit("\tmov\trax, rdx")
           }
         "&" => self.emit("\tand\trax, r10")
@@ -5395,10 +5429,10 @@ fn X64Codegen::gen_compound_assign(
         }
         ">>" => {
           self.emit("\tmov\trcx, r10")
-          if info.ty.is_signed() {
-            self.emit("\tsar\trax, cl")
-          } else {
+          if unsigned_op {
             self.emit("\tshr\trax, cl")
+          } else {
+            self.emit("\tsar\trax, cl")
           }
         }
         _ => abort("unsupported x86-64 bit-field compound assignment: " + op)

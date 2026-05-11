@@ -1894,6 +1894,27 @@ test "generate linux amd64 bit-field floating assignments" {
 }
 
 ///|
+test "generate linux amd64 bit-field integer promotions" {
+  let source =
+    #|struct Bits { unsigned int a : 3; unsigned int b : 5; };
+    #|int main(void) {
+    #|  struct Bits bits;
+    #|  bits.a = 1;
+    #|  bits.a /= -1;
+    #|  bits.b = 2;
+    #|  bits.b %= -2;
+    #|  return (int)bits.a + (int)bits.b;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(assembly.contains("idiv\tr10"), content="true")
+}
+
+///|
 test "generate function with params" {
   let source = "int add(int a, int b) { return a + b; }"
   let prog = @parser.parse(source)
