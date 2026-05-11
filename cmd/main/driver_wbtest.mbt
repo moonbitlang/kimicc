@@ -722,6 +722,63 @@ test "driver applies pic and pie macro options in order" {
 }
 
 ///|
+fn preprocess_driver_hosted(argv : Array[String]) -> String {
+  let opts = match parse_driver_args(argv) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  let source = "#ifdef __STDC_HOSTED__\nint hosted = __STDC_HOSTED__;\n#else\nint hosted = -1;\n#endif\n"
+  let result = preprocess_source_with_dependencies(source, "foo.c", opts)
+  result.text
+}
+
+///|
+test "driver honors hosted and freestanding mode macros" {
+  assert_eq(
+    preprocess_driver_hosted(["kimicc", "-E", "foo.c"]),
+    "int hosted=1;\n",
+  )
+  assert_eq(
+    preprocess_driver_hosted(["kimicc", "-E", "-ffreestanding", "foo.c"]),
+    "int hosted=0;\n",
+  )
+  assert_eq(
+    preprocess_driver_hosted([
+      "kimicc", "-E", "-ffreestanding", "-fhosted", "foo.c",
+    ]),
+    "int hosted=1;\n",
+  )
+  assert_eq(
+    preprocess_driver_hosted([
+      "kimicc", "-E", "-fhosted", "-ffreestanding", "foo.c",
+    ]),
+    "int hosted=0;\n",
+  )
+}
+
+///|
+test "driver leaves hosted macro overrides after mode selection" {
+  assert_eq(
+    preprocess_driver_hosted([
+      "kimicc", "-E", "-D__STDC_HOSTED__=9", "-ffreestanding", "foo.c",
+    ]),
+    "int hosted=9;\n",
+  )
+  assert_eq(
+    preprocess_driver_hosted([
+      "kimicc", "-E", "-ffreestanding", "-D__STDC_HOSTED__=9", "foo.c",
+    ]),
+    "int hosted=9;\n",
+  )
+  assert_eq(
+    preprocess_driver_hosted([
+      "kimicc", "-E", "-U__STDC_HOSTED__", "-ffreestanding", "foo.c",
+    ]),
+    "int hosted=-1;\n",
+  )
+}
+
+///|
 test "driver recognizes preprocessed inputs" {
   let opts = match parse_driver_args(["kimicc", "-fpreprocessed", "foo.c"]) {
     Ok(opts) => opts

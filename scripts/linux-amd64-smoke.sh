@@ -235,6 +235,18 @@ grep -F 'int pie=2;' "$driver_query_path" >/dev/null
 grep -F 'int pic=0;' "$driver_query_path" >/dev/null
 grep -F 'int pie=0;' "$driver_query_path" >/dev/null
 
+cat > "$source_path" <<'C'
+#ifdef __STDC_HOSTED__
+int hosted = __STDC_HOSTED__;
+#else
+int hosted = -1;
+#endif
+C
+"$kimicc" -E -target linux-amd64 -ffreestanding "$source_path" >"$driver_query_path"
+grep -F 'int hosted=0;' "$driver_query_path" >/dev/null
+"$kimicc" -E -target linux-amd64 -D__STDC_HOSTED__=9 -ffreestanding "$source_path" >"$driver_query_path"
+grep -F 'int hosted=9;' "$driver_query_path" >/dev/null
+
 cat > "$bad_source_path" <<'C'
 _Static_assert(0, "linux smoke expects this failure");
 int main(void) { return 0; }

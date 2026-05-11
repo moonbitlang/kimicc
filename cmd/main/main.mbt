@@ -67,6 +67,7 @@ priv struct DriverOptions {
   toolchain_args : Array[String]
   mut input_language : String?
   mut already_preprocessed : Bool
+  mut hosted : Bool
   mut no_standard_includes : Bool
   mut show_help : Bool
   mut show_version : Bool
@@ -114,6 +115,7 @@ fn DriverOptions::new() -> DriverOptions {
     toolchain_args: [],
     input_language: None,
     already_preprocessed: false,
+    hosted: true,
     no_standard_includes: false,
     show_help: false,
     show_version: false,
@@ -1120,6 +1122,12 @@ fn consume_ignored_option(
       } else if arg == "-fPIE" {
         add_pie_macros(opts, "2")
         Ok(index)
+      } else if arg == "-ffreestanding" {
+        opts.hosted = false
+        Ok(index)
+      } else if arg == "-fhosted" {
+        opts.hosted = true
+        Ok(index)
       } else if arg == "-fno-pic" ||
         arg == "-fno-PIC" ||
         arg == "-fno-pie" ||
@@ -1642,6 +1650,9 @@ fn forced_include_prefix(opts : DriverOptions) -> String {
 ///|
 fn command_line_macro_prefix(opts : DriverOptions) -> String {
   let buf = StringBuilder::new()
+  if !opts.hosted {
+    buf.write_string("#define __STDC_HOSTED__ 0\n")
+  }
   for op in opts.macro_ops {
     match op {
       Define(name, replacement) => {
