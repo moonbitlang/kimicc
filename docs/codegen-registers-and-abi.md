@@ -261,7 +261,8 @@ Initialized global arrays, structs, and unions are emitted with layout padding
 and designated-initializer holes for the covered aggregate cases, including
 bit-field storage units that do not overlap earlier streamed scalar fields and
 pointer/function-pointer relocations to globals, functions, and aggregate
-subobjects.
+subobjects. Pointer arithmetic in global relocations is scaled by the effective
+pointer type, including casted pointer bases such as `(char *)array + n`.
 `__builtin_offsetof` folds simple, nested, and constant array-index member
 designators using the same covered aggregate layout model.
 The shared frontend also folds covered C11 `_Generic` selections to the chosen

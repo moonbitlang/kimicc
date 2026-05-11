@@ -83,7 +83,8 @@ the target split real and testable without claiming full C ABI coverage yet.
   padding and designated-initializer holes for the covered aggregate cases,
   including bit-field storage units that do not overlap earlier streamed
   scalar fields and pointer/function-pointer relocations to globals, functions,
-  and aggregate subobjects.
+  and aggregate subobjects. Pointer arithmetic in global relocations is scaled
+  by the effective pointer type, including casted pointer bases.
 - `__builtin_offsetof` folds simple, nested, and constant array-index member
   designators using the covered aggregate layout model.
 - `_Alignas` and numeric GNU `__attribute__((aligned(N)))`/`__aligned__(N)`

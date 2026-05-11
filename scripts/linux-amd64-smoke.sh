@@ -381,6 +381,8 @@ int global_add1(int x) { return x + 1; }
 
 int global_arr[5] = { 1, [3] = 4 };
 int *global_ptr = global_arr + 3;
+char *global_byte_ptr = (char *)global_arr + 12;
+int *global_cast_ptr = (int *)((char *)global_arr + 12);
 int *global_addr = &global_arr[4];
 int (*global_fp)(int) = global_add1;
 int *global_ptrs[3] = { global_arr, global_arr + 2, &global_arr[4] };
@@ -589,6 +591,12 @@ int offsetof_designators(void) {
   if (__builtin_offsetof(struct NestedMix, i.a) != 0) return 556;
   if (__builtin_offsetof(struct IArray, v[1]) != 4) return 557;
   if (__builtin_offsetof(struct GlobalOuter, inner.x) != 8) return 558;
+  return 0;
+}
+
+int global_cast_pointer_initializers(void) {
+  if (*global_cast_ptr != 4) return 599;
+  if (global_byte_ptr - (char *)global_arr != 12) return 600;
   return 0;
 }
 
@@ -1771,6 +1779,7 @@ int main(void) {
          gnu_noop_attributes() +
          alignof_selection() +
          function_pointer_param_conversions() +
+         global_cast_pointer_initializers() +
          offsetof_designators() +
          var_pair(0, make_pair(0, 1)) +
          var_dpair(0, make_dpair(0.5, 0.5)) +

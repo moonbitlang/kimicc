@@ -1345,6 +1345,8 @@ test "generate linux amd64 global aggregate initializers" {
     #|struct GOuter gout = { .tail = 9, .inner = { .x = 7, .c = 2 }, .tag = 1 };
     #|struct GBits gbits = { .a = 5, .b = -3, .c = 17 };
     #|int *gptr = garr + 3;
+    #|char *gbyte_ptr = (char *)garr + 3;
+    #|int *gcast_ptr = (int *)((char *)garr + 5);
     #|int *gaddr = &garr[4];
     #|int (*gfp)(int) = gadd1;
     #|int *gptrs[3] = { garr, garr + 2, &garr[4] };
@@ -1388,6 +1390,8 @@ test "generate linux amd64 global aggregate initializers" {
   inspect(assembly.contains("\t.long\t2285"), content="true")
   inspect(assembly.contains("\t.long\t13"), content="true")
   inspect(assembly.contains("\t.quad\tgarr+12"), content="true")
+  inspect(assembly.contains("\t.quad\tgarr+3"), content="true")
+  inspect(assembly.contains("\t.quad\tgarr+5"), content="true")
   inspect(assembly.contains("\t.quad\tgarr+16"), content="true")
   inspect(assembly.contains("\t.quad\tgadd1"), content="true")
   inspect(assembly.contains("\t.quad\tgarr+8"), content="true")

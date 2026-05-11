@@ -3983,10 +3983,9 @@ fn X64Codegen::global_expr_type(
       } else {
         SInt
       }
-    DesignatedField(_, e)
-    | DesignatedIndex(_, e)
-    | DesignatedRange(_, _, e)
-    | Cast(_, e) => self.global_expr_type(e)
+    DesignatedField(_, e) | DesignatedIndex(_, e) | DesignatedRange(_, _, e) =>
+      self.global_expr_type(e)
+    Cast(ty, _) => ty
     AddrOf(e) => Pointer(self.global_expr_type(e))
     ArrayAccess(base, _) =>
       match peel_aligned_type(self.global_expr_type(base)) {
