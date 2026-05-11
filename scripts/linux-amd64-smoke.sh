@@ -2000,11 +2000,37 @@ typedef __builtin_va_list va_list;
 __uint128_t make_u128(unsigned long hi, unsigned long lo);
 int check_u128(__uint128_t x);
 int check_parts(__uint128_t x, unsigned long hi, unsigned long lo);
+int check_stack_after_scalar(long a, long b, long c, long d, long e, long f, long g, __uint128_t x);
+int check_var_after_named(long a, long b, long c, long d, long e, long f, long g, __uint128_t named, ...);
+int call_kimicc_stack_u128(__uint128_t x);
+
+struct BigAlignedStack {
+  _Alignas(32) long a;
+  long b;
+  long c;
+};
+
+int check_big_aligned_stack(long a, long b, long c, long d, long e, long f, long g, struct BigAlignedStack p);
+int call_kimicc_big_aligned_stack(struct BigAlignedStack p);
 
 __uint128_t id_u128(__uint128_t x) { return x; }
 
 __uint128_t stack_u128(long a, long b, long c, long d, long e, __uint128_t x) {
   return x;
+}
+
+__uint128_t stack_u128_after_scalar(long a, long b, long c, long d, long e, long f, long g, __uint128_t x) {
+  return x;
+}
+
+int kimicc_stack_u128(long a, long b, long c, long d, long e, long f, long g, __uint128_t x) {
+  if (a != 1 || b != 2 || c != 3 || d != 4 || e != 5 || f != 6 || g != 7) return 0;
+  return check_parts(x, 1, 41) ? 31 : 0;
+}
+
+int kimicc_big_aligned_stack(long a, long b, long c, long d, long e, long f, long g, struct BigAlignedStack p) {
+  if (a != 1 || b != 2 || c != 3 || d != 4 || e != 5 || f != 6 || g != 7) return 0;
+  return p.a == 33 && p.b == 34 && p.c == 35 ? 33 : 0;
 }
 
 int read_u128(int tag, ...) {
@@ -2025,6 +2051,16 @@ int main(void) {
   if (check_u128(x) != 14) return 1;
   if (check_u128(stack_u128(1, 2, 3, 4, 5, x)) != 14) return 2;
   if (read_u128(0, x) != 14) return 3;
+  if (check_u128(stack_u128_after_scalar(1, 2, 3, 4, 5, 6, 7, x)) != 14) return 29;
+  if (check_stack_after_scalar(1, 2, 3, 4, 5, 6, 7, x) != 29) return 29;
+  if (check_var_after_named(1, 2, 3, 4, 5, 6, 7, x, x) != 30) return 30;
+  if (call_kimicc_stack_u128(x) != 31) return 31;
+  struct BigAlignedStack p;
+  p.a = 33;
+  p.b = 34;
+  p.c = 35;
+  if (check_big_aligned_stack(1, 2, 3, 4, 5, 6, 7, p) != 32) return 32;
+  if (call_kimicc_big_aligned_stack(p) != 33) return 33;
   if (!high_only) return 4;
   if (!high_bool) return 5;
   if (zero) return 6;
@@ -2079,7 +2115,18 @@ int main(void) {
 C
 
 cat > "$int128_helper_path" <<'C'
+#include <stdarg.h>
+
 int check_parts(__uint128_t x, unsigned long expected_hi, unsigned long expected_lo);
+int kimicc_stack_u128(long a, long b, long c, long d, long e, long f, long g, __uint128_t x);
+
+struct BigAlignedStack {
+  _Alignas(32) long a;
+  long b;
+  long c;
+};
+
+int kimicc_big_aligned_stack(long a, long b, long c, long d, long e, long f, long g, struct BigAlignedStack p);
 
 __uint128_t make_u128(unsigned long hi, unsigned long lo) {
   return ((__uint128_t)hi << 64) | lo;
@@ -2093,6 +2140,35 @@ int check_parts(__uint128_t x, unsigned long expected_hi, unsigned long expected
   unsigned long actual_hi = (unsigned long)(x >> 64);
   unsigned long actual_lo = (unsigned long)x;
   return actual_hi == expected_hi && actual_lo == expected_lo;
+}
+
+int check_stack_after_scalar(long a, long b, long c, long d, long e, long f, long g, __uint128_t x) {
+  if (a != 1 || b != 2 || c != 3 || d != 4 || e != 5 || f != 6 || g != 7) return 0;
+  return check_parts(x, 1, 41) ? 29 : 0;
+}
+
+int check_var_after_named(long a, long b, long c, long d, long e, long f, long g, __uint128_t named, ...) {
+  va_list ap;
+  __uint128_t x;
+  if (a != 1 || b != 2 || c != 3 || d != 4 || e != 5 || f != 6 || g != 7) return 0;
+  if (!check_parts(named, 1, 41)) return 0;
+  va_start(ap, named);
+  x = va_arg(ap, __uint128_t);
+  va_end(ap);
+  return check_parts(x, 1, 41) ? 30 : 0;
+}
+
+int call_kimicc_stack_u128(__uint128_t x) {
+  return kimicc_stack_u128(1, 2, 3, 4, 5, 6, 7, x);
+}
+
+int check_big_aligned_stack(long a, long b, long c, long d, long e, long f, long g, struct BigAlignedStack p) {
+  if (a != 1 || b != 2 || c != 3 || d != 4 || e != 5 || f != 6 || g != 7) return 0;
+  return p.a == 33 && p.b == 34 && p.c == 35 ? 32 : 0;
+}
+
+int call_kimicc_big_aligned_stack(struct BigAlignedStack p) {
+  return kimicc_big_aligned_stack(1, 2, 3, 4, 5, 6, 7, p);
 }
 C
 

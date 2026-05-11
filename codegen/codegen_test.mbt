@@ -1122,6 +1122,45 @@ test "generate linux amd64 int128 call return and va_arg ABI" {
 }
 
 ///|
+test "generate linux amd64 aligns overflow stack arguments" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|struct BigA { _Alignas(32) long a; long b; long c; };
+    #|__uint128_t make128(void);
+    #|int take128(__uint128_t x);
+    #|__uint128_t stack128(long a, long b, long c, long d, long e, long f, long g, __uint128_t x) { return x; }
+    #|int read_after_named(long a, long b, long c, long d, long e, long f, long g, __uint128_t named, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, named);
+    #|  __uint128_t x = __builtin_va_arg(ap, __uint128_t);
+    #|  __builtin_va_end(ap);
+    #|  return take128(named) + take128(x);
+    #|}
+    #|int take_big(long a, long b, long c, long d, long e, long f, long g, struct BigA p) { return (int)p.a; }
+    #|int main(void) {
+    #|  struct BigA p;
+    #|  __uint128_t x = make128();
+    #|  p.a = 9;
+    #|  p.b = 1;
+    #|  p.c = 2;
+    #|  return take128(stack128(1,2,3,4,5,6,7,x)) + read_after_named(1,2,3,4,5,6,7,x,x) + take_big(1,2,3,4,5,6,7,p);
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(assembly.contains("and\trsp, -32"), content="true")
+  inspect(assembly.contains("mov\tQWORD PTR [rsp + 16], rax"), content="true")
+  inspect(assembly.contains("mov\tQWORD PTR [rsp + 32], rax"), content="true")
+  inspect(assembly.contains("mov\trax, QWORD PTR [rbp + 32]"), content="true")
+  inspect(assembly.contains("mov\trdx, QWORD PTR [rbp + 40]"), content="true")
+  inspect(assembly.contains("mov\trax, QWORD PTR [rbp + 48]"), content="true")
+  inspect(assembly.contains("lea\trax, [rbp + 48]"), content="true")
+}
+
+///|
 test "generate linux amd64 int128 truthiness checks both halves" {
   let source =
     #|__uint128_t make128(void);

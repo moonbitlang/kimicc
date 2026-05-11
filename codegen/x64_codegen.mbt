@@ -851,6 +851,46 @@ fn X64Codegen::aggregate_word_count(
 }
 
 ///|
+fn X64Codegen::stack_arg_align_slots(
+  self : X64Codegen,
+  ty : @parser.Type,
+) -> Int {
+  let align = self.type_align(ty)
+  if x64_is_int128_type(ty) || align > 8 {
+    x64_align_to(align, 8) / 8
+  } else {
+    1
+  }
+}
+
+///|
+fn X64Codegen::align_stack_arg_index(
+  self : X64Codegen,
+  index : Int,
+  ty : @parser.Type,
+) -> Int {
+  x64_align_to(index, self.stack_arg_align_slots(ty))
+}
+
+///|
+fn X64Codegen::align_call_stack_arg(
+  self : X64Codegen,
+  index : Int,
+  call_align : Int,
+  ty : @parser.Type,
+) -> (Int, Int) {
+  let align_slots = self.stack_arg_align_slots(ty)
+  let aligned_index = x64_align_to(index, align_slots)
+  let stack_align = align_slots * 8
+  let aligned_call = if stack_align > call_align {
+    stack_align
+  } else {
+    call_align
+  }
+  (aligned_index, aligned_call)
+}
+
+///|
 fn x64_mem_at_reg(reg : String, offset : Int) -> String {
   if offset == 0 {
     "[" + reg + "]"
@@ -1567,6 +1607,7 @@ fn X64Codegen::compute_va_initial_offsets(
       let classes = match self.aggregate_classes(param.ty) {
         Some(classes) => classes
         None => {
+          stack_idx = self.align_stack_arg_index(stack_idx, param.ty)
           stack_idx += self.aggregate_word_count(param.ty)
           continue
         }
@@ -1577,23 +1618,27 @@ fn X64Codegen::compute_va_initial_offsets(
         int_idx += int_needed
         fp_idx += fp_needed
       } else {
+        stack_idx = self.align_stack_arg_index(stack_idx, param.ty)
         stack_idx += classes.length()
       }
     } else if x64_is_fp_type(param.ty) {
       if fp_idx < 8 {
         fp_idx += 1
       } else {
+        stack_idx = self.align_stack_arg_index(stack_idx, param.ty)
         stack_idx += 1
       }
     } else if x64_is_int128_type(param.ty) {
       if int_idx + 2 <= 6 {
         int_idx += 2
       } else {
+        stack_idx = self.align_stack_arg_index(stack_idx, param.ty)
         stack_idx += 2
       }
     } else if int_idx < 6 {
       int_idx += 1
     } else {
+      stack_idx = self.align_stack_arg_index(stack_idx, param.ty)
       stack_idx += 1
     }
   }
@@ -5505,6 +5550,7 @@ fn X64Codegen::gen_call(
   let mut int_count = if has_sret { 1 } else { 0 }
   let mut fp_count = 0
   let mut stack_count = 0
+  let mut call_stack_align = 16
   let mut temp_count = 0
   for i = 0; i < args.length(); i = i + 1 {
     let actual_ty = self.type_of(args[i])
@@ -5527,6 +5573,11 @@ fn X64Codegen::gen_call(
       } else {
         arg_int_reg_index.push(-1)
         arg_fp_reg_index.push(-1)
+        let (aligned_stack_count, aligned_call_stack_align) = self.align_call_stack_arg(
+          stack_count, call_stack_align, arg_ty,
+        )
+        stack_count = aligned_stack_count
+        call_stack_align = aligned_call_stack_align
         arg_stack_index.push(stack_count)
         stack_count += 1
       }
@@ -5543,6 +5594,11 @@ fn X64Codegen::gen_call(
           temp_count += words
           arg_int_reg_index.push(-1)
           arg_fp_reg_index.push(-1)
+          let (aligned_stack_count, aligned_call_stack_align) = self.align_call_stack_arg(
+            stack_count, call_stack_align, arg_ty,
+          )
+          stack_count = aligned_stack_count
+          call_stack_align = aligned_call_stack_align
           arg_stack_index.push(stack_count)
           stack_count += words
           continue
@@ -5567,6 +5623,11 @@ fn X64Codegen::gen_call(
       } else {
         arg_int_reg_index.push(-1)
         arg_fp_reg_index.push(-1)
+        let (aligned_stack_count, aligned_call_stack_align) = self.align_call_stack_arg(
+          stack_count, call_stack_align, arg_ty,
+        )
+        stack_count = aligned_stack_count
+        call_stack_align = aligned_call_stack_align
         arg_stack_index.push(stack_count)
         stack_count += words
       }
@@ -5585,6 +5646,11 @@ fn X64Codegen::gen_call(
       } else {
         arg_int_reg_index.push(-1)
         arg_fp_reg_index.push(-1)
+        let (aligned_stack_count, aligned_call_stack_align) = self.align_call_stack_arg(
+          stack_count, call_stack_align, arg_ty,
+        )
+        stack_count = aligned_stack_count
+        call_stack_align = aligned_call_stack_align
         arg_stack_index.push(stack_count)
         stack_count += 2
       }
@@ -5603,17 +5669,25 @@ fn X64Codegen::gen_call(
       } else {
         arg_int_reg_index.push(-1)
         arg_fp_reg_index.push(-1)
+        let (aligned_stack_count, aligned_call_stack_align) = self.align_call_stack_arg(
+          stack_count, call_stack_align, arg_ty,
+        )
+        stack_count = aligned_stack_count
+        call_stack_align = aligned_call_stack_align
         arg_stack_index.push(stack_count)
         stack_count += 1
       }
     }
   }
-  let temp_area = x64_align_to(temp_count * 8, 16)
-  let call_area = x64_align_to(stack_count * 8, 16)
   let save_area = 16
+  let save_temp_area = x64_align_to(
+    save_area + temp_count * 8,
+    call_stack_align,
+  )
+  let call_area = x64_align_to(stack_count * 8, call_stack_align)
   self.emit("\tmov\tr11, rsp")
-  self.emit("\tand\trsp, -16")
-  self.emit("\tsub\trsp, " + (save_area + temp_area).to_string())
+  self.emit("\tand\trsp, -" + call_stack_align.to_string())
+  self.emit("\tsub\trsp, " + save_temp_area.to_string())
   self.emit("\tmov\tQWORD PTR [rsp], r11")
   if indirect_call {
     self.gen_callee_addr(func)
@@ -5839,9 +5913,10 @@ fn X64Codegen::emit_copy_va_arg_overflow_aggregate(
   ty : @parser.Type,
 ) -> Unit {
   self.emit("\tmov\tr10, QWORD PTR [r11 + 8]")
-  if self.type_align(ty) > 8 {
-    self.emit("\tadd\tr10, 15")
-    self.emit("\tand\tr10, -16")
+  let align = self.type_align(ty)
+  if align > 8 {
+    self.emit("\tadd\tr10, " + (align - 1).to_string())
+    self.emit("\tand\tr10, -" + align.to_string())
   }
   let overflow_size = x64_align_to(self.type_size(ty), 8)
   self.emit("\tlea\trax, [r10 + " + overflow_size.to_string() + "]")
@@ -6544,6 +6619,7 @@ fn X64Codegen::emit_function(
             Some(classes) => classes
             None => {
               let words = self.aggregate_word_count(param.ty)
+              stack_idx = self.align_stack_arg_index(stack_idx, param.ty)
               for word in 0..<words {
                 let stack_off = 16 + (stack_idx + word) * 8
                 self.emit(
@@ -6591,6 +6667,7 @@ fn X64Codegen::emit_function(
             int_idx += int_needed
             fp_idx += fp_needed
           } else {
+            stack_idx = self.align_stack_arg_index(stack_idx, param.ty)
             for word in 0..<classes.length() {
               let width = self.aggregate_word_width(param.ty, word)
               let stack_off = 16 + (stack_idx + word) * 8
@@ -6610,6 +6687,7 @@ fn X64Codegen::emit_function(
             )
             fp_idx += 1
           } else {
+            stack_idx = self.align_stack_arg_index(stack_idx, param.ty)
             let stack_off = 16 + stack_idx * 8
             match x64_core_type(param.ty) {
               Float =>
@@ -6644,6 +6722,7 @@ fn X64Codegen::emit_function(
             )
             int_idx += 2
           } else {
+            stack_idx = self.align_stack_arg_index(stack_idx, param.ty)
             let stack_off = 16 + stack_idx * 8
             self.emit(
               "\tmov\trax, QWORD PTR [rbp + " + stack_off.to_string() + "]",
@@ -6660,6 +6739,7 @@ fn X64Codegen::emit_function(
           self.emit_store_int_reg_to_local(arg_regs[int_idx], offset)
           int_idx += 1
         } else {
+          stack_idx = self.align_stack_arg_index(stack_idx, param.ty)
           let stack_off = 16 + stack_idx * 8
           self.emit(
             "\tmov\trax, QWORD PTR [rbp + " + stack_off.to_string() + "]",
