@@ -201,7 +201,10 @@ the function epilogue restores `rsp` from `rbp`. Common floating builtins
 including `__builtin_fabs*`, `__builtin_nan*`, `__builtin_huge_val*`,
 `__builtin_inf*`, `__builtin_copysign*`, `__builtin_sqrt*`, and the
 ordered/unordered `__builtin_is*` predicates also lower directly; floating
-comparisons explicitly account for unordered `NaN` conditions. Covered
+comparisons explicitly account for unordered `NaN` conditions. `float` and
+`double` compound assignments plus prefix/postfix increment/decrement keep
+their arithmetic in SSE registers and store the converted result back through
+the lvalue type. Covered
 integer-width atomic
 builtins lower directly: loads and stores use x86-64 scalar memory operations,
 GNU and C11 exchange plus byte test-and-set/clear use `xchg`,

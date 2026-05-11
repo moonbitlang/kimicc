@@ -406,7 +406,8 @@ recompiled on every invocation.
   not yet implement a general register allocator or claim complete C ABI
   conformance.
 - The Linux/amd64 backend is experimental and currently covers scalar calls,
-  scalar varargs, small integer/SSE/mixed aggregate calls and returns,
+  scalar varargs, floating-point arithmetic and lvalue mutations, small
+  integer/SSE/mixed aggregate calls and returns,
   recursive nested/array aggregate classification in that small subset,
   memory-class aggregate calls and returns, ELF assembly emission, and
   Clang-delegated object emission. The shared parser also folds covered C11
