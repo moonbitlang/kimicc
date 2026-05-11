@@ -68,6 +68,11 @@ fixtures locally. It writes `/tmp/tinycc_stripped.c` and
 `/tmp/quickjs_preprocessed.c` by default and accepts `TINYCC_REF` and
 `QUICKJS_REF` overrides when intentionally refreshing the pins.
 
+Native CI uses `scripts/native-ci-test.sh` for the MoonBit test pass. The
+script runs ordinary package tests together, then runs each `test/e2e/*_test.mbt`
+file as its own native test target. This keeps the external e2e coverage in CI
+without building the entire e2e package as one large native blackbox bundle.
+
 ## Phase 3: Link Driver
 
 Make default `kimicc input.c -o program` useful while still keeping native

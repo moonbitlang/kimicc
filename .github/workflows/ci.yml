@@ -30,7 +30,7 @@ jobs:
         run: moon update
 
       - name: Check shell scripts
-        run: bash -n scripts/fetch-external-parser-fixtures.sh scripts/linux-amd64-smoke.sh
+        run: bash -n scripts/fetch-external-parser-fixtures.sh scripts/linux-amd64-smoke.sh scripts/native-ci-test.sh
 
       - name: Check formatting
         run: |
@@ -55,7 +55,7 @@ jobs:
         run: scripts/fetch-external-parser-fixtures.sh
 
       - name: moon test
-        run: moon test --target native
+        run: scripts/native-ci-test.sh
 
   linux-amd64-smoke:
     runs-on: ubuntu-24.04
