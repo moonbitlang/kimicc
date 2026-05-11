@@ -127,6 +127,11 @@ old_helper_path="/tmp/kimicc-linux-amd64-oldstyle-helper.c"
 old_object_path="/tmp/kimicc-linux-amd64-oldstyle.o"
 old_helper_object_path="/tmp/kimicc-linux-amd64-oldstyle-helper.o"
 old_binary_path="/tmp/kimicc-linux-amd64-oldstyle"
+callee_saved_source_path="/tmp/kimicc-linux-amd64-callee-saved.c"
+callee_saved_helper_path="/tmp/kimicc-linux-amd64-callee-saved-helper.s"
+callee_saved_object_path="/tmp/kimicc-linux-amd64-callee-saved.o"
+callee_saved_helper_object_path="/tmp/kimicc-linux-amd64-callee-saved-helper.o"
+callee_saved_binary_path="/tmp/kimicc-linux-amd64-callee-saved"
 int128_source_path="/tmp/kimicc-linux-amd64-int128.c"
 int128_helper_path="/tmp/kimicc-linux-amd64-int128-helper.c"
 int128_object_path="/tmp/kimicc-linux-amd64-int128.o"
@@ -1786,6 +1791,64 @@ status=$?
 set -e
 if [ "$status" -ne 42 ]; then
   echo "expected old-style promotion smoke binary to exit 42, got $status" >&2
+  exit 1
+fi
+
+cat > "$callee_saved_source_path" <<'C'
+int check_r13_preserved(void);
+
+int aligned_touch(void) {
+  _Alignas(32) int slots[8];
+  slots[0] = 42;
+  slots[7] = 0;
+  return slots[0] + slots[7];
+}
+
+int main(void) {
+  if (aligned_touch() != 42) return 41;
+  return check_r13_preserved() ? 42 : 40;
+}
+C
+
+cat > "$callee_saved_helper_path" <<'ASM'
+.intel_syntax noprefix
+.text
+.globl check_r13_preserved
+.type check_r13_preserved, @function
+check_r13_preserved:
+  push rbp
+  mov rbp, rsp
+  push r13
+  sub rsp, 8
+  movabs r13, 0x1122334455667788
+  call aligned_touch
+  cmp eax, 42
+  jne .Lbad_r13
+  movabs rax, 0x1122334455667788
+  cmp r13, rax
+  sete al
+  movzx eax, al
+  jmp .Ldone_r13
+.Lbad_r13:
+  xor eax, eax
+.Ldone_r13:
+  add rsp, 8
+  pop r13
+  pop rbp
+  ret
+.size check_r13_preserved, .-check_r13_preserved
+.section .note.GNU-stack,"",@progbits
+ASM
+
+"$kimicc" -c -target linux-amd64 -o "$callee_saved_object_path" "$callee_saved_source_path"
+clang -target x86_64-linux-gnu -c -o "$callee_saved_helper_object_path" "$callee_saved_helper_path"
+clang -o "$callee_saved_binary_path" "$callee_saved_object_path" "$callee_saved_helper_object_path"
+set +e
+"$callee_saved_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 42 ]; then
+  echo "expected callee-saved r13 smoke binary to exit 42, got $status" >&2
   exit 1
 fi
 
