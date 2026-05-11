@@ -40,6 +40,25 @@ test "driver command-line defines support function-like and empty macros" {
 }
 
 ///|
+test "driver dumps final macro definitions" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-E", "-dM", "-DVALUE=7", "-U__STDC__", "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.dump_macros)
+  let result = dump_macros_source_with_dependencies(
+    "#define LOCAL(x) ((x) + VALUE)\n#undef VALUE\n#define EMPTY\n", "foo.c", opts,
+  )
+  assert_true(result.text.contains("#define EMPTY\n"))
+  assert_true(result.text.contains("#define LOCAL(x) ((x)+VALUE)\n"))
+  assert_true(!result.text.contains("#define VALUE 7\n"))
+  assert_true(!result.text.contains("#define __STDC__ 1\n"))
+}
+
+///|
 test "driver applies command-line macro operations in order" {
   let remove_opts = match
     parse_driver_args(["kimicc", "-DVALUE=1", "-UVALUE", "-E", "foo.c"]) {
@@ -1262,13 +1281,14 @@ test "dependency-only mode treats output as dependency destination" {
 test "driver parses preprocessor dependency options" {
   let opts = match
     parse_driver_args([
-      "kimicc", "-c", "-Wp,-MMD,build/foo.d,-MP,-MQ,build dir/foo.o,-DVALUE=3,-DINC(x)=((x)+1),-DEMPTY=,-UOLD",
+      "kimicc", "-c", "-Wp,-MMD,build/foo.d,-MP,-dM,-MQ,build dir/foo.o,-DVALUE=3,-DINC(x)=((x)+1),-DEMPTY=,-UOLD",
       "-o", "build/foo.o", "src/foo.c",
     ]) {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
   assert_true(opts.emit_dependencies)
+  assert_true(opts.dump_macros)
   assert_true(!opts.dependency_include_system)
   assert_true(opts.dependency_phony_targets)
   assert_true(opts.dependency_output_path is Some("build/foo.d"))
@@ -1309,12 +1329,13 @@ test "driver parses Xpreprocessor macro and include options" {
       "kimicc", "-E", "-Xpreprocessor", "-D", "-Xpreprocessor", "VALUE=19", "-Xpreprocessor",
       "-include", "-Xpreprocessor", header, "-Xpreprocessor", "-I", "-Xpreprocessor",
       "include-x", "-Xpreprocessor", "-iquote", "-Xpreprocessor", "quote-x", "-Xpreprocessor",
-      "-UOLD", "foo.c",
+      "-dM", "-Xpreprocessor", "-UOLD", "foo.c",
     ]) {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
   assert_eq(opts.defines["VALUE"], "19")
+  assert_true(opts.dump_macros)
   assert_eq(opts.include_paths, ["include-x", "quote-x"])
   assert_eq(opts.undefines, ["OLD"])
   let result = preprocess_source_with_dependencies(

@@ -1146,6 +1146,75 @@ fn Preprocessor::process_source(
 }
 
 ///|
+fn pp_sorted_macro_names(macros : Map[String, Macro]) -> Array[String] {
+  let names : Array[String] = []
+  for pair in macros {
+    names.push(pair.0)
+  }
+  for i in 1..<names.length() {
+    let key = names[i]
+    let mut j = i - 1
+    while j >= 0 && names[j] > key {
+      names[j + 1] = names[j]
+      j -= 1
+    }
+    names[j + 1] = key
+  }
+  names
+}
+
+///|
+fn pp_macro_param_source(macro_ : Macro, index : Int) -> String {
+  let param = macro_.params[index]
+  if macro_.variadic && index == macro_.params.length() - 1 {
+    if param == "__VA_ARGS__" {
+      "..."
+    } else {
+      param + "..."
+    }
+  } else {
+    param
+  }
+}
+
+///|
+fn pp_macro_definition_source(name : String, macro_ : Macro) -> String {
+  let buf = StringBuilder::new()
+  buf.write_string("#define ")
+  buf.write_string(name)
+  if macro_.function_like {
+    buf.write_char('(')
+    for i in 0..<macro_.params.length() {
+      if i > 0 {
+        buf.write_char(',')
+      }
+      buf.write_string(pp_macro_param_source(macro_, i))
+    }
+    buf.write_char(')')
+  }
+  if macro_.replacement.length() > 0 {
+    buf.write_char(' ')
+    buf.write_string(pp_tokens_to_source(macro_.replacement))
+  }
+  buf.to_string()
+}
+
+///|
+fn Preprocessor::dump_macro_definitions(self : Preprocessor) -> String {
+  let buf = StringBuilder::new()
+  for name in pp_sorted_macro_names(self.macros) {
+    match self.macros.get(name) {
+      Some(macro_) => {
+        buf.write_string(pp_macro_definition_source(name, macro_))
+        buf.write_char('\n')
+      }
+      None => ()
+    }
+  }
+  buf.to_string()
+}
+
+///|
 /// Preprocess one C translation unit into ordinary C source for the parser.
 pub fn preprocess_with_dependencies(
   source : String,
@@ -1161,6 +1230,37 @@ pub fn preprocess_with_dependencies(
         dependencies: pp.dependencies,
         dependency_records: pp.dependency_records,
       })
+  }
+}
+
+///|
+/// Run preprocessing and return the final macro table as `#define` lines.
+pub fn dump_macros_with_dependencies(
+  source : String,
+  options : PreprocessOptions,
+) -> Result[PreprocessResult, PreprocessError] {
+  let pp = Preprocessor::new(options)
+  ignore(pp.process_source(source, options.filename))
+  match pp.error {
+    Some(err) => Err(err)
+    None =>
+      Ok({
+        text: pp.dump_macro_definitions(),
+        dependencies: pp.dependencies,
+        dependency_records: pp.dependency_records,
+      })
+  }
+}
+
+///|
+/// Run preprocessing and return the final macro table as `#define` lines.
+pub fn dump_macros(
+  source : String,
+  options : PreprocessOptions,
+) -> Result[String, PreprocessError] {
+  match dump_macros_with_dependencies(source, options) {
+    Ok(result) => Ok(result.text)
+    Err(err) => Err(err)
   }
 }
 

@@ -223,7 +223,9 @@ the target split real and testable without claiming full C ABI coverage yet.
   optimization predefined macros such as `__NO_INLINE__`, `__OPTIMIZE__`,
   `__OPTIMIZE_SIZE__`, and `__FAST_MATH__`; explicit `-ffast-math` and
   `-fno-fast-math` update the fast-math macros in command-line order. This is
-  a preprocessor contract, not a separate optimization pipeline.
+  a preprocessor contract, not a separate optimization pipeline. `-dM -E`
+  dumps the final macro table after processing command-line definitions,
+  forced includes, source definitions, and undefinitions.
 - `--sysroot` and `-isysroot` add target-specific system include roots for
   preprocessing and are forwarded to Clang for object assembly and linking.
   Toolchain discovery options such as `--gcc-toolchain=PATH` and

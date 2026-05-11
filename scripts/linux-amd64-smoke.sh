@@ -280,6 +280,24 @@ grep -F 'int strict=0;' "$driver_query_path" >/dev/null
 grep -F 'int optimize=0;' "$driver_query_path" >/dev/null
 grep -F 'int fast=0;' "$driver_query_path" >/dev/null
 
+cat > "$source_path" <<'C'
+#define DUMPED 31
+#undef __STDC_HOSTED__
+int not_preprocessed_output = DUMPED;
+C
+"$kimicc" -E -dM -target linux-amd64 -DCLI_MACRO=17 "$source_path" >"$driver_query_path"
+grep -F '#define CLI_MACRO 17' "$driver_query_path" >/dev/null
+grep -F '#define DUMPED 31' "$driver_query_path" >/dev/null
+grep -F '#define __x86_64__ 1' "$driver_query_path" >/dev/null
+if grep -F '#define __STDC_HOSTED__' "$driver_query_path" >/dev/null; then
+  echo "expected -dM to honor source undefinition of __STDC_HOSTED__" >&2
+  exit 1
+fi
+if grep -F 'not_preprocessed_output' "$driver_query_path" >/dev/null; then
+  echo "expected -dM to suppress normal preprocessed source output" >&2
+  exit 1
+fi
+
 cat > "$bad_source_path" <<'C'
 _Static_assert(0, "linux smoke expects this failure");
 int main(void) { return 0; }

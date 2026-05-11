@@ -7,6 +7,10 @@ import {
 }
 
 // Values
+pub fn dump_macros(String, PreprocessOptions) -> Result[String, PreprocessError]
+
+pub fn dump_macros_with_dependencies(String, PreprocessOptions) -> Result[PreprocessResult, PreprocessError]
+
 pub fn parse(String, PreprocessOptions) -> Result[@parser.Program, PreprocessError]
 
 pub fn preprocess(String, PreprocessOptions) -> Result[String, PreprocessError]

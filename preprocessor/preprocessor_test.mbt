@@ -22,6 +22,24 @@ test "object-like and function-like macros expand" {
 }
 
 ///|
+test "dump macros returns final macro table" {
+  let source =
+    #|#define LOCAL 7
+    #|#define ADD(x, y) ((x) + (y))
+    #|#define LOG(fmt, ...) fmt
+    #|#undef __STDC__
+  let text = match @preprocessor.dump_macros(source, test_options()) {
+    Ok(text) => text
+    Err(err) => abort(err.to_string())
+  }
+  assert_true(text.contains("#define ADD(x,y) ((x)+(y))\n"))
+  assert_true(text.contains("#define LOCAL 7\n"))
+  assert_true(text.contains("#define LOG(fmt,...) fmt\n"))
+  assert_true(text.contains("#define __STDC_VERSION__ 201112L\n"))
+  assert_true(!text.contains("#define __STDC__ 1\n"))
+}
+
+///|
 test "conditionals select active branch" {
   let source =
     #|#define ENABLED 1

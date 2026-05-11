@@ -67,6 +67,7 @@ priv struct DriverOptions {
   toolchain_args : Array[String]
   mut input_language : String?
   mut already_preprocessed : Bool
+  mut dump_macros : Bool
   mut hosted : Bool
   mut stdc_version : String?
   mut strict_ansi : Bool
@@ -122,6 +123,7 @@ fn DriverOptions::new() -> DriverOptions {
     toolchain_args: [],
     input_language: None,
     already_preprocessed: false,
+    dump_macros: false,
     hosted: true,
     stdc_version: None,
     strict_ansi: false,
@@ -442,6 +444,7 @@ fn apply_dependency_mode(opts : DriverOptions, mode : String) -> Bool {
 ///|
 fn is_wp_option_name(value : String) -> Bool {
   apply_dependency_mode(DriverOptions::new(), value) ||
+  value == "-dM" ||
   value == "-MF" ||
   value == "-MT" ||
   value == "-MQ" ||
@@ -496,6 +499,8 @@ fn apply_wp_options(opts : DriverOptions, arg : String) -> Result[Unit, String] 
         opts.dependency_output_path = Some(parts[i + 1])
         i += 1
       }
+    } else if part == "-dM" {
+      opts.dump_macros = true
     } else if part == "-MF" {
       if i + 1 < parts.length() {
         opts.dependency_output_path = Some(parts[i + 1])
@@ -649,6 +654,9 @@ fn consume_xpreprocessor_option(
     } else {
       Ok(index + 1)
     }
+  } else if part == "-dM" {
+    opts.dump_macros = true
+    Ok(index + 1)
   } else if part == "-MF" || starts_with(part, "-MF") {
     match xpreprocessor_option_value(argv, index, "-MF", "-MF") {
       Ok((value, next_i)) => {
@@ -1431,6 +1439,7 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
       "-print-multi-lib" | "--print-multi-lib" => opts.print_multi_lib = true
       "-print-libgcc-file-name" | "--print-libgcc-file-name" =>
         opts.print_libgcc_file_name = true
+      "-dM" => opts.dump_macros = true
       "-E" | "--preprocess-only" => opts.output = EmitPreprocessed
       "-S" => opts.output = EmitAssembly
       "-c" | "--compile" => opts.output = EmitObject
@@ -1753,6 +1762,11 @@ fn forced_include_prefix(opts : DriverOptions) -> String {
     buf.write_char('\n')
   }
   buf.to_string()
+}
+
+///|
+fn driver_preprocess_source(source : String, opts : DriverOptions) -> String {
+  command_line_macro_prefix(opts) + forced_include_prefix(opts) + source
 }
 
 ///|
@@ -2083,9 +2097,7 @@ fn preprocess_source_with_dependencies(
     }
     { text: source, dependency_records: [{ path: input_path, system: false }] }
   } else {
-    let preprocessed_source = command_line_macro_prefix(opts) +
-      forced_include_prefix(opts) +
-      source
+    let preprocessed_source = driver_preprocess_source(source, opts)
     match
       @preprocessor.preprocess_with_dependencies(
         preprocessed_source,
@@ -2097,6 +2109,36 @@ fn preprocess_source_with_dependencies(
         fail(err.to_string())
         { text: "", dependency_records: [] }
       }
+    }
+  }
+}
+
+///|
+fn dump_macros_source_with_dependencies(
+  source : String,
+  input_path : String,
+  opts : DriverOptions,
+) -> DriverPreprocessResult {
+  if (opts.already_preprocessed || is_preprocessed_source_path(input_path)) &&
+    opts.forced_includes.length() > 0 {
+    fail("--preprocessed cannot be combined with -include")
+  }
+  let preprocessed_source = if opts.already_preprocessed ||
+    is_preprocessed_source_path(input_path) {
+    command_line_macro_prefix(opts) + source
+  } else {
+    driver_preprocess_source(source, opts)
+  }
+  match
+    @preprocessor.dump_macros_with_dependencies(
+      preprocessed_source,
+      preprocess_options(input_path, opts),
+    ) {
+    Ok(result) =>
+      { text: result.text, dependency_records: result.dependency_records }
+    Err(err) => {
+      fail(err.to_string())
+      { text: "", dependency_records: [] }
     }
   }
 }
@@ -2316,6 +2358,7 @@ fn print_usage() -> Unit {
     #|  -D NAME[=VALUE]     define a macro
     #|  -U NAME             undefine a macro
     #|  -include FILE       include a file before the main source
+    #|  -dM                 with -E, dump final macro definitions
     #|  -Wp,OPTS            forward supported comma-separated preprocessor options
     #|  -Xpreprocessor OPT  forward one supported preprocessor option
     #|  -nostdinc           disable built-in system include paths
@@ -2388,9 +2431,11 @@ fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
   let output_path = default_output_path(opts, input_path)
   match opts.output {
     EmitPreprocessed => {
-      let preprocessed = preprocess_source_with_dependencies(
-        source, input_path, opts,
-      )
+      let preprocessed = if opts.dump_macros {
+        dump_macros_source_with_dependencies(source, input_path, opts)
+      } else {
+        preprocess_source_with_dependencies(source, input_path, opts)
+      }
       if output_path == "-" {
         write_stdout(preprocessed.text)
       } else if !write_file(output_path, preprocessed.text) {
