@@ -162,7 +162,9 @@ arithmetic conversions for the covered integer subset. Narrow integer and
 the destination type before storage or ABI return placement; unsigned 64-bit
 integer to `float`/`double` conversions use an explicit high-bit path instead
 of signed `cvtsi2s*`. Direct calls use declared parameter types to select
-scalar argument registers and conversions.
+scalar argument registers and conversions. Pointer `+`, `-`, `+=`, and `-=`
+scale integer operands by the pointed element size for the covered object
+pointer cases.
 Unnamed variadic call arguments use C default argument promotions before ABI
 classification, and calls through declarations with no recorded parameter types
 apply the same promotions to supplied arguments. Narrow integer call results are
