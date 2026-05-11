@@ -86,7 +86,8 @@ the target split real and testable without claiming full C ABI coverage yet.
 - `_Alignas` and numeric GNU `__attribute__((aligned(N)))`/`__aligned__(N)`
   are honored for x86-64 struct/union layout, ELF global alignment, and stack
   locals. Functions with locals requiring more than 16-byte alignment keep
-  `rbp` as the incoming frame anchor and use an aligned local-frame base.
+  `rbp` as the incoming frame anchor and use an aligned local-frame base,
+  preserving the callee-saved register used for that base before returning.
 - GNU `__attribute__((packed))` on struct/union declarations is preserved for
   layout. Packed aggregates with unaligned fields are classified as System V
   memory-class arguments/returns, including non-packed outer aggregates that
