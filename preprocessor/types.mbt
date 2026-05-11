@@ -11,6 +11,7 @@ pub(all) struct PreprocessOptions {
   system_include_paths : Array[String]
   defines : Map[String, String]
   undefines : Array[String]
+  undef_predefined : Bool
   emit_line_markers : Bool
 } derive(Eq)
 
@@ -24,6 +25,7 @@ pub fn PreprocessOptions::new(filename : String) -> PreprocessOptions {
     system_include_paths: [],
     defines: {},
     undefines: [],
+    undef_predefined: false,
     emit_line_markers: false,
   }
 }

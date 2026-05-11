@@ -40,6 +40,26 @@ test "dump macros returns final macro table" {
 }
 
 ///|
+test "undef predefined keeps only standard macro baseline" {
+  let options : @preprocessor.PreprocessOptions = {
+    ..test_options(),
+    undef_predefined: true,
+  }
+  let text = match @preprocessor.dump_macros("", options) {
+    Ok(text) => text
+    Err(err) => abort(err.to_string())
+  }
+  assert_true(text.contains("#define __STDC__ 1\n"))
+  assert_true(text.contains("#define __STDC_VERSION__ 201112L\n"))
+  assert_true(text.contains("#define __STDC_HOSTED__ 1\n"))
+  assert_true(!text.contains("#define __GNUC__"))
+  assert_true(!text.contains("#define __clang__"))
+  assert_true(!text.contains("#define __LP64__"))
+  assert_true(!text.contains("#define __DATE__"))
+  assert_true(!text.contains("#define __has_builtin"))
+}
+
+///|
 test "conditionals select active branch" {
   let source =
     #|#define ENABLED 1
@@ -146,6 +166,7 @@ test "target macros follow selected target" {
     system_include_paths: options.system_include_paths,
     defines: options.defines,
     undefines: options.undefines,
+    undef_predefined: options.undef_predefined,
     emit_line_markers: options.emit_line_markers,
   }
   let source =
@@ -174,6 +195,7 @@ test "linux amd64 predefined macros cover system header probes" {
     system_include_paths: options.system_include_paths,
     defines: options.defines,
     undefines: options.undefines,
+    undef_predefined: options.undef_predefined,
     emit_line_markers: options.emit_line_markers,
   }
   let source =
@@ -239,6 +261,7 @@ test "linux amd64 has builtin reflects supported lowering" {
     system_include_paths: options.system_include_paths,
     defines: options.defines,
     undefines: options.undefines,
+    undef_predefined: options.undef_predefined,
     emit_line_markers: options.emit_line_markers,
   }
   let source =
@@ -296,6 +319,7 @@ test "has attribute reflects supported packed layout" {
     system_include_paths: options.system_include_paths,
     defines: options.defines,
     undefines: options.undefines,
+    undef_predefined: options.undef_predefined,
     emit_line_markers: options.emit_line_markers,
   }
   let source =
@@ -527,6 +551,7 @@ test "include paths are explicit" {
     system_include_paths: ["preprocessor/testdata/system_path"],
     defines: {},
     undefines: [],
+    undef_predefined: false,
     emit_line_markers: false,
   }
   let source =
@@ -548,6 +573,7 @@ test "preprocess with dependencies records resolved includes" {
     system_include_paths: ["preprocessor/testdata/system_path"],
     defines: {},
     undefines: [],
+    undef_predefined: false,
     emit_line_markers: false,
   }
   let source =
@@ -596,6 +622,7 @@ test "has include follows quote and system include search" {
     system_include_paths: ["preprocessor/testdata/system_path"],
     defines: {},
     undefines: [],
+    undef_predefined: false,
     emit_line_markers: false,
   }
   let source =
@@ -636,6 +663,7 @@ test "has include next resumes after current include directory" {
     ],
     defines: {},
     undefines: [],
+    undef_predefined: false,
     emit_line_markers: false,
   }
   let source =
@@ -667,6 +695,7 @@ test "include_next resumes after current include directory" {
     ],
     defines: {},
     undefines: [],
+    undef_predefined: false,
     emit_line_markers: false,
   }
   let source =
@@ -687,6 +716,7 @@ test "pragma once skips repeated include" {
     system_include_paths: [],
     defines: {},
     undefines: [],
+    undef_predefined: false,
     emit_line_markers: false,
   }
   let source =
@@ -708,6 +738,7 @@ test "guarded recursive include is ignored" {
     system_include_paths: [],
     defines: {},
     undefines: [],
+    undef_predefined: false,
     emit_line_markers: false,
   }
   let source =

@@ -75,10 +75,17 @@ fn Preprocessor::seed_command_line_macro(
 }
 
 ///|
-fn Preprocessor::seed_common_target_macros(self : Preprocessor) -> Unit {
+fn Preprocessor::seed_standard_macros(self : Preprocessor) -> Unit {
   self.seed_macro("__STDC__", "1")
   self.seed_macro("__STDC_VERSION__", "201112L")
   self.seed_macro("__STDC_HOSTED__", "1")
+  self.seed_macro("__STDC_UTF_16__", "1")
+  self.seed_macro("__STDC_UTF_32__", "1")
+}
+
+///|
+fn Preprocessor::seed_common_target_macros(self : Preprocessor) -> Unit {
+  self.seed_standard_macros()
   self.seed_macro("__GNUC__", "4")
   self.seed_macro("__GNUC_MINOR__", "2")
   self.seed_macro("__GNUC_PATCHLEVEL__", "1")
@@ -210,8 +217,6 @@ fn Preprocessor::seed_common_target_macros(self : Preprocessor) -> Unit {
   self.seed_macro("__GCC_ATOMIC_POINTER_LOCK_FREE", "2")
   self.seed_macro("__GCC_ATOMIC_TEST_AND_SET_TRUEVAL", "1")
   self.seed_macro("__GNUC_STDC_INLINE__", "1")
-  self.seed_macro("__STDC_UTF_16__", "1")
-  self.seed_macro("__STDC_UTF_32__", "1")
   self.seed_macro("__FINITE_MATH_ONLY__", "0")
 }
 
@@ -309,7 +314,11 @@ fn Preprocessor::new(options : PreprocessOptions) -> Preprocessor {
     error: None,
   }
   pp.record_dependency(options.filename, false)
-  pp.seed_target_macros()
+  if options.undef_predefined {
+    pp.seed_standard_macros()
+  } else {
+    pp.seed_target_macros()
+  }
   pp.seed_macro_definition("__has_builtin(x) 0")
   pp.seed_macro_definition("__has_attribute(x) 0")
   pp.seed_macro_definition("__has_feature(x) 0")
@@ -327,6 +336,23 @@ fn Preprocessor::new(options : PreprocessOptions) -> Preprocessor {
     pp.macros.remove(name)
   }
   pp
+}
+
+///|
+fn pp_macro_dump_skips_name(name : String) -> Bool {
+  match name {
+    "__DATE__"
+    | "__TIME__"
+    | "__has_builtin"
+    | "__has_attribute"
+    | "__has_feature"
+    | "__has_extension"
+    | "__has_c_attribute"
+    | "__has_declspec_attribute"
+    | "__has_warning"
+    | "__is_identifier" => true
+    _ => false
+  }
 }
 
 ///|
@@ -1203,12 +1229,14 @@ fn pp_macro_definition_source(name : String, macro_ : Macro) -> String {
 fn Preprocessor::dump_macro_definitions(self : Preprocessor) -> String {
   let buf = StringBuilder::new()
   for name in pp_sorted_macro_names(self.macros) {
-    match self.macros.get(name) {
-      Some(macro_) => {
-        buf.write_string(pp_macro_definition_source(name, macro_))
-        buf.write_char('\n')
+    if !pp_macro_dump_skips_name(name) {
+      match self.macros.get(name) {
+        Some(macro_) => {
+          buf.write_string(pp_macro_definition_source(name, macro_))
+          buf.write_char('\n')
+        }
+        None => ()
       }
-      None => ()
     }
   }
   buf.to_string()

@@ -300,6 +300,15 @@ fi
 printf '#define STDIN_MACRO 23\n' |
   "$kimicc" -E -dM -target linux-amd64 - >"$driver_query_path"
 grep -F '#define STDIN_MACRO 23' "$driver_query_path" >/dev/null
+printf '#define USER_UNDEF_MACRO 29\n' |
+  "$kimicc" -E -dM -undef -target linux-amd64 -DCLI_MACRO=17 - >"$driver_query_path"
+grep -F '#define CLI_MACRO 17' "$driver_query_path" >/dev/null
+grep -F '#define USER_UNDEF_MACRO 29' "$driver_query_path" >/dev/null
+grep -F '#define __STDC__ 1' "$driver_query_path" >/dev/null
+if grep -F '#define __x86_64__' "$driver_query_path" >/dev/null; then
+  echo "expected -undef to suppress target predefined macros" >&2
+  exit 1
+fi
 
 cat > "$bad_source_path" <<'C'
 _Static_assert(0, "linux smoke expects this failure");

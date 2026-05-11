@@ -59,6 +59,27 @@ test "driver dumps final macro definitions" {
 }
 
 ///|
+test "driver honors undef predefined macro mode" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-E", "-dM", "-undef", "-target", "linux-amd64", "-pthread", "-fPIE",
+      "-O2", "-DVALUE=7", "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.undef_predefined)
+  let result = dump_macros_source_with_dependencies("", "foo.c", opts)
+  assert_true(result.text.contains("#define VALUE 7\n"))
+  assert_true(result.text.contains("#define __STDC__ 1\n"))
+  assert_true(!result.text.contains("#define __linux__"))
+  assert_true(!result.text.contains("#define __x86_64__"))
+  assert_true(!result.text.contains("#define _REENTRANT"))
+  assert_true(!result.text.contains("#define __PIC__"))
+  assert_true(!result.text.contains("#define __OPTIMIZE__"))
+}
+
+///|
 test "driver treats dash as stdin input" {
   let opts = match parse_driver_args(["kimicc", "-E", "-dM", "-"]) {
     Ok(opts) => opts
@@ -1292,7 +1313,7 @@ test "dependency-only mode treats output as dependency destination" {
 test "driver parses preprocessor dependency options" {
   let opts = match
     parse_driver_args([
-      "kimicc", "-c", "-Wp,-MMD,build/foo.d,-MP,-dM,-MQ,build dir/foo.o,-DVALUE=3,-DINC(x)=((x)+1),-DEMPTY=,-UOLD",
+      "kimicc", "-c", "-Wp,-MMD,build/foo.d,-MP,-dM,-undef,-MQ,build dir/foo.o,-DVALUE=3,-DINC(x)=((x)+1),-DEMPTY=,-UOLD",
       "-o", "build/foo.o", "src/foo.c",
     ]) {
     Ok(opts) => opts
@@ -1300,6 +1321,7 @@ test "driver parses preprocessor dependency options" {
   }
   assert_true(opts.emit_dependencies)
   assert_true(opts.dump_macros)
+  assert_true(opts.undef_predefined)
   assert_true(!opts.dependency_include_system)
   assert_true(opts.dependency_phony_targets)
   assert_true(opts.dependency_output_path is Some("build/foo.d"))
@@ -1340,13 +1362,14 @@ test "driver parses Xpreprocessor macro and include options" {
       "kimicc", "-E", "-Xpreprocessor", "-D", "-Xpreprocessor", "VALUE=19", "-Xpreprocessor",
       "-include", "-Xpreprocessor", header, "-Xpreprocessor", "-I", "-Xpreprocessor",
       "include-x", "-Xpreprocessor", "-iquote", "-Xpreprocessor", "quote-x", "-Xpreprocessor",
-      "-dM", "-Xpreprocessor", "-UOLD", "foo.c",
+      "-dM", "-Xpreprocessor", "-undef", "-Xpreprocessor", "-UOLD", "foo.c",
     ]) {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
   assert_eq(opts.defines["VALUE"], "19")
   assert_true(opts.dump_macros)
+  assert_true(opts.undef_predefined)
   assert_eq(opts.include_paths, ["include-x", "quote-x"])
   assert_eq(opts.undefines, ["OLD"])
   let result = preprocess_source_with_dependencies(

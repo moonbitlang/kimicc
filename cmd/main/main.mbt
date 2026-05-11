@@ -40,8 +40,8 @@ priv enum DriverOutput {
 
 ///|
 priv enum DriverMacroOp {
-  Define(String, String)
-  Undef(String)
+  Define(String, String, Bool)
+  Undef(String, Bool)
 }
 
 ///|
@@ -71,6 +71,7 @@ priv struct DriverOptions {
   mut input_language : String?
   mut already_preprocessed : Bool
   mut dump_macros : Bool
+  mut undef_predefined : Bool
   mut hosted : Bool
   mut stdc_version : String?
   mut strict_ansi : Bool
@@ -127,6 +128,7 @@ fn DriverOptions::new() -> DriverOptions {
     input_language: None,
     already_preprocessed: false,
     dump_macros: false,
+    undef_predefined: false,
     hosted: true,
     stdc_version: None,
     strict_ansi: false,
@@ -270,14 +272,29 @@ fn add_define(opts : DriverOptions, raw : String) -> Unit {
   let (name, value) = split_define_arg(raw)
   if name != "" {
     opts.defines[name] = value
-    opts.macro_ops.push(Define(name, value))
+    opts.macro_ops.push(Define(name, value, false))
   }
 }
 
 ///|
 fn add_undefine(opts : DriverOptions, name : String) -> Unit {
   opts.undefines.push(name)
-  opts.macro_ops.push(Undef(name))
+  opts.macro_ops.push(Undef(name, false))
+}
+
+///|
+fn add_driver_define(opts : DriverOptions, raw : String) -> Unit {
+  let (name, value) = split_define_arg(raw)
+  if name != "" {
+    opts.defines[name] = value
+    opts.macro_ops.push(Define(name, value, true))
+  }
+}
+
+///|
+fn add_driver_undefine(opts : DriverOptions, name : String) -> Unit {
+  opts.undefines.push(name)
+  opts.macro_ops.push(Undef(name, true))
 }
 
 ///|
@@ -318,31 +335,31 @@ fn add_joined_toolchain_arg(
 ///|
 fn add_pthread(opts : DriverOptions) -> Unit {
   opts.linker_args.push("-pthread")
-  add_define(opts, "_REENTRANT=1")
+  add_driver_define(opts, "_REENTRANT=1")
 }
 
 ///|
 fn add_pic_macros(opts : DriverOptions, value : String) -> Unit {
-  add_define(opts, "__PIC__=" + value)
-  add_define(opts, "__pic__=" + value)
-  add_undefine(opts, "__PIE__")
-  add_undefine(opts, "__pie__")
+  add_driver_define(opts, "__PIC__=" + value)
+  add_driver_define(opts, "__pic__=" + value)
+  add_driver_undefine(opts, "__PIE__")
+  add_driver_undefine(opts, "__pie__")
 }
 
 ///|
 fn add_pie_macros(opts : DriverOptions, value : String) -> Unit {
-  add_define(opts, "__PIC__=" + value)
-  add_define(opts, "__pic__=" + value)
-  add_define(opts, "__PIE__=" + value)
-  add_define(opts, "__pie__=" + value)
+  add_driver_define(opts, "__PIC__=" + value)
+  add_driver_define(opts, "__pic__=" + value)
+  add_driver_define(opts, "__PIE__=" + value)
+  add_driver_define(opts, "__pie__=" + value)
 }
 
 ///|
 fn clear_pic_pie_macros(opts : DriverOptions) -> Unit {
-  add_undefine(opts, "__PIC__")
-  add_undefine(opts, "__pic__")
-  add_undefine(opts, "__PIE__")
-  add_undefine(opts, "__pie__")
+  add_driver_undefine(opts, "__PIC__")
+  add_driver_undefine(opts, "__pic__")
+  add_driver_undefine(opts, "__PIE__")
+  add_driver_undefine(opts, "__pie__")
 }
 
 ///|
@@ -457,6 +474,7 @@ fn apply_dependency_mode(opts : DriverOptions, mode : String) -> Bool {
 fn is_wp_option_name(value : String) -> Bool {
   apply_dependency_mode(DriverOptions::new(), value) ||
   value == "-dM" ||
+  value == "-undef" ||
   value == "-MF" ||
   value == "-MT" ||
   value == "-MQ" ||
@@ -513,6 +531,8 @@ fn apply_wp_options(opts : DriverOptions, arg : String) -> Result[Unit, String] 
       }
     } else if part == "-dM" {
       opts.dump_macros = true
+    } else if part == "-undef" {
+      opts.undef_predefined = true
     } else if part == "-MF" {
       if i + 1 < parts.length() {
         opts.dependency_output_path = Some(parts[i + 1])
@@ -668,6 +688,9 @@ fn consume_xpreprocessor_option(
     }
   } else if part == "-dM" {
     opts.dump_macros = true
+    Ok(index + 1)
+  } else if part == "-undef" {
+    opts.undef_predefined = true
     Ok(index + 1)
   } else if part == "-MF" || starts_with(part, "-MF") {
     match xpreprocessor_option_value(argv, index, "-MF", "-MF") {
@@ -1452,6 +1475,7 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
       "-print-libgcc-file-name" | "--print-libgcc-file-name" =>
         opts.print_libgcc_file_name = true
       "-dM" => opts.dump_macros = true
+      "-undef" => opts.undef_predefined = true
       "-E" | "--preprocess-only" => opts.output = EmitPreprocessed
       "-S" => opts.output = EmitAssembly
       "-c" | "--compile" => opts.output = EmitObject
@@ -1750,6 +1774,7 @@ fn preprocess_options(
     system_include_paths: full_system_include_paths(opts),
     defines: {},
     undefines: [],
+    undef_predefined: opts.undef_predefined,
     emit_line_markers: false,
   }
 }
@@ -1803,38 +1828,40 @@ fn command_line_macro_prefix(opts : DriverOptions) -> String {
       }
     None => ()
   }
-  if opts.strict_ansi {
+  if opts.strict_ansi && !opts.undef_predefined {
     buf.write_string("#define __STRICT_ANSI__ 1\n")
   }
-  if opts.no_inline {
+  if opts.no_inline && !opts.undef_predefined {
     buf.write_string("#define __NO_INLINE__ 1\n")
   }
-  if opts.optimize {
+  if opts.optimize && !opts.undef_predefined {
     buf.write_string("#define __OPTIMIZE__ 1\n")
   }
-  if opts.optimize_size {
+  if opts.optimize_size && !opts.undef_predefined {
     buf.write_string("#define __OPTIMIZE_SIZE__ 1\n")
   }
-  if opts.fast_math {
+  if opts.fast_math && !opts.undef_predefined {
     buf.write_string("#define __FAST_MATH__ 1\n")
     buf.write_string("#define __FINITE_MATH_ONLY__ 1\n")
   }
   for op in opts.macro_ops {
     match op {
-      Define(name, replacement) => {
-        buf.write_string("#define ")
-        buf.write_string(name)
-        if replacement != "" {
-          buf.write_char(' ')
-          buf.write_string(replacement)
+      Define(name, replacement, driver_owned) =>
+        if !driver_owned || !opts.undef_predefined {
+          buf.write_string("#define ")
+          buf.write_string(name)
+          if replacement != "" {
+            buf.write_char(' ')
+            buf.write_string(replacement)
+          }
+          buf.write_char('\n')
         }
-        buf.write_char('\n')
-      }
-      Undef(name) => {
-        buf.write_string("#undef ")
-        buf.write_string(name)
-        buf.write_char('\n')
-      }
+      Undef(name, driver_owned) =>
+        if !driver_owned || !opts.undef_predefined {
+          buf.write_string("#undef ")
+          buf.write_string(name)
+          buf.write_char('\n')
+        }
     }
   }
   buf.to_string()
