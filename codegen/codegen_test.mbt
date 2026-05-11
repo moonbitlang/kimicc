@@ -135,6 +135,26 @@ test "generate linux amd64 double call and cast to int" {
 }
 
 ///|
+test "generate linux amd64 floating casts to unsigned long" {
+  let source =
+    #|unsigned long from_double(double x) { return (unsigned long)x; }
+    #|unsigned long from_float(float x) { return (unsigned long)x; }
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(assembly.contains("ucomisd\txmm0, xmm1"), content="true")
+  inspect(assembly.contains("subsd\txmm0, xmm1"), content="true")
+  inspect(
+    assembly.contains("movabs\tr10, -9223372036854775808"),
+    content="true",
+  )
+  inspect(assembly.contains("or\trax, r10"), content="true")
+}
+
+///|
 test "generate linux amd64 indirect function pointer calls" {
   let source =
     #|struct Pair { long a; long b; };

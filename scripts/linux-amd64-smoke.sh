@@ -680,10 +680,15 @@ int scalar_conversions(void) {
   {
     unsigned long one = 1;
     unsigned long hi = one << 63;
+    unsigned long just_above_hi = hi + 4096UL;
     double d = (double)hi;
+    double above = (double)just_above_hi;
     float f = (float)hi;
     if (!(d > 0.0)) return 274;
     if (!(f > 0.0f)) return 275;
+    if ((unsigned long)d != hi) return 276;
+    if ((unsigned long)f != hi) return 277;
+    if ((unsigned long)above != just_above_hi) return 278;
   }
   return 0;
 }

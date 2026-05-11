@@ -4239,9 +4239,20 @@ fn x64_ternary_result_type(
 
 ///|
 fn X64Codegen::emit_load_fp_literal(self : X64Codegen, value : Double) -> Unit {
+  self.emit_load_fp_literal_into("xmm0", value)
+}
+
+///|
+fn X64Codegen::emit_load_fp_literal_into(
+  self : X64Codegen,
+  reg : String,
+  value : Double,
+) -> Unit {
   let id = self.fp_literals.length()
   self.fp_literals.push(value)
-  self.emit("\tmovsd\txmm0, QWORD PTR [rip + .Lfp" + id.to_string() + "]")
+  self.emit(
+    "\tmovsd\t" + reg + ", QWORD PTR [rip + .Lfp" + id.to_string() + "]",
+  )
 }
 
 ///|
@@ -4674,15 +4685,62 @@ fn X64Codegen::emit_uint64_to_fp(
 }
 
 ///|
+fn X64Codegen::emit_fp_to_uint64(
+  self : X64Codegen,
+  src_ty : @parser.Type,
+) -> Unit {
+  let below_high_bit = self.new_label()
+  let done = self.new_label()
+  if x64_core_type(src_ty) == Float {
+    self.emit("\tcvtss2sd\txmm0, xmm0")
+  }
+  self.emit_load_fp_literal_into("xmm1", 9223372036854775808.0)
+  self.emit("\tucomisd\txmm0, xmm1")
+  self.emit("\tjb\t" + below_high_bit)
+  self.emit("\tsubsd\txmm0, xmm1")
+  self.emit("\tcvttsd2si\trax, xmm0")
+  self.emit("\tmovabs\tr10, -9223372036854775808")
+  self.emit("\tor\trax, r10")
+  self.emit("\tjmp\t" + done)
+  self.emit(below_high_bit + ":")
+  self.emit("\tcvttsd2si\trax, xmm0")
+  self.emit(done + ":")
+}
+
+///|
+fn X64Codegen::emit_fp_to_integer(
+  self : X64Codegen,
+  src_ty : @parser.Type,
+  dst_ty : @parser.Type,
+) -> Unit {
+  if is_unsigned_integer_type(dst_ty) && self.type_size(dst_ty) == 8 {
+    self.emit_fp_to_uint64(src_ty)
+  } else if x64_core_type(src_ty) == Float {
+    self.emit("\tcvttss2si\trax, xmm0")
+  } else {
+    self.emit("\tcvttsd2si\trax, xmm0")
+  }
+}
+
+///|
 fn X64Codegen::gen_expr_as_int(self : X64Codegen, expr : @parser.Expr) -> Unit {
   let src_ty = self.type_of(expr)
   self.gen_expr(expr)
   if x64_is_fp_type(src_ty) {
-    if x64_core_type(src_ty) == Float {
-      self.emit("\tcvttss2si\trax, xmm0")
-    } else {
-      self.emit("\tcvttsd2si\trax, xmm0")
-    }
+    self.emit_fp_to_integer(src_ty, SLongLong)
+  }
+}
+
+///|
+fn X64Codegen::gen_expr_as_integer(
+  self : X64Codegen,
+  expr : @parser.Expr,
+  dst_ty : @parser.Type,
+) -> Unit {
+  let src_ty = self.type_of(expr)
+  self.gen_expr(expr)
+  if x64_is_fp_type(src_ty) {
+    self.emit_fp_to_integer(src_ty, dst_ty)
   }
 }
 
@@ -4708,7 +4766,7 @@ fn X64Codegen::gen_expr_as_scalar(
     self.gen_expr_as_int(expr)
     self.emit_extend_rax_to_int128(src_ty)
   } else {
-    self.gen_expr_as_int(expr)
+    self.gen_expr_as_integer(expr, dst_ty)
     self.emit_int_conversion_to(dst_ty)
   }
 }

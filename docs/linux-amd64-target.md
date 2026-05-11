@@ -244,7 +244,8 @@ the target split real and testable without claiming full C ABI coverage yet.
 The backend currently covers a practical scalar subset: signed and unsigned
 integer arithmetic/comparisons, narrow integer and `_Bool` scalar conversions
 for casts/initializers/assignments/returns, unsigned 64-bit integer to
-`float`/`double` conversions, covered `__int128` ABI transport and arithmetic,
+`float`/`double` conversions, `float`/`double` to unsigned 64-bit integer
+conversions, covered `__int128` ABI transport and arithmetic,
 direct prototype call arguments,
 unnamed variadic and unprototyped default promotions, and call results,
 floating-point arithmetic/comparisons, `float`/`double` compound assignments
