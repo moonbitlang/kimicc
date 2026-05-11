@@ -152,7 +152,8 @@ feature set. Several high-risk ABI areas have focused tests, including:
 - large aggregate arguments and hidden result pointers;
 - variadic calls and `va_arg` layout;
 - global scalar constant initializers;
-- global aggregate, pointer-relocation, and bit-field initializers;
+- global aggregate initializers, including mixed nested field/index
+  designators, plus pointer-relocation and bit-field initializers;
 - direct Mach-O object mode versus assembly mode.
 
 The project also keeps broader Clang differential corpora and external-project
@@ -288,11 +289,12 @@ conversions, including unsigned division, modulo, right shifts, and relational
 comparisons.
 Initialized global arrays, structs, and unions are emitted with layout padding
 and designated-initializer holes for the covered aggregate cases, including
-bit-field storage units that do not overlap earlier streamed scalar fields and
-pointer/function-pointer relocations to globals, functions, and aggregate
-subobjects. Pointer arithmetic in global relocations is scaled by the effective
-pointer type, including casted pointer bases and address-of casted subscripts
-such as `(char *)array + n` and `&((char *)array)[n]`.
+mixed nested field/index designators, bit-field storage units that do not
+overlap earlier streamed scalar fields, and pointer/function-pointer
+relocations to globals, functions, and aggregate subobjects. Pointer arithmetic
+in global relocations is scaled by the effective pointer type, including casted
+pointer bases and address-of casted subscripts such as `(char *)array + n` and
+`&((char *)array)[n]`.
 `__builtin_offsetof` folds simple, nested, and constant array-index member
 designators using the same covered aggregate layout model.
 The shared frontend also folds covered C11 `_Generic` selections to the chosen

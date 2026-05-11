@@ -87,11 +87,11 @@ the target split real and testable without claiming full C ABI coverage yet.
   unsigned division, modulo, right shifts, and relational comparisons.
 - Initialized global arrays, structs, and unions are emitted with layout
   padding and designated-initializer holes for the covered aggregate cases,
-  including bit-field storage units that do not overlap earlier streamed
-  scalar fields and pointer/function-pointer relocations to globals, functions,
-  and aggregate subobjects. Pointer arithmetic in global relocations is scaled
-  by the effective pointer type, including casted pointer bases and address-of
-  casted pointer subscripts.
+  including mixed nested field/index designators, bit-field storage units that
+  do not overlap earlier streamed scalar fields, and pointer/function-pointer
+  relocations to globals, functions, and aggregate subobjects. Pointer
+  arithmetic in global relocations is scaled by the effective pointer type,
+  including casted pointer bases and address-of casted pointer subscripts.
 - `__builtin_offsetof` folds simple, nested, and constant array-index member
   designators using the covered aggregate layout model.
 - `_Alignas` and numeric GNU `__attribute__((aligned(N)))`/`__aligned__(N)`
