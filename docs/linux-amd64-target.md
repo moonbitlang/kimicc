@@ -355,6 +355,8 @@ preprocesses the same source and checks that libc typedefs such as `uint8_t`,
 `uintptr_t`, `size_t`, `ptrdiff_t`, and `va_list` survived the Clang-resource
 `#include_next` chain. The compiled probe also checks representative unsigned
 max-value macros such as `UINTPTR_MAX` and `SIZE_MAX` in `_Static_assert`
-expressions. The script also checks that the built compiler returns a nonzero
-status for an invalid Linux/amd64 translation unit, so compiler failures are
-not masked by the test harness.
+expressions. A separate linked probe passes the generated `va_list` state to
+glibc `vsnprintf`, covering a real libc v-function smoke without claiming
+complete `va_list` interoperability. The script also checks that the built
+compiler returns a nonzero status for an invalid Linux/amd64 translation unit,
+so compiler failures are not masked by the test harness.

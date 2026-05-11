@@ -141,6 +141,8 @@ system_header_source_path="/tmp/kimicc-linux-amd64-system-headers.c"
 system_header_preprocessed_path="/tmp/kimicc-linux-amd64-system-headers.i"
 system_header_object_path="/tmp/kimicc-linux-amd64-system-headers.o"
 system_header_binary_path="/tmp/kimicc-linux-amd64-system-headers"
+va_list_source_path="/tmp/kimicc-linux-amd64-va-list.c"
+va_list_binary_path="/tmp/kimicc-linux-amd64-va-list"
 
 mkdir -p "$probe_include_dir" "$probe_after_include_dir" "$probe_prefix_dir/headers"
 cat > "$probe_include_dir/probe_header.h" <<'H'
@@ -1908,6 +1910,40 @@ status=$?
 set -e
 if [ "$status" -ne 42 ]; then
   echo "expected system-header smoke binary to exit 42, got $status" >&2
+  exit 1
+fi
+
+cat > "$va_list_source_path" <<'C'
+#include <stdarg.h>
+#include <stdio.h>
+
+int render(char *buf, const char *fmt, ...) {
+  va_list ap;
+  int n;
+  va_start(ap, fmt);
+  n = vsnprintf(buf, 64, fmt, ap);
+  va_end(ap);
+  return n;
+}
+
+int main(void) {
+  char buf[64];
+  int n = render(buf, "i=%d s=%s f=%.1f", 7, "ok", 2.5);
+  if (n != 14) return 40;
+  if (buf[0] != 'i' || buf[2] != '7' || buf[6] != 'o') return 41;
+  if (buf[9] != 'f' || buf[11] != '2' || buf[13] != '5') return 41;
+  if (buf[14] != 0) return 41;
+  return 42;
+}
+C
+
+"$kimicc" -target linux-amd64 -o "$va_list_binary_path" "$va_list_source_path"
+set +e
+"$va_list_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 42 ]; then
+  echo "expected va_list interop smoke binary to exit 42, got $status" >&2
   exit 1
 fi
 
