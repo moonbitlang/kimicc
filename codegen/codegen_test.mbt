@@ -1100,6 +1100,31 @@ test "generate linux amd64 prototype scalar call conversions" {
 }
 
 ///|
+test "generate linux amd64 function pointer scalar call conversions" {
+  let source =
+    #|int take_int(int x) { return x; }
+    #|int take_float(float x) { return x == 1.5f; }
+    #|int take_double(double x) { return x == 2.25; }
+    #|int main(void) {
+    #|  int (*ip)(int) = take_int;
+    #|  int (*fp)(float) = take_float;
+    #|  int (*dp)(double) = take_double;
+    #|  float f = 2.25f;
+    #|  return ip(42.9) + fp(1.5) + dp(f);
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(assembly.contains("cvttsd2si\trax, xmm0"), content="true")
+  inspect(assembly.contains("cvtsd2ss\txmm0, xmm0"), content="true")
+  inspect(assembly.contains("cvtss2sd\txmm0, xmm0"), content="true")
+  inspect(assembly.contains("call\tQWORD PTR [rsp + 8]"), content="true")
+}
+
+///|
 test "generate linux amd64 narrow scalar call returns" {
   let source =
     #|_Bool ret_bool(void);

@@ -574,46 +574,62 @@ fn function_param_info(params : Array[Param]) -> (Int, Bool) {
 }
 
 ///|
+fn normalized_function_param_types(
+  params : Array[Param],
+) -> (Array[Type], Bool) {
+  let (named_count, variadic) = function_param_info(params)
+  let types : Array[Type] = []
+  for i in 0..<named_count {
+    match params[i].ty {
+      Void => ()
+      Array(elem, _) => types.push(Pointer(elem))
+      _ => types.push(params[i].ty)
+    }
+  }
+  (types, variadic)
+}
+
+///|
 fn make_function_pointer_type(
   ty : Type,
   push_mode : Bool,
   ptr_depth : Int,
-  named_count : Int,
+  param_types : Array[Type],
   variadic : Bool,
 ) -> Type {
   if push_mode {
-    return push_function_pointer_inside(ty, ptr_depth, named_count, variadic)
+    return push_function_pointer_inside(ty, ptr_depth, param_types, variadic)
   }
-  FuncPtr(ty, named_count, variadic)
+  FuncPtr(ty, param_types, variadic)
 }
 
 ///|
 fn push_function_pointer_inside(
   ty : Type,
   ptr_depth : Int,
-  named_count : Int,
+  param_types : Array[Type],
   variadic : Bool,
 ) -> Type {
   match ty {
     Array(inner, size) =>
       Array(
-        push_function_pointer_inside(inner, ptr_depth, named_count, variadic),
+        push_function_pointer_inside(inner, ptr_depth, param_types, variadic),
         size,
       )
     Pointer(ret) =>
       if ptr_depth <= 1 {
-        FuncPtr(ret, named_count, variadic)
+        FuncPtr(ret, param_types, variadic)
       } else {
         Pointer(
           push_function_pointer_inside(
             ret,
             ptr_depth - 1,
-            named_count,
+            param_types,
             variadic,
           ),
         )
       }
-    _ => FuncPtr(ty, named_count, variadic)
+    _ => FuncPtr(ty, param_types, variadic)
   }
 }
 
@@ -781,11 +797,11 @@ fn Parser::parse_declarator_suffixes(
           }
         }
         self.expect(RParen)
-        let (named_count, variadic) = function_param_info(params)
+        let (param_types, variadic) = normalized_function_param_types(params)
         func_ret_ty = Some(ty)
         func_params = Some(params)
         ty = make_function_pointer_type(
-          ty, push_mode, ptr_depth, named_count, variadic,
+          ty, push_mode, ptr_depth, param_types, variadic,
         )
         if !push_mode {
           is_func_decl = true
@@ -844,9 +860,9 @@ fn Parser::parse_abstract_declarator_suffixes(
           }
         }
         self.expect(RParen)
-        let (named_count, variadic) = function_param_info(params)
+        let (param_types, variadic) = normalized_function_param_types(params)
         result = make_function_pointer_type(
-          result, push_mode, ptr_depth, named_count, variadic,
+          result, push_mode, ptr_depth, param_types, variadic,
         )
       }
       _ => break

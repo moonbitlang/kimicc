@@ -39,6 +39,32 @@ test "parse variable declaration" {
 }
 
 ///|
+test "parse function pointer parameter types" {
+  let source =
+    #|int main() {
+    #|  int (*fp)(float, double) = 0;
+    #|  int (*vp)(int, ...) = 0;
+    #|  return 0;
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [
+          VarDecl(fp_ty, "fp", Some(Number(0))),
+          VarDecl(vp_ty, "vp", Some(Number(0))),
+          Return(Some(Number(0))),
+        ]
+      )
+    ) => {
+      inspect(fp_ty, content="FuncPtr(SInt, [Float, Double], false)")
+      inspect(vp_ty, content="FuncPtr(SInt, [SInt], true)")
+    }
+    _ => fail("Expected typed function pointer locals")
+  }
+}
+
+///|
 test "parse block-scope builtin va list declaration" {
   let source = "int main() { __builtin_va_list ap; return 0; }"
   let prog = @parser.parse(source)

@@ -1676,6 +1676,21 @@ int alignof_selection(void) {
   return 0;
 }
 
+int fp_take_int(int x) { return x == 42 ? 0 : 596; }
+int fp_take_float(float x) { return x == 1.5f ? 0 : 597; }
+int fp_take_double(double x) { return x == 2.25 ? 0 : 598; }
+
+int function_pointer_param_conversions(void) {
+  int (*ip)(int) = fp_take_int;
+  int (*fp)(float) = fp_take_float;
+  int (*dp)(double) = fp_take_double;
+  float f = 2.25f;
+  if (ip(42.9) != 0) return 596;
+  if (fp(1.5) != 0) return 597;
+  if (dp(f) != 0) return 598;
+  return 0;
+}
+
 int main(void) {
   struct Pair p;
   struct DPair q;
@@ -1755,6 +1770,7 @@ int main(void) {
          gnu_classify_type_selection() +
          gnu_noop_attributes() +
          alignof_selection() +
+         function_pointer_param_conversions() +
          offsetof_designators() +
          var_pair(0, make_pair(0, 1)) +
          var_dpair(0, make_dpair(0.5, 0.5)) +

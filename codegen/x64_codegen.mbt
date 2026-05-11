@@ -3878,7 +3878,7 @@ fn X64Codegen::type_of(self : X64Codegen, expr : @parser.Expr) -> @parser.Type {
       } else if self.func_rets.contains(name) {
         FuncPtr(
           self.func_rets[name],
-          self.func_param_counts.get_or_default(name, 0),
+          self.func_param_types.get_or_default(name, []),
           self.func_variadic.get_or_default(name, false),
         )
       } else {
@@ -3937,7 +3937,7 @@ fn X64Codegen::type_of(self : X64Codegen, expr : @parser.Expr) -> @parser.Type {
     Deref(ptr) =>
       match x64_core_type(self.type_of(ptr)) {
         Pointer(ty) | Array(ty, _) => ty
-        FuncPtr(ret, count, variadic) => FuncPtr(ret, count, variadic)
+        FuncPtr(ret, params, variadic) => FuncPtr(ret, params, variadic)
         _ => SInt
       }
     AddrOf(e) => Pointer(self.type_of(e))
@@ -3977,7 +3977,7 @@ fn X64Codegen::global_expr_type(
       } else if self.func_rets.contains(name) {
         FuncPtr(
           self.func_rets[name],
-          self.func_param_counts.get_or_default(name, 0),
+          self.func_param_types.get_or_default(name, []),
           self.func_variadic.get_or_default(name, false),
         )
       } else {
@@ -4229,8 +4229,8 @@ fn x64_ternary_result_type(
     (_, Array(elem, _)) => Pointer(elem)
     (Pointer(elem), _) => Pointer(elem)
     (_, Pointer(elem)) => Pointer(elem)
-    (FuncPtr(ret, count, variadic), _) => FuncPtr(ret, count, variadic)
-    (_, FuncPtr(ret, count, variadic)) => FuncPtr(ret, count, variadic)
+    (FuncPtr(ret, params, variadic), _) => FuncPtr(ret, params, variadic)
+    (_, FuncPtr(ret, params, variadic)) => FuncPtr(ret, params, variadic)
     _ =>
       if x64_is_fp_type(then_ty) || x64_is_fp_type(else_ty) {
         if x64_core_type(then_ty) == Double || x64_core_type(else_ty) == Double {
@@ -5737,7 +5737,16 @@ fn X64Codegen::declared_call_arg_type(
     None => ()
   }
   match self.type_of(func) {
-    FuncPtr(_, 0, false) => return x64_default_argument_promotion(actual)
+    FuncPtr(_, params, false) =>
+      if params.length() == 0 {
+        return x64_default_argument_promotion(actual)
+      } else if index < params.length() {
+        return params[index]
+      }
+    FuncPtr(_, params, true) =>
+      if index < params.length() {
+        return params[index]
+      }
     _ => ()
   }
   match func {
@@ -5762,7 +5771,7 @@ fn X64Codegen::named_call_arg_count(
   func : @parser.Expr,
 ) -> Int {
   match self.type_of(func) {
-    FuncPtr(_, count, true) => count
+    FuncPtr(_, params, true) => params.length()
     _ =>
       match func {
         Var(name) =>

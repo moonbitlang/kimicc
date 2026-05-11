@@ -247,6 +247,7 @@ for casts/initializers/assignments/returns, unsigned 64-bit integer to
 `float`/`double` conversions, `float`/`double` to unsigned 64-bit integer
 conversions, covered `__int128` ABI transport and arithmetic,
 direct prototype call arguments,
+typed function-pointer scalar call arguments,
 unnamed variadic and unprototyped default promotions, and call results,
 floating-point arithmetic/comparisons, `float`/`double` compound assignments
 and prefix/postfix increment/decrement, mixed integer/floating compound

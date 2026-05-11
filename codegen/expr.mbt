@@ -129,7 +129,7 @@ fn Codegen::type_of(
     Deref(ptr) =>
       match peel_aligned_type(self.type_of(ptr, frame_size)) {
         Pointer(ty) => ty
-        FuncPtr(ret, count, variadic) => FuncPtr(ret, count, variadic)
+        FuncPtr(ret, params, variadic) => FuncPtr(ret, params, variadic)
         Array(elem, _) => elem
         _ => SInt
       }
@@ -648,10 +648,25 @@ fn Codegen::declared_call_arg_type(
   index : Int,
   actual : @parser.Type,
   named_count_limit : Int?,
+  frame_size : Int,
 ) -> @parser.Type {
   match named_count_limit {
     Some(limit) => if index >= limit { return actual }
     None => ()
+  }
+  match self.type_of(func, frame_size) {
+    FuncPtr(_, param_types, variadic) => {
+      if variadic && index >= param_types.length() {
+        return actual
+      }
+      if !variadic && param_types.length() == 0 {
+        return actual
+      }
+      if index < param_types.length() {
+        return param_types[index]
+      }
+    }
+    _ => ()
   }
   match func {
     Var(name) =>
@@ -3094,7 +3109,7 @@ fn Codegen::gen_expr(
         let signature_func = call_signature_expr(func)
         let callee_ty = self.type_of(signature_func, frame_size)
         let typed_variadic_count = match callee_ty {
-          FuncPtr(_, count, true) => Some(count)
+          FuncPtr(_, params, true) => Some(params.length())
           _ => None
         }
         let named_count = match typed_variadic_count {
@@ -3168,6 +3183,7 @@ fn Codegen::gen_expr(
               i,
               actual_ty,
               Some(named_count),
+              frame_size,
             )
             actual_arg_types.push(actual_ty)
             arg_types.push(arg_ty)
@@ -3434,6 +3450,7 @@ fn Codegen::gen_expr(
               i,
               actual_ty,
               None,
+              frame_size,
             )
             actual_arg_types.push(actual_ty)
             arg_types.push(arg_ty)

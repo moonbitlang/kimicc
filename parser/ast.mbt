@@ -22,12 +22,24 @@ pub(all) enum Type {
   Double
   Struct(String)
   Union(String)
-  FuncPtr(Type, Int, Bool)
+  FuncPtr(Type, Array[Type], Bool)
   Pointer(Type)
   Array(Type, Int)
   Atomic(Type)
   Aligned(Type, Int)
 } derive(Eq)
+
+///|
+fn type_array_to_string(types : Array[Type]) -> String {
+  let mut result = "["
+  for i in 0..<types.length() {
+    if i > 0 {
+      result = result + ", "
+    }
+    result = result + types[i].to_string()
+  }
+  result + "]"
+}
 
 ///|
 pub impl Show for Type with to_string(self) {
@@ -50,11 +62,11 @@ pub impl Show for Type with to_string(self) {
     Double => "Double"
     Struct(name) => "Struct(" + name + ")"
     Union(name) => "Union(" + name + ")"
-    FuncPtr(ret, count, variadic) =>
+    FuncPtr(ret, params, variadic) =>
       "FuncPtr(" +
       ret.to_string() +
       ", " +
-      count.to_string() +
+      type_array_to_string(params) +
       ", " +
       variadic.to_string() +
       ")"

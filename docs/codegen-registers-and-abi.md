@@ -169,7 +169,9 @@ non-`__int128` integer lvalues use floating arithmetic before converting back to
 the lvalue type, including covered integer bit-field lvalues. Covered integer
 bit-field compound assignments apply integer promotions before the arithmetic
 operation and then store back through the bit-field mask. Direct calls use
-declared parameter types to select scalar argument registers and conversions.
+declared parameter types to select scalar argument registers and conversions;
+typed function-pointer calls preserve parsed parameter types and apply the same
+scalar argument conversions before indirect calls.
 Pointer `+`, `-`, `+=`, and `-=` scale integer operands by the pointed element
 size for the covered object pointer cases.
 Unnamed variadic call arguments use C default argument promotions before ABI
