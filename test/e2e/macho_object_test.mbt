@@ -85,6 +85,48 @@ async test "direct macho object supports global bit-field initializers" {
 }
 
 ///|
+async test "direct macho object supports global aggregate initializers" {
+  let source =
+    #|struct Inner { char c; int x; };
+    #|struct Outer { char tag; struct Inner inner; int tail; };
+    #|struct Refs { int *first; int *tail; int (*fn)(int); };
+    #|struct Node { int value; struct Node *next; };
+    #|union Bytes { int i; char c[4]; };
+    #|int add1(int x) { return x + 1; }
+    #|int arr[5] = { 1, [3] = 4 };
+    #|struct Outer outer = { .tail = 9, .inner = { .x = 7, .c = 2 }, .tag = 1 };
+    #|int *ptr = arr + 3;
+    #|int (*fp)(int) = add1;
+    #|int *ptrs[3] = { arr, arr + 2, &arr[4] };
+    #|struct Refs refs = { .tail = arr + 4, .fn = add1, .first = &arr[1] };
+    #|int *member = &outer.inner.x;
+    #|int *member_next = &outer.inner.x + 1;
+    #|struct Node node2 = { 2, 0 };
+    #|struct Node node1 = { .next = &node2, .value = 1 };
+    #|struct Node *nodes[2] = { &node1, &node2 };
+    #|union Bytes bytes = { .c = { 65, 66, 0, 0 } };
+    #|char str[6] = "hey";
+    #|int main(void) {
+    #|  if (arr[0] != 1 || arr[3] != 4 || arr[4] != 0) return 1;
+    #|  if (outer.tag != 1 || outer.inner.c != 2 || outer.inner.x != 7 || outer.tail != 9) return 2;
+    #|  if (ptr != &arr[3] || *ptr != 4) return 3;
+    #|  if (fp(41) != 42) return 4;
+    #|  if (ptrs[0] != &arr[0] || ptrs[1] != &arr[2] || ptrs[2] != &arr[4]) return 5;
+    #|  if (refs.first != &arr[1] || refs.tail != &arr[4] || refs.fn(41) != 42) return 6;
+    #|  if (member != &outer.inner.x || *member != 7 || member_next != &outer.tail) return 7;
+    #|  if (node1.value != 1 || node1.next != &node2 || node2.value != 2 || node2.next != 0) return 8;
+    #|  if (nodes[0] != &node1 || nodes[1] != &node2) return 9;
+    #|  if (bytes.c[0] != 65 || bytes.c[1] != 66 || bytes.c[2] != 0 || bytes.c[3] != 0) return 10;
+    #|  if (str[0] != 104 || str[1] != 101 || str[2] != 121 || str[3] != 0 || str[5] != 0) return 11;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_direct_object_async(
+    source, "macho_global_aggregate_init",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object emits bss as zerofill with later const data" {
   let source = "int data = 1; int bss; int main(void) { char *s = \"A\"; bss = 40; return data + bss + s[0] - 64; }"
   let obj_path = compile_source_to_direct_object_path(
