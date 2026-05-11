@@ -247,6 +247,39 @@ grep -F 'int hosted=0;' "$driver_query_path" >/dev/null
 "$kimicc" -E -target linux-amd64 -D__STDC_HOSTED__=9 -ffreestanding "$source_path" >"$driver_query_path"
 grep -F 'int hosted=9;' "$driver_query_path" >/dev/null
 
+cat > "$source_path" <<'C'
+#ifdef __STDC_VERSION__
+long version = __STDC_VERSION__;
+#else
+long version = 0;
+#endif
+#ifdef __STRICT_ANSI__
+int strict = __STRICT_ANSI__;
+#else
+int strict = 0;
+#endif
+#ifdef __OPTIMIZE__
+int optimize = __OPTIMIZE__;
+#else
+int optimize = 0;
+#endif
+#ifdef __FAST_MATH__
+int fast = __FAST_MATH__;
+#else
+int fast = 0;
+#endif
+C
+"$kimicc" -E -target linux-amd64 -std=c99 -O2 -ffast-math "$source_path" >"$driver_query_path"
+grep -F 'long version=199901L;' "$driver_query_path" >/dev/null
+grep -F 'int strict=1;' "$driver_query_path" >/dev/null
+grep -F 'int optimize=1;' "$driver_query_path" >/dev/null
+grep -F 'int fast=1;' "$driver_query_path" >/dev/null
+"$kimicc" -E -target linux-amd64 -std=gnu89 -Ofast -O0 "$source_path" >"$driver_query_path"
+grep -F 'long version=0;' "$driver_query_path" >/dev/null
+grep -F 'int strict=0;' "$driver_query_path" >/dev/null
+grep -F 'int optimize=0;' "$driver_query_path" >/dev/null
+grep -F 'int fast=0;' "$driver_query_path" >/dev/null
+
 cat > "$bad_source_path" <<'C'
 _Static_assert(0, "linux smoke expects this failure");
 int main(void) { return 0; }
