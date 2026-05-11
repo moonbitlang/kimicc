@@ -109,6 +109,7 @@ forced_asm_object_path="/tmp/kimicc-linux-amd64-forced-asm.o"
 probe_include_dir="/tmp/kimicc-linux-amd64-include"
 probe_after_include_dir="/tmp/kimicc-linux-amd64-include-after"
 probe_prefix_dir="/tmp/kimicc-linux-amd64-prefix"
+imacros_path="/tmp/kimicc-linux-amd64-imacros.h"
 after_include_source_path="/tmp/kimicc-linux-amd64-include-after.c"
 prefix_include_source_path="/tmp/kimicc-linux-amd64-prefix-include.c"
 driver_stdout_path="/tmp/kimicc-linux-amd64-driver.out"
@@ -159,6 +160,10 @@ int pragma_once_global = 7;
 H
 cat > "$probe_prefix_dir/headers/prefix_header.h" <<'H'
 #define KIMICC_PREFIX_HEADER 7
+H
+cat > "$imacros_path" <<'H'
+#define KIMICC_IMACROS_VALUE 37
+int imacros_output_should_be_discarded = 1;
 H
 
 set +e
@@ -307,6 +312,19 @@ grep -F '#define USER_UNDEF_MACRO 29' "$driver_query_path" >/dev/null
 grep -F '#define __STDC__ 1' "$driver_query_path" >/dev/null
 if grep -F '#define __x86_64__' "$driver_query_path" >/dev/null; then
   echo "expected -undef to suppress target predefined macros" >&2
+  exit 1
+fi
+cat > "$source_path" <<'C'
+#ifdef KIMICC_IMACROS_VALUE
+int imacros_value = KIMICC_IMACROS_VALUE;
+#else
+int imacros_value = 0;
+#endif
+C
+"$kimicc" -E -target linux-amd64 -imacros "$imacros_path" "$source_path" >"$driver_query_path"
+grep -F 'int imacros_value=37;' "$driver_query_path" >/dev/null
+if grep -F 'imacros_output_should_be_discarded' "$driver_query_path" >/dev/null; then
+  echo "expected -imacros to discard ordinary output from the macro file" >&2
   exit 1
 fi
 

@@ -966,6 +966,15 @@ fn Preprocessor::process_directive(
         let idx = pp_first_non_space(rest)
         if idx < rest.length() && rest[idx].is_ident("once") {
           self.once_files[physical_file] = true
+        } else if idx < rest.length() && rest[idx].is_ident("kimicc_imacros") {
+          ignore(
+            self.process_include(
+              pp_line_after(rest, idx + 1),
+              physical_file,
+              logical_file,
+              line,
+            ),
+          )
         }
       }
     "line" =>

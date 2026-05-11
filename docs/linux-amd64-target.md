@@ -240,7 +240,8 @@ the target split real and testable without claiming full C ABI coverage yet.
   The `-isystem-after` and `-idirafter` paths are searched after the configured
   target system directories. `-iprefix` is applied to later
   `-iwithprefixbefore` user include paths and `-iwithprefix` system include
-  paths.
+  paths. `-imacros FILE` processes macro definitions from a file before forced
+  includes while discarding ordinary output from that macro file.
 - Dependency flags `-M`, `-MM`, `-MD`, `-MMD`, `-MP`, `-MF`, `-MT`, and `-MQ`
   are handled by the driver using headers resolved by kimicc's preprocessor.
   Full dependency modes include system headers; `-MM` and `-MMD` keep only the

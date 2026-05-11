@@ -40,6 +40,44 @@ test "driver command-line defines support function-like and empty macros" {
 }
 
 ///|
+test "driver applies imacros before forced includes" {
+  let macro_path = "/tmp/kimicc-driver-imacros.h"
+  let include_path = "/tmp/kimicc-driver-imacros-include.h"
+  assert_true(
+    write_file(
+      macro_path, "#define IMACROS_VALUE SEED\nint suppressed_from_imacros = 1;\n",
+    ),
+  )
+  assert_true(write_file(include_path, "int forced_value = IMACROS_VALUE;\n"))
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-E", "-DSEED=44", "-imacros", macro_path, "-include", include_path,
+      "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_eq(opts.macro_includes, [macro_path])
+  assert_eq(opts.forced_includes, [include_path])
+  let result = preprocess_source_with_dependencies(
+    "int body = IMACROS_VALUE;\n", "foo.c", opts,
+  )
+  assert_eq(result.text, "int forced_value=44;\nint body=44;\n")
+  assert_true(!result.text.contains("suppressed_from_imacros"))
+  let mut saw_macro = false
+  let mut saw_include = false
+  for dep in result.dependency_records {
+    if dep.path == macro_path {
+      saw_macro = true
+    } else if dep.path == include_path {
+      saw_include = true
+    }
+  }
+  assert_true(saw_macro)
+  assert_true(saw_include)
+}
+
+///|
 test "driver dumps final macro definitions" {
   let opts = match
     parse_driver_args([
@@ -1313,7 +1351,7 @@ test "dependency-only mode treats output as dependency destination" {
 test "driver parses preprocessor dependency options" {
   let opts = match
     parse_driver_args([
-      "kimicc", "-c", "-Wp,-MMD,build/foo.d,-MP,-dM,-undef,-MQ,build dir/foo.o,-DVALUE=3,-DINC(x)=((x)+1),-DEMPTY=,-UOLD",
+      "kimicc", "-c", "-Wp,-MMD,build/foo.d,-MP,-dM,-undef,-imacros,macros.h,-MQ,build dir/foo.o,-DVALUE=3,-DINC(x)=((x)+1),-DEMPTY=,-UOLD",
       "-o", "build/foo.o", "src/foo.c",
     ]) {
     Ok(opts) => opts
@@ -1322,6 +1360,7 @@ test "driver parses preprocessor dependency options" {
   assert_true(opts.emit_dependencies)
   assert_true(opts.dump_macros)
   assert_true(opts.undef_predefined)
+  assert_eq(opts.macro_includes, ["macros.h"])
   assert_true(!opts.dependency_include_system)
   assert_true(opts.dependency_phony_targets)
   assert_true(opts.dependency_output_path is Some("build/foo.d"))
@@ -1356,13 +1395,18 @@ test "driver parses Wp include options" {
 ///|
 test "driver parses Xpreprocessor macro and include options" {
   let header = "/tmp/kimicc-driver-xpreprocessor-include.h"
+  let macro_header = "/tmp/kimicc-driver-xpreprocessor-imacros.h"
   assert_true(write_file(header, "int from_xpreprocessor = VALUE;\n"))
+  assert_true(
+    write_file(macro_header, "#define XPRE_IMACROS 5\nint hidden_xpre = 1;\n"),
+  )
   let opts = match
     parse_driver_args([
       "kimicc", "-E", "-Xpreprocessor", "-D", "-Xpreprocessor", "VALUE=19", "-Xpreprocessor",
       "-include", "-Xpreprocessor", header, "-Xpreprocessor", "-I", "-Xpreprocessor",
       "include-x", "-Xpreprocessor", "-iquote", "-Xpreprocessor", "quote-x", "-Xpreprocessor",
-      "-dM", "-Xpreprocessor", "-undef", "-Xpreprocessor", "-UOLD", "foo.c",
+      "-dM", "-Xpreprocessor", "-undef", "-Xpreprocessor", "-imacros", "-Xpreprocessor",
+      macro_header, "-Xpreprocessor", "-UOLD", "foo.c",
     ]) {
     Ok(opts) => opts
     Err(err) => abort(err)
@@ -1371,9 +1415,11 @@ test "driver parses Xpreprocessor macro and include options" {
   assert_true(opts.dump_macros)
   assert_true(opts.undef_predefined)
   assert_eq(opts.include_paths, ["include-x", "quote-x"])
+  assert_eq(opts.macro_includes, [macro_header])
   assert_eq(opts.undefines, ["OLD"])
   let result = preprocess_source_with_dependencies(
-    "int body = VALUE;\n", "foo.c", opts,
+    "int body = VALUE + XPRE_IMACROS;\n", "foo.c", opts,
   )
-  assert_eq(result.text, "int from_xpreprocessor=19;\nint body=19;\n")
+  assert_eq(result.text, "int from_xpreprocessor=19;\nint body=19+5;\n")
+  assert_true(!result.text.contains("hidden_xpre"))
 }

@@ -61,6 +61,7 @@ priv struct DriverOptions {
   after_system_include_paths : Array[String]
   sysroot_paths : Array[String]
   mut include_prefix : String?
+  macro_includes : Array[String]
   forced_includes : Array[String]
   macro_ops : Array[DriverMacroOp]
   defines : Map[String, String]
@@ -118,6 +119,7 @@ fn DriverOptions::new() -> DriverOptions {
     after_system_include_paths: [],
     sysroot_paths: [],
     include_prefix: None,
+    macro_includes: [],
     forced_includes: [],
     macro_ops: [],
     defines: {},
@@ -480,6 +482,8 @@ fn is_wp_option_name(value : String) -> Bool {
   value == "-MQ" ||
   value == "-I" ||
   starts_with(value, "-I") ||
+  value == "-imacros" ||
+  starts_with(value, "-imacros") ||
   value == "-include" ||
   starts_with(value, "-include") ||
   value == "-isystem-after" ||
@@ -589,6 +593,14 @@ fn apply_wp_options(opts : DriverOptions, arg : String) -> Result[Unit, String] 
     } else if part == "-include-pch" {
       match wp_option_value(parts, i, "-include-pch", "-include-pch") {
         Ok((_value, next_i)) => i = next_i
+        Err(err) => return Err(err)
+      }
+    } else if part == "-imacros" || starts_with(part, "-imacros") {
+      match wp_option_value(parts, i, "-imacros", "-imacros") {
+        Ok((value, next_i)) => {
+          opts.macro_includes.push(value)
+          i = next_i
+        }
         Err(err) => return Err(err)
       }
     } else if part == "-include" || starts_with(part, "-include") {
@@ -735,6 +747,14 @@ fn consume_xpreprocessor_option(
   } else if part == "-include-pch" {
     match xpreprocessor_value(argv, index, "-include-pch") {
       Ok((_value, next_i)) => Ok(next_i)
+      Err(err) => Err(err)
+    }
+  } else if part == "-imacros" || starts_with(part, "-imacros") {
+    match xpreprocessor_option_value(argv, index, "-imacros", "-imacros") {
+      Ok((value, next_i)) => {
+        opts.macro_includes.push(value)
+        Ok(next_i)
+      }
       Err(err) => Err(err)
     }
   } else if part == "-include" || starts_with(part, "-include") {
@@ -1042,7 +1062,6 @@ fn consume_ignored_option(
     | "-iapinotes-modules"
     | "-iapinotes-path"
     | "-include-pch"
-    | "-imacros"
     | "-fdebug-compilation-dir"
     | "-fdepscan-share-identifier"
     | "-fexperimental-openacc-macro-override"
@@ -1675,6 +1694,14 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
             Ok(next_i) => i = next_i
             Err(err) => return Err(err)
           }
+        } else if arg == "-imacros" || starts_with(arg, "-imacros") {
+          match option_value(argv, i, "-imacros", "-imacros") {
+            Ok((value, next_i)) => {
+              opts.macro_includes.push(value)
+              i = next_i
+            }
+            Err(err) => return Err(err)
+          }
         } else if arg == "-include" || starts_with(arg, "-include") {
           match option_value(argv, i, "-include", "-include") {
             Ok((value, next_i)) => {
@@ -1807,8 +1834,22 @@ fn forced_include_prefix(opts : DriverOptions) -> String {
 }
 
 ///|
+fn macro_include_prefix(opts : DriverOptions) -> String {
+  let buf = StringBuilder::new()
+  for path in opts.macro_includes {
+    buf.write_string("#pragma kimicc_imacros ")
+    buf.write_string(c_string_literal(path))
+    buf.write_char('\n')
+  }
+  buf.to_string()
+}
+
+///|
 fn driver_preprocess_source(source : String, opts : DriverOptions) -> String {
-  command_line_macro_prefix(opts) + forced_include_prefix(opts) + source
+  command_line_macro_prefix(opts) +
+  macro_include_prefix(opts) +
+  forced_include_prefix(opts) +
+  source
 }
 
 ///|
@@ -2136,8 +2177,8 @@ fn preprocess_source_with_dependencies(
   opts : DriverOptions,
 ) -> DriverPreprocessResult {
   if opts.already_preprocessed || is_preprocessed_source_path(input_path) {
-    if opts.forced_includes.length() > 0 {
-      fail("--preprocessed cannot be combined with -include")
+    if opts.forced_includes.length() > 0 || opts.macro_includes.length() > 0 {
+      fail("--preprocessed cannot be combined with -include or -imacros")
     }
     { text: source, dependency_records: [{ path: input_path, system: false }] }
   } else {
@@ -2164,8 +2205,8 @@ fn dump_macros_source_with_dependencies(
   opts : DriverOptions,
 ) -> DriverPreprocessResult {
   if (opts.already_preprocessed || is_preprocessed_source_path(input_path)) &&
-    opts.forced_includes.length() > 0 {
-    fail("--preprocessed cannot be combined with -include")
+    (opts.forced_includes.length() > 0 || opts.macro_includes.length() > 0) {
+    fail("--preprocessed cannot be combined with -include or -imacros")
   }
   let preprocessed_source = if opts.already_preprocessed ||
     is_preprocessed_source_path(input_path) {
@@ -2401,6 +2442,7 @@ fn print_usage() -> Unit {
     #|  -isystem DIR        add a system include path
     #|  -D NAME[=VALUE]     define a macro
     #|  -U NAME             undefine a macro
+    #|  -imacros FILE       process macro definitions from a file without emitting it
     #|  -include FILE       include a file before the main source
     #|  -dM                 with -E, dump final macro definitions
     #|  -Wp,OPTS            forward supported comma-separated preprocessor options
