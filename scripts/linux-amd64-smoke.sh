@@ -683,6 +683,7 @@ int pointer_compound_assign(void) {
   char bytes[4] = {7, 8, 9, 10};
   int *p = values;
   char *c = bytes;
+  void *v = bytes;
   p += 3;
   if (*p != 4) return 580;
   p -= 2;
@@ -692,6 +693,12 @@ int pointer_compound_assign(void) {
   if (*c != 9) return 583;
   c -= 1;
   if (*c != 8) return 584;
+  v += 3;
+  if ((char*)v - bytes != 3) return 593;
+  v = 2 + v;
+  if ((char*)v - bytes != 5) return 594;
+  v--;
+  if (v - (void*)bytes != 4) return 595;
   return 0;
 }
 

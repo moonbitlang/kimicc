@@ -928,6 +928,29 @@ test "generate linux amd64 pointer compound assignment scales element size" {
 }
 
 ///|
+test "generate linux amd64 void pointer arithmetic scales as bytes" {
+  let source =
+    #|int main(void) {
+    #|  char bytes[8];
+    #|  void *p = bytes;
+    #|  p += 3;
+    #|  p = 2 + p;
+    #|  p--;
+    #|  return p - (void*)bytes;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(assembly.contains("imul\trax, rax, 0"), content="false")
+  inspect(assembly.contains("mov\tr10, 0"), content="false")
+  inspect(assembly.contains("sub\trax, 1"), content="true")
+  inspect(assembly.contains("idiv\tr10"), content="false")
+}
+
+///|
 test "generate linux amd64 unsigned scalar operators" {
   let source =
     #|int main(void) {

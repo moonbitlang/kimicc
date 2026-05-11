@@ -125,6 +125,17 @@ fn x64_pointer_element(ty : @parser.Type) -> @parser.Type? {
 }
 
 ///|
+fn X64Codegen::pointer_element_size(
+  self : X64Codegen,
+  elem_ty : @parser.Type,
+) -> Int {
+  match x64_core_type(elem_ty) {
+    Void => 1
+    _ => self.type_size(elem_ty)
+  }
+}
+
+///|
 fn x64_is_fp_type(ty : @parser.Type) -> Bool {
   match x64_core_type(ty) {
     Float | Double => true
@@ -3985,7 +3996,7 @@ fn X64Codegen::gen_addr(self : X64Codegen, expr : @parser.Expr) -> Unit {
         Some(ty) => ty
         None => SInt
       }
-      let elem_size = self.type_size(elem_ty)
+      let elem_size = self.pointer_element_size(elem_ty)
       if elem_size != 1 {
         self.emit("\timul\trax, rax, " + elem_size.to_string())
       }
@@ -4672,7 +4683,7 @@ fn X64Codegen::emit_scaled_integer(
   elem_ty : @parser.Type,
 ) -> Unit {
   self.gen_expr(expr)
-  let size = self.type_size(elem_ty)
+  let size = self.pointer_element_size(elem_ty)
   if size != 1 {
     self.emit("\timul\trax, rax, " + size.to_string())
   }
@@ -4726,7 +4737,7 @@ fn X64Codegen::gen_pointer_arith(
         self.emit("\tmov\tr10, rax")
         self.emit_pop_rax()
         self.emit("\tsub\trax, r10")
-        let size = self.type_size(elem_ty)
+        let size = self.pointer_element_size(elem_ty)
         if size != 1 {
           self.emit("\tcqo")
           self.emit("\tmov\tr10, " + size.to_string())
@@ -5315,7 +5326,7 @@ fn X64Codegen::gen_inc_dec(
     self.emit_push_rax()
   }
   let step = match x64_pointer_element(expr_ty) {
-    Some(elem) => self.type_size(elem)
+    Some(elem) => self.pointer_element_size(elem)
     None => 1
   }
   let amount = if delta > 0 { delta * step } else { -delta * step }
@@ -6877,7 +6888,7 @@ fn X64Codegen::global_lvalue_reloc(
       match self.global_lvalue_reloc(base) {
         Some((label, base_offset)) => {
           let elem_size = match peel_aligned_type(self.global_expr_type(base)) {
-            Array(elem, _) | Pointer(elem) => self.type_size(elem)
+            Array(elem, _) | Pointer(elem) => self.pointer_element_size(elem)
             _ => 1
           }
           match self.fold_const(index) {
@@ -6967,7 +6978,7 @@ fn X64Codegen::global_offset_bytes(
   offset : Int64,
 ) -> Int {
   match x64_pointer_element(self.global_expr_type(base)) {
-    Some(elem_ty) => offset.to_int() * self.type_size(elem_ty)
+    Some(elem_ty) => offset.to_int() * self.pointer_element_size(elem_ty)
     None => offset.to_int()
   }
 }

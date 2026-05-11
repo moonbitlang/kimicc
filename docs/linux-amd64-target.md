@@ -254,8 +254,8 @@ compound literals, initialized global arrays/structs/unions and covered global
 bit-field storage units, global pointer/function-pointer address relocations,
 `__builtin_offsetof` member designators, switch dispatch with
 fallthrough/default behavior, scaled pointer arithmetic including pointer
-compound assignments, pointers, arrays, simple globals, string
-literals, covered C11 `_Generic` selections, GNU `typeof`
+compound assignments, GNU byte-sized `void *` arithmetic, pointers, arrays,
+simple globals, string literals, covered C11 `_Generic` selections, GNU `typeof`
 specifiers, GNU `__auto_type` locals, C11/GNU alignment query operators, GNU
 compile-time selection builtins, GNU type-classification builtins,
 parser-accepted no-op GNU attributes, and common
