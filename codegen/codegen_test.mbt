@@ -1417,6 +1417,7 @@ test "generate linux amd64 global floating constants use expression type" {
     #|double gcast_int = (int)1.75;
     #|float gternary_int = 1 ? 3 / 2 : 9.0f;
     #|int gint_from_float = (int)1.75;
+    #|int gfp_expr_to_int = (double)3 / 2;
     #|int main(void) { return 0; }
   let prog = @parser.parse(source)
   let target = match @target.Target::parse("linux-amd64") {
@@ -1429,6 +1430,36 @@ test "generate linux amd64 global floating constants use expression type" {
   inspect(assembly.contains("gcast_int:\n\t.double\t1"), content="true")
   inspect(assembly.contains("gternary_int:\n\t.float\t1"), content="true")
   inspect(assembly.contains("gint_from_float:\n\t.long\t1"), content="true")
+  inspect(assembly.contains("gfp_expr_to_int:\n\t.long\t1"), content="true")
+}
+
+///|
+test "generate linux amd64 global unsigned constants use C conversions" {
+  let source =
+    #|unsigned long gudiv = (unsigned long)-1 / 2;
+    #|unsigned long gumod = (unsigned long)-1 % 2;
+    #|int ugt = (unsigned long)-1 > 1;
+    #|int ult = (unsigned long)-1 < 1;
+    #|unsigned int uwrap = (unsigned int)-1 + 1;
+    #|unsigned int ushr = (unsigned int)-1 >> 31;
+    #|long sshr = -2 >> 1;
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(
+    assembly.contains("gudiv:\n\t.quad\t9223372036854775807"),
+    content="true",
+  )
+  inspect(assembly.contains("gumod:\n\t.quad\t1"), content="true")
+  inspect(assembly.contains("ugt:\n\t.long\t1"), content="true")
+  inspect(assembly.contains("ult:\n\t.long\t0"), content="true")
+  inspect(assembly.contains("uwrap:\n\t.long\t0"), content="true")
+  inspect(assembly.contains("ushr:\n\t.long\t1"), content="true")
+  inspect(assembly.contains("sshr:\n\t.quad\t-1"), content="true")
 }
 
 ///|

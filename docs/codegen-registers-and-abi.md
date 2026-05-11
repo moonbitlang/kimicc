@@ -260,7 +260,10 @@ initializer cases; compound literals are materialized in stack storage.
 Global floating and integer scalar constant initializers are folded through the
 source expression's C type before conversion to the destination object type, so
 integer subexpressions such as `1 / 2` keep integer-division semantics and
-floating-to-integer casts initialize integer storage.
+explicit or implicit floating-to-integer initializer conversions initialize
+integer storage. Integer constant folding uses the covered usual arithmetic
+conversions, including unsigned division, modulo, right shifts, and relational
+comparisons.
 Initialized global arrays, structs, and unions are emitted with layout padding
 and designated-initializer holes for the covered aggregate cases, including
 bit-field storage units that do not overlap earlier streamed scalar fields and

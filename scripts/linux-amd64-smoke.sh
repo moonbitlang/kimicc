@@ -403,6 +403,13 @@ double global_int_div = 1 / 2;
 double global_fp_div = (double)1 / 2;
 double global_cast_int_fp = (int)1.75;
 int global_int_from_float = (int)1.75;
+int global_fp_expr_to_int = (double)3 / 2;
+unsigned long global_unsigned_div = (unsigned long)-1 / 2;
+unsigned long global_unsigned_mod = (unsigned long)-1 % 2;
+int global_unsigned_gt = (unsigned long)-1 > 1;
+int global_unsigned_lt = (unsigned long)-1 < 1;
+unsigned int global_unsigned_wrap = (unsigned int)-1 + 1;
+unsigned int global_unsigned_shift = (unsigned int)-1 >> 31;
 
 int seventh(int a, int b, int c, int d, int e, int f, int g) { return g; }
 double ninth(double a, double b, double c, double d, double e, double f, double g, double h, double i) { return i; }
@@ -609,6 +616,13 @@ int global_cast_pointer_initializers(void) {
   if (global_fp_div != 0.5) return 604;
   if (global_cast_int_fp != 1.0) return 605;
   if (global_int_from_float != 1) return 606;
+  if (global_fp_expr_to_int != 1) return 607;
+  if (global_unsigned_div != 9223372036854775807UL) return 608;
+  if (global_unsigned_mod != 1UL) return 609;
+  if (global_unsigned_gt != 1) return 610;
+  if (global_unsigned_lt != 0) return 611;
+  if (global_unsigned_wrap != 0U) return 612;
+  if (global_unsigned_shift != 1U) return 613;
   return 0;
 }
 
