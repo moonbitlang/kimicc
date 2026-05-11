@@ -88,6 +88,54 @@ test "generate darwin arm64 global int128 constants use two eightbytes" {
 }
 
 ///|
+test "generate darwin arm64 global pointer relocations are type scaled" {
+  let source =
+    #|struct DGInner { char c; int x; };
+    #|struct DGOuter { char tag; struct DGInner inner; int tail; };
+    #|int drel_arr[5] = { 1, [3] = 4 };
+    #|struct DGOuter drel_outer = { .tail = 9, .inner = { .x = 7, .c = 2 }, .tag = 1 };
+    #|int *drel_ptr = drel_arr + 3;
+    #|char *drel_byte_ptr = (char *)drel_arr + 3;
+    #|int *drel_cast_ptr = (int *)((char *)drel_arr + 5);
+    #|char *drel_byte_subscript_ptr = &((char *)drel_arr)[7];
+    #|int *drel_cast_subscript_ptr = &((int *)((char *)drel_arr + 6))[1];
+    #|int *drel_member = &drel_outer.inner.x;
+    #|int *drel_member_next = &drel_outer.inner.x + 1;
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(
+    assembly.contains("_drel_ptr:\n\t.quad\t_drel_arr+12"),
+    content="true",
+  )
+  inspect(
+    assembly.contains("_drel_byte_ptr:\n\t.quad\t_drel_arr+3"),
+    content="true",
+  )
+  inspect(
+    assembly.contains("_drel_cast_ptr:\n\t.quad\t_drel_arr+5"),
+    content="true",
+  )
+  inspect(
+    assembly.contains("_drel_byte_subscript_ptr:\n\t.quad\t_drel_arr+7"),
+    content="true",
+  )
+  inspect(
+    assembly.contains("_drel_cast_subscript_ptr:\n\t.quad\t_drel_arr+10"),
+    content="true",
+  )
+  inspect(
+    assembly.contains("_drel_member:\n\t.quad\t_drel_outer+8"),
+    content="true",
+  )
+  inspect(
+    assembly.contains("_drel_member_next:\n\t.quad\t_drel_outer+12"),
+    content="true",
+  )
+}
+
+///|
 test "generate linux amd64 simple function" {
   let source = "int main() { return 42; }"
   let prog = @parser.parse(source)

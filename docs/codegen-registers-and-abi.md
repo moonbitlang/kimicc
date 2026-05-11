@@ -128,6 +128,10 @@ integer subexpressions such as `1 / 2` in integer semantics when initializing
 floating storage, preserves explicit floating-to-integer initializer
 conversions, and applies the covered usual arithmetic conversions for unsigned
 integer division, modulo, shifts, and comparisons.
+Pointer and function-pointer global initializers can also emit relocations to
+globals, functions, and aggregate subobjects. Pointer arithmetic in those
+relocations is scaled by the effective pointer type, including casted pointer
+bases and address-of casted pointer subscripts.
 
 ## ABI Compliance Status
 
