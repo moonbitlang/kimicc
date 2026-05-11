@@ -54,6 +54,7 @@ priv struct DriverOptions {
   mut emit_dependencies : Bool
   mut dependency_include_system : Bool
   mut dependency_phony_targets : Bool
+  mut dependency_missing_generated : Bool
   mut dependency_output_path : String?
   dependency_targets : Array[String]
   include_paths : Array[String]
@@ -112,6 +113,7 @@ fn DriverOptions::new() -> DriverOptions {
     emit_dependencies: false,
     dependency_include_system: true,
     dependency_phony_targets: false,
+    dependency_missing_generated: false,
     dependency_output_path: None,
     dependency_targets: [],
     include_paths: [],
@@ -478,6 +480,7 @@ fn is_wp_option_name(value : String) -> Bool {
   value == "-dM" ||
   value == "-undef" ||
   value == "-MF" ||
+  value == "-MG" ||
   value == "-MT" ||
   value == "-MQ" ||
   value == "-I" ||
@@ -544,6 +547,8 @@ fn apply_wp_options(opts : DriverOptions, arg : String) -> Result[Unit, String] 
       } else {
         return Err("missing argument after -Wp,-MF")
       }
+    } else if part == "-MG" {
+      opts.dependency_missing_generated = true
     } else if part == "-MT" {
       if i + 1 < parts.length() {
         opts.dependency_targets.push(parts[i + 1])
@@ -712,6 +717,9 @@ fn consume_xpreprocessor_option(
       }
       Err(err) => Err(err)
     }
+  } else if part == "-MG" {
+    opts.dependency_missing_generated = true
+    Ok(index + 1)
   } else if part == "-MT" || starts_with(part, "-MT") {
     match xpreprocessor_option_value(argv, index, "-MT", "-MT") {
       Ok((value, next_i)) => {
@@ -1431,6 +1439,8 @@ fn validate_driver_options(opts : DriverOptions) -> Result[Unit, String] {
     opts.output != EmitObject &&
     opts.assembly_input_paths.length() > 0 {
     Err("assembly inputs are only supported with -c or link mode")
+  } else if opts.dependency_missing_generated && opts.output != EmitDependencies {
+    Err("option '-MG' requires '-M' or '-MM'")
   } else if opts.output != LinkExecutable && compile_only_input_count(opts) > 1 {
     match opts.output_path {
       Some(_) => Err("cannot specify -o when generating multiple output files")
@@ -1582,6 +1592,8 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
             }
             Err(err) => return Err(err)
           }
+        } else if arg == "-MG" {
+          opts.dependency_missing_generated = true
         } else if arg == "-Xpreprocessor" {
           match consume_xpreprocessor_option(opts, argv, i) {
             Ok(next_i) => i = next_i
@@ -1802,6 +1814,7 @@ fn preprocess_options(
     defines: {},
     undefines: [],
     undef_predefined: opts.undef_predefined,
+    allow_missing_includes: opts.dependency_missing_generated,
     emit_line_markers: false,
   }
 }
@@ -2455,6 +2468,7 @@ fn print_usage() -> Unit {
     #|  -target TARGET      choose darwin-arm64 or linux-amd64
     #|  -MD, -MMD           write a Makefile dependency sidecar
     #|  -MF PATH            set dependency sidecar path
+    #|  -MG                 treat missing dependency-only headers as generated
     #|  -MT TARGET          set dependency rule target
     #|  -MQ TARGET          set and Makefile-quote dependency rule target
   println(text)

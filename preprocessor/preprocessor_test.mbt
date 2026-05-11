@@ -44,6 +44,7 @@ test "undef predefined keeps only standard macro baseline" {
   let options : @preprocessor.PreprocessOptions = {
     ..test_options(),
     undef_predefined: true,
+    allow_missing_includes: false,
   }
   let text = match @preprocessor.dump_macros("", options) {
     Ok(text) => text
@@ -167,6 +168,7 @@ test "target macros follow selected target" {
     defines: options.defines,
     undefines: options.undefines,
     undef_predefined: options.undef_predefined,
+    allow_missing_includes: options.allow_missing_includes,
     emit_line_markers: options.emit_line_markers,
   }
   let source =
@@ -196,6 +198,7 @@ test "linux amd64 predefined macros cover system header probes" {
     defines: options.defines,
     undefines: options.undefines,
     undef_predefined: options.undef_predefined,
+    allow_missing_includes: options.allow_missing_includes,
     emit_line_markers: options.emit_line_markers,
   }
   let source =
@@ -262,6 +265,7 @@ test "linux amd64 has builtin reflects supported lowering" {
     defines: options.defines,
     undefines: options.undefines,
     undef_predefined: options.undef_predefined,
+    allow_missing_includes: options.allow_missing_includes,
     emit_line_markers: options.emit_line_markers,
   }
   let source =
@@ -320,6 +324,7 @@ test "has attribute reflects supported packed layout" {
     defines: options.defines,
     undefines: options.undefines,
     undef_predefined: options.undef_predefined,
+    allow_missing_includes: options.allow_missing_includes,
     emit_line_markers: options.emit_line_markers,
   }
   let source =
@@ -552,6 +557,7 @@ test "include paths are explicit" {
     defines: {},
     undefines: [],
     undef_predefined: false,
+    allow_missing_includes: false,
     emit_line_markers: false,
   }
   let source =
@@ -565,6 +571,55 @@ test "include paths are explicit" {
 }
 
 ///|
+test "missing generated includes can be recorded for dependencies" {
+  let options : @preprocessor.PreprocessOptions = {
+    filename: "input.c",
+    target: @target.Target::default(),
+    include_paths: [],
+    system_include_paths: [],
+    defines: {},
+    undefines: [],
+    undef_predefined: false,
+    allow_missing_includes: true,
+    emit_line_markers: false,
+  }
+  let source =
+    #|#include "generated/config.h"
+    #|#include <generated/system.h>
+    #|int body = 1;
+  match @preprocessor.preprocess_with_dependencies(source, options) {
+    Ok(result) => {
+      inspect(result.text, content="int body=1;\n")
+      let mut saw_quote = false
+      let mut saw_angle = false
+      for dep in result.dependency_records {
+        if dep.path == "generated/config.h" && !dep.system {
+          saw_quote = true
+        } else if dep.path == "generated/system.h" && !dep.system {
+          saw_angle = true
+        }
+      }
+      assert_true(saw_quote)
+      assert_true(saw_angle)
+    }
+    Err(err) => fail(err.to_string())
+  }
+}
+
+///|
+test "missing include without generated mode remains an error" {
+  match
+    @preprocessor.preprocess(
+      "#include \"missing/generated.h\"\n",
+      test_options(),
+    ) {
+    Ok(_) => fail("expected missing include to fail")
+    Err(err) =>
+      assert_eq(err.to_string(), "include file not found: missing/generated.h")
+  }
+}
+
+///|
 test "preprocess with dependencies records resolved includes" {
   let options : @preprocessor.PreprocessOptions = {
     filename: "preprocessor/testdata/input.c",
@@ -574,6 +629,7 @@ test "preprocess with dependencies records resolved includes" {
     defines: {},
     undefines: [],
     undef_predefined: false,
+    allow_missing_includes: false,
     emit_line_markers: false,
   }
   let source =
@@ -623,6 +679,7 @@ test "has include follows quote and system include search" {
     defines: {},
     undefines: [],
     undef_predefined: false,
+    allow_missing_includes: false,
     emit_line_markers: false,
   }
   let source =
@@ -664,6 +721,7 @@ test "has include next resumes after current include directory" {
     defines: {},
     undefines: [],
     undef_predefined: false,
+    allow_missing_includes: false,
     emit_line_markers: false,
   }
   let source =
@@ -696,6 +754,7 @@ test "include_next resumes after current include directory" {
     defines: {},
     undefines: [],
     undef_predefined: false,
+    allow_missing_includes: false,
     emit_line_markers: false,
   }
   let source =
@@ -717,6 +776,7 @@ test "pragma once skips repeated include" {
     defines: {},
     undefines: [],
     undef_predefined: false,
+    allow_missing_includes: false,
     emit_line_markers: false,
   }
   let source =
@@ -739,6 +799,7 @@ test "guarded recursive include is ignored" {
     defines: {},
     undefines: [],
     undef_predefined: false,
+    allow_missing_includes: false,
     emit_line_markers: false,
   }
   let source =

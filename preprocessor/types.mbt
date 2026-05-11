@@ -12,6 +12,7 @@ pub(all) struct PreprocessOptions {
   defines : Map[String, String]
   undefines : Array[String]
   undef_predefined : Bool
+  allow_missing_includes : Bool
   emit_line_markers : Bool
 } derive(Eq)
 
@@ -26,6 +27,7 @@ pub fn PreprocessOptions::new(filename : String) -> PreprocessOptions {
     defines: {},
     undefines: [],
     undef_predefined: false,
+    allow_missing_includes: false,
     emit_line_markers: false,
   }
 }

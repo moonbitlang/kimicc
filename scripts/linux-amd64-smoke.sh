@@ -327,6 +327,24 @@ if grep -F 'imacros_output_should_be_discarded' "$driver_query_path" >/dev/null;
   echo "expected -imacros to discard ordinary output from the macro file" >&2
   exit 1
 fi
+cat > "$source_path" <<'C'
+#include "generated/config.h"
+#include <generated/system.h>
+int generated_dependency_probe = 1;
+C
+"$kimicc" -M -MG -target linux-amd64 "$source_path" >"$driver_query_path"
+grep -F 'generated/config.h' "$driver_query_path" >/dev/null
+grep -F 'generated/system.h' "$driver_query_path" >/dev/null
+set +e
+"$kimicc" -MD -MG -target linux-amd64 "$source_path" \
+  >"$driver_stdout_path" 2>"$driver_stderr_path"
+driver_status=$?
+set -e
+if [ "$driver_status" -eq 0 ]; then
+  echo "expected -MG with -MD to fail outside dependency-only mode" >&2
+  exit 1
+fi
+grep -F "option '-MG' requires '-M' or '-MM'" "$driver_stderr_path" >/dev/null
 
 cat > "$bad_source_path" <<'C'
 _Static_assert(0, "linux smoke expects this failure");

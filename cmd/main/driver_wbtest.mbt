@@ -1348,6 +1348,54 @@ test "dependency-only mode treats output as dependency destination" {
 }
 
 ///|
+test "driver records generated missing headers in dependency-only mode" {
+  let opts = match
+    parse_driver_args(["kimicc", "-M", "-MG", "-MF", "-", "src/foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.output == EmitDependencies)
+  assert_true(opts.dependency_missing_generated)
+  let result = preprocess_source_with_dependencies(
+    "#include \"generated/config.h\"\n#include <generated/system.h>\nint body;\n",
+    "src/foo.c", opts,
+  )
+  assert_eq(
+    dependency_rule_content(
+      opts,
+      "src/foo.c",
+      "src/foo.o",
+      result.dependency_records,
+    ),
+    "src/foo.o: src/foo.c generated/config.h generated/system.h\n",
+  )
+  let wp_opts = match
+    parse_driver_args(["kimicc", "-Wp,-MM,-MG", "src/foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(wp_opts.output == EmitDependencies)
+  assert_true(wp_opts.dependency_missing_generated)
+  let x_opts = match
+    parse_driver_args([
+      "kimicc", "-Xpreprocessor", "-M", "-Xpreprocessor", "-MG", "src/foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(x_opts.output == EmitDependencies)
+  assert_true(x_opts.dependency_missing_generated)
+}
+
+///|
+test "driver rejects generated missing headers outside dependency-only mode" {
+  match parse_driver_args(["kimicc", "-MD", "-MG", "src/foo.c"]) {
+    Ok(_) => fail("expected -MG with -MD to fail")
+    Err(err) => assert_eq(err, "option '-MG' requires '-M' or '-MM'")
+  }
+}
+
+///|
 test "driver parses preprocessor dependency options" {
   let opts = match
     parse_driver_args([

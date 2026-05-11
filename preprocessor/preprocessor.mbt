@@ -739,7 +739,11 @@ fn Preprocessor::process_include(
             }
           }
         None => {
-          self.set_error("include file not found: " + name)
+          if self.options.allow_missing_includes {
+            self.record_dependency(name, false)
+          } else {
+            self.set_error("include file not found: " + name)
+          }
           ""
         }
       }
@@ -772,7 +776,11 @@ fn Preprocessor::process_include_next(
             }
           }
         None => {
-          self.set_error("include_next file not found: " + name)
+          if self.options.allow_missing_includes {
+            self.record_dependency(name, false)
+          } else {
+            self.set_error("include_next file not found: " + name)
+          }
           ""
         }
       }

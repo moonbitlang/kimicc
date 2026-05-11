@@ -242,11 +242,13 @@ the target split real and testable without claiming full C ABI coverage yet.
   `-iwithprefixbefore` user include paths and `-iwithprefix` system include
   paths. `-imacros FILE` processes macro definitions from a file before forced
   includes while discarding ordinary output from that macro file.
-- Dependency flags `-M`, `-MM`, `-MD`, `-MMD`, `-MP`, `-MF`, `-MT`, and `-MQ`
+- Dependency flags `-M`, `-MM`, `-MD`, `-MMD`, `-MP`, `-MF`, `-MG`, `-MT`, and `-MQ`
   are handled by the driver using headers resolved by kimicc's preprocessor.
   Full dependency modes include system headers; `-MM` and `-MMD` keep only the
-  main source and user headers. Repeated `-MT`/`-MQ` options add multiple rule
-  targets, `-MF -` writes the dependency rule to stdout, Clang's
+  main source and user headers. In dependency-only `-M`/`-MM` modes, `-MG`
+  records missing include names as generated dependencies instead of failing.
+  Repeated `-MT`/`-MQ` options add multiple rule targets, `-MF -` writes the
+  dependency rule to stdout, Clang's
   `-dependency-file PATH` is accepted as a depfile destination alias, and
   dependency-only `-o PATH` is treated as a dependency output path when `-MF`
   is absent.
