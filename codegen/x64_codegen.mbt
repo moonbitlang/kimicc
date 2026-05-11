@@ -7270,9 +7270,13 @@ fn X64Codegen::global_lvalue_reloc(
 ) -> (String, Int)? {
   match expr {
     Var(name) => Some((name, 0))
+    Cast(_, e) => self.global_lvalue_reloc(e)
+    Unary("*", e) | Deref(e) => self.global_address_reloc_parts(e)
     ArrayAccess(base, index) =>
-      match self.global_lvalue_reloc(base) {
-        Some((label, base_offset)) => {
+      match
+        (self.global_lvalue_reloc(base), self.global_address_reloc_parts(base)) {
+        (Some(parts), _) | (None, Some(parts)) => {
+          let (label, base_offset) = parts
           let elem_size = match peel_aligned_type(self.global_expr_type(base)) {
             Array(elem, _) | Pointer(elem) => self.pointer_element_size(elem)
             _ => 1
@@ -7282,7 +7286,7 @@ fn X64Codegen::global_lvalue_reloc(
             None => None
           }
         }
-        None => None
+        _ => None
       }
     MemberAccess(obj, field) =>
       match self.global_lvalue_reloc(obj) {
@@ -7315,45 +7319,55 @@ fn X64Codegen::global_lvalue_reloc(
 }
 
 ///|
-fn X64Codegen::global_address_reloc(
+fn X64Codegen::global_address_reloc_parts(
   self : X64Codegen,
   expr : @parser.Expr,
-) -> String? {
+) -> (String, Int)? {
   match expr {
-    Var(name) => Some(name)
-    Cast(_, e) => self.global_address_reloc(e)
-    LabelAddr(name) => Some(self.label_ref(name))
-    AddrOf(e) =>
-      match self.global_lvalue_reloc(e) {
-        Some((label, offset)) => Some(reloc_with_offset(label, offset))
-        None => None
-      }
+    Var(name) => Some((name, 0))
+    Cast(_, e) => self.global_address_reloc_parts(e)
+    LabelAddr(name) => Some((self.label_ref(name), 0))
+    AddrOf(e) => self.global_lvalue_reloc(e)
     Binary("+", base, offset_expr) =>
-      match (self.global_address_reloc(base), self.fold_const(offset_expr)) {
-        (Some(label), Some(offset)) =>
-          Some(reloc_with_offset(label, self.global_offset_bytes(base, offset)))
+      match
+        (self.global_address_reloc_parts(base), self.fold_const(offset_expr)) {
+        (Some((label, base_offset)), Some(offset)) =>
+          Some((label, base_offset + self.global_offset_bytes(base, offset)))
         _ =>
           match
-            (self.global_address_reloc(offset_expr), self.fold_const(base)) {
-            (Some(label), Some(offset)) =>
+            (
+              self.global_address_reloc_parts(offset_expr),
+              self.fold_const(base),
+            ) {
+            (Some((label, base_offset)), Some(offset)) =>
               Some(
-                reloc_with_offset(
+                (
                   label,
-                  self.global_offset_bytes(offset_expr, offset),
+                  base_offset + self.global_offset_bytes(offset_expr, offset),
                 ),
               )
             _ => None
           }
       }
     Binary("-", base, offset_expr) =>
-      match (self.global_address_reloc(base), self.fold_const(offset_expr)) {
-        (Some(label), Some(offset)) =>
-          Some(
-            reloc_with_offset(label, -self.global_offset_bytes(base, offset)),
-          )
+      match
+        (self.global_address_reloc_parts(base), self.fold_const(offset_expr)) {
+        (Some((label, base_offset)), Some(offset)) =>
+          Some((label, base_offset - self.global_offset_bytes(base, offset)))
         _ => None
       }
     _ => None
+  }
+}
+
+///|
+fn X64Codegen::global_address_reloc(
+  self : X64Codegen,
+  expr : @parser.Expr,
+) -> String? {
+  match self.global_address_reloc_parts(expr) {
+    Some((label, offset)) => Some(reloc_with_offset(label, offset))
+    None => None
   }
 }
 

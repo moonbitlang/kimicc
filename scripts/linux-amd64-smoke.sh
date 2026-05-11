@@ -383,6 +383,8 @@ int global_arr[5] = { 1, [3] = 4 };
 int *global_ptr = global_arr + 3;
 char *global_byte_ptr = (char *)global_arr + 12;
 int *global_cast_ptr = (int *)((char *)global_arr + 12);
+char *global_byte_subscript_ptr = &((char *)global_arr)[12];
+int *global_cast_subscript_ptr = &((int *)((char *)global_arr + 8))[1];
 int *global_addr = &global_arr[4];
 int (*global_fp)(int) = global_add1;
 int *global_ptrs[3] = { global_arr, global_arr + 2, &global_arr[4] };
@@ -597,6 +599,8 @@ int offsetof_designators(void) {
 int global_cast_pointer_initializers(void) {
   if (*global_cast_ptr != 4) return 599;
   if (global_byte_ptr - (char *)global_arr != 12) return 600;
+  if (*global_cast_subscript_ptr != 4) return 601;
+  if (global_byte_subscript_ptr - (char *)global_arr != 12) return 602;
   return 0;
 }
 

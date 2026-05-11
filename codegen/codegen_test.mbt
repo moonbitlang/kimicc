@@ -1347,6 +1347,8 @@ test "generate linux amd64 global aggregate initializers" {
     #|int *gptr = garr + 3;
     #|char *gbyte_ptr = (char *)garr + 3;
     #|int *gcast_ptr = (int *)((char *)garr + 5);
+    #|char *gbyte_subscript_ptr = &((char *)garr)[7];
+    #|int *gcast_subscript_ptr = &((int *)((char *)garr + 6))[1];
     #|int *gaddr = &garr[4];
     #|int (*gfp)(int) = gadd1;
     #|int *gptrs[3] = { garr, garr + 2, &garr[4] };
@@ -1392,12 +1394,14 @@ test "generate linux amd64 global aggregate initializers" {
   inspect(assembly.contains("\t.quad\tgarr+12"), content="true")
   inspect(assembly.contains("\t.quad\tgarr+3"), content="true")
   inspect(assembly.contains("\t.quad\tgarr+5"), content="true")
+  inspect(assembly.contains("\t.quad\tgarr+7"), content="true")
+  inspect(assembly.contains("\t.quad\tgarr+10"), content="true")
   inspect(assembly.contains("\t.quad\tgarr+16"), content="true")
   inspect(assembly.contains("\t.quad\tgadd1"), content="true")
   inspect(assembly.contains("\t.quad\tgarr+8"), content="true")
   inspect(assembly.contains("\t.quad\tgarr+4"), content="true")
   inspect(assembly.contains("\t.quad\tgout+8"), content="true")
-  inspect(assembly.contains("\t.quad\tgout+8+4"), content="true")
+  inspect(assembly.contains("\t.quad\tgout+12"), content="true")
   inspect(assembly.contains("\t.quad\tgnode2"), content="true")
   inspect(assembly.contains("\t.quad\tgnode1"), content="true")
   inspect(assembly.contains("\t.byte\t65"), content="true")
