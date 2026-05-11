@@ -72,6 +72,9 @@ register:
 `x10` holding the high half. Floating-point values are often carried as raw
 bits in integer scratch registers between AST operations, then moved into
 `sN`/`dN` registers for floating-point arithmetic, calls, or returns.
+Covered conditional expressions compute a C result type for scalar, pointer,
+and function-pointer branches, then convert only the selected arm to that type
+before control flow rejoins.
 
 ## Calls
 
@@ -143,6 +146,8 @@ feature set. Several high-risk ABI areas have focused tests, including:
 - narrow scalar parameter signedness;
 - prototype-driven scalar argument conversion;
 - floating-point argument and return registers;
+- mixed scalar conditional-expression conversions;
+- conditional function-pointer calls preserving argument and return metadata;
 - 16-byte aggregate pass/return behavior;
 - large aggregate arguments and hidden result pointers;
 - variadic calls and `va_arg` layout;
