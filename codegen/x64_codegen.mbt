@@ -846,13 +846,18 @@ fn x64_mem_at_reg(reg : String, offset : Int) -> String {
 
 ///|
 fn x64_sized_mem_at_reg(reg : String, offset : Int, width : Int) -> String {
+  x64_sized_mem_ref(x64_mem_at_reg(reg, offset), width)
+}
+
+///|
+fn x64_sized_mem_ref(mem : String, width : Int) -> String {
   let prefix = match width {
     1 => "BYTE PTR "
     2 => "WORD PTR "
     4 => "DWORD PTR "
     _ => "QWORD PTR "
   }
-  prefix + x64_mem_at_reg(reg, offset)
+  prefix + mem
 }
 
 ///|
@@ -862,6 +867,294 @@ fn x64_sized_reg(width : Int) -> String {
     2 => "ax"
     4 => "eax"
     _ => "rax"
+  }
+}
+
+///|
+fn x64_reg8(reg : String) -> String {
+  match reg {
+    "rax" => "al"
+    "rbx" => "bl"
+    "rcx" => "cl"
+    "rdx" => "dl"
+    "rdi" => "dil"
+    "rsi" => "sil"
+    "r8" => "r8b"
+    "r9" => "r9b"
+    "r10" => "r10b"
+    "r11" => "r11b"
+    _ => reg
+  }
+}
+
+///|
+fn x64_reg16(reg : String) -> String {
+  match reg {
+    "rax" => "ax"
+    "rbx" => "bx"
+    "rcx" => "cx"
+    "rdx" => "dx"
+    "rdi" => "di"
+    "rsi" => "si"
+    "r8" => "r8w"
+    "r9" => "r9w"
+    "r10" => "r10w"
+    "r11" => "r11w"
+    _ => reg
+  }
+}
+
+///|
+fn x64_reg32(reg : String) -> String {
+  match reg {
+    "rax" => "eax"
+    "rbx" => "ebx"
+    "rcx" => "ecx"
+    "rdx" => "edx"
+    "rdi" => "edi"
+    "rsi" => "esi"
+    "r8" => "r8d"
+    "r9" => "r9d"
+    "r10" => "r10d"
+    "r11" => "r11d"
+    _ => reg
+  }
+}
+
+///|
+fn X64Codegen::aggregate_word_width(
+  self : X64Codegen,
+  ty : @parser.Type,
+  word : Int,
+) -> Int {
+  let remaining = self.type_size(ty) - word * 8
+  if remaining >= 8 {
+    8
+  } else if remaining > 0 {
+    remaining
+  } else {
+    0
+  }
+}
+
+///|
+fn X64Codegen::emit_load_int_bytes_from_mem_reg(
+  self : X64Codegen,
+  dst_reg : String,
+  base_reg : String,
+  offset : Int,
+  width : Int,
+) -> Unit {
+  match width {
+    1 =>
+      self.emit(
+        "\tmovzx\t" +
+        x64_reg32(dst_reg) +
+        ", " +
+        x64_sized_mem_at_reg(base_reg, offset, 1),
+      )
+    2 =>
+      self.emit(
+        "\tmovzx\t" +
+        x64_reg32(dst_reg) +
+        ", " +
+        x64_sized_mem_at_reg(base_reg, offset, 2),
+      )
+    3 => {
+      self.emit(
+        "\tmovzx\t" +
+        x64_reg32(dst_reg) +
+        ", " +
+        x64_sized_mem_at_reg(base_reg, offset, 2),
+      )
+      self.emit(
+        "\tmovzx\tr11d, " + x64_sized_mem_at_reg(base_reg, offset + 2, 1),
+      )
+      self.emit("\tshl\tr11, 16")
+      self.emit("\tor\t" + dst_reg + ", r11")
+    }
+    4 =>
+      self.emit(
+        "\tmov\t" +
+        x64_reg32(dst_reg) +
+        ", " +
+        x64_sized_mem_at_reg(base_reg, offset, 4),
+      )
+    5 | 6 | 7 => {
+      self.emit(
+        "\tmov\t" +
+        x64_reg32(dst_reg) +
+        ", " +
+        x64_sized_mem_at_reg(base_reg, offset, 4),
+      )
+      if width == 5 {
+        self.emit(
+          "\tmovzx\tr11d, " + x64_sized_mem_at_reg(base_reg, offset + 4, 1),
+        )
+        self.emit("\tshl\tr11, 32")
+        self.emit("\tor\t" + dst_reg + ", r11")
+      } else {
+        self.emit(
+          "\tmovzx\tr11d, " + x64_sized_mem_at_reg(base_reg, offset + 4, 2),
+        )
+        self.emit("\tshl\tr11, 32")
+        self.emit("\tor\t" + dst_reg + ", r11")
+        if width == 7 {
+          self.emit(
+            "\tmovzx\tr11d, " + x64_sized_mem_at_reg(base_reg, offset + 6, 1),
+          )
+          self.emit("\tshl\tr11, 48")
+          self.emit("\tor\t" + dst_reg + ", r11")
+        }
+      }
+    }
+    8 =>
+      self.emit(
+        "\tmov\t" + dst_reg + ", " + x64_sized_mem_at_reg(base_reg, offset, 8),
+      )
+    _ => ()
+  }
+}
+
+///|
+fn X64Codegen::emit_store_int_bytes_to_mem_reg(
+  self : X64Codegen,
+  src_reg : String,
+  base_reg : String,
+  offset : Int,
+  width : Int,
+) -> Unit {
+  self.emit_store_int_bytes_to_mem_refs(
+    src_reg,
+    x64_mem_at_reg(base_reg, offset),
+    x64_mem_at_reg(base_reg, offset + 2),
+    x64_mem_at_reg(base_reg, offset + 4),
+    x64_mem_at_reg(base_reg, offset + 6),
+    width,
+  )
+}
+
+///|
+fn X64Codegen::emit_store_int_bytes_to_local(
+  self : X64Codegen,
+  src_reg : String,
+  local_offset : Int,
+  byte_offset : Int,
+  width : Int,
+) -> Unit {
+  self.emit_store_int_bytes_to_mem_refs(
+    src_reg,
+    self.local_neg_ref(local_offset, byte_offset),
+    self.local_neg_ref(local_offset, byte_offset + 2),
+    self.local_neg_ref(local_offset, byte_offset + 4),
+    self.local_neg_ref(local_offset, byte_offset + 6),
+    width,
+  )
+}
+
+///|
+fn X64Codegen::emit_store_int_bytes_to_mem_refs(
+  self : X64Codegen,
+  src_reg : String,
+  mem0 : String,
+  mem2 : String,
+  mem4 : String,
+  mem6 : String,
+  width : Int,
+) -> Unit {
+  match width {
+    1 =>
+      self.emit(
+        "\tmov\t" + x64_sized_mem_ref(mem0, 1) + ", " + x64_reg8(src_reg),
+      )
+    2 =>
+      self.emit(
+        "\tmov\t" + x64_sized_mem_ref(mem0, 2) + ", " + x64_reg16(src_reg),
+      )
+    3 => {
+      self.emit(
+        "\tmov\t" + x64_sized_mem_ref(mem0, 2) + ", " + x64_reg16(src_reg),
+      )
+      self.emit("\tmov\tr11, " + src_reg)
+      self.emit("\tshr\tr11, 16")
+      self.emit("\tmov\t" + x64_sized_mem_ref(mem2, 1) + ", r11b")
+    }
+    4 =>
+      self.emit(
+        "\tmov\t" + x64_sized_mem_ref(mem0, 4) + ", " + x64_reg32(src_reg),
+      )
+    5 | 6 | 7 => {
+      self.emit(
+        "\tmov\t" + x64_sized_mem_ref(mem0, 4) + ", " + x64_reg32(src_reg),
+      )
+      self.emit("\tmov\tr11, " + src_reg)
+      self.emit("\tshr\tr11, 32")
+      if width == 5 {
+        self.emit("\tmov\t" + x64_sized_mem_ref(mem4, 1) + ", r11b")
+      } else {
+        self.emit("\tmov\t" + x64_sized_mem_ref(mem4, 2) + ", r11w")
+        if width == 7 {
+          self.emit("\tshr\tr11, 16")
+          self.emit("\tmov\t" + x64_sized_mem_ref(mem6, 1) + ", r11b")
+        }
+      }
+    }
+    8 => self.emit("\tmov\t" + x64_sized_mem_ref(mem0, 8) + ", " + src_reg)
+    _ => ()
+  }
+}
+
+///|
+fn X64Codegen::emit_load_sse_word_from_mem_reg(
+  self : X64Codegen,
+  dst_reg : String,
+  base_reg : String,
+  offset : Int,
+  width : Int,
+) -> Unit {
+  if width <= 4 {
+    self.emit(
+      "\tmovss\t" + dst_reg + ", " + x64_sized_mem_at_reg(base_reg, offset, 4),
+    )
+  } else {
+    self.emit(
+      "\tmovsd\t" + dst_reg + ", " + x64_sized_mem_at_reg(base_reg, offset, 8),
+    )
+  }
+}
+
+///|
+fn X64Codegen::emit_store_sse_word_to_mem_reg(
+  self : X64Codegen,
+  src_reg : String,
+  base_reg : String,
+  offset : Int,
+  width : Int,
+) -> Unit {
+  if width <= 4 {
+    self.emit(
+      "\tmovss\t" + x64_sized_mem_at_reg(base_reg, offset, 4) + ", " + src_reg,
+    )
+  } else {
+    self.emit(
+      "\tmovsd\t" + x64_sized_mem_at_reg(base_reg, offset, 8) + ", " + src_reg,
+    )
+  }
+}
+
+///|
+fn X64Codegen::emit_store_sse_word_to_local(
+  self : X64Codegen,
+  src_reg : String,
+  local_offset : Int,
+  byte_offset : Int,
+  width : Int,
+) -> Unit {
+  let mem = self.local_neg_ref(local_offset, byte_offset)
+  if width <= 4 {
+    self.emit("\tmovss\t" + x64_sized_mem_ref(mem, 4) + ", " + src_reg)
+  } else {
+    self.emit("\tmovsd\t" + x64_sized_mem_ref(mem, 8) + ", " + src_reg)
   }
 }
 
@@ -880,22 +1173,23 @@ fn X64Codegen::emit_load_small_aggregate_return(
   let mut fp_idx = 0
   self.emit("\tmov\tr10, rax")
   for word in 0..<classes.length() {
+    let width = self.aggregate_word_width(ty, word)
     match classes[word] {
       IntClass => {
-        self.emit(
-          "\tmov\t" +
-          int_regs[int_idx] +
-          ", QWORD PTR " +
-          x64_mem_at_reg("r10", word * 8),
+        self.emit_load_int_bytes_from_mem_reg(
+          int_regs[int_idx],
+          "r10",
+          word * 8,
+          width,
         )
         int_idx += 1
       }
       SseClass => {
-        self.emit(
-          "\tmovsd\t" +
-          fp_regs[fp_idx] +
-          ", QWORD PTR " +
-          x64_mem_at_reg("r10", word * 8),
+        self.emit_load_sse_word_from_mem_reg(
+          fp_regs[fp_idx],
+          "r10",
+          word * 8,
+          width,
         )
         fp_idx += 1
       }
@@ -917,22 +1211,23 @@ fn X64Codegen::emit_store_small_aggregate_return(
   let mut int_idx = 0
   let mut fp_idx = 0
   for word in 0..<classes.length() {
+    let width = self.aggregate_word_width(ty, word)
     match classes[word] {
       IntClass => {
-        self.emit(
-          "\tmov\tQWORD PTR " +
-          x64_mem_at_reg("r10", word * 8) +
-          ", " +
+        self.emit_store_int_bytes_to_mem_reg(
           int_regs[int_idx],
+          "r10",
+          word * 8,
+          width,
         )
         int_idx += 1
       }
       SseClass => {
-        self.emit(
-          "\tmovsd\tQWORD PTR " +
-          x64_mem_at_reg("r10", word * 8) +
-          ", " +
+        self.emit_store_sse_word_to_mem_reg(
           fp_regs[fp_idx],
+          "r10",
+          word * 8,
+          width,
         )
         fp_idx += 1
       }
@@ -5385,22 +5680,23 @@ fn X64Codegen::gen_call(
       let mut int_cursor = int_reg_index
       let mut fp_cursor = fp_reg_index
       for word in 0..<arg_words[i] {
+        let width = self.aggregate_word_width(arg_types[i], word)
         match arg_classes[i][word] {
           IntClass => {
-            self.emit(
-              "\tmov\t" +
-              arg_regs[int_cursor] +
-              ", QWORD PTR " +
-              x64_rsp_ref(src_off + word * 8),
+            self.emit_load_int_bytes_from_mem_reg(
+              arg_regs[int_cursor],
+              "rsp",
+              src_off + word * 8,
+              width,
             )
             int_cursor += 1
           }
           SseClass => {
-            self.emit(
-              "\tmovsd\t" +
-              fp_arg_regs[fp_cursor] +
-              ", QWORD PTR " +
-              x64_rsp_ref(src_off + word * 8),
+            self.emit_load_sse_word_from_mem_reg(
+              fp_arg_regs[fp_cursor],
+              "rsp",
+              src_off + word * 8,
+              width,
             )
             fp_cursor += 1
           }
@@ -6223,22 +6519,23 @@ fn X64Codegen::emit_function(
             let mut int_cursor = int_idx
             let mut fp_cursor = fp_idx
             for word in 0..<classes.length() {
+              let width = self.aggregate_word_width(param.ty, word)
               match classes[word] {
                 IntClass => {
-                  self.emit(
-                    "\tmov\tQWORD PTR " +
-                    self.local_neg_ref(offset, word * 8) +
-                    ", " +
+                  self.emit_store_int_bytes_to_local(
                     arg_regs[int_cursor],
+                    offset,
+                    word * 8,
+                    width,
                   )
                   int_cursor += 1
                 }
                 SseClass => {
-                  self.emit(
-                    "\tmovsd\tQWORD PTR " +
-                    self.local_neg_ref(offset, word * 8) +
-                    ", " +
+                  self.emit_store_sse_word_to_local(
                     fp_arg_regs[fp_cursor],
+                    offset,
+                    word * 8,
+                    width,
                   )
                   fp_cursor += 1
                 }

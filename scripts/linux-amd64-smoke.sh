@@ -296,6 +296,14 @@ struct DArray {
   double v[2];
 };
 
+struct Nine {
+  char v[9];
+};
+
+struct F3 {
+  float v[3];
+};
+
 struct Inner {
   long a;
 };
@@ -462,6 +470,42 @@ struct NestedMix make_nested(long a, double b) {
 }
 
 int nested_sum(struct NestedMix p) { return (int)p.i.a + (int)p.d; }
+
+struct Nine make_nine(char tail) {
+  struct Nine n;
+  n.v[0] = 3;
+  n.v[1] = 4;
+  n.v[2] = 5;
+  n.v[3] = 6;
+  n.v[4] = 7;
+  n.v[5] = 8;
+  n.v[6] = 9;
+  n.v[7] = 10;
+  n.v[8] = tail;
+  return n;
+}
+
+int nine_sum(struct Nine n) { return n.v[0] + n.v[8]; }
+
+struct F3 make_f3(float a, float b, float c) {
+  struct F3 f;
+  f.v[0] = a;
+  f.v[1] = b;
+  f.v[2] = c;
+  return f;
+}
+
+float f3_sum(struct F3 f) { return f.v[0] + f.v[1] + f.v[2]; }
+
+int partial_aggregate_eightbytes(void) {
+  struct Nine n = make_nine(39);
+  struct F3 f = make_f3(1.0f, 2.0f, 39.0f);
+  if (n.v[0] != 3 || n.v[8] != 39) return 585;
+  if (nine_sum(n) != 42) return 586;
+  if ((int)f.v[2] != 39) return 587;
+  if ((int)f3_sum(f) != 42) return 588;
+  return 0;
+}
 
 int aligned_offset(void) { return __builtin_offsetof(struct AlignedBytes, c); }
 int aligned_global(void) { return (int)global_aligned; }
@@ -1552,6 +1596,7 @@ int main(void) {
          (int)darray_sum(make_darray(0.5, 0.5)) +
          nested_sum(make_nested(0, 1.0)) -
          3 +
+         partial_aggregate_eightbytes() +
          aligned_offset() +
          aligned_global() -
          18 +

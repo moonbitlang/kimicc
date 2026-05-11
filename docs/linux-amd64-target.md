@@ -64,7 +64,9 @@ the target split real and testable without claiming full C ABI coverage yet.
   structs/unions and arrays of supported scalar fields. Covered integer, pure
   SSE, and mixed integer/SSE aggregates use `rax`/`rdx`, `xmm0`/`xmm1`, `rdi`
   through `r9`, `xmm0` through `xmm7`, or the overflow stack area as required by
-  the covered System V aggregate subset.
+  the covered System V aggregate subset. Partial final eightbytes are loaded
+  and stored at their actual object width when moving between memory and ABI
+  registers.
 - Memory-class `struct`/`union` arguments are copied by value into the overflow
   stack argument area. Memory-class aggregate returns use the System V hidden
   result pointer in `rdi` and return that pointer in `rax`.
