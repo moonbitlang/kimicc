@@ -234,7 +234,8 @@ classified recursively by eightbyte, including nested structs/unions and arrays
 of supported scalar fields, and passed or returned in the covered integer, SSE,
 mixed integer/SSE, and overflow-stack subset. When the final aggregate
 eightbyte is only partially occupied, register loads and stores use that
-partial object width rather than an unconditional 8-byte memory access.
+partial object width rather than an unconditional 8-byte memory access,
+including the scratch copy used for register-sourced aggregate `va_arg`.
 Memory-class aggregate arguments are passed by value on the overflow stack, and
 memory-class aggregate returns use the System V hidden result pointer.
 Actual aggregate object copies and `va_arg` overflow-stack scratch copies use

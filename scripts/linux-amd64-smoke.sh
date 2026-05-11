@@ -497,6 +497,24 @@ struct F3 make_f3(float a, float b, float c) {
 
 float f3_sum(struct F3 f) { return f.v[0] + f.v[1] + f.v[2]; }
 
+int var_nine(int tag, ...) {
+  va_list ap;
+  struct Nine n;
+  __builtin_va_start(ap, tag);
+  n = __builtin_va_arg(ap, struct Nine);
+  __builtin_va_end(ap);
+  return nine_sum(n);
+}
+
+int var_f3(int tag, ...) {
+  va_list ap;
+  struct F3 f;
+  __builtin_va_start(ap, tag);
+  f = __builtin_va_arg(ap, struct F3);
+  __builtin_va_end(ap);
+  return (int)f3_sum(f);
+}
+
 int partial_aggregate_eightbytes(void) {
   struct Nine n = make_nine(39);
   struct F3 f = make_f3(1.0f, 2.0f, 39.0f);
@@ -504,6 +522,8 @@ int partial_aggregate_eightbytes(void) {
   if (nine_sum(n) != 42) return 586;
   if ((int)f.v[2] != 39) return 587;
   if ((int)f3_sum(f) != 42) return 588;
+  if (var_nine(0, n) != 42) return 589;
+  if (var_f3(0, f) != 42) return 590;
   return 0;
 }
 

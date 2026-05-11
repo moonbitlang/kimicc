@@ -5864,6 +5864,7 @@ fn X64Codegen::emit_va_arg_aggregate_addr(
   let mut int_cursor = 0
   let mut fp_cursor = 0
   for word in 0..<classes.length() {
+    let width = self.aggregate_word_width(ty, word)
     match classes[word] {
       IntClass => {
         self.emit("\tmov\tr8d, eax")
@@ -5871,9 +5872,7 @@ fn X64Codegen::emit_va_arg_aggregate_addr(
           self.emit("\tadd\tr8, " + (int_cursor * 8).to_string())
         }
         self.emit("\tmov\trdx, QWORD PTR [r9 + r8]")
-        self.emit(
-          "\tmov\tQWORD PTR " + x64_mem_at_reg("r10", word * 8) + ", rdx",
-        )
+        self.emit_store_int_bytes_to_mem_reg("rdx", "r10", word * 8, width)
         int_cursor += 1
       }
       SseClass => {
@@ -5881,10 +5880,12 @@ fn X64Codegen::emit_va_arg_aggregate_addr(
         if fp_cursor > 0 {
           self.emit("\tadd\tr8, " + (fp_cursor * 16).to_string())
         }
-        self.emit("\tmovsd\txmm0, QWORD PTR [r9 + r8]")
-        self.emit(
-          "\tmovsd\tQWORD PTR " + x64_mem_at_reg("r10", word * 8) + ", xmm0",
-        )
+        if width <= 4 {
+          self.emit("\tmovss\txmm0, DWORD PTR [r9 + r8]")
+        } else {
+          self.emit("\tmovsd\txmm0, QWORD PTR [r9 + r8]")
+        }
+        self.emit_store_sse_word_to_mem_reg("xmm0", "r10", word * 8, width)
         fp_cursor += 1
       }
     }

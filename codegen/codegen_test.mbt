@@ -793,6 +793,8 @@ test "generate linux amd64 aggregate va_arg state" {
     #|struct Pair { long a; long b; };
     #|struct DPair { double a; double b; };
     #|struct Big { long a; long b; long c; };
+    #|struct Nine { char v[9]; };
+    #|struct F3 { float v[3]; };
     #|struct __attribute__((packed)) Packed { char c; int x; };
     #|int read_pair(int tag, ...) {
     #|  va_list ap;
@@ -814,6 +816,20 @@ test "generate linux amd64 aggregate va_arg state" {
     #|  struct Big p = __builtin_va_arg(ap, struct Big);
     #|  __builtin_va_end(ap);
     #|  return (int)(p.a + p.b + p.c);
+    #|}
+    #|int read_nine(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  struct Nine p = __builtin_va_arg(ap, struct Nine);
+    #|  __builtin_va_end(ap);
+    #|  return p.v[0] + p.v[8];
+    #|}
+    #|int read_f3(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  struct F3 p = __builtin_va_arg(ap, struct F3);
+    #|  __builtin_va_end(ap);
+    #|  return (int)(p.v[0] + p.v[1] + p.v[2]);
     #|}
     #|int read_pair_stack(int a, int b, int c, int d, int e, ...) {
     #|  va_list ap;
@@ -843,6 +859,8 @@ test "generate linux amd64 aggregate va_arg state" {
   inspect(assembly.contains("mov\tQWORD PTR [r11 + 8], rax"), content="true")
   inspect(assembly.contains("mov\tal, BYTE PTR [r11 + 4]"), content="true")
   inspect(assembly.contains("mov\tBYTE PTR [r10 + 4], al"), content="true")
+  inspect(assembly.contains("mov\tBYTE PTR [r10 + 8], dl"), content="true")
+  inspect(assembly.contains("movss\tDWORD PTR [r10 + 8], xmm0"), content="true")
 }
 
 ///|
