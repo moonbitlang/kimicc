@@ -92,8 +92,10 @@ test "generate darwin arm64 global pointer relocations are type scaled" {
   let source =
     #|struct DGInner { char c; int x; };
     #|struct DGOuter { char tag; struct DGInner inner; int tail; };
+    #|struct DGCast { char c; int x; };
     #|int drel_arr[5] = { 1, [3] = 4 };
     #|struct DGOuter drel_outer = { .tail = 9, .inner = { .x = 7, .c = 2 }, .tag = 1 };
+    #|char drel_buf[16];
     #|int *drel_ptr = drel_arr + 3;
     #|char *drel_byte_ptr = (char *)drel_arr + 3;
     #|int *drel_cast_ptr = (int *)((char *)drel_arr + 5);
@@ -101,6 +103,7 @@ test "generate darwin arm64 global pointer relocations are type scaled" {
     #|int *drel_cast_subscript_ptr = &((int *)((char *)drel_arr + 6))[1];
     #|int *drel_member = &drel_outer.inner.x;
     #|int *drel_member_next = &drel_outer.inner.x + 1;
+    #|int *drel_cast_member = &((struct DGCast *)drel_buf)->x;
     #|int main(void) { return 0; }
   let prog = @parser.parse(source)
   let codegen = @codegen.Codegen::new()
@@ -131,6 +134,10 @@ test "generate darwin arm64 global pointer relocations are type scaled" {
   )
   inspect(
     assembly.contains("_drel_member_next:\n\t.quad\t_drel_outer+12"),
+    content="true",
+  )
+  inspect(
+    assembly.contains("_drel_cast_member:\n\t.quad\t_drel_buf+4"),
     content="true",
   )
 }
@@ -1464,18 +1471,21 @@ test "generate linux amd64 global aggregate initializers" {
     #|struct GBits { unsigned a : 3; signed b : 4; unsigned c : 5; };
     #|struct GRefs { int *first; int *tail; int (*fn)(int); };
     #|struct GNode { int value; struct GNode *next; };
+    #|struct GCast { char c; int x; };
     #|union GU { int i; char c[4]; };
     #|union GUBits { unsigned a : 3; signed b : 4; };
     #|int gadd1(int x) { return x + 1; }
     #|int garr[5] = { 1, [3] = 4 };
     #|struct GOuter gout = { .tail = 9, .inner = { .x = 7, .c = 2 }, .tag = 1 };
     #|struct GBits gbits = { .a = 5, .b = -3, .c = 17 };
+    #|char gbuf[16];
     #|int *gptr = garr + 3;
     #|char *gbyte_ptr = (char *)garr + 3;
     #|int *gcast_ptr = (int *)((char *)garr + 5);
     #|char *gbyte_subscript_ptr = &((char *)garr)[7];
     #|int *gcast_subscript_ptr = &((int *)((char *)garr + 6))[1];
     #|int *gaddr = &garr[4];
+    #|int *gcast_member = &((struct GCast *)gbuf)->x;
     #|int (*gfp)(int) = gadd1;
     #|int *gptrs[3] = { garr, garr + 2, &garr[4] };
     #|struct GRefs grefs = { .tail = garr + 4, .fn = gadd1, .first = &garr[1] };
@@ -1501,6 +1511,7 @@ test "generate linux amd64 global aggregate initializers" {
   inspect(assembly.contains("gbits:"), content="true")
   inspect(assembly.contains("gptr:"), content="true")
   inspect(assembly.contains("gaddr:"), content="true")
+  inspect(assembly.contains("gcast_member:"), content="true")
   inspect(assembly.contains("gfp:"), content="true")
   inspect(assembly.contains("gptrs:"), content="true")
   inspect(assembly.contains("grefs:"), content="true")
@@ -1523,6 +1534,7 @@ test "generate linux amd64 global aggregate initializers" {
   inspect(assembly.contains("\t.quad\tgarr+7"), content="true")
   inspect(assembly.contains("\t.quad\tgarr+10"), content="true")
   inspect(assembly.contains("\t.quad\tgarr+16"), content="true")
+  inspect(assembly.contains("\t.quad\tgbuf+4"), content="true")
   inspect(assembly.contains("\t.quad\tgadd1"), content="true")
   inspect(assembly.contains("\t.quad\tgarr+8"), content="true")
   inspect(assembly.contains("\t.quad\tgarr+4"), content="true")

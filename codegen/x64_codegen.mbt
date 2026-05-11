@@ -3987,6 +3987,11 @@ fn X64Codegen::global_expr_type(
       self.global_expr_type(e)
     Cast(ty, _) => ty
     AddrOf(e) => Pointer(self.global_expr_type(e))
+    Deref(e) =>
+      match peel_aligned_type(self.global_expr_type(e)) {
+        Pointer(elem) | Array(elem, _) => elem
+        _ => SInt
+      }
     ArrayAccess(base, _) =>
       match peel_aligned_type(self.global_expr_type(base)) {
         Array(elem, _) | Pointer(elem) => elem
