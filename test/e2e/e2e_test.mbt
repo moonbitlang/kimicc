@@ -1891,6 +1891,24 @@ async test "global scalar initializer" {
 }
 
 ///|
+async test "global bit-field initializers" {
+  let source =
+    #|struct Bits { unsigned a : 3; signed b : 4; unsigned c : 5; };
+    #|union UBits { unsigned a : 3; signed b : 4; };
+    #|struct Bits bits = { .a = 5, .b = -3, .c = 17 };
+    #|union UBits ubits = { .b = -3 };
+    #|int main(void) {
+    #|  if (bits.a != 5) return 1;
+    #|  if (bits.b != -3) return 2;
+    #|  if (bits.c != 17) return 3;
+    #|  if (ubits.b != -3) return 4;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "global string pointer initializer" {
   let source =
     #|char *msg = "hi";
