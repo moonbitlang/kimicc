@@ -267,6 +267,31 @@ memory, string, bit-manipulation, dynamic stack allocation, integer atomic,
 integer overflow-checking, fortified
 formatted-output, and floating and scalar hint/query builtins.
 
+## Register Allocation Model
+
+The Linux/amd64 backend does not run a general-purpose register allocator. It
+uses a fixed expression-lowering discipline:
+
+- Scalar integer and pointer expression results are produced in `rax`.
+- `float` and `double` expression results are produced in `xmm0`.
+- `__int128` expression results use `rdx:rax`.
+- Address-producing paths use `rax`, with aggregate-copy helpers using `r10`
+  as the destination address and `r11` as the source address.
+- Calls first evaluate arguments into a temporary stack area, then marshal those
+  values into the System V argument registers or overflow stack slots. This
+  keeps nested calls from clobbering already-evaluated arguments without needing
+  live-range analysis.
+- The backend treats normal scratch registers as caller-saved around calls. It
+  only preserves callee-saved state that it explicitly uses, currently `r13`
+  when a function needs a separate over-aligned local-frame base.
+- Local C objects live in stack slots. The backend reloads from those slots
+  rather than trying to keep variables resident in machine registers.
+
+That fixed strategy is simple and slower than a real allocator, but it can still
+emit ABI-correct code for the documented subset because ABI registers are chosen
+at call/return boundaries, stack alignment is maintained there, and
+callee-saved registers used by the backend are restored before return.
+
 ## Known Gaps
 
 This is not complete Linux C ABI compliance yet. The new backend does not yet
