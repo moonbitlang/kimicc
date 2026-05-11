@@ -1410,6 +1410,28 @@ test "generate linux amd64 global aggregate initializers" {
 }
 
 ///|
+test "generate linux amd64 global floating constants use expression type" {
+  let source =
+    #|double gint_div = 1 / 2;
+    #|double gfp_div = (double)1 / 2;
+    #|double gcast_int = (int)1.75;
+    #|float gternary_int = 1 ? 3 / 2 : 9.0f;
+    #|int gint_from_float = (int)1.75;
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(assembly.contains("gint_div:\n\t.double\t0"), content="true")
+  inspect(assembly.contains("gfp_div:\n\t.double\t0.5"), content="true")
+  inspect(assembly.contains("gcast_int:\n\t.double\t1"), content="true")
+  inspect(assembly.contains("gternary_int:\n\t.float\t1"), content="true")
+  inspect(assembly.contains("gint_from_float:\n\t.long\t1"), content="true")
+}
+
+///|
 test "generate linux amd64 switch dispatch" {
   let source =
     #|int pick(int x) {

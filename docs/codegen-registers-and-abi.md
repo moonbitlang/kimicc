@@ -257,6 +257,10 @@ movement are rounded to eightbyte slots.
 Local aggregate brace initializers and compound literals are supported for the
 covered scalar, array, struct, union, nested-designator, and bit-field
 initializer cases; compound literals are materialized in stack storage.
+Global floating and integer scalar constant initializers are folded through the
+source expression's C type before conversion to the destination object type, so
+integer subexpressions such as `1 / 2` keep integer-division semantics and
+floating-to-integer casts initialize integer storage.
 Initialized global arrays, structs, and unions are emitted with layout padding
 and designated-initializer holes for the covered aggregate cases, including
 bit-field storage units that do not overlap earlier streamed scalar fields and

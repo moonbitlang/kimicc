@@ -7187,10 +7187,17 @@ fn X64Codegen::fold_const(self : X64Codegen, expr : @parser.Expr) -> Int64? {
         Some(_) => Some(0L)
         None => None
       }
-    Cast(_, e)
-    | DesignatedField(_, e)
-    | DesignatedIndex(_, e)
-    | DesignatedRange(_, _, e) => self.fold_const(e)
+    Cast(ty, e) =>
+      if !x64_is_fp_type(ty) && x64_is_fp_type(self.type_of(e)) {
+        match self.fold_float_const(e) {
+          Some(value) => Some(value.to_int().to_int64())
+          None => None
+        }
+      } else {
+        self.fold_const(e)
+      }
+    DesignatedField(_, e) | DesignatedIndex(_, e) | DesignatedRange(_, _, e) =>
+      self.fold_const(e)
     Sizeof(ty) => Some(self.type_size(ty).to_int64())
     SizeofExpr(e) => Some(self.type_size(self.global_expr_type(e)).to_int64())
     Alignof(ty) => Some(self.type_align(ty).to_int64())
@@ -7209,57 +7216,74 @@ fn X64Codegen::fold_float_const(
   self : X64Codegen,
   expr : @parser.Expr,
 ) -> Double? {
-  match expr {
-    FloatLiteral(v) => Some(v)
-    Number(n) => Some(n.to_double())
-    Binary("+", a, b) =>
-      match (self.fold_float_const(a), self.fold_float_const(b)) {
-        (Some(x), Some(y)) => Some(x + y)
-        _ => None
-      }
-    Binary("-", a, b) =>
-      match (self.fold_float_const(a), self.fold_float_const(b)) {
-        (Some(x), Some(y)) => Some(x - y)
-        _ => None
-      }
-    Binary("*", a, b) =>
-      match (self.fold_float_const(a), self.fold_float_const(b)) {
-        (Some(x), Some(y)) => Some(x * y)
-        _ => None
-      }
-    Binary("/", a, b) =>
-      match (self.fold_float_const(a), self.fold_float_const(b)) {
-        (Some(x), Some(y)) => Some(x / y)
-        _ => None
-      }
-    Unary("-", e) =>
-      match self.fold_float_const(e) {
-        Some(x) => Some(-x)
-        None => None
-      }
-    Unary("+", e) => self.fold_float_const(e)
-    Ternary(cond, a, b) =>
-      match self.fold_const(cond) {
-        Some(0L) => self.fold_float_const(b)
-        Some(_) => self.fold_float_const(a)
-        None => None
-      }
-    Cast(_, e)
-    | DesignatedField(_, e)
-    | DesignatedIndex(_, e)
-    | DesignatedRange(_, _, e) => self.fold_float_const(e)
-    Call(Var(name), _) =>
-      match name {
-        "__builtin_nan" | "__builtin_nanf" | "__builtin_nanl" => Some(0.0 / 0.0)
-        "__builtin_huge_val"
-        | "__builtin_huge_valf"
-        | "__builtin_huge_vall"
-        | "__builtin_inf"
-        | "__builtin_inff"
-        | "__builtin_infl" => Some(1.0 / 0.0)
-        _ => None
-      }
-    _ => None
+  let expr_ty = self.type_of(expr)
+  if !x64_is_fp_type(expr_ty) {
+    match expr {
+      Cast(_, e) if x64_is_fp_type(self.type_of(e)) =>
+        match self.fold_float_const(e) {
+          Some(value) => Some(value.to_int().to_double())
+          None => None
+        }
+      _ =>
+        match self.fold_const(expr) {
+          Some(value) => Some(value.to_double())
+          None => None
+        }
+    }
+  } else {
+    match expr {
+      FloatLiteral(v) => Some(v)
+      Number(n) => Some(n.to_double())
+      Binary("+", a, b) =>
+        match (self.fold_float_const(a), self.fold_float_const(b)) {
+          (Some(x), Some(y)) => Some(x + y)
+          _ => None
+        }
+      Binary("-", a, b) =>
+        match (self.fold_float_const(a), self.fold_float_const(b)) {
+          (Some(x), Some(y)) => Some(x - y)
+          _ => None
+        }
+      Binary("*", a, b) =>
+        match (self.fold_float_const(a), self.fold_float_const(b)) {
+          (Some(x), Some(y)) => Some(x * y)
+          _ => None
+        }
+      Binary("/", a, b) =>
+        match (self.fold_float_const(a), self.fold_float_const(b)) {
+          (Some(x), Some(y)) => Some(x / y)
+          _ => None
+        }
+      Unary("-", e) =>
+        match self.fold_float_const(e) {
+          Some(x) => Some(-x)
+          None => None
+        }
+      Unary("+", e) => self.fold_float_const(e)
+      Ternary(cond, a, b) =>
+        match self.fold_const(cond) {
+          Some(0L) => self.fold_float_const(b)
+          Some(_) => self.fold_float_const(a)
+          None => None
+        }
+      Cast(_, e)
+      | DesignatedField(_, e)
+      | DesignatedIndex(_, e)
+      | DesignatedRange(_, _, e) => self.fold_float_const(e)
+      Call(Var(name), _) =>
+        match name {
+          "__builtin_nan" | "__builtin_nanf" | "__builtin_nanl" =>
+            Some(0.0 / 0.0)
+          "__builtin_huge_val"
+          | "__builtin_huge_valf"
+          | "__builtin_huge_vall"
+          | "__builtin_inf"
+          | "__builtin_inff"
+          | "__builtin_infl" => Some(1.0 / 0.0)
+          _ => None
+        }
+      _ => None
+    }
   }
 }
 
@@ -7480,7 +7504,12 @@ fn X64Codegen::emit_global_scalar(
           self.emit("\t.zero\t" + self.type_size(ty).to_string())
         _ => self.emit_global_int_by_size(8, value)
       }
-    FloatLiteral(value) => self.emit_global_float(ty, value)
+    FloatLiteral(value) =>
+      if x64_is_fp_type(ty) {
+        self.emit_global_float(ty, value)
+      } else {
+        self.emit_global_scalar(ty, Number(value.to_int().to_int64()))
+      }
     String(value) =>
       match x64_core_type(ty) {
         Array(SChar, n) | Array(UChar, n) => {

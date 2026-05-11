@@ -399,6 +399,10 @@ struct GlobalNode *global_nodes[2] = { &global_node1, &global_node2 };
 union GlobalUnion global_union = { .c = { 65, 66, 0, 0 } };
 union GlobalBitUnion global_bit_union = { .b = -3 };
 char global_string[6] = "hey";
+double global_int_div = 1 / 2;
+double global_fp_div = (double)1 / 2;
+double global_cast_int_fp = (int)1.75;
+int global_int_from_float = (int)1.75;
 
 int seventh(int a, int b, int c, int d, int e, int f, int g) { return g; }
 double ninth(double a, double b, double c, double d, double e, double f, double g, double h, double i) { return i; }
@@ -601,6 +605,10 @@ int global_cast_pointer_initializers(void) {
   if (global_byte_ptr - (char *)global_arr != 12) return 600;
   if (*global_cast_subscript_ptr != 4) return 601;
   if (global_byte_subscript_ptr - (char *)global_arr != 12) return 602;
+  if (global_int_div != 0.0) return 603;
+  if (global_fp_div != 0.5) return 604;
+  if (global_cast_int_fp != 1.0) return 605;
+  if (global_int_from_float != 1) return 606;
   return 0;
 }
 

@@ -79,6 +79,10 @@ the target split real and testable without claiming full C ABI coverage yet.
   covered scalar, array, struct, union, nested-designator, and bit-field
   initializer cases. Compound literals use stack storage with block lifetime in
   the generated function.
+- Global floating and integer scalar constant initializers are folded through
+  the source expression's C type before conversion to the destination object
+  type, preserving integer subexpression semantics such as `1 / 2` and
+  floating-to-integer casts.
 - Initialized global arrays, structs, and unions are emitted with layout
   padding and designated-initializer holes for the covered aggregate cases,
   including bit-field storage units that do not overlap earlier streamed
