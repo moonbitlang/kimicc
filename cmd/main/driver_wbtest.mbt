@@ -844,6 +844,69 @@ test "driver applies std options and macro overrides in clang order" {
 }
 
 ///|
+fn preprocess_driver_optimization(argv : Array[String]) -> String {
+  let opts = match parse_driver_args(argv) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  let source = "#ifdef __OPTIMIZE__\nint optimize = __OPTIMIZE__;\n#else\nint optimize = 0;\n#endif\n#ifdef __OPTIMIZE_SIZE__\nint size = __OPTIMIZE_SIZE__;\n#else\nint size = 0;\n#endif\n#ifdef __NO_INLINE__\nint no_inline = __NO_INLINE__;\n#else\nint no_inline = 0;\n#endif\n#ifdef __FAST_MATH__\nint fast = __FAST_MATH__;\n#else\nint fast = 0;\n#endif\n#ifdef __FINITE_MATH_ONLY__\nint finite = __FINITE_MATH_ONLY__;\n#else\nint finite = -1;\n#endif\n"
+  let result = preprocess_source_with_dependencies(source, "foo.c", opts)
+  result.text
+}
+
+///|
+test "driver maps optimization options to predefined macros" {
+  assert_eq(
+    preprocess_driver_optimization(["kimicc", "-E", "foo.c"]),
+    "int optimize=0;\nint size=0;\nint no_inline=1;\nint fast=0;\nint finite=0;\n",
+  )
+  assert_eq(
+    preprocess_driver_optimization(["kimicc", "-E", "-O0", "foo.c"]),
+    "int optimize=0;\nint size=0;\nint no_inline=1;\nint fast=0;\nint finite=0;\n",
+  )
+  assert_eq(
+    preprocess_driver_optimization(["kimicc", "-E", "-O2", "foo.c"]),
+    "int optimize=1;\nint size=0;\nint no_inline=0;\nint fast=0;\nint finite=0;\n",
+  )
+  assert_eq(
+    preprocess_driver_optimization(["kimicc", "-E", "-Os", "foo.c"]),
+    "int optimize=1;\nint size=1;\nint no_inline=0;\nint fast=0;\nint finite=0;\n",
+  )
+  assert_eq(
+    preprocess_driver_optimization(["kimicc", "-E", "-Ofast", "foo.c"]),
+    "int optimize=1;\nint size=0;\nint no_inline=0;\nint fast=1;\nint finite=1;\n",
+  )
+}
+
+///|
+test "driver applies optimization options and macro overrides in order" {
+  assert_eq(
+    preprocess_driver_optimization(["kimicc", "-E", "-Os", "-O0", "foo.c"]),
+    "int optimize=0;\nint size=0;\nint no_inline=1;\nint fast=0;\nint finite=0;\n",
+  )
+  assert_eq(
+    preprocess_driver_optimization(["kimicc", "-E", "-O0", "-Oz", "foo.c"]),
+    "int optimize=1;\nint size=1;\nint no_inline=0;\nint fast=0;\nint finite=0;\n",
+  )
+  assert_eq(
+    preprocess_driver_optimization(["kimicc", "-E", "-Ofast", "-O2", "foo.c"]),
+    "int optimize=1;\nint size=0;\nint no_inline=0;\nint fast=0;\nint finite=0;\n",
+  )
+  assert_eq(
+    preprocess_driver_optimization([
+      "kimicc", "-E", "-D__OPTIMIZE__=9", "-O0", "foo.c",
+    ]),
+    "int optimize=9;\nint size=0;\nint no_inline=1;\nint fast=0;\nint finite=0;\n",
+  )
+  assert_eq(
+    preprocess_driver_optimization([
+      "kimicc", "-E", "-U__NO_INLINE__", "-O0", "foo.c",
+    ]),
+    "int optimize=0;\nint size=0;\nint no_inline=0;\nint fast=0;\nint finite=0;\n",
+  )
+}
+
+///|
 test "driver recognizes preprocessed inputs" {
   let opts = match parse_driver_args(["kimicc", "-fpreprocessed", "foo.c"]) {
     Ok(opts) => opts

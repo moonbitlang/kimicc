@@ -219,7 +219,10 @@ the target split real and testable without claiming full C ABI coverage yet.
   predefined `__STDC_HOSTED__` value before user `-D`/`-U` macro overrides.
   Common `-std=`/`--std=` values and `-ansi` update `__STDC_VERSION__` and
   `__STRICT_ANSI__` for preprocessing probes, without enforcing a separate
-  parser dialect.
+  parser dialect. Common `-O*` optimization spellings update the matching
+  optimization predefined macros such as `__NO_INLINE__`, `__OPTIMIZE__`,
+  `__OPTIMIZE_SIZE__`, and `__FAST_MATH__`; this is a preprocessor contract,
+  not a separate optimization pipeline.
 - `--sysroot` and `-isysroot` add target-specific system include roots for
   preprocessing and are forwarded to Clang for object assembly and linking.
   Toolchain discovery options such as `--gcc-toolchain=PATH` and

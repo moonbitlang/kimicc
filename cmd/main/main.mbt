@@ -70,6 +70,10 @@ priv struct DriverOptions {
   mut hosted : Bool
   mut stdc_version : String?
   mut strict_ansi : Bool
+  mut optimize : Bool
+  mut optimize_size : Bool
+  mut no_inline : Bool
+  mut fast_math : Bool
   mut no_standard_includes : Bool
   mut show_help : Bool
   mut show_version : Bool
@@ -120,6 +124,10 @@ fn DriverOptions::new() -> DriverOptions {
     hosted: true,
     stdc_version: None,
     strict_ansi: false,
+    optimize: false,
+    optimize_size: false,
+    no_inline: true,
+    fast_math: false,
     no_standard_includes: false,
     show_help: false,
     show_version: false,
@@ -352,6 +360,43 @@ fn apply_language_standard(opts : DriverOptions, value : String) -> Unit {
       set_c_standard_macros(opts, "202311L", true)
     "gnu2x" | "gnu23" => set_c_standard_macros(opts, "202311L", false)
     _ => ()
+  }
+}
+
+///|
+fn set_optimization_macros(
+  opts : DriverOptions,
+  optimize : Bool,
+  optimize_size : Bool,
+  no_inline : Bool,
+  fast_math : Bool,
+) -> Unit {
+  opts.optimize = optimize
+  opts.optimize_size = optimize_size
+  opts.no_inline = no_inline
+  opts.fast_math = fast_math
+}
+
+///|
+fn apply_optimization_option(opts : DriverOptions, arg : String) -> Bool {
+  match arg {
+    "-O0" => {
+      set_optimization_macros(opts, false, false, true, false)
+      true
+    }
+    "-O" | "-O1" | "-O2" | "-O3" | "-O4" | "-Og" => {
+      set_optimization_macros(opts, true, false, false, false)
+      true
+    }
+    "-Os" | "-Oz" => {
+      set_optimization_macros(opts, true, true, false, false)
+      true
+    }
+    "-Ofast" => {
+      set_optimization_macros(opts, true, false, false, true)
+      true
+    }
+    _ => false
   }
 }
 
@@ -1175,6 +1220,8 @@ fn consume_ignored_option(
       } else if arg == "-ansi" {
         apply_language_standard(opts, "ansi")
         Ok(index)
+      } else if apply_optimization_option(opts, arg) {
+        Ok(index)
       } else if arg == "-fno-pic" ||
         arg == "-fno-PIC" ||
         arg == "-fno-pie" ||
@@ -1713,6 +1760,19 @@ fn command_line_macro_prefix(opts : DriverOptions) -> String {
   }
   if opts.strict_ansi {
     buf.write_string("#define __STRICT_ANSI__ 1\n")
+  }
+  if opts.no_inline {
+    buf.write_string("#define __NO_INLINE__ 1\n")
+  }
+  if opts.optimize {
+    buf.write_string("#define __OPTIMIZE__ 1\n")
+  }
+  if opts.optimize_size {
+    buf.write_string("#define __OPTIMIZE_SIZE__ 1\n")
+  }
+  if opts.fast_math {
+    buf.write_string("#define __FAST_MATH__ 1\n")
+    buf.write_string("#define __FINITE_MATH_ONLY__ 1\n")
   }
   for op in opts.macro_ops {
     match op {
