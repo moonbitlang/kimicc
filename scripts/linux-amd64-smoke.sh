@@ -297,6 +297,9 @@ if grep -F 'not_preprocessed_output' "$driver_query_path" >/dev/null; then
   echo "expected -dM to suppress normal preprocessed source output" >&2
   exit 1
 fi
+printf '#define STDIN_MACRO 23\n' |
+  "$kimicc" -E -dM -target linux-amd64 - >"$driver_query_path"
+grep -F '#define STDIN_MACRO 23' "$driver_query_path" >/dev/null
 
 cat > "$bad_source_path" <<'C'
 _Static_assert(0, "linux smoke expects this failure");

@@ -18,6 +18,35 @@ moonbit_bytes_t moonbit_read_file(moonbit_bytes_t path) {
 }
 
 MOONBIT_FFI_EXPORT
+moonbit_bytes_t moonbit_read_stdin(void) {
+  size_t len = 0;
+  size_t cap = 4096;
+  char *buf = (char *)malloc(cap);
+  if (!buf) return moonbit_make_bytes(0, 0);
+
+  for (;;) {
+    if (len == cap) {
+      size_t next_cap = cap * 2;
+      char *next = (char *)realloc(buf, next_cap);
+      if (!next) {
+        free(buf);
+        return moonbit_make_bytes(0, 0);
+      }
+      buf = next;
+      cap = next_cap;
+    }
+    size_t n = fread(buf + len, 1, cap - len, stdin);
+    len += n;
+    if (n == 0) break;
+  }
+
+  moonbit_bytes_t bytes = moonbit_make_bytes(len, 0);
+  if (len > 0) memcpy(bytes, buf, len);
+  free(buf);
+  return bytes;
+}
+
+MOONBIT_FFI_EXPORT
 int moonbit_file_exists(moonbit_bytes_t path) {
   FILE *f = fopen((const char *)path, "r");
   if (!f) return 0;

@@ -3,6 +3,9 @@
 extern "c" fn moonbit_read_file(path : Bytes) -> Bytes = "moonbit_read_file"
 
 ///|
+extern "c" fn moonbit_read_stdin() -> Bytes = "moonbit_read_stdin"
+
+///|
 #borrow(path)
 extern "c" fn moonbit_file_exists(path : Bytes) -> Bool = "moonbit_file_exists"
 
@@ -161,6 +164,15 @@ fn read_file(path : String) -> String? {
     None
   } else {
     Some(@utf8.decode_lossy(bytes))
+  }
+}
+
+///|
+fn read_input(path : String) -> String? {
+  if path == "-" {
+    Some(@utf8.decode_lossy(moonbit_read_stdin()))
+  } else {
+    read_file(path)
   }
 }
 
@@ -1647,6 +1659,11 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
             }
             Err(err) => return Err(err)
           }
+        } else if arg == "-" {
+          match add_positional(opts, arg) {
+            Ok(_) => ()
+            Err(err) => return Err(err)
+          }
         } else if starts_with(arg, "-") {
           match consume_linker_option(opts, argv, i, arg) {
             Ok(next_i) => i = next_i
@@ -2384,7 +2401,7 @@ fn compile_link_inputs(opts : DriverOptions, input_path : String) -> Unit {
   let asm_paths : Array[String] = []
   let dependency_records : Array[@preprocessor.PreprocessDependency] = []
   for path in source_paths {
-    let source = match read_file(path) {
+    let source = match read_input(path) {
       Some(content) => content
       None => {
         fail("cannot read file: " + path)
@@ -2421,7 +2438,7 @@ fn compile_multiple_inputs(opts : DriverOptions, input_path : String) -> Unit {
 
 ///|
 fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
-  let source = match read_file(input_path) {
+  let source = match read_input(input_path) {
     Some(content) => content
     None => {
       fail("cannot read file: " + input_path)

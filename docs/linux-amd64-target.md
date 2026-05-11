@@ -206,9 +206,11 @@ the target split real and testable without claiming full C ABI coverage yet.
   outputs.
 - Compile-style modes such as `-S`, `-c`, `-E`, `-M`/`-MM`, and
   `-fsyntax-only` accept multiple C sources when kimicc can choose per-input
-  outputs. Default link mode accepts one or more C source inputs, emits
-  temporary assembly for each input, and delegates the final Linux/amd64 link to
-  Clang. Common linker options such as `-L`, `-l`, `-Wl,`, `-Xlinker`,
+  outputs. A lone `-` is treated as stdin for the primary C input, which keeps
+  probes such as `cc -E -dM -` usable. Default link mode accepts one or more C
+  source inputs, emits temporary assembly for each input, and delegates the
+  final Linux/amd64 link to Clang. Common linker options such as `-L`, `-l`,
+  `-Wl,`, `-Xlinker`,
   `-rpath PATH`, and `-e SYMBOL` are preserved for that delegated link step.
   `-pthread` is also preserved for link delegation and seeds `_REENTRANT=1`
   before preprocessing, matching the build-system contract projects expect from

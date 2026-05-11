@@ -59,6 +59,17 @@ test "driver dumps final macro definitions" {
 }
 
 ///|
+test "driver treats dash as stdin input" {
+  let opts = match parse_driver_args(["kimicc", "-E", "-dM", "-"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.input_path is Some("-"))
+  assert_true(opts.output == EmitPreprocessed)
+  assert_true(opts.dump_macros)
+}
+
+///|
 test "driver applies command-line macro operations in order" {
   let remove_opts = match
     parse_driver_args(["kimicc", "-DVALUE=1", "-UVALUE", "-E", "foo.c"]) {
