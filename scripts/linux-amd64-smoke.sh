@@ -377,6 +377,22 @@ union GlobalBitUnion {
   signed b : 4;
 };
 
+union GlobalBox {
+  double d;
+  long l;
+};
+
+struct GlobalNested {
+  union GlobalBox box;
+  int tag;
+  int arr[3];
+};
+
+struct GlobalPair {
+  int a;
+  int b;
+};
+
 int global_add1(int x) { return x + 1; }
 
 int global_arr[5] = { 1, [3] = 4 };
@@ -398,6 +414,8 @@ struct GlobalNode global_node1 = { .next = &global_node2, .value = 1 };
 struct GlobalNode *global_nodes[2] = { &global_node1, &global_node2 };
 union GlobalUnion global_union = { .c = { 65, 66, 0, 0 } };
 union GlobalBitUnion global_bit_union = { .b = -3 };
+struct GlobalNested global_nested = { .box.d = 1.5, .tag = 7, .arr[2] = 35 };
+struct GlobalPair global_pairs[2] = { [1].b = 5, [0].a = 37 };
 char global_string[6] = "hey";
 double global_int_div = 1 / 2;
 double global_fp_div = (double)1 / 2;
@@ -1517,6 +1535,12 @@ int global_initializers(void) {
   }
   if (global_nodes[0] != &global_node1 || global_nodes[1] != &global_node2) {
     return 393;
+  }
+  if (global_nested.box.d != 1.5 || global_nested.tag != 7 || global_nested.arr[0] != 0 || global_nested.arr[1] != 0 || global_nested.arr[2] != 35) {
+    return 394;
+  }
+  if (global_pairs[0].a != 37 || global_pairs[0].b != 0 || global_pairs[1].a != 0 || global_pairs[1].b != 5) {
+    return 395;
   }
   return 0;
 }
