@@ -7471,6 +7471,14 @@ fn X64Codegen::fold_const_int(
         }
         None => None
       }
+    Unary("+", e) =>
+      match self.fold_const_int(e) {
+        Some(value) => {
+          let ty = x64_const_integer_promote(value.ty)
+          Some(x64_const_cast_int(value, ty))
+        }
+        None => None
+      }
     Unary("~", e) =>
       match self.fold_const_int(e) {
         Some(value) => {

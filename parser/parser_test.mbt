@@ -1070,10 +1070,13 @@ test "parse static assertions compare unsigned constant values" {
     #|_Static_assert((unsigned int)-1 + 1U == 0, "unsigned wrap");
     #|_Static_assert((unsigned int)-1 >> 31 == 1, "unsigned shift");
     #|_Static_assert((long)-1 < (unsigned int)1, "lp64 signed compare");
+    #|_Static_assert(+1 == 1, "unary plus");
+    #|int table[+2];
     #|int main(void) {
     #|  return 0;
     #|}
   let prog = @parser.parse(source)
+  inspect(prog.globals.length(), content="1")
   inspect(prog.decls.length(), content="1")
 }
 

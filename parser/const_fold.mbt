@@ -108,6 +108,7 @@ pub fn fold_const(expr : Expr) -> Int64? {
         Some(x) => Some(-x)
         _ => None
       }
+    Unary("+", e) => fold_const(e)
     Unary("~", e) =>
       match fold_const(e) {
         Some(x) => Some(x.lnot())
@@ -544,6 +545,14 @@ fn Parser::fold_const_int(self : Parser, expr : Expr) -> ConstIntValue? {
         Some(x) => {
           let ty = const_integer_promote(x.ty)
           Some(const_cast_int(const_int(-x.bits, ty), ty))
+        }
+        _ => None
+      }
+    Unary("+", e) =>
+      match self.fold_const_int(e) {
+        Some(x) => {
+          let ty = const_integer_promote(x.ty)
+          Some(const_cast_int(x, ty))
         }
         _ => None
       }

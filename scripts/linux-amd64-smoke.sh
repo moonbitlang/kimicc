@@ -410,6 +410,8 @@ int global_unsigned_gt = (unsigned long)-1 > 1;
 int global_unsigned_lt = (unsigned long)-1 < 1;
 unsigned int global_unsigned_wrap = (unsigned int)-1 + 1;
 unsigned int global_unsigned_shift = (unsigned int)-1 >> 31;
+int global_unary_plus = +1;
+int global_unary_plus_unsigned = +(unsigned int)-1 > 0;
 
 int seventh(int a, int b, int c, int d, int e, int f, int g) { return g; }
 double ninth(double a, double b, double c, double d, double e, double f, double g, double h, double i) { return i; }
@@ -623,6 +625,8 @@ int global_cast_pointer_initializers(void) {
   if (global_unsigned_lt != 0) return 611;
   if (global_unsigned_wrap != 0U) return 612;
   if (global_unsigned_shift != 1U) return 613;
+  if (global_unary_plus != 1) return 614;
+  if (global_unary_plus_unsigned != 1) return 615;
   return 0;
 }
 

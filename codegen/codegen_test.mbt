@@ -1443,6 +1443,8 @@ test "generate linux amd64 global unsigned constants use C conversions" {
     #|unsigned int uwrap = (unsigned int)-1 + 1;
     #|unsigned int ushr = (unsigned int)-1 >> 31;
     #|long sshr = -2 >> 1;
+    #|int gplus = +1;
+    #|int gplus_unsigned = +(unsigned int)-1 > 0;
     #|int main(void) { return 0; }
   let prog = @parser.parse(source)
   let target = match @target.Target::parse("linux-amd64") {
@@ -1460,6 +1462,8 @@ test "generate linux amd64 global unsigned constants use C conversions" {
   inspect(assembly.contains("uwrap:\n\t.long\t0"), content="true")
   inspect(assembly.contains("ushr:\n\t.long\t1"), content="true")
   inspect(assembly.contains("sshr:\n\t.quad\t-1"), content="true")
+  inspect(assembly.contains("gplus:\n\t.long\t1"), content="true")
+  inspect(assembly.contains("gplus_unsigned:\n\t.long\t1"), content="true")
 }
 
 ///|
