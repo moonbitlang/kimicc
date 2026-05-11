@@ -1439,6 +1439,11 @@ struct InitPair {
   int b;
 };
 
+struct InitWrap {
+  struct InitPair pairs[2];
+  int arr[3];
+};
+
 struct InitBits {
   unsigned a : 3;
   signed b : 4;
@@ -1448,6 +1453,8 @@ struct InitBits {
 int compound_literals_and_initializers(void) {
   InitValue v;
   struct InitPair p = { .b = 5, .a = 6 };
+  struct InitWrap local = { .pairs[1].b = 5, .pairs[0].a = 37, .arr[2] = 35 };
+  struct InitWrap literal = (struct InitWrap){ .pairs[0].b = 2, .arr[1] = 4 };
   int arr[5] = { 1, [3] = 4 };
   int *tmp = (int[5]){ 10, 20, [4] = 30 };
   int scalar = (int){ 3 };
@@ -1464,6 +1471,18 @@ int compound_literals_and_initializers(void) {
   }
   if (scalar != 3) return 375;
   if (bits.a != 5 || bits.b != -3 || bits.c != 17) return 376;
+  if (local.pairs[0].a != 37 || local.pairs[0].b != 0 || local.pairs[1].a != 0 || local.pairs[1].b != 5) {
+    return 616;
+  }
+  if (local.arr[0] != 0 || local.arr[1] != 0 || local.arr[2] != 35) {
+    return 617;
+  }
+  if (literal.pairs[0].a != 0 || literal.pairs[0].b != 2 || literal.pairs[1].a != 0 || literal.pairs[1].b != 0) {
+    return 618;
+  }
+  if (literal.arr[0] != 0 || literal.arr[1] != 4 || literal.arr[2] != 0) {
+    return 619;
+  }
   return 0;
 }
 
