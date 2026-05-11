@@ -249,7 +249,8 @@ conversions, covered `__int128` ABI transport and arithmetic,
 direct prototype call arguments,
 unnamed variadic and unprototyped default promotions, and call results,
 floating-point arithmetic/comparisons, `float`/`double` compound assignments
-and prefix/postfix increment/decrement, mixed scalar ternary conversions,
+and prefix/postfix increment/decrement, mixed integer/floating compound
+assignments for non-`__int128` integer lvalues, mixed scalar ternary conversions,
 local variables,
 branches, loops, direct and indirect function-pointer calls, scalar and covered
 aggregate varargs, small integer-class aggregate arguments/returns, small

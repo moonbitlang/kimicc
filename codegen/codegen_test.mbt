@@ -155,6 +155,24 @@ test "generate linux amd64 floating casts to unsigned long" {
 }
 
 ///|
+test "generate linux amd64 integer floating compound assignments" {
+  let source =
+    #|int scale_int(void) { int x = 2; x *= 1.9; return x; }
+    #|unsigned long add_ulong(double x) { unsigned long y = 0; y += x; return y; }
+    #|unsigned int scale_uint(float x) { unsigned int y = 2; y *= x; return y; }
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(assembly.contains("mulsd\txmm0, xmm1"), content="true")
+  inspect(assembly.contains("mulss\txmm0, xmm1"), content="true")
+  inspect(assembly.contains("ucomisd\txmm0, xmm1"), content="true")
+  inspect(assembly.contains("cvttsd2si\trax, xmm0"), content="true")
+}
+
+///|
 test "generate linux amd64 indirect function pointer calls" {
   let source =
     #|struct Pair { long a; long b; };

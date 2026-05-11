@@ -689,6 +689,18 @@ int scalar_conversions(void) {
     if ((unsigned long)d != hi) return 276;
     if ((unsigned long)f != hi) return 277;
     if ((unsigned long)above != just_above_hi) return 278;
+    {
+      unsigned long acc = 0;
+      int signed_scale = 2;
+      unsigned int unsigned_scale = 2;
+      float factor = 1.9f;
+      acc += above;
+      signed_scale *= 1.9;
+      unsigned_scale *= factor;
+      if (acc != just_above_hi) return 279;
+      if (signed_scale != 3) return 280;
+      if (unsigned_scale != 3U) return 281;
+    }
   }
   return 0;
 }

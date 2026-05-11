@@ -4644,13 +4644,22 @@ fn X64Codegen::gen_expr_as_fp(
     }
   } else {
     self.gen_expr(expr)
-    if is_unsigned_integer_type(src_ty) && self.type_size(src_ty) == 8 {
-      self.emit_uint64_to_fp(dst_ty)
-    } else if x64_core_type(dst_ty) == Float {
-      self.emit("\tcvtsi2ss\txmm0, rax")
-    } else {
-      self.emit("\tcvtsi2sd\txmm0, rax")
-    }
+    self.emit_int_to_fp(src_ty, dst_ty)
+  }
+}
+
+///|
+fn X64Codegen::emit_int_to_fp(
+  self : X64Codegen,
+  src_ty : @parser.Type,
+  dst_ty : @parser.Type,
+) -> Unit {
+  if is_unsigned_integer_type(src_ty) && self.type_size(src_ty) == 8 {
+    self.emit_uint64_to_fp(dst_ty)
+  } else if x64_core_type(dst_ty) == Float {
+    self.emit("\tcvtsi2ss\txmm0, rax")
+  } else {
+    self.emit("\tcvtsi2sd\txmm0, rax")
   }
 }
 
@@ -4719,6 +4728,20 @@ fn X64Codegen::emit_fp_to_integer(
     self.emit("\tcvttss2si\trax, xmm0")
   } else {
     self.emit("\tcvttsd2si\trax, xmm0")
+  }
+}
+
+///|
+fn X64Codegen::emit_fp_to_scalar(
+  self : X64Codegen,
+  src_ty : @parser.Type,
+  dst_ty : @parser.Type,
+) -> Unit {
+  if x64_core_type(dst_ty) == Bool {
+    self.emit_fp_to_bool(src_ty)
+  } else {
+    self.emit_fp_to_integer(src_ty, dst_ty)
+    self.emit_int_conversion_to(dst_ty)
   }
 }
 
@@ -5204,6 +5227,66 @@ fn X64Codegen::gen_pointer_compound_assign(
 }
 
 ///|
+fn X64Codegen::gen_integer_fp_compound_assign(
+  self : X64Codegen,
+  op : String,
+  lhs : @parser.Expr,
+  rhs : @parser.Expr,
+  lhs_ty : @parser.Type,
+  rhs_ty : @parser.Type,
+) -> Bool {
+  if !lhs_ty.is_integer() ||
+    x64_is_int128_type(lhs_ty) ||
+    !x64_is_fp_type(rhs_ty) {
+    return false
+  }
+  match op {
+    "+" | "-" | "*" | "/" => ()
+    _ => return false
+  }
+  let result_ty : @parser.Type = if x64_core_type(rhs_ty) == Double {
+    Double
+  } else {
+    Float
+  }
+  let suffix = x64_fp_suffix(result_ty)
+  let spill_store = if x64_core_type(result_ty) == Float {
+    "DWORD PTR [rsp], xmm0"
+  } else {
+    "QWORD PTR [rsp], xmm0"
+  }
+  let spill_load = if x64_core_type(result_ty) == Float {
+    "DWORD PTR [rsp]"
+  } else {
+    "QWORD PTR [rsp]"
+  }
+  self.gen_addr(lhs)
+  self.emit_push_rax()
+  self.emit_load_indirect(lhs_ty)
+  self.emit_int_to_fp(lhs_ty, result_ty)
+  self.emit("\tsub\trsp, 8")
+  self.emit("\tmov" + suffix + "\t" + spill_store)
+  self.gen_expr_as_fp(rhs, result_ty)
+  self.emit("\tmovapd\txmm1, xmm0")
+  self.emit("\tmov" + suffix + "\txmm0, " + spill_load)
+  self.emit("\tadd\trsp, 8")
+  match op {
+    "+" => self.emit("\tadd" + suffix + "\txmm0, xmm1")
+    "-" => self.emit("\tsub" + suffix + "\txmm0, xmm1")
+    "*" => self.emit("\tmul" + suffix + "\txmm0, xmm1")
+    "/" => self.emit("\tdiv" + suffix + "\txmm0, xmm1")
+    _ => abort("unsupported x86-64 integer/floating compound assignment: " + op)
+  }
+  self.emit_fp_to_scalar(result_ty, lhs_ty)
+  self.emit("\tmov\tr11, rax")
+  self.emit_pop_rax()
+  self.emit("\tmov\tr10, rax")
+  self.emit("\tmov\trax, r11")
+  self.emit_store_indirect(lhs_ty)
+  true
+}
+
+///|
 fn X64Codegen::gen_compound_assign(
   self : X64Codegen,
   op : String,
@@ -5305,6 +5388,9 @@ fn X64Codegen::gen_compound_assign(
     }
     self.emit("\tpop\tr10")
     self.emit_store_indirect(lhs_ty)
+    return
+  }
+  if self.gen_integer_fp_compound_assign(op, lhs, rhs, lhs_ty, rhs_ty) {
     return
   }
   self.gen_addr(lhs)
