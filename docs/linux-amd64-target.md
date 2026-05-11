@@ -221,8 +221,9 @@ the target split real and testable without claiming full C ABI coverage yet.
   `__STRICT_ANSI__` for preprocessing probes, without enforcing a separate
   parser dialect. Common `-O*` optimization spellings update the matching
   optimization predefined macros such as `__NO_INLINE__`, `__OPTIMIZE__`,
-  `__OPTIMIZE_SIZE__`, and `__FAST_MATH__`; this is a preprocessor contract,
-  not a separate optimization pipeline.
+  `__OPTIMIZE_SIZE__`, and `__FAST_MATH__`; explicit `-ffast-math` and
+  `-fno-fast-math` update the fast-math macros in command-line order. This is
+  a preprocessor contract, not a separate optimization pipeline.
 - `--sysroot` and `-isysroot` add target-specific system include roots for
   preprocessing and are forwarded to Clang for object assembly and linking.
   Toolchain discovery options such as `--gcc-toolchain=PATH` and

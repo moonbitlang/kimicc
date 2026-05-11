@@ -74,6 +74,7 @@ priv struct DriverOptions {
   mut optimize_size : Bool
   mut no_inline : Bool
   mut fast_math : Bool
+  mut fast_math_explicit : Bool
   mut no_standard_includes : Bool
   mut show_help : Bool
   mut show_version : Bool
@@ -128,6 +129,7 @@ fn DriverOptions::new() -> DriverOptions {
     optimize_size: false,
     no_inline: true,
     fast_math: false,
+    fast_math_explicit: false,
     no_standard_includes: false,
     show_help: false,
     show_version: false,
@@ -369,12 +371,16 @@ fn set_optimization_macros(
   optimize : Bool,
   optimize_size : Bool,
   no_inline : Bool,
-  fast_math : Bool,
+  optimization_fast_math : Bool,
 ) -> Unit {
   opts.optimize = optimize
   opts.optimize_size = optimize_size
   opts.no_inline = no_inline
-  opts.fast_math = fast_math
+  if optimization_fast_math {
+    opts.fast_math = true
+  } else if !opts.fast_math_explicit {
+    opts.fast_math = false
+  }
 }
 
 ///|
@@ -1210,6 +1216,14 @@ fn consume_ignored_option(
         Ok(index)
       } else if arg == "-fhosted" {
         opts.hosted = true
+        Ok(index)
+      } else if arg == "-ffast-math" {
+        opts.fast_math = true
+        opts.fast_math_explicit = true
+        Ok(index)
+      } else if arg == "-fno-fast-math" {
+        opts.fast_math = false
+        opts.fast_math_explicit = false
         Ok(index)
       } else if starts_with(arg, "-std=") {
         apply_language_standard(opts, arg["-std=".length():].to_owned())

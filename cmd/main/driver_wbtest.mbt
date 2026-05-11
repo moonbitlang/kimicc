@@ -907,6 +907,38 @@ test "driver applies optimization options and macro overrides in order" {
 }
 
 ///|
+test "driver applies explicit fast math macros in clang order" {
+  assert_eq(
+    preprocess_driver_optimization(["kimicc", "-E", "-ffast-math", "foo.c"]),
+    "int optimize=0;\nint size=0;\nint no_inline=1;\nint fast=1;\nint finite=1;\n",
+  )
+  assert_eq(
+    preprocess_driver_optimization([
+      "kimicc", "-E", "-ffast-math", "-fno-fast-math", "foo.c",
+    ]),
+    "int optimize=0;\nint size=0;\nint no_inline=1;\nint fast=0;\nint finite=0;\n",
+  )
+  assert_eq(
+    preprocess_driver_optimization([
+      "kimicc", "-E", "-fno-fast-math", "-ffast-math", "foo.c",
+    ]),
+    "int optimize=0;\nint size=0;\nint no_inline=1;\nint fast=1;\nint finite=1;\n",
+  )
+  assert_eq(
+    preprocess_driver_optimization([
+      "kimicc", "-E", "-ffast-math", "-O0", "foo.c",
+    ]),
+    "int optimize=0;\nint size=0;\nint no_inline=1;\nint fast=1;\nint finite=1;\n",
+  )
+  assert_eq(
+    preprocess_driver_optimization([
+      "kimicc", "-E", "-ffast-math", "-Ofast", "-O2", "foo.c",
+    ]),
+    "int optimize=1;\nint size=0;\nint no_inline=0;\nint fast=1;\nint finite=1;\n",
+  )
+}
+
+///|
 test "driver recognizes preprocessed inputs" {
   let opts = match parse_driver_args(["kimicc", "-fpreprocessed", "foo.c"]) {
     Ok(opts) => opts
