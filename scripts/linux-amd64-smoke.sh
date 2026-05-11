@@ -595,6 +595,23 @@ int floating_inc_dec(void) {
   return 0;
 }
 
+int pointer_compound_assign(void) {
+  int values[5] = {1, 2, 3, 4, 5};
+  char bytes[4] = {7, 8, 9, 10};
+  int *p = values;
+  char *c = bytes;
+  p += 3;
+  if (*p != 4) return 580;
+  p -= 2;
+  if (*p != 2) return 581;
+  if (p - values != 1) return 582;
+  c += 2;
+  if (*c != 9) return 583;
+  c -= 1;
+  if (*c != 8) return 584;
+  return 0;
+}
+
 int var_pair(int tag, ...) {
   va_list ap;
   struct Pair p;
@@ -1547,6 +1564,7 @@ int main(void) {
          unsigned_ops() +
          scalar_conversions() +
          floating_inc_dec() +
+         pointer_compound_assign() +
          default_promotions() +
          target_predefines() +
          memory_builtins() +

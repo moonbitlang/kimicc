@@ -4726,6 +4726,43 @@ fn X64Codegen::gen_assign(
 }
 
 ///|
+fn X64Codegen::gen_pointer_compound_assign(
+  self : X64Codegen,
+  op : String,
+  lhs : @parser.Expr,
+  rhs : @parser.Expr,
+  lhs_ty : @parser.Type,
+  rhs_ty : @parser.Type,
+) -> Bool {
+  match x64_core_type(lhs_ty) {
+    Pointer(elem_ty) =>
+      if (op == "+" || op == "-") && rhs_ty.is_integer() {
+        self.gen_addr(lhs)
+        self.emit_push_rax()
+        self.emit_load_indirect(lhs_ty)
+        self.emit_push_rax()
+        self.emit_scaled_integer(rhs, elem_ty)
+        self.emit("\tmov\tr10, rax")
+        self.emit_pop_rax()
+        if op == "+" {
+          self.emit("\tadd\trax, r10")
+        } else {
+          self.emit("\tsub\trax, r10")
+        }
+        self.emit("\tmov\tr11, rax")
+        self.emit_pop_rax()
+        self.emit("\tmov\tr10, rax")
+        self.emit("\tmov\trax, r11")
+        self.emit_store_indirect(lhs_ty)
+        true
+      } else {
+        false
+      }
+    _ => false
+  }
+}
+
+///|
 fn X64Codegen::gen_compound_assign(
   self : X64Codegen,
   op : String,
@@ -4791,6 +4828,9 @@ fn X64Codegen::gen_compound_assign(
   }
   let lhs_ty = self.type_of(lhs)
   let rhs_ty = self.type_of(rhs)
+  if self.gen_pointer_compound_assign(op, lhs, rhs, lhs_ty, rhs_ty) {
+    return
+  }
   if lhs_ty.is_integer() && rhs_ty.is_integer() && x64_is_int128_type(lhs_ty) {
     self.gen_int128_compound_assign(op, lhs, rhs, lhs_ty, rhs_ty)
     return

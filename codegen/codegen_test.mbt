@@ -888,6 +888,28 @@ test "generate linux amd64 scalar compound assignment operators" {
 }
 
 ///|
+test "generate linux amd64 pointer compound assignment scales element size" {
+  let source =
+    #|int main(void) {
+    #|  int values[4];
+    #|  int *p = values;
+    #|  p += 2;
+    #|  p -= 1;
+    #|  return p - values;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(assembly.contains("imul\trax, rax, 4"), content="true")
+  inspect(assembly.contains("add\trax, r10"), content="true")
+  inspect(assembly.contains("sub\trax, r10"), content="true")
+  inspect(assembly.contains("idiv\tr10"), content="true")
+}
+
+///|
 test "generate linux amd64 unsigned scalar operators" {
   let source =
     #|int main(void) {
