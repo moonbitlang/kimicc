@@ -1,4 +1,11 @@
 ///|
+/// One `OLD=NEW` physical filename prefix mapping for `__FILE__`.
+pub(all) struct PreprocessPrefixMap {
+  from_prefix : String
+  to_prefix : String
+} derive(Eq)
+
+///|
 /// Options controlling C preprocessing.
 ///
 /// `filename` names the main translation unit for diagnostics, `__FILE__`,
@@ -9,6 +16,7 @@ pub(all) struct PreprocessOptions {
   target : @target.Target
   include_paths : Array[String]
   system_include_paths : Array[String]
+  file_prefix_maps : Array[PreprocessPrefixMap]
   defines : Map[String, String]
   undefines : Array[String]
   undef_predefined : Bool
@@ -24,6 +32,7 @@ pub fn PreprocessOptions::new(filename : String) -> PreprocessOptions {
     target: @target.Target::default(),
     include_paths: [],
     system_include_paths: [],
+    file_prefix_maps: [],
     defines: {},
     undefines: [],
     undef_predefined: false,

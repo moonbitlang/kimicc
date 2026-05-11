@@ -154,6 +154,29 @@ test "gcc line marker updates logical file and line macros" {
 }
 
 ///|
+test "file prefix maps remap physical file macro names" {
+  let options : @preprocessor.PreprocessOptions = {
+    ..@preprocessor.PreprocessOptions::new("/work/project/main.c"),
+    file_prefix_maps: [
+      { from_prefix: "/work", to_prefix: "/mapped" },
+      { from_prefix: "/work/project", to_prefix: "/src" },
+    ],
+  }
+  let source =
+    #|const char *main_file = __FILE__;
+    #|#line 7 "/work/project/generated.h"
+    #|const char *logical_file = __FILE__;
+  match @preprocessor.preprocess(source, options) {
+    Ok(text) =>
+      inspect(
+        text,
+        content="const char*main_file=\"/src/main.c\";\nconst char*logical_file=\"/work/project/generated.h\";\n",
+      )
+    Err(err) => abort(err.to_string())
+  }
+}
+
+///|
 test "target macros follow selected target" {
   let linux = match @target.Target::parse("linux-amd64") {
     Some(target) => target
@@ -165,6 +188,7 @@ test "target macros follow selected target" {
     target: linux,
     include_paths: options.include_paths,
     system_include_paths: options.system_include_paths,
+    file_prefix_maps: options.file_prefix_maps,
     defines: options.defines,
     undefines: options.undefines,
     undef_predefined: options.undef_predefined,
@@ -195,6 +219,7 @@ test "linux amd64 predefined macros cover system header probes" {
     target: linux,
     include_paths: options.include_paths,
     system_include_paths: options.system_include_paths,
+    file_prefix_maps: options.file_prefix_maps,
     defines: options.defines,
     undefines: options.undefines,
     undef_predefined: options.undef_predefined,
@@ -262,6 +287,7 @@ test "linux amd64 has builtin reflects supported lowering" {
     target: linux,
     include_paths: options.include_paths,
     system_include_paths: options.system_include_paths,
+    file_prefix_maps: options.file_prefix_maps,
     defines: options.defines,
     undefines: options.undefines,
     undef_predefined: options.undef_predefined,
@@ -321,6 +347,7 @@ test "has attribute reflects supported packed layout" {
     target: linux,
     include_paths: options.include_paths,
     system_include_paths: options.system_include_paths,
+    file_prefix_maps: options.file_prefix_maps,
     defines: options.defines,
     undefines: options.undefines,
     undef_predefined: options.undef_predefined,
@@ -554,6 +581,7 @@ test "include paths are explicit" {
     target: @target.Target::default(),
     include_paths: ["preprocessor/testdata/include_path"],
     system_include_paths: ["preprocessor/testdata/system_path"],
+    file_prefix_maps: [],
     defines: {},
     undefines: [],
     undef_predefined: false,
@@ -577,6 +605,7 @@ test "missing generated includes can be recorded for dependencies" {
     target: @target.Target::default(),
     include_paths: [],
     system_include_paths: [],
+    file_prefix_maps: [],
     defines: {},
     undefines: [],
     undef_predefined: false,
@@ -626,6 +655,7 @@ test "preprocess with dependencies records resolved includes" {
     target: @target.Target::default(),
     include_paths: ["preprocessor/testdata/include_path"],
     system_include_paths: ["preprocessor/testdata/system_path"],
+    file_prefix_maps: [],
     defines: {},
     undefines: [],
     undef_predefined: false,
@@ -676,6 +706,7 @@ test "has include follows quote and system include search" {
     target: @target.Target::default(),
     include_paths: ["preprocessor/testdata/include_path"],
     system_include_paths: ["preprocessor/testdata/system_path"],
+    file_prefix_maps: [],
     defines: {},
     undefines: [],
     undef_predefined: false,
@@ -718,6 +749,7 @@ test "has include next resumes after current include directory" {
     system_include_paths: [
       "preprocessor/testdata/next_first", "preprocessor/testdata/next_second",
     ],
+    file_prefix_maps: [],
     defines: {},
     undefines: [],
     undef_predefined: false,
@@ -751,6 +783,7 @@ test "include_next resumes after current include directory" {
     system_include_paths: [
       "preprocessor/testdata/next_first", "preprocessor/testdata/next_second",
     ],
+    file_prefix_maps: [],
     defines: {},
     undefines: [],
     undef_predefined: false,
@@ -773,6 +806,7 @@ test "pragma once skips repeated include" {
     target: @target.Target::default(),
     include_paths: ["preprocessor/testdata/pragma_once"],
     system_include_paths: [],
+    file_prefix_maps: [],
     defines: {},
     undefines: [],
     undef_predefined: false,
@@ -796,6 +830,7 @@ test "guarded recursive include is ignored" {
     target: @target.Target::default(),
     include_paths: ["preprocessor/testdata/self_guard"],
     system_include_paths: [],
+    file_prefix_maps: [],
     defines: {},
     undefines: [],
     undef_predefined: false,

@@ -153,6 +153,44 @@ test "driver applies command-line macro operations in order" {
 }
 
 ///|
+test "driver applies file prefix maps to file macros" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-E", "-fmacro-prefix-map=/work=/mapped", "-ffile-prefix-map=/work/project=/src",
+      "/work/project/main.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_eq(opts.file_prefix_maps.length(), 2)
+  let source =
+    #|const char *main_file = __FILE__;
+    #|#line 7 "/work/project/generated.h"
+    #|const char *logical_file = __FILE__;
+  let result = preprocess_source_with_dependencies(
+    source, "/work/project/main.c", opts,
+  )
+  assert_eq(
+    result.text,
+    "const char*main_file=\"/src/main.c\";\nconst char*logical_file=\"/work/project/generated.h\";\n",
+  )
+}
+
+///|
+test "driver rejects malformed file prefix maps" {
+  match
+    parse_driver_args([
+      "kimicc", "-E", "-fmacro-prefix-map=missing-replacement", "foo.c",
+    ]) {
+    Ok(_) => fail("expected malformed prefix map to fail")
+    Err(err) =>
+      assert_eq(
+        err, "invalid argument 'missing-replacement' to -fmacro-prefix-map=",
+      )
+  }
+}
+
+///|
 test "driver consumes ignored flags with separate values" {
   let opts = match
     parse_driver_args([

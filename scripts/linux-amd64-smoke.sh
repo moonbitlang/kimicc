@@ -286,6 +286,17 @@ grep -F 'int optimize=0;' "$driver_query_path" >/dev/null
 grep -F 'int fast=0;' "$driver_query_path" >/dev/null
 
 cat > "$source_path" <<'C'
+const char *source_file = __FILE__;
+#line 7 "/tmp/kimicc-linux-amd64/generated.h"
+const char *line_file = __FILE__;
+C
+"$kimicc" -E -target linux-amd64 -fmacro-prefix-map=/tmp=/mapped \
+  -ffile-prefix-map="$source_path"=/project/source.c \
+  "$source_path" >"$driver_query_path"
+grep -F 'const char*source_file="/project/source.c";' "$driver_query_path" >/dev/null
+grep -F 'const char*line_file="/tmp/kimicc-linux-amd64/generated.h";' "$driver_query_path" >/dev/null
+
+cat > "$source_path" <<'C'
 #define DUMPED 31
 #undef __STDC_HOSTED__
 int not_preprocessed_output = DUMPED;

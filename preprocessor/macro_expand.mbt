@@ -512,6 +512,7 @@ fn Preprocessor::expanded_macro_argument(
   index : Int,
   disabled : Map[String, Bool],
   file : String,
+  file_remappable : Bool,
   line : Int,
   depth : Int,
 ) -> Array[PpToken] {
@@ -519,6 +520,7 @@ fn Preprocessor::expanded_macro_argument(
     self.macro_argument(macro_, args, index),
     disabled,
     file,
+    file_remappable,
     line,
     depth + 1,
   )
@@ -545,6 +547,7 @@ fn Preprocessor::substitute_macro_replacement(
   args : Array[Array[PpToken]],
   disabled : Map[String, Bool],
   file : String,
+  file_remappable : Bool,
   line : Int,
   depth : Int,
 ) -> Array[PpToken] {
@@ -567,6 +570,7 @@ fn Preprocessor::substitute_macro_replacement(
               args,
               disabled,
               file,
+              file_remappable,
               line,
               depth + 1,
             )
@@ -636,7 +640,7 @@ fn Preprocessor::substitute_macro_replacement(
       let param_index = pp_macro_param_index(macro_, tok.text)
       if param_index >= 0 {
         let arg = self.expanded_macro_argument(
-          macro_, args, param_index, disabled, file, line, depth,
+          macro_, args, param_index, disabled, file, file_remappable, line, depth,
         )
         for arg_tok in arg {
           result.push(arg_tok)
@@ -658,6 +662,7 @@ fn Preprocessor::substitute_macro(
   args : Array[Array[PpToken]],
   disabled : Map[String, Bool],
   file : String,
+  file_remappable : Bool,
   line : Int,
   depth : Int,
 ) -> Array[PpToken] {
@@ -667,9 +672,47 @@ fn Preprocessor::substitute_macro(
     args,
     disabled,
     file,
+    file_remappable,
     line,
     depth,
   )
+}
+
+///|
+fn pp_apply_file_prefix_maps(
+  file : String,
+  maps : Array[PreprocessPrefixMap],
+) -> String {
+  let mut best_index = -1
+  let mut best_length = -1
+  for i = 0; i < maps.length(); i = i + 1 {
+    let from_prefix = maps[i].from_prefix
+    if file.length() >= from_prefix.length() &&
+      file[0:from_prefix.length()].to_owned() == from_prefix &&
+      from_prefix.length() > best_length {
+      best_index = i
+      best_length = from_prefix.length()
+    }
+  }
+  if best_index < 0 {
+    file
+  } else {
+    let best = maps[best_index]
+    best.to_prefix + file[best.from_prefix.length():].to_owned()
+  }
+}
+
+///|
+fn Preprocessor::macro_file_name(
+  self : Preprocessor,
+  file : String,
+  file_remappable : Bool,
+) -> String {
+  if file_remappable {
+    pp_apply_file_prefix_maps(file, self.options.file_prefix_maps)
+  } else {
+    file
+  }
 }
 
 ///|
@@ -678,6 +721,7 @@ fn Preprocessor::expand_tokens(
   tokens : Array[PpToken],
   disabled : Map[String, Bool],
   file : String,
+  file_remappable : Bool,
   line : Int,
   depth : Int,
 ) -> Array[PpToken] {
@@ -696,7 +740,12 @@ fn Preprocessor::expand_tokens(
         continue
       }
       if tok.text == "__FILE__" {
-        result.push(pp_token(PpString, pp_quote_string(file)))
+        result.push(
+          pp_token(
+            PpString,
+            pp_quote_string(self.macro_file_name(file, file_remappable)),
+          ),
+        )
         i += 1
         continue
       }
@@ -796,12 +845,13 @@ fn Preprocessor::expand_tokens(
                   Some((args, end_index)) => {
                     let disabled_next = self.disabled_with(disabled, tok.text)
                     let substituted = self.substitute_macro(
-                      macro_, args, disabled, file, line, depth,
+                      macro_, args, disabled, file, file_remappable, line, depth,
                     )
                     let expanded = self.expand_tokens(
                       substituted,
                       disabled_next,
                       file,
+                      file_remappable,
                       line,
                       depth + 1,
                     )
@@ -820,6 +870,7 @@ fn Preprocessor::expand_tokens(
                 macro_.replacement,
                 disabled_next,
                 file,
+                file_remappable,
                 line,
                 depth + 1,
               )

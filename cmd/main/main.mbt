@@ -61,6 +61,7 @@ priv struct DriverOptions {
   system_include_paths : Array[String]
   after_system_include_paths : Array[String]
   sysroot_paths : Array[String]
+  file_prefix_maps : Array[@preprocessor.PreprocessPrefixMap]
   mut include_prefix : String?
   macro_includes : Array[String]
   forced_includes : Array[String]
@@ -120,6 +121,7 @@ fn DriverOptions::new() -> DriverOptions {
     system_include_paths: [],
     after_system_include_paths: [],
     sysroot_paths: [],
+    file_prefix_maps: [],
     include_prefix: None,
     macro_includes: [],
     forced_includes: [],
@@ -230,6 +232,30 @@ fn split_define_arg(arg : String) -> (String, String) {
     (arg, "1")
   } else {
     (arg[0:eq].to_owned(), arg[eq + 1:].to_owned())
+  }
+}
+
+///|
+fn add_file_prefix_map(
+  opts : DriverOptions,
+  option : String,
+  value : String,
+) -> String? {
+  let mut eq = -1
+  for i = 0; i < value.length(); i = i + 1 {
+    if value[i] == '=' {
+      eq = i
+      break
+    }
+  }
+  if eq < 0 {
+    Some("invalid argument '" + value + "' to " + option + "=")
+  } else {
+    opts.file_prefix_maps.push({
+      from_prefix: value[0:eq].to_owned(),
+      to_prefix: value[eq + 1:].to_owned(),
+    })
+    None
   }
 }
 
@@ -1295,6 +1321,18 @@ fn consume_ignored_option(
         opts.fast_math = false
         opts.fast_math_explicit = false
         Ok(index)
+      } else if starts_with(arg, "-fmacro-prefix-map=") {
+        let value = arg["-fmacro-prefix-map=".length():].to_owned()
+        match add_file_prefix_map(opts, "-fmacro-prefix-map", value) {
+          Some(err) => Err(err)
+          None => Ok(index)
+        }
+      } else if starts_with(arg, "-ffile-prefix-map=") {
+        let value = arg["-ffile-prefix-map=".length():].to_owned()
+        match add_file_prefix_map(opts, "-ffile-prefix-map", value) {
+          Some(err) => Err(err)
+          None => Ok(index)
+        }
       } else if starts_with(arg, "-std=") {
         apply_language_standard(opts, arg["-std=".length():].to_owned())
         Ok(index)
@@ -1811,6 +1849,7 @@ fn preprocess_options(
     target: opts.target,
     include_paths: opts.include_paths,
     system_include_paths: full_system_include_paths(opts),
+    file_prefix_maps: opts.file_prefix_maps,
     defines: {},
     undefines: [],
     undef_predefined: opts.undef_predefined,
@@ -2458,6 +2497,10 @@ fn print_usage() -> Unit {
     #|  -imacros FILE       process macro definitions from a file without emitting it
     #|  -include FILE       include a file before the main source
     #|  -dM                 with -E, dump final macro definitions
+    #|  -fmacro-prefix-map=OLD=NEW
+    #|                      remap OLD to NEW in __FILE__
+    #|  -ffile-prefix-map=OLD=NEW
+    #|                      remap OLD to NEW in __FILE__
     #|  -Wp,OPTS            forward supported comma-separated preprocessor options
     #|  -Xpreprocessor OPT  forward one supported preprocessor option
     #|  -nostdinc           disable built-in system include paths
