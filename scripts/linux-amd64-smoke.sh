@@ -216,6 +216,25 @@ C
 "$kimicc" -E -target linux-amd64 -pthread "$source_path" >"$driver_query_path"
 grep -F 'int threaded=1;' "$driver_query_path" >/dev/null
 
+cat > "$source_path" <<'C'
+#ifdef __PIC__
+int pic = __PIC__;
+#else
+int pic = 0;
+#endif
+#ifdef __PIE__
+int pie = __PIE__;
+#else
+int pie = 0;
+#endif
+C
+"$kimicc" -E -target linux-amd64 -fPIE "$source_path" >"$driver_query_path"
+grep -F 'int pic=2;' "$driver_query_path" >/dev/null
+grep -F 'int pie=2;' "$driver_query_path" >/dev/null
+"$kimicc" -E -target linux-amd64 -fPIE -fno-pie "$source_path" >"$driver_query_path"
+grep -F 'int pic=0;' "$driver_query_path" >/dev/null
+grep -F 'int pie=0;' "$driver_query_path" >/dev/null
+
 cat > "$bad_source_path" <<'C'
 _Static_assert(0, "linux smoke expects this failure");
 int main(void) { return 0; }

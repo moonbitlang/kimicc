@@ -212,7 +212,10 @@ the target split real and testable without claiming full C ABI coverage yet.
   `-rpath PATH`, and `-e SYMBOL` are preserved for that delegated link step.
   `-pthread` is also preserved for link delegation and seeds `_REENTRANT=1`
   before preprocessing, matching the build-system contract projects expect from
-  Clang/GCC-style drivers.
+  Clang/GCC-style drivers. PIC and PIE driver flags seed the same predefined
+  macro contract as Clang: `-fpic`/`-fpie` define value `1`,
+  `-fPIC`/`-fPIE` define value `2`, and the `-fno-*` variants clear the PIC/PIE
+  macros in command-line order.
 - `--sysroot` and `-isysroot` add target-specific system include roots for
   preprocessing and are forwarded to Clang for object assembly and linking.
   Toolchain discovery options such as `--gcc-toolchain=PATH` and

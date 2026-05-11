@@ -671,6 +671,57 @@ test "driver pthread seeds reentrant define and linker flag" {
 }
 
 ///|
+fn preprocess_driver_pic_pie(argv : Array[String]) -> String {
+  let opts = match parse_driver_args(argv) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  let source = "#ifdef __PIC__\nint pic = __PIC__;\n#else\nint pic = 0;\n#endif\n#ifdef __PIE__\nint pie = __PIE__;\n#else\nint pie = 0;\n#endif\n"
+  let result = preprocess_source_with_dependencies(source, "foo.c", opts)
+  result.text
+}
+
+///|
+test "driver seeds pic and pie predefined macros" {
+  assert_eq(
+    preprocess_driver_pic_pie(["kimicc", "-E", "-fpic", "foo.c"]),
+    "int pic=1;\nint pie=0;\n",
+  )
+  assert_eq(
+    preprocess_driver_pic_pie(["kimicc", "-E", "-fPIC", "foo.c"]),
+    "int pic=2;\nint pie=0;\n",
+  )
+  assert_eq(
+    preprocess_driver_pic_pie(["kimicc", "-E", "-fpie", "foo.c"]),
+    "int pic=1;\nint pie=1;\n",
+  )
+  assert_eq(
+    preprocess_driver_pic_pie(["kimicc", "-E", "-fPIE", "foo.c"]),
+    "int pic=2;\nint pie=2;\n",
+  )
+}
+
+///|
+test "driver applies pic and pie macro options in order" {
+  assert_eq(
+    preprocess_driver_pic_pie(["kimicc", "-E", "-fpie", "-fPIC", "foo.c"]),
+    "int pic=2;\nint pie=0;\n",
+  )
+  assert_eq(
+    preprocess_driver_pic_pie(["kimicc", "-E", "-fPIC", "-fpie", "foo.c"]),
+    "int pic=1;\nint pie=1;\n",
+  )
+  assert_eq(
+    preprocess_driver_pic_pie(["kimicc", "-E", "-fPIE", "-fno-pie", "foo.c"]),
+    "int pic=0;\nint pie=0;\n",
+  )
+  assert_eq(
+    preprocess_driver_pic_pie(["kimicc", "-E", "-fno-pic", "-fPIC", "foo.c"]),
+    "int pic=2;\nint pie=0;\n",
+  )
+}
+
+///|
 test "driver recognizes preprocessed inputs" {
   let opts = match parse_driver_args(["kimicc", "-fpreprocessed", "foo.c"]) {
     Ok(opts) => opts

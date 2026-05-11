@@ -292,6 +292,30 @@ fn add_pthread(opts : DriverOptions) -> Unit {
 }
 
 ///|
+fn add_pic_macros(opts : DriverOptions, value : String) -> Unit {
+  add_define(opts, "__PIC__=" + value)
+  add_define(opts, "__pic__=" + value)
+  add_undefine(opts, "__PIE__")
+  add_undefine(opts, "__pie__")
+}
+
+///|
+fn add_pie_macros(opts : DriverOptions, value : String) -> Unit {
+  add_define(opts, "__PIC__=" + value)
+  add_define(opts, "__pic__=" + value)
+  add_define(opts, "__PIE__=" + value)
+  add_define(opts, "__pie__=" + value)
+}
+
+///|
+fn clear_pic_pie_macros(opts : DriverOptions) -> Unit {
+  add_undefine(opts, "__PIC__")
+  add_undefine(opts, "__pic__")
+  add_undefine(opts, "__PIE__")
+  add_undefine(opts, "__pie__")
+}
+
+///|
 fn apply_dependency_mode(opts : DriverOptions, mode : String) -> Bool {
   match mode {
     "-M" => {
@@ -1084,6 +1108,24 @@ fn consume_ignored_option(
           }
           None => Err("unsupported target: " + value)
         }
+      } else if arg == "-fpic" {
+        add_pic_macros(opts, "1")
+        Ok(index)
+      } else if arg == "-fPIC" {
+        add_pic_macros(opts, "2")
+        Ok(index)
+      } else if arg == "-fpie" {
+        add_pie_macros(opts, "1")
+        Ok(index)
+      } else if arg == "-fPIE" {
+        add_pie_macros(opts, "2")
+        Ok(index)
+      } else if arg == "-fno-pic" ||
+        arg == "-fno-PIC" ||
+        arg == "-fno-pie" ||
+        arg == "-fno-PIE" {
+        clear_pic_pie_macros(opts)
+        Ok(index)
       } else if starts_with(arg, "-MF") ||
         starts_with(arg, "-MT") ||
         starts_with(arg, "-MQ") ||
