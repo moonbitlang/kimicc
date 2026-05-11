@@ -10,6 +10,19 @@ test "generate simple function" {
 }
 
 ///|
+test "generate darwin arm64 global unary plus initializer" {
+  let source =
+    #|int gplus = +1;
+    #|long gshift = +1L << 3;
+    #|int main(void) { return gplus + (int)gshift; }
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(assembly.contains("_gplus:\n\t.long\t1"), content="true")
+  inspect(assembly.contains("_gshift:\n\t.quad\t8"), content="true")
+}
+
+///|
 test "generate linux amd64 simple function" {
   let source = "int main() { return 42; }"
   let prog = @parser.parse(source)

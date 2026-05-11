@@ -417,6 +417,7 @@ fn Codegen::fold_const(self : Codegen, expr : @parser.Expr) -> Int64? {
         Some(x) => Some(-x)
         _ => None
       }
+    Unary("+", e) => self.fold_const(e)
     Unary("~", e) =>
       match self.fold_const(e) {
         Some(x) => Some(x.lnot())
