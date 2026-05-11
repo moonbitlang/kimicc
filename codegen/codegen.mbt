@@ -448,57 +448,74 @@ fn Codegen::fold_const(self : Codegen, expr : @parser.Expr) -> Int64? {
 
 ///|
 fn Codegen::fold_float_const(self : Codegen, expr : @parser.Expr) -> Double? {
-  match expr {
-    FloatLiteral(v) => Some(v)
-    Number(n) => Some(n.to_double())
-    Binary("+", a, b) =>
-      match (self.fold_float_const(a), self.fold_float_const(b)) {
-        (Some(x), Some(y)) => Some(x + y)
-        _ => None
-      }
-    Binary("-", a, b) =>
-      match (self.fold_float_const(a), self.fold_float_const(b)) {
-        (Some(x), Some(y)) => Some(x - y)
-        _ => None
-      }
-    Binary("*", a, b) =>
-      match (self.fold_float_const(a), self.fold_float_const(b)) {
-        (Some(x), Some(y)) => Some(x * y)
-        _ => None
-      }
-    Binary("/", a, b) =>
-      match (self.fold_float_const(a), self.fold_float_const(b)) {
-        (Some(x), Some(y)) => Some(x / y)
-        _ => None
-      }
-    Unary("-", e) =>
-      match self.fold_float_const(e) {
-        Some(x) => Some(-x)
-        None => None
-      }
-    Unary("+", e) => self.fold_float_const(e)
-    Ternary(cond, a, b) =>
-      match self.fold_const(cond) {
-        Some(0L) => self.fold_float_const(b)
-        Some(_) => self.fold_float_const(a)
-        None => None
-      }
-    Cast(_, e) => self.fold_float_const(e)
-    DesignatedField(_, e) => self.fold_float_const(e)
-    DesignatedIndex(_, e) => self.fold_float_const(e)
-    DesignatedRange(_, _, e) => self.fold_float_const(e)
-    Call(Var(name), _) =>
-      match name {
-        "__builtin_nan" | "__builtin_nanf" | "__builtin_nanl" => Some(0.0 / 0.0)
-        "__builtin_huge_val"
-        | "__builtin_huge_valf"
-        | "__builtin_huge_vall"
-        | "__builtin_inf"
-        | "__builtin_inff"
-        | "__builtin_infl" => Some(1.0 / 0.0)
-        _ => None
-      }
-    _ => None
+  let expr_ty = self.type_of(expr, 0)
+  if !expr_ty.is_floating() {
+    match expr {
+      Cast(_, e) if self.type_of(e, 0).is_floating() =>
+        match self.fold_float_const(e) {
+          Some(v) => Some(v.to_int().to_double())
+          None => None
+        }
+      _ =>
+        match self.fold_const(expr) {
+          Some(n) => Some(n.to_double())
+          _ => None
+        }
+    }
+  } else {
+    match expr {
+      FloatLiteral(v) => Some(v)
+      Number(n) => Some(n.to_double())
+      Binary("+", a, b) =>
+        match (self.fold_float_const(a), self.fold_float_const(b)) {
+          (Some(x), Some(y)) => Some(x + y)
+          _ => None
+        }
+      Binary("-", a, b) =>
+        match (self.fold_float_const(a), self.fold_float_const(b)) {
+          (Some(x), Some(y)) => Some(x - y)
+          _ => None
+        }
+      Binary("*", a, b) =>
+        match (self.fold_float_const(a), self.fold_float_const(b)) {
+          (Some(x), Some(y)) => Some(x * y)
+          _ => None
+        }
+      Binary("/", a, b) =>
+        match (self.fold_float_const(a), self.fold_float_const(b)) {
+          (Some(x), Some(y)) => Some(x / y)
+          _ => None
+        }
+      Unary("-", e) =>
+        match self.fold_float_const(e) {
+          Some(x) => Some(-x)
+          None => None
+        }
+      Unary("+", e) => self.fold_float_const(e)
+      Ternary(cond, a, b) =>
+        match self.fold_const(cond) {
+          Some(0L) => self.fold_float_const(b)
+          Some(_) => self.fold_float_const(a)
+          None => None
+        }
+      Cast(_, e) => self.fold_float_const(e)
+      DesignatedField(_, e) => self.fold_float_const(e)
+      DesignatedIndex(_, e) => self.fold_float_const(e)
+      DesignatedRange(_, _, e) => self.fold_float_const(e)
+      Call(Var(name), _) =>
+        match name {
+          "__builtin_nan" | "__builtin_nanf" | "__builtin_nanl" =>
+            Some(0.0 / 0.0)
+          "__builtin_huge_val"
+          | "__builtin_huge_valf"
+          | "__builtin_huge_vall"
+          | "__builtin_inf"
+          | "__builtin_inff"
+          | "__builtin_infl" => Some(1.0 / 0.0)
+          _ => None
+        }
+      _ => None
+    }
   }
 }
 
@@ -658,6 +675,15 @@ fn Codegen::emit_global_scalar(
       }
     _ => ()
   }
+  if ty.is_integer() && self.type_of(expr, 0).is_floating() {
+    match self.fold_float_const(expr) {
+      Some(v) => {
+        self.emit_global_scalar(ty, Number(v.to_int().to_int64()))
+        return
+      }
+      None => ()
+    }
+  }
   // Try constant-fold the expression first
   let folded_expr = match self.fold_const(expr) {
     Some(n) => @parser.Expr::Number(n)
@@ -677,7 +703,12 @@ fn Codegen::emit_global_scalar(
         }
         _ => self.emit("\t.quad\t" + n.to_string())
       }
-    FloatLiteral(v) => self.emit_global_float(ty, v)
+    FloatLiteral(v) =>
+      if ty.is_floating() {
+        self.emit_global_float(ty, v)
+      } else {
+        self.emit_global_scalar(ty, Number(v.to_int().to_int64()))
+      }
     String(s) =>
       match ty {
         Array(SChar, n) | Array(UChar, n) => {

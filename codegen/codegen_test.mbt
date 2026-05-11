@@ -23,6 +23,27 @@ test "generate darwin arm64 global unary plus initializer" {
 }
 
 ///|
+test "generate darwin arm64 global scalar constants use expression type" {
+  let source =
+    #|double dgint_div = 1 / 2;
+    #|double dgfp_div = (double)1 / 2;
+    #|double dgcast_int = (int)1.75;
+    #|float dgternary_int = 1 ? 3 / 2 : 9.0f;
+    #|int dgint_from_float = (int)1.75;
+    #|int dgfp_expr_to_int = (double)3 / 2;
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(assembly.contains("_dgint_div:\n\t.double\t0"), content="true")
+  inspect(assembly.contains("_dgfp_div:\n\t.double\t0.5"), content="true")
+  inspect(assembly.contains("_dgcast_int:\n\t.double\t1"), content="true")
+  inspect(assembly.contains("_dgternary_int:\n\t.single\t1"), content="true")
+  inspect(assembly.contains("_dgint_from_float:\n\t.long\t1"), content="true")
+  inspect(assembly.contains("_dgfp_expr_to_int:\n\t.long\t1"), content="true")
+}
+
+///|
 test "generate linux amd64 simple function" {
   let source = "int main() { return 42; }"
   let prog = @parser.parse(source)

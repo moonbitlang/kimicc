@@ -104,6 +104,8 @@ fn Codegen::type_of(
     }
     Unary("-", operand) =>
       unary_numeric_result_type(self.type_of(operand, frame_size))
+    Unary("+", operand) =>
+      unary_numeric_result_type(self.type_of(operand, frame_size))
     Unary("!", _) => SInt
     Unary("~", operand) =>
       unary_integer_result_type(self.type_of(operand, frame_size))
