@@ -68,6 +68,8 @@ priv struct DriverOptions {
   mut input_language : String?
   mut already_preprocessed : Bool
   mut hosted : Bool
+  mut stdc_version : String?
+  mut strict_ansi : Bool
   mut no_standard_includes : Bool
   mut show_help : Bool
   mut show_version : Bool
@@ -116,6 +118,8 @@ fn DriverOptions::new() -> DriverOptions {
     input_language: None,
     already_preprocessed: false,
     hosted: true,
+    stdc_version: None,
+    strict_ansi: false,
     no_standard_includes: false,
     show_help: false,
     show_version: false,
@@ -315,6 +319,40 @@ fn clear_pic_pie_macros(opts : DriverOptions) -> Unit {
   add_undefine(opts, "__pic__")
   add_undefine(opts, "__PIE__")
   add_undefine(opts, "__pie__")
+}
+
+///|
+fn set_c_standard_macros(
+  opts : DriverOptions,
+  stdc_version : String,
+  strict_ansi : Bool,
+) -> Unit {
+  opts.stdc_version = Some(stdc_version)
+  opts.strict_ansi = strict_ansi
+}
+
+///|
+fn apply_language_standard(opts : DriverOptions, value : String) -> Unit {
+  match value {
+    "c89" | "c90" | "iso9899:1990" | "ansi" =>
+      set_c_standard_macros(opts, "", true)
+    "gnu89" | "gnu90" => set_c_standard_macros(opts, "", false)
+    "iso9899:199409" | "c94" | "c95" =>
+      set_c_standard_macros(opts, "199409L", true)
+    "c99" | "c9x" | "iso9899:1999" | "iso9899:199x" =>
+      set_c_standard_macros(opts, "199901L", true)
+    "gnu99" | "gnu9x" => set_c_standard_macros(opts, "199901L", false)
+    "c11" | "c1x" | "iso9899:2011" =>
+      set_c_standard_macros(opts, "201112L", true)
+    "gnu11" | "gnu1x" => set_c_standard_macros(opts, "201112L", false)
+    "c17" | "c18" | "iso9899:2017" | "iso9899:2018" =>
+      set_c_standard_macros(opts, "201710L", true)
+    "gnu17" | "gnu18" => set_c_standard_macros(opts, "201710L", false)
+    "c2x" | "c23" | "iso9899:2024" =>
+      set_c_standard_macros(opts, "202311L", true)
+    "gnu2x" | "gnu23" => set_c_standard_macros(opts, "202311L", false)
+    _ => ()
+  }
 }
 
 ///|
@@ -1128,6 +1166,15 @@ fn consume_ignored_option(
       } else if arg == "-fhosted" {
         opts.hosted = true
         Ok(index)
+      } else if starts_with(arg, "-std=") {
+        apply_language_standard(opts, arg["-std=".length():].to_owned())
+        Ok(index)
+      } else if starts_with(arg, "--std=") {
+        apply_language_standard(opts, arg["--std=".length():].to_owned())
+        Ok(index)
+      } else if arg == "-ansi" {
+        apply_language_standard(opts, "ansi")
+        Ok(index)
       } else if arg == "-fno-pic" ||
         arg == "-fno-PIC" ||
         arg == "-fno-pie" ||
@@ -1652,6 +1699,20 @@ fn command_line_macro_prefix(opts : DriverOptions) -> String {
   let buf = StringBuilder::new()
   if !opts.hosted {
     buf.write_string("#define __STDC_HOSTED__ 0\n")
+  }
+  match opts.stdc_version {
+    Some(value) =>
+      if value == "" {
+        buf.write_string("#undef __STDC_VERSION__\n")
+      } else {
+        buf.write_string("#define __STDC_VERSION__ ")
+        buf.write_string(value)
+        buf.write_char('\n')
+      }
+    None => ()
+  }
+  if opts.strict_ansi {
+    buf.write_string("#define __STRICT_ANSI__ 1\n")
   }
   for op in opts.macro_ops {
     match op {

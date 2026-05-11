@@ -217,6 +217,9 @@ the target split real and testable without claiming full C ABI coverage yet.
   `-fPIC`/`-fPIE` define value `2`, and the `-fno-*` variants clear the PIC/PIE
   macros in command-line order. `-ffreestanding` and `-fhosted` select the
   predefined `__STDC_HOSTED__` value before user `-D`/`-U` macro overrides.
+  Common `-std=`/`--std=` values and `-ansi` update `__STDC_VERSION__` and
+  `__STRICT_ANSI__` for preprocessing probes, without enforcing a separate
+  parser dialect.
 - `--sysroot` and `-isysroot` add target-specific system include roots for
   preprocessing and are forwarded to Clang for object assembly and linking.
   Toolchain discovery options such as `--gcc-toolchain=PATH` and

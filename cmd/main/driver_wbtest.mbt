@@ -779,6 +779,71 @@ test "driver leaves hosted macro overrides after mode selection" {
 }
 
 ///|
+fn preprocess_driver_standard(argv : Array[String]) -> String {
+  let opts = match parse_driver_args(argv) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  let source = "#ifdef __STDC_VERSION__\nlong version = __STDC_VERSION__;\n#else\nlong version = 0;\n#endif\n#ifdef __STRICT_ANSI__\nint strict = __STRICT_ANSI__;\n#else\nint strict = 0;\n#endif\n"
+  let result = preprocess_source_with_dependencies(source, "foo.c", opts)
+  result.text
+}
+
+///|
+test "driver maps std options to predefined standard macros" {
+  assert_eq(
+    preprocess_driver_standard(["kimicc", "-E", "foo.c"]),
+    "long version=201112L;\nint strict=0;\n",
+  )
+  assert_eq(
+    preprocess_driver_standard(["kimicc", "-E", "-std=c89", "foo.c"]),
+    "long version=0;\nint strict=1;\n",
+  )
+  assert_eq(
+    preprocess_driver_standard(["kimicc", "-E", "-std=gnu89", "foo.c"]),
+    "long version=0;\nint strict=0;\n",
+  )
+  assert_eq(
+    preprocess_driver_standard(["kimicc", "-E", "-std=c99", "foo.c"]),
+    "long version=199901L;\nint strict=1;\n",
+  )
+  assert_eq(
+    preprocess_driver_standard(["kimicc", "-E", "-std=gnu17", "foo.c"]),
+    "long version=201710L;\nint strict=0;\n",
+  )
+  assert_eq(
+    preprocess_driver_standard(["kimicc", "-E", "--std=c23", "foo.c"]),
+    "long version=202311L;\nint strict=1;\n",
+  )
+}
+
+///|
+test "driver applies std options and macro overrides in clang order" {
+  assert_eq(
+    preprocess_driver_standard([
+      "kimicc", "-E", "-std=c99", "-std=gnu11", "foo.c",
+    ]),
+    "long version=201112L;\nint strict=0;\n",
+  )
+  assert_eq(
+    preprocess_driver_standard([
+      "kimicc", "-E", "-D__STDC_VERSION__=9L", "-std=c89", "foo.c",
+    ]),
+    "long version=9L;\nint strict=1;\n",
+  )
+  assert_eq(
+    preprocess_driver_standard([
+      "kimicc", "-E", "-U__STRICT_ANSI__", "-std=c11", "foo.c",
+    ]),
+    "long version=201112L;\nint strict=0;\n",
+  )
+  assert_eq(
+    preprocess_driver_standard(["kimicc", "-E", "-ansi", "foo.c"]),
+    "long version=0;\nint strict=1;\n",
+  )
+}
+
+///|
 test "driver recognizes preprocessed inputs" {
   let opts = match parse_driver_args(["kimicc", "-fpreprocessed", "foo.c"]) {
     Ok(opts) => opts
