@@ -166,10 +166,10 @@ conversions use the corresponding high-bit split around `2^63`. Mixed scalar
 ternary arms are converted to the selected conditional-expression result type
 before control flow rejoins. Mixed integer/floating compound assignments for
 non-`__int128` integer lvalues use floating arithmetic before converting back to
-the lvalue type. Direct calls use declared parameter types to select scalar
-argument registers and conversions. Pointer `+`, `-`, `+=`, and `-=` scale
-integer operands by the pointed element size for the covered object pointer
-cases.
+the lvalue type, including covered integer bit-field lvalues. Direct calls use
+declared parameter types to select scalar argument registers and conversions.
+Pointer `+`, `-`, `+=`, and `-=` scale integer operands by the pointed element
+size for the covered object pointer cases.
 Unnamed variadic call arguments use C default argument promotions before ABI
 classification, and calls through declarations with no recorded parameter types
 apply the same promotions to supplied arguments. Narrow integer call results are

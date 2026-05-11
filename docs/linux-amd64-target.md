@@ -256,7 +256,8 @@ branches, loops, direct and indirect function-pointer calls, scalar and covered
 aggregate varargs, small integer-class aggregate arguments/returns, small
 SSE-class and mixed-class aggregate arguments/returns including nested
 struct/array fields, memory-class aggregate arguments/returns, integer
-bit-fields, GNU packed aggregate layout, local aggregate initializers,
+bit-fields including mixed floating compound assignments, GNU packed aggregate
+layout, local aggregate initializers,
 compound literals, initialized global arrays/structs/unions and covered global
 bit-field storage units, global pointer/function-pointer address relocations,
 `__builtin_offsetof` member designators, switch dispatch with

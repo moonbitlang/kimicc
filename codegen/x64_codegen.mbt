@@ -5145,7 +5145,7 @@ fn X64Codegen::gen_assign(
   let lhs_ty = self.type_of(lhs)
   match self.bitfield_info(lhs) {
     Some(info) => {
-      self.gen_expr_as_int(rhs)
+      self.gen_expr_as_scalar(rhs, info.ty)
       self.emit_push_rax()
       self.gen_addr(lhs)
       self.emit("\tmov\tr10, rax")
@@ -5287,6 +5287,65 @@ fn X64Codegen::gen_integer_fp_compound_assign(
 }
 
 ///|
+fn X64Codegen::gen_bitfield_fp_compound_assign(
+  self : X64Codegen,
+  op : String,
+  lhs : @parser.Expr,
+  rhs : @parser.Expr,
+  info : X64BitfieldInfo,
+) -> Bool {
+  let rhs_ty = self.type_of(rhs)
+  if !x64_is_fp_type(rhs_ty) {
+    return false
+  }
+  match op {
+    "+" | "-" | "*" | "/" => ()
+    _ => return false
+  }
+  let result_ty : @parser.Type = if x64_core_type(rhs_ty) == Double {
+    Double
+  } else {
+    Float
+  }
+  let suffix = x64_fp_suffix(result_ty)
+  let spill_store = if x64_core_type(result_ty) == Float {
+    "DWORD PTR [rsp], xmm0"
+  } else {
+    "QWORD PTR [rsp], xmm0"
+  }
+  let spill_load = if x64_core_type(result_ty) == Float {
+    "DWORD PTR [rsp]"
+  } else {
+    "QWORD PTR [rsp]"
+  }
+  self.gen_addr(lhs)
+  self.emit_push_rax()
+  self.emit_load_bitfield_from_addr("rax", info)
+  self.emit_int_to_fp(info.ty, result_ty)
+  self.emit("\tsub\trsp, 8")
+  self.emit("\tmov" + suffix + "\t" + spill_store)
+  self.gen_expr_as_fp(rhs, result_ty)
+  self.emit("\tmovapd\txmm1, xmm0")
+  self.emit("\tmov" + suffix + "\txmm0, " + spill_load)
+  self.emit("\tadd\trsp, 8")
+  match op {
+    "+" => self.emit("\tadd" + suffix + "\txmm0, xmm1")
+    "-" => self.emit("\tsub" + suffix + "\txmm0, xmm1")
+    "*" => self.emit("\tmul" + suffix + "\txmm0, xmm1")
+    "/" => self.emit("\tdiv" + suffix + "\txmm0, xmm1")
+    _ =>
+      abort("unsupported x86-64 bit-field/floating compound assignment: " + op)
+  }
+  self.emit_fp_to_scalar(result_ty, info.ty)
+  self.emit("\tmov\tr11, rax")
+  self.emit_pop_rax()
+  self.emit("\tmov\tr10, rax")
+  self.emit("\tmov\trax, r11")
+  self.emit_store_bitfield_value(info)
+  true
+}
+
+///|
 fn X64Codegen::gen_compound_assign(
   self : X64Codegen,
   op : String,
@@ -5295,6 +5354,9 @@ fn X64Codegen::gen_compound_assign(
 ) -> Unit {
   match self.bitfield_info(lhs) {
     Some(info) => {
+      if self.gen_bitfield_fp_compound_assign(op, lhs, rhs, info) {
+        return
+      }
       self.gen_addr(lhs)
       self.emit_push_rax()
       self.emit_load_bitfield_from_addr("rax", info)

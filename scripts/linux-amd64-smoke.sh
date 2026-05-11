@@ -620,7 +620,19 @@ int bitfields(void) {
   bits.c = 17;
   bits.a += 1;
   bits.c >>= 1;
-  return bits.a == 6 && bits.b == -3 && bits.c == 8 ? 0 : 64;
+  if (bits.a != 6 || bits.b != -3 || bits.c != 8) return 64;
+  bits.a = 2.9;
+  bits.a *= 1.9;
+  if (bits.a != 3) return 65;
+  bits.b += 1.5;
+  if (bits.b != -1) return 66;
+  bits.c = 0;
+  {
+    float factor = 3.5f;
+    bits.c += factor;
+  }
+  if (bits.c != 3) return 67;
+  return 0;
 }
 
 int unsigned_ops(void) {

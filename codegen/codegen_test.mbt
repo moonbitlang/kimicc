@@ -1867,6 +1867,33 @@ test "generate linux amd64 bit-field read write and compound assignment" {
 }
 
 ///|
+test "generate linux amd64 bit-field floating assignments" {
+  let source =
+    #|struct Bits { unsigned int a : 3; int b : 4; unsigned int c : 5; };
+    #|int main(void) {
+    #|  struct Bits bits;
+    #|  bits.a = 2.9;
+    #|  bits.a *= 1.9;
+    #|  bits.b = -3;
+    #|  bits.b += 1.5;
+    #|  bits.c = 0;
+    #|  float factor = 3.5f;
+    #|  bits.c += factor;
+    #|  return (int)bits.a + bits.b + (int)bits.c;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(assembly.contains("cvttsd2si\trax, xmm0"), content="true")
+  inspect(assembly.contains("mulsd\txmm0, xmm1"), content="true")
+  inspect(assembly.contains("addsd\txmm0, xmm1"), content="true")
+  inspect(assembly.contains("addss\txmm0, xmm1"), content="true")
+}
+
+///|
 test "generate function with params" {
   let source = "int add(int a, int b) { return a + b; }"
   let prog = @parser.parse(source)
