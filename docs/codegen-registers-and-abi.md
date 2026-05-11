@@ -132,6 +132,8 @@ Pointer and function-pointer global initializers can also emit relocations to
 globals, functions, and aggregate subobjects. Pointer arithmetic in those
 relocations is scaled by the effective pointer type, including casted pointer
 bases and address-of casted pointer subscripts.
+Global aggregate initializers emit layout padding and covered bit-field storage
+units, including grouped struct bit-fields and designated union bit-fields.
 
 ## ABI Compliance Status
 

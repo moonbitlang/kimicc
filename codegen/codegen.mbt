@@ -1167,17 +1167,39 @@ fn Codegen::emit_global_scalar(
 }
 
 ///|
-fn find_designated_initializer(
-  exprs : Array[@parser.Expr],
-  field_name : String,
-) -> @parser.Expr? {
-  for expr in exprs {
-    match expr {
-      DesignatedField(name, _) if name == field_name => return Some(expr)
-      _ => ()
-    }
+fn global_initializer_value(expr : @parser.Expr) -> @parser.Expr {
+  match expr {
+    DesignatedField(_, e) | DesignatedIndex(_, e) | DesignatedRange(_, _, e) =>
+      e
+    _ => expr
   }
-  None
+}
+
+///|
+fn Codegen::emit_global_int_by_size(
+  self : Codegen,
+  size : Int,
+  value : Int64,
+) -> Unit {
+  match size {
+    1 => self.emit("\t.byte\t" + value.to_string())
+    2 => self.emit("\t.short\t" + value.to_string())
+    4 => self.emit("\t.long\t" + value.to_string())
+    _ => self.emit("\t.quad\t" + value.to_string())
+  }
+}
+
+///|
+fn Codegen::global_bitfield_bits(
+  self : Codegen,
+  init_expr : @parser.Expr,
+  bit_width : Int,
+  bit_offset : Int,
+) -> Int64 {
+  match self.fold_const(global_initializer_value(init_expr)) {
+    Some(value) => (value & bitfield_mask(bit_width)) << bit_offset
+    None => 0L
+  }
 }
 
 ///|
@@ -1235,33 +1257,66 @@ fn Codegen::emit_global_array(
       } else {
         []
       }
-      let mut emitted = 0
+      let field_inits : Array[@parser.Expr?] = Array::make(
+        layout.length(),
+        None,
+      )
       let mut positional = 0
-      for field in layout {
-        let field_name = field.0
+      for init_expr in exprs {
+        match init_expr {
+          DesignatedField(field_name, _) =>
+            for i = 0; i < layout.length(); i = i + 1 {
+              if layout[i].0 == field_name {
+                field_inits[i] = Some(init_expr)
+                positional = i + 1
+                break
+              }
+            }
+          _ =>
+            if positional < layout.length() {
+              field_inits[positional] = Some(init_expr)
+              positional += 1
+            }
+        }
+      }
+      let mut emitted = 0
+      let mut i = 0
+      while i < layout.length() {
+        let field = layout[i]
         let field_ty = field.1
         let field_offset = field.2
         let field_size = field.3
         let bit_width = field.5
-        let init_expr = match find_designated_initializer(exprs, field_name) {
-          Some(expr) => Some(expr)
-          None => {
-            while positional < exprs.length() &&
-                  exprs[positional] is DesignatedField(_, _) {
-              positional = positional + 1
+        if bit_width > 0 {
+          let container_offset = field_offset
+          let container_size = field_size
+          let mut container_value = 0L
+          let mut j = i
+          while j < layout.length() &&
+                layout[j].2 == container_offset &&
+                layout[j].3 == container_size &&
+                layout[j].5 > 0 {
+            let width = layout[j].5
+            let offset = layout[j].4
+            match field_inits[j] {
+              Some(init_expr) =>
+                container_value = container_value |
+                  self.global_bitfield_bits(init_expr, width, offset)
+              None => ()
             }
-            if positional < exprs.length() {
-              let expr = exprs[positional]
-              positional = positional + 1
-              Some(expr)
-            } else {
-              None
-            }
+            j += 1
           }
-        }
-        match init_expr {
-          Some(expr) =>
-            if bit_width == 0 {
+          if container_offset >= emitted {
+            if container_offset > emitted {
+              self.emit("\t.space\t" + (container_offset - emitted).to_string())
+            }
+            self.emit_global_int_by_size(container_size, container_value)
+            emitted = container_offset + container_size
+          }
+          i = j
+        } else {
+          match field_inits[i] {
+            Some(expr) => {
               // Emit padding to reach the correct field offset
               if field_offset > emitted {
                 self.emit("\t.space\t" + (field_offset - emitted).to_string())
@@ -1269,7 +1324,9 @@ fn Codegen::emit_global_array(
               self.emit_global_scalar(field_ty, expr)
               emitted = field_offset + field_size
             }
-          None => ()
+            None => ()
+          }
+          i += 1
         }
       }
       // Pad remaining space with zeros
@@ -1293,8 +1350,17 @@ fn Codegen::emit_global_array(
           _ => if layout.length() > 0 { Some(layout[0]) } else { None }
         }
         match field {
-          Some((_, field_ty, field_offset, field_size, _, bit_width)) =>
-            if bit_width == 0 {
+          Some((_, field_ty, field_offset, field_size, bit_offset, bit_width)) =>
+            if bit_width > 0 {
+              if field_offset > 0 {
+                self.emit("\t.space\t" + field_offset.to_string())
+              }
+              self.emit_global_int_by_size(
+                field_size,
+                self.global_bitfield_bits(init_expr, bit_width, bit_offset),
+              )
+              emitted = field_offset + field_size
+            } else {
               if field_offset > 0 {
                 self.emit("\t.space\t" + field_offset.to_string())
               }

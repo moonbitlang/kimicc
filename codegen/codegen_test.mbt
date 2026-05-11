@@ -143,6 +143,21 @@ test "generate darwin arm64 global pointer relocations are type scaled" {
 }
 
 ///|
+test "generate darwin arm64 global bit-field initializers" {
+  let source =
+    #|struct DBits { unsigned a : 3; signed b : 4; unsigned c : 5; };
+    #|union DUBits { unsigned a : 3; signed b : 4; };
+    #|struct DBits dbits = { .a = 5, .b = -3, .c = 17 };
+    #|union DUBits dubits = { .b = -3 };
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(assembly.contains("_dbits:\n\t.long\t2285"), content="true")
+  inspect(assembly.contains("_dubits:\n\t.long\t13"), content="true")
+}
+
+///|
 test "generate linux amd64 simple function" {
   let source = "int main() { return 42; }"
   let prog = @parser.parse(source)
