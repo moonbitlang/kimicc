@@ -1487,6 +1487,9 @@ test "generate linux amd64 global aggregate initializers" {
     #|struct GRefs { int *first; int *tail; int (*fn)(int); };
     #|struct GNode { int value; struct GNode *next; };
     #|struct GCast { char c; int x; };
+    #|union GBox { double d; long l; };
+    #|struct GNested { union GBox box; int tag; int arr[3]; };
+    #|struct GPair { int a; int b; };
     #|union GU { int i; char c[4]; };
     #|union GUBits { unsigned a : 3; signed b : 4; };
     #|int gadd1(int x) { return x + 1; }
@@ -1511,6 +1514,8 @@ test "generate linux amd64 global aggregate initializers" {
     #|struct GNode *gnodes[2] = { &gnode1, &gnode2 };
     #|union GU gu = { .c = { 65, 66, 0, 0 } };
     #|union GUBits gubits = { .b = -3 };
+    #|struct GNested gnested = { .box.d = 1.5, .tag = 7, .arr[2] = 35 };
+    #|struct GPair gpairs[2] = { [1].b = 5, [0].a = 37 };
     #|char gstr[6] = "hey";
     #|int main(void) {
     #|  return garr[0] + garr[3] + gout.tag + gout.inner.c + gout.inner.x + gout.tail + gbits.a + gbits.b + gbits.c + gu.c[0] + gu.c[1] + gubits.b + gstr[0];
@@ -1535,6 +1540,8 @@ test "generate linux amd64 global aggregate initializers" {
   inspect(assembly.contains("gnodes:"), content="true")
   inspect(assembly.contains("gu:"), content="true")
   inspect(assembly.contains("gubits:"), content="true")
+  inspect(assembly.contains("gnested:"), content="true")
+  inspect(assembly.contains("gpairs:"), content="true")
   inspect(assembly.contains("gstr:"), content="true")
   inspect(assembly.contains("\t.long\t1"), content="true")
   inspect(assembly.contains("\t.long\t4"), content="true")
@@ -1559,6 +1566,9 @@ test "generate linux amd64 global aggregate initializers" {
   inspect(assembly.contains("\t.quad\tgnode1"), content="true")
   inspect(assembly.contains("\t.byte\t65"), content="true")
   inspect(assembly.contains("\t.byte\t66"), content="true")
+  inspect(assembly.contains("\t.double\t1.5"), content="true")
+  inspect(assembly.contains("\t.long\t35"), content="true")
+  inspect(assembly.contains("\t.long\t37"), content="true")
   inspect(assembly.contains("\t.asciz\t\"hey\""), content="true")
 }
 

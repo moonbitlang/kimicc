@@ -1,4 +1,90 @@
 ///|
+priv enum InitDesignator {
+  InitField(String)
+  InitIndex(Int64)
+  InitRange(Int64, Int64)
+}
+
+///|
+fn Parser::parse_initializer_designator_path(
+  self : Parser,
+) -> Array[InitDesignator] {
+  let path = []
+  while self.token == Dot || self.token == LBracket {
+    match self.token {
+      Dot => {
+        self.advance()
+        match self.token {
+          Ident(name) => {
+            path.push(InitField(name))
+            self.advance()
+          }
+          _ => abort("Expected field name in designated initializer")
+        }
+      }
+      LBracket => {
+        self.advance()
+        let start = match self.fold_const(self.parse_assign()) {
+          Some(n) => n
+          None => 0L
+        }
+        let end = if self.token == Ellipsis {
+          self.advance()
+          match self.fold_const(self.parse_assign()) {
+            Some(n) => n
+            None => start
+          }
+        } else {
+          start
+        }
+        self.expect(RBracket)
+        if start == end {
+          path.push(InitIndex(start))
+        } else {
+          path.push(InitRange(start, end))
+        }
+      }
+      _ => ()
+    }
+  }
+  path
+}
+
+///|
+fn Parser::parse_initializer_value(
+  self : Parser,
+  compound_literal : Bool,
+) -> Expr {
+  if self.token == LBrace {
+    if compound_literal {
+      Expr::Array(self.parse_compound_literal_init_exprs())
+    } else {
+      Expr::Array(self.parse_brace_init_exprs())
+    }
+  } else {
+    self.parse_assign()
+  }
+}
+
+///|
+fn Parser::parse_designated_initializer(
+  self : Parser,
+  compound_literal : Bool,
+) -> Expr {
+  let path = self.parse_initializer_designator_path()
+  self.expect(Assign)
+  let mut value = self.parse_initializer_value(compound_literal)
+  for i = path.length() - 1; i >= 0; i = i - 1 {
+    match path[i] {
+      InitField(name) => value = DesignatedField(name, value)
+      InitIndex(index) => value = DesignatedIndex(index, value)
+      InitRange(first, last) => value = DesignatedRange(first, last, value)
+    }
+  }
+  value
+}
+
+///|
 /// Parse expressions inside a brace initializer: { expr1, expr2, ... }
 fn Parser::parse_brace_init_exprs(self : Parser) -> Array[Expr] {
   let exprs = []
@@ -8,64 +94,8 @@ fn Parser::parse_brace_init_exprs(self : Parser) -> Array[Expr] {
       // Recursively parse nested brace initializer and wrap as Expr::Array
       let nested = self.parse_brace_init_exprs()
       exprs.push(Expr::Array(nested))
-    } else if self.token == Dot {
-      self.advance()
-      let fields = []
-      let field = match self.token {
-        Ident(name) => {
-          self.advance()
-          name
-        }
-        _ => abort("Expected field name in designated initializer")
-      }
-      fields.push(field)
-      while self.token == Dot {
-        self.advance()
-        match self.token {
-          Ident(name) => {
-            self.advance()
-            fields.push(name)
-          }
-          _ => abort("Expected field name in designated initializer")
-        }
-      }
-      self.expect(Assign)
-      let mut value = if self.token == LBrace {
-        Expr::Array(self.parse_brace_init_exprs())
-      } else {
-        self.parse_assign()
-      }
-      for i = fields.length() - 1; i >= 0; i = i - 1 {
-        value = DesignatedField(fields[i], value)
-      }
-      exprs.push(value)
-    } else if self.token == LBracket {
-      self.advance()
-      let start = match self.fold_const(self.parse_assign()) {
-        Some(n) => n
-        None => 0L
-      }
-      let end = if self.token == Ellipsis {
-        self.advance()
-        match self.fold_const(self.parse_assign()) {
-          Some(n) => n
-          None => start
-        }
-      } else {
-        start
-      }
-      self.expect(RBracket)
-      self.expect(Assign)
-      let value = if self.token == LBrace {
-        Expr::Array(self.parse_brace_init_exprs())
-      } else {
-        self.parse_assign()
-      }
-      if start == end {
-        exprs.push(DesignatedIndex(start, value))
-      } else {
-        exprs.push(DesignatedRange(start, end, value))
-      }
+    } else if self.token == Dot || self.token == LBracket {
+      exprs.push(self.parse_designated_initializer(false))
     } else {
       exprs.push(self.parse_assign())
     }
@@ -85,64 +115,8 @@ fn Parser::parse_compound_literal_init_exprs(self : Parser) -> Array[Expr] {
     if self.token == LBrace {
       let nested = self.parse_compound_literal_init_exprs()
       exprs.push(Expr::Array(nested))
-    } else if self.token == Dot {
-      self.advance()
-      let fields = []
-      let field = match self.token {
-        Ident(name) => {
-          self.advance()
-          name
-        }
-        _ => abort("Expected field name in designated initializer")
-      }
-      fields.push(field)
-      while self.token == Dot {
-        self.advance()
-        match self.token {
-          Ident(name) => {
-            self.advance()
-            fields.push(name)
-          }
-          _ => abort("Expected field name in designated initializer")
-        }
-      }
-      self.expect(Assign)
-      let mut value = if self.token == LBrace {
-        Expr::Array(self.parse_compound_literal_init_exprs())
-      } else {
-        self.parse_assign()
-      }
-      for i = fields.length() - 1; i >= 0; i = i - 1 {
-        value = DesignatedField(fields[i], value)
-      }
-      exprs.push(value)
-    } else if self.token == LBracket {
-      self.advance()
-      let start = match self.fold_const(self.parse_assign()) {
-        Some(n) => n
-        None => 0L
-      }
-      let end = if self.token == Ellipsis {
-        self.advance()
-        match self.fold_const(self.parse_assign()) {
-          Some(n) => n
-          None => start
-        }
-      } else {
-        start
-      }
-      self.expect(RBracket)
-      self.expect(Assign)
-      let value = if self.token == LBrace {
-        Expr::Array(self.parse_compound_literal_init_exprs())
-      } else {
-        self.parse_assign()
-      }
-      if start == end {
-        exprs.push(DesignatedIndex(start, value))
-      } else {
-        exprs.push(DesignatedRange(start, end, value))
-      }
+    } else if self.token == Dot || self.token == LBracket {
+      exprs.push(self.parse_designated_initializer(true))
     } else {
       exprs.push(self.parse_assign())
     }

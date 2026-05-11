@@ -910,6 +910,22 @@ fn Codegen::emit_global_float(
 }
 
 ///|
+fn Codegen::global_designator_matches_type(
+  self : Codegen,
+  ty : @parser.Type,
+  expr : @parser.Expr,
+) -> Bool {
+  match (peel_aligned_type(ty), expr) {
+    (Struct(name), DesignatedField(field, _))
+    | (Union(name), DesignatedField(field, _)) =>
+      self.find_field_layout(name, field) is Some(_)
+    (Array(_, _), DesignatedIndex(_, _))
+    | (Array(_, _), DesignatedRange(_, _, _)) => true
+    _ => false
+  }
+}
+
+///|
 fn Codegen::global_lvalue_reloc(
   self : Codegen,
   expr : @parser.Expr,
@@ -1104,6 +1120,17 @@ fn Codegen::emit_global_scalar(
       None => ()
     }
   }
+  match expr {
+    DesignatedField(_, e) | DesignatedIndex(_, e) | DesignatedRange(_, _, e) => {
+      if is_aggregate_type(ty) && self.global_designator_matches_type(ty, expr) {
+        self.emit_global_array(ty, [expr])
+      } else {
+        self.emit_global_scalar(ty, e)
+      }
+      return
+    }
+    _ => ()
+  }
   // Try constant-fold the expression first
   let folded_expr = match self.fold_const(expr) {
     Some(n) => @parser.Expr::Number(n)
@@ -1157,9 +1184,6 @@ fn Codegen::emit_global_scalar(
       // Function pointer or address of global in initializer
       self.emit("\t.quad\t_" + name)
     Cast(_, e) => self.emit_global_scalar(ty, e)
-    DesignatedField(_, e) => self.emit_global_scalar(ty, e)
-    DesignatedIndex(_, e) => self.emit_global_scalar(ty, e)
-    DesignatedRange(_, _, e) => self.emit_global_scalar(ty, e)
     CompoundLiteral(_, exprs, _) => self.emit_global_array(ty, exprs)
     Array(nested) =>
       // Nested brace initializer: emit as array/struct

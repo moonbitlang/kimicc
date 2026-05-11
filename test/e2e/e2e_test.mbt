@@ -1961,6 +1961,36 @@ async test "global aggregate initializers" {
 }
 
 ///|
+async test "global nested designator initializers" {
+  let source =
+    #|typedef union Box {
+    #|  double d;
+    #|  long l;
+    #|} Box;
+    #|typedef struct Value {
+    #|  Box box;
+    #|  int tag;
+    #|  int arr[3];
+    #|} Value;
+    #|struct Pair {
+    #|  int a;
+    #|  int b;
+    #|};
+    #|Value value = { .box.d = 1.5, .tag = 7, .arr[2] = 35 };
+    #|struct Pair pairs[2] = { [1].b = 5, [0].a = 37 };
+    #|int main(void) {
+    #|  if (value.box.d != 1.5) return 1;
+    #|  if (value.tag != 7) return 2;
+    #|  if (value.arr[0] != 0 || value.arr[1] != 0 || value.arr[2] != 35) return 3;
+    #|  if (pairs[0].a != 37 || pairs[0].b != 0) return 4;
+    #|  if (pairs[1].a != 0 || pairs[1].b != 5) return 5;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "global string pointer initializer" {
   let source =
     #|char *msg = "hi";

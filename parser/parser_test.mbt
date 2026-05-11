@@ -989,6 +989,34 @@ test "parse global array initializer inferred size" {
 }
 
 ///|
+test "parse mixed nested initializer designators" {
+  let source =
+    #|struct Pair { int a; int b; };
+    #|struct Wrap { struct Pair pairs[2]; };
+    #|struct Wrap w = { .pairs[1].b = 5, .pairs[0].a = 37 };
+    #|int main() { return 0; }
+  let prog = @parser.parse(source)
+  inspect(prog.globals.length(), content="1")
+  match prog.globals[0].init {
+    Some(
+      Array(
+        [
+          DesignatedField(
+            "pairs",
+            DesignatedIndex(1, DesignatedField("b", Number(5)))
+          ),
+          DesignatedField(
+            "pairs",
+            DesignatedIndex(0, DesignatedField("a", Number(37)))
+          ),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected mixed field/index designator path")
+  }
+}
+
+///|
 test "parse multidimensional array declarator keeps outer dimension first" {
   let source = "unsigned short table[2][4];\nint main() { return 0; }"
   let prog = @parser.parse(source)

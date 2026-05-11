@@ -7792,6 +7792,23 @@ fn X64Codegen::global_bitfield_bits(
 }
 
 ///|
+fn X64Codegen::global_designator_matches_type(
+  self : X64Codegen,
+  ty : @parser.Type,
+  expr : @parser.Expr,
+) -> Bool {
+  match (x64_core_type(ty), expr) {
+    (Struct(name), DesignatedField(field, _)) =>
+      self.field_layout(Struct(name), field) is Some(_)
+    (Union(name), DesignatedField(field, _)) =>
+      self.field_layout(Union(name), field) is Some(_)
+    (Array(_, _), DesignatedIndex(_, _))
+    | (Array(_, _), DesignatedRange(_, _, _)) => true
+    _ => false
+  }
+}
+
+///|
 fn X64Codegen::emit_global_scalar(
   self : X64Codegen,
   ty : @parser.Type,
@@ -7843,6 +7860,20 @@ fn X64Codegen::emit_global_scalar(
       }
     None => ()
   }
+  match expr {
+    DesignatedField(_, inner)
+    | DesignatedIndex(_, inner)
+    | DesignatedRange(_, _, inner) => {
+      if x64_is_object_aggregate_type(ty) &&
+        self.global_designator_matches_type(ty, expr) {
+        self.emit_global_array(ty, [expr])
+      } else {
+        self.emit_global_scalar(ty, inner)
+      }
+      return
+    }
+    _ => ()
+  }
   let folded_expr = match self.fold_const(expr) {
     Some(value) => @parser.Expr::Number(value)
     None => expr
@@ -7888,9 +7919,6 @@ fn X64Codegen::emit_global_scalar(
         }
       }
     Cast(_, inner) => self.emit_global_scalar(ty, inner)
-    DesignatedField(_, inner)
-    | DesignatedIndex(_, inner)
-    | DesignatedRange(_, _, inner) => self.emit_global_scalar(ty, inner)
     CompoundLiteral(_, exprs, _) | Array(exprs) =>
       self.emit_global_array(ty, exprs)
     Var(name) => self.emit("\t.quad\t" + name)
