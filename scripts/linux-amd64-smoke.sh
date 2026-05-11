@@ -206,6 +206,15 @@ grep -F 'not configured with sysroot headers suffix' "$driver_stderr_path" >/dev
 "$kimicc" -target linux-amd64 -print-multi-lib >"$driver_query_path"
 "$kimicc" -target linux-amd64 --print-file-name crt1.o >"$driver_query_path"
 grep -F 'crt1.o' "$driver_query_path" >/dev/null
+cat > "$source_path" <<'C'
+#ifdef _REENTRANT
+int threaded = _REENTRANT;
+#else
+int threaded = 0;
+#endif
+C
+"$kimicc" -E -target linux-amd64 -pthread "$source_path" >"$driver_query_path"
+grep -F 'int threaded=1;' "$driver_query_path" >/dev/null
 
 cat > "$bad_source_path" <<'C'
 _Static_assert(0, "linux smoke expects this failure");
