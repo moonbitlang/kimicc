@@ -1626,6 +1626,30 @@ test "generate linux amd64 honors GNU aligned attributes" {
 }
 
 ///|
+test "generate linux amd64 aligns aggregate scratch storage" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|struct BigA { _Alignas(32) long a; long b; long c; };
+    #|struct BigA make_biga(void);
+    #|int read_biga(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  return (int)__builtin_va_arg(ap, struct BigA).a;
+    #|}
+    #|int main(void) { return (int)make_biga().a; }
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(assembly.contains("and\trsp, -32"), content="true")
+  inspect(assembly.contains("mov\tr13, rsp"), content="true")
+  inspect(assembly.contains("lea\trax, [r13 - 32]"), content="true")
+  inspect(assembly.contains("lea\tr10, [r13 - 256]"), content="true")
+}
+
+///|
 test "generate linux amd64 packed aggregate layout and memory class" {
   let source =
     #|struct __attribute__((packed)) Packed { char c; int x; };

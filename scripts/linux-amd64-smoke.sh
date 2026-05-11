@@ -321,6 +321,12 @@ struct AlignedBytes {
 
 _Alignas(32) long global_aligned = 1;
 
+struct BigAligned {
+  _Alignas(32) long a;
+  long b;
+  long c;
+};
+
 struct GnuAlignedBytes {
   char a;
   char b __attribute__((aligned(16)));
@@ -550,6 +556,30 @@ int aligned_offset(void) { return __builtin_offsetof(struct AlignedBytes, c); }
 int aligned_global(void) { return (int)global_aligned; }
 int gnu_aligned_offset(void) { return __builtin_offsetof(struct GnuAlignedBytes, c); }
 int gnu_aligned_global(void) { return (int)gnu_global_aligned; }
+
+struct BigAligned make_big_aligned(long value) {
+  struct BigAligned p;
+  p.a = value;
+  p.b = 1;
+  p.c = 2;
+  return p;
+}
+
+int var_big_aligned(int tag, ...) {
+  va_list ap;
+  int value;
+  __builtin_va_start(ap, tag);
+  value = (int)__builtin_va_arg(ap, struct BigAligned).a;
+  __builtin_va_end(ap);
+  return value;
+}
+
+int aligned_aggregate_scratch(void) {
+  struct BigAligned p = make_big_aligned(19);
+  if ((int)make_big_aligned(23).a != 23) return 596;
+  if (var_big_aligned(0, p) != 19) return 597;
+  return 0;
+}
 
 int offsetof_designators(void) {
   if (__builtin_offsetof(struct NestedMix, i.a) != 0) return 556;
@@ -1648,6 +1678,7 @@ int main(void) {
          aligned_offset() +
          aligned_global() -
          18 +
+         aligned_aggregate_scratch() +
          gnu_aligned_offset() +
          gnu_aligned_global() -
          18 +

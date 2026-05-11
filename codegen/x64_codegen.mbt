@@ -28,8 +28,10 @@ priv struct X64Codegen {
   mut sret_dest_offset : Int
   mut sret_scratch_offset : Int
   mut sret_scratch_size : Int
+  mut sret_scratch_align : Int
   mut va_arg_scratch_offset : Int
   mut va_arg_scratch_size : Int
+  mut va_arg_scratch_align : Int
   mut break_label : String?
   mut continue_label : String?
   mut emitted_labels : Map[String, String]
@@ -64,8 +66,10 @@ fn X64Codegen::new() -> X64Codegen {
     sret_dest_offset: -1,
     sret_scratch_offset: -1,
     sret_scratch_size: 0,
+    sret_scratch_align: 1,
     va_arg_scratch_offset: -1,
     va_arg_scratch_size: 0,
+    va_arg_scratch_align: 1,
     break_label: None,
     continue_label: None,
     emitted_labels: {},
@@ -6108,6 +6112,10 @@ fn X64Codegen::collect_expr_locals(
         if size > self.sret_scratch_size {
           self.sret_scratch_size = size
         }
+        let align = self.type_align(ret_ty)
+        if align > self.sret_scratch_align {
+          self.sret_scratch_align = align
+        }
       }
       match func {
         Var("__builtin_va_start") | Var("__builtin_va_copy") =>
@@ -6129,6 +6137,10 @@ fn X64Codegen::collect_expr_locals(
         let size = self.type_size(ty)
         if size > self.va_arg_scratch_size {
           self.va_arg_scratch_size = size
+        }
+        let align = self.type_align(ty)
+        if align > self.va_arg_scratch_align {
+          self.va_arg_scratch_align = align
         }
       }
       self.collect_expr_locals(ap_expr)
@@ -6431,8 +6443,10 @@ fn X64Codegen::emit_function(
       self.sret_dest_offset = -1
       self.sret_scratch_offset = -1
       self.sret_scratch_size = 0
+      self.sret_scratch_align = 1
       self.va_arg_scratch_offset = -1
       self.va_arg_scratch_size = 0
+      self.va_arg_scratch_align = 1
       self.break_label = None
       self.continue_label = None
       self.emitted_labels = {}
@@ -6473,13 +6487,16 @@ fn X64Codegen::emit_function(
       if self.sret_scratch_size > 0 {
         self.sret_scratch_offset = self.alloc_local(
           "__kimicc_sret_scratch",
-          Array(UChar, self.sret_scratch_size),
+          Aligned(Array(UChar, self.sret_scratch_size), self.sret_scratch_align),
         )
       }
       if self.va_arg_scratch_size > 0 {
         self.va_arg_scratch_offset = self.alloc_local(
           "__kimicc_va_arg_scratch",
-          Array(UChar, self.va_arg_scratch_size),
+          Aligned(
+            Array(UChar, self.va_arg_scratch_size),
+            self.va_arg_scratch_align,
+          ),
         )
       }
       let frame_align = if self.stack_align > 16 {
