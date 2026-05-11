@@ -65,6 +65,26 @@ async test "direct macho object supports max unsigned data initializers" {
 }
 
 ///|
+async test "direct macho object supports global bit-field initializers" {
+  let source =
+    #|struct Bits { unsigned a : 3; signed b : 4; unsigned c : 5; };
+    #|union UBits { unsigned a : 3; signed b : 4; };
+    #|struct Bits bits = { .a = 5, .b = -3, .c = 17 };
+    #|union UBits ubits = { .b = -3 };
+    #|int main(void) {
+    #|  if (bits.a != 5) return 1;
+    #|  if (bits.b != -3) return 2;
+    #|  if (bits.c != 17) return 3;
+    #|  if (ubits.b != -3) return 4;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_direct_object_async(
+    source, "macho_global_bitfield_init",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object emits bss as zerofill with later const data" {
   let source = "int data = 1; int bss; int main(void) { char *s = \"A\"; bss = 40; return data + bss + s[0] - 64; }"
   let obj_path = compile_source_to_direct_object_path(
