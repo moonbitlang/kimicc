@@ -44,6 +44,34 @@ test "generate darwin arm64 global scalar constants use expression type" {
 }
 
 ///|
+test "generate darwin arm64 global unsigned constants use C conversions" {
+  let source =
+    #|unsigned long dugdiv = (unsigned long)-1 / 2;
+    #|unsigned long dugmod = (unsigned long)-1 % 2;
+    #|int dugt = (unsigned long)-1 > 1;
+    #|int dult = (unsigned long)-1 < 1;
+    #|unsigned int duwrap = (unsigned int)-1 + 1;
+    #|unsigned int dushr = (unsigned int)-1 >> 31;
+    #|long dsshr = -2 >> 1;
+    #|int dgplus_unsigned = +(unsigned int)-1 > 0;
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(
+    assembly.contains("_dugdiv:\n\t.quad\t9223372036854775807"),
+    content="true",
+  )
+  inspect(assembly.contains("_dugmod:\n\t.quad\t1"), content="true")
+  inspect(assembly.contains("_dugt:\n\t.long\t1"), content="true")
+  inspect(assembly.contains("_dult:\n\t.long\t0"), content="true")
+  inspect(assembly.contains("_duwrap:\n\t.long\t0"), content="true")
+  inspect(assembly.contains("_dushr:\n\t.long\t1"), content="true")
+  inspect(assembly.contains("_dsshr:\n\t.quad\t-1"), content="true")
+  inspect(assembly.contains("_dgplus_unsigned:\n\t.long\t1"), content="true")
+}
+
+///|
 test "generate linux amd64 simple function" {
   let source = "int main() { return 42; }"
   let prog = @parser.parse(source)

@@ -311,138 +311,505 @@ fn Codegen::global_expr_type(
 }
 
 ///|
-fn Codegen::fold_const(self : Codegen, expr : @parser.Expr) -> Int64? {
+priv struct DarwinConstIntValue {
+  bits : Int64
+  ty : @parser.Type
+}
+
+///|
+fn darwin_const_core_type(ty : @parser.Type) -> @parser.Type {
+  match ty {
+    Atomic(inner) | Aligned(inner, _) => darwin_const_core_type(inner)
+    _ => ty
+  }
+}
+
+///|
+fn darwin_const_int(bits : Int64, ty : @parser.Type) -> DarwinConstIntValue {
+  { bits, ty: darwin_const_core_type(ty) }
+}
+
+///|
+fn darwin_const_bool(value : Bool) -> DarwinConstIntValue {
+  { bits: if value { 1L } else { 0L }, ty: SInt }
+}
+
+///|
+fn darwin_const_type_is_unsigned(ty : @parser.Type) -> Bool {
+  match darwin_const_core_type(ty) {
+    Bool | UChar | UShort | UInt | ULong | ULongLong | UInt128 => true
+    _ => false
+  }
+}
+
+///|
+fn darwin_const_type_int_width(ty : @parser.Type) -> Int? {
+  match darwin_const_core_type(ty) {
+    Bool => Some(1)
+    SChar | UChar => Some(8)
+    SShort | UShort => Some(16)
+    SInt | UInt => Some(32)
+    SLong | ULong | SLongLong | ULongLong | Pointer(_) | FuncPtr(_, _, _) =>
+      Some(64)
+    SInt128 | UInt128 => Some(128)
+    _ => None
+  }
+}
+
+///|
+fn darwin_const_type_is_integer(ty : @parser.Type) -> Bool {
+  match darwin_const_core_type(ty) {
+    Bool
+    | SChar
+    | UChar
+    | SShort
+    | UShort
+    | SInt
+    | UInt
+    | SLong
+    | ULong
+    | SLongLong
+    | ULongLong
+    | SInt128
+    | UInt128 => true
+    _ => false
+  }
+}
+
+///|
+fn darwin_const_integer_promote(ty : @parser.Type) -> @parser.Type {
+  match darwin_const_core_type(ty) {
+    Bool | SChar | UChar | SShort | UShort => SInt
+    other => other
+  }
+}
+
+///|
+fn darwin_const_unsigned_type_for_rank(rank : Int) -> @parser.Type {
+  if rank >= 6 {
+    UInt128
+  } else if rank == 5 {
+    ULongLong
+  } else if rank == 4 {
+    ULong
+  } else {
+    UInt
+  }
+}
+
+///|
+fn darwin_const_signed_type_for_rank(rank : Int) -> @parser.Type {
+  if rank >= 6 {
+    SInt128
+  } else if rank == 5 {
+    SLongLong
+  } else if rank == 4 {
+    SLong
+  } else {
+    SInt
+  }
+}
+
+///|
+fn darwin_const_integer_common_type(
+  lhs_ty : @parser.Type,
+  rhs_ty : @parser.Type,
+) -> @parser.Type {
+  let lhs_ty = darwin_const_integer_promote(lhs_ty)
+  let rhs_ty = darwin_const_integer_promote(rhs_ty)
+  if lhs_ty == rhs_ty {
+    return lhs_ty
+  }
+  if !darwin_const_type_is_integer(lhs_ty) ||
+    !darwin_const_type_is_integer(rhs_ty) {
+    return lhs_ty
+  }
+  let lhs_unsigned = darwin_const_type_is_unsigned(lhs_ty)
+  let rhs_unsigned = darwin_const_type_is_unsigned(rhs_ty)
+  let lhs_rank = integer_rank(lhs_ty)
+  let rhs_rank = integer_rank(rhs_ty)
+  if lhs_unsigned == rhs_unsigned {
+    let rank = if lhs_rank > rhs_rank { lhs_rank } else { rhs_rank }
+    if lhs_unsigned {
+      darwin_const_unsigned_type_for_rank(rank)
+    } else {
+      darwin_const_signed_type_for_rank(rank)
+    }
+  } else {
+    let unsigned_ty = if lhs_unsigned { lhs_ty } else { rhs_ty }
+    let signed_ty = if lhs_unsigned { rhs_ty } else { lhs_ty }
+    let unsigned_rank = integer_rank(unsigned_ty)
+    let signed_rank = integer_rank(signed_ty)
+    let unsigned_width = darwin_const_type_int_width(unsigned_ty).unwrap_or(0)
+    let signed_width = darwin_const_type_int_width(signed_ty).unwrap_or(0)
+    if unsigned_rank >= signed_rank {
+      unsigned_ty
+    } else if signed_width > unsigned_width {
+      signed_ty
+    } else {
+      darwin_const_unsigned_type_for_rank(signed_rank)
+    }
+  }
+}
+
+///|
+fn darwin_const_cast_int(
+  value : DarwinConstIntValue,
+  ty : @parser.Type,
+) -> DarwinConstIntValue {
+  let core_ty = darwin_const_core_type(ty)
+  let unsigned = darwin_const_type_is_unsigned(core_ty)
+  match darwin_const_type_int_width(core_ty) {
+    None => darwin_const_int(value.bits, core_ty)
+    Some(1) => darwin_const_int(if value.bits == 0L { 0L } else { 1L }, core_ty)
+    Some(width) =>
+      if width >= 64 {
+        darwin_const_int(value.bits, core_ty)
+      } else {
+        let mask = (1L << width) - 1L
+        let bits = value.bits & mask
+        if unsigned {
+          darwin_const_int(bits, core_ty)
+        } else {
+          let sign = 1L << (width - 1)
+          if (bits & sign) != 0L {
+            darwin_const_int(bits | mask.lnot(), core_ty)
+          } else {
+            darwin_const_int(bits, core_ty)
+          }
+        }
+      }
+  }
+}
+
+///|
+fn darwin_const_apply_binary_type(
+  left : DarwinConstIntValue,
+  right : DarwinConstIntValue,
+) -> (DarwinConstIntValue, DarwinConstIntValue, @parser.Type) {
+  let ty = darwin_const_integer_common_type(left.ty, right.ty)
+  (darwin_const_cast_int(left, ty), darwin_const_cast_int(right, ty), ty)
+}
+
+///|
+fn darwin_const_binary_arith(
+  op : String,
+  left : DarwinConstIntValue,
+  right : DarwinConstIntValue,
+) -> DarwinConstIntValue? {
+  let (x, y, ty) = darwin_const_apply_binary_type(left, right)
+  let bits = match op {
+    "+" => x.bits + y.bits
+    "-" => x.bits - y.bits
+    "*" => x.bits * y.bits
+    "|" => x.bits | y.bits
+    "&" => x.bits & y.bits
+    "^" => x.bits ^ y.bits
+    _ => return None
+  }
+  Some(darwin_const_cast_int(darwin_const_int(bits, ty), ty))
+}
+
+///|
+fn darwin_const_equal_compare(
+  left : DarwinConstIntValue,
+  right : DarwinConstIntValue,
+) -> Bool {
+  let (x, y, _) = darwin_const_apply_binary_type(left, right)
+  x.bits == y.bits
+}
+
+///|
+fn darwin_const_rel_compare(
+  op : String,
+  left : DarwinConstIntValue,
+  right : DarwinConstIntValue,
+) -> Bool {
+  let (left, right, ty) = darwin_const_apply_binary_type(left, right)
+  if darwin_const_type_is_unsigned(ty) {
+    let x = left.bits.reinterpret_as_uint64()
+    let y = right.bits.reinterpret_as_uint64()
+    match op {
+      "<" => x < y
+      ">" => x > y
+      "<=" => x <= y
+      ">=" => x >= y
+      _ => false
+    }
+  } else {
+    match op {
+      "<" => left.bits < right.bits
+      ">" => left.bits > right.bits
+      "<=" => left.bits <= right.bits
+      ">=" => left.bits >= right.bits
+      _ => false
+    }
+  }
+}
+
+///|
+fn darwin_const_divide(
+  op : String,
+  left : DarwinConstIntValue,
+  right : DarwinConstIntValue,
+) -> DarwinConstIntValue? {
+  let (left, right, ty) = darwin_const_apply_binary_type(left, right)
+  if right.bits == 0L {
+    return None
+  }
+  if darwin_const_type_is_unsigned(ty) {
+    let x = left.bits.reinterpret_as_uint64()
+    let y = right.bits.reinterpret_as_uint64()
+    let result = if op == "/" { x / y } else { x % y }
+    Some(
+      darwin_const_cast_int(
+        darwin_const_int(result.reinterpret_as_int64(), ty),
+        ty,
+      ),
+    )
+  } else {
+    let result = if op == "/" {
+      left.bits / right.bits
+    } else {
+      left.bits % right.bits
+    }
+    Some(darwin_const_cast_int(darwin_const_int(result, ty), ty))
+  }
+}
+
+///|
+fn darwin_const_shift(
+  op : String,
+  left : DarwinConstIntValue,
+  right : DarwinConstIntValue,
+) -> DarwinConstIntValue? {
+  let lhs_ty = darwin_const_integer_promote(left.ty)
+  let x = darwin_const_cast_int(left, lhs_ty)
+  let y = darwin_const_cast_int(right, darwin_const_integer_promote(right.ty))
+  let shift = y.bits.to_int()
+  if op == "<<" {
+    Some(
+      darwin_const_cast_int(darwin_const_int(x.bits << shift, lhs_ty), lhs_ty),
+    )
+  } else if darwin_const_type_is_unsigned(lhs_ty) {
+    Some(
+      darwin_const_cast_int(
+        darwin_const_int(
+          (x.bits.reinterpret_as_uint64() >> shift).reinterpret_as_int64(),
+          lhs_ty,
+        ),
+        lhs_ty,
+      ),
+    )
+  } else {
+    Some(
+      darwin_const_cast_int(darwin_const_int(x.bits >> shift, lhs_ty), lhs_ty),
+    )
+  }
+}
+
+///|
+fn Codegen::fold_const_int(
+  self : Codegen,
+  expr : @parser.Expr,
+) -> DarwinConstIntValue? {
   match expr {
-    Number(n) => Some(n)
+    Number(n) => {
+      let ty = number_literal_type(n)
+      Some(darwin_const_cast_int(darwin_const_int(n, ty), ty))
+    }
     Binary("+", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x + y)
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => darwin_const_binary_arith("+", x, y)
         _ => None
       }
     Binary("-", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x - y)
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => darwin_const_binary_arith("-", x, y)
         _ => None
       }
     Binary("*", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x * y)
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => darwin_const_binary_arith("*", x, y)
         _ => None
       }
     Binary("/", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(_), Some(0L)) => None
-        (Some(x), Some(y)) => Some(x / y)
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => darwin_const_divide("/", x, y)
         _ => None
       }
     Binary("%", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(_), Some(0L)) => None
-        (Some(x), Some(y)) => Some(x % y)
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => darwin_const_divide("%", x, y)
         _ => None
       }
     Binary("|", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x | y)
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => darwin_const_binary_arith("|", x, y)
         _ => None
       }
     Binary("&", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x & y)
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => darwin_const_binary_arith("&", x, y)
         _ => None
       }
     Binary("^", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x ^ y)
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => darwin_const_binary_arith("^", x, y)
         _ => None
       }
     Binary("<<", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x << y.to_int())
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => darwin_const_shift("<<", x, y)
         _ => None
       }
     Binary(">>", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x >> y.to_int())
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => darwin_const_shift(">>", x, y)
         _ => None
       }
     Binary("==", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x == y { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) =>
+          Some(darwin_const_bool(darwin_const_equal_compare(x, y)))
         _ => None
       }
     Binary("!=", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x != y { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) =>
+          Some(darwin_const_bool(!darwin_const_equal_compare(x, y)))
         _ => None
       }
     Binary("<", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x < y { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) =>
+          Some(darwin_const_bool(darwin_const_rel_compare("<", x, y)))
         _ => None
       }
     Binary(">", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x > y { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) =>
+          Some(darwin_const_bool(darwin_const_rel_compare(">", x, y)))
         _ => None
       }
     Binary("<=", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x <= y { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) =>
+          Some(darwin_const_bool(darwin_const_rel_compare("<=", x, y)))
         _ => None
       }
     Binary(">=", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x >= y { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) =>
+          Some(darwin_const_bool(darwin_const_rel_compare(">=", x, y)))
         _ => None
       }
     Binary("&&", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x != 0L && y != 0L { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) =>
+          Some(darwin_const_bool(x.bits != 0L && y.bits != 0L))
         _ => None
       }
     Binary("||", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x != 0L || y != 0L { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) =>
+          Some(darwin_const_bool(x.bits != 0L || y.bits != 0L))
         _ => None
       }
     Ternary(cond, a, b) =>
-      match self.fold_const(cond) {
-        Some(0L) => self.fold_const(b)
-        Some(_) => self.fold_const(a)
+      match self.fold_const_int(cond) {
+        Some({ bits: 0L, .. }) => self.fold_const_int(b)
+        Some(_) => self.fold_const_int(a)
         None => None
       }
     Unary("-", e) =>
-      match self.fold_const(e) {
-        Some(x) => Some(-x)
-        _ => None
+      match self.fold_const_int(e) {
+        Some(value) => {
+          let ty = darwin_const_integer_promote(value.ty)
+          Some(darwin_const_cast_int(darwin_const_int(-value.bits, ty), ty))
+        }
+        None => None
       }
-    Unary("+", e) => self.fold_const(e)
+    Unary("+", e) =>
+      match self.fold_const_int(e) {
+        Some(value) => {
+          let ty = darwin_const_integer_promote(value.ty)
+          Some(darwin_const_cast_int(value, ty))
+        }
+        None => None
+      }
     Unary("~", e) =>
-      match self.fold_const(e) {
-        Some(x) => Some(x.lnot())
-        _ => None
+      match self.fold_const_int(e) {
+        Some(value) => {
+          let ty = darwin_const_integer_promote(value.ty)
+          Some(
+            darwin_const_cast_int(darwin_const_int(value.bits.lnot(), ty), ty),
+          )
+        }
+        None => None
       }
     Unary("!", e) =>
-      match self.fold_const(e) {
-        Some(0L) => Some(1L)
-        Some(_) => Some(0L)
-        _ => None
+      match self.fold_const_int(e) {
+        Some(value) => Some(darwin_const_bool(value.bits == 0L))
+        None => None
       }
-    Cast(_, e) => self.fold_const(e)
-    DesignatedField(_, e) => self.fold_const(e)
-    DesignatedIndex(_, e) => self.fold_const(e)
-    DesignatedRange(_, _, e) => self.fold_const(e)
-    Sizeof(ty) => Some(self.type_size(ty).to_int64())
-    SizeofExpr(e) => Some(self.type_size(self.global_expr_type(e)).to_int64())
-    Alignof(ty) => Some(self.type_align(ty).to_int64())
-    AlignofExpr(e) => Some(self.type_align(self.global_expr_type(e)).to_int64())
+    Cast(ty, e) =>
+      if ty.is_floating() {
+        None
+      } else if self.type_of(e, 0).is_floating() {
+        match self.fold_float_const(e) {
+          Some(value) =>
+            Some(
+              darwin_const_cast_int(
+                darwin_const_int(value.to_int().to_int64(), ty),
+                ty,
+              ),
+            )
+          None => None
+        }
+      } else {
+        match darwin_const_type_int_width(ty) {
+          Some(_) =>
+            match self.fold_const_int(e) {
+              Some(value) => Some(darwin_const_cast_int(value, ty))
+              None => None
+            }
+          None => None
+        }
+      }
+    DesignatedField(_, e) => self.fold_const_int(e)
+    DesignatedIndex(_, e) => self.fold_const_int(e)
+    DesignatedRange(_, _, e) => self.fold_const_int(e)
+    Sizeof(ty) => Some(darwin_const_int(self.type_size(ty).to_int64(), ULong))
+    SizeofExpr(e) =>
+      Some(
+        darwin_const_int(
+          self.type_size(self.global_expr_type(e)).to_int64(),
+          ULong,
+        ),
+      )
+    Alignof(ty) => Some(darwin_const_int(self.type_align(ty).to_int64(), ULong))
+    AlignofExpr(e) =>
+      Some(
+        darwin_const_int(
+          self.type_align(self.global_expr_type(e)).to_int64(),
+          ULong,
+        ),
+      )
     OffsetOf(ty, path) =>
       match self.offset_of_path(ty, path) {
-        Some(offset) => Some(offset.to_int64())
+        Some(offset) => Some(darwin_const_int(offset.to_int64(), ULong))
         None => None
       }
     _ => None
+  }
+}
+
+///|
+fn Codegen::fold_const(self : Codegen, expr : @parser.Expr) -> Int64? {
+  match self.fold_const_int(expr) {
+    Some(value) => Some(value.bits)
+    None => None
   }
 }
 

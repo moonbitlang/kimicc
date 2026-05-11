@@ -120,6 +120,15 @@ Assignments and initializers copy aggregate storage with explicit address-based
 paths, and call results for register aggregates are materialized when a later
 operation needs an address or field access.
 
+## Global Initializers
+
+Darwin ARM64 global scalar initializers are folded through the initializer
+expression's C type before conversion to the destination object type. This keeps
+integer subexpressions such as `1 / 2` in integer semantics when initializing
+floating storage, preserves explicit floating-to-integer initializer
+conversions, and applies the covered usual arithmetic conversions for unsigned
+integer division, modulo, shifts, and comparisons.
+
 ## ABI Compliance Status
 
 The backend is intended to match the Darwin ARM64 C ABI for the supported
@@ -131,6 +140,7 @@ feature set. Several high-risk ABI areas have focused tests, including:
 - 16-byte aggregate pass/return behavior;
 - large aggregate arguments and hidden result pointers;
 - variadic calls and `va_arg` layout;
+- global scalar constant initializers;
 - direct Mach-O object mode versus assembly mode.
 
 The project also keeps broader Clang differential corpora and external-project
