@@ -127,6 +127,38 @@ async test "direct macho object supports global aggregate initializers" {
 }
 
 ///|
+async test "direct macho object supports nested global designators" {
+  let source =
+    #|typedef union Box {
+    #|  double d;
+    #|  long l;
+    #|} Box;
+    #|typedef struct Value {
+    #|  Box box;
+    #|  int tag;
+    #|  int arr[3];
+    #|} Value;
+    #|struct Pair {
+    #|  int a;
+    #|  int b;
+    #|};
+    #|Value value = { .box.d = 1.5, .tag = 7, .arr[2] = 35 };
+    #|struct Pair pairs[2] = { [1].b = 5, [0].a = 37 };
+    #|int main(void) {
+    #|  if (value.box.d != 1.5) return 1;
+    #|  if (value.tag != 7) return 2;
+    #|  if (value.arr[0] != 0 || value.arr[1] != 0 || value.arr[2] != 35) return 3;
+    #|  if (pairs[0].a != 37 || pairs[0].b != 0) return 4;
+    #|  if (pairs[1].a != 0 || pairs[1].b != 5) return 5;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_direct_object_async(
+    source, "macho_nested_global_designators",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object emits bss as zerofill with later const data" {
   let source = "int data = 1; int bss; int main(void) { char *s = \"A\"; bss = 40; return data + bss + s[0] - 64; }"
   let obj_path = compile_source_to_direct_object_path(
