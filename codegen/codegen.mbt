@@ -910,7 +910,7 @@ fn Codegen::emit_global_float(
 }
 
 ///|
-fn Codegen::global_designator_matches_type(
+fn Codegen::designator_matches_type(
   self : Codegen,
   ty : @parser.Type,
   expr : @parser.Expr,
@@ -1122,7 +1122,7 @@ fn Codegen::emit_global_scalar(
   }
   match expr {
     DesignatedField(_, e) | DesignatedIndex(_, e) | DesignatedRange(_, _, e) => {
-      if is_aggregate_type(ty) && self.global_designator_matches_type(ty, expr) {
+      if is_aggregate_type(ty) && self.designator_matches_type(ty, expr) {
         self.emit_global_array(ty, [expr])
       } else {
         self.emit_global_scalar(ty, e)

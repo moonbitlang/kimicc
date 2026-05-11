@@ -1177,6 +1177,48 @@ test "parse struct compound literal assignment" {
 }
 
 ///|
+test "parse mixed compound literal initializer designators" {
+  let source =
+    #|typedef struct Pair { int a; int b; } Pair;
+    #|typedef struct Wrap { Pair pairs[2]; } Wrap;
+    #|int main(void) {
+    #|  Wrap w = (Wrap){ .pairs[1].b = 5, .pairs[0].a = 37 };
+    #|  return 0;
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [
+          VarDecl(
+            _,
+            "w",
+            Some(
+              CompoundLiteral(
+                Struct(_),
+                [
+                  DesignatedField(
+                    "pairs",
+                    DesignatedIndex(1, DesignatedField("b", Number(5)))
+                  ),
+                  DesignatedField(
+                    "pairs",
+                    DesignatedIndex(0, DesignatedField("a", Number(37)))
+                  ),
+                ],
+                _
+              )
+            )
+          ),
+          _,
+        ]
+      )
+    ) => ()
+    _ => fail("Expected mixed compound literal designator path")
+  }
+}
+
+///|
 test "check ast for array init locals" {
   let source =
     #|int main() {

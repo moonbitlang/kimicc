@@ -2187,28 +2187,36 @@ fn Codegen::emit_init_value_at_addr(
   }
   if is_aggregate_type(ty) {
     match init_expr {
-      DesignatedField(_, DesignatedField(_, _) as nested) =>
-        self.emit_init_aggregate_at_addr(ty, [nested], frame_size)
-      _ =>
-        match value {
-          CompoundLiteral(_, init_exprs, _) | Array(init_exprs) =>
-            self.emit_init_aggregate_at_addr(ty, init_exprs, frame_size)
-          Number(0) => ()
-          Call(_, _) if self.is_register_aggregate(ty) => {
-            self.emit("\tstr\tx9, [sp, #-16]!")
-            self.gen_expr(value, frame_size)
-            self.emit_save_register_aggregate(ty)
-            self.emit("\tldr\tx9, [sp, #16]")
-            self.emit_store_saved_register_aggregate_at_x9(ty)
-            self.emit("\tadd\tsp, sp, #16")
-          }
-          _ => {
-            self.emit("\tstr\tx9, [sp, #-16]!")
-            self.gen_aggregate_addr(value, frame_size)
-            self.emit("\tstr\tx9, [sp, #-16]!")
-            self.emit_copy_aggregate_from_addr_on_stack(ty)
-          }
+      DesignatedField(_, e)
+      | DesignatedIndex(_, e)
+      | DesignatedRange(_, _, e) => {
+        if self.designator_matches_type(ty, init_expr) {
+          self.emit_init_aggregate_at_addr(ty, [init_expr], frame_size)
+        } else {
+          self.emit_init_value_at_addr(ty, e, frame_size)
         }
+        return
+      }
+      _ => ()
+    }
+    match value {
+      CompoundLiteral(_, init_exprs, _) | Array(init_exprs) =>
+        self.emit_init_aggregate_at_addr(ty, init_exprs, frame_size)
+      Number(0) => ()
+      Call(_, _) if self.is_register_aggregate(ty) => {
+        self.emit("\tstr\tx9, [sp, #-16]!")
+        self.gen_expr(value, frame_size)
+        self.emit_save_register_aggregate(ty)
+        self.emit("\tldr\tx9, [sp, #16]")
+        self.emit_store_saved_register_aggregate_at_x9(ty)
+        self.emit("\tadd\tsp, sp, #16")
+      }
+      _ => {
+        self.emit("\tstr\tx9, [sp, #-16]!")
+        self.gen_aggregate_addr(value, frame_size)
+        self.emit("\tstr\tx9, [sp, #-16]!")
+        self.emit_copy_aggregate_from_addr_on_stack(ty)
+      }
     }
   } else {
     self.emit_init_scalar_at_addr(ty, value, frame_size)

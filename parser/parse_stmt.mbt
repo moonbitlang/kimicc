@@ -712,17 +712,30 @@ fn Parser::push_struct_init_assignments(
         )
       (Struct(_) | Union(_), DesignatedField(_, _)) =>
         self.push_struct_init_assignments(stmts, field_target, field.ty, [value])
+      (Array(_, _), Array(elem_exprs)) =>
+        self.push_array_init_assignments_at(
+          stmts,
+          field_target,
+          field.ty,
+          elem_exprs,
+        )
+      (Array(_, _), DesignatedIndex(_, _))
+      | (Array(_, _), DesignatedRange(_, _, _)) =>
+        self.push_array_init_assignments_at(stmts, field_target, field.ty, [
+          value,
+        ])
       (Struct(_) | Union(_), Number(0)) => ()
+      (Array(_, _), Number(0)) => ()
       _ => stmts.push(ExprStmt(Assign(field_target, value)))
     }
   }
 }
 
 ///|
-fn Parser::push_array_init_assignments(
+fn Parser::push_array_init_assignments_at(
   self : Parser,
   stmts : Array[Stmt],
-  name : String,
+  target : Expr,
   ty : Type,
   init_exprs : Array[Expr],
 ) -> Unit {
@@ -753,15 +766,34 @@ fn Parser::push_array_init_assignments(
       }
     }
     for i = start; i <= end; i = i + 1 {
-      let elem = Expr::ArrayAccess(Var(name), Number(i.to_int64()))
+      let elem = Expr::ArrayAccess(target, Number(i.to_int64()))
       match (elem_ty, value) {
         (Struct(_) | Union(_), Array(field_exprs)) =>
           self.push_struct_init_assignments(stmts, elem, elem_ty, field_exprs)
+        (Struct(_) | Union(_), DesignatedField(_, _)) =>
+          self.push_struct_init_assignments(stmts, elem, elem_ty, [value])
+        (Array(_, _), Array(elem_exprs)) =>
+          self.push_array_init_assignments_at(stmts, elem, elem_ty, elem_exprs)
+        (Array(_, _), DesignatedIndex(_, _))
+        | (Array(_, _), DesignatedRange(_, _, _)) =>
+          self.push_array_init_assignments_at(stmts, elem, elem_ty, [value])
         (Struct(_) | Union(_), Number(0)) => ()
+        (Array(_, _), Number(0)) => ()
         _ => stmts.push(ExprStmt(Assign(elem, value)))
       }
     }
   }
+}
+
+///|
+fn Parser::push_array_init_assignments(
+  self : Parser,
+  stmts : Array[Stmt],
+  name : String,
+  ty : Type,
+  init_exprs : Array[Expr],
+) -> Unit {
+  self.push_array_init_assignments_at(stmts, Var(name), ty, init_exprs)
 }
 
 ///|

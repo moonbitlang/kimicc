@@ -2922,6 +2922,34 @@ async test "e2e local nested aggregate initializer preserves struct field" {
 }
 
 ///|
+async test "e2e local mixed initializer designators" {
+  let source =
+    #|typedef struct Pair {
+    #|  int a;
+    #|  int b;
+    #|} Pair;
+    #|
+    #|typedef struct Wrap {
+    #|  Pair pairs[2];
+    #|  int arr[3];
+    #|} Wrap;
+    #|
+    #|int main(void) {
+    #|  Wrap local = { .pairs[1].b = 5, .pairs[0].a = 37, .arr[2] = 35 };
+    #|  Wrap literal = (Wrap){ .pairs[0].b = 2, .arr[1] = 4 };
+    #|  if (local.pairs[0].a != 37 || local.pairs[0].b != 0) return 1;
+    #|  if (local.pairs[1].a != 0 || local.pairs[1].b != 5) return 2;
+    #|  if (local.arr[0] != 0 || local.arr[1] != 0 || local.arr[2] != 35) return 3;
+    #|  if (literal.pairs[0].a != 0 || literal.pairs[0].b != 2) return 4;
+    #|  if (literal.pairs[1].a != 0 || literal.pairs[1].b != 0) return 5;
+    #|  if (literal.arr[0] != 0 || literal.arr[1] != 4 || literal.arr[2] != 0) return 6;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e unsigned int128 supports wide limb arithmetic" {
   let source =
     #|typedef unsigned __int128 u128;

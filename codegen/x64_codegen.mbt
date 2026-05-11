@@ -1405,13 +1405,22 @@ fn X64Codegen::emit_init_value_at_addr(
 ) -> Unit {
   let value = x64_initializer_value(init_expr)
   if x64_is_object_aggregate_type(ty) {
+    match init_expr {
+      DesignatedField(_, inner)
+      | DesignatedIndex(_, inner)
+      | DesignatedRange(_, _, inner) => {
+        if self.designator_matches_type(ty, init_expr) {
+          self.emit_init_aggregate_at_addr(ty, [init_expr])
+        } else {
+          self.emit_init_value_at_addr(ty, inner)
+        }
+        return
+      }
+      _ => ()
+    }
     match value {
       Array(init_exprs) | CompoundLiteral(_, init_exprs, _) =>
         self.emit_init_aggregate_at_addr(ty, init_exprs)
-      DesignatedField(_, _)
-      | DesignatedIndex(_, _)
-      | DesignatedRange(_, _, _) =>
-        self.emit_init_aggregate_at_addr(ty, [value])
       Number(0) => self.emit_zero_memory_at_rax(ty)
       Call(_, _) if x64_is_aggregate_type(ty) &&
         self.is_supported_small_aggregate(ty) => {
@@ -7792,7 +7801,7 @@ fn X64Codegen::global_bitfield_bits(
 }
 
 ///|
-fn X64Codegen::global_designator_matches_type(
+fn X64Codegen::designator_matches_type(
   self : X64Codegen,
   ty : @parser.Type,
   expr : @parser.Expr,
@@ -7865,7 +7874,7 @@ fn X64Codegen::emit_global_scalar(
     | DesignatedIndex(_, inner)
     | DesignatedRange(_, _, inner) => {
       if x64_is_object_aggregate_type(ty) &&
-        self.global_designator_matches_type(ty, expr) {
+        self.designator_matches_type(ty, expr) {
         self.emit_global_array(ty, [expr])
       } else {
         self.emit_global_scalar(ty, inner)
