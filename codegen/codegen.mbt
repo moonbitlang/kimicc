@@ -277,6 +277,12 @@ fn Codegen::global_expr_type(
     Var(name) =>
       if self.globals.contains(name) {
         self.globals[name].ty
+      } else if self.func_rets.contains(name) {
+        FuncPtr(
+          self.func_rets[name],
+          self.func_param_types.get_or_default(name, []),
+          self.func_variadic.get_or_default(name, false),
+        )
       } else {
         Pointer(Void)
       }

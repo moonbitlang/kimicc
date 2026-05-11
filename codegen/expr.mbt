@@ -63,7 +63,11 @@ fn Codegen::type_of(
       } else if self.globals.contains(name) {
         self.globals[name].ty
       } else if self.func_rets.contains(name) {
-        Pointer(Void) // Function pointer type
+        FuncPtr(
+          self.func_rets[name],
+          self.func_param_types.get_or_default(name, []),
+          self.func_variadic.get_or_default(name, false),
+        )
       } else {
         SInt
       }
@@ -176,7 +180,23 @@ fn ternary_result_type(
   match (peel_aligned_type(then_ty), peel_aligned_type(else_ty)) {
     (Array(elem, _), _) => Pointer(elem)
     (_, Array(elem, _)) => Pointer(elem)
-    _ => then_ty
+    (Pointer(elem), _) => Pointer(elem)
+    (_, Pointer(elem)) => Pointer(elem)
+    (FuncPtr(ret, params, variadic), _) => FuncPtr(ret, params, variadic)
+    (_, FuncPtr(ret, params, variadic)) => FuncPtr(ret, params, variadic)
+    _ =>
+      if then_ty.is_floating() || else_ty.is_floating() {
+        if peel_aligned_type(then_ty) == Double ||
+          peel_aligned_type(else_ty) == Double {
+          Double
+        } else {
+          Float
+        }
+      } else if then_ty.is_integer() && else_ty.is_integer() {
+        integer_common_type(then_ty, else_ty)
+      } else {
+        then_ty
+      }
   }
 }
 
@@ -3887,12 +3907,27 @@ fn Codegen::gen_expr(
     Ternary(cond, then_expr, else_expr) => {
       let else_label = self.new_label()
       let end_label = self.new_label()
+      let result_ty = self.type_of(expr, frame_size)
       self.gen_expr(cond, frame_size)
       self.emit("\tcbz\tx9, " + else_label)
       self.gen_expr(then_expr, frame_size)
+      if !address_value_type(result_ty) {
+        self.emit_numeric_conversion(
+          self.type_of(then_expr, frame_size),
+          result_ty,
+        )
+        self.emit_scalar_conversion_to(result_ty)
+      }
       self.emit("\tb\t" + end_label)
       self.emit(else_label + ":")
       self.gen_expr(else_expr, frame_size)
+      if !address_value_type(result_ty) {
+        self.emit_numeric_conversion(
+          self.type_of(else_expr, frame_size),
+          result_ty,
+        )
+        self.emit_scalar_conversion_to(result_ty)
+      }
       self.emit(end_label + ":")
     }
     PrefixInc(expr) => {

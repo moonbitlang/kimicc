@@ -2683,6 +2683,51 @@ async test "e2e function pointer double return is read from fp register" {
 }
 
 ///|
+async test "e2e ternary conversions preserve scalar and function pointer types" {
+  let source =
+    #|double add_one(double x) { return x + 1.0; }
+    #|double sub_one(double x) { return x - 1.0; }
+    #|
+    #|double choose_double(int flag) {
+    #|  return flag ? 1 : 2.5;
+    #|}
+    #|
+    #|int choose_int(int flag) {
+    #|  return flag ? 1.5 : 2;
+    #|}
+    #|
+    #|unsigned long choose_ulong(int flag) {
+    #|  return flag ? -1 : 2UL;
+    #|}
+    #|
+    #|int choose_ptr(int flag) {
+    #|  int value = 41;
+    #|  int *p = flag ? 0 : &value;
+    #|  return p ? *p : 0;
+    #|}
+    #|
+    #|double call_selected(int flag, double x) {
+    #|  return (flag ? add_one : sub_one)(x);
+    #|}
+    #|
+    #|int main(void) {
+    #|  if (choose_double(1) != 1.0) return 1;
+    #|  if (choose_double(0) != 2.5) return 2;
+    #|  if (choose_int(1) != 1) return 3;
+    #|  if (choose_int(0) != 2) return 4;
+    #|  if (choose_ulong(1) != (unsigned long)-1) return 5;
+    #|  if (choose_ulong(0) != 2UL) return 6;
+    #|  if (choose_ptr(1) != 0) return 7;
+    #|  if (choose_ptr(0) != 41) return 8;
+    #|  if (call_selected(1, 41.0) != 42.0) return 9;
+    #|  if (call_selected(0, 43.0) != 42.0) return 10;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e member access reads field from struct call result" {
   let source =
     #|typedef struct Obj Obj;
