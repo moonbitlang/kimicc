@@ -697,6 +697,31 @@ async test "direct macho object supports function pointer call" {
 }
 
 ///|
+async test "direct macho object supports ternary conversions and fp callee" {
+  let source =
+    #|double add_one(double x) { return x + 1.0; }
+    #|double sub_one(double x) { return x - 1.0; }
+    #|double choose_double(int flag) { return flag ? 1 : 2.5; }
+    #|int choose_int(int flag) { return flag ? 1.5 : 2; }
+    #|double call_selected(int flag, double x) {
+    #|  return (flag ? add_one : sub_one)(x);
+    #|}
+    #|int main(void) {
+    #|  if (choose_double(1) != 1.0) return 1;
+    #|  if (choose_double(0) != 2.5) return 2;
+    #|  if (choose_int(1) != 1) return 3;
+    #|  if (choose_int(0) != 2) return 4;
+    #|  if (call_selected(1, 41.0) != 42.0) return 5;
+    #|  if (call_selected(0, 43.0) != 42.0) return 6;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_direct_object_async(
+    source, "macho_ternary_conversions_fp_callee",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object supports constant if control flow" {
   let source = "int main(void) { if (1) return 42; return 1; }"
   let exit_code = run_source_direct_object_async(source, "macho_if_const")
