@@ -749,6 +749,25 @@ fn Preprocessor::expand_tokens(
         i += 1
         continue
       }
+      if tok.text == "__BASE_FILE__" {
+        result.push(
+          pp_token(
+            PpString,
+            pp_quote_string(self.macro_file_name(self.options.filename, true)),
+          ),
+        )
+        i += 1
+        continue
+      }
+      if tok.text == "__INCLUDE_LEVEL__" {
+        let mut include_level = self.include_stack.length() - 1
+        if include_level < 0 {
+          include_level = 0
+        }
+        result.push(pp_token(PpNumber, include_level.to_string()))
+        i += 1
+        continue
+      }
       if tok.text == "__COUNTER__" {
         result.push(pp_token(PpNumber, self.counter.to_string()))
         self.counter += 1

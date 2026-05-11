@@ -158,6 +158,10 @@ cat > "$probe_include_dir/pragma_once_header.h" <<'H'
 #pragma once
 int pragma_once_global = 7;
 H
+cat > "$probe_include_dir/base_file_header.h" <<'H'
+const char *header_base_file = __BASE_FILE__;
+int header_include_level = __INCLUDE_LEVEL__;
+H
 cat > "$probe_prefix_dir/headers/prefix_header.h" <<'H'
 #define KIMICC_PREFIX_HEADER 7
 H
@@ -287,13 +291,20 @@ grep -F 'int fast=0;' "$driver_query_path" >/dev/null
 
 cat > "$source_path" <<'C'
 const char *source_file = __FILE__;
+const char *base_file = __BASE_FILE__;
+int include_level = __INCLUDE_LEVEL__;
+#include "base_file_header.h"
 #line 7 "/tmp/kimicc-linux-amd64/generated.h"
 const char *line_file = __FILE__;
 C
 "$kimicc" -E -target linux-amd64 -fmacro-prefix-map=/tmp=/mapped \
   -ffile-prefix-map="$source_path"=/project/source.c \
-  "$source_path" >"$driver_query_path"
+  -I "$probe_include_dir" "$source_path" >"$driver_query_path"
 grep -F 'const char*source_file="/project/source.c";' "$driver_query_path" >/dev/null
+grep -F 'const char*base_file="/project/source.c";' "$driver_query_path" >/dev/null
+grep -F 'int include_level=0;' "$driver_query_path" >/dev/null
+grep -F 'const char*header_base_file="/project/source.c";' "$driver_query_path" >/dev/null
+grep -F 'int header_include_level=1;' "$driver_query_path" >/dev/null
 grep -F 'const char*line_file="/tmp/kimicc-linux-amd64/generated.h";' "$driver_query_path" >/dev/null
 
 cat > "$source_path" <<'C'

@@ -245,6 +245,8 @@ the target split real and testable without claiming full C ABI coverage yet.
   `-fmacro-prefix-map=OLD=NEW` and `-ffile-prefix-map=OLD=NEW` remap the
   physical source path used by `__FILE__`; the longest matching prefix wins,
   and logical filenames introduced by `#line` are left as written.
+  `__BASE_FILE__` expands to the remapped main translation-unit filename, and
+  `__INCLUDE_LEVEL__` expands to the current include nesting depth.
 - Dependency flags `-M`, `-MM`, `-MD`, `-MMD`, `-MP`, `-MF`, `-MG`, `-MT`, and `-MQ`
   are handled by the driver using headers resolved by kimicc's preprocessor.
   Full dependency modes include system headers; `-MM` and `-MMD` keep only the

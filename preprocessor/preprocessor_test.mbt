@@ -177,6 +177,32 @@ test "file prefix maps remap physical file macro names" {
 }
 
 ///|
+test "base file and include level follow physical include stack" {
+  let options : @preprocessor.PreprocessOptions = {
+    ..@preprocessor.PreprocessOptions::new("/work/project/main.c"),
+    include_paths: ["preprocessor/testdata/include_level"],
+    file_prefix_maps: [{ from_prefix: "/work/project", to_prefix: "/src" }],
+  }
+  let source =
+    #|const char *main_base = __BASE_FILE__;
+    #|const char *main_file = __FILE__;
+    #|int main_level = __INCLUDE_LEVEL__;
+    #|#include "level.h"
+    #|#line 8 "/work/project/generated.h"
+    #|const char *line_base = __BASE_FILE__;
+    #|const char *line_file = __FILE__;
+    #|int line_level = __INCLUDE_LEVEL__;
+  match @preprocessor.preprocess(source, options) {
+    Ok(text) =>
+      inspect(
+        text,
+        content="const char*main_base=\"/src/main.c\";\nconst char*main_file=\"/src/main.c\";\nint main_level=0;\nconst char*header_base=\"/src/main.c\";\nconst char*header_file=\"preprocessor/testdata/include_level/level.h\";\nint header_level=1;\nconst char*line_base=\"/src/main.c\";\nconst char*line_file=\"/work/project/generated.h\";\nint line_level=0;\n",
+      )
+    Err(err) => abort(err.to_string())
+  }
+}
+
+///|
 test "target macros follow selected target" {
   let linux = match @target.Target::parse("linux-amd64") {
     Some(target) => target
