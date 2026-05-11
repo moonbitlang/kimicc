@@ -248,7 +248,8 @@ for casts/initializers/assignments/returns, unsigned 64-bit integer to
 direct prototype call arguments,
 unnamed variadic and unprototyped default promotions, and call results,
 floating-point arithmetic/comparisons, `float`/`double` compound assignments
-and prefix/postfix increment/decrement, local variables,
+and prefix/postfix increment/decrement, mixed scalar ternary conversions,
+local variables,
 branches, loops, direct and indirect function-pointer calls, scalar and covered
 aggregate varargs, small integer-class aggregate arguments/returns, small
 SSE-class and mixed-class aggregate arguments/returns including nested

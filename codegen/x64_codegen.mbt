@@ -3942,7 +3942,8 @@ fn X64Codegen::type_of(self : X64Codegen, expr : @parser.Expr) -> @parser.Type {
     Cast(ty, _) => ty
     PrefixInc(e) | PrefixDec(e) | PostfixInc(e) | PostfixDec(e) =>
       self.type_of(e)
-    Ternary(_, then_, _) => self.type_of(then_)
+    Ternary(_, then_, else_) =>
+      x64_ternary_result_type(self.type_of(then_), self.type_of(else_))
     LabelAddr(_) => Pointer(Void)
     VaArg(_, ty) => ty
     Array(_) => SInt
@@ -4206,6 +4207,33 @@ fn x64_binary_converts_result(op : String) -> Bool {
   match op {
     "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" => true
     _ => false
+  }
+}
+
+///|
+fn x64_ternary_result_type(
+  then_ty : @parser.Type,
+  else_ty : @parser.Type,
+) -> @parser.Type {
+  match (x64_core_type(then_ty), x64_core_type(else_ty)) {
+    (Array(elem, _), _) => Pointer(elem)
+    (_, Array(elem, _)) => Pointer(elem)
+    (Pointer(elem), _) => Pointer(elem)
+    (_, Pointer(elem)) => Pointer(elem)
+    (FuncPtr(ret, count, variadic), _) => FuncPtr(ret, count, variadic)
+    (_, FuncPtr(ret, count, variadic)) => FuncPtr(ret, count, variadic)
+    _ =>
+      if x64_is_fp_type(then_ty) || x64_is_fp_type(else_ty) {
+        if x64_core_type(then_ty) == Double || x64_core_type(else_ty) == Double {
+          Double
+        } else {
+          Float
+        }
+      } else if then_ty.is_integer() && else_ty.is_integer() {
+        integer_common_type(then_ty, else_ty)
+      } else {
+        then_ty
+      }
   }
 }
 
@@ -6128,11 +6156,24 @@ fn X64Codegen::gen_expr(self : X64Codegen, expr : @parser.Expr) -> Unit {
     Ternary(cond, then_, else_) => {
       let else_label = self.new_label()
       let end_label = self.new_label()
+      let result_ty = self.type_of(expr)
       self.gen_cond_jump_false(cond, else_label)
-      self.gen_expr(then_)
+      if x64_is_fp_type(result_ty) {
+        self.gen_expr_as_fp(then_, result_ty)
+      } else if x64_is_object_aggregate_type(result_ty) {
+        self.gen_expr(then_)
+      } else {
+        self.gen_expr_as_scalar(then_, result_ty)
+      }
       self.emit("\tjmp\t" + end_label)
       self.emit(else_label + ":")
-      self.gen_expr(else_)
+      if x64_is_fp_type(result_ty) {
+        self.gen_expr_as_fp(else_, result_ty)
+      } else if x64_is_object_aggregate_type(result_ty) {
+        self.gen_expr(else_)
+      } else {
+        self.gen_expr_as_scalar(else_, result_ty)
+      }
       self.emit(end_label + ":")
     }
     LabelAddr(name) =>

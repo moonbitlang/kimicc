@@ -1021,6 +1021,23 @@ test "generate linux amd64 scalar casts assignments and returns" {
 }
 
 ///|
+test "generate linux amd64 mixed scalar ternary conversions" {
+  let source =
+    #|double choose_double(int flag) { return flag ? 1 : 2.5; }
+    #|int choose_int(int flag) { return flag ? 1.5 : 2; }
+    #|unsigned long choose_ulong(int flag) { return flag ? -1 : 2UL; }
+    #|int *choose_ptr(int flag, int *p) { return flag ? 0 : p; }
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(assembly.contains("cvtsi2sd\txmm0, rax"), content="true")
+  inspect(assembly.contains("cvttsd2si\trax, xmm0"), content="true")
+}
+
+///|
 test "generate linux amd64 prototype scalar call conversions" {
   let source =
     #|double as_double(double x) { return x; }

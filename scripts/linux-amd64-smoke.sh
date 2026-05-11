@@ -127,6 +127,8 @@ old_helper_path="/tmp/kimicc-linux-amd64-oldstyle-helper.c"
 old_object_path="/tmp/kimicc-linux-amd64-oldstyle.o"
 old_helper_object_path="/tmp/kimicc-linux-amd64-oldstyle-helper.o"
 old_binary_path="/tmp/kimicc-linux-amd64-oldstyle"
+ternary_source_path="/tmp/kimicc-linux-amd64-ternary.c"
+ternary_binary_path="/tmp/kimicc-linux-amd64-ternary"
 callee_saved_source_path="/tmp/kimicc-linux-amd64-callee-saved.c"
 callee_saved_helper_path="/tmp/kimicc-linux-amd64-callee-saved-helper.s"
 callee_saved_object_path="/tmp/kimicc-linux-amd64-callee-saved.o"
@@ -1969,6 +1971,39 @@ status=$?
 set -e
 if [ "$status" -ne 42 ]; then
   echo "expected old-style promotion smoke binary to exit 42, got $status" >&2
+  exit 1
+fi
+
+cat > "$ternary_source_path" <<'C'
+double choose_double(int flag) { return flag ? 1 : 2.5; }
+int choose_int(int flag) { return flag ? 1.5 : 2; }
+unsigned long choose_ulong(int flag) { return flag ? -1 : 2UL; }
+int choose_ptr_zero_first(int flag) {
+  int value = 42;
+  int *p = flag ? 0 : &value;
+  return p ? *p : 0;
+}
+
+int main(void) {
+  if (choose_double(1) != 1.0) return 39;
+  if (choose_double(0) != 2.5) return 40;
+  if (choose_int(1) != 1) return 41;
+  if (choose_int(0) != 2) return 41;
+  if (choose_ulong(1) != (unsigned long)-1) return 41;
+  if (choose_ulong(0) != 2UL) return 41;
+  if (choose_ptr_zero_first(1) != 0) return 41;
+  if (choose_ptr_zero_first(0) != 42) return 41;
+  return 42;
+}
+C
+
+"$kimicc" -target linux-amd64 -o "$ternary_binary_path" "$ternary_source_path"
+set +e
+"$ternary_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 42 ]; then
+  echo "expected mixed ternary smoke binary to exit 42, got $status" >&2
   exit 1
 fi
 
