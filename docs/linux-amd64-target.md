@@ -482,9 +482,10 @@ v-function smoke without claiming complete `va_list` interoperability. Another
 linked libc runtime probe covers ordinary calls through glibc declarations such
 as `strtol`, `isdigit`, `tolower`, `snprintf`, `strerror`, `sqrt`, `setjmp`,
 `longjmp`, `setlocale`, `mbstowcs`, `wcstombs`, `wcslen`, `btowc`, and `wctob`,
-plus `qsort`, `bsearch`, `setenv`, `getenv`, and `unsetenv`; the
-`qsort` and `bsearch` cases check glibc callbacks into a kimicc-generated
-function pointer. The same libc probe also calls `strlen` through a
+plus `qsort`, `bsearch`, `signal`, `raise`, `atexit`, `setenv`, `getenv`, and
+`unsetenv`; the `qsort`, `bsearch`, `signal`, and `atexit` cases check glibc
+callbacks into kimicc-generated function pointers. The same libc probe also
+calls `strlen` through a
 kimicc-generated function pointer loaded from the external glibc declaration. A
 pthread probe links with `-pthread`, starts a `pthread_create`
 callback, joins it, and checks pointer/result transport through the libc thread

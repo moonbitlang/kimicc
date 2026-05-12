@@ -2283,12 +2283,14 @@ cat > "$libc_runtime_source_path" <<'C'
 #include <locale.h>
 #include <math.h>
 #include <setjmp.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
 
 static jmp_buf jb;
+static volatile sig_atomic_t signal_seen = 0;
 
 static int cmp_ints(const void *a, const void *b) {
   int av = *(const int *)a;
@@ -2301,6 +2303,14 @@ int jump_once(int n) {
     longjmp(jb, n);
   }
   return n;
+}
+
+static void catch_signal(int signo) {
+  signal_seen = signo;
+}
+
+static void exit_with_42(void) {
+  _Exit(42);
 }
 
 int main(void) {
@@ -2341,7 +2351,12 @@ int main(void) {
   if (strcmp(narrow, "abc") != 0) return 32;
   if (btowc('Z') != (wint_t)'Z') return 33;
   if (wctob((wint_t)'Q') != 'Q') return 34;
-  return 42;
+  if (signal(SIGUSR1, catch_signal) == SIG_ERR) return 35;
+  if (raise(SIGUSR1) != 0) return 36;
+  if (signal_seen != SIGUSR1) return 37;
+  if (signal(SIGUSR1, SIG_DFL) == SIG_ERR) return 38;
+  if (atexit(exit_with_42) != 0) return 39;
+  return 0;
 }
 C
 
