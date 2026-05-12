@@ -488,16 +488,17 @@ such as `struct stat`, `struct iovec`, and `struct pollfd` in `_Static_assert`
 expressions. It also runs a syntax-only probe over a broader set of common
 libc/POSIX headers such as `assert.h`, `ctype.h`, `dirent.h`, `inttypes.h`,
 `locale.h`, `math.h`, `pthread.h`, `setjmp.h`, `wchar.h`, `sys/mman.h`,
-`sys/select.h`, `sys/time.h`, and `sys/wait.h`. A separate linked probe passes
-the generated `va_list` state to glibc `vsnprintf`, covering a real libc
-v-function smoke without claiming complete `va_list` interoperability. Another
-linked libc runtime probe covers ordinary calls through glibc declarations such
-as `strtol`, `isdigit`, `tolower`, `snprintf`, `strerror`, `sqrt`, `setjmp`,
-`longjmp`, `setlocale`, `mbstowcs`, `wcstombs`, `wcslen`, `btowc`, and `wctob`,
-plus `qsort`, `bsearch`, `signal`, `raise`, `atexit`, `setenv`, `getenv`, and
-`unsetenv`; the `qsort`, `bsearch`, `signal`, and `atexit` cases check glibc
-callbacks into kimicc-generated function pointers. The same libc probe also
-calls `strlen` through a
+`sys/resource.h`, `sys/select.h`, `sys/times.h`, `sys/time.h`, `sys/utsname.h`,
+and `sys/wait.h`. A separate linked probe passes the generated `va_list` state
+to glibc `vsnprintf`, covering a real libc v-function smoke without claiming
+complete `va_list` interoperability. Another linked libc runtime probe covers
+ordinary calls through glibc declarations such as `strtol`, `isdigit`,
+`tolower`, `snprintf`, `strerror`, `sqrt`, `setjmp`, `longjmp`, `setlocale`,
+`mbstowcs`, `wcstombs`, `wcslen`, `btowc`, and `wctob`, plus `qsort`,
+`bsearch`, `signal`, `raise`, `atexit`, `setenv`, `getenv`, and `unsetenv`; the
+`qsort`, `bsearch`, `signal`, and `atexit` cases check glibc callbacks into
+kimicc-generated function pointers. The same libc probe also calls `strlen`
+through a
 kimicc-generated function pointer loaded from the external glibc declaration. A
 pthread probe links with `-pthread`, starts a `pthread_create`
 callback, joins it, and checks pointer/result transport through the libc thread
@@ -507,10 +508,11 @@ reflected in emitted Linux/amd64 assembly. A POSIX runtime probe covers
 `mkstemp`, `write`, `lseek`, `read`, `pread`, `pwrite`, `fstat`, `stat`,
 `access`, `truncate`, `ftruncate`, `fsync`, `dup`, `fcntl`, `link`, `symlink`,
 `readlink`, `rename`, `chmod`, `mkdir`, `rmdir`, `getcwd`, `chdir`,
-`clock_gettime`, `opendir`, `readdir`, `closedir`, `mmap`, `munmap`, `pipe`,
-`poll`, `select`, `socketpair`, `fork`, `_exit`, `execlp`, `waitpid`, `getpid`,
-`close`, and `unlink` through the Ubuntu glibc declarations. A separate linked
-probe checks that GNU constructor and
+`clock_gettime`, `gettimeofday`, `time`, `uname`, `gethostname`, `getrusage`,
+`times`, `opendir`, `readdir`, `closedir`, `mmap`, `munmap`, `pipe`, `poll`,
+`select`, `socketpair`, `fork`, `_exit`, `execlp`, `waitpid`, `getpid`, `close`,
+and `unlink` through the Ubuntu glibc declarations. A separate linked probe
+checks that GNU constructor and
 destructor functions run through `.init_array`/`.fini_array`. The
 script also checks that a strong clang-built
 function or global definition overrides a kimicc-built ELF weak definition at

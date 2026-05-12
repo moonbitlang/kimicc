@@ -2447,11 +2447,14 @@ cat > "$posix_runtime_source_path" <<'C'
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/times.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/utsname.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -2469,6 +2472,12 @@ int main(void) {
   struct stat st;
   struct stat path_st;
   struct timespec ts;
+  struct timeval now;
+  struct rusage usage;
+  struct tms tmsbuf;
+  struct utsname uts;
+  time_t now_time;
+  clock_t ticks;
   ssize_t link_len;
   size_t length = 4096;
   void *mem;
@@ -2483,6 +2492,7 @@ int main(void) {
   pid_t child;
   int wait_status = 0;
   char c = 0;
+  char host[256];
   DIR *dir;
   if (fd < 0) return 11;
   if (write(fd, "abc", 3) != 3) return 12;
@@ -2540,6 +2550,17 @@ int main(void) {
   if (chdir("/tmp") != 0) return 75;
   if (chdir(cwd) != 0) return 76;
   if (clock_gettime(CLOCK_REALTIME, &ts) != 0) return 17;
+  if (gettimeofday(&now, 0) != 0) return 106;
+  now_time = time(0);
+  if (now_time == (time_t)-1) return 107;
+  if (uname(&uts) != 0) return 108;
+  if (!uts.sysname[0] || !uts.machine[0]) return 109;
+  if (gethostname(host, sizeof(host)) != 0) return 110;
+  host[sizeof(host) - 1] = 0;
+  if (!host[0]) return 111;
+  if (getrusage(RUSAGE_SELF, &usage) != 0) return 112;
+  ticks = times(&tmsbuf);
+  if (ticks == (clock_t)-1) return 113;
   mem = mmap(0, length, PROT_READ | PROT_WRITE,
              MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (mem == MAP_FAILED) return 18;
@@ -2859,15 +2880,19 @@ cat > "$header_syntax_source_path" <<'C'
 #include <unistd.h>
 #include <wchar.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <sys/select.h>
 #include <sys/stat.h>
+#include <sys/times.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/utsname.h>
 #include <sys/wait.h>
 int main(void) {
   return sizeof(DIR *) + sizeof(FILE *) + sizeof(jmp_buf) +
     sizeof(pthread_t) + sizeof(sigset_t) + sizeof(fd_set) +
-    sizeof(struct timeval) > 0;
+    sizeof(struct timeval) + sizeof(struct rusage) +
+    sizeof(struct tms) + sizeof(struct utsname) > 0;
 }
 C
 
