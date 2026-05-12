@@ -2268,6 +2268,12 @@ cat > "$libc_runtime_source_path" <<'C'
 
 static jmp_buf jb;
 
+static int cmp_ints(const void *a, const void *b) {
+  int av = *(const int *)a;
+  int bv = *(const int *)b;
+  return (av > bv) - (av < bv);
+}
+
 int jump_once(int n) {
   if (setjmp(jb) == 0) {
     longjmp(jb, n);
@@ -2278,6 +2284,7 @@ int jump_once(int n) {
 int main(void) {
   char buf[64];
   char *end = 0;
+  int values[5] = { 5, 1, 4, 2, 3 };
   long v = strtol("123x", &end, 10);
   if (v != 123 || *end != 'x') return 11;
   if (!isdigit('7') || tolower('A') != 'a') return 12;
@@ -2286,6 +2293,10 @@ int main(void) {
   }
   if (sqrt(81.0) != 9.0) return 14;
   if (jump_once(42) != 42) return 15;
+  qsort(values, 5, sizeof(values[0]), cmp_ints);
+  for (int i = 0; i < 5; i++) {
+    if (values[i] != i + 1) return 16 + i;
+  }
   return 42;
 }
 C
