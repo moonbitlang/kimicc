@@ -2295,6 +2295,9 @@ int main(void) {
   char buf[64];
   char *end = 0;
   int values[5] = { 5, 1, 4, 2, 3 };
+  int key = 3;
+  int *found;
+  char *env;
   size_t (*strlen_ptr)(const char *) = strlen;
   long v = strtol("123x", &end, 10);
   if (v != 123 || *end != 'x') return 11;
@@ -2308,7 +2311,14 @@ int main(void) {
   for (int i = 0; i < 5; i++) {
     if (values[i] != i + 1) return 16 + i;
   }
-  if (strlen_ptr("abcd") != 4) return 21;
+  found = bsearch(&key, values, 5, sizeof(values[0]), cmp_ints);
+  if (!found || *found != 3) return 21;
+  if (strlen_ptr("abcd") != 4) return 22;
+  if (setenv("KIMICC_LINUX_AMD64_SMOKE_ENV", "ok", 1) != 0) return 23;
+  env = getenv("KIMICC_LINUX_AMD64_SMOKE_ENV");
+  if (!env || strcmp(env, "ok") != 0) return 24;
+  if (unsetenv("KIMICC_LINUX_AMD64_SMOKE_ENV") != 0) return 25;
+  if (getenv("KIMICC_LINUX_AMD64_SMOKE_ENV")) return 26;
   return 42;
 }
 C
