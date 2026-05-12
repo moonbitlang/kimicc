@@ -245,7 +245,8 @@ GNU and C11 exchange plus byte test-and-set/clear use `xchg`,
 compare-exchange and read-modify-write operations, including `nand`, use
 `lock cmpxchg`, C11 weak compare-exchange uses the same non-spurious lowering
 as strong compare-exchange, legacy `__sync_*` compare-and-swap and
-read-modify-write builtins use the same update loop, thread fences and
+read-modify-write builtins, including signed/unsigned min/max, use the same
+update loop, thread fences and
 `__sync_synchronize` use `mfence`, signal fences are no-ops in emitted code,
 and lock-free query builtins report true for the covered 1-, 2-, 4-, and
 8-byte scalar widths.

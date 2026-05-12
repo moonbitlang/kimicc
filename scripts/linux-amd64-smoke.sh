@@ -1128,7 +1128,7 @@ int target_predefines(void) {
   if (!clang_version[0] || !compiler_version[0]) return 576;
   if (literal_encoding[0] != 'U' || literal_encoding[4] != '8') return 580;
   if (wide_literal_encoding[0] != 'U' || wide_literal_encoding[4] != '3') return 581;
-#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_return_address) && __has_builtin(__builtin_dynamic_object_size) && __has_builtin(__builtin_flt_rounds) && __has_builtin(__atomic_load_n) && __has_builtin(__sync_bool_compare_and_swap) && __has_builtin(__sync_val_compare_and_swap) && __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p) && __has_builtin(__builtin_classify_type)
+#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_return_address) && __has_builtin(__builtin_dynamic_object_size) && __has_builtin(__builtin_flt_rounds) && __has_builtin(__atomic_load_n) && __has_builtin(__sync_bool_compare_and_swap) && __has_builtin(__sync_val_compare_and_swap) && __has_builtin(__sync_fetch_and_max) && __has_builtin(__sync_fetch_and_min) && __has_builtin(__sync_fetch_and_umax) && __has_builtin(__sync_fetch_and_umin) && __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p) && __has_builtin(__builtin_classify_type)
   target = target + 0;
 #else
   return 513;
@@ -1376,6 +1376,8 @@ int atomic_builtins(void) {
   unsigned short h = 0;
   unsigned int w = 5;
   unsigned long x = 0;
+  int sw = -3;
+  unsigned int uw = 10;
   _Atomic(unsigned int) a = 5;
   unsigned int expected = 11;
   unsigned int expected_w = 31;
@@ -1459,6 +1461,14 @@ int atomic_builtins(void) {
   if (__sync_fetch_and_nand(&w, 15u) != 3u) return 458;
   __atomic_store_n(&w, 10, 5);
   if (__sync_nand_and_fetch(&w, 15u) != ~10u) return 459;
+  if (__sync_fetch_and_max(&sw, -1) != -3) return 620;
+  if (sw != -1) return 621;
+  if (__sync_fetch_and_min(&sw, -7) != -1) return 622;
+  if (sw != -7) return 623;
+  if (__sync_fetch_and_umax(&uw, 12u) != 10u) return 624;
+  if (uw != 12u) return 625;
+  if (__sync_fetch_and_umin(&uw, 7u) != 12u) return 626;
+  if (uw != 7u) return 627;
   __atomic_store_n(&w, 21, 5);
   if (__sync_swap(&w, 22u) != 21u) return 460;
   if (__sync_lock_test_and_set(&w, 23u) != 22u) return 461;

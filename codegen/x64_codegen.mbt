@@ -2135,6 +2135,34 @@ fn X64Codegen::emit_atomic_update_op(
       self.emit("\tand\t" + dst + ", " + value)
       self.emit("\tnot\t" + dst)
     }
+    "max" => {
+      let keep_label = self.new_label()
+      self.emit("\tcmp\t" + dst + ", " + value)
+      self.emit("\tjge\t" + keep_label)
+      self.emit("\tmov\t" + dst + ", " + value)
+      self.emit(keep_label + ":")
+    }
+    "min" => {
+      let keep_label = self.new_label()
+      self.emit("\tcmp\t" + dst + ", " + value)
+      self.emit("\tjle\t" + keep_label)
+      self.emit("\tmov\t" + dst + ", " + value)
+      self.emit(keep_label + ":")
+    }
+    "umax" => {
+      let keep_label = self.new_label()
+      self.emit("\tcmp\t" + dst + ", " + value)
+      self.emit("\tjae\t" + keep_label)
+      self.emit("\tmov\t" + dst + ", " + value)
+      self.emit(keep_label + ":")
+    }
+    "umin" => {
+      let keep_label = self.new_label()
+      self.emit("\tcmp\t" + dst + ", " + value)
+      self.emit("\tjbe\t" + keep_label)
+      self.emit("\tmov\t" + dst + ", " + value)
+      self.emit(keep_label + ":")
+    }
     _ => ()
   }
 }
@@ -2991,6 +3019,10 @@ fn X64Codegen::builtin_return_type(
     | "__sync_fetch_and_or"
     | "__sync_fetch_and_xor"
     | "__sync_fetch_and_nand"
+    | "__sync_fetch_and_max"
+    | "__sync_fetch_and_min"
+    | "__sync_fetch_and_umax"
+    | "__sync_fetch_and_umin"
     | "__sync_add_and_fetch"
     | "__sync_sub_and_fetch"
     | "__sync_and_and_fetch"
@@ -3302,6 +3334,22 @@ fn X64Codegen::emit_builtin_call(
     }
     "__sync_fetch_and_nand" => {
       self.emit_atomic_update_builtin(args, "~&", false)
+      true
+    }
+    "__sync_fetch_and_max" => {
+      self.emit_atomic_update_builtin(args, "max", false)
+      true
+    }
+    "__sync_fetch_and_min" => {
+      self.emit_atomic_update_builtin(args, "min", false)
+      true
+    }
+    "__sync_fetch_and_umax" => {
+      self.emit_atomic_update_builtin(args, "umax", false)
+      true
+    }
+    "__sync_fetch_and_umin" => {
+      self.emit_atomic_update_builtin(args, "umin", false)
       true
     }
     "__sync_add_and_fetch" => {

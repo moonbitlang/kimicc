@@ -438,7 +438,7 @@ test "linux amd64 has builtin reflects supported lowering" {
     #|#else
     #|int atomic_and_overflow = 0;
     #|#endif
-    #|#if __has_builtin(__sync_fetch_and_add) && __has_builtin(__sync_add_and_fetch) && __has_builtin(__sync_fetch_and_nand) && __has_builtin(__sync_nand_and_fetch) && __has_builtin(__sync_lock_test_and_set) && __has_builtin(__sync_lock_release) && __has_builtin(__sync_swap)
+    #|#if __has_builtin(__sync_fetch_and_add) && __has_builtin(__sync_add_and_fetch) && __has_builtin(__sync_fetch_and_nand) && __has_builtin(__sync_nand_and_fetch) && __has_builtin(__sync_fetch_and_max) && __has_builtin(__sync_fetch_and_min) && __has_builtin(__sync_fetch_and_umax) && __has_builtin(__sync_fetch_and_umin) && __has_builtin(__sync_lock_test_and_set) && __has_builtin(__sync_lock_release) && __has_builtin(__sync_swap)
     #|int sync_update_builtins = 1;
     #|#else
     #|int sync_update_builtins = 0;

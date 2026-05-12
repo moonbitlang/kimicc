@@ -732,6 +732,8 @@ test "generate linux amd64 lowers atomic builtins" {
     #|  unsigned char flag = 0;
     #|  unsigned short h = 0;
     #|  unsigned int w = 5;
+    #|  int sw = -3;
+    #|  unsigned int uw = 10;
     #|  _Atomic(unsigned int) a = 5;
     #|  unsigned int expected = 11;
     #|  unsigned int expected_ptr = 23;
@@ -799,6 +801,14 @@ test "generate linux amd64 lowers atomic builtins" {
     #|  if (__sync_fetch_and_nand(&w, 15u) != 3u) return 41;
     #|  __atomic_store_n(&w, 10, 5);
     #|  if (__sync_nand_and_fetch(&w, 15u) != ~10u) return 42;
+    #|  if (__sync_fetch_and_max(&sw, -1) != -3) return 46;
+    #|  if (sw != -1) return 47;
+    #|  if (__sync_fetch_and_min(&sw, -7) != -1) return 48;
+    #|  if (sw != -7) return 49;
+    #|  if (__sync_fetch_and_umax(&uw, 12u) != 10u) return 50;
+    #|  if (uw != 12u) return 51;
+    #|  if (__sync_fetch_and_umin(&uw, 7u) != 12u) return 52;
+    #|  if (uw != 7u) return 53;
     #|  __atomic_store_n(&w, 21, 5);
     #|  if (__sync_swap(&w, 22u) != 21u) return 43;
     #|  if (__sync_lock_test_and_set(&w, 23u) != 22u) return 44;
@@ -869,6 +879,10 @@ test "generate linux amd64 lowers atomic builtins" {
   inspect(assembly.contains("call\t__sync_add_and_fetch"), content="false")
   inspect(assembly.contains("call\t__sync_fetch_and_nand"), content="false")
   inspect(assembly.contains("call\t__sync_nand_and_fetch"), content="false")
+  inspect(assembly.contains("call\t__sync_fetch_and_max"), content="false")
+  inspect(assembly.contains("call\t__sync_fetch_and_min"), content="false")
+  inspect(assembly.contains("call\t__sync_fetch_and_umax"), content="false")
+  inspect(assembly.contains("call\t__sync_fetch_and_umin"), content="false")
   inspect(assembly.contains("call\t__sync_lock_test_and_set"), content="false")
   inspect(assembly.contains("call\t__sync_lock_release"), content="false")
   inspect(assembly.contains("call\t__sync_swap"), content="false")
