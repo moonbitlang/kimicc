@@ -1073,6 +1073,11 @@ int target_predefines(void) {
 #else
   return 510;
 #endif
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ && __FLOAT_WORD_ORDER__ == __ORDER_LITTLE_ENDIAN__ && __ORDER_PDP_ENDIAN__ == 3412
+  target = target + 0;
+#else
+  return 574;
+#endif
 #if __SIZE_MAX__ == 18446744073709551615UL && __UINTPTR_MAX__ == 18446744073709551615UL && __PTRDIFF_MAX__ == 9223372036854775807L
   target = target + 0;
 #else
