@@ -185,6 +185,11 @@ old_helper_path="/tmp/kimicc-linux-amd64-oldstyle-helper.c"
 old_object_path="/tmp/kimicc-linux-amd64-oldstyle.o"
 old_helper_object_path="/tmp/kimicc-linux-amd64-oldstyle-helper.o"
 old_binary_path="/tmp/kimicc-linux-amd64-oldstyle"
+weak_source_path="/tmp/kimicc-linux-amd64-weak.c"
+weak_helper_path="/tmp/kimicc-linux-amd64-weak-helper.c"
+weak_object_path="/tmp/kimicc-linux-amd64-weak.o"
+weak_helper_object_path="/tmp/kimicc-linux-amd64-weak-helper.o"
+weak_binary_path="/tmp/kimicc-linux-amd64-weak"
 ternary_source_path="/tmp/kimicc-linux-amd64-ternary.c"
 ternary_binary_path="/tmp/kimicc-linux-amd64-ternary"
 callee_saved_source_path="/tmp/kimicc-linux-amd64-callee-saved.c"
@@ -1249,6 +1254,11 @@ int target_predefines(void) {
   target = target + 0;
 #else
   return 607;
+#endif
+#if __has_attribute(weak) && __has_attribute(__weak__)
+  target = target + 0;
+#else
+  return 608;
 #endif
 #if __has_attribute(unused) && __has_attribute(__unused__) && __has_attribute(fallthrough) && __has_attribute(__fallthrough__)
   target = target + 0;
@@ -2716,6 +2726,43 @@ status=$?
 set -e
 if [ "$status" -ne 42 ]; then
   echo "expected old-style promotion smoke binary to exit 42, got $status" >&2
+  exit 1
+fi
+
+cat > "$weak_source_path" <<'C'
+__attribute__((weak)) int weak_answer(void) { return 1; }
+int main(void) { return weak_answer(); }
+C
+
+cat > "$weak_helper_path" <<'C'
+int weak_answer(void) { return 42; }
+C
+
+"$kimicc" -c -target linux-amd64 -o "$weak_object_path" "$weak_source_path"
+clang -target x86_64-linux-gnu -c -o "$weak_helper_object_path" \
+  "$weak_helper_path"
+clang -o "$weak_binary_path" "$weak_object_path" "$weak_helper_object_path"
+set +e
+"$weak_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 42 ]; then
+  echo "expected weak symbol override smoke binary to exit 42, got $status" >&2
+  exit 1
+fi
+
+cat > "$weak_source_path" <<'C'
+extern int weak_missing(void) __attribute__((weak));
+int main(void) { return weak_missing ? 1 : 42; }
+C
+
+"$kimicc" -target linux-amd64 -o "$weak_binary_path" "$weak_source_path"
+set +e
+"$weak_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 42 ]; then
+  echo "expected undefined weak symbol smoke binary to exit 42, got $status" >&2
   exit 1
 fi
 

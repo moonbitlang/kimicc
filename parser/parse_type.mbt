@@ -3,6 +3,7 @@ priv struct AttributeInfo {
   mut is_packed : Bool
   mut align : Int?
   mut mode : String?
+  mut is_weak : Bool
 }
 
 ///|
@@ -56,7 +57,12 @@ fn Parser::skip_qualifiers(self : Parser) -> Unit {
 
 ///|
 fn Parser::skip_attributes_info(self : Parser) -> AttributeInfo {
-  let info : AttributeInfo = { is_packed: false, align: None, mode: None }
+  let info : AttributeInfo = {
+    is_packed: false,
+    align: None,
+    mode: None,
+    is_weak: false,
+  }
   while self.token == Ident("__attribute__") ||
         self.token == Ident("__attribute") ||
         self.token == Ident("__asm") ||
@@ -71,6 +77,7 @@ fn Parser::skip_attributes_info(self : Parser) -> AttributeInfo {
       if tracks_packed {
         match self.token {
           Ident("packed") | Ident("__packed__") => info.is_packed = true
+          Ident("weak") | Ident("__weak__") => info.is_weak = true
           Ident("vector_size")
           | Ident("__vector_size__")
           | Ident("ext_vector_type")

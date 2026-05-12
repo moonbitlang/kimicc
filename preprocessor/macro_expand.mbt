@@ -90,6 +90,8 @@ fn pp_has_attribute(name : String) -> Bool {
     | "__aligned__"
     | "mode"
     | "__mode__"
+    | "weak"
+    | "__weak__"
     | "unused"
     | "__unused__"
     | "fallthrough"

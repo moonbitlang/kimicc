@@ -1,16 +1,21 @@
 ///|
 fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
-  self.skip_attributes()
+  let leading_attrs = self.skip_attributes_info()
+  let mut leading_weak = leading_attrs.is_weak
   let mut leading_inline = false
   while self.token == Inline {
     leading_inline = true
     self.advance()
-    self.skip_attributes()
+    let inline_attrs = self.skip_attributes_info()
+    leading_weak = leading_weak || inline_attrs.is_weak
     self.skip_qualifiers()
   }
   let spec = self.parse_decl_specifiers()
   if leading_inline {
     spec.is_inline = true
+  }
+  if leading_weak {
+    spec.is_weak = true
   }
   let decl = self.parse_declarator(spec.base_type)
   let post_decl_attrs = self.skip_attributes_info()
@@ -29,6 +34,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       variadic: false,
       is_static: false,
       is_inline: false,
+      is_weak: false,
       body: None,
     }
   }
@@ -48,6 +54,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
         variadic: false,
         is_static: false,
         is_inline: false,
+        is_weak: false,
         body: None,
       }
     }
@@ -104,6 +111,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       variadic,
       is_static: spec.is_static,
       is_inline: spec.is_inline,
+      is_weak: spec.is_weak || post_decl_attrs.is_weak,
       body,
     }
   }
@@ -120,6 +128,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       variadic: false,
       is_static: false,
       is_inline: false,
+      is_weak: false,
       body: None,
     }
   }
@@ -137,6 +146,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
     variadic: false,
     is_static: false,
     is_inline: false,
+    is_weak: false,
     body: None,
   }
 }
@@ -204,6 +214,7 @@ fn Parser::parse_global_var_tail(
     init,
     is_static: spec.is_static,
     is_extern: spec.is_extern,
+    is_weak: spec.is_weak || post_decl_attrs.is_weak,
   })
   self.remember_value_type(name, ty)
   self.skip_attributes()
@@ -249,6 +260,7 @@ fn Parser::parse_global_var_tail(
       init: extra_init,
       is_static: spec.is_static,
       is_extern: spec.is_extern,
+      is_weak: spec.is_weak || extra_post_decl_attrs.is_weak,
     })
     self.remember_value_type(extra_decl.name, extra_ty)
     self.skip_attributes()

@@ -7,6 +7,7 @@ priv struct DeclSpec {
   mut is_auto_type : Bool
   mut align : Int?
   mut mode : String?
+  mut is_weak : Bool
 }
 
 ///|
@@ -35,10 +36,12 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     is_auto_type: false,
     align: None,
     mode: None,
+    is_weak: false,
   }
   let leading_attrs = self.skip_attributes_info()
   spec.align = merge_align(spec.align, leading_attrs.align)
   spec.mode = merge_mode(spec.mode, leading_attrs.mode)
+  spec.is_weak = spec.is_weak || leading_attrs.is_weak
   let mut has_void = false
   let mut has_char = false
   let mut has_short = false
@@ -69,6 +72,7 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     let attrs = self.skip_attributes_info()
     spec.align = merge_align(spec.align, attrs.align)
     spec.mode = merge_mode(spec.mode, attrs.mode)
+    spec.is_weak = spec.is_weak || attrs.is_weak
     let mut consumed = false
     // Storage class specifiers
     if !consumed {

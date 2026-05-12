@@ -22,6 +22,7 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
       init,
       is_static: false,
       is_extern: false,
+      is_weak: post_decl_attrs.is_weak,
     })
     self.remember_value_type(decl.name, decl_ty)
   }
@@ -51,6 +52,7 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
         init: extra_init,
         is_static: false,
         is_extern: false,
+        is_weak: extra_post_decl_attrs.is_weak,
       })
       self.remember_value_type(extra.name, extra_ty)
     }
@@ -63,7 +65,6 @@ fn Parser::parse_program(self : Parser) -> Program {
   let structs = []
   let decls = []
   while self.token != EOF {
-    self.skip_attributes()
     while self.token == Ident("__extension__") {
       self.advance()
       self.skip_attributes()

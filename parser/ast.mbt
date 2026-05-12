@@ -323,6 +323,7 @@ pub(all) struct FuncDecl {
   variadic : Bool
   is_static : Bool
   is_inline : Bool
+  is_weak : Bool
   body : Stmt?
 } derive(Eq)
 
@@ -346,6 +347,7 @@ pub(all) struct GlobalDecl {
   init : GlobalInit?
   is_static : Bool
   is_extern : Bool
+  is_weak : Bool
 } derive(Eq)
 
 ///|

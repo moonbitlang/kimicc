@@ -2071,6 +2071,43 @@ test "generate linux amd64 honors GNU aligned attributes" {
 }
 
 ///|
+test "generate linux amd64 emits weak symbol bindings" {
+  let source =
+    #|__attribute__((weak)) int weak_fn(void) { return 1; }
+    #|int weak_global __attribute__((weak)) = 2;
+    #|extern int weak_missing(void) __attribute__((weak));
+    #|int main(void) { return weak_fn() + weak_global; }
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(assembly.contains("\t.weak\tweak_fn"), content="true")
+  inspect(assembly.contains("\t.globl\tweak_fn"), content="false")
+  inspect(assembly.contains("\t.weak\tweak_global"), content="true")
+  inspect(assembly.contains("\t.globl\tweak_global"), content="false")
+  inspect(assembly.contains("\t.weak\tweak_missing"), content="true")
+}
+
+///|
+test "generate linux amd64 loads external function addresses through GOT" {
+  let source =
+    #|extern int weak_missing(void) __attribute__((weak));
+    #|int main(void) { return weak_missing ? 1 : 0; }
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(
+    assembly.contains("\tmov\trax, QWORD PTR [rip + weak_missing@GOTPCREL]"),
+    content="true",
+  )
+}
+
+///|
 test "generate linux amd64 aligns aggregate scratch storage" {
   let source =
     #|typedef __builtin_va_list va_list;

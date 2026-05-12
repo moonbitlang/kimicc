@@ -1496,7 +1496,11 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
         has_data = true
       }
       if !g.is_static {
-        self.emit("	.globl	_" + g.name)
+        if g.is_weak {
+          self.emit("	.weak_definition	_" + g.name)
+        } else {
+          self.emit("	.globl	_" + g.name)
+        }
       }
       self.emit_global_p2align(g.ty)
       self.emit("_" + g.name + ":")
@@ -1531,7 +1535,11 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
       }
       let size = self.type_size(g.ty)
       if !g.is_static {
-        self.emit("	.globl	_" + g.name)
+        if g.is_weak {
+          self.emit("	.weak_definition	_" + g.name)
+        } else {
+          self.emit("	.globl	_" + g.name)
+        }
       }
       self.emit_global_p2align(g.ty)
       self.emit("_" + g.name + ":")

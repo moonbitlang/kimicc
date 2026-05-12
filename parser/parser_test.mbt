@@ -856,6 +856,26 @@ test "parse GNU aligned attributes" {
 }
 
 ///|
+test "parse GNU weak attributes" {
+  let source =
+    #|__attribute__((weak)) int weak_fn(void) { return 1; }
+    #|int weak_global __attribute__((__weak__)) = 2;
+    #|int strong_fn(void) { return weak_fn() + weak_global; }
+  let prog = @parser.parse(source)
+  match prog.decls {
+    [
+      { name: "weak_fn", is_weak: true, .. },
+      { name: "strong_fn", is_weak: false, .. },
+    ] => ()
+    _ => fail("Expected weak function attribute to be recorded")
+  }
+  match prog.globals {
+    [{ name: "weak_global", is_weak: true, .. }] => ()
+    _ => fail("Expected weak global attribute to be recorded")
+  }
+}
+
+///|
 test "parse pointer to struct member access" {
   let source =
     #|struct Node { int val; struct Node *next; };

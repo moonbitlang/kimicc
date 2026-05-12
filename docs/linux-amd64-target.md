@@ -26,9 +26,10 @@ the target split real and testable without claiming full C ABI coverage yet.
   `__has_builtin(name)` reports true for the
   builtin functions and atomic intrinsics the Linux/amd64 lowering currently
   supports, and false for unsupported builtin names. `__has_attribute(name)`
-  reports true for GNU `packed`/`__packed__` and numeric
-  `aligned`/`__aligned__` attributes, matching the layout attributes the
-  parser and backend currently honor, plus parser-accepted no-op GNU
+  reports true for GNU `packed`/`__packed__`, numeric
+  `aligned`/`__aligned__`, and `weak`/`__weak__` attributes, matching the
+  layout and symbol-binding attributes the parser and backend currently honor,
+  plus parser-accepted no-op GNU
   diagnostic, optimization, allocation, and sanitizer attributes.
   Clang-style feature probes
   report true only for the covered `c_alignas`, `c_alignof`,
@@ -122,6 +123,10 @@ the target split real and testable without claiming full C ABI coverage yet.
   layout. Packed aggregates with unaligned fields are classified as System V
   memory-class arguments/returns, including non-packed outer aggregates that
   contain a packed member at an unaligned offset.
+- GNU `__attribute__((weak))`/`__weak__` on Linux/amd64 function and global
+  declarations or definitions emits ELF weak symbol bindings. Addresses of
+  external function/global declarations are loaded through GOT relocations so
+  undefined weak references remain PIE-linkable.
 - Integer bit-fields use packed storage-unit layout for the covered struct/union
   cases and support read, write, compound assignment, and increment/decrement.
 - Local variables live in stack slots under a 16-byte aligned stack frame, or an
@@ -198,8 +203,8 @@ the target split real and testable without claiming full C ABI coverage yet.
   spellings such as `_Decimal32`, `_Decimal64`, `_Decimal128`, `__bf16`, and
   `__ibm128` are rejected explicitly instead of being treated as identifiers.
 - GNU `__has_attribute` reports true for semantic layout/type attributes that
-  are implemented (`packed`, numeric `aligned`, and common scalar `mode`) and for
-  parser-accepted no-op
+  are implemented (`packed`, numeric `aligned`, common scalar `mode`, and
+  `weak`) and for parser-accepted no-op
   diagnostic, optimization, allocation, and sanitizer attributes such as
   `format`, `nonnull`, `warn_unused_result`, `noreturn`, `noinline`,
   `always_inline`, `cold`, `hot`, `malloc`, `alloc_size`, `alloc_align`, and
@@ -477,7 +482,10 @@ a `pthread_create` callback, joins it, and checks pointer/result transport
 through the libc thread API. A POSIX runtime probe covers `mkstemp`, `write`,
 `lseek`, `read`, `fstat`, `clock_gettime`, `opendir`, `readdir`, `closedir`,
 `mmap`, `munmap`, `pipe`, `poll`, `select`, `close`, and `unlink` through the
-Ubuntu glibc declarations. The script also
+Ubuntu glibc declarations. The script also checks that a strong clang-built
+function definition overrides a kimicc-built ELF weak definition at link time,
+and that an undefined weak function reference links and resolves to null in the
+generated PIE binary. It also
 checks that the built compiler returns a nonzero status for an invalid
 Linux/amd64 translation unit, so compiler failures are not masked by the test
 harness.

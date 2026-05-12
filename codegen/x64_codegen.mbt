@@ -12,6 +12,8 @@ priv struct X64Codegen {
   func_variadic : Map[String, Bool]
   func_param_counts : Map[String, Int]
   func_param_types : Map[String, Array[@parser.Type]]
+  func_defined : Map[String, Bool]
+  func_weak : Map[String, Bool]
   struct_layouts : Map[
     String,
     Array[(String, @parser.Type, Int, Int, Int, Int)],
@@ -53,6 +55,8 @@ fn X64Codegen::new() -> X64Codegen {
     func_variadic: {},
     func_param_counts: {},
     func_param_types: {},
+    func_defined: {},
+    func_weak: {},
     struct_layouts: {},
     struct_decls: {},
     globals: {},
@@ -4324,7 +4328,7 @@ fn X64Codegen::gen_addr(self : X64Codegen, expr : @parser.Expr) -> Unit {
       if self.local_offsets.contains(name) {
         self.emit_local_addr(self.local_offsets[name])
       } else {
-        self.emit("\tlea\trax, [rip + " + name + "]")
+        self.emit_symbol_addr(name)
       }
     Deref(ptr) => self.gen_expr(ptr)
     AddrOf(e) => self.gen_addr(e)
@@ -6598,7 +6602,7 @@ fn X64Codegen::gen_expr(self : X64Codegen, expr : @parser.Expr) -> Unit {
       if !self.local_offsets.contains(name) &&
         !self.globals.contains(name) &&
         self.func_rets.contains(name) {
-        self.emit("\tlea\trax, [rip + " + name + "]")
+        self.emit_symbol_addr(name)
       } else {
         self.gen_addr(Var(name))
         match x64_core_type(self.type_of(expr)) {
@@ -7173,9 +7177,7 @@ fn X64Codegen::emit_function(
       if self.stack_align > 16 {
         self.local_base_reg = "r13"
       }
-      if !decl.is_static {
-        self.emit("\t.globl\t" + decl.name)
-      }
+      self.emit_symbol_binding(decl.name, decl.is_static, decl.is_weak)
       self.emit("\t.type\t" + decl.name + ", @function")
       self.emit(decl.name + ":")
       self.emit("\tpush\trbp")
@@ -8402,6 +8404,11 @@ fn X64Codegen::emit_globals(
   self : X64Codegen,
   globals : Array[@parser.GlobalDecl],
 ) -> Unit {
+  for g in globals {
+    if g.init is None && g.is_extern && g.is_weak && !g.is_static {
+      self.emit("\t.weak\t" + g.name)
+    }
+  }
   let mut has_data = false
   for g in globals {
     if g.init is Some(_) {
@@ -8409,9 +8416,7 @@ fn X64Codegen::emit_globals(
         self.emit("\t.data")
         has_data = true
       }
-      if !g.is_static {
-        self.emit("\t.globl\t" + g.name)
-      }
+      self.emit_symbol_binding(g.name, g.is_static, g.is_weak)
       self.emit("\t.align\t" + self.type_align(g.ty).to_string())
       self.emit(g.name + ":")
       match g.init {
@@ -8428,13 +8433,47 @@ fn X64Codegen::emit_globals(
         self.emit("\t.bss")
         has_bss = true
       }
-      if !g.is_static {
-        self.emit("\t.globl\t" + g.name)
-      }
+      self.emit_symbol_binding(g.name, g.is_static, g.is_weak)
       self.emit("\t.align\t" + self.type_align(g.ty).to_string())
       self.emit(g.name + ":")
       self.emit("\t.zero\t" + self.type_size(g.ty).to_string())
     }
+  }
+}
+
+///|
+fn X64Codegen::emit_symbol_binding(
+  self : X64Codegen,
+  name : String,
+  is_static : Bool,
+  is_weak : Bool,
+) -> Unit {
+  if !is_static {
+    if is_weak {
+      self.emit("\t.weak\t" + name)
+    } else {
+      self.emit("\t.globl\t" + name)
+    }
+  }
+}
+
+///|
+fn X64Codegen::symbol_addr_needs_got(self : X64Codegen, name : String) -> Bool {
+  if self.globals.contains(name) {
+    self.globals[name].is_extern
+  } else if self.func_rets.contains(name) {
+    !self.func_defined.get_or_default(name, false)
+  } else {
+    false
+  }
+}
+
+///|
+fn X64Codegen::emit_symbol_addr(self : X64Codegen, name : String) -> Unit {
+  if self.symbol_addr_needs_got(name) {
+    self.emit("\tmov\trax, QWORD PTR [rip + " + name + "@GOTPCREL]")
+  } else {
+    self.emit("\tlea\trax, [rip + " + name + "]")
   }
 }
 
@@ -8477,6 +8516,16 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
     self.func_rets[decl.name] = decl.ret
     self.func_variadic[decl.name] = decl.variadic
     self.func_param_counts[decl.name] = decl.params.length()
+    if decl.body is Some(_) {
+      self.func_defined[decl.name] = true
+    } else if !self.func_defined.contains(decl.name) {
+      self.func_defined[decl.name] = false
+    }
+    if decl.is_weak {
+      self.func_weak[decl.name] = true
+    } else if !self.func_weak.contains(decl.name) {
+      self.func_weak[decl.name] = false
+    }
     let param_types = []
     for param in decl.params {
       param_types.push(param.ty)
@@ -8486,6 +8535,13 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
   let globals = merge_global_decls(prog.globals)
   for g in globals {
     self.globals[g.name] = g
+  }
+  for decl in prog.decls {
+    if decl.body is None &&
+      self.func_weak.get_or_default(decl.name, false) &&
+      !decl.is_static {
+      self.emit("\t.weak\t" + decl.name)
+    }
   }
   for decl in prog.decls {
     self.emit_function(decl)
