@@ -2172,7 +2172,7 @@ if [ "$status" -ne 42 ]; then
 fi
 
 cat > "$libm_source_path" <<'C'
-double cos(double);
+#include <math.h>
 int main(void) { return cos(0.0) == 1.0 ? 0 : 1; }
 C
 
