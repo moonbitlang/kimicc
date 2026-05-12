@@ -56,6 +56,7 @@ test "undef predefined keeps only standard macro baseline" {
   assert_true(!text.contains("#define __GNUC__"))
   assert_true(!text.contains("#define __clang__"))
   assert_true(!text.contains("#define __clang_major__"))
+  assert_true(!text.contains("#define __clang_literal_encoding__"))
   assert_true(!text.contains("#define __VERSION__"))
   assert_true(!text.contains("#define __LP64__"))
   assert_true(!text.contains("#define __BIGGEST_ALIGNMENT__"))
@@ -321,6 +322,8 @@ test "linux amd64 predefined macros cover system header probes" {
     #|#endif
     #|int prefix = __USER_LABEL_PREFIX__ 9;
     #|const char *clang_version = __clang_version__;
+    #|const char *literal_encoding = __clang_literal_encoding__;
+    #|const char *wide_literal_encoding = __clang_wide_literal_encoding__;
     #|const char *compiler_version = __VERSION__;
     #|__SIG_ATOMIC_TYPE__ sig_atomic_value;
     #|__WINT_TYPE__ wint_value;
@@ -340,6 +343,8 @@ test "linux amd64 predefined macros cover system header probes" {
           #|int math_inline_probes=1;
           #|int prefix=9;
           #|const char*clang_version="kimicc clang-compatible preprocessor";
+          #|const char*literal_encoding="UTF-8";
+          #|const char*wide_literal_encoding="UTF-32";
           #|const char*compiler_version="kimicc";
           #|int sig_atomic_value;
           #|unsigned int wint_value;

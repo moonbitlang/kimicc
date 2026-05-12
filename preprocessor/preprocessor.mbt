@@ -97,6 +97,8 @@ fn Preprocessor::seed_common_target_macros(self : Preprocessor) -> Unit {
     "__clang_version__",
     pp_quote_string("kimicc clang-compatible preprocessor"),
   )
+  self.seed_macro("__clang_literal_encoding__", pp_quote_string("UTF-8"))
+  self.seed_macro("__clang_wide_literal_encoding__", pp_quote_string("UTF-32"))
   self.seed_macro("__VERSION__", pp_quote_string("kimicc"))
   self.seed_macro("__LP64__", "1")
   self.seed_macro("_LP64", "1")

@@ -1110,7 +1110,11 @@ int target_predefines(void) {
 #endif
   const char *clang_version = __clang_version__;
   const char *compiler_version = __VERSION__;
+  const char *literal_encoding = __clang_literal_encoding__;
+  const char *wide_literal_encoding = __clang_wide_literal_encoding__;
   if (!clang_version[0] || !compiler_version[0]) return 576;
+  if (literal_encoding[0] != 'U' || literal_encoding[4] != '8') return 580;
+  if (wide_literal_encoding[0] != 'U' || wide_literal_encoding[4] != '3') return 581;
 #if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_return_address) && __has_builtin(__builtin_dynamic_object_size) && __has_builtin(__builtin_flt_rounds) && __has_builtin(__atomic_load_n) && __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p) && __has_builtin(__builtin_classify_type)
   target = target + 0;
 #else
