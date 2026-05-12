@@ -2487,6 +2487,9 @@ int main(void) {
   char sym_path[PATH_MAX];
   char renamed_path[PATH_MAX];
   char dir_path[PATH_MAX];
+  char temp_dir[PATH_MAX];
+  char fifo_path[PATH_MAX];
+  char conf_path[PATH_MAX];
   char glob_pattern[PATH_MAX];
   char link_buf[PATH_MAX];
   struct stat st;
@@ -2494,8 +2497,11 @@ int main(void) {
   struct statvfs vfs;
   struct timespec ts;
   struct timeval now;
+  struct timeval timeval_pair[2];
   struct rusage usage;
+  struct rlimit limit;
   struct tms tmsbuf;
+  struct timespec times_pair[2];
   struct utsname uts;
   regex_t regex;
   regmatch_t match[1];
@@ -2507,7 +2513,11 @@ int main(void) {
   uint64_t event_value;
   ssize_t link_len;
   off_t send_offset = 0;
+  size_t conf_len;
   size_t length = 4096;
+  long page_size;
+  long name_max;
+  mode_t old_mask;
   void *mem;
   char *mapped;
   int fds[2];
@@ -2597,6 +2607,40 @@ int main(void) {
   gr = getgrgid(getgid());
   if (!gr || !gr->gr_name || !gr->gr_name[0]) return 134;
   if (statvfs("/tmp", &vfs) != 0 || vfs.f_bsize == 0) return 135;
+  page_size = sysconf(_SC_PAGESIZE);
+  if (page_size <= 0) return 164;
+  name_max = pathconf("/tmp", _PC_NAME_MAX);
+  if (name_max <= 0) return 165;
+  conf_len = confstr(_CS_PATH, conf_path, sizeof(conf_path));
+  if (conf_len == 0 || conf_len >= sizeof(conf_path)) return 166;
+  if (!conf_path[0]) return 167;
+  if (getrlimit(RLIMIT_NOFILE, &limit) != 0) return 168;
+  if (limit.rlim_cur == 0 || limit.rlim_max == 0) return 169;
+  old_mask = umask(077);
+  umask(old_mask);
+  if (snprintf(temp_dir, sizeof(temp_dir), "%s.mkdtemp.XXXXXX", path) <= 0) {
+    return 170;
+  }
+  if (!mkdtemp(temp_dir)) return 171;
+  if (snprintf(fifo_path, sizeof(fifo_path), "%s/fifo", temp_dir) <= 0) {
+    return 172;
+  }
+  if (mkfifo(fifo_path, S_IRUSR | S_IWUSR) != 0) return 173;
+  if (lstat(fifo_path, &path_st) != 0 || !S_ISFIFO(path_st.st_mode)) {
+    return 174;
+  }
+  timeval_pair[0].tv_sec = 0;
+  timeval_pair[0].tv_usec = 0;
+  timeval_pair[1].tv_sec = 0;
+  timeval_pair[1].tv_usec = 0;
+  if (utimes(path, timeval_pair) != 0) return 175;
+  times_pair[0].tv_sec = 0;
+  times_pair[0].tv_nsec = 0;
+  times_pair[1].tv_sec = 0;
+  times_pair[1].tv_nsec = 0;
+  if (utimensat(AT_FDCWD, path, times_pair, 0) != 0) return 176;
+  if (unlink(fifo_path) != 0) return 177;
+  if (rmdir(temp_dir) != 0) return 178;
   dup_fd = dup(fd);
   if (dup_fd < 0) return 67;
   if (lseek(dup_fd, 0, SEEK_SET) != 0) return 68;

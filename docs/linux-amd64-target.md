@@ -510,17 +510,18 @@ attribute, GNU function/global aliases, and GNU function/global sections are
 reflected in emitted Linux/amd64 assembly. A POSIX runtime probe covers
 `mkstemp`, `write`, `lseek`, `read`, `pread`, `pwrite`, `fstat`, `stat`,
 `access`, `truncate`, `ftruncate`, `fsync`, `dup`, `fcntl`, `link`, `symlink`,
-`readlink`, `rename`, `chmod`, `mkdir`, `rmdir`, `getcwd`, `chdir`,
+`readlink`, `rename`, `chmod`, `mkdir`, `mkdtemp`, `mkfifo`, `rmdir`, `lstat`,
+`getcwd`, `chdir`, `utimes`, `utimensat`, `sysconf`, `pathconf`, `confstr`,
 `clock_gettime`, `gettimeofday`, `time`, `uname`, `gethostname`, `getrusage`,
-`times`, `opendir`, `readdir`, `closedir`, `mmap`, `munmap`, `pipe`, `poll`,
-`select`, `ioctl`, `readv`, `writev`, `sendfile`, `socketpair`, `socket`,
-`setsockopt`, `bind`, `getsockname`, `inet_pton`, `inet_ntop`, `getaddrinfo`,
-`freeaddrinfo`, `fnmatch`, `regcomp`, `regexec`, `regfree`, `glob`, `globfree`,
-`getpwuid`, `getgrgid`, `statvfs`, `eventfd`, `epoll_create1`, `epoll_ctl`,
-`epoll_wait`, `timerfd_create`, `inotify_init1`, `syscall`, `getrandom`,
-`fork`, `_exit`, `execlp`, `waitpid`, `getpid`, `close`, and `unlink` through
-the Ubuntu glibc declarations. A separate linked probe checks that GNU
-constructor and
+`getrlimit`, `umask`, `times`, `opendir`, `readdir`, `closedir`, `mmap`,
+`munmap`, `pipe`, `poll`, `select`, `ioctl`, `readv`, `writev`, `sendfile`,
+`socketpair`, `socket`, `setsockopt`, `bind`, `getsockname`, `inet_pton`,
+`inet_ntop`, `getaddrinfo`, `freeaddrinfo`, `fnmatch`, `regcomp`, `regexec`,
+`regfree`, `glob`, `globfree`, `getpwuid`, `getgrgid`, `statvfs`, `eventfd`,
+`epoll_create1`, `epoll_ctl`, `epoll_wait`, `timerfd_create`, `inotify_init1`,
+`syscall`, `getrandom`, `fork`, `_exit`, `execlp`, `waitpid`, `getpid`, `close`,
+and `unlink` through the Ubuntu glibc declarations. A separate linked probe
+checks that GNU constructor and
 destructor functions run through `.init_array`/`.fini_array`. The
 script also checks that a strong clang-built
 function or global definition overrides a kimicc-built ELF weak definition at
