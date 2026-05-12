@@ -333,8 +333,10 @@ aggregates with unaligned fields become System V memory-class arguments and
 returns. The same unaligned-field rule is applied when a non-packed outer
 aggregate contains a packed member at an unaligned offset. Integer bit-fields
 use packed storage-unit layout for the covered cases and are lowered with
-read-modify-write updates. Parser-accepted no-op GNU diagnostic, optimization,
-allocation, and sanitizer attributes are ignored during lowering. Switch
+read-modify-write updates. Linux/amd64 also lowers covered GNU symbol
+attributes for ELF weak bindings, aliases, custom sections, visibility, and
+constructor/destructor arrays. Parser-accepted no-op GNU diagnostic,
+optimization, allocation, and sanitizer attributes are ignored during lowering. Switch
 dispatch emits explicit case comparisons, uses the promoted control expression
 type, preserves default and fallthrough behavior, and compares 32-bit integer
 switches through `eax`.
