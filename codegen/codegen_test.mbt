@@ -209,6 +209,23 @@ test "generate linux amd64 function with params" {
 }
 
 ///|
+test "generate linux amd64 implicit external direct call" {
+  let source = "int main(void) { return undeclared_puts(\"ok\"); }"
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(assembly.contains("\tcall\tundeclared_puts"), content="true")
+  inspect(
+    assembly.contains("lea\trax, [rip + undeclared_puts]"),
+    content="false",
+  )
+  inspect(assembly.contains("call\tQWORD PTR"), content="false")
+}
+
+///|
 test "generate linux amd64 postfix increment stores new value and returns old value" {
   let source = "int main(void) { int x = 1; return x++; }"
   let prog = @parser.parse(source)

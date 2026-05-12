@@ -63,7 +63,9 @@ the target split real and testable without claiming full C ABI coverage yet.
   `__builtin_va_start`, `__builtin_va_arg`, `__builtin_va_copy`, and
   `__builtin_va_end`. Unnamed variadic arguments use C default argument
   promotions before ABI classification. Calls through declarations with no
-  recorded parameter types also use default promotions for supplied arguments.
+  recorded parameter types, and calls to undeclared external names, also use
+  default promotions for supplied arguments. Undeclared external calls are
+  emitted as direct symbol calls, not as loads through the symbol address.
   `va_arg` supports scalar values plus the covered small and memory-class
   aggregate subset, including packed memory-class aggregates read from the
   overflow stack.
@@ -318,7 +320,8 @@ for casts/initializers/assignments/returns, unsigned 64-bit integer to
 conversions, covered `__int128` ABI transport and arithmetic,
 direct prototype call arguments,
 typed function-pointer scalar call arguments,
-unnamed variadic and unprototyped default promotions, and call results,
+unnamed variadic and unprototyped default promotions, direct calls to
+undeclared external names, and call results,
 floating-point arithmetic/comparisons, `float`/`double` compound assignments
 and prefix/postfix increment/decrement, mixed integer/floating compound
 assignments for non-`__int128` integer lvalues, mixed scalar ternary conversions,

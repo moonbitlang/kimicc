@@ -178,6 +178,8 @@ link_fail_source_path="/tmp/kimicc-linux-amd64-link-fail.c"
 link_fail_binary_path="/tmp/kimicc-linux-amd64-link-fail"
 link_fail_stdout_path="/tmp/kimicc-linux-amd64-link-fail.out"
 link_fail_stderr_path="/tmp/kimicc-linux-amd64-link-fail.err"
+implicit_call_source_path="/tmp/kimicc-linux-amd64-implicit-call.c"
+implicit_call_binary_path="/tmp/kimicc-linux-amd64-implicit-call"
 old_source_path="/tmp/kimicc-linux-amd64-oldstyle.c"
 old_helper_path="/tmp/kimicc-linux-amd64-oldstyle-helper.c"
 old_object_path="/tmp/kimicc-linux-amd64-oldstyle.o"
@@ -511,6 +513,21 @@ if [ -s "$link_fail_stdout_path" ]; then
   exit 1
 fi
 grep -F 'error: link failed with code 1' "$link_fail_stderr_path" >/dev/null
+
+cat > "$implicit_call_source_path" <<'C'
+int main(void) { return atoi("42"); }
+C
+
+"$kimicc" -target linux-amd64 -o "$implicit_call_binary_path" \
+  "$implicit_call_source_path"
+set +e
+"$implicit_call_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 42 ]; then
+  echo "expected implicit external call smoke binary to exit 42, got $status" >&2
+  exit 1
+fi
 
 cat > "$source_path" <<'C'
 #include "pragma_once_header.h"

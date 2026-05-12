@@ -5992,9 +5992,7 @@ fn X64Codegen::is_variadic_call(self : X64Codegen, func : @parser.Expr) -> Bool 
 fn X64Codegen::is_direct_call(self : X64Codegen, func : @parser.Expr) -> Bool {
   match func {
     Var(name) =>
-      !self.local_offsets.contains(name) &&
-      !self.globals.contains(name) &&
-      self.func_rets.contains(name)
+      !self.local_offsets.contains(name) && !self.globals.contains(name)
     _ => false
   }
 }
