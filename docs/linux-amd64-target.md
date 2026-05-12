@@ -489,7 +489,8 @@ expressions. It also runs a syntax-only probe over a broader set of common
 libc/POSIX headers such as `arpa/inet.h`, `assert.h`, `ctype.h`, `dirent.h`,
 `fnmatch.h`, `glob.h`, `grp.h`, `inttypes.h`, `limits.h`, `locale.h`, `math.h`,
 `netdb.h`, `netinet/in.h`, `pthread.h`, `pwd.h`, `regex.h`, `setjmp.h`,
-`wchar.h`, `sys/mman.h`, `sys/resource.h`, `sys/select.h`, `sys/statvfs.h`,
+`wchar.h`, `sys/epoll.h`, `sys/eventfd.h`, `sys/inotify.h`, `sys/mman.h`,
+`sys/resource.h`, `sys/select.h`, `sys/statvfs.h`, `sys/timerfd.h`,
 `sys/times.h`, `sys/time.h`, `sys/utsname.h`, and `sys/wait.h`. A separate
 linked probe passes the generated `va_list` state to glibc `vsnprintf`,
 covering a real libc v-function smoke without claiming complete `va_list`
@@ -514,9 +515,10 @@ reflected in emitted Linux/amd64 assembly. A POSIX runtime probe covers
 `select`, `socketpair`, `socket`, `setsockopt`, `bind`, `getsockname`,
 `inet_pton`, `inet_ntop`, `getaddrinfo`, `freeaddrinfo`, `fnmatch`, `regcomp`,
 `regexec`, `regfree`, `glob`, `globfree`, `getpwuid`, `getgrgid`, `statvfs`,
-`fork`, `_exit`, `execlp`, `waitpid`, `getpid`, `close`, and `unlink` through
-the Ubuntu glibc declarations. A separate linked probe checks that GNU
-constructor and
+`eventfd`, `epoll_create1`, `epoll_ctl`, `epoll_wait`, `timerfd_create`,
+`inotify_init1`, `fork`, `_exit`, `execlp`, `waitpid`, `getpid`, `close`, and
+`unlink` through the Ubuntu glibc declarations. A separate linked probe checks
+that GNU constructor and
 destructor functions run through `.init_array`/`.fini_array`. The
 script also checks that a strong clang-built
 function or global definition overrides a kimicc-built ELF weak definition at

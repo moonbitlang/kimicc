@@ -2451,15 +2451,20 @@ cat > "$posix_runtime_source_path" <<'C'
 #include <poll.h>
 #include <pwd.h>
 #include <regex.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/epoll.h>
+#include <sys/eventfd.h>
+#include <sys/inotify.h>
 #include <sys/mman.h>
 #include <sys/resource.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
+#include <sys/timerfd.h>
 #include <sys/times.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -2494,6 +2499,7 @@ int main(void) {
   struct group *gr;
   time_t now_time;
   clock_t ticks;
+  uint64_t event_value;
   ssize_t link_len;
   size_t length = 4096;
   void *mem;
@@ -2501,10 +2507,15 @@ int main(void) {
   int fds[2];
   int spair[2];
   int net_fd;
+  int event_fd;
+  int epoll_fd;
+  int timer_fd;
+  int inotify_fd;
   int reuse_addr = 1;
   int dup_fd;
   int fd_flags;
   struct pollfd pfd;
+  struct epoll_event ep_event;
   fd_set readfds;
   struct timeval tv;
   struct sockaddr_in addr;
@@ -2623,6 +2634,38 @@ int main(void) {
   if (read(fds[0], &c, 1) != 1 || c != 'z') return 26;
   close(fds[0]);
   close(fds[1]);
+  event_fd = eventfd(0, EFD_CLOEXEC);
+  if (event_fd < 0) return 136;
+  epoll_fd = epoll_create1(EPOLL_CLOEXEC);
+  if (epoll_fd < 0) return 137;
+  memset(&ep_event, 0, sizeof(ep_event));
+  ep_event.events = EPOLLIN;
+  ep_event.data.fd = event_fd;
+  if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, event_fd, &ep_event) != 0) {
+    return 138;
+  }
+  event_value = 1;
+  if (write(event_fd, &event_value, sizeof(event_value)) !=
+      sizeof(event_value)) {
+    return 139;
+  }
+  memset(&ep_event, 0, sizeof(ep_event));
+  if (epoll_wait(epoll_fd, &ep_event, 1, 0) != 1) return 140;
+  if (!(ep_event.events & EPOLLIN) || ep_event.data.fd != event_fd) return 141;
+  event_value = 0;
+  if (read(event_fd, &event_value, sizeof(event_value)) !=
+      sizeof(event_value)) {
+    return 142;
+  }
+  if (event_value != 1) return 143;
+  if (close(epoll_fd) != 0) return 144;
+  if (close(event_fd) != 0) return 145;
+  timer_fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
+  if (timer_fd < 0) return 146;
+  if (close(timer_fd) != 0) return 147;
+  inotify_fd = inotify_init1(IN_CLOEXEC);
+  if (inotify_fd < 0) return 148;
+  if (close(inotify_fd) != 0) return 149;
   if (socketpair(AF_UNIX, SOCK_STREAM, 0, spair) != 0) return 27;
   if (write(spair[0], "q", 1) != 1) return 28;
   if (read(spair[1], &c, 1) != 1 || c != 'q') return 29;
@@ -2954,11 +2997,15 @@ cat > "$header_syntax_source_path" <<'C'
 #include <time.h>
 #include <unistd.h>
 #include <wchar.h>
+#include <sys/epoll.h>
+#include <sys/eventfd.h>
+#include <sys/inotify.h>
 #include <sys/mman.h>
 #include <sys/resource.h>
 #include <sys/select.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
+#include <sys/timerfd.h>
 #include <sys/times.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -2971,7 +3018,8 @@ int main(void) {
     sizeof(struct tms) + sizeof(struct utsname) +
     sizeof(struct addrinfo) + sizeof(struct sockaddr_in) +
     sizeof(regex_t) + sizeof(glob_t) + sizeof(struct passwd) +
-    sizeof(struct group) + sizeof(struct statvfs) > 0;
+    sizeof(struct group) + sizeof(struct statvfs) +
+    sizeof(struct epoll_event) > 0;
 }
 C
 
