@@ -325,6 +325,10 @@ C
 grep -F '#define CLI_MACRO 17' "$driver_query_path" >/dev/null
 grep -F '#define DUMPED 31' "$driver_query_path" >/dev/null
 grep -F '#define __x86_64__ 1' "$driver_query_path" >/dev/null
+grep -F '#define __CHAR16_TYPE__ unsigned short' "$driver_query_path" >/dev/null
+grep -F '#define __INT64_FMTd__ "ld"' "$driver_query_path" >/dev/null
+grep -F '#define __UINT64_C_SUFFIX__ UL' "$driver_query_path" >/dev/null
+grep -F '#define __SIZE_FMTu__ "lu"' "$driver_query_path" >/dev/null
 if grep -F '#define __STDC_HOSTED__' "$driver_query_path" >/dev/null; then
   echo "expected -dM to honor source undefinition of __STDC_HOSTED__" >&2
   exit 1

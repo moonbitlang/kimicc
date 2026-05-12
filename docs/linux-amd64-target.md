@@ -17,8 +17,9 @@ the target split real and testable without claiming full C ABI coverage yet.
   version and literal-encoding macros, floating-point limit macros used by
   Clang's `<float.h>`, endian and floating-word-order constants, atomic
   memory-order constants, x86-64 small-code-model and GCC ABI identity macros,
-  and ELF empty label/register prefix macros. Linux header compatibility macros
-  such as `__NO_MATH_INLINES` are also seeded.
+  ELF empty label/register prefix macros, `__CHAR16_TYPE__`/`__CHAR32_TYPE__`,
+  and the stdint/inttypes suffix and format helper macros used by libc headers.
+  Linux header compatibility macros such as `__NO_MATH_INLINES` are also seeded.
   `__has_builtin(name)` reports true for the
   builtin functions and atomic intrinsics the Linux/amd64 lowering currently
   supports, and false for unsupported builtin names. `__has_attribute(name)`

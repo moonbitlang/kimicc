@@ -325,13 +325,29 @@ test "linux amd64 predefined macros cover system header probes" {
     #|#else
     #|int math_inline_probes = 2;
     #|#endif
+    #|#if __BOOL_WIDTH__ == 8 && __INT8_MAX__ == 127 && __INT_FAST64_WIDTH__ == 64 && __UINT_LEAST32_MAX__ == 4294967295U && __CLANG_ATOMIC_WCHAR_T_LOCK_FREE == 2
+    #|int integer_introspection_probes = 1;
+    #|#else
+    #|int integer_introspection_probes = 2;
+    #|#endif
+    #|#define KIMICC_STRINGIFY_1(x) #x
+    #|#define KIMICC_STRINGIFY(x) KIMICC_STRINGIFY_1(x)
     #|int prefix = __USER_LABEL_PREFIX__ 9;
     #|const char *clang_version = __clang_version__;
     #|const char *literal_encoding = __clang_literal_encoding__;
     #|const char *wide_literal_encoding = __clang_wide_literal_encoding__;
     #|const char *compiler_version = __VERSION__;
+    #|const char *int64_format = __INT64_FMTd__;
+    #|const char *uint64_format = __UINT64_FMTu__;
+    #|const char *size_format = __SIZE_FMTu__;
+    #|const char *int_fast64_format = __INT_FAST64_FMTi__;
+    #|const char *uint_least16_format = __UINT_LEAST16_FMTx__;
+    #|const char *int64_suffix = KIMICC_STRINGIFY(__INT64_C_SUFFIX__);
+    #|const char *uint64_suffix = KIMICC_STRINGIFY(__UINT64_C_SUFFIX__);
     #|__SIG_ATOMIC_TYPE__ sig_atomic_value;
     #|__WINT_TYPE__ wint_value;
+    #|__CHAR16_TYPE__ char16_value;
+    #|__CHAR32_TYPE__ char32_value;
     #|__INT64_TYPE__ int64_value;
     #|__UINT64_TYPE__ uint64_value;
     #|__INT_LEAST64_TYPE__ least64_value;
@@ -347,13 +363,23 @@ test "linux amd64 predefined macros cover system header probes" {
           #|int clang_version_probes=1;
           #|int abi_version_probes=1;
           #|int math_inline_probes=1;
+          #|int integer_introspection_probes=1;
           #|int prefix=9;
           #|const char*clang_version="kimicc clang-compatible preprocessor";
           #|const char*literal_encoding="UTF-8";
           #|const char*wide_literal_encoding="UTF-32";
           #|const char*compiler_version="kimicc";
+          #|const char*int64_format="ld";
+          #|const char*uint64_format="lu";
+          #|const char*size_format="lu";
+          #|const char*int_fast64_format="li";
+          #|const char*uint_least16_format="hx";
+          #|const char*int64_suffix="L";
+          #|const char*uint64_suffix="UL";
           #|int sig_atomic_value;
           #|unsigned int wint_value;
+          #|unsigned short char16_value;
+          #|unsigned int char32_value;
           #|long int int64_value;
           #|long unsigned int uint64_value;
           #|long int least64_value;
