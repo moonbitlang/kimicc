@@ -461,8 +461,10 @@ run directly; it re-execs itself in the `ubuntu:24.04` amd64 container.
 
 For repeated local runs, build `kimicc-linux-amd64-smoke:ubuntu24.04` once with
 `scripts/build-linux-amd64-smoke-image.sh`; the smoke script automatically uses
-that image when it exists locally. Set `KIMICC_LINUX_AMD64_SMOKE_IMAGE` to use a
-different image tag. On a Linux/amd64 host, set
+that image when it exists locally. Alternatively, set
+`KIMICC_LINUX_AMD64_SMOKE_BUILD_IMAGE=1` to build that image automatically if it
+is missing. Set `KIMICC_LINUX_AMD64_SMOKE_IMAGE` to use a different image tag.
+On a Linux/amd64 host, set
 `KIMICC_LINUX_AMD64_SMOKE_FORCE_DOCKER=1` to force the Docker path, which is how
 CI validates the cached image workflow.
 

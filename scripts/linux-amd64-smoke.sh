@@ -23,6 +23,9 @@ if [ "$needs_docker" = "1" ] &&
   if [ -z "$smoke_image" ]; then
     if docker image inspect "$default_smoke_image" >/dev/null 2>&1; then
       smoke_image="$default_smoke_image"
+    elif [ "${KIMICC_LINUX_AMD64_SMOKE_BUILD_IMAGE:-0}" = "1" ]; then
+      scripts/build-linux-amd64-smoke-image.sh
+      smoke_image="$default_smoke_image"
     else
       smoke_image="ubuntu:24.04"
     fi
