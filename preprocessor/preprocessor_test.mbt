@@ -58,6 +58,7 @@ test "undef predefined keeps only standard macro baseline" {
   assert_true(!text.contains("#define __clang_major__"))
   assert_true(!text.contains("#define __VERSION__"))
   assert_true(!text.contains("#define __LP64__"))
+  assert_true(!text.contains("#define __BIGGEST_ALIGNMENT__"))
   assert_true(!text.contains("#define __DATE__"))
   assert_true(!text.contains("#define __has_builtin"))
 }
@@ -283,11 +284,13 @@ test "linux amd64 predefined macros cover system header probes" {
     #|#if defined(__gnu_linux__) && defined(__ELF__) && defined(_LP64)
     #|#if __SIZEOF_POINTER__ == 8 && __SIZEOF_LONG__ == 8 && __CHAR_BIT__ == 8
     #|#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ && __FLOAT_WORD_ORDER__ == __ORDER_LITTLE_ENDIAN__ && __ORDER_PDP_ENDIAN__ == 3412
+    #|#if __BIGGEST_ALIGNMENT__ == 16 && __SIZEOF_LONG_DOUBLE__ == 16
     #|#if __SIZE_MAX__ == 18446744073709551615UL && __UINTPTR_MAX__ == 18446744073709551615UL && __PTRDIFF_MAX__ == 9223372036854775807L
     #|#if __ATOMIC_SEQ_CST == 5 && __GCC_ATOMIC_POINTER_LOCK_FREE == 2
     #|int probes = 1;
     #|#else
     #|int probes = 2;
+    #|#endif
     #|#endif
     #|#endif
     #|#endif

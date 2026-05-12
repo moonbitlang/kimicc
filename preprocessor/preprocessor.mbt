@@ -124,6 +124,7 @@ fn Preprocessor::seed_common_target_macros(self : Preprocessor) -> Unit {
   self.seed_macro("__SIZEOF_INT128__", "16")
   self.seed_macro("__SIZEOF_WCHAR_T__", "4")
   self.seed_macro("__SIZEOF_WINT_T__", "4")
+  self.seed_macro("__BIGGEST_ALIGNMENT__", "16")
   self.seed_macro("__FLT_EVAL_METHOD__", "0")
   self.seed_macro("__FLT_RADIX__", "2")
   self.seed_macro("__FLT_MANT_DIG__", "24")

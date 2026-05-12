@@ -1078,6 +1078,11 @@ int target_predefines(void) {
 #else
   return 574;
 #endif
+#if __BIGGEST_ALIGNMENT__ == 16 && __SIZEOF_LONG_DOUBLE__ == 16
+  target = target + 0;
+#else
+  return 577;
+#endif
 #if __SIZE_MAX__ == 18446744073709551615UL && __UINTPTR_MAX__ == 18446744073709551615UL && __PTRDIFF_MAX__ == 9223372036854775807L
   target = target + 0;
 #else
