@@ -749,6 +749,11 @@ fn Preprocessor::expand_tokens(
         i += 1
         continue
       }
+      if tok.text == "__FILE_NAME__" {
+        result.push(pp_token(PpString, pp_quote_string(pp_basename(file))))
+        i += 1
+        continue
+      }
       if tok.text == "__BASE_FILE__" {
         result.push(
           pp_token(

@@ -44,6 +44,21 @@ fn pp_dirname(path : String) -> String {
 }
 
 ///|
+fn pp_basename(path : String) -> String {
+  let mut last = -1
+  for i = 0; i < path.length(); i = i + 1 {
+    if path[i] == '/' {
+      last = i
+    }
+  }
+  if last < 0 {
+    path
+  } else {
+    path[last + 1:].to_owned()
+  }
+}
+
+///|
 fn pp_is_absolute_path(path : String) -> Bool {
   path.length() > 0 && path[0] == '/'
 }

@@ -203,6 +203,31 @@ test "base file and include level follow physical include stack" {
 }
 
 ///|
+test "file name macro uses basename without prefix maps" {
+  let options : @preprocessor.PreprocessOptions = {
+    ..@preprocessor.PreprocessOptions::new("/work/project/main.c"),
+    include_paths: ["preprocessor/testdata/include_level"],
+    file_prefix_maps: [
+      { from_prefix: "/work/project/main.c", to_prefix: "/mapped/renamed.c" },
+      { from_prefix: "/work/project", to_prefix: "/src" },
+    ],
+  }
+  let source =
+    #|const char *main_name = __FILE_NAME__;
+    #|#include "name.h"
+    #|#line 8 "/work/project/generated.h"
+    #|const char *line_name = __FILE_NAME__;
+  match @preprocessor.preprocess(source, options) {
+    Ok(text) =>
+      inspect(
+        text,
+        content="const char*main_name=\"main.c\";\nconst char*header_file_name=\"name.h\";\nconst char*line_name=\"generated.h\";\n",
+      )
+    Err(err) => abort(err.to_string())
+  }
+}
+
+///|
 test "target macros follow selected target" {
   let linux = match @target.Target::parse("linux-amd64") {
     Some(target) => target
