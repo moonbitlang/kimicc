@@ -469,6 +469,7 @@ test "generate linux amd64 lowers scalar hint builtins" {
     #|  if (__builtin_frame_address(0) == 0) return 5;
     #|  if (__builtin_assume_aligned(p, 16) != p) return 6;
     #|  if (__builtin_expect_with_probability(x, 1, 0.9) != x) return 7;
+    #|  if (__builtin_unpredictable(x) != x) return 13;
     #|  void *ra = __builtin_return_address(0);
     #|  if (ra == 0) return 8;
     #|  if (__builtin_return_address(1) != 0) return 9;
@@ -495,6 +496,7 @@ test "generate linux amd64 lowers scalar hint builtins" {
     assembly.contains("call\t__builtin_expect_with_probability"),
     content="false",
   )
+  inspect(assembly.contains("call\t__builtin_unpredictable"), content="false")
   inspect(assembly.contains("call\t__builtin_assume_aligned"), content="false")
   inspect(assembly.contains("call\t__builtin_prefetch"), content="false")
   inspect(assembly.contains("call\t__builtin_object_size"), content="false")

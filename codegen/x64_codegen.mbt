@@ -2885,7 +2885,9 @@ fn X64Codegen::builtin_return_type(
   args : Array[@parser.Expr],
 ) -> @parser.Type? {
   match name {
-    "__builtin_expect" | "__builtin_expect_with_probability" =>
+    "__builtin_expect"
+    | "__builtin_expect_with_probability"
+    | "__builtin_unpredictable" =>
       if args.length() > 0 {
         Some(self.type_of(args[0]))
       } else {
@@ -3129,7 +3131,9 @@ fn X64Codegen::emit_builtin_call(
   args : Array[@parser.Expr],
 ) -> Bool {
   match name {
-    "__builtin_expect" | "__builtin_expect_with_probability" => {
+    "__builtin_expect"
+    | "__builtin_expect_with_probability"
+    | "__builtin_unpredictable" => {
       if args.length() > 0 {
         self.gen_expr(args[0])
       } else {

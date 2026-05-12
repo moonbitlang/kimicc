@@ -228,6 +228,7 @@ fn pp_linux_amd64_has_builtin(name : String) -> Bool {
   match name {
     "__builtin_expect"
     | "__builtin_expect_with_probability"
+    | "__builtin_unpredictable"
     | "__builtin_assume"
     | "__builtin_assume_aligned"
     | "__builtin_prefetch"

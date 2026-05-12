@@ -140,8 +140,9 @@ the target split real and testable without claiming full C ABI coverage yet.
   metadata arguments and lower to the corresponding Linux libc calls.
 - Common scalar hint/query builtins lower without external calls:
   `__builtin_expect`, `__builtin_expect_with_probability`,
-  `__builtin_assume`, `__builtin_assume_aligned`, `__builtin_prefetch`,
-  `__builtin_constant_p`, `__builtin_object_size`,
+  `__builtin_unpredictable`, `__builtin_assume`,
+  `__builtin_assume_aligned`, `__builtin_prefetch`, `__builtin_constant_p`,
+  `__builtin_object_size`,
   `__builtin_dynamic_object_size`,
   `__builtin_flt_rounds`,
   `__builtin_frame_address`, `__builtin_return_address`,

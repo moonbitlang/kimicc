@@ -222,7 +222,9 @@ implemented for scalar values plus the covered small and memory-class aggregate
 calls before normal x86-64 call lowering; fortified `strlcpy`/`strlcat`
 checked builtins drop their object-size argument before the libc call. Common
 scalar hint/query and bit-manipulation builtins lower directly without
-external calls; object-size query builtins conservatively report unknown size.
+external calls; `__builtin_unpredictable` returns its value operand like the
+other no-op prediction hints, and object-size query builtins conservatively
+report unknown size.
 `__builtin_flt_rounds` currently reports the default round-to-nearest mode.
 `__builtin_frame_address` exposes `rbp`;
 `__builtin_return_address(0)` loads `[rbp + 8]`, nonzero depths return null,
