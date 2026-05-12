@@ -139,6 +139,33 @@ test "parse extended float spellings in sizeof and alignof type names" {
 }
 
 ///|
+test "parse unsupported float128 layout constants for linux" {
+  let linux = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => fail("linux-amd64 target should parse")
+  }
+  let source =
+    #|int main(void) {
+    #|  int q_size[sizeof(__float128)];
+    #|  int q_align[__alignof__(_Float128)];
+    #|  return 0;
+    #|}
+  let prog = @parser.parse_for_target(source, linux)
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [
+          VarDecl(Array(SInt, 16), "q_size", None),
+          VarDecl(Array(SInt, 16), "q_align", None),
+          Return(Some(Number(0))),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected float128 placeholder layout constants")
+  }
+}
+
+///|
 test "parse long double external declaration as distinct type" {
   let source = "extern long double fabsl(long double);"
   let prog = @parser.parse(source)

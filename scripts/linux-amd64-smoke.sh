@@ -2097,6 +2097,11 @@ int binary_float_aliases(void) {
   return 0;
 }
 
+int unsupported_float_layout_constants(void) {
+  if (sizeof(__float128) != 16 || __alignof__(_Float128) != 16) return 605;
+  return 0;
+}
+
 int main(void) {
   struct Pair p;
   struct DPair q;
@@ -2178,6 +2183,7 @@ int main(void) {
          alignof_selection() +
          function_pointer_param_conversions() +
          binary_float_aliases() +
+         unsupported_float_layout_constants() +
          global_cast_pointer_initializers() +
          offsetof_designators() +
          var_pair(0, make_pair(0, 1)) +
