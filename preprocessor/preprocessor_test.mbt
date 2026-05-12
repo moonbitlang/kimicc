@@ -765,6 +765,38 @@ test "include paths are explicit" {
 }
 
 ///|
+test "literal angle includes ignore macros in path components" {
+  let options : @preprocessor.PreprocessOptions = {
+    filename: "input.c",
+    target: @target.Target::default(),
+    include_paths: [],
+    system_include_paths: ["preprocessor/testdata/system_path"],
+    file_prefix_maps: [],
+    defines: {},
+    undefines: [],
+    undef_predefined: false,
+    allow_missing_includes: false,
+    emit_line_markers: false,
+  }
+  let source =
+    #|#define bits 1
+    #|#include <bits/errno.h>
+    #|#if __has_include(<bits/errno.h>)
+    #|int literal_bits_probe = 1;
+    #|#else
+    #|int literal_bits_probe = 0;
+    #|#endif
+  match @preprocessor.preprocess(source, options) {
+    Ok(text) =>
+      inspect(
+        text,
+        content="int literal_bits_errno=7;\nint literal_bits_probe=1;\n",
+      )
+    Err(err) => fail(err.to_string())
+  }
+}
+
+///|
 test "missing generated includes can be recorded for dependencies" {
   let options : @preprocessor.PreprocessOptions = {
     filename: "input.c",

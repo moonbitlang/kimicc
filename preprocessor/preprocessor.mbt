@@ -649,14 +649,7 @@ fn pp_parenthesized_body(
 }
 
 ///|
-fn Preprocessor::parse_include_query_name(
-  self : Preprocessor,
-  tokens : Array[PpToken],
-  file : String,
-  line : Int,
-) -> (String, Bool)? {
-  let expanded = self.expand_tokens(tokens, {}, file, true, line, 0)
-  let clean = pp_without_whitespace(expanded)
+fn pp_parse_header_name(clean : Array[PpToken]) -> (String, Bool)? {
   if clean.length() == 0 {
     return None
   }
@@ -675,6 +668,22 @@ fn Preprocessor::parse_include_query_name(
     }
   }
   None
+}
+
+///|
+fn Preprocessor::parse_include_query_name(
+  self : Preprocessor,
+  tokens : Array[PpToken],
+  file : String,
+  line : Int,
+) -> (String, Bool)? {
+  let clean = pp_without_whitespace(tokens)
+  match pp_parse_header_name(clean) {
+    Some(header) => return Some(header)
+    None => ()
+  }
+  let expanded = self.expand_tokens(tokens, {}, file, true, line, 0)
+  pp_parse_header_name(pp_without_whitespace(expanded))
 }
 
 ///|
@@ -810,25 +819,19 @@ fn Preprocessor::parse_include_name(
   file : String,
   line : Int,
 ) -> (String, Bool)? {
-  let expanded = self.expand_tokens(tokens, {}, file, true, line, 0)
-  let clean = pp_without_whitespace(expanded)
+  let clean = pp_without_whitespace(tokens)
   if clean.length() == 0 {
     self.set_error("expected header name after #include")
     return None
   }
-  if clean[0].kind == PpString {
-    return Some((pp_unquote_string_literal(clean[0].text), false))
+  match pp_parse_header_name(clean) {
+    Some(header) => return Some(header)
+    None => ()
   }
-  if clean[0].is_punct("<") {
-    let buf = StringBuilder::new()
-    let mut i = 1
-    while i < clean.length() && !clean[i].is_punct(">") {
-      buf.write_string(clean[i].text)
-      i += 1
-    }
-    if i < clean.length() && clean[i].is_punct(">") {
-      return Some((buf.to_string(), true))
-    }
+  let expanded = self.expand_tokens(tokens, {}, file, true, line, 0)
+  match pp_parse_header_name(pp_without_whitespace(expanded)) {
+    Some(header) => return Some(header)
+    None => ()
   }
   self.set_error("unsupported #include header form")
   None
