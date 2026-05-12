@@ -2457,18 +2457,23 @@ cat > "$posix_runtime_source_path" <<'C'
 #include <string.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
+#include <sys/ioctl.h>
 #include <sys/inotify.h>
 #include <sys/mman.h>
+#include <sys/random.h>
 #include <sys/resource.h>
 #include <sys/select.h>
+#include <sys/sendfile.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
+#include <sys/syscall.h>
 #include <sys/timerfd.h>
 #include <sys/times.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/utsname.h>
+#include <sys/uio.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -2501,6 +2506,7 @@ int main(void) {
   clock_t ticks;
   uint64_t event_value;
   ssize_t link_len;
+  off_t send_offset = 0;
   size_t length = 4096;
   void *mem;
   char *mapped;
@@ -2514,8 +2520,10 @@ int main(void) {
   int reuse_addr = 1;
   int dup_fd;
   int fd_flags;
+  int available = 0;
   struct pollfd pfd;
   struct epoll_event ep_event;
+  struct iovec iov[2];
   fd_set readfds;
   struct timeval tv;
   struct sockaddr_in addr;
@@ -2526,6 +2534,9 @@ int main(void) {
   pid_t child;
   int wait_status = 0;
   char c = 0;
+  char a = 0;
+  char b = 0;
+  char random_bytes[4];
   char host[256];
   char ipbuf[INET_ADDRSTRLEN];
   DIR *dir;
@@ -2612,6 +2623,11 @@ int main(void) {
   if (getrusage(RUSAGE_SELF, &usage) != 0) return 112;
   ticks = times(&tmsbuf);
   if (ticks == (clock_t)-1) return 113;
+  if (syscall(SYS_getpid) != getpid()) return 162;
+  if (getrandom(random_bytes, sizeof(random_bytes), 0) !=
+      sizeof(random_bytes)) {
+    return 163;
+  }
   mem = mmap(0, length, PROT_READ | PROT_WRITE,
              MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (mem == MAP_FAILED) return 18;
@@ -2621,6 +2637,8 @@ int main(void) {
   if (munmap(mem, length) != 0) return 20;
   if (pipe(fds) != 0) return 21;
   if (write(fds[1], "z", 1) != 1) return 22;
+  if (ioctl(fds[0], FIONREAD, &available) != 0) return 150;
+  if (available != 1) return 151;
   pfd.fd = fds[0];
   pfd.events = POLLIN;
   pfd.revents = 0;
@@ -2632,6 +2650,27 @@ int main(void) {
   if (select(fds[0] + 1, &readfds, 0, 0, &tv) != 1) return 24;
   if (!FD_ISSET(fds[0], &readfds)) return 25;
   if (read(fds[0], &c, 1) != 1 || c != 'z') return 26;
+  iov[0].iov_base = &a;
+  iov[0].iov_len = 1;
+  iov[1].iov_base = &b;
+  iov[1].iov_len = 1;
+  if (write(fds[1], "xy", 2) != 2) return 152;
+  if (readv(fds[0], iov, 2) != 2) return 153;
+  if (a != 'x' || b != 'y') return 154;
+  iov[0].iov_base = "m";
+  iov[0].iov_len = 1;
+  iov[1].iov_base = "n";
+  iov[1].iov_len = 1;
+  if (writev(fds[1], iov, 2) != 2) return 155;
+  if (read(fds[0], buf, 2) != 2) return 156;
+  buf[2] = 0;
+  if (strcmp(buf, "mn") != 0) return 157;
+  send_offset = 0;
+  if (sendfile(fds[1], fd, &send_offset, 3) != 3) return 158;
+  if (send_offset != 3) return 159;
+  if (read(fds[0], buf, 3) != 3) return 160;
+  buf[3] = 0;
+  if (strcmp(buf, "abc") != 0) return 161;
   close(fds[0]);
   close(fds[1]);
   event_fd = eventfd(0, EFD_CLOEXEC);
@@ -2999,17 +3038,22 @@ cat > "$header_syntax_source_path" <<'C'
 #include <wchar.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
+#include <sys/ioctl.h>
 #include <sys/inotify.h>
 #include <sys/mman.h>
+#include <sys/random.h>
 #include <sys/resource.h>
 #include <sys/select.h>
+#include <sys/sendfile.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
+#include <sys/syscall.h>
 #include <sys/timerfd.h>
 #include <sys/times.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/utsname.h>
+#include <sys/uio.h>
 #include <sys/wait.h>
 int main(void) {
   return sizeof(DIR *) + sizeof(FILE *) + sizeof(jmp_buf) +
@@ -3019,7 +3063,7 @@ int main(void) {
     sizeof(struct addrinfo) + sizeof(struct sockaddr_in) +
     sizeof(regex_t) + sizeof(glob_t) + sizeof(struct passwd) +
     sizeof(struct group) + sizeof(struct statvfs) +
-    sizeof(struct epoll_event) > 0;
+    sizeof(struct epoll_event) + sizeof(struct iovec) > 0;
 }
 C
 
