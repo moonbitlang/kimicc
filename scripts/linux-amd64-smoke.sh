@@ -7,10 +7,17 @@ smoke_image="${KIMICC_LINUX_AMD64_SMOKE_IMAGE:-}"
 
 host_os="$(uname -s)"
 host_arch="$(uname -m)"
-if { [ "$host_os" != "Linux" ] || { [ "$host_arch" != "x86_64" ] && [ "$host_arch" != "amd64" ]; }; } &&
+needs_docker=0
+if [ "${KIMICC_LINUX_AMD64_SMOKE_FORCE_DOCKER:-0}" = "1" ]; then
+  needs_docker=1
+elif [ "$host_os" != "Linux" ] || { [ "$host_arch" != "x86_64" ] && [ "$host_arch" != "amd64" ]; }; then
+  needs_docker=1
+fi
+
+if [ "$needs_docker" = "1" ] &&
   [ "${KIMICC_LINUX_AMD64_SMOKE_IN_DOCKER:-0}" != "1" ]; then
   if ! command -v docker >/dev/null 2>&1; then
-    echo "linux-amd64 smoke requires Docker on non-linux/amd64 hosts" >&2
+    echo "linux-amd64 smoke requires Docker on non-linux/amd64 hosts or when forced" >&2
     exit 1
   fi
   if [ -z "$smoke_image" ]; then

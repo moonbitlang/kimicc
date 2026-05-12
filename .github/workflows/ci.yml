@@ -63,21 +63,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Install system tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang file git python3
-
-      - name: Install MoonBit
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
-
-      - name: Show toolchain versions
-        run: |
-          moon version --all
-          clang --version
-          uname -m
+      - name: Build Linux amd64 smoke image
+        run: scripts/build-linux-amd64-smoke-image.sh
 
       - name: Linux amd64 smoke
-        run: scripts/linux-amd64-smoke.sh
+        run: KIMICC_LINUX_AMD64_SMOKE_FORCE_DOCKER=1 scripts/linux-amd64-smoke.sh
