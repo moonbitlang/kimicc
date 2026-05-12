@@ -182,6 +182,12 @@ the target split real and testable without claiming full C ABI coverage yet.
   `long double` layout constants use the SysV x86-64 size/alignment of 16
   bytes, and storage layout honors that size/alignment even though x87 value
   lowering is still unsupported.
+- glibc binary extended floating spellings used by headers are parsed as their
+  covered ABI peers where that is correct for the current type model:
+  `_Float32` as `float`, `_Float64` and `_Float32x` as `double`, and
+  `_Float64x` as the existing SysV `long double` placeholder. Decimal/vendor
+  spellings such as `_Decimal32`, `_Decimal64`, `_Decimal128`, `__bf16`, and
+  `__ibm128` are rejected explicitly instead of being treated as identifiers.
 - GNU `__has_attribute` reports true for semantic layout attributes that are
   implemented (`packed` and numeric `aligned`) and for parser-accepted no-op
   diagnostic, optimization, allocation, and sanitizer attributes such as
@@ -372,10 +378,11 @@ SSE/MMX/FXSR CPU feature macros, segment address-space macros such as
 C23 `#embed` result macros, and inline-assembly capability macros such as
 `__GCC_ASM_FLAG_OUTPUTS__` and `__GCC_HAVE_DWARF2_CFI_ASM`.
 Unsupported extension type spellings such as `_Float16` and `__float128`, and
-unsupported ABI types such as SysV x86-64 `long double`, are parsed as distinct
-types so external declarations in system headers do not silently become `int`
-or `double`; code generation still fails if such a type needs value operations
-or ABI lowering.
+unsupported ABI types such as SysV x86-64 `long double` and `_Float64x`, are
+parsed as distinct types so external declarations in system headers do not
+silently become `int` or `double`; code generation still fails if such a type
+needs value operations or ABI lowering. Unsupported decimal/vendor floating
+spellings are rejected explicitly.
 
 ## Local Smoke Test On ARM64 macOS
 

@@ -164,9 +164,12 @@ Do not treat this as full ABI compliance yet. Known reasons include:
 
 - there is no independent ABI classification table separate from codegen;
 - `_Float16` and `__float128` are parsed only as unsupported placeholder
-  types, while Linux/amd64 `long double` is parsed as a distinct x87 ABI type
-  but rejected when value lowering is required; vector/SIMD C types and
-  HFA/HVA aggregate rules are not modeled as first-class supported types;
+  types, while Linux/amd64 `long double` and `_Float64x` are parsed as distinct
+  x87 ABI types but rejected when value lowering is required. Linux/glibc
+  `_Float32`, `_Float64`, and `_Float32x` declarations are accepted as the
+  covered `float`/`double` ABI peers; decimal/vendor floating spellings are
+  rejected explicitly. Vector/SIMD C types and HFA/HVA aggregate rules are not
+  modeled as first-class supported types;
 - unusual packing, alignment, and extension combinations need more differential
   coverage;
 - the full C language and GNU/Clang extension surface is still growing.
