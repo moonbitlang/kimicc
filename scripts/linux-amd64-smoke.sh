@@ -1063,10 +1063,15 @@ int default_promotions(void) {
 }
 
 int target_predefines(void) {
-#if defined(__gnu_linux__) && defined(__linux__) && defined(__ELF__) && defined(__x86_64__) && defined(__amd64__) && defined(_LP64)
+#if defined(__gnu_linux__) && defined(__linux__) && defined(__ELF__) && defined(__x86_64__) && defined(__amd64__) && defined(_LP64) && defined(__code_model_small__)
   int target = 0;
 #else
   return 509;
+#endif
+#if __GXX_ABI_VERSION == 1002
+  target = target + 0;
+#else
+  return 582;
 #endif
 #if __SIZEOF_POINTER__ == 8 && __SIZEOF_LONG__ == 8 && __CHAR_BIT__ == 8
   target = target + 0;

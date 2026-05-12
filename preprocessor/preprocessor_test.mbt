@@ -283,7 +283,7 @@ test "linux amd64 predefined macros cover system header probes" {
     emit_line_markers: options.emit_line_markers,
   }
   let source =
-    #|#if defined(__gnu_linux__) && defined(__ELF__) && defined(_LP64)
+    #|#if defined(__gnu_linux__) && defined(__ELF__) && defined(_LP64) && defined(__code_model_small__)
     #|#if __SIZEOF_POINTER__ == 8 && __SIZEOF_LONG__ == 8 && __CHAR_BIT__ == 8
     #|#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ && __FLOAT_WORD_ORDER__ == __ORDER_LITTLE_ENDIAN__ && __ORDER_PDP_ENDIAN__ == 3412
     #|#if __BIGGEST_ALIGNMENT__ == 16 && __SIZEOF_LONG_DOUBLE__ == 16
@@ -315,6 +315,11 @@ test "linux amd64 predefined macros cover system header probes" {
     #|#else
     #|int clang_version_probes = 2;
     #|#endif
+    #|#if __GXX_ABI_VERSION == 1002
+    #|int abi_version_probes = 1;
+    #|#else
+    #|int abi_version_probes = 2;
+    #|#endif
     #|#if defined(__NO_MATH_INLINES) && __NO_MATH_INLINES == 1
     #|int math_inline_probes = 1;
     #|#else
@@ -340,6 +345,7 @@ test "linux amd64 predefined macros cover system header probes" {
           #|int float_probes=1;
           #|int int64_probes=1;
           #|int clang_version_probes=1;
+          #|int abi_version_probes=1;
           #|int math_inline_probes=1;
           #|int prefix=9;
           #|const char*clang_version="kimicc clang-compatible preprocessor";

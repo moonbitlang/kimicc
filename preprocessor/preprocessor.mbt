@@ -278,6 +278,8 @@ fn Preprocessor::seed_linux_amd64_macros(self : Preprocessor) -> Unit {
   self.seed_macro("__x86_64", "1")
   self.seed_macro("__amd64__", "1")
   self.seed_macro("__amd64", "1")
+  self.seed_macro("__GXX_ABI_VERSION", "1002")
+  self.seed_macro("__code_model_small__", "1")
   self.seed_macro("__REGISTER_PREFIX__", "")
   self.seed_macro("__USER_LABEL_PREFIX__", "")
   self.seed_macro("__SIZEOF_LONG_DOUBLE__", "16")
