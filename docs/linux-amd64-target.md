@@ -20,7 +20,9 @@ the target split real and testable without claiming full C ABI coverage yet.
   ELF empty label/register prefix macros, `__CHAR16_TYPE__`/`__CHAR32_TYPE__`,
   and the stdint/inttypes suffix and format helper macros used by libc headers.
   Linux header compatibility macros such as `__NO_MATH_INLINES` and the
-  supported `__GCC_HAVE_SYNC_COMPARE_AND_SWAP_*` widths are also seeded.
+  supported `__GCC_HAVE_SYNC_COMPARE_AND_SWAP_*` widths are also seeded, along
+  with Clang's numeric floating-class, memory-scope, and cache-line interference
+  constants.
   `__has_builtin(name)` reports true for the
   builtin functions and atomic intrinsics the Linux/amd64 lowering currently
   supports, and false for unsupported builtin names. `__has_attribute(name)`

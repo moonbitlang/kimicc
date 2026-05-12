@@ -325,6 +325,11 @@ test "linux amd64 predefined macros cover system header probes" {
     #|#else
     #|int sync_compare_exchange_probes = 2;
     #|#endif
+    #|#if __GCC_CONSTRUCTIVE_SIZE == 64 && __GCC_DESTRUCTIVE_SIZE == 64 && __FPCLASS_QNAN == 0x0002 && __FPCLASS_POSINF == 0x0200 && __MEMORY_SCOPE_SYSTEM == 0 && __OPENCL_MEMORY_SCOPE_SUB_GROUP == 4
+    #|int numeric_constant_probes = 1;
+    #|#else
+    #|int numeric_constant_probes = 2;
+    #|#endif
     #|#if defined(__NO_MATH_INLINES) && __NO_MATH_INLINES == 1
     #|int math_inline_probes = 1;
     #|#else
@@ -368,6 +373,7 @@ test "linux amd64 predefined macros cover system header probes" {
           #|int clang_version_probes=1;
           #|int abi_version_probes=1;
           #|int sync_compare_exchange_probes=1;
+          #|int numeric_constant_probes=1;
           #|int math_inline_probes=1;
           #|int integer_introspection_probes=1;
           #|int prefix=9;
