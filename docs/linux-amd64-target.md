@@ -476,7 +476,8 @@ kimicc-generated function pointer. A pthread probe links with `-pthread`, starts
 a `pthread_create` callback, joins it, and checks pointer/result transport
 through the libc thread API. A POSIX runtime probe covers `mkstemp`, `write`,
 `lseek`, `read`, `fstat`, `clock_gettime`, `opendir`, `readdir`, `closedir`,
-`close`, and `unlink` through the Ubuntu glibc declarations. The script also
+`mmap`, `munmap`, `pipe`, `poll`, `select`, `close`, and `unlink` through the
+Ubuntu glibc declarations. The script also
 checks that the built compiler returns a nonzero status for an invalid
 Linux/amd64 translation unit, so compiler failures are not masked by the test
 harness.

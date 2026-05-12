@@ -2346,10 +2346,14 @@ fi
 cat > "$posix_runtime_source_path" <<'C'
 #include <dirent.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
+#include <sys/select.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -2359,6 +2363,14 @@ int main(void) {
   char buf[8];
   struct stat st;
   struct timespec ts;
+  size_t length = 4096;
+  void *mem;
+  char *mapped;
+  int fds[2];
+  struct pollfd pfd;
+  fd_set readfds;
+  struct timeval tv;
+  char c = 0;
   DIR *dir;
   if (fd < 0) return 11;
   if (write(fd, "abc", 3) != 3) return 12;
@@ -2368,10 +2380,32 @@ int main(void) {
   if (strcmp(buf, "abc") != 0) return 15;
   if (fstat(fd, &st) != 0 || st.st_size != 3) return 16;
   if (clock_gettime(CLOCK_REALTIME, &ts) != 0) return 17;
+  mem = mmap(0, length, PROT_READ | PROT_WRITE,
+             MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (mem == MAP_FAILED) return 18;
+  mapped = (char *)mem;
+  strcpy(mapped, "abc");
+  if (strcmp(mapped, "abc") != 0) return 19;
+  if (munmap(mem, length) != 0) return 20;
+  if (pipe(fds) != 0) return 21;
+  if (write(fds[1], "z", 1) != 1) return 22;
+  pfd.fd = fds[0];
+  pfd.events = POLLIN;
+  pfd.revents = 0;
+  if (poll(&pfd, 1, 0) != 1 || !(pfd.revents & POLLIN)) return 23;
+  FD_ZERO(&readfds);
+  FD_SET(fds[0], &readfds);
+  tv.tv_sec = 0;
+  tv.tv_usec = 0;
+  if (select(fds[0] + 1, &readfds, 0, 0, &tv) != 1) return 24;
+  if (!FD_ISSET(fds[0], &readfds)) return 25;
+  if (read(fds[0], &c, 1) != 1 || c != 'z') return 26;
+  close(fds[0]);
+  close(fds[1]);
   dir = opendir("/tmp");
-  if (!dir) return 18;
-  if (!readdir(dir)) return 19;
-  if (closedir(dir) != 0) return 20;
+  if (!dir) return 27;
+  if (!readdir(dir)) return 28;
+  if (closedir(dir) != 0) return 29;
   close(fd);
   unlink(path);
   return 42;
