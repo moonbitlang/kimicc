@@ -2366,6 +2366,7 @@ cat > "$posix_runtime_source_path" <<'C'
 #include <sys/select.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -2382,6 +2383,8 @@ int main(void) {
   struct pollfd pfd;
   fd_set readfds;
   struct timeval tv;
+  pid_t child;
+  int wait_status = 0;
   char c = 0;
   DIR *dir;
   if (fd < 0) return 11;
@@ -2414,10 +2417,16 @@ int main(void) {
   if (read(fds[0], &c, 1) != 1 || c != 'z') return 26;
   close(fds[0]);
   close(fds[1]);
+  child = fork();
+  if (child < 0) return 27;
+  if (child == 0) _exit(42);
+  if (waitpid(child, &wait_status, 0) != child) return 28;
+  if (!WIFEXITED(wait_status) || WEXITSTATUS(wait_status) != 42) return 29;
+  if (getpid() <= 1) return 30;
   dir = opendir("/tmp");
-  if (!dir) return 27;
-  if (!readdir(dir)) return 28;
-  if (closedir(dir) != 0) return 29;
+  if (!dir) return 31;
+  if (!readdir(dir)) return 32;
+  if (closedir(dir) != 0) return 33;
   close(fd);
   unlink(path);
   return 42;

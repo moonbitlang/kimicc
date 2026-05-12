@@ -483,8 +483,9 @@ declaration. A pthread probe links with `-pthread`, starts a `pthread_create`
 callback, joins it, and checks pointer/result transport through the libc thread
 API. A POSIX runtime probe covers `mkstemp`, `write`,
 `lseek`, `read`, `fstat`, `clock_gettime`, `opendir`, `readdir`, `closedir`,
-`mmap`, `munmap`, `pipe`, `poll`, `select`, `close`, and `unlink` through the
-Ubuntu glibc declarations. The script also checks that a strong clang-built
+`mmap`, `munmap`, `pipe`, `poll`, `select`, `fork`, `_exit`, `waitpid`,
+`getpid`, `close`, and `unlink` through the Ubuntu glibc declarations. The
+script also checks that a strong clang-built
 function or global definition overrides a kimicc-built ELF weak definition at
 link time, and that undefined weak function/global references link and resolve
 to null in the generated PIE binary. It also
