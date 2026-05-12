@@ -136,17 +136,24 @@ fn Parser::is_type_name_start(self : Parser) -> Bool {
     | Static
     | Extern
     | Inline => true
-    Ident("_Float16")
-    | Ident("__int128")
-    | Ident("__int128_t")
-    | Ident("__uint128_t")
-    | Ident("_Atomic")
-    | Ident("_Alignas")
-    | Ident("alignas")
-    | Ident("__typeof")
-    | Ident("__typeof__")
-    | Ident("typeof") => true
-    Ident(name) => self.typedefs.contains(name)
+    Ident(name) =>
+      name == "_Float16" ||
+      name == "__float128" ||
+      name == "_Float128" ||
+      is_extended_float_type_name(name) ||
+      name == "__int128" ||
+      name == "__int128_t" ||
+      name == "__uint128_t" ||
+      name == "_BitInt" ||
+      name == "_Complex" ||
+      name == "__complex__" ||
+      name == "_Atomic" ||
+      name == "_Alignas" ||
+      name == "alignas" ||
+      name == "__typeof" ||
+      name == "__typeof__" ||
+      name == "typeof" ||
+      self.typedefs.contains(name)
     _ => false
   }
 }

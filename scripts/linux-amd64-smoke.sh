@@ -2080,6 +2080,23 @@ int function_pointer_param_conversions(void) {
   return 0;
 }
 
+_Float32 add_float32_alias(_Float32 x) { return x + 0.5f; }
+_Float64 add_float64_alias(_Float64 x) { return x + 0.75; }
+_Float32x add_float32x_alias(_Float32x x) { return x + 1.25; }
+
+int binary_float_aliases(void) {
+  _Float32 f = 1.5f;
+  _Float64 d = 2.25;
+  _Float32x x = 3.5;
+  if (sizeof(_Float32) != 4 || __alignof__(_Float32) != 4) return 599;
+  if (sizeof(_Float64) != 8 || __alignof__(_Float64) != 8) return 600;
+  if (sizeof(_Float32x) != 8 || __alignof__(_Float32x) != 8) return 601;
+  if (add_float32_alias(f) != 2.0f) return 602;
+  if (add_float64_alias(d) != 3.0) return 603;
+  if (add_float32x_alias(x) != 4.75) return 604;
+  return 0;
+}
+
 int main(void) {
   struct Pair p;
   struct DPair q;
@@ -2160,6 +2177,7 @@ int main(void) {
          gnu_noop_attributes() +
          alignof_selection() +
          function_pointer_param_conversions() +
+         binary_float_aliases() +
          global_cast_pointer_initializers() +
          offsetof_designators() +
          var_pair(0, make_pair(0, 1)) +
