@@ -2093,10 +2093,13 @@ test "generate linux amd64 emits weak symbol bindings" {
 ///|
 test "generate linux amd64 loads external declaration addresses through GOT" {
   let source =
+    #|extern int strong_external(void);
     #|extern int weak_missing(void) __attribute__((weak));
+    #|extern int strong_global;
     #|extern int weak_global_missing __attribute__((weak));
     #|int main(void) {
-    #|  return (weak_missing ? 1 : 0) + (&weak_global_missing ? 2 : 0);
+    #|  return (strong_external ? 1 : 0) + (weak_missing ? 2 : 0) +
+    #|    (&strong_global ? 4 : 0) + (&weak_global_missing ? 8 : 0);
     #|}
   let prog = @parser.parse(source)
   let target = match @target.Target::parse("linux-amd64") {
@@ -2105,7 +2108,15 @@ test "generate linux amd64 loads external declaration addresses through GOT" {
   }
   let assembly = @codegen.generate_assembly_for_target(prog, target)
   inspect(
+    assembly.contains("\tmov\trax, QWORD PTR [rip + strong_external@GOTPCREL]"),
+    content="true",
+  )
+  inspect(
     assembly.contains("\tmov\trax, QWORD PTR [rip + weak_missing@GOTPCREL]"),
+    content="true",
+  )
+  inspect(
+    assembly.contains("\tmov\trax, QWORD PTR [rip + strong_global@GOTPCREL]"),
     content="true",
   )
   inspect(

@@ -477,9 +477,11 @@ v-function smoke without claiming complete `va_list` interoperability. Another
 linked libc runtime probe covers ordinary calls through glibc declarations such
 as `strtol`, `isdigit`, `tolower`, `snprintf`, `strerror`, `sqrt`, `setjmp`, and
 `longjmp`, and `qsort`; the `qsort` case checks a glibc callback into a
-kimicc-generated function pointer. A pthread probe links with `-pthread`, starts
-a `pthread_create` callback, joins it, and checks pointer/result transport
-through the libc thread API. A POSIX runtime probe covers `mkstemp`, `write`,
+kimicc-generated function pointer. The same libc probe also calls `strlen`
+through a kimicc-generated function pointer loaded from the external glibc
+declaration. A pthread probe links with `-pthread`, starts a `pthread_create`
+callback, joins it, and checks pointer/result transport through the libc thread
+API. A POSIX runtime probe covers `mkstemp`, `write`,
 `lseek`, `read`, `fstat`, `clock_gettime`, `opendir`, `readdir`, `closedir`,
 `mmap`, `munmap`, `pipe`, `poll`, `select`, `close`, and `unlink` through the
 Ubuntu glibc declarations. The script also checks that a strong clang-built

@@ -2295,6 +2295,7 @@ int main(void) {
   char buf[64];
   char *end = 0;
   int values[5] = { 5, 1, 4, 2, 3 };
+  size_t (*strlen_ptr)(const char *) = strlen;
   long v = strtol("123x", &end, 10);
   if (v != 123 || *end != 'x') return 11;
   if (!isdigit('7') || tolower('A') != 'a') return 12;
@@ -2307,6 +2308,7 @@ int main(void) {
   for (int i = 0; i < 5; i++) {
     if (values[i] != i + 1) return 16 + i;
   }
+  if (strlen_ptr("abcd") != 4) return 21;
   return 42;
 }
 C
