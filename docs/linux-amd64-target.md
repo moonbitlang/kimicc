@@ -446,11 +446,16 @@ Linux assembly, assembles an ELF object, links a Linux executable, checks that
 the executable exits with code 42, and compiles an additional common
 system-header probe using the container's Linux include directories, including
 typedefs and macros from `stddef.h`, `stdint.h`, `stdalign.h`, `stdbool.h`,
-`stdarg.h`, `limits.h`, and `float.h`. Before compiling that probe, it also
-preprocesses the same source and checks that libc typedefs such as `uint8_t`,
-`uintptr_t`, `size_t`, `ptrdiff_t`, and `va_list` survived the Clang-resource
-`#include_next` chain. The compiled probe also checks representative unsigned
-max-value macros such as `UINTPTR_MAX` and `SIZE_MAX` in `_Static_assert`
+`stdarg.h`, `stdio.h`, `stdlib.h`, `string.h`, `unistd.h`, `errno.h`,
+`fcntl.h`, `time.h`, `sys/types.h`, `sys/stat.h`, `sys/socket.h`, `sys/uio.h`,
+`poll.h`, `signal.h`, `fpu_control.h`, `limits.h`, and `float.h`. Before
+compiling that probe, it also preprocesses the same source and checks that
+libc typedefs such as `uint8_t`, `uintptr_t`, `size_t`, `ptrdiff_t`, and
+`va_list` survived the Clang-resource `#include_next` chain. The compiled probe
+also checks representative unsigned max-value macros such as `UINTPTR_MAX` and
+`SIZE_MAX`, common Linux macros such as `EINVAL`, `STDOUT_FILENO`, `F_GETFL`,
+`AF_INET`, `POLLIN`, and `SIGTERM`, and representative complete system types
+such as `struct stat`, `struct iovec`, and `struct pollfd` in `_Static_assert`
 expressions. A separate linked probe passes the generated `va_list` state to
 glibc `vsnprintf`, covering a real libc v-function smoke without claiming
 complete `va_list` interoperability. The script also checks that the built
