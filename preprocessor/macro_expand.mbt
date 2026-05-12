@@ -219,6 +219,8 @@ fn pp_is_identifier_query(name : String) -> Bool {
     | "_Float16"
     | "__float128"
     | "_Float128"
+    | "_Complex"
+    | "__complex__"
     | "__int128"
     | "__int128_t"
     | "__uint128_t" => false
