@@ -474,6 +474,12 @@ C
 expect_compile_failure "unsupported vector_size smoke source" "$bad_source_path"
 
 cat > "$bad_source_path" <<'C'
+typedef float v4f __attribute__((mode(V4SF)));
+int main(void) { return 0; }
+C
+expect_compile_failure "unsupported vector mode smoke source" "$bad_source_path"
+
+cat > "$bad_source_path" <<'C'
 long double unsupported_long_double;
 int main(void) { return unsupported_long_double == 0.0L; }
 C
