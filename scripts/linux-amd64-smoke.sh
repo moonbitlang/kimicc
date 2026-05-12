@@ -2441,6 +2441,7 @@ fi
 cat > "$posix_runtime_source_path" <<'C'
 #include <dirent.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -2458,13 +2459,17 @@ int main(void) {
   char path[] = "/tmp/kimicc-posix-runtime-XXXXXX";
   int fd = mkstemp(path);
   char buf[8];
+  char cwd[PATH_MAX];
   struct stat st;
+  struct stat path_st;
   struct timespec ts;
   size_t length = 4096;
   void *mem;
   char *mapped;
   int fds[2];
   int spair[2];
+  int dup_fd;
+  int fd_flags;
   struct pollfd pfd;
   fd_set readfds;
   struct timeval tv;
@@ -2479,6 +2484,23 @@ int main(void) {
   buf[3] = 0;
   if (strcmp(buf, "abc") != 0) return 15;
   if (fstat(fd, &st) != 0 || st.st_size != 3) return 16;
+  if (!getcwd(cwd, sizeof(cwd))) return 64;
+  if (access(path, F_OK) != 0) return 65;
+  if (stat(path, &path_st) != 0 || path_st.st_size != 3) return 66;
+  dup_fd = dup(fd);
+  if (dup_fd < 0) return 67;
+  if (lseek(dup_fd, 0, SEEK_SET) != 0) return 68;
+  if (read(dup_fd, buf, 3) != 3) return 69;
+  buf[3] = 0;
+  if (strcmp(buf, "abc") != 0) return 70;
+  fd_flags = fcntl(dup_fd, F_GETFD);
+  if (fd_flags < 0) return 71;
+  if (fcntl(dup_fd, F_SETFD, fd_flags | FD_CLOEXEC) != 0) return 72;
+  fd_flags = fcntl(dup_fd, F_GETFD);
+  if (fd_flags < 0 || !(fd_flags & FD_CLOEXEC)) return 73;
+  if (close(dup_fd) != 0) return 74;
+  if (chdir("/tmp") != 0) return 75;
+  if (chdir(cwd) != 0) return 76;
   if (clock_gettime(CLOCK_REALTIME, &ts) != 0) return 17;
   mem = mmap(0, length, PROT_READ | PROT_WRITE,
              MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
