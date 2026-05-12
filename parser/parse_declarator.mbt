@@ -42,6 +42,7 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
   let mut has_float = false
   let mut has_float16 = false
   let mut has_float128 = false
+  let mut has_float64x = false
   let mut has_double = false
   let mut has_int128 = false
   let mut has_unsigned = false
@@ -275,6 +276,23 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
             self.advance()
             saw_primitive = true
             consumed = true
+          } else if name == "_Float32" {
+            has_float = true
+            self.advance()
+            saw_primitive = true
+            consumed = true
+          } else if name == "_Float64" || name == "_Float32x" {
+            has_double = true
+            self.advance()
+            saw_primitive = true
+            consumed = true
+          } else if name == "_Float64x" {
+            has_float64x = true
+            self.advance()
+            saw_primitive = true
+            consumed = true
+          } else if is_unsupported_extended_float_type(name) {
+            abort(name + " types are not supported")
           } else if name == "_BitInt" {
             abort("_BitInt types are not supported")
           } else if name == "_Complex" || name == "__complex__" {
@@ -315,6 +333,8 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     spec.base_type = Float16
   } else if has_float128 {
     spec.base_type = Float128
+  } else if has_float64x {
+    spec.base_type = LongDouble
   } else if has_float {
     spec.base_type = Float
   } else if has_double && long_count == 1 {
@@ -362,6 +382,30 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     spec.base_type = Atomic(spec.base_type)
   }
   spec
+}
+
+///|
+fn is_unsupported_extended_float_type(name : String) -> Bool {
+  match name {
+    "_Decimal32" | "_Decimal64" | "_Decimal128" | "__bf16" | "__ibm128" => true
+    _ => false
+  }
+}
+
+///|
+fn is_extended_float_type_name(name : String) -> Bool {
+  match name {
+    "_Float32"
+    | "_Float64"
+    | "_Float32x"
+    | "_Float64x"
+    | "_Decimal32"
+    | "_Decimal64"
+    | "_Decimal128"
+    | "__bf16"
+    | "__ibm128" => true
+    _ => false
+  }
 }
 
 ///|

@@ -462,6 +462,12 @@ C
 expect_compile_failure "unsupported _BitInt smoke source" "$bad_source_path"
 
 cat > "$bad_source_path" <<'C'
+_Decimal32 unsupported_decimal32;
+int main(void) { return 0; }
+C
+expect_compile_failure "unsupported _Decimal32 smoke source" "$bad_source_path"
+
+cat > "$bad_source_path" <<'C'
 long double unsupported_long_double;
 int main(void) { return unsupported_long_double == 0.0L; }
 C

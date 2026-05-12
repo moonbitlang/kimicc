@@ -85,6 +85,21 @@ test "parse unsupported float128 external declaration as placeholder type" {
 }
 
 ///|
+test "parse standard extended float spellings used by glibc math" {
+  let source = "extern _Float32 f32(_Float64, _Float32x, _Float64x);"
+  let prog = @parser.parse(source)
+  match prog.decls[0] {
+    {
+      ret: Float,
+      name: "f32",
+      params: [{ ty: Double, .. }, { ty: Double, .. }, { ty: LongDouble, .. }],
+      ..,
+    } => ()
+    _ => fail("Expected extended float aliases")
+  }
+}
+
+///|
 test "parse long double external declaration as distinct type" {
   let source = "extern long double fabsl(long double);"
   let prog = @parser.parse(source)

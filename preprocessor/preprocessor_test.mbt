@@ -591,8 +591,21 @@ test "is identifier reflects parser keywords and extensions" {
     #|#else
     #|int extensions = 0;
     #|#endif
+    #|#if !__is_identifier(_Float32) && !__is_identifier(_Float64) && !__is_identifier(_Float32x) && !__is_identifier(_Float64x)
+    #|int binary_float_extensions = 1;
+    #|#else
+    #|int binary_float_extensions = 0;
+    #|#endif
+    #|#if !__is_identifier(_Decimal32) && !__is_identifier(_Decimal64) && !__is_identifier(_Decimal128) && !__is_identifier(__bf16) && !__is_identifier(__ibm128)
+    #|int unsupported_float_extensions = 1;
+    #|#else
+    #|int unsupported_float_extensions = 0;
+    #|#endif
   let text = expect_preprocess(source)
-  inspect(text, content="int c_keywords=1;\nint extensions=1;\n")
+  inspect(
+    text,
+    content="int c_keywords=1;\nint extensions=1;\nint binary_float_extensions=1;\nint unsupported_float_extensions=1;\n",
+  )
 }
 
 ///|
