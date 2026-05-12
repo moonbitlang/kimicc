@@ -505,9 +505,10 @@ API. The main linked smoke source also checks that a hidden-visibility GNU
 attribute, GNU function/global aliases, and GNU function/global sections are
 reflected in emitted Linux/amd64 assembly. A POSIX runtime probe covers
 `mkstemp`, `write`, `lseek`, `read`, `fstat`, `stat`, `access`, `dup`,
-`fcntl`, `getcwd`, `chdir`, `clock_gettime`, `opendir`, `readdir`, `closedir`,
-`mmap`, `munmap`, `pipe`, `poll`, `select`, `socketpair`, `fork`, `_exit`,
-`execlp`, `waitpid`, `getpid`, `close`, and `unlink` through the Ubuntu glibc
+`fcntl`, `link`, `symlink`, `readlink`, `rename`, `chmod`, `mkdir`, `rmdir`,
+`getcwd`, `chdir`, `clock_gettime`, `opendir`, `readdir`, `closedir`, `mmap`,
+`munmap`, `pipe`, `poll`, `select`, `socketpair`, `fork`, `_exit`, `execlp`,
+`waitpid`, `getpid`, `close`, and `unlink` through the Ubuntu glibc
 declarations. A separate linked probe checks that GNU constructor and
 destructor functions run through `.init_array`/`.fini_array`. The
 script also checks that a strong clang-built

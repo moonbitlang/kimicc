@@ -2451,6 +2451,7 @@ cat > "$posix_runtime_source_path" <<'C'
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <sys/types.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -2460,9 +2461,15 @@ int main(void) {
   int fd = mkstemp(path);
   char buf[8];
   char cwd[PATH_MAX];
+  char hard_path[PATH_MAX];
+  char sym_path[PATH_MAX];
+  char renamed_path[PATH_MAX];
+  char dir_path[PATH_MAX];
+  char link_buf[PATH_MAX];
   struct stat st;
   struct stat path_st;
   struct timespec ts;
+  ssize_t link_len;
   size_t length = 4096;
   void *mem;
   char *mapped;
@@ -2487,6 +2494,26 @@ int main(void) {
   if (!getcwd(cwd, sizeof(cwd))) return 64;
   if (access(path, F_OK) != 0) return 65;
   if (stat(path, &path_st) != 0 || path_st.st_size != 3) return 66;
+  if (snprintf(hard_path, sizeof(hard_path), "%s.hard", path) <= 0) return 80;
+  if (snprintf(sym_path, sizeof(sym_path), "%s.sym", path) <= 0) return 81;
+  if (snprintf(renamed_path, sizeof(renamed_path), "%s.renamed", path) <= 0) {
+    return 82;
+  }
+  if (snprintf(dir_path, sizeof(dir_path), "%s.dir", path) <= 0) return 83;
+  if (link(path, hard_path) != 0) return 84;
+  if (stat(hard_path, &path_st) != 0 || path_st.st_size != 3) return 85;
+  if (symlink(path, sym_path) != 0) return 86;
+  link_len = readlink(sym_path, link_buf, sizeof(link_buf) - 1);
+  if (link_len <= 0) return 87;
+  link_buf[link_len] = 0;
+  if (strcmp(link_buf, path) != 0) return 88;
+  if (rename(hard_path, renamed_path) != 0) return 89;
+  if (access(renamed_path, F_OK) != 0) return 90;
+  if (chmod(renamed_path, S_IRUSR | S_IWUSR) != 0) return 91;
+  if (mkdir(dir_path, S_IRWXU) != 0) return 92;
+  if (rmdir(dir_path) != 0) return 93;
+  if (unlink(sym_path) != 0) return 94;
+  if (unlink(renamed_path) != 0) return 95;
   dup_fd = dup(fd);
   if (dup_fd < 0) return 67;
   if (lseek(dup_fd, 0, SEEK_SET) != 0) return 68;
