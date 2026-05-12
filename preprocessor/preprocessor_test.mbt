@@ -55,6 +55,8 @@ test "undef predefined keeps only standard macro baseline" {
   assert_true(text.contains("#define __STDC_HOSTED__ 1\n"))
   assert_true(!text.contains("#define __GNUC__"))
   assert_true(!text.contains("#define __clang__"))
+  assert_true(!text.contains("#define __clang_major__"))
+  assert_true(!text.contains("#define __VERSION__"))
   assert_true(!text.contains("#define __LP64__"))
   assert_true(!text.contains("#define __DATE__"))
   assert_true(!text.contains("#define __has_builtin"))
@@ -301,7 +303,14 @@ test "linux amd64 predefined macros cover system header probes" {
     #|#else
     #|int int64_probes = 2;
     #|#endif
+    #|#if defined(__clang__) && __clang_major__ == 18 && __clang_minor__ == 1 && __clang_patchlevel__ == 3
+    #|int clang_version_probes = 1;
+    #|#else
+    #|int clang_version_probes = 2;
+    #|#endif
     #|int prefix = __USER_LABEL_PREFIX__ 9;
+    #|const char *clang_version = __clang_version__;
+    #|const char *compiler_version = __VERSION__;
     #|__WINT_TYPE__ wint_value;
     #|__INT64_TYPE__ int64_value;
     #|__UINT64_TYPE__ uint64_value;
@@ -315,7 +324,10 @@ test "linux amd64 predefined macros cover system header probes" {
           #|int probes=1;
           #|int float_probes=1;
           #|int int64_probes=1;
+          #|int clang_version_probes=1;
           #|int prefix=9;
+          #|const char*clang_version="kimicc clang-compatible preprocessor";
+          #|const char*compiler_version="kimicc";
           #|unsigned int wint_value;
           #|long int int64_value;
           #|long unsigned int uint64_value;

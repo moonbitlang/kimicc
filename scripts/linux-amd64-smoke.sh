@@ -1088,6 +1088,14 @@ int target_predefines(void) {
 #else
   return 511;
 #endif
+#if defined(__clang__) && __clang_major__ == 18 && __clang_minor__ == 1 && __clang_patchlevel__ == 3
+  target = target + 0;
+#else
+  return 575;
+#endif
+  const char *clang_version = __clang_version__;
+  const char *compiler_version = __VERSION__;
+  if (!clang_version[0] || !compiler_version[0]) return 576;
 #if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_return_address) && __has_builtin(__builtin_dynamic_object_size) && __has_builtin(__builtin_flt_rounds) && __has_builtin(__atomic_load_n) && __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p) && __has_builtin(__builtin_classify_type)
   target = target + 0;
 #else

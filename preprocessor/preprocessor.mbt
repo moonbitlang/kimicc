@@ -90,6 +90,14 @@ fn Preprocessor::seed_common_target_macros(self : Preprocessor) -> Unit {
   self.seed_macro("__GNUC_MINOR__", "2")
   self.seed_macro("__GNUC_PATCHLEVEL__", "1")
   self.seed_macro("__clang__", "1")
+  self.seed_macro("__clang_major__", "18")
+  self.seed_macro("__clang_minor__", "1")
+  self.seed_macro("__clang_patchlevel__", "3")
+  self.seed_macro(
+    "__clang_version__",
+    pp_quote_string("kimicc clang-compatible preprocessor"),
+  )
+  self.seed_macro("__VERSION__", pp_quote_string("kimicc"))
   self.seed_macro("__LP64__", "1")
   self.seed_macro("_LP64", "1")
   self.seed_macro("__ORDER_LITTLE_ENDIAN__", "1234")
