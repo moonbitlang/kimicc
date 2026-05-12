@@ -122,6 +122,17 @@ docker run --rm --platform linux/amd64 \
   bash scripts/linux-amd64-smoke.sh
 ```
 
+For repeated local runs, build the cached smoke image once:
+
+```bash
+scripts/build-linux-amd64-smoke-image.sh
+scripts/linux-amd64-smoke.sh
+```
+
+`scripts/linux-amd64-smoke.sh` automatically uses
+`kimicc-linux-amd64-smoke:ubuntu24.04` when that image exists locally; set
+`KIMICC_LINUX_AMD64_SMOKE_IMAGE` to use another image tag.
+
 See [`docs/linux-amd64-target.md`](docs/linux-amd64-target.md) for current
 coverage, gaps, and the Docker test workflow.
 

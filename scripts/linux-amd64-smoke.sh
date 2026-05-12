@@ -2,6 +2,8 @@
 set -euo pipefail
 
 repo="$(cd "${KIMICC_REPO:-$(pwd)}" && pwd)"
+default_smoke_image="kimicc-linux-amd64-smoke:ubuntu24.04"
+smoke_image="${KIMICC_LINUX_AMD64_SMOKE_IMAGE:-}"
 
 host_os="$(uname -s)"
 host_arch="$(uname -m)"
@@ -11,12 +13,19 @@ if { [ "$host_os" != "Linux" ] || { [ "$host_arch" != "x86_64" ] && [ "$host_arc
     echo "linux-amd64 smoke requires Docker on non-linux/amd64 hosts" >&2
     exit 1
   fi
+  if [ -z "$smoke_image" ]; then
+    if docker image inspect "$default_smoke_image" >/dev/null 2>&1; then
+      smoke_image="$default_smoke_image"
+    else
+      smoke_image="ubuntu:24.04"
+    fi
+  fi
   exec docker run --rm --platform linux/amd64 \
     -e KIMICC_LINUX_AMD64_SMOKE_IN_DOCKER=1 \
     -e KIMICC_REPO=/work \
     -v "$repo:/work" \
     -w /work \
-    ubuntu:24.04 \
+    "$smoke_image" \
     bash scripts/linux-amd64-smoke.sh
 fi
 

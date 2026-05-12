@@ -409,6 +409,11 @@ docker run --rm --platform linux/amd64 \
 On a non-Linux/amd64 host with Docker installed, the same script can also be
 run directly; it re-execs itself in the `ubuntu:24.04` amd64 container.
 
+For repeated local runs, build `kimicc-linux-amd64-smoke:ubuntu24.04` once with
+`scripts/build-linux-amd64-smoke-image.sh`; the smoke script automatically uses
+that image when it exists locally. Set `KIMICC_LINUX_AMD64_SMOKE_IMAGE` to use a
+different image tag.
+
 The script copies the repository to a temporary directory inside the container,
 installs missing tools when needed, runs the target/codegen/driver/preprocessor
 tests, then exercises the built native `cmd/main` executable directly. It emits
