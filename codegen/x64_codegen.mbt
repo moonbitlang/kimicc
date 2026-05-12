@@ -159,6 +159,7 @@ fn x64_is_int128_type(ty : @parser.Type) -> Bool {
 fn x64_reject_unsupported_scalar(ty : @parser.Type) -> Unit {
   match x64_core_type(ty) {
     Float16 => abort("_Float16 ABI lowering is not supported")
+    Float128 => abort("__float128 ABI lowering is not supported")
     LongDouble => abort("long double x87 ABI lowering is not supported")
     Pointer(_) | FuncPtr(_, _, _) => ()
     Array(elem, _) | Atomic(elem) | Aligned(elem, _) =>
@@ -282,7 +283,7 @@ fn X64Codegen::type_size(self : X64Codegen, ty : @parser.Type) -> Int {
         SShort | UShort => 2
         SInt | UInt | Float => 4
         Float16 => abort("_Float16 size is not supported")
-        LongDouble => 16
+        Float128 | LongDouble => 16
         SLong
         | ULong
         | SLongLong
@@ -358,7 +359,7 @@ fn X64Codegen::type_align(self : X64Codegen, ty : @parser.Type) -> Int {
         SShort | UShort => 2
         SInt | UInt | Float => 4
         Float16 => abort("_Float16 alignment is not supported")
-        LongDouble => 16
+        Float128 | LongDouble => 16
         SLong
         | ULong
         | SLongLong
@@ -565,6 +566,7 @@ fn X64Codegen::emit_load_indirect(self : X64Codegen, ty : @parser.Type) -> Unit 
   match x64_core_type(ty) {
     Float => self.emit("\tmovss\txmm0, DWORD PTR [rax]")
     Float16 => abort("_Float16 load is not supported")
+    Float128 => abort("__float128 load is not supported")
     LongDouble => abort("long double x87 load is not supported")
     Double => self.emit("\tmovsd\txmm0, QWORD PTR [rax]")
     Bool | UChar => self.emit("\tmovzx\trax, BYTE PTR [rax]")
@@ -593,6 +595,7 @@ fn X64Codegen::emit_store_indirect(
   match x64_core_type(ty) {
     Float => self.emit("\tmovss\tDWORD PTR [r10], xmm0")
     Float16 => abort("_Float16 store is not supported")
+    Float128 => abort("__float128 store is not supported")
     LongDouble => abort("long double x87 store is not supported")
     Double => self.emit("\tmovsd\tQWORD PTR [r10], xmm0")
     Bool | SChar | UChar => self.emit("\tmov\tBYTE PTR [r10], al")
@@ -673,7 +676,7 @@ fn x64_merge_aggregate_class(
 fn x64_scalar_aggregate_class(ty : @parser.Type) -> X64AggregateClass? {
   match x64_core_type(ty) {
     Float | Double => Some(SseClass)
-    LongDouble | Void | Array(_, _) | Struct(_) | Union(_) => None
+    Float128 | LongDouble | Void | Array(_, _) | Struct(_) | Union(_) => None
     _ => Some(IntClass)
   }
 }
@@ -8190,13 +8193,16 @@ fn X64Codegen::emit_global_scalar(
           self.emit_global_int_by_size(8, 0L)
         }
         Float | Double => self.emit_global_float(ty, value.to_double())
+        Float128 => abort("__float128 global initializer is not supported")
         LongDouble => abort("long double global initializer is not supported")
         Struct(_) | Union(_) | Array(_, _) =>
           self.emit("\t.zero\t" + self.type_size(ty).to_string())
         _ => self.emit_global_int_by_size(8, value)
       }
     FloatLiteral(value) =>
-      if x64_core_type(ty) == LongDouble {
+      if x64_core_type(ty) == Float128 {
+        abort("__float128 global initializer is not supported")
+      } else if x64_core_type(ty) == LongDouble {
         abort("long double global initializer is not supported")
       } else if x64_is_fp_type(ty) {
         self.emit_global_float(ty, value)

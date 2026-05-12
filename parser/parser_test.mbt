@@ -75,6 +75,16 @@ test "parse unsupported float16 external declaration as placeholder type" {
 }
 
 ///|
+test "parse unsupported float128 external declaration as placeholder type" {
+  let source = "extern __float128 fabsq(__float128);"
+  let prog = @parser.parse(source)
+  match prog.decls[0] {
+    { ret: Float128, name: "fabsq", params: [{ ty: Float128, .. }], .. } => ()
+    _ => fail("Expected __float128 placeholder function declaration")
+  }
+}
+
+///|
 test "parse long double external declaration as distinct type" {
   let source = "extern long double fabsl(long double);"
   let prog = @parser.parse(source)

@@ -41,6 +41,7 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
   let mut long_count = 0
   let mut has_float = false
   let mut has_float16 = false
+  let mut has_float128 = false
   let mut has_double = false
   let mut has_int128 = false
   let mut has_unsigned = false
@@ -269,6 +270,11 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
             self.advance()
             saw_primitive = true
             consumed = true
+          } else if name == "__float128" || name == "_Float128" {
+            has_float128 = true
+            self.advance()
+            saw_primitive = true
+            consumed = true
           } else if !saw_primitive &&
             !saw_typedef_name &&
             self.typedefs.contains(name) {
@@ -303,6 +309,8 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     spec.base_type = Bool
   } else if has_float16 {
     spec.base_type = Float16
+  } else if has_float128 {
+    spec.base_type = Float128
   } else if has_float {
     spec.base_type = Float
   } else if has_double && long_count == 1 {

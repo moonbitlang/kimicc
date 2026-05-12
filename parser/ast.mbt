@@ -20,6 +20,7 @@ pub(all) enum Type {
   UInt128
   Float
   Float16
+  Float128
   Double
   LongDouble
   Struct(String)
@@ -62,6 +63,7 @@ pub impl Show for Type with to_string(self) {
     UInt128 => "UInt128"
     Float => "Float"
     Float16 => "Float16"
+    Float128 => "Float128"
     Double => "Double"
     LongDouble => "LongDouble"
     Struct(name) => "Struct(" + name + ")"
@@ -158,6 +160,7 @@ pub fn Type::size(self : Type) -> Int {
     SShort | UShort => 2
     SInt | UInt | Float => 4
     Float16 => abort("_Float16 size is not supported")
+    Float128 => abort("__float128 size is not supported")
     SLong
     | ULong
     | SLongLong
@@ -191,6 +194,7 @@ pub fn Type::align(self : Type) -> Int {
     SShort | UShort => 2
     SInt | UInt | Float => 4
     Float16 => abort("_Float16 alignment is not supported")
+    Float128 => abort("__float128 alignment is not supported")
     SLong
     | ULong
     | SLongLong

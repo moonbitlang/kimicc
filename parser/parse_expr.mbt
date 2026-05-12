@@ -599,6 +599,7 @@ fn classify_type_code(ty : Type) -> Int64 {
     Bool => 4
     Float | Double | LongDouble => 8
     Float16 => abort("_Float16 classification is not supported")
+    Float128 => abort("__float128 classification is not supported")
     Pointer(_) | Array(_, _) | FuncPtr(_, _, _) => 5
     Struct(_) => 12
     Union(_) => 13

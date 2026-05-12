@@ -217,6 +217,8 @@ fn pp_is_identifier_query(name : String) -> Bool {
     | "__auto_type"
     | "__builtin_va_list"
     | "_Float16"
+    | "__float128"
+    | "_Float128"
     | "__int128"
     | "__int128_t"
     | "__uint128_t" => false

@@ -326,6 +326,8 @@ fn Parser::is_stmt_decl_start(self : Parser) -> Bool {
       name == "__int128_t" ||
       name == "__uint128_t" ||
       name == "_Float16" ||
+      name == "__float128" ||
+      name == "_Float128" ||
       name == "__builtin_va_list" ||
       name == "__typeof" ||
       name == "__typeof__" ||

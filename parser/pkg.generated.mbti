@@ -246,6 +246,7 @@ pub(all) enum Type {
   UInt128
   Float
   Float16
+  Float128
   Double
   LongDouble
   Struct(String)
