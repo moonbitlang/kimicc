@@ -2722,11 +2722,25 @@ int main(void) {
       sizeof(random_bytes)) {
     return 163;
   }
+  if (ftruncate(fd, length) != 0) return 186;
+  mem = mmap(0, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  if (mem == MAP_FAILED) return 187;
+  mapped = (char *)mem;
+  strcpy(mapped, "abc");
+  if (msync(mem, length, MS_SYNC) != 0) return 188;
+  if (munmap(mem, length) != 0) return 189;
+  if (ftruncate(fd, 3) != 0) return 190;
+  if (lseek(fd, 0, SEEK_SET) != 0) return 191;
+  if (read(fd, buf, 3) != 3) return 192;
+  buf[3] = 0;
+  if (strcmp(buf, "abc") != 0) return 193;
   mem = mmap(0, length, PROT_READ | PROT_WRITE,
              MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (mem == MAP_FAILED) return 18;
   mapped = (char *)mem;
   strcpy(mapped, "abc");
+  if (madvise(mem, length, MADV_NORMAL) != 0) return 194;
+  if (mprotect(mem, length, PROT_READ) != 0) return 195;
   if (strcmp(mapped, "abc") != 0) return 19;
   if (munmap(mem, length) != 0) return 20;
   if (pipe(fds) != 0) return 21;
