@@ -357,6 +357,14 @@ glibc typedefs and macros from the probed Ubuntu 24.04 headers can be
 preprocessed and compiled, but it is not a complete libc compatibility claim.
 The existing Darwin ARM64 Mach-O object writer and JIT remain Darwin-specific.
 
+The Linux/amd64 preprocessor also intentionally does not seed Clang macros that
+would advertise unsupported frontend or backend features. Current examples are
+`__BITINT_MAXWIDTH__`, `_Float16`/`__float128` limit and size macros,
+SSE/MMX/FXSR CPU feature macros, segment address-space macros such as
+`__SEG_FS` and `__seg_fs`, LLVM identity macros, Objective-C/CFString macros,
+C23 `#embed` result macros, and inline-assembly capability macros such as
+`__GCC_ASM_FLAG_OUTPUTS__` and `__GCC_HAVE_DWARF2_CFI_ASM`.
+
 ## Local Smoke Test On ARM64 macOS
 
 You can still test Linux object emission locally if Clang can assemble
