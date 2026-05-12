@@ -2766,6 +2766,43 @@ if [ "$status" -ne 42 ]; then
   exit 1
 fi
 
+cat > "$weak_source_path" <<'C'
+__attribute__((weak)) int weak_value = 1;
+int main(void) { return weak_value; }
+C
+
+cat > "$weak_helper_path" <<'C'
+int weak_value = 42;
+C
+
+"$kimicc" -c -target linux-amd64 -o "$weak_object_path" "$weak_source_path"
+clang -target x86_64-linux-gnu -c -o "$weak_helper_object_path" \
+  "$weak_helper_path"
+clang -o "$weak_binary_path" "$weak_object_path" "$weak_helper_object_path"
+set +e
+"$weak_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 42 ]; then
+  echo "expected weak global override smoke binary to exit 42, got $status" >&2
+  exit 1
+fi
+
+cat > "$weak_source_path" <<'C'
+extern int weak_global_missing __attribute__((weak));
+int main(void) { return &weak_global_missing ? 1 : 42; }
+C
+
+"$kimicc" -target linux-amd64 -o "$weak_binary_path" "$weak_source_path"
+set +e
+"$weak_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 42 ]; then
+  echo "expected undefined weak global smoke binary to exit 42, got $status" >&2
+  exit 1
+fi
+
 cat > "$ternary_source_path" <<'C'
 double choose_double(int flag) { return flag ? 1 : 2.5; }
 int choose_int(int flag) { return flag ? 1.5 : 2; }

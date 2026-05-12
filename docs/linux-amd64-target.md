@@ -483,9 +483,9 @@ through the libc thread API. A POSIX runtime probe covers `mkstemp`, `write`,
 `lseek`, `read`, `fstat`, `clock_gettime`, `opendir`, `readdir`, `closedir`,
 `mmap`, `munmap`, `pipe`, `poll`, `select`, `close`, and `unlink` through the
 Ubuntu glibc declarations. The script also checks that a strong clang-built
-function definition overrides a kimicc-built ELF weak definition at link time,
-and that an undefined weak function reference links and resolves to null in the
-generated PIE binary. It also
+function or global definition overrides a kimicc-built ELF weak definition at
+link time, and that undefined weak function/global references link and resolve
+to null in the generated PIE binary. It also
 checks that the built compiler returns a nonzero status for an invalid
 Linux/amd64 translation unit, so compiler failures are not masked by the test
 harness.
