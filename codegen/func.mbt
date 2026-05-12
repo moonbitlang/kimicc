@@ -83,7 +83,7 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
             }
             fp_idx += 1
           }
-          Double => {
+          Double | LongDouble => {
             if fp_idx < 8 {
               let reg = "d" + fp_idx.to_string()
               self.emit_store_local(reg, offset, frame_size)
@@ -197,7 +197,7 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
       // Default return
       match decl.ret {
         Float => self.emit("\tfmov\ts0, wzr")
-        Double => self.emit("\tfmov\td0, xzr")
+        Double | LongDouble => self.emit("\tfmov\td0, xzr")
         SInt128 | UInt128 => {
           self.emit("\tmov\tx0, #0")
           self.emit("\tmov\tx1, #0")

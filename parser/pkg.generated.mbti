@@ -1,10 +1,16 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "bobzhang/kimicc/parser"
 
+import {
+  "bobzhang/kimicc/target",
+}
+
 // Values
 pub fn fold_const(Expr) -> Int64?
 
 pub fn parse(String) -> Program
+
+pub fn parse_for_target(String, @target.Target) -> Program
 
 // Errors
 
@@ -86,6 +92,7 @@ pub(all) struct Param {
 
 pub struct Parser {
   lexer : Lexer
+  target : @target.Target
   mut token : Token
   typedefs : Map[String, Type]
   anonymous_structs : Array[StructDecl]
@@ -100,6 +107,7 @@ pub struct Parser {
   mut compound_literal_counter : Int
 }
 pub fn Parser::new(Lexer) -> Self
+pub fn Parser::new_for_target(Lexer, @target.Target) -> Self
 
 pub(all) struct Program {
   structs : Array[StructDecl]
@@ -239,6 +247,7 @@ pub(all) enum Type {
   Float
   Float16
   Double
+  LongDouble
   Struct(String)
   Union(String)
   FuncPtr(Type, Array[Type], Bool)

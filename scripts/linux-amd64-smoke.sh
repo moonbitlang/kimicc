@@ -443,6 +443,12 @@ int main(void) { return 0; }
 C
 expect_compile_failure "unsupported _Float16 smoke source" "$bad_source_path"
 
+cat > "$bad_source_path" <<'C'
+long double unsupported_long_double;
+int main(void) { return unsupported_long_double == 0.0L; }
+C
+expect_compile_failure "unsupported long double smoke source" "$bad_source_path"
+
 cat > "$link_fail_source_path" <<'C'
 int missing(void);
 int main(void) { return missing(); }
@@ -2277,6 +2283,8 @@ _Static_assert(FLT_MANT_DIG == 24, "float mantissa");
 _Static_assert(DBL_MANT_DIG == 53, "double mantissa");
 _Static_assert(LDBL_MANT_DIG == 64, "long double mantissa");
 _Static_assert(DECIMAL_DIG == 21, "decimal digits");
+_Static_assert(sizeof(long double) == 16, "long double width");
+_Static_assert(alignof(long double) == 16, "long double alignment");
 _Static_assert(sizeof(uintptr_t) == 8, "stdint uintptr width");
 _Static_assert(sizeof(int64_t) == 8, "stdint int64 width");
 _Static_assert(sizeof(uint64_t) == 8, "stdint uint64 width");

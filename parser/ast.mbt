@@ -21,6 +21,7 @@ pub(all) enum Type {
   Float
   Float16
   Double
+  LongDouble
   Struct(String)
   Union(String)
   FuncPtr(Type, Array[Type], Bool)
@@ -62,6 +63,7 @@ pub impl Show for Type with to_string(self) {
     Float => "Float"
     Float16 => "Float16"
     Double => "Double"
+    LongDouble => "LongDouble"
     Struct(name) => "Struct(" + name + ")"
     Union(name) => "Union(" + name + ")"
     FuncPtr(ret, params, variadic) =>
@@ -117,10 +119,11 @@ pub fn Type::is_signed(self : Type) -> Bool {
 }
 
 ///|
-/// Returns true for supported `float` and `double` arithmetic types.
+/// Returns true for supported floating arithmetic types under the default
+/// Darwin ARM64 layout assumptions.
 pub fn Type::is_floating(self : Type) -> Bool {
   match self {
-    Float | Double => true
+    Float | Double | LongDouble => true
     Aligned(ty, _) => ty.is_floating()
     _ => false
   }
@@ -160,6 +163,7 @@ pub fn Type::size(self : Type) -> Int {
     | SLongLong
     | ULongLong
     | Double
+    | LongDouble
     | Pointer(_)
     | FuncPtr(_, _, _) => 8
     SInt128 | UInt128 => 16
@@ -192,6 +196,7 @@ pub fn Type::align(self : Type) -> Int {
     | SLongLong
     | ULongLong
     | Double
+    | LongDouble
     | Pointer(_)
     | FuncPtr(_, _, _) => 8
     SInt128 | UInt128 => 16

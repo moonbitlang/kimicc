@@ -160,6 +160,22 @@ fn const_type_core(ty : Type) -> Type {
 }
 
 ///|
+fn Parser::long_double_size(self : Parser) -> Int {
+  match self.target {
+    DarwinArm64 => 8
+    LinuxAmd64 => 16
+  }
+}
+
+///|
+fn Parser::long_double_align(self : Parser) -> Int {
+  match self.target {
+    DarwinArm64 => 8
+    LinuxAmd64 => 16
+  }
+}
+
+///|
 fn const_number_type(bits : Int64) -> Type {
   if bits < 0L {
     ULongLong
@@ -620,6 +636,7 @@ fn basic_type_size(ty : Type) -> Int {
     SShort | UShort => 2
     SInt | UInt | Float => 4
     Float16 => abort("_Float16 size is not supported")
+    LongDouble => 8
     SLong
     | ULong
     | SLongLong
@@ -644,6 +661,7 @@ fn basic_type_align(ty : Type) -> Int {
     SShort | UShort => 2
     SInt | UInt | Float => 4
     Float16 => abort("_Float16 alignment is not supported")
+    LongDouble => 8
     SLong
     | ULong
     | SLongLong
@@ -675,6 +693,7 @@ fn Parser::const_type_size(self : Parser, ty : Type) -> Int {
     SShort | UShort => 2
     SInt | UInt | Float => 4
     Float16 => abort("_Float16 size is not supported")
+    LongDouble => self.long_double_size()
     SLong
     | ULong
     | SLongLong
@@ -699,6 +718,7 @@ fn Parser::const_type_align(self : Parser, ty : Type) -> Int {
     SShort | UShort => 2
     SInt | UInt | Float => 4
     Float16 => abort("_Float16 alignment is not supported")
+    LongDouble => self.long_double_align()
     SLong
     | ULong
     | SLongLong

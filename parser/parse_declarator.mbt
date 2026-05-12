@@ -305,6 +305,10 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     spec.base_type = Float16
   } else if has_float {
     spec.base_type = Float
+  } else if has_double && long_count == 1 {
+    spec.base_type = LongDouble
+  } else if has_double && long_count > 1 {
+    abort("invalid long double specifier")
   } else if has_double {
     spec.base_type = Double
   } else if has_int128 {

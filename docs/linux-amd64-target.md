@@ -178,7 +178,10 @@ the target split real and testable without claiming full C ABI coverage yet.
 - GNU `__auto_type` local declarations infer the declared type from the
   initializer for the covered scalar and pointer expression types.
 - C11 `_Alignof(type)` and GNU `alignof`/`__alignof__` type or expression
-  operands are folded to the covered parser type model's alignment.
+  operands are folded to the covered parser type model's alignment. Linux
+  `long double` layout constants use the SysV x86-64 size/alignment of 16
+  bytes, and storage layout honors that size/alignment even though x87 value
+  lowering is still unsupported.
 - GNU `__has_attribute` reports true for semantic layout attributes that are
   implemented (`packed` and numeric `aligned`) and for parser-accepted no-op
   diagnostic, optimization, allocation, and sanitizer attributes such as
@@ -368,10 +371,11 @@ SSE/MMX/FXSR CPU feature macros, segment address-space macros such as
 `__SEG_FS` and `__seg_fs`, LLVM identity macros, Objective-C/CFString macros,
 C23 `#embed` result macros, and inline-assembly capability macros such as
 `__GCC_ASM_FLAG_OUTPUTS__` and `__GCC_HAVE_DWARF2_CFI_ASM`.
-Unsupported extension type spellings such as `_Float16` are parsed as distinct
-unsupported placeholder types so external declarations in system headers do not
-silently become `int`; code generation still fails if such a type needs layout
-or ABI lowering.
+Unsupported extension type spellings such as `_Float16`, and unsupported ABI
+types such as SysV x86-64 `long double`, are parsed as distinct types so
+external declarations in system headers do not silently become `int` or
+`double`; code generation still fails if such a type needs value operations or
+ABI lowering.
 
 ## Local Smoke Test On ARM64 macOS
 

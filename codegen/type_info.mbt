@@ -11,6 +11,7 @@ fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
     | SLongLong
     | ULongLong
     | Double
+    | LongDouble
     | Pointer(_)
     | FuncPtr(_, _, _) => 8
     SInt128 | UInt128 => 16
@@ -91,6 +92,7 @@ fn Codegen::type_align(self : Codegen, ty : @parser.Type) -> Int {
     | SLongLong
     | ULongLong
     | Double
+    | LongDouble
     | Pointer(_)
     | FuncPtr(_, _, _) => 8
     SInt128 | UInt128 => 16

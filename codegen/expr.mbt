@@ -735,13 +735,13 @@ fn Codegen::call_return_type(
             | "__builtin_huge_valf"
             | "__builtin_inff" => Float
             "__builtin_fabs"
-            | "__builtin_fabsl"
             | "__builtin_nan"
-            | "__builtin_nanl"
             | "__builtin_huge_val"
+            | "__builtin_inf" => Double
+            "__builtin_fabsl"
+            | "__builtin_nanl"
             | "__builtin_huge_vall"
-            | "__builtin_inf"
-            | "__builtin_infl" => Double
+            | "__builtin_infl" => LongDouble
             "__builtin_rotateleft32" | "__builtin_rotateright32" => UInt
             "__builtin_rotateleft64" | "__builtin_rotateright64" => ULongLong
             "__builtin_object_size" | "__builtin_dynamic_object_size" => ULong
@@ -757,7 +757,7 @@ fn Codegen::call_return_type(
 fn Codegen::emit_call_result(self : Codegen, ret_ty : @parser.Type) -> Unit {
   match ret_ty {
     Float => self.emit("\tfmov\tw9, s0")
-    Double => self.emit("\tfmov\tx9, d0")
+    Double | LongDouble => self.emit("\tfmov\tx9, d0")
     SInt128 | UInt128 => {
       self.emit("\tmov\tx9, x0")
       self.emit("\tmov\tx10, x1")
@@ -3219,7 +3219,7 @@ fn Codegen::gen_expr(
             arg_types.push(arg_ty)
             arg_copy_offsets.push(-1)
             match peel_aligned_type(arg_ty) {
-              Float | Double => {
+              Float | Double | LongDouble => {
                 total_slots += 1
                 fp_idx += 1
                 arg_slot_counts.push(1)
@@ -3354,7 +3354,7 @@ fn Codegen::gen_expr(
                 fp_idx += 1
                 slot_idx += 1
               }
-              Double => {
+              Double | LongDouble => {
                 let reg = "d" + fp_idx.to_string()
                 self.emit(
                   "\tldr\tx9, [sp, #" +
@@ -3486,7 +3486,7 @@ fn Codegen::gen_expr(
             arg_types.push(arg_ty)
             arg_copy_offsets.push(-1)
             match peel_aligned_type(arg_ty) {
-              Float | Double => {
+              Float | Double | LongDouble => {
                 if fp_idx >= 8 {
                   stack_count += 1
                 }
@@ -3631,7 +3631,7 @@ fn Codegen::gen_expr(
                 fp_idx += 1
                 slot_idx += 1
               }
-              Double => {
+              Double | LongDouble => {
                 if fp_idx < 8 {
                   self.emit(
                     "\tldr\tx9, [sp, #" + (slot_idx * 8).to_string() + "]",
@@ -4039,7 +4039,7 @@ fn Codegen::gen_expr(
           // Reload the float value into w9 for return
           self.emit("\tmov\tw9, w9")
         }
-        Double => {
+        Double | LongDouble => {
           self.emit("\tldr\tx9, [x9]")
           // Advance ap by 8
           self.emit("\tstr\tx9, [sp, #-16]!") // save value

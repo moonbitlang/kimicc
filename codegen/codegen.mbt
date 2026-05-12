@@ -1101,7 +1101,7 @@ fn Codegen::emit_global_scalar(
     _ => ()
   }
   match ty {
-    Float | Double =>
+    Float | Double | LongDouble =>
       match self.fold_float_const(expr) {
         Some(v) => {
           self.emit_global_float(ty, v)
@@ -1151,7 +1151,7 @@ fn Codegen::emit_global_scalar(
           self.emit("\t.quad\t" + n.to_string())
           self.emit("\t.quad\t0")
         }
-        Float | Double => self.emit_global_float(ty, n.to_double())
+        Float | Double | LongDouble => self.emit_global_float(ty, n.to_double())
         Struct(_) | Union(_) | Array(_, _) => {
           // Zero-initialize aggregate type
           let size = self.type_size(ty)

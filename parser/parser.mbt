@@ -6,6 +6,7 @@
 /// its fields are implementation details and may not remain stable.
 pub struct Parser {
   lexer : Lexer
+  target : @target.Target
   mut token : Token
   typedefs : Map[String, Type]
   anonymous_structs : Array[StructDecl]
@@ -25,8 +26,16 @@ pub struct Parser {
 ///
 /// Prefer `parse(input)` unless you need to drive lexer/parser state manually.
 pub fn Parser::new(lexer : Lexer) -> Parser {
+  Parser::new_for_target(lexer, @target.Target::default())
+}
+
+///|
+/// Creates a parser using target-specific layout assumptions for constant
+/// folding of target-sensitive types.
+pub fn Parser::new_for_target(lexer : Lexer, target : @target.Target) -> Parser {
   let p = {
     lexer,
+    target,
     token: EOF,
     typedefs: {},
     anonymous_structs: [],
@@ -63,8 +72,15 @@ fn Parser::expect(self : Parser, t : Token) -> Unit {
 /// The parser does not run a C preprocessor. Invalid or unsupported syntax
 /// aborts instead of returning a structured error value.
 pub fn parse(input : String) -> Program {
+  parse_for_target(input, @target.Target::default())
+}
+
+///|
+/// Parses one complete C translation unit using target-specific layout
+/// assumptions where parsing must fold layout constants.
+pub fn parse_for_target(input : String, target : @target.Target) -> Program {
   let lexer = Lexer::new(input)
-  let parser = Parser::new(lexer)
+  let parser = Parser::new_for_target(lexer, target)
   parser.parse_program()
 }
 

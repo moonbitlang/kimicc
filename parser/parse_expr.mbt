@@ -597,7 +597,7 @@ fn classify_type_code(ty : Type) -> Int64 {
     Atomic(inner) => classify_type_code(inner)
     Void => 0
     Bool => 4
-    Float | Double => 8
+    Float | Double | LongDouble => 8
     Float16 => abort("_Float16 classification is not supported")
     Pointer(_) | Array(_, _) | FuncPtr(_, _, _) => 5
     Struct(_) => 12

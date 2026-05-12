@@ -2296,7 +2296,7 @@ fn generate_assembly_from_preprocessed(
   parser_input : String,
   opts : DriverOptions,
 ) -> String {
-  let prog = @parser.parse(parser_input)
+  let prog = @parser.parse_for_target(parser_input, opts.target)
   @codegen.generate_assembly_for_target(prog, opts.target)
 }
 
@@ -2643,7 +2643,7 @@ fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
           let preprocessed = preprocess_source_with_dependencies(
             source, input_path, opts,
           )
-          let prog = @parser.parse(preprocessed.text)
+          let prog = @parser.parse_for_target(preprocessed.text, opts.target)
           let object = @codegen.generate_macho_object(prog)
           if !write_bytes_file(output_path, object) {
             fail("cannot write file: " + output_path)
@@ -2681,7 +2681,7 @@ fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
       let preprocessed = preprocess_source_with_dependencies(
         source, input_path, opts,
       )
-      let _ = @parser.parse(preprocessed.text)
+      let _ = @parser.parse_for_target(preprocessed.text, opts.target)
       write_dependency_file(
         opts,
         input_path,

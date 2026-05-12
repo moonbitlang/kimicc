@@ -75,6 +75,44 @@ test "parse unsupported float16 external declaration as placeholder type" {
 }
 
 ///|
+test "parse long double external declaration as distinct type" {
+  let source = "extern long double fabsl(long double);"
+  let prog = @parser.parse(source)
+  match prog.decls[0] {
+    { ret: LongDouble, name: "fabsl", params: [{ ty: LongDouble, .. }], .. } =>
+      ()
+    _ => fail("Expected long double function declaration")
+  }
+}
+
+///|
+test "parse long double layout constants for selected target" {
+  let linux = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => fail("linux-amd64 target should parse")
+  }
+  let source = "int main(void) { int slots[sizeof(long double)]; return 0; }"
+  let darwin_prog = @parser.parse(source)
+  let linux_prog = @parser.parse_for_target(source, linux)
+  match darwin_prog.decls[0].body {
+    Some(
+      Compound(
+        [VarDecl(Array(SInt, 8), "slots", None), Return(Some(Number(0)))]
+      )
+    ) => ()
+    _ => fail("Expected Darwin long double size in array bound")
+  }
+  match linux_prog.decls[0].body {
+    Some(
+      Compound(
+        [VarDecl(Array(SInt, 16), "slots", None), Return(Some(Number(0)))]
+      )
+    ) => ()
+    _ => fail("Expected Linux long double size in array bound")
+  }
+}
+
+///|
 test "parse block-scope builtin va list declaration" {
   let source = "int main() { __builtin_va_list ap; return 0; }"
   let prog = @parser.parse(source)
