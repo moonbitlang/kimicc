@@ -326,6 +326,7 @@ grep -F '#define CLI_MACRO 17' "$driver_query_path" >/dev/null
 grep -F '#define DUMPED 31' "$driver_query_path" >/dev/null
 grep -F '#define __x86_64__ 1' "$driver_query_path" >/dev/null
 grep -F '#define __CHAR16_TYPE__ unsigned short' "$driver_query_path" >/dev/null
+grep -F '#define __GCC_HAVE_SYNC_COMPARE_AND_SWAP_8 1' "$driver_query_path" >/dev/null
 grep -F '#define __INT64_FMTd__ "ld"' "$driver_query_path" >/dev/null
 grep -F '#define __UINT64_C_SUFFIX__ UL' "$driver_query_path" >/dev/null
 grep -F '#define __SIZE_FMTu__ "lu"' "$driver_query_path" >/dev/null
@@ -1127,7 +1128,7 @@ int target_predefines(void) {
   if (!clang_version[0] || !compiler_version[0]) return 576;
   if (literal_encoding[0] != 'U' || literal_encoding[4] != '8') return 580;
   if (wide_literal_encoding[0] != 'U' || wide_literal_encoding[4] != '3') return 581;
-#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_return_address) && __has_builtin(__builtin_dynamic_object_size) && __has_builtin(__builtin_flt_rounds) && __has_builtin(__atomic_load_n) && __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p) && __has_builtin(__builtin_classify_type)
+#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_return_address) && __has_builtin(__builtin_dynamic_object_size) && __has_builtin(__builtin_flt_rounds) && __has_builtin(__atomic_load_n) && __has_builtin(__sync_bool_compare_and_swap) && __has_builtin(__sync_val_compare_and_swap) && __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p) && __has_builtin(__builtin_classify_type)
   target = target + 0;
 #else
   return 513;
@@ -1440,6 +1441,14 @@ int atomic_builtins(void) {
   if (w != ~10u) return 404;
   __atomic_store_n(&w, 10, 5);
   if (__atomic_nand_fetch(&w, 15, 5) != ~10u) return 405;
+  __atomic_store_n(&w, 10, 5);
+  if (!__sync_bool_compare_and_swap(&w, 10u, 12u)) return 445;
+  if (w != 12u) return 446;
+  if (__sync_bool_compare_and_swap(&w, 10u, 14u)) return 447;
+  if (__sync_val_compare_and_swap(&w, 12u, 17u) != 12u) return 448;
+  if (w != 17u) return 449;
+  if (__sync_val_compare_and_swap(&w, 12u, 19u) != 17u) return 450;
+  if (w != 17u) return 451;
   if (__c11_atomic_fetch_add(&a, 3, 5) != 5) return 318;
   if (a != 8) return 319;
   if (__c11_atomic_fetch_sub(&a, 1, 5) != 8) return 320;

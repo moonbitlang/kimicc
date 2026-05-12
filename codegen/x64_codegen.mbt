@@ -2449,6 +2449,40 @@ fn X64Codegen::emit_atomic_compare_exchange_ptr_builtin(
 }
 
 ///|
+fn X64Codegen::emit_sync_compare_and_swap_builtin(
+  self : X64Codegen,
+  args : Array[@parser.Expr],
+  return_old : Bool,
+) -> Unit {
+  if args.length() >= 3 {
+    let elem_ty = x64_atomic_target_type(self.type_of(args[0]))
+    let width = self.type_size(elem_ty)
+    self.gen_expr(args[0])
+    self.emit_push_rax()
+    self.gen_expr_as_scalar(args[1], elem_ty)
+    self.emit_push_rax()
+    self.gen_expr_as_scalar(args[2], elem_ty)
+    self.emit("\tmov\tr11, rax")
+    self.emit_pop_rax()
+    self.emit("\tpop\trdi")
+    self.emit(
+      "\tlock cmpxchg\t" +
+      x64_atomic_mem_operand("rdi", width) +
+      ", " +
+      x64_atomic_r11_reg(width),
+    )
+    if return_old {
+      self.emit_atomic_clean_rax(elem_ty)
+      self.emit_int_conversion_to(elem_ty)
+    } else {
+      self.emit_setcc("sete")
+    }
+  } else {
+    self.emit("\tmov\trax, 0")
+  }
+}
+
+///|
 fn X64Codegen::emit_atomic_lock_free_builtin(
   self : X64Codegen,
   args : Array[@parser.Expr],
@@ -2926,9 +2960,16 @@ fn X64Codegen::builtin_return_type(
     | "__atomic_compare_exchange_n"
     | "__c11_atomic_compare_exchange_strong"
     | "__c11_atomic_compare_exchange_weak"
+    | "__sync_bool_compare_and_swap"
     | "__atomic_always_lock_free"
     | "__atomic_is_lock_free"
     | "__c11_atomic_is_lock_free" => Some(Bool)
+    "__sync_val_compare_and_swap" =>
+      if args.length() > 0 {
+        Some(x64_atomic_target_type(self.type_of(args[0])))
+      } else {
+        Some(SLongLong)
+      }
     "__builtin_clz"
     | "__builtin_clzl"
     | "__builtin_clzll"
@@ -3194,6 +3235,14 @@ fn X64Codegen::emit_builtin_call(
     | "__atomic_is_lock_free"
     | "__c11_atomic_is_lock_free" => {
       self.emit_atomic_lock_free_builtin(args)
+      true
+    }
+    "__sync_bool_compare_and_swap" => {
+      self.emit_sync_compare_and_swap_builtin(args, false)
+      true
+    }
+    "__sync_val_compare_and_swap" => {
+      self.emit_sync_compare_and_swap_builtin(args, true)
       true
     }
     "__builtin_add_overflow"

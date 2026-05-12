@@ -19,7 +19,8 @@ the target split real and testable without claiming full C ABI coverage yet.
   memory-order constants, x86-64 small-code-model and GCC ABI identity macros,
   ELF empty label/register prefix macros, `__CHAR16_TYPE__`/`__CHAR32_TYPE__`,
   and the stdint/inttypes suffix and format helper macros used by libc headers.
-  Linux header compatibility macros such as `__NO_MATH_INLINES` are also seeded.
+  Linux header compatibility macros such as `__NO_MATH_INLINES` and the
+  supported `__GCC_HAVE_SYNC_COMPARE_AND_SWAP_*` widths are also seeded.
   `__has_builtin(name)` reports true for the
   builtin functions and atomic intrinsics the Linux/amd64 lowering currently
   supports, and false for unsupported builtin names. `__has_attribute(name)`
@@ -195,8 +196,9 @@ the target split real and testable without claiming full C ABI coverage yet.
   `__c11_atomic_exchange`, `__c11_atomic_compare_exchange_strong`,
   `__c11_atomic_compare_exchange_weak`, `__c11_atomic_thread_fence`,
   `__c11_atomic_signal_fence`, `__c11_atomic_is_lock_free`, and
-  `__sync_synchronize`. Lock-free query builtins currently report true for the
-  covered 1-, 2-, 4-, and 8-byte scalar widths.
+  `__sync_synchronize`, plus `__sync_bool_compare_and_swap` and
+  `__sync_val_compare_and_swap`. Lock-free query builtins currently report true
+  for the covered 1-, 2-, 4-, and 8-byte scalar widths.
 - Covered same-width integer overflow builtins lower without external calls:
   `__builtin_add_overflow`, `__builtin_sub_overflow`, and
   `__builtin_mul_overflow`, plus the signed/unsigned typed spellings such as

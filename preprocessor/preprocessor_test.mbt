@@ -320,6 +320,11 @@ test "linux amd64 predefined macros cover system header probes" {
     #|#else
     #|int abi_version_probes = 2;
     #|#endif
+    #|#if __GCC_HAVE_SYNC_COMPARE_AND_SWAP_1 == 1 && __GCC_HAVE_SYNC_COMPARE_AND_SWAP_2 == 1 && __GCC_HAVE_SYNC_COMPARE_AND_SWAP_4 == 1 && __GCC_HAVE_SYNC_COMPARE_AND_SWAP_8 == 1
+    #|int sync_compare_exchange_probes = 1;
+    #|#else
+    #|int sync_compare_exchange_probes = 2;
+    #|#endif
     #|#if defined(__NO_MATH_INLINES) && __NO_MATH_INLINES == 1
     #|int math_inline_probes = 1;
     #|#else
@@ -362,6 +367,7 @@ test "linux amd64 predefined macros cover system header probes" {
           #|int int64_probes=1;
           #|int clang_version_probes=1;
           #|int abi_version_probes=1;
+          #|int sync_compare_exchange_probes=1;
           #|int math_inline_probes=1;
           #|int integer_introspection_probes=1;
           #|int prefix=9;
@@ -421,7 +427,7 @@ test "linux amd64 has builtin reflects supported lowering" {
     #|#else
     #|int gnu_copy_builtins = 0;
     #|#endif
-    #|#if __has_builtin(__atomic_load_n) && __has_builtin(__builtin_add_overflow)
+    #|#if __has_builtin(__atomic_load_n) && __has_builtin(__builtin_add_overflow) && __has_builtin(__sync_bool_compare_and_swap) && __has_builtin(__sync_val_compare_and_swap)
     #|int atomic_and_overflow = 1;
     #|#else
     #|int atomic_and_overflow = 0;

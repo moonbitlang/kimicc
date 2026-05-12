@@ -415,7 +415,9 @@ fn pp_linux_amd64_has_builtin(name : String) -> Bool {
     | "__c11_atomic_thread_fence"
     | "__c11_atomic_signal_fence"
     | "__c11_atomic_is_lock_free"
-    | "__sync_synchronize" => true
+    | "__sync_synchronize"
+    | "__sync_bool_compare_and_swap"
+    | "__sync_val_compare_and_swap" => true
     _ => false
   }
 }

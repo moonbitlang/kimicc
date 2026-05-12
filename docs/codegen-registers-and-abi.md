@@ -244,8 +244,9 @@ builtins lower directly: loads and stores use x86-64 scalar memory operations,
 GNU and C11 exchange plus byte test-and-set/clear use `xchg`,
 compare-exchange and read-modify-write operations, including `nand`, use
 `lock cmpxchg`, C11 weak compare-exchange uses the same non-spurious lowering
-as strong compare-exchange, thread fences and `__sync_synchronize` use
-`mfence`, signal fences are no-ops in emitted code, and lock-free query
+as strong compare-exchange, legacy `__sync_*_compare_and_swap` builtins use
+the same `lock cmpxchg` instruction, thread fences and `__sync_synchronize`
+use `mfence`, signal fences are no-ops in emitted code, and lock-free query
 builtins report true for the covered 1-, 2-, 4-, and 8-byte scalar widths.
 The common overflow-checking builtins `__builtin_add_overflow`,
 `__builtin_sub_overflow`, and `__builtin_mul_overflow`, plus their signed and
