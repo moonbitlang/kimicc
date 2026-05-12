@@ -819,6 +819,10 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
     post_decl_attrs,
   )
   let decl_is_weak = spec.is_weak || post_decl_attrs.is_weak
+  let decl_visibility = merge_visibility(
+    spec.visibility,
+    post_decl_attrs.visibility,
+  )
   if spec.is_auto_type {
     if spec.is_static ||
       spec.is_extern ||
@@ -857,6 +861,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
         is_static: true,
         is_extern: false,
         is_weak: false,
+        visibility: None,
       })
     } else {
       self.globals.push({
@@ -866,6 +871,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
         is_static: false,
         is_extern: true,
         is_weak: decl_is_weak,
+        visibility: decl_visibility,
       })
     }
     self.remember_value_type(mangled, final_ty)
@@ -880,6 +886,10 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
         extra_post_decl_attrs,
       )
       let extra_decl_is_weak = spec.is_weak || extra_post_decl_attrs.is_weak
+      let extra_decl_visibility = merge_visibility(
+        spec.visibility,
+        extra_post_decl_attrs.visibility,
+      )
       let extra_mangled = if spec.is_static {
         self.register_static_local(extra_decl.name)
       } else {
@@ -895,6 +905,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
           is_static: true,
           is_extern: false,
           is_weak: false,
+          visibility: None,
         })
       } else {
         self.globals.push({
@@ -904,6 +915,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
           is_static: false,
           is_extern: true,
           is_weak: extra_decl_is_weak,
+          visibility: extra_decl_visibility,
         })
       }
       self.remember_value_type(extra_mangled, extra_ty)

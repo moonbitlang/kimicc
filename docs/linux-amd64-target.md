@@ -27,9 +27,10 @@ the target split real and testable without claiming full C ABI coverage yet.
   builtin functions and atomic intrinsics the Linux/amd64 lowering currently
   supports, and false for unsupported builtin names. `__has_attribute(name)`
   reports true for GNU `packed`/`__packed__`, numeric
-  `aligned`/`__aligned__`, and `weak`/`__weak__` attributes, matching the
-  layout and symbol-binding attributes the parser and backend currently honor,
-  plus parser-accepted no-op GNU
+  `aligned`/`__aligned__`, `weak`/`__weak__`, and Linux/amd64
+  `visibility`/`__visibility__` attributes, matching the layout and
+  symbol-binding attributes the parser and backend currently honor, plus
+  parser-accepted no-op GNU
   diagnostic, optimization, allocation, and sanitizer attributes.
   Clang-style feature probes
   report true only for the covered `c_alignas`, `c_alignof`,
@@ -127,6 +128,10 @@ the target split real and testable without claiming full C ABI coverage yet.
   declarations or definitions emits ELF weak symbol bindings. Addresses of
   external function/global declarations are loaded through GOT relocations so
   undefined weak references remain PIE-linkable.
+- GNU `__attribute__((visibility("hidden")))`,
+  `visibility("protected")`, and `visibility("internal")` on Linux/amd64
+  function and global declarations or definitions emit the corresponding ELF
+  symbol visibility directives.
 - Integer bit-fields use packed storage-unit layout for the covered struct/union
   cases and support read, write, compound assignment, and increment/decrement.
 - Local variables live in stack slots under a 16-byte aligned stack frame, or an
@@ -483,7 +488,9 @@ function pointer. The same libc probe also calls `strlen` through a
 kimicc-generated function pointer loaded from the external glibc declaration. A
 pthread probe links with `-pthread`, starts a `pthread_create`
 callback, joins it, and checks pointer/result transport through the libc thread
-API. A POSIX runtime probe covers `mkstemp`, `write`,
+API. The main linked smoke source also checks that a hidden-visibility GNU
+attribute is reflected in emitted Linux/amd64 assembly. A POSIX runtime probe
+covers `mkstemp`, `write`,
 `lseek`, `read`, `fstat`, `clock_gettime`, `opendir`, `readdir`, `closedir`,
 `mmap`, `munmap`, `pipe`, `poll`, `select`, `socketpair`, `fork`, `_exit`,
 `execlp`, `waitpid`, `getpid`, `close`, and `unlink` through the Ubuntu glibc

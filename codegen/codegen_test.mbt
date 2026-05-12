@@ -2091,6 +2091,27 @@ test "generate linux amd64 emits weak symbol bindings" {
 }
 
 ///|
+test "generate linux amd64 emits symbol visibility directives" {
+  let source =
+    #|__attribute__((visibility("hidden"))) int hidden_fn(void) { return 1; }
+    #|int protected_global __attribute__((visibility("protected"))) = 2;
+    #|extern int hidden_later __attribute__((visibility("hidden")));
+    #|int hidden_later = 3;
+    #|extern int internal_missing(void) __attribute__((visibility("internal")));
+    #|int main(void) { return hidden_fn() + protected_global; }
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(assembly.contains("\t.hidden\thidden_fn"), content="true")
+  inspect(assembly.contains("\t.hidden\thidden_later"), content="true")
+  inspect(assembly.contains("\t.protected\tprotected_global"), content="true")
+  inspect(assembly.contains("\t.internal\tinternal_missing"), content="true")
+}
+
+///|
 test "generate linux amd64 loads external declaration addresses through GOT" {
   let source =
     #|extern int strong_external(void);

@@ -324,6 +324,7 @@ pub(all) struct FuncDecl {
   is_static : Bool
   is_inline : Bool
   is_weak : Bool
+  visibility : String?
   body : Stmt?
 } derive(Eq)
 
@@ -348,6 +349,7 @@ pub(all) struct GlobalDecl {
   is_static : Bool
   is_extern : Bool
   is_weak : Bool
+  visibility : String?
 } derive(Eq)
 
 ///|

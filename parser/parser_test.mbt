@@ -876,6 +876,30 @@ test "parse GNU weak attributes" {
 }
 
 ///|
+test "parse GNU visibility attributes" {
+  let source =
+    #|__attribute__((visibility("hidden"))) int hidden_fn(void) { return 1; }
+    #|int protected_global __attribute__((visibility("protected"))) = 2;
+    #|extern int internal_global __attribute__((__visibility__("internal")));
+    #|int main(void) { return hidden_fn() + protected_global; }
+  let prog = @parser.parse(source)
+  match prog.decls {
+    [
+      { name: "hidden_fn", visibility: Some("hidden"), .. },
+      { name: "main", visibility: None, .. },
+    ] => ()
+    _ => fail("Expected function visibility attribute to be recorded")
+  }
+  match prog.globals {
+    [
+      { name: "protected_global", visibility: Some("protected"), .. },
+      { name: "internal_global", visibility: Some("internal"), .. },
+    ] => ()
+    _ => fail("Expected global visibility attributes to be recorded")
+  }
+}
+
+///|
 test "parse pointer to struct member access" {
   let source =
     #|struct Node { int val; struct Node *next; };

@@ -7177,7 +7177,12 @@ fn X64Codegen::emit_function(
       if self.stack_align > 16 {
         self.local_base_reg = "r13"
       }
-      self.emit_symbol_binding(decl.name, decl.is_static, decl.is_weak)
+      self.emit_symbol_binding(
+        decl.name,
+        decl.is_static,
+        decl.is_weak,
+        decl.visibility,
+      )
       self.emit("\t.type\t" + decl.name + ", @function")
       self.emit(decl.name + ":")
       self.emit("\tpush\trbp")
@@ -8408,6 +8413,9 @@ fn X64Codegen::emit_globals(
     if g.init is None && g.is_extern && g.is_weak && !g.is_static {
       self.emit("\t.weak\t" + g.name)
     }
+    if g.init is None && g.is_extern {
+      self.emit_symbol_visibility(g.name, g.is_static, g.visibility)
+    }
   }
   let mut has_data = false
   for g in globals {
@@ -8416,7 +8424,7 @@ fn X64Codegen::emit_globals(
         self.emit("\t.data")
         has_data = true
       }
-      self.emit_symbol_binding(g.name, g.is_static, g.is_weak)
+      self.emit_symbol_binding(g.name, g.is_static, g.is_weak, g.visibility)
       self.emit("\t.align\t" + self.type_align(g.ty).to_string())
       self.emit(g.name + ":")
       match g.init {
@@ -8433,7 +8441,7 @@ fn X64Codegen::emit_globals(
         self.emit("\t.bss")
         has_bss = true
       }
-      self.emit_symbol_binding(g.name, g.is_static, g.is_weak)
+      self.emit_symbol_binding(g.name, g.is_static, g.is_weak, g.visibility)
       self.emit("\t.align\t" + self.type_align(g.ty).to_string())
       self.emit(g.name + ":")
       self.emit("\t.zero\t" + self.type_size(g.ty).to_string())
@@ -8447,6 +8455,7 @@ fn X64Codegen::emit_symbol_binding(
   name : String,
   is_static : Bool,
   is_weak : Bool,
+  visibility : String?,
 ) -> Unit {
   if !is_static {
     if is_weak {
@@ -8454,6 +8463,25 @@ fn X64Codegen::emit_symbol_binding(
     } else {
       self.emit("\t.globl\t" + name)
     }
+    self.emit_symbol_visibility(name, is_static, visibility)
+  }
+}
+
+///|
+fn X64Codegen::emit_symbol_visibility(
+  self : X64Codegen,
+  name : String,
+  is_static : Bool,
+  visibility : String?,
+) -> Unit {
+  if is_static {
+    return
+  }
+  match visibility {
+    Some("hidden") => self.emit("\t.hidden\t" + name)
+    Some("protected") => self.emit("\t.protected\t" + name)
+    Some("internal") => self.emit("\t.internal\t" + name)
+    _ => ()
   }
 }
 
@@ -8541,6 +8569,9 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
       self.func_weak.get_or_default(decl.name, false) &&
       !decl.is_static {
       self.emit("\t.weak\t" + decl.name)
+    }
+    if decl.body is None {
+      self.emit_symbol_visibility(decl.name, decl.is_static, decl.visibility)
     }
   }
   for decl in prog.decls {

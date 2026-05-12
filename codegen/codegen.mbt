@@ -109,6 +109,33 @@ fn should_replace_global_decl(
 }
 
 ///|
+fn merge_global_visibility(
+  primary : @parser.GlobalDecl,
+  other : @parser.GlobalDecl,
+) -> String? {
+  match primary.visibility {
+    Some(_) => primary.visibility
+    None => other.visibility
+  }
+}
+
+///|
+fn with_merged_global_attrs(
+  primary : @parser.GlobalDecl,
+  other : @parser.GlobalDecl,
+) -> @parser.GlobalDecl {
+  {
+    ty: primary.ty,
+    name: primary.name,
+    init: primary.init,
+    is_static: primary.is_static,
+    is_extern: primary.is_extern,
+    is_weak: primary.is_weak || other.is_weak,
+    visibility: merge_global_visibility(primary, other),
+  }
+}
+
+///|
 fn merge_global_decls(
   globals : Array[@parser.GlobalDecl],
 ) -> Array[@parser.GlobalDecl] {
@@ -123,7 +150,9 @@ fn merge_global_decls(
     if found < 0 {
       merged.push(g)
     } else if should_replace_global_decl(merged[found], g) {
-      merged[found] = g
+      merged[found] = with_merged_global_attrs(g, merged[found])
+    } else {
+      merged[found] = with_merged_global_attrs(merged[found], g)
     }
   }
   merged

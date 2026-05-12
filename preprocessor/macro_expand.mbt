@@ -135,6 +135,17 @@ fn pp_has_attribute(name : String) -> Bool {
 }
 
 ///|
+fn Preprocessor::has_attribute_query(
+  self : Preprocessor,
+  name : String,
+) -> Bool {
+  match name {
+    "visibility" | "__visibility__" => self.options.target == LinuxAmd64
+    _ => pp_has_attribute(name)
+  }
+}
+
+///|
 fn pp_has_feature(name : String) -> Bool {
   match name {
     "c_alignas"
@@ -845,7 +856,12 @@ fn Preprocessor::expand_tokens(
         match self.parse_macro_invocation(clean, i + 1, tok.text) {
           Some((args, end_index)) => {
             let value = match pp_query_name(args) {
-              Some(name) => if pp_has_attribute(name) { "1" } else { "0" }
+              Some(name) =>
+                if self.has_attribute_query(name) {
+                  "1"
+                } else {
+                  "0"
+                }
               None => "0"
             }
             result.push(pp_token(PpNumber, value))

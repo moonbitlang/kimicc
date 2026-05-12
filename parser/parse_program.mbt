@@ -23,6 +23,7 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
       is_static: false,
       is_extern: false,
       is_weak: post_decl_attrs.is_weak,
+      visibility: post_decl_attrs.visibility,
     })
     self.remember_value_type(decl.name, decl_ty)
   }
@@ -53,6 +54,7 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
         is_static: false,
         is_extern: false,
         is_weak: extra_post_decl_attrs.is_weak,
+        visibility: extra_post_decl_attrs.visibility,
       })
       self.remember_value_type(extra.name, extra_ty)
     }

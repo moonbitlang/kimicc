@@ -4,6 +4,7 @@ priv struct AttributeInfo {
   mut align : Int?
   mut mode : String?
   mut is_weak : Bool
+  mut visibility : String?
 }
 
 ///|
@@ -18,6 +19,14 @@ fn merge_align(lhs : Int?, rhs : Int?) -> Int? {
 
 ///|
 fn merge_mode(lhs : String?, rhs : String?) -> String? {
+  match rhs {
+    Some(_) => rhs
+    None => lhs
+  }
+}
+
+///|
+fn merge_visibility(lhs : String?, rhs : String?) -> String? {
   match rhs {
     Some(_) => rhs
     None => lhs
@@ -62,6 +71,7 @@ fn Parser::skip_attributes_info(self : Parser) -> AttributeInfo {
     align: None,
     mode: None,
     is_weak: false,
+    visibility: None,
   }
   while self.token == Ident("__attribute__") ||
         self.token == Ident("__attribute") ||
@@ -78,6 +88,21 @@ fn Parser::skip_attributes_info(self : Parser) -> AttributeInfo {
         match self.token {
           Ident("packed") | Ident("__packed__") => info.is_packed = true
           Ident("weak") | Ident("__weak__") => info.is_weak = true
+          Ident("visibility") | Ident("__visibility__") => {
+            self.advance()
+            if self.token == LParen {
+              self.advance()
+              match self.token {
+                String(name) => {
+                  info.visibility = Some(name)
+                  self.advance()
+                }
+                _ => ()
+              }
+              self.expect(RParen)
+            }
+            continue
+          }
           Ident("vector_size")
           | Ident("__vector_size__")
           | Ident("ext_vector_type")

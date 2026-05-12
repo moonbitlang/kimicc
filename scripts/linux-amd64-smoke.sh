@@ -1260,6 +1260,11 @@ int target_predefines(void) {
 #else
   return 608;
 #endif
+#if __has_attribute(visibility) && __has_attribute(__visibility__)
+  target = target + 0;
+#else
+  return 609;
+#endif
 #if __has_attribute(unused) && __has_attribute(__unused__) && __has_attribute(fallthrough) && __has_attribute(__fallthrough__)
   target = target + 0;
 #else
@@ -2087,12 +2092,16 @@ static inline int attr_inline(int x) { return x + 1; }
 __attribute__((noinline, warn_unused_result, cold, no_sanitize_thread))
 int attr_helper(void) { return attr_printf_like("*"); }
 
+__attribute__((visibility("hidden")))
+int hidden_attr_value(void) { return 42; }
+
 int gnu_noop_attributes(void) {
   __attribute__((unused)) int ignored = 3;
   char buf[1];
   if (attr_helper() != 42) return 563;
   if (attr_identity(buf) != buf) return 564;
   if (attr_inline(-1) != 0) return 565;
+  if (hidden_attr_value() != 42) return 609;
   int x = 0;
   switch (x) {
   case 0:
@@ -2249,6 +2258,7 @@ int main(void) {
 C
 
 "$kimicc" -v -S -target linux-amd64 -I "$probe_include_dir" -o /tmp/kimicc-linux-amd64-smoke.s "$source_path"
+grep -E '^[[:space:]]*\.hidden[[:space:]]+hidden_attr_value$' /tmp/kimicc-linux-amd64-smoke.s >/dev/null
 "$kimicc" -c -target linux-amd64 -MMD -MP -MF "$dependency_path" -I "$probe_include_dir" -o "$object_path" "$source_path"
 file "$object_path" | grep -E 'ELF 64-bit.*x86-64'
 grep -F "$object_path: $source_path $probe_include_dir/pragma_once_header.h" "$dependency_path" >/dev/null
