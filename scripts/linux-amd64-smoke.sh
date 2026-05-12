@@ -150,6 +150,8 @@ ctor_source_path="/tmp/kimicc-linux-amd64-ctor.c"
 ctor_binary_path="/tmp/kimicc-linux-amd64-ctor"
 libm_source_path="/tmp/kimicc-linux-amd64-libm.c"
 libm_binary_path="/tmp/kimicc-linux-amd64-libm"
+dlfcn_source_path="/tmp/kimicc-linux-amd64-dlfcn.c"
+dlfcn_binary_path="/tmp/kimicc-linux-amd64-dlfcn"
 multi_main_source_path="/tmp/kimicc-linux-amd64-multi-main.c"
 multi_helper_source_path="/tmp/kimicc-linux-amd64-multi-helper.c"
 multi_main_object_path="/tmp/kimicc-linux-amd64-multi-main.o"
@@ -2892,6 +2894,38 @@ C
   -o "$libm_binary_path" "$libm_source_path" -l m
 "$libm_binary_path"
 
+cat > "$dlfcn_source_path" <<'C'
+#include <dlfcn.h>
+#include <unistd.h>
+
+typedef pid_t (*getpid_fn)(void);
+
+int main(void) {
+  void *handle = dlopen("libc.so.6", RTLD_NOW);
+  char *err;
+  getpid_fn loaded_getpid;
+  if (!handle) return 31;
+  dlerror();
+  loaded_getpid = (getpid_fn)dlsym(handle, "getpid");
+  err = dlerror();
+  if (err || !loaded_getpid) return 32;
+  if (loaded_getpid() != getpid()) return 33;
+  if (dlclose(handle) != 0) return 34;
+  return 42;
+}
+C
+
+"$kimicc" -target linux-amd64 --library-directory /usr/lib/x86_64-linux-gnu \
+  -o "$dlfcn_binary_path" "$dlfcn_source_path" -l dl
+set +e
+"$dlfcn_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 42 ]; then
+  echo "expected dlfcn smoke binary to exit 42, got $status" >&2
+  exit 1
+fi
+
 cat > "$extensionless_source_path" <<'C'
 int main(void) { return 42; }
 C
@@ -3088,6 +3122,7 @@ cat > "$header_syntax_source_path" <<'C'
 #include <assert.h>
 #include <ctype.h>
 #include <dirent.h>
+#include <dlfcn.h>
 #include <errno.h>
 #include <fnmatch.h>
 #include <glob.h>

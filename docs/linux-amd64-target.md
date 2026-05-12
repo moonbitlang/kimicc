@@ -487,10 +487,10 @@ also checks representative unsigned max-value macros such as `UINTPTR_MAX` and
 such as `struct stat`, `struct iovec`, and `struct pollfd` in `_Static_assert`
 expressions. It also runs a syntax-only probe over a broader set of common
 libc/POSIX headers such as `arpa/inet.h`, `assert.h`, `ctype.h`, `dirent.h`,
-`fnmatch.h`, `glob.h`, `grp.h`, `inttypes.h`, `limits.h`, `locale.h`, `math.h`,
-`netdb.h`, `netinet/in.h`, `pthread.h`, `pwd.h`, `regex.h`, `sched.h`,
-`semaphore.h`, `setjmp.h`, `wchar.h`, `sys/epoll.h`, `sys/eventfd.h`,
-`sys/ioctl.h`, `sys/inotify.h`, `sys/mman.h`, `sys/random.h`,
+`dlfcn.h`, `fnmatch.h`, `glob.h`, `grp.h`, `inttypes.h`, `limits.h`,
+`locale.h`, `math.h`, `netdb.h`, `netinet/in.h`, `pthread.h`, `pwd.h`,
+`regex.h`, `sched.h`, `semaphore.h`, `setjmp.h`, `wchar.h`, `sys/epoll.h`,
+`sys/eventfd.h`, `sys/ioctl.h`, `sys/inotify.h`, `sys/mman.h`, `sys/random.h`,
 `sys/resource.h`, `sys/select.h`, `sys/sendfile.h`, `sys/statvfs.h`,
 `sys/syscall.h`, `sys/timerfd.h`, `sys/times.h`, `sys/time.h`,
 `sys/utsname.h`, `sys/uio.h`, and `sys/wait.h`. A separate linked probe passes
@@ -507,10 +507,12 @@ kimicc-generated function pointer loaded from the external glibc declaration. A
 pthread probe links with `-pthread`, starts a `pthread_create`
 callback, joins it, and checks pointer/result transport plus representative
 mutex, condition, once, thread-local key, semaphore, and scheduler-yield calls
-through the libc thread API. The main linked smoke source also checks that a
-hidden-visibility GNU attribute, GNU function/global aliases, and GNU
-function/global sections are reflected in emitted Linux/amd64 assembly. A POSIX
-runtime probe covers
+through the libc thread API. A dynamic-loading probe links with `-ldl`, opens
+`libc.so.6`, resolves `getpid` with `dlsym`, calls through the loaded function
+pointer, and closes the handle with `dlclose`. The main linked smoke source also
+checks that a hidden-visibility GNU attribute, GNU function/global aliases, and
+GNU function/global sections are reflected in emitted Linux/amd64 assembly. A
+POSIX runtime probe covers
 `mkstemp`, `write`, `lseek`, `read`, `pread`, `pwrite`, `fstat`, `stat`,
 `access`, `truncate`, `ftruncate`, `fsync`, `dup`, `fcntl`, `link`, `symlink`,
 `readlink`, `rename`, `chmod`, `mkdir`, `mkdtemp`, `mkfifo`, `rmdir`, `lstat`,
