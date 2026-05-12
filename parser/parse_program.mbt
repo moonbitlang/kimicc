@@ -3,9 +3,9 @@
 fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
   // Parse first declarator
   let decl = self.parse_declarator(base_ty)
-  let post_decl_align = self.skip_attributes_align()
+  let post_decl_attrs = self.skip_attributes_info()
   if decl.name != "" {
-    let decl_ty = apply_decl_align(resolve_var_type(decl), post_decl_align)
+    let decl_ty = self.apply_decl_attrs(resolve_var_type(decl), post_decl_attrs)
     let mut init : GlobalInit? = None
     if self.token == Assign {
       self.advance()
@@ -29,11 +29,11 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
   while self.token == Comma {
     self.advance()
     let extra = self.parse_declarator(base_ty)
-    let extra_post_decl_align = self.skip_attributes_align()
+    let extra_post_decl_attrs = self.skip_attributes_info()
     if extra.name != "" {
-      let extra_ty = apply_decl_align(
+      let extra_ty = self.apply_decl_attrs(
         resolve_var_type(extra),
-        extra_post_decl_align,
+        extra_post_decl_attrs,
       )
       let mut extra_init : GlobalInit? = None
       if self.token == Assign {
@@ -156,10 +156,10 @@ fn Parser::parse_typedef(self : Parser) -> Unit {
   self.skip_attributes()
   // Parse first typedef declarator
   let decl = self.parse_declarator(spec.base_type)
-  let post_decl_align = self.skip_attributes_align()
-  self.typedefs[decl.name] = apply_decl_align(
+  let post_decl_attrs = self.skip_attributes_info()
+  self.typedefs[decl.name] = self.apply_decl_attrs(
     apply_decl_align(decl.ty, spec.align),
-    post_decl_align,
+    post_decl_attrs,
   )
   // Handle comma-separated typedef names: typedef int a, b, c;
   while self.token == Comma {
@@ -167,10 +167,10 @@ fn Parser::parse_typedef(self : Parser) -> Unit {
     self.skip_attributes()
     self.skip_qualifiers()
     let extra_decl = self.parse_declarator(spec.base_type)
-    let extra_post_decl_align = self.skip_attributes_align()
-    self.typedefs[extra_decl.name] = apply_decl_align(
+    let extra_post_decl_attrs = self.skip_attributes_info()
+    self.typedefs[extra_decl.name] = self.apply_decl_attrs(
       apply_decl_align(extra_decl.ty, spec.align),
-      extra_post_decl_align,
+      extra_post_decl_attrs,
     )
   }
   self.expect(Semicolon)

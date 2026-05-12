@@ -166,6 +166,38 @@ test "parse unsupported float128 layout constants for linux" {
 }
 
 ///|
+test "parse GNU mode attributes for linux integer typedef layout" {
+  let linux = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => fail("linux-amd64 target should parse")
+  }
+  let source =
+    #|typedef int register_t __attribute__((__mode__(__word__)));
+    #|typedef unsigned int fpu_control_t __attribute__((mode(__HI__)));
+    #|typedef int spec_small_t __attribute__((mode(HI)));
+    #|int main(void) {
+    #|  int reg_size[sizeof(register_t)];
+    #|  int fpu_size[sizeof(fpu_control_t)];
+    #|  int spec_size[sizeof(spec_small_t)];
+    #|  return 0;
+    #|}
+  let prog = @parser.parse_for_target(source, linux)
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [
+          VarDecl(Array(SInt, 8), "reg_size", None),
+          VarDecl(Array(SInt, 2), "fpu_size", None),
+          VarDecl(Array(SInt, 2), "spec_size", None),
+          Return(Some(Number(0))),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected GNU mode integer typedef layout constants")
+  }
+}
+
+///|
 test "parse long double external declaration as distinct type" {
   let source = "extern long double fabsl(long double);"
   let prog = @parser.parse(source)

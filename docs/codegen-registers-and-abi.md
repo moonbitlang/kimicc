@@ -325,6 +325,9 @@ GNU `__builtin_classify_type` is also folded before backend lowering.
 aggregate layout, ELF global alignment, and stack-local frame realignment.
 Functions that need a local frame alignment greater than 16 bytes save and
 restore `r13` when using it as the aligned local-frame base. GNU
+`__attribute__((mode(...)))` maps common Linux header scalar modes such as `HI`,
+`DI`, `word`, and `unwind_word` onto the corresponding covered parser scalar
+types before ABI layout and codegen. GNU
 `__attribute__((packed))` participates in aggregate layout, and packed
 aggregates with unaligned fields become System V memory-class arguments and
 returns. The same unaligned-field rule is applied when a non-packed outer

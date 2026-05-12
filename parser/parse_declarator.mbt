@@ -6,6 +6,7 @@ priv struct DeclSpec {
   mut is_inline : Bool
   mut is_auto_type : Bool
   mut align : Int?
+  mut mode : String?
 }
 
 ///|
@@ -33,8 +34,11 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     is_inline: false,
     is_auto_type: false,
     align: None,
+    mode: None,
   }
-  spec.align = merge_align(spec.align, self.skip_attributes_align())
+  let leading_attrs = self.skip_attributes_info()
+  spec.align = merge_align(spec.align, leading_attrs.align)
+  spec.mode = merge_mode(spec.mode, leading_attrs.mode)
   let mut has_void = false
   let mut has_char = false
   let mut has_short = false
@@ -62,7 +66,9 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
   let mut saw_typedef_name = false
   let mut has_va_list = false
   while true {
-    spec.align = merge_align(spec.align, self.skip_attributes_align())
+    let attrs = self.skip_attributes_info()
+    spec.align = merge_align(spec.align, attrs.align)
+    spec.mode = merge_mode(spec.mode, attrs.mode)
     let mut consumed = false
     // Storage class specifiers
     if !consumed {
@@ -381,6 +387,7 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
   if has_atomic_qualifier {
     spec.base_type = Atomic(spec.base_type)
   }
+  spec.base_type = self.apply_decl_mode(spec.base_type, spec.mode)
   spec
 }
 
@@ -555,10 +562,10 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] {
     self.skip_qualifiers()
     let spec = self.parse_decl_specifiers()
     let decl = self.parse_declarator(spec.base_type)
-    let post_decl_align = self.skip_attributes_align()
-    let field_ty = apply_decl_align(
+    let post_decl_attrs = self.skip_attributes_info()
+    let field_ty = self.apply_decl_attrs(
       apply_decl_align(decl.ty, spec.align),
-      post_decl_align,
+      post_decl_attrs,
     )
     let bit_width = if self.token == Colon {
       self.advance()
@@ -575,10 +582,10 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] {
       self.skip_attributes()
       self.skip_qualifiers()
       let extra = self.parse_declarator(spec.base_type)
-      let extra_post_decl_align = self.skip_attributes_align()
-      let extra_ty = apply_decl_align(
+      let extra_post_decl_attrs = self.skip_attributes_info()
+      let extra_ty = self.apply_decl_attrs(
         apply_decl_align(extra.ty, spec.align),
-        extra_post_decl_align,
+        extra_post_decl_attrs,
       )
       let extra_bit_width = if self.token == Colon {
         self.advance()

@@ -111,6 +111,11 @@ the target split real and testable without claiming full C ABI coverage yet.
   alignment keep `rbp` as the incoming frame anchor and use an aligned
   local-frame base, preserving the callee-saved register used for that base
   before returning.
+- GNU `__attribute__((mode(...)))` is honored for common scalar modes used by
+  Linux headers, including `QI`, `HI`, `SI`, `DI`, `TI`, `word`, and
+  `unwind_word`. This keeps ABI typedefs such as `register_t` and
+  `fpu_control_t` at their Linux x86-64 widths instead of silently falling back
+  to the spelling's nominal base type.
 - GNU `__attribute__((packed))` on struct/union declarations is preserved for
   layout. Packed aggregates with unaligned fields are classified as System V
   memory-class arguments/returns, including non-packed outer aggregates that

@@ -2319,6 +2319,8 @@ cat > "$system_header_source_path" <<'C'
 #include <stdalign.h>
 #include <stdbool.h>
 #include <stdarg.h>
+#include <sys/types.h>
+#include <fpu_control.h>
 #include <limits.h>
 #include <float.h>
 
@@ -2347,6 +2349,8 @@ _Static_assert(sizeof(int64_t) == 8, "stdint int64 width");
 _Static_assert(sizeof(uint64_t) == 8, "stdint uint64 width");
 _Static_assert(sizeof(size_t) == 8, "stddef size_t width");
 _Static_assert(sizeof(ptrdiff_t) == 8, "stddef ptrdiff_t width");
+_Static_assert(sizeof(register_t) == 8, "sys/types register_t width");
+_Static_assert(sizeof(fpu_control_t) == 2, "fpu_control_t width");
 _Static_assert((int64_t)-1 < 0, "stdint int64 signedness");
 _Static_assert((ptrdiff_t)-1 < 0, "stddef ptrdiff_t signedness");
 _Static_assert(alignof(unsigned long) == 8, "unsigned long alignment");

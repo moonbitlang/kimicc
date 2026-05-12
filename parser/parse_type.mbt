@@ -2,6 +2,7 @@
 priv struct AttributeInfo {
   mut is_packed : Bool
   mut align : Int?
+  mut mode : String?
 }
 
 ///|
@@ -11,6 +12,14 @@ fn merge_align(lhs : Int?, rhs : Int?) -> Int? {
     (Some(_), None) => lhs
     (None, Some(_)) => rhs
     (None, None) => None
+  }
+}
+
+///|
+fn merge_mode(lhs : String?, rhs : String?) -> String? {
+  match rhs {
+    Some(_) => rhs
+    None => lhs
   }
 }
 
@@ -47,7 +56,7 @@ fn Parser::skip_qualifiers(self : Parser) -> Unit {
 
 ///|
 fn Parser::skip_attributes_info(self : Parser) -> AttributeInfo {
-  let info : AttributeInfo = { is_packed: false, align: None }
+  let info : AttributeInfo = { is_packed: false, align: None, mode: None }
   while self.token == Ident("__attribute__") ||
         self.token == Ident("__attribute") ||
         self.token == Ident("__asm") ||
@@ -67,6 +76,21 @@ fn Parser::skip_attributes_info(self : Parser) -> AttributeInfo {
           | Ident("ext_vector_type")
           | Ident("__ext_vector_type__") =>
             abort("vector types are not supported")
+          Ident("mode") | Ident("__mode__") => {
+            self.advance()
+            if self.token == LParen {
+              self.advance()
+              match self.token {
+                Ident(mode_name) => {
+                  info.mode = Some(canonical_mode_name(mode_name))
+                  self.advance()
+                }
+                _ => ()
+              }
+              self.expect(RParen)
+            }
+            continue
+          }
           Ident("aligned") | Ident("__aligned__") => {
             self.advance()
             if self.token == LParen {
@@ -105,13 +129,92 @@ fn Parser::skip_attributes_info(self : Parser) -> AttributeInfo {
 }
 
 ///|
-fn Parser::skip_attributes_packed(self : Parser) -> Bool {
-  self.skip_attributes_info().is_packed
+fn canonical_mode_name(name : String) -> String {
+  let mut start = 0
+  let mut end = name.length()
+  if name.length() >= 2 && name[0] == '_' && name[1] == '_' {
+    start = 2
+  }
+  if end - start >= 2 && name[end - 1] == '_' && name[end - 2] == '_' {
+    end = end - 2
+  }
+  name[start:end].to_owned()
 }
 
 ///|
-fn Parser::skip_attributes_align(self : Parser) -> Int? {
-  self.skip_attributes_info().align
+fn type_is_unsigned_integer(ty : Type) -> Bool {
+  match ty {
+    Bool | UChar | UShort | UInt | ULong | ULongLong | UInt128 => true
+    Atomic(inner) | Aligned(inner, _) => type_is_unsigned_integer(inner)
+    _ => false
+  }
+}
+
+///|
+fn sized_integer_type(unsigned : Bool, bits : Int) -> Type {
+  match bits {
+    8 => if unsigned { UChar } else { SChar }
+    16 => if unsigned { UShort } else { SShort }
+    32 => if unsigned { UInt } else { SInt }
+    64 => if unsigned { ULong } else { SLong }
+    128 => if unsigned { UInt128 } else { SInt128 }
+    _ => abort("unsupported mode integer width")
+  }
+}
+
+///|
+fn Parser::apply_decl_mode(self : Parser, ty : Type, mode : String?) -> Type {
+  match mode {
+    None => ty
+    Some(name) => {
+      let unsigned = type_is_unsigned_integer(ty)
+      let word_bits = match self.target {
+        DarwinArm64 | LinuxAmd64 => 64
+      }
+      match name {
+        "QI" => sized_integer_type(unsigned, 8)
+        "HI" => sized_integer_type(unsigned, 16)
+        "SI" => sized_integer_type(unsigned, 32)
+        "DI" => sized_integer_type(unsigned, 64)
+        "word" | "unwind_word" => sized_integer_type(unsigned, word_bits)
+        "TI" => sized_integer_type(unsigned, 128)
+        "HF" => Float16
+        "SF" => Float
+        "DF" => Double
+        "XF" => LongDouble
+        "TF" => Float128
+        "HC" | "SC" | "DC" | "XC" | "TC" =>
+          abort("_Complex types are not supported")
+        "V2QI"
+        | "V4QI"
+        | "V8QI"
+        | "V16QI"
+        | "V2HI"
+        | "V4HI"
+        | "V8HI"
+        | "V2SI"
+        | "V4SI"
+        | "V2DI"
+        | "V4SF"
+        | "V2DF" => abort("vector types are not supported")
+        _ => abort("unsupported mode attribute: " + name)
+      }
+    }
+  }
+}
+
+///|
+fn Parser::apply_decl_attrs(
+  self : Parser,
+  ty : Type,
+  attrs : AttributeInfo,
+) -> Type {
+  apply_decl_align(self.apply_decl_mode(ty, attrs.mode), attrs.align)
+}
+
+///|
+fn Parser::skip_attributes_packed(self : Parser) -> Bool {
+  self.skip_attributes_info().is_packed
 }
 
 ///|

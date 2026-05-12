@@ -13,7 +13,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
     spec.is_inline = true
   }
   let decl = self.parse_declarator(spec.base_type)
-  let post_decl_align = self.skip_attributes_align()
+  let post_decl_attrs = self.skip_attributes_info()
   // If no name and no function suffix, skip to semicolon
   if decl.name == "" && decl.func_params is None {
     while self.token != Semicolon && self.token != EOF {
@@ -112,7 +112,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
     self.token == Assign ||
     self.token == Comma ||
     self.token == LBracket {
-    self.parse_global_var_tail(spec, decl, post_decl_align)
+    self.parse_global_var_tail(spec, decl, post_decl_attrs)
     return {
       ret: Void,
       name: "",
@@ -162,11 +162,11 @@ fn Parser::parse_global_var_tail(
   self : Parser,
   spec : DeclSpec,
   decl : DeclaratorResult,
-  post_decl_align : Int?,
+  post_decl_attrs : AttributeInfo,
 ) -> Unit {
-  let mut ty = apply_decl_align(
+  let mut ty = self.apply_decl_attrs(
     apply_decl_align(resolve_var_type(decl), spec.align),
-    post_decl_align,
+    post_decl_attrs,
   )
   let name = decl.name
   let mut init : GlobalInit? = None
@@ -211,10 +211,10 @@ fn Parser::parse_global_var_tail(
   while self.token == Comma {
     self.advance()
     let extra_decl = self.parse_declarator(spec.base_type)
-    let extra_post_decl_align = self.skip_attributes_align()
-    let mut extra_ty = apply_decl_align(
+    let extra_post_decl_attrs = self.skip_attributes_info()
+    let mut extra_ty = self.apply_decl_attrs(
       apply_decl_align(resolve_var_type(extra_decl), spec.align),
-      extra_post_decl_align,
+      extra_post_decl_attrs,
     )
     let mut extra_init : GlobalInit? = None
     if self.token == Assign {
@@ -265,9 +265,12 @@ fn Parser::parse_param(self : Parser) -> Param {
   }
   let spec = self.parse_decl_specifiers()
   let decl = self.parse_declarator(spec.base_type)
-  let post_decl_align = self.skip_attributes_align()
+  let post_decl_attrs = self.skip_attributes_info()
   {
-    ty: apply_decl_align(apply_decl_align(decl.ty, spec.align), post_decl_align),
+    ty: self.apply_decl_attrs(
+      apply_decl_align(decl.ty, spec.align),
+      post_decl_attrs,
+    ),
     name: decl.name,
     bit_width: None,
   }

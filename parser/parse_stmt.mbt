@@ -813,10 +813,10 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
   let stmts = []
   // Parse first declarator
   let decl = self.parse_declarator(spec.base_type)
-  let post_decl_align = self.skip_attributes_align()
-  let decl_ty = apply_decl_align(
+  let post_decl_attrs = self.skip_attributes_info()
+  let decl_ty = self.apply_decl_attrs(
     apply_decl_align(resolve_var_type(decl), spec.align),
-    post_decl_align,
+    post_decl_attrs,
   )
   if spec.is_auto_type {
     if spec.is_static ||
@@ -828,7 +828,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
     self.expect(Assign)
     let expr = self.parse_assign()
     let inferred_ty = auto_decl_type(self.const_expr_type(expr))
-    let ty = apply_decl_align(inferred_ty, post_decl_align)
+    let ty = self.apply_decl_attrs(inferred_ty, post_decl_attrs)
     self.expect(Semicolon)
     self.remember_value_type(decl.name, ty)
     return VarDecl(ty, decl.name, Some(expr))
@@ -871,10 +871,10 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
     while self.token == Comma {
       self.advance()
       let extra_decl = self.parse_declarator(spec.base_type)
-      let extra_post_decl_align = self.skip_attributes_align()
-      let extra_decl_ty = apply_decl_align(
+      let extra_post_decl_attrs = self.skip_attributes_info()
+      let extra_decl_ty = self.apply_decl_attrs(
         apply_decl_align(resolve_var_type(extra_decl), spec.align),
-        extra_post_decl_align,
+        extra_post_decl_attrs,
       )
       let extra_mangled = if spec.is_static {
         self.register_static_local(extra_decl.name)
@@ -983,10 +983,10 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
   while self.token == Comma {
     self.advance()
     let extra_decl = self.parse_declarator(spec.base_type)
-    let extra_post_decl_align = self.skip_attributes_align()
-    let extra_decl_ty = apply_decl_align(
+    let extra_post_decl_attrs = self.skip_attributes_info()
+    let extra_decl_ty = self.apply_decl_attrs(
       apply_decl_align(resolve_var_type(extra_decl), spec.align),
-      extra_post_decl_align,
+      extra_post_decl_attrs,
     )
     let mut remembered_extra_ty = extra_decl_ty
     if self.token == Assign {
