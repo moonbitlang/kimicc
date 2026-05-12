@@ -303,6 +303,8 @@ fn Preprocessor::seed_linux_amd64_macros(self : Preprocessor) -> Unit {
   self.seed_macro("__LDBL_HAS_QUIET_NAN__", "1")
   self.seed_macro("__WINT_TYPE__", "unsigned int")
   self.seed_macro("__WINT_MAX__", "4294967295U")
+  self.seed_macro("__WINT_UNSIGNED__", "1")
+  self.seed_macro("__NO_MATH_INLINES", "1")
 }
 
 ///|

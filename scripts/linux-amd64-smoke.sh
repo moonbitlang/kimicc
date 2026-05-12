@@ -1088,10 +1088,15 @@ int target_predefines(void) {
 #else
   return 512;
 #endif
-#if __WCHAR_WIDTH__ == 32 && __WINT_WIDTH__ == 32 && __SIG_ATOMIC_WIDTH__ == 32 && __SIG_ATOMIC_MAX__ == 2147483647
+#if __WCHAR_WIDTH__ == 32 && __WINT_WIDTH__ == 32 && __WINT_UNSIGNED__ == 1 && __SIG_ATOMIC_WIDTH__ == 32 && __SIG_ATOMIC_MAX__ == 2147483647
   target = target + 0;
 #else
   return 578;
+#endif
+#if defined(__NO_MATH_INLINES) && __NO_MATH_INLINES == 1
+  target = target + 0;
+#else
+  return 579;
 #endif
 #if __ATOMIC_SEQ_CST == 5 && __GCC_ATOMIC_POINTER_LOCK_FREE == 2
   target = target + 0;

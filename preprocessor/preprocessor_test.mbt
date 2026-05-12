@@ -287,7 +287,7 @@ test "linux amd64 predefined macros cover system header probes" {
     #|#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ && __FLOAT_WORD_ORDER__ == __ORDER_LITTLE_ENDIAN__ && __ORDER_PDP_ENDIAN__ == 3412
     #|#if __BIGGEST_ALIGNMENT__ == 16 && __SIZEOF_LONG_DOUBLE__ == 16
     #|#if __SIZE_MAX__ == 18446744073709551615UL && __UINTPTR_MAX__ == 18446744073709551615UL && __PTRDIFF_MAX__ == 9223372036854775807L
-    #|#if __WCHAR_WIDTH__ == 32 && __WINT_WIDTH__ == 32 && __SIG_ATOMIC_WIDTH__ == 32 && __SIG_ATOMIC_MAX__ == 2147483647
+    #|#if __WCHAR_WIDTH__ == 32 && __WINT_WIDTH__ == 32 && __WINT_UNSIGNED__ == 1 && __SIG_ATOMIC_WIDTH__ == 32 && __SIG_ATOMIC_MAX__ == 2147483647
     #|#if __ATOMIC_SEQ_CST == 5 && __GCC_ATOMIC_POINTER_LOCK_FREE == 2
     #|int probes = 1;
     #|#else
@@ -314,6 +314,11 @@ test "linux amd64 predefined macros cover system header probes" {
     #|#else
     #|int clang_version_probes = 2;
     #|#endif
+    #|#if defined(__NO_MATH_INLINES) && __NO_MATH_INLINES == 1
+    #|int math_inline_probes = 1;
+    #|#else
+    #|int math_inline_probes = 2;
+    #|#endif
     #|int prefix = __USER_LABEL_PREFIX__ 9;
     #|const char *clang_version = __clang_version__;
     #|const char *compiler_version = __VERSION__;
@@ -332,6 +337,7 @@ test "linux amd64 predefined macros cover system header probes" {
           #|int float_probes=1;
           #|int int64_probes=1;
           #|int clang_version_probes=1;
+          #|int math_inline_probes=1;
           #|int prefix=9;
           #|const char*clang_version="kimicc clang-compatible preprocessor";
           #|const char*compiler_version="kimicc";
