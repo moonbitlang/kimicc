@@ -45,9 +45,9 @@ jobs:
 
       - name: Check generated interfaces
         run: |
-          moon info
+          moon info --target native
           if ! git diff --exit-code; then
-            echo "::error::moon info produced interface changes - run 'moon info' locally and commit the result"
+            echo "::error::moon info --target native produced interface changes - run 'moon info --target native' locally and commit the result"
             exit 1
           fi
 
