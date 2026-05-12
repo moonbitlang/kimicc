@@ -2270,11 +2270,13 @@ fi
 cat > "$libc_runtime_source_path" <<'C'
 #include <ctype.h>
 #include <errno.h>
+#include <locale.h>
 #include <math.h>
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wchar.h>
 
 static jmp_buf jb;
 
@@ -2293,11 +2295,13 @@ int jump_once(int n) {
 
 int main(void) {
   char buf[64];
+  char narrow[8];
   char *end = 0;
   int values[5] = { 5, 1, 4, 2, 3 };
   int key = 3;
   int *found;
   char *env;
+  wchar_t wide[8];
   size_t (*strlen_ptr)(const char *) = strlen;
   long v = strtol("123x", &end, 10);
   if (v != 123 || *end != 'x') return 11;
@@ -2319,6 +2323,14 @@ int main(void) {
   if (!env || strcmp(env, "ok") != 0) return 24;
   if (unsetenv("KIMICC_LINUX_AMD64_SMOKE_ENV") != 0) return 25;
   if (getenv("KIMICC_LINUX_AMD64_SMOKE_ENV")) return 26;
+  if (!setlocale(LC_ALL, "C")) return 27;
+  if (mbstowcs(wide, "abc", 8) != 3) return 28;
+  if (wcslen(wide) != 3) return 29;
+  if (wide[0] != (wchar_t)'a' || wide[2] != (wchar_t)'c') return 30;
+  if (wcstombs(narrow, wide, sizeof(narrow)) != 3) return 31;
+  if (strcmp(narrow, "abc") != 0) return 32;
+  if (btowc('Z') != (wint_t)'Z') return 33;
+  if (wctob((wint_t)'Q') != 'Q') return 34;
   return 42;
 }
 C

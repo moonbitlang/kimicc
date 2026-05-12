@@ -475,8 +475,9 @@ libc/POSIX headers such as `assert.h`, `ctype.h`, `dirent.h`, `inttypes.h`,
 the generated `va_list` state to glibc `vsnprintf`, covering a real libc
 v-function smoke without claiming complete `va_list` interoperability. Another
 linked libc runtime probe covers ordinary calls through glibc declarations such
-as `strtol`, `isdigit`, `tolower`, `snprintf`, `strerror`, `sqrt`, `setjmp`, and
-`longjmp`, plus `qsort`, `bsearch`, `setenv`, `getenv`, and `unsetenv`; the
+as `strtol`, `isdigit`, `tolower`, `snprintf`, `strerror`, `sqrt`, `setjmp`,
+`longjmp`, `setlocale`, `mbstowcs`, `wcstombs`, `wcslen`, `btowc`, and `wctob`,
+plus `qsort`, `bsearch`, `setenv`, `getenv`, and `unsetenv`; the
 `qsort` and `bsearch` cases check glibc callbacks into a kimicc-generated
 function pointer. The same libc probe also calls `strlen` through a
 kimicc-generated function pointer loaded from the external glibc declaration. A
