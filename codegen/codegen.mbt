@@ -120,6 +120,17 @@ fn merge_global_visibility(
 }
 
 ///|
+fn merge_global_alias(
+  primary : @parser.GlobalDecl,
+  other : @parser.GlobalDecl,
+) -> String? {
+  match primary.symbol_alias {
+    Some(_) => primary.symbol_alias
+    None => other.symbol_alias
+  }
+}
+
+///|
 fn with_merged_global_attrs(
   primary : @parser.GlobalDecl,
   other : @parser.GlobalDecl,
@@ -132,6 +143,7 @@ fn with_merged_global_attrs(
     is_extern: primary.is_extern,
     is_weak: primary.is_weak || other.is_weak,
     visibility: merge_global_visibility(primary, other),
+    symbol_alias: merge_global_alias(primary, other),
   }
 }
 

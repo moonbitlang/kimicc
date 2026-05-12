@@ -9,6 +9,7 @@ priv struct DeclSpec {
   mut mode : String?
   mut is_weak : Bool
   mut visibility : String?
+  mut symbol_alias : String?
 }
 
 ///|
@@ -39,12 +40,14 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     mode: None,
     is_weak: false,
     visibility: None,
+    symbol_alias: None,
   }
   let leading_attrs = self.skip_attributes_info()
   spec.align = merge_align(spec.align, leading_attrs.align)
   spec.mode = merge_mode(spec.mode, leading_attrs.mode)
   spec.is_weak = spec.is_weak || leading_attrs.is_weak
   spec.visibility = merge_visibility(spec.visibility, leading_attrs.visibility)
+  spec.symbol_alias = merge_alias(spec.symbol_alias, leading_attrs.symbol_alias)
   let mut has_void = false
   let mut has_char = false
   let mut has_short = false
@@ -77,6 +80,7 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     spec.mode = merge_mode(spec.mode, attrs.mode)
     spec.is_weak = spec.is_weak || attrs.is_weak
     spec.visibility = merge_visibility(spec.visibility, attrs.visibility)
+    spec.symbol_alias = merge_alias(spec.symbol_alias, attrs.symbol_alias)
     let mut consumed = false
     // Storage class specifiers
     if !consumed {

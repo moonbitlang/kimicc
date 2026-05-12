@@ -5,6 +5,7 @@ priv struct AttributeInfo {
   mut mode : String?
   mut is_weak : Bool
   mut visibility : String?
+  mut symbol_alias : String?
 }
 
 ///|
@@ -27,6 +28,14 @@ fn merge_mode(lhs : String?, rhs : String?) -> String? {
 
 ///|
 fn merge_visibility(lhs : String?, rhs : String?) -> String? {
+  match rhs {
+    Some(_) => rhs
+    None => lhs
+  }
+}
+
+///|
+fn merge_alias(lhs : String?, rhs : String?) -> String? {
   match rhs {
     Some(_) => rhs
     None => lhs
@@ -72,6 +81,7 @@ fn Parser::skip_attributes_info(self : Parser) -> AttributeInfo {
     mode: None,
     is_weak: false,
     visibility: None,
+    symbol_alias: None,
   }
   while self.token == Ident("__attribute__") ||
         self.token == Ident("__attribute") ||
@@ -88,6 +98,21 @@ fn Parser::skip_attributes_info(self : Parser) -> AttributeInfo {
         match self.token {
           Ident("packed") | Ident("__packed__") => info.is_packed = true
           Ident("weak") | Ident("__weak__") => info.is_weak = true
+          Ident("alias") | Ident("__alias__") => {
+            self.advance()
+            if self.token == LParen {
+              self.advance()
+              match self.token {
+                String(name) => {
+                  info.symbol_alias = Some(name)
+                  self.advance()
+                }
+                _ => ()
+              }
+              self.expect(RParen)
+            }
+            continue
+          }
           Ident("visibility") | Ident("__visibility__") => {
             self.advance()
             if self.token == LParen {

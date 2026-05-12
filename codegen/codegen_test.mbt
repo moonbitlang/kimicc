@@ -2112,6 +2112,34 @@ test "generate linux amd64 emits symbol visibility directives" {
 }
 
 ///|
+test "generate linux amd64 emits symbol aliases" {
+  let source =
+    #|int alias_target(void) { return 42; }
+    #|extern int alias_answer(void) __attribute__((alias("alias_target")));
+    #|int alias_global_target = 7;
+    #|extern int alias_global __attribute__((alias("alias_global_target")));
+    #|int main(void) { return alias_answer() + alias_global; }
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(assembly.contains("\t.type\talias_answer, @function"), content="true")
+  inspect(
+    assembly.contains("\t.set\talias_answer, alias_target"),
+    content="true",
+  )
+  inspect(assembly.contains("\t.type\talias_global, @object"), content="true")
+  inspect(
+    assembly.contains("\t.set\talias_global, alias_global_target"),
+    content="true",
+  )
+  inspect(assembly.contains("alias_answer@GOTPCREL"), content="false")
+  inspect(assembly.contains("alias_global@GOTPCREL"), content="false")
+}
+
+///|
 test "generate linux amd64 loads external declaration addresses through GOT" {
   let source =
     #|extern int strong_external(void);

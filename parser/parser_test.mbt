@@ -900,6 +900,30 @@ test "parse GNU visibility attributes" {
 }
 
 ///|
+test "parse GNU alias attributes" {
+  let source =
+    #|int alias_target(void) { return 1; }
+    #|extern int alias_fn(void) __attribute__((alias("alias_target")));
+    #|int alias_value_target = 2;
+    #|extern int alias_value __attribute__((__alias__("alias_value_target")));
+  let prog = @parser.parse(source)
+  match prog.decls {
+    [
+      { name: "alias_target", symbol_alias: None, .. },
+      { name: "alias_fn", symbol_alias: Some("alias_target"), .. },
+    ] => ()
+    _ => fail("Expected function alias attribute to be recorded")
+  }
+  match prog.globals {
+    [
+      { name: "alias_value_target", symbol_alias: None, .. },
+      { name: "alias_value", symbol_alias: Some("alias_value_target"), .. },
+    ] => ()
+    _ => fail("Expected global alias attribute to be recorded")
+  }
+}
+
+///|
 test "parse pointer to struct member access" {
   let source =
     #|struct Node { int val; struct Node *next; };

@@ -8410,16 +8410,29 @@ fn X64Codegen::emit_globals(
   globals : Array[@parser.GlobalDecl],
 ) -> Unit {
   for g in globals {
-    if g.init is None && g.is_extern && g.is_weak && !g.is_static {
-      self.emit("\t.weak\t" + g.name)
-    }
-    if g.init is None && g.is_extern {
-      self.emit_symbol_visibility(g.name, g.is_static, g.visibility)
+    match g.symbol_alias {
+      Some(target) =>
+        self.emit_symbol_alias(
+          g.name,
+          target,
+          g.is_static,
+          g.is_weak,
+          g.visibility,
+          Some("@object"),
+        )
+      None => {
+        if g.init is None && g.is_extern && g.is_weak && !g.is_static {
+          self.emit("\t.weak\t" + g.name)
+        }
+        if g.init is None && g.is_extern {
+          self.emit_symbol_visibility(g.name, g.is_static, g.visibility)
+        }
+      }
     }
   }
   let mut has_data = false
   for g in globals {
-    if g.init is Some(_) {
+    if g.init is Some(_) && g.symbol_alias is None {
       if !has_data {
         self.emit("\t.data")
         has_data = true
@@ -8436,7 +8449,7 @@ fn X64Codegen::emit_globals(
   }
   let mut has_bss = false
   for g in globals {
-    if g.init is None && !g.is_extern {
+    if g.init is None && !g.is_extern && g.symbol_alias is None {
       if !has_bss {
         self.emit("\t.bss")
         has_bss = true
@@ -8486,9 +8499,27 @@ fn X64Codegen::emit_symbol_visibility(
 }
 
 ///|
+fn X64Codegen::emit_symbol_alias(
+  self : X64Codegen,
+  name : String,
+  target : String,
+  is_static : Bool,
+  is_weak : Bool,
+  visibility : String?,
+  symbol_type : String?,
+) -> Unit {
+  self.emit_symbol_binding(name, is_static, is_weak, visibility)
+  match symbol_type {
+    Some(kind) => self.emit("\t.type\t" + name + ", " + kind)
+    None => ()
+  }
+  self.emit("\t.set\t" + name + ", " + target)
+}
+
+///|
 fn X64Codegen::symbol_addr_needs_got(self : X64Codegen, name : String) -> Bool {
   if self.globals.contains(name) {
-    self.globals[name].is_extern
+    self.globals[name].is_extern && self.globals[name].symbol_alias is None
   } else if self.func_rets.contains(name) {
     !self.func_defined.get_or_default(name, false)
   } else {
@@ -8544,7 +8575,7 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
     self.func_rets[decl.name] = decl.ret
     self.func_variadic[decl.name] = decl.variadic
     self.func_param_counts[decl.name] = decl.params.length()
-    if decl.body is Some(_) {
+    if decl.body is Some(_) || decl.symbol_alias is Some(_) {
       self.func_defined[decl.name] = true
     } else if !self.func_defined.contains(decl.name) {
       self.func_defined[decl.name] = false
@@ -8565,12 +8596,24 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
     self.globals[g.name] = g
   }
   for decl in prog.decls {
-    if decl.body is None &&
-      self.func_weak.get_or_default(decl.name, false) &&
-      !decl.is_static {
-      self.emit("\t.weak\t" + decl.name)
+    match decl.symbol_alias {
+      Some(target) =>
+        self.emit_symbol_alias(
+          decl.name,
+          target,
+          decl.is_static,
+          decl.is_weak,
+          decl.visibility,
+          Some("@function"),
+        )
+      None =>
+        if decl.body is None &&
+          self.func_weak.get_or_default(decl.name, false) &&
+          !decl.is_static {
+          self.emit("\t.weak\t" + decl.name)
+        }
     }
-    if decl.body is None {
+    if decl.symbol_alias is None && decl.body is None {
       self.emit_symbol_visibility(decl.name, decl.is_static, decl.visibility)
     }
   }
