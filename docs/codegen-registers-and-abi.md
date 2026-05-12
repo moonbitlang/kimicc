@@ -163,8 +163,9 @@ matrix and residual known failures.
 Do not treat this as full ABI compliance yet. Known reasons include:
 
 - there is no independent ABI classification table separate from codegen;
-- `_Float16`, vector/SIMD C types, and HFA/HVA aggregate rules are not modeled
-  as first-class supported types;
+- `_Float16` is parsed only as an unsupported placeholder type, while
+  vector/SIMD C types and HFA/HVA aggregate rules are not modeled as
+  first-class supported types;
 - unusual packing, alignment, and extension combinations need more differential
   coverage;
 - the full C language and GNU/Clang extension surface is still growing.

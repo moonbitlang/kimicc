@@ -65,6 +65,16 @@ test "parse function pointer parameter types" {
 }
 
 ///|
+test "parse unsupported float16 external declaration as placeholder type" {
+  let source = "extern _Float16 __fabsf16(_Float16);"
+  let prog = @parser.parse(source)
+  match prog.decls[0] {
+    { ret: Float16, name: "__fabsf16", params: [{ ty: Float16, .. }], .. } => ()
+    _ => fail("Expected _Float16 placeholder function declaration")
+  }
+}
+
+///|
 test "parse block-scope builtin va list declaration" {
   let source = "int main() { __builtin_va_list ap; return 0; }"
   let prog = @parser.parse(source)

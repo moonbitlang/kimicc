@@ -368,6 +368,10 @@ SSE/MMX/FXSR CPU feature macros, segment address-space macros such as
 `__SEG_FS` and `__seg_fs`, LLVM identity macros, Objective-C/CFString macros,
 C23 `#embed` result macros, and inline-assembly capability macros such as
 `__GCC_ASM_FLAG_OUTPUTS__` and `__GCC_HAVE_DWARF2_CFI_ASM`.
+Unsupported extension type spellings such as `_Float16` are parsed as distinct
+unsupported placeholder types so external declarations in system headers do not
+silently become `int`; code generation still fails if such a type needs layout
+or ABI lowering.
 
 ## Local Smoke Test On ARM64 macOS
 

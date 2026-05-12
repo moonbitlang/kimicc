@@ -5,6 +5,7 @@ fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
     Bool | SChar | UChar => 1
     SShort | UShort => 2
     SInt | UInt | Float => 4
+    Float16 => abort("_Float16 size is not supported")
     SLong
     | ULong
     | SLongLong
@@ -84,6 +85,7 @@ fn Codegen::type_align(self : Codegen, ty : @parser.Type) -> Int {
     Bool | SChar | UChar => 1
     SShort | UShort => 2
     SInt | UInt | Float => 4
+    Float16 => abort("_Float16 alignment is not supported")
     SLong
     | ULong
     | SLongLong

@@ -19,6 +19,7 @@ pub(all) enum Type {
   SInt128
   UInt128
   Float
+  Float16
   Double
   Struct(String)
   Union(String)
@@ -59,6 +60,7 @@ pub impl Show for Type with to_string(self) {
     SInt128 => "SInt128"
     UInt128 => "UInt128"
     Float => "Float"
+    Float16 => "Float16"
     Double => "Double"
     Struct(name) => "Struct(" + name + ")"
     Union(name) => "Union(" + name + ")"
@@ -115,7 +117,7 @@ pub fn Type::is_signed(self : Type) -> Bool {
 }
 
 ///|
-/// Returns true for `float` and `double`.
+/// Returns true for supported `float` and `double` arithmetic types.
 pub fn Type::is_floating(self : Type) -> Bool {
   match self {
     Float | Double => true
@@ -152,6 +154,7 @@ pub fn Type::size(self : Type) -> Int {
     Bool | SChar | UChar => 1
     SShort | UShort => 2
     SInt | UInt | Float => 4
+    Float16 => abort("_Float16 size is not supported")
     SLong
     | ULong
     | SLongLong
@@ -183,6 +186,7 @@ pub fn Type::align(self : Type) -> Int {
     Bool | SChar | UChar => 1
     SShort | UShort => 2
     SInt | UInt | Float => 4
+    Float16 => abort("_Float16 alignment is not supported")
     SLong
     | ULong
     | SLongLong

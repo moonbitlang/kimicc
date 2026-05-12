@@ -40,6 +40,7 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
   let mut has_short = false
   let mut long_count = 0
   let mut has_float = false
+  let mut has_float16 = false
   let mut has_double = false
   let mut has_int128 = false
   let mut has_unsigned = false
@@ -264,6 +265,7 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
             saw_primitive = true
             consumed = true
           } else if name == "_Float16" {
+            has_float16 = true
             self.advance()
             saw_primitive = true
             consumed = true
@@ -299,6 +301,8 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     spec.base_type = Void
   } else if has_bool {
     spec.base_type = Bool
+  } else if has_float16 {
+    spec.base_type = Float16
   } else if has_float {
     spec.base_type = Float
   } else if has_double {

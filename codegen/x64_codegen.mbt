@@ -269,6 +269,7 @@ fn X64Codegen::type_size(self : X64Codegen, ty : @parser.Type) -> Int {
         Bool | SChar | UChar => 1
         SShort | UShort => 2
         SInt | UInt | Float => 4
+        Float16 => abort("_Float16 size is not supported")
         SLong
         | ULong
         | SLongLong
@@ -343,6 +344,7 @@ fn X64Codegen::type_align(self : X64Codegen, ty : @parser.Type) -> Int {
         Bool | SChar | UChar => 1
         SShort | UShort => 2
         SInt | UInt | Float => 4
+        Float16 => abort("_Float16 alignment is not supported")
         SLong
         | ULong
         | SLongLong
@@ -548,6 +550,7 @@ fn X64Codegen::emit_pop_rax(self : X64Codegen) -> Unit {
 fn X64Codegen::emit_load_indirect(self : X64Codegen, ty : @parser.Type) -> Unit {
   match x64_core_type(ty) {
     Float => self.emit("\tmovss\txmm0, DWORD PTR [rax]")
+    Float16 => abort("_Float16 load is not supported")
     Double => self.emit("\tmovsd\txmm0, QWORD PTR [rax]")
     Bool | UChar => self.emit("\tmovzx\trax, BYTE PTR [rax]")
     SChar => self.emit("\tmovsx\trax, BYTE PTR [rax]")
@@ -574,6 +577,7 @@ fn X64Codegen::emit_store_indirect(
 ) -> Unit {
   match x64_core_type(ty) {
     Float => self.emit("\tmovss\tDWORD PTR [r10], xmm0")
+    Float16 => abort("_Float16 store is not supported")
     Double => self.emit("\tmovsd\tQWORD PTR [r10], xmm0")
     Bool | SChar | UChar => self.emit("\tmov\tBYTE PTR [r10], al")
     SShort | UShort => self.emit("\tmov\tWORD PTR [r10], ax")

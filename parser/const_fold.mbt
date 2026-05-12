@@ -619,6 +619,7 @@ fn basic_type_size(ty : Type) -> Int {
     Bool | SChar | UChar => 1
     SShort | UShort => 2
     SInt | UInt | Float => 4
+    Float16 => abort("_Float16 size is not supported")
     SLong
     | ULong
     | SLongLong
@@ -642,6 +643,7 @@ fn basic_type_align(ty : Type) -> Int {
     Bool | SChar | UChar => 1
     SShort | UShort => 2
     SInt | UInt | Float => 4
+    Float16 => abort("_Float16 alignment is not supported")
     SLong
     | ULong
     | SLongLong
@@ -672,6 +674,7 @@ fn Parser::const_type_size(self : Parser, ty : Type) -> Int {
     Bool | SChar | UChar => 1
     SShort | UShort => 2
     SInt | UInt | Float => 4
+    Float16 => abort("_Float16 size is not supported")
     SLong
     | ULong
     | SLongLong
@@ -695,6 +698,7 @@ fn Parser::const_type_align(self : Parser, ty : Type) -> Int {
     Bool | SChar | UChar => 1
     SShort | UShort => 2
     SInt | UInt | Float => 4
+    Float16 => abort("_Float16 alignment is not supported")
     SLong
     | ULong
     | SLongLong

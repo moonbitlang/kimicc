@@ -99,6 +99,39 @@ moon test codegen --target native
 moon test cmd/main --target native
 moon test preprocessor --target native
 
+expect_compile_failure() {
+  local label="$1"
+  local source="$2"
+  rm -f "$bad_asm_path"
+  set +e
+  python3 - "$kimicc" "$bad_asm_path" "$source" "$bad_stdout_path" "$bad_stderr_path" <<'PY'
+import subprocess
+import sys
+
+compiler, asm_path, source_path, stdout_path, stderr_path = sys.argv[1:]
+with open(stdout_path, "wb") as stdout, open(stderr_path, "wb") as stderr:
+    proc = subprocess.run(
+        [compiler, "-S", "-target", "linux-amd64", "-o", asm_path, source_path],
+        stdout=stdout,
+        stderr=stderr,
+    )
+code = proc.returncode
+if code < 0:
+    code = 128 + (-code)
+sys.exit(code)
+PY
+  compile_status=$?
+  set -e
+  if [ "$compile_status" -eq 0 ]; then
+    echo "expected $label to fail compilation" >&2
+    exit 1
+  fi
+  if [ -e "$bad_asm_path" ]; then
+    echo "$label unexpectedly produced assembly" >&2
+    exit 1
+  fi
+}
+
 source_path="/tmp/kimicc-linux-amd64-smoke.c"
 object_path="/tmp/kimicc-linux-amd64-smoke.o"
 dependency_path="/tmp/kimicc-linux-amd64-smoke.d"
@@ -402,34 +435,13 @@ cat > "$bad_source_path" <<'C'
 _Static_assert(0, "linux smoke expects this failure");
 int main(void) { return 0; }
 C
-rm -f "$bad_asm_path"
-set +e
-python3 - "$kimicc" "$bad_asm_path" "$bad_source_path" "$bad_stdout_path" "$bad_stderr_path" <<'PY'
-import subprocess
-import sys
+expect_compile_failure "invalid C smoke source" "$bad_source_path"
 
-compiler, asm_path, source_path, stdout_path, stderr_path = sys.argv[1:]
-with open(stdout_path, "wb") as stdout, open(stderr_path, "wb") as stderr:
-    proc = subprocess.run(
-        [compiler, "-S", "-target", "linux-amd64", "-o", asm_path, source_path],
-        stdout=stdout,
-        stderr=stderr,
-    )
-code = proc.returncode
-if code < 0:
-    code = 128 + (-code)
-sys.exit(code)
-PY
-compile_status=$?
-set -e
-if [ "$compile_status" -eq 0 ]; then
-  echo "expected invalid C smoke source to fail compilation" >&2
-  exit 1
-fi
-if [ -e "$bad_asm_path" ]; then
-  echo "invalid C smoke source unexpectedly produced assembly" >&2
-  exit 1
-fi
+cat > "$bad_source_path" <<'C'
+_Float16 unsupported_half;
+int main(void) { return 0; }
+C
+expect_compile_failure "unsupported _Float16 smoke source" "$bad_source_path"
 
 cat > "$link_fail_source_path" <<'C'
 int missing(void);
