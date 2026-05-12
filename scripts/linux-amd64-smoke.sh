@@ -1128,7 +1128,7 @@ int target_predefines(void) {
   if (!clang_version[0] || !compiler_version[0]) return 576;
   if (literal_encoding[0] != 'U' || literal_encoding[4] != '8') return 580;
   if (wide_literal_encoding[0] != 'U' || wide_literal_encoding[4] != '3') return 581;
-#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_return_address) && __has_builtin(__builtin_dynamic_object_size) && __has_builtin(__builtin_flt_rounds) && __has_builtin(__builtin_unpredictable) && __has_builtin(__atomic_load_n) && __has_builtin(__sync_bool_compare_and_swap) && __has_builtin(__sync_val_compare_and_swap) && __has_builtin(__sync_fetch_and_max) && __has_builtin(__sync_fetch_and_min) && __has_builtin(__sync_fetch_and_umax) && __has_builtin(__sync_fetch_and_umin) && __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p) && __has_builtin(__builtin_classify_type)
+#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_return_address) && __has_builtin(__builtin_dynamic_object_size) && __has_builtin(__builtin_flt_rounds) && __has_builtin(__builtin_unpredictable) && __has_builtin(__builtin_is_aligned) && __has_builtin(__builtin_align_up) && __has_builtin(__builtin_align_down) && __has_builtin(__atomic_load_n) && __has_builtin(__sync_bool_compare_and_swap) && __has_builtin(__sync_val_compare_and_swap) && __has_builtin(__sync_fetch_and_max) && __has_builtin(__sync_fetch_and_min) && __has_builtin(__sync_fetch_and_umax) && __has_builtin(__sync_fetch_and_umin) && __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p) && __has_builtin(__builtin_classify_type)
   target = target + 0;
 #else
   return 513;
@@ -1267,6 +1267,10 @@ int scalar_hint_builtins(void) {
   if (__builtin_assume_aligned(&x, 16) != &x) return 434;
   if (__builtin_expect_with_probability(x, 41, 0.9) != 41) return 435;
   if (__builtin_unpredictable(x) != 41) return 628;
+  if (!__builtin_is_aligned(32, 16)) return 629;
+  if (__builtin_is_aligned(34, 16)) return 630;
+  if (__builtin_align_up(33, 16) != 48) return 631;
+  if (__builtin_align_down(47, 16) != 32) return 632;
   void *ra = __builtin_return_address(0);
   if (ra == 0) return 505;
   if (__builtin_return_address(1) != 0) return 506;

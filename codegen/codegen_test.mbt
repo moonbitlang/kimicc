@@ -476,6 +476,10 @@ test "generate linux amd64 lowers scalar hint builtins" {
     #|  if (__builtin_extract_return_addr(ra) != ra) return 10;
     #|  if (__builtin_frob_return_addr(ra) != ra) return 11;
     #|  if (__builtin_flt_rounds() != 1) return 12;
+    #|  if (!__builtin_is_aligned(32, 16)) return 14;
+    #|  if (__builtin_is_aligned(34, 16)) return 15;
+    #|  if (__builtin_align_up(33, 16) != 48) return 16;
+    #|  if (__builtin_align_down(47, 16) != 32) return 17;
     #|  return 0;
     #|}
     #|int trapper(void) {
@@ -497,6 +501,9 @@ test "generate linux amd64 lowers scalar hint builtins" {
     content="false",
   )
   inspect(assembly.contains("call\t__builtin_unpredictable"), content="false")
+  inspect(assembly.contains("call\t__builtin_is_aligned"), content="false")
+  inspect(assembly.contains("call\t__builtin_align_up"), content="false")
+  inspect(assembly.contains("call\t__builtin_align_down"), content="false")
   inspect(assembly.contains("call\t__builtin_assume_aligned"), content="false")
   inspect(assembly.contains("call\t__builtin_prefetch"), content="false")
   inspect(assembly.contains("call\t__builtin_object_size"), content="false")

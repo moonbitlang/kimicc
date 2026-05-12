@@ -2077,6 +2077,55 @@ fn X64Codegen::emit_builtin_alloca(
 }
 
 ///|
+fn X64Codegen::emit_builtin_is_aligned(
+  self : X64Codegen,
+  args : Array[@parser.Expr],
+) -> Unit {
+  if args.length() >= 2 {
+    self.gen_expr(args[0])
+    self.emit_push_rax()
+    self.gen_expr(args[1])
+    self.emit("\tmov\tr10, rax")
+    self.emit_pop_rax()
+    self.emit("\tsub\tr10, 1")
+    self.emit("\ttest\trax, r10")
+    self.emit_setcc("sete")
+  } else {
+    self.emit("\tmov\trax, 0")
+  }
+}
+
+///|
+fn X64Codegen::emit_builtin_align_value(
+  self : X64Codegen,
+  args : Array[@parser.Expr],
+  round_up : Bool,
+) -> Unit {
+  if args.length() >= 2 {
+    let result_ty = self.type_of(args[0])
+    self.gen_expr(args[0])
+    self.emit_push_rax()
+    self.gen_expr(args[1])
+    self.emit("\tmov\tr10, rax")
+    if round_up {
+      self.emit("\tmov\tr11, r10")
+      self.emit("\tsub\tr11, 1")
+    }
+    self.emit_pop_rax()
+    if round_up {
+      self.emit("\tadd\trax, r11")
+    }
+    self.emit("\tneg\tr10")
+    self.emit("\tand\trax, r10")
+    if result_ty.is_integer() {
+      self.emit_int_conversion_to(result_ty)
+    }
+  } else {
+    self.emit("\tmov\trax, 0")
+  }
+}
+
+///|
 fn X64Codegen::emit_atomic_raw_load_to_rax(
   self : X64Codegen,
   addr_reg : String,
@@ -2900,6 +2949,13 @@ fn X64Codegen::builtin_return_type(
         Some(Pointer(Void))
       }
     "__builtin_constant_p" => Some(SInt)
+    "__builtin_is_aligned" => Some(Bool)
+    "__builtin_align_up" | "__builtin_align_down" =>
+      if args.length() > 0 {
+        Some(self.type_of(args[0]))
+      } else {
+        Some(ULong)
+      }
     "__builtin_object_size" | "__builtin_dynamic_object_size" => Some(ULong)
     "__builtin_frame_address"
     | "__builtin_return_address"
@@ -3193,6 +3249,18 @@ fn X64Codegen::emit_builtin_call(
     }
     "__builtin_flt_rounds" => {
       self.emit("\tmov\trax, 1")
+      true
+    }
+    "__builtin_is_aligned" => {
+      self.emit_builtin_is_aligned(args)
+      true
+    }
+    "__builtin_align_up" => {
+      self.emit_builtin_align_value(args, true)
+      true
+    }
+    "__builtin_align_down" => {
+      self.emit_builtin_align_value(args, false)
       true
     }
     "__builtin_object_size" | "__builtin_dynamic_object_size" => {
