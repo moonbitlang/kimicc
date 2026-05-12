@@ -2491,6 +2491,17 @@ int main(void) {
   buf[3] = 0;
   if (strcmp(buf, "abc") != 0) return 15;
   if (fstat(fd, &st) != 0 || st.st_size != 3) return 16;
+  if (pwrite(fd, "Z", 1, 1) != 1) return 96;
+  if (pread(fd, buf, 3, 0) != 3) return 97;
+  buf[3] = 0;
+  if (strcmp(buf, "aZc") != 0) return 98;
+  if (ftruncate(fd, 2) != 0) return 99;
+  if (stat(path, &path_st) != 0 || path_st.st_size != 2) return 100;
+  if (truncate(path, 3) != 0) return 101;
+  if (stat(path, &path_st) != 0 || path_st.st_size != 3) return 102;
+  if (pwrite(fd, "b", 1, 1) != 1) return 103;
+  if (pwrite(fd, "c", 1, 2) != 1) return 104;
+  if (fsync(fd) != 0) return 105;
   if (!getcwd(cwd, sizeof(cwd))) return 64;
   if (access(path, F_OK) != 0) return 65;
   if (stat(path, &path_st) != 0 || path_st.st_size != 3) return 66;
