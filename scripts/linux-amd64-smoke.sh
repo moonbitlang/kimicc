@@ -139,6 +139,8 @@ dependency_stdout_path="/tmp/kimicc-linux-amd64-smoke-mm.out"
 binary_path="/tmp/kimicc-linux-amd64-smoke"
 libc_runtime_source_path="/tmp/kimicc-linux-amd64-libc-runtime.c"
 libc_runtime_binary_path="/tmp/kimicc-linux-amd64-libc-runtime"
+pthread_source_path="/tmp/kimicc-linux-amd64-pthread.c"
+pthread_binary_path="/tmp/kimicc-linux-amd64-pthread"
 libm_source_path="/tmp/kimicc-linux-amd64-libm.c"
 libm_binary_path="/tmp/kimicc-linux-amd64-libm"
 multi_main_source_path="/tmp/kimicc-linux-amd64-multi-main.c"
@@ -2277,6 +2279,37 @@ status=$?
 set -e
 if [ "$status" -ne 42 ]; then
   echo "expected libc runtime smoke binary to exit 42, got $status" >&2
+  exit 1
+fi
+
+cat > "$pthread_source_path" <<'C'
+#include <pthread.h>
+
+static void *worker(void *arg) {
+  long *p = (long *)arg;
+  *p = *p + 35;
+  return arg;
+}
+
+int main(void) {
+  pthread_t th;
+  long value = 7;
+  void *ret = 0;
+  if (pthread_create(&th, 0, worker, &value) != 0) return 11;
+  if (pthread_join(th, &ret) != 0) return 12;
+  if (ret != &value) return 13;
+  return (int)value;
+}
+C
+
+"$kimicc" -target linux-amd64 -pthread -o "$pthread_binary_path" \
+  "$pthread_source_path"
+set +e
+"$pthread_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 42 ]; then
+  echo "expected pthread smoke binary to exit 42, got $status" >&2
   exit 1
 fi
 
