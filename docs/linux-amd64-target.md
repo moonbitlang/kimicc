@@ -369,6 +369,8 @@ the compiler's `__builtin_va_*` lowering and is not a complete system-header
 glibc typedefs and macros from the probed Ubuntu 24.04 headers can be
 preprocessed and compiled, but it is not a complete libc compatibility claim.
 The existing Darwin ARM64 Mach-O object writer and JIT remain Darwin-specific.
+GNU/Clang vector type attributes such as `vector_size` and `ext_vector_type` are
+rejected explicitly instead of being skipped as no-op attributes.
 
 The Linux/amd64 preprocessor also intentionally does not seed Clang macros that
 would advertise unsupported frontend or backend features. Current examples are

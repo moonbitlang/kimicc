@@ -62,6 +62,11 @@ fn Parser::skip_attributes_info(self : Parser) -> AttributeInfo {
       if tracks_packed {
         match self.token {
           Ident("packed") | Ident("__packed__") => info.is_packed = true
+          Ident("vector_size")
+          | Ident("__vector_size__")
+          | Ident("ext_vector_type")
+          | Ident("__ext_vector_type__") =>
+            abort("vector types are not supported")
           Ident("aligned") | Ident("__aligned__") => {
             self.advance()
             if self.token == LParen {
