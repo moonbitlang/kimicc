@@ -2409,6 +2409,14 @@ fi
 
 cat > "$pthread_source_path" <<'C'
 #include <pthread.h>
+#include <sched.h>
+#include <semaphore.h>
+
+static int once_seen = 0;
+
+static void mark_once(void) {
+  once_seen++;
+}
 
 static void *worker(void *arg) {
   long *p = (long *)arg;
@@ -2418,11 +2426,36 @@ static void *worker(void *arg) {
 
 int main(void) {
   pthread_t th;
+  pthread_mutex_t mutex;
+  pthread_cond_t cond;
+  pthread_once_t once = PTHREAD_ONCE_INIT;
+  pthread_key_t key;
+  sem_t sem;
   long value = 7;
   void *ret = 0;
+  if (pthread_mutex_init(&mutex, 0) != 0) return 21;
+  if (pthread_mutex_lock(&mutex) != 0) return 22;
+  value = value + 0;
+  if (pthread_mutex_unlock(&mutex) != 0) return 23;
+  if (pthread_cond_init(&cond, 0) != 0) return 24;
+  if (pthread_cond_signal(&cond) != 0) return 25;
+  if (pthread_once(&once, mark_once) != 0) return 26;
+  if (pthread_once(&once, mark_once) != 0) return 27;
+  if (once_seen != 1) return 28;
+  if (pthread_key_create(&key, 0) != 0) return 29;
+  if (pthread_setspecific(key, &value) != 0) return 30;
+  if (pthread_getspecific(key) != &value) return 31;
+  if (sem_init(&sem, 0, 0) != 0) return 32;
+  if (sem_post(&sem) != 0) return 33;
+  if (sem_wait(&sem) != 0) return 34;
+  if (sched_yield() != 0) return 35;
   if (pthread_create(&th, 0, worker, &value) != 0) return 11;
   if (pthread_join(th, &ret) != 0) return 12;
   if (ret != &value) return 13;
+  if (sem_destroy(&sem) != 0) return 36;
+  if (pthread_key_delete(key) != 0) return 37;
+  if (pthread_cond_destroy(&cond) != 0) return 38;
+  if (pthread_mutex_destroy(&mutex) != 0) return 39;
   return (int)value;
 }
 C
@@ -3068,6 +3101,8 @@ cat > "$header_syntax_source_path" <<'C'
 #include <pthread.h>
 #include <pwd.h>
 #include <regex.h>
+#include <sched.h>
+#include <semaphore.h>
 #include <setjmp.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -3107,7 +3142,8 @@ int main(void) {
     sizeof(struct addrinfo) + sizeof(struct sockaddr_in) +
     sizeof(regex_t) + sizeof(glob_t) + sizeof(struct passwd) +
     sizeof(struct group) + sizeof(struct statvfs) +
-    sizeof(struct epoll_event) + sizeof(struct iovec) > 0;
+    sizeof(struct epoll_event) + sizeof(struct iovec) +
+    sizeof(sem_t) > 0;
 }
 C
 
