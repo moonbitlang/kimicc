@@ -811,6 +811,12 @@ fn preprocess_driver_pic_pie(argv : Array[String]) -> String {
 ///|
 test "driver seeds pic and pie predefined macros" {
   assert_eq(
+    preprocess_driver_pic_pie([
+      "kimicc", "-E", "-target", "linux-amd64", "foo.c",
+    ]),
+    "int pic=2;\nint pie=2;\n",
+  )
+  assert_eq(
     preprocess_driver_pic_pie(["kimicc", "-E", "-fpic", "foo.c"]),
     "int pic=1;\nint pie=0;\n",
   )
@@ -830,6 +836,18 @@ test "driver seeds pic and pie predefined macros" {
 
 ///|
 test "driver applies pic and pie macro options in order" {
+  assert_eq(
+    preprocess_driver_pic_pie([
+      "kimicc", "-E", "-target", "linux-amd64", "-fno-pie", "foo.c",
+    ]),
+    "int pic=0;\nint pie=0;\n",
+  )
+  assert_eq(
+    preprocess_driver_pic_pie([
+      "kimicc", "-E", "-target", "linux-amd64", "-fno-pie", "-D__PIC__=9", "foo.c",
+    ]),
+    "int pic=9;\nint pie=0;\n",
+  )
   assert_eq(
     preprocess_driver_pic_pie(["kimicc", "-E", "-fpie", "-fPIC", "foo.c"]),
     "int pic=2;\nint pie=0;\n",

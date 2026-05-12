@@ -218,10 +218,12 @@ the target split real and testable without claiming full C ABI coverage yet.
   `-rpath PATH`, and `-e SYMBOL` are preserved for that delegated link step.
   `-pthread` is also preserved for link delegation and seeds `_REENTRANT=1`
   before preprocessing, matching the build-system contract projects expect from
-  Clang/GCC-style drivers. PIC and PIE driver flags seed the same predefined
-  macro contract as Clang: `-fpic`/`-fpie` define value `1`,
+  Clang/GCC-style drivers. Linux/amd64 preprocessing seeds the default
+  `__PIC__`, `__pic__`, `__PIE__`, and `__pie__` value `2`, matching Clang's
+  default PIE driver contract for this target. PIC and PIE driver flags then
+  update that contract in command-line order: `-fpic`/`-fpie` define value `1`,
   `-fPIC`/`-fPIE` define value `2`, and the `-fno-*` variants clear the PIC/PIE
-  macros in command-line order. `-ffreestanding` and `-fhosted` select the
+  macros. `-ffreestanding` and `-fhosted` select the
   predefined `__STDC_HOSTED__` value before user `-D`/`-U` macro overrides.
   Common `-std=`/`--std=` values and `-ansi` update `__STDC_VERSION__` and
   `__STRICT_ANSI__` for preprocessing probes, without enforcing a separate

@@ -1937,6 +1937,17 @@ fn command_line_macro_prefix(opts : DriverOptions) -> String {
     buf.write_string("#define __FAST_MATH__ 1\n")
     buf.write_string("#define __FINITE_MATH_ONLY__ 1\n")
   }
+  if !opts.undef_predefined {
+    match opts.target {
+      LinuxAmd64 => {
+        buf.write_string("#define __PIC__ 2\n")
+        buf.write_string("#define __pic__ 2\n")
+        buf.write_string("#define __PIE__ 2\n")
+        buf.write_string("#define __pie__ 2\n")
+      }
+      DarwinArm64 => ()
+    }
+  }
   for op in opts.macro_ops {
     match op {
       Define(name, replacement, driver_owned) =>

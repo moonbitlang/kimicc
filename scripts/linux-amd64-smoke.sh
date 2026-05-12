@@ -238,6 +238,9 @@ int pie = __PIE__;
 int pie = 0;
 #endif
 C
+"$kimicc" -E -target linux-amd64 "$source_path" >"$driver_query_path"
+grep -F 'int pic=2;' "$driver_query_path" >/dev/null
+grep -F 'int pie=2;' "$driver_query_path" >/dev/null
 "$kimicc" -E -target linux-amd64 -fPIE "$source_path" >"$driver_query_path"
 grep -F 'int pic=2;' "$driver_query_path" >/dev/null
 grep -F 'int pie=2;' "$driver_query_path" >/dev/null
