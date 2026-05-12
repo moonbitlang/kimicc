@@ -2533,6 +2533,7 @@ int main(void) {
   struct flock file_lock;
   struct statvfs vfs;
   struct timespec ts;
+  struct timespec sleep_time;
   struct timeval now;
   struct timeval timeval_pair[2];
   struct rusage usage;
@@ -2706,6 +2707,12 @@ int main(void) {
   if (chdir("/tmp") != 0) return 75;
   if (chdir(cwd) != 0) return 76;
   if (clock_gettime(CLOCK_REALTIME, &ts) != 0) return 17;
+  if (clock_getres(CLOCK_MONOTONIC, &ts) != 0) return 196;
+  sleep_time.tv_sec = 0;
+  sleep_time.tv_nsec = 0;
+  if (nanosleep(&sleep_time, 0) != 0) return 197;
+  if (clock_nanosleep(CLOCK_MONOTONIC, 0, &sleep_time, 0) != 0) return 198;
+  if (timespec_get(&ts, TIME_UTC) != TIME_UTC) return 199;
   if (gettimeofday(&now, 0) != 0) return 106;
   now_time = time(0);
   if (now_time == (time_t)-1) return 107;
