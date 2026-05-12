@@ -59,6 +59,7 @@ test "undef predefined keeps only standard macro baseline" {
   assert_true(!text.contains("#define __VERSION__"))
   assert_true(!text.contains("#define __LP64__"))
   assert_true(!text.contains("#define __BIGGEST_ALIGNMENT__"))
+  assert_true(!text.contains("#define __SIG_ATOMIC_WIDTH__"))
   assert_true(!text.contains("#define __DATE__"))
   assert_true(!text.contains("#define __has_builtin"))
 }
@@ -286,10 +287,12 @@ test "linux amd64 predefined macros cover system header probes" {
     #|#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ && __FLOAT_WORD_ORDER__ == __ORDER_LITTLE_ENDIAN__ && __ORDER_PDP_ENDIAN__ == 3412
     #|#if __BIGGEST_ALIGNMENT__ == 16 && __SIZEOF_LONG_DOUBLE__ == 16
     #|#if __SIZE_MAX__ == 18446744073709551615UL && __UINTPTR_MAX__ == 18446744073709551615UL && __PTRDIFF_MAX__ == 9223372036854775807L
+    #|#if __WCHAR_WIDTH__ == 32 && __WINT_WIDTH__ == 32 && __SIG_ATOMIC_WIDTH__ == 32 && __SIG_ATOMIC_MAX__ == 2147483647
     #|#if __ATOMIC_SEQ_CST == 5 && __GCC_ATOMIC_POINTER_LOCK_FREE == 2
     #|int probes = 1;
     #|#else
     #|int probes = 2;
+    #|#endif
     #|#endif
     #|#endif
     #|#endif
@@ -314,6 +317,7 @@ test "linux amd64 predefined macros cover system header probes" {
     #|int prefix = __USER_LABEL_PREFIX__ 9;
     #|const char *clang_version = __clang_version__;
     #|const char *compiler_version = __VERSION__;
+    #|__SIG_ATOMIC_TYPE__ sig_atomic_value;
     #|__WINT_TYPE__ wint_value;
     #|__INT64_TYPE__ int64_value;
     #|__UINT64_TYPE__ uint64_value;
@@ -331,6 +335,7 @@ test "linux amd64 predefined macros cover system header probes" {
           #|int prefix=9;
           #|const char*clang_version="kimicc clang-compatible preprocessor";
           #|const char*compiler_version="kimicc";
+          #|int sig_atomic_value;
           #|unsigned int wint_value;
           #|long int int64_value;
           #|long unsigned int uint64_value;

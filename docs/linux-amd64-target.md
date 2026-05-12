@@ -13,7 +13,7 @@ the target split real and testable without claiming full C ABI coverage yet.
   `_main`.
 - The preprocessor seeds Linux/x86-64 target macros such as `__linux__`,
   `__gnu_linux__`, `__ELF__`, `__x86_64__`, `__amd64__`, `_LP64`, basic
-  `__SIZEOF_*`/width/max-value/alignment macros, Clang/GCC compatibility
+  `__SIZEOF_*`/type/width/max-value/alignment macros, Clang/GCC compatibility
   version macros, floating-point limit macros used by Clang's `<float.h>`,
   endian and floating-word-order constants, atomic memory-order constants, and
   ELF empty label/register prefix macros.
