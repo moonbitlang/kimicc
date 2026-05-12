@@ -2140,6 +2140,28 @@ test "generate linux amd64 emits symbol aliases" {
 }
 
 ///|
+test "generate linux amd64 emits custom sections" {
+  let source =
+    #|__attribute__((section(".text.kimicc"))) int section_fn(void) { return 42; }
+    #|int section_global __attribute__((section(".data.kimicc"))) = 7;
+    #|int main(void) { return section_fn() + section_global; }
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(
+    assembly.contains("\t.section\t.text.kimicc,\"ax\",@progbits"),
+    content="true",
+  )
+  inspect(
+    assembly.contains("\t.section\t.data.kimicc,\"aw\",@progbits"),
+    content="true",
+  )
+}
+
+///|
 test "generate linux amd64 loads external declaration addresses through GOT" {
   let source =
     #|extern int strong_external(void);

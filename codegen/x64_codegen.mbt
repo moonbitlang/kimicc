@@ -7177,6 +7177,7 @@ fn X64Codegen::emit_function(
       if self.stack_align > 16 {
         self.local_base_reg = "r13"
       }
+      self.emit_function_section(decl.section)
       self.emit_symbol_binding(
         decl.name,
         decl.is_static,
@@ -8430,13 +8431,9 @@ fn X64Codegen::emit_globals(
       }
     }
   }
-  let mut has_data = false
   for g in globals {
     if g.init is Some(_) && g.symbol_alias is None {
-      if !has_data {
-        self.emit("\t.data")
-        has_data = true
-      }
+      self.emit_global_data_section(g.section)
       self.emit_symbol_binding(g.name, g.is_static, g.is_weak, g.visibility)
       self.emit("\t.align\t" + self.type_align(g.ty).to_string())
       self.emit(g.name + ":")
@@ -8447,18 +8444,47 @@ fn X64Codegen::emit_globals(
       }
     }
   }
-  let mut has_bss = false
   for g in globals {
     if g.init is None && !g.is_extern && g.symbol_alias is None {
-      if !has_bss {
-        self.emit("\t.bss")
-        has_bss = true
-      }
+      self.emit_global_bss_section(g.section)
       self.emit_symbol_binding(g.name, g.is_static, g.is_weak, g.visibility)
       self.emit("\t.align\t" + self.type_align(g.ty).to_string())
       self.emit(g.name + ":")
       self.emit("\t.zero\t" + self.type_size(g.ty).to_string())
     }
+  }
+}
+
+///|
+fn X64Codegen::emit_function_section(
+  self : X64Codegen,
+  section : String?,
+) -> Unit {
+  match section {
+    Some(name) => self.emit("\t.section\t" + name + ",\"ax\",@progbits")
+    None => self.emit("\t.text")
+  }
+}
+
+///|
+fn X64Codegen::emit_global_data_section(
+  self : X64Codegen,
+  section : String?,
+) -> Unit {
+  match section {
+    Some(name) => self.emit("\t.section\t" + name + ",\"aw\",@progbits")
+    None => self.emit("\t.data")
+  }
+}
+
+///|
+fn X64Codegen::emit_global_bss_section(
+  self : X64Codegen,
+  section : String?,
+) -> Unit {
+  match section {
+    Some(name) => self.emit("\t.section\t" + name + ",\"aw\",@progbits")
+    None => self.emit("\t.bss")
   }
 }
 

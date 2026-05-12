@@ -28,9 +28,10 @@ the target split real and testable without claiming full C ABI coverage yet.
   supports, and false for unsupported builtin names. `__has_attribute(name)`
   reports true for GNU `packed`/`__packed__`, numeric
   `aligned`/`__aligned__`, `weak`/`__weak__`, and Linux/amd64
-  `alias`/`__alias__` and `visibility`/`__visibility__` attributes, matching
-  the layout and symbol-binding attributes the parser and backend currently
-  honor, plus parser-accepted no-op GNU
+  `alias`/`__alias__`, `section`/`__section__`, and
+  `visibility`/`__visibility__` attributes, matching the layout and
+  symbol-binding attributes the parser and backend currently honor, plus
+  parser-accepted no-op GNU
   diagnostic, optimization, allocation, and sanitizer attributes.
   Clang-style feature probes
   report true only for the covered `c_alignas`, `c_alignof`,
@@ -130,6 +131,9 @@ the target split real and testable without claiming full C ABI coverage yet.
   undefined weak references remain PIE-linkable.
 - GNU `__attribute__((alias("target")))`/`__alias__` on Linux/amd64 function
   and global declarations emits ELF symbol aliases with `.set`.
+- GNU `__attribute__((section("name")))`/`__section__` on Linux/amd64 function
+  and global declarations or definitions emits those symbols into the requested
+  ELF section.
 - GNU `__attribute__((visibility("hidden")))`,
   `visibility("protected")`, and `visibility("internal")` on Linux/amd64
   function and global declarations or definitions emit the corresponding ELF
@@ -492,8 +496,9 @@ kimicc-generated function pointer loaded from the external glibc declaration. A
 pthread probe links with `-pthread`, starts a `pthread_create`
 callback, joins it, and checks pointer/result transport through the libc thread
 API. The main linked smoke source also checks that a hidden-visibility GNU
-attribute and GNU function/global aliases are reflected in emitted Linux/amd64
-assembly. A POSIX runtime probe covers `mkstemp`, `write`,
+attribute, GNU function/global aliases, and GNU function/global sections are
+reflected in emitted Linux/amd64 assembly. A POSIX runtime probe covers
+`mkstemp`, `write`,
 `lseek`, `read`, `fstat`, `clock_gettime`, `opendir`, `readdir`, `closedir`,
 `mmap`, `munmap`, `pipe`, `poll`, `select`, `socketpair`, `fork`, `_exit`,
 `execlp`, `waitpid`, `getpid`, `close`, and `unlink` through the Ubuntu glibc

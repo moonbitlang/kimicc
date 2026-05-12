@@ -1265,6 +1265,11 @@ int target_predefines(void) {
 #else
   return 610;
 #endif
+#if __has_attribute(section) && __has_attribute(__section__)
+  target = target + 0;
+#else
+  return 611;
+#endif
 #if __has_attribute(visibility) && __has_attribute(__visibility__)
   target = target + 0;
 #else
@@ -2105,6 +2110,11 @@ extern int alias_attr_value(void) __attribute__((alias("alias_attr_target")));
 int alias_global_target = 42;
 extern int alias_global_value __attribute__((alias("alias_global_target")));
 
+__attribute__((section(".text.kimicc_section")))
+int section_attr_value(void) { return 40; }
+
+int section_global_value __attribute__((section(".data.kimicc_section"))) = 2;
+
 int gnu_noop_attributes(void) {
   __attribute__((unused)) int ignored = 3;
   char buf[1];
@@ -2113,6 +2123,7 @@ int gnu_noop_attributes(void) {
   if (attr_inline(-1) != 0) return 565;
   if (hidden_attr_value() != 42) return 609;
   if (alias_attr_value() != 42 || alias_global_value != 42) return 610;
+  if (section_attr_value() + section_global_value != 42) return 611;
   int x = 0;
   switch (x) {
   case 0:
@@ -2272,6 +2283,8 @@ C
 grep -E '^[[:space:]]*\.hidden[[:space:]]+hidden_attr_value$' /tmp/kimicc-linux-amd64-smoke.s >/dev/null
 grep -E '^[[:space:]]*\.set[[:space:]]+alias_attr_value,[[:space:]]*alias_attr_target$' /tmp/kimicc-linux-amd64-smoke.s >/dev/null
 grep -E '^[[:space:]]*\.set[[:space:]]+alias_global_value,[[:space:]]*alias_global_target$' /tmp/kimicc-linux-amd64-smoke.s >/dev/null
+grep -F $'\t.section\t.text.kimicc_section,"ax",@progbits' /tmp/kimicc-linux-amd64-smoke.s >/dev/null
+grep -F $'\t.section\t.data.kimicc_section,"aw",@progbits' /tmp/kimicc-linux-amd64-smoke.s >/dev/null
 "$kimicc" -c -target linux-amd64 -MMD -MP -MF "$dependency_path" -I "$probe_include_dir" -o "$object_path" "$source_path"
 file "$object_path" | grep -E 'ELF 64-bit.*x86-64'
 grep -F "$object_path: $source_path $probe_include_dir/pragma_once_header.h" "$dependency_path" >/dev/null

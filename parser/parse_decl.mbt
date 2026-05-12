@@ -4,6 +4,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
   let mut leading_weak = leading_attrs.is_weak
   let mut leading_visibility = leading_attrs.visibility
   let mut leading_alias = leading_attrs.symbol_alias
+  let mut leading_section = leading_attrs.section
   let mut leading_inline = false
   while self.token == Inline {
     leading_inline = true
@@ -15,6 +16,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       inline_attrs.visibility,
     )
     leading_alias = merge_alias(leading_alias, inline_attrs.symbol_alias)
+    leading_section = merge_section(leading_section, inline_attrs.section)
     self.skip_qualifiers()
   }
   let spec = self.parse_decl_specifiers()
@@ -26,6 +28,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
   }
   spec.visibility = merge_visibility(spec.visibility, leading_visibility)
   spec.symbol_alias = merge_alias(spec.symbol_alias, leading_alias)
+  spec.section = merge_section(spec.section, leading_section)
   let decl = self.parse_declarator(spec.base_type)
   let post_decl_attrs = self.skip_attributes_info()
   // If no name and no function suffix, skip to semicolon
@@ -46,6 +49,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       is_weak: false,
       visibility: None,
       symbol_alias: None,
+      section: None,
       body: None,
     }
   }
@@ -68,6 +72,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
         is_weak: false,
         visibility: None,
         symbol_alias: None,
+        section: None,
         body: None,
       }
     }
@@ -127,6 +132,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       is_weak: spec.is_weak || post_decl_attrs.is_weak,
       visibility: merge_visibility(spec.visibility, post_decl_attrs.visibility),
       symbol_alias: merge_alias(spec.symbol_alias, post_decl_attrs.symbol_alias),
+      section: merge_section(spec.section, post_decl_attrs.section),
       body,
     }
   }
@@ -146,6 +152,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       is_weak: false,
       visibility: None,
       symbol_alias: None,
+      section: None,
       body: None,
     }
   }
@@ -166,6 +173,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
     is_weak: false,
     visibility: None,
     symbol_alias: None,
+    section: None,
     body: None,
   }
 }
@@ -236,6 +244,7 @@ fn Parser::parse_global_var_tail(
     is_weak: spec.is_weak || post_decl_attrs.is_weak,
     visibility: merge_visibility(spec.visibility, post_decl_attrs.visibility),
     symbol_alias: merge_alias(spec.symbol_alias, post_decl_attrs.symbol_alias),
+    section: merge_section(spec.section, post_decl_attrs.section),
   })
   self.remember_value_type(name, ty)
   self.skip_attributes()
@@ -290,6 +299,7 @@ fn Parser::parse_global_var_tail(
         spec.symbol_alias,
         extra_post_decl_attrs.symbol_alias,
       ),
+      section: merge_section(spec.section, extra_post_decl_attrs.section),
     })
     self.remember_value_type(extra_decl.name, extra_ty)
     self.skip_attributes()

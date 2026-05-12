@@ -924,6 +924,22 @@ test "parse GNU alias attributes" {
 }
 
 ///|
+test "parse GNU section attributes" {
+  let source =
+    #|__attribute__((section(".text.kimicc"))) int section_fn(void) { return 1; }
+    #|int section_global __attribute__((__section__(".data.kimicc"))) = 2;
+  let prog = @parser.parse(source)
+  match prog.decls {
+    [{ name: "section_fn", section: Some(".text.kimicc"), .. }] => ()
+    _ => fail("Expected function section attribute to be recorded")
+  }
+  match prog.globals {
+    [{ name: "section_global", section: Some(".data.kimicc"), .. }] => ()
+    _ => fail("Expected global section attribute to be recorded")
+  }
+}
+
+///|
 test "parse pointer to struct member access" {
   let source =
     #|struct Node { int val; struct Node *next; };

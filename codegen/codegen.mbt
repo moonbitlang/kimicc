@@ -131,6 +131,17 @@ fn merge_global_alias(
 }
 
 ///|
+fn merge_global_section(
+  primary : @parser.GlobalDecl,
+  other : @parser.GlobalDecl,
+) -> String? {
+  match primary.section {
+    Some(_) => primary.section
+    None => other.section
+  }
+}
+
+///|
 fn with_merged_global_attrs(
   primary : @parser.GlobalDecl,
   other : @parser.GlobalDecl,
@@ -144,6 +155,7 @@ fn with_merged_global_attrs(
     is_weak: primary.is_weak || other.is_weak,
     visibility: merge_global_visibility(primary, other),
     symbol_alias: merge_global_alias(primary, other),
+    section: merge_global_section(primary, other),
   }
 }
 

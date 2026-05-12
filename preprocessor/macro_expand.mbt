@@ -141,6 +141,7 @@ fn Preprocessor::has_attribute_query(
 ) -> Bool {
   match name {
     "alias" | "__alias__" => self.options.target == LinuxAmd64
+    "section" | "__section__" => self.options.target == LinuxAmd64
     "visibility" | "__visibility__" => self.options.target == LinuxAmd64
     _ => pp_has_attribute(name)
   }
