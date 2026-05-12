@@ -1240,6 +1240,9 @@ int target_predefines(void) {
 #else
   return 562;
 #endif
+#if __has_attribute(vector_size) || __has_attribute(__vector_size__) || __has_attribute(ext_vector_type) || __has_attribute(__ext_vector_type__)
+  return 606;
+#endif
 #if __has_include("probe_header.h")
   target = target + 0;
 #else

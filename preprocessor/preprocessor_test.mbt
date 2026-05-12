@@ -538,11 +538,16 @@ test "has attribute reflects supported packed layout" {
     #|#else
     #|int sanitizer_attrs = 0;
     #|#endif
+    #|#if __has_attribute(vector_size) || __has_attribute(__vector_size__) || __has_attribute(ext_vector_type) || __has_attribute(__ext_vector_type__)
+    #|int unsupported_type_attrs = 1;
+    #|#else
+    #|int unsupported_type_attrs = 0;
+    #|#endif
   match @preprocessor.preprocess(source, linux_options) {
     Ok(text) =>
       inspect(
         text,
-        content="int packed_attr=1;\nint aligned_attr=1;\nint unused_attr=1;\nint fallthrough_attr=1;\nint function_hint_attrs=1;\nint diagnostic_attrs=1;\nint allocation_attrs=1;\nint sanitizer_attrs=1;\n",
+        content="int packed_attr=1;\nint aligned_attr=1;\nint unused_attr=1;\nint fallthrough_attr=1;\nint function_hint_attrs=1;\nint diagnostic_attrs=1;\nint allocation_attrs=1;\nint sanitizer_attrs=1;\nint unsupported_type_attrs=0;\n",
       )
     Err(err) => fail(err.to_string())
   }
