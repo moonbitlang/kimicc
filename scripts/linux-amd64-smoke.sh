@@ -193,6 +193,7 @@ system_header_source_path="/tmp/kimicc-linux-amd64-system-headers.c"
 system_header_preprocessed_path="/tmp/kimicc-linux-amd64-system-headers.i"
 system_header_object_path="/tmp/kimicc-linux-amd64-system-headers.o"
 system_header_binary_path="/tmp/kimicc-linux-amd64-system-headers"
+header_syntax_source_path="/tmp/kimicc-linux-amd64-header-syntax.c"
 va_list_source_path="/tmp/kimicc-linux-amd64-va-list.c"
 va_list_binary_path="/tmp/kimicc-linux-amd64-va-list"
 
@@ -2432,6 +2433,43 @@ if [ "$status" -ne 42 ]; then
   echo "expected system-header smoke binary to exit 42, got $status" >&2
   exit 1
 fi
+
+cat > "$header_syntax_source_path" <<'C'
+#include <assert.h>
+#include <ctype.h>
+#include <dirent.h>
+#include <errno.h>
+#include <inttypes.h>
+#include <limits.h>
+#include <locale.h>
+#include <math.h>
+#include <pthread.h>
+#include <setjmp.h>
+#include <signal.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+#include <wchar.h>
+#include <sys/mman.h>
+#include <sys/select.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+int main(void) {
+  return sizeof(DIR *) + sizeof(FILE *) + sizeof(jmp_buf) +
+    sizeof(pthread_t) + sizeof(sigset_t) + sizeof(fd_set) +
+    sizeof(struct timeval) > 0;
+}
+C
+
+"$kimicc" -fsyntax-only -target linux-amd64 "$header_syntax_source_path"
 
 cat > "$va_list_source_path" <<'C'
 #include <stdarg.h>

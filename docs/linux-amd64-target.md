@@ -460,8 +460,12 @@ also checks representative unsigned max-value macros such as `UINTPTR_MAX` and
 `SIZE_MAX`, common Linux macros such as `EINVAL`, `STDOUT_FILENO`, `F_GETFL`,
 `AF_INET`, `POLLIN`, and `SIGTERM`, and representative complete system types
 such as `struct stat`, `struct iovec`, and `struct pollfd` in `_Static_assert`
-expressions. A separate linked probe passes the generated `va_list` state to
-glibc `vsnprintf`, covering a real libc v-function smoke without claiming
-complete `va_list` interoperability. The script also checks that the built
-compiler returns a nonzero status for an invalid Linux/amd64 translation unit,
-so compiler failures are not masked by the test harness.
+expressions. It also runs a syntax-only probe over a broader set of common
+libc/POSIX headers such as `assert.h`, `ctype.h`, `dirent.h`, `inttypes.h`,
+`locale.h`, `math.h`, `pthread.h`, `setjmp.h`, `wchar.h`, `sys/mman.h`,
+`sys/select.h`, `sys/time.h`, and `sys/wait.h`. A separate linked probe passes
+the generated `va_list` state to glibc `vsnprintf`, covering a real libc
+v-function smoke without claiming complete `va_list` interoperability. The
+script also checks that the built compiler returns a nonzero status for an
+invalid Linux/amd64 translation unit, so compiler failures are not masked by
+the test harness.
