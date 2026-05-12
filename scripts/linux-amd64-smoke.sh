@@ -2374,6 +2374,7 @@ cat > "$posix_runtime_source_path" <<'C'
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/select.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/wait.h>
@@ -2390,6 +2391,7 @@ int main(void) {
   void *mem;
   char *mapped;
   int fds[2];
+  int spair[2];
   struct pollfd pfd;
   fd_set readfds;
   struct timeval tv;
@@ -2427,16 +2429,29 @@ int main(void) {
   if (read(fds[0], &c, 1) != 1 || c != 'z') return 26;
   close(fds[0]);
   close(fds[1]);
+  if (socketpair(AF_UNIX, SOCK_STREAM, 0, spair) != 0) return 27;
+  if (write(spair[0], "q", 1) != 1) return 28;
+  if (read(spair[1], &c, 1) != 1 || c != 'q') return 29;
+  close(spair[0]);
+  close(spair[1]);
   child = fork();
-  if (child < 0) return 27;
+  if (child < 0) return 30;
   if (child == 0) _exit(42);
-  if (waitpid(child, &wait_status, 0) != child) return 28;
-  if (!WIFEXITED(wait_status) || WEXITSTATUS(wait_status) != 42) return 29;
-  if (getpid() <= 1) return 30;
+  if (waitpid(child, &wait_status, 0) != child) return 31;
+  if (!WIFEXITED(wait_status) || WEXITSTATUS(wait_status) != 42) return 32;
+  child = fork();
+  if (child < 0) return 33;
+  if (child == 0) {
+    execlp("sh", "sh", "-c", "exit 43", (char *)0);
+    _exit(127);
+  }
+  if (waitpid(child, &wait_status, 0) != child) return 34;
+  if (!WIFEXITED(wait_status) || WEXITSTATUS(wait_status) != 43) return 35;
+  if (getpid() <= 1) return 36;
   dir = opendir("/tmp");
-  if (!dir) return 31;
-  if (!readdir(dir)) return 32;
-  if (closedir(dir) != 0) return 33;
+  if (!dir) return 37;
+  if (!readdir(dir)) return 38;
+  if (closedir(dir) != 0) return 39;
   close(fd);
   unlink(path);
   return 42;
