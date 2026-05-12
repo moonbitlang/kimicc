@@ -1552,6 +1552,17 @@ test "parse non-variadic function declaration" {
 }
 
 ///|
+test "parse function parameter array with GNU restrict size" {
+  let source = "int regexec(unsigned long n, int pmatch[__restrict n]);"
+  let prog = @parser.parse(source)
+  inspect(prog.decls.length(), content="1")
+  let decl = prog.decls[0]
+  inspect(decl.name, content="regexec")
+  inspect(decl.params.length(), content="2")
+  inspect(decl.params[1].ty, content="Pointer(SInt)")
+}
+
+///|
 test "parse generic selection chooses matching association" {
   let source =
     #|int main(void) {

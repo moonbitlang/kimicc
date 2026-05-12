@@ -843,6 +843,50 @@ fn DeclaratorResult::set_func_info(
 }
 
 ///|
+fn Parser::is_array_parameter_qualifier(self : Parser) -> Bool {
+  match self.token {
+    Const | Restrict | Static | Volatile => true
+    Ident(name) =>
+      name == "__const" ||
+      name == "__const__" ||
+      name == "__restrict" ||
+      name == "__restrict__" ||
+      name == "__restrict_arr" ||
+      name == "__volatile" ||
+      name == "__volatile__"
+    _ => false
+  }
+}
+
+///|
+fn Parser::skip_array_parameter_qualifiers(self : Parser) -> Unit {
+  while self.is_array_parameter_qualifier() {
+    self.advance()
+  }
+}
+
+///|
+fn Parser::parse_array_declarator_size(self : Parser) -> Int {
+  self.advance()
+  self.skip_array_parameter_qualifiers()
+  let size = if self.token == RBracket {
+    0
+  } else if self.token == Star {
+    self.advance()
+    0
+  } else {
+    let size_expr = self.parse_assign()
+    match self.fold_const(size_expr) {
+      Some(n) => n.to_int()
+      None => 0
+    }
+  }
+  self.skip_array_parameter_qualifiers()
+  self.expect(RBracket)
+  size
+}
+
+///|
 fn Parser::parse_declarator_suffixes(
   self : Parser,
   base_ty : Type,
@@ -857,28 +901,7 @@ fn Parser::parse_declarator_suffixes(
   let mut is_func_decl = false
   while true {
     match self.token {
-      LBracket => {
-        self.advance()
-        // Skip C99 array parameter qualifiers: static, const, restrict, volatile
-        while self.token == Static ||
-              self.token == Const ||
-              self.token == Restrict ||
-              self.token == Volatile {
-          self.advance()
-        }
-        let size = if self.token == RBracket {
-          self.advance()
-          0
-        } else {
-          let size_expr = self.parse_assign()
-          self.expect(RBracket)
-          match self.fold_const(size_expr) {
-            Some(n) => n.to_int()
-            None => 0
-          }
-        }
-        pending_arrays.push(size)
-      }
+      LBracket => pending_arrays.push(self.parse_array_declarator_size())
       LParen => {
         ty = apply_pending_array_suffixes(ty, pending_arrays, push_mode)
         pending_arrays = []
@@ -920,28 +943,7 @@ fn Parser::parse_abstract_declarator_suffixes(
   let mut pending_arrays : Array[Int] = []
   while true {
     match self.token {
-      LBracket => {
-        self.advance()
-        // Skip C99 array parameter qualifiers: static, const, restrict, volatile
-        while self.token == Static ||
-              self.token == Const ||
-              self.token == Restrict ||
-              self.token == Volatile {
-          self.advance()
-        }
-        let size = if self.token == RBracket {
-          self.advance()
-          0
-        } else {
-          let size_expr = self.parse_assign()
-          self.expect(RBracket)
-          match self.fold_const(size_expr) {
-            Some(n) => n.to_int()
-            None => 0
-          }
-        }
-        pending_arrays.push(size)
-      }
+      LBracket => pending_arrays.push(self.parse_array_declarator_size())
       LParen => {
         result = apply_pending_array_suffixes(result, pending_arrays, push_mode)
         pending_arrays = []
