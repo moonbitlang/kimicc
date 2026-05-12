@@ -2492,6 +2492,7 @@ cat > "$posix_runtime_source_path" <<'C'
 #include <string.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
+#include <sys/file.h>
 #include <sys/ioctl.h>
 #include <sys/inotify.h>
 #include <sys/mman.h>
@@ -2529,6 +2530,7 @@ int main(void) {
   char link_buf[PATH_MAX];
   struct stat st;
   struct stat path_st;
+  struct flock file_lock;
   struct statvfs vfs;
   struct timespec ts;
   struct timeval now;
@@ -2565,6 +2567,7 @@ int main(void) {
   int reuse_addr = 1;
   int dup_fd;
   int fd_flags;
+  int lock_result;
   int available = 0;
   struct pollfd pfd;
   struct epoll_event ep_event;
@@ -2603,6 +2606,18 @@ int main(void) {
   if (pwrite(fd, "b", 1, 1) != 1) return 103;
   if (pwrite(fd, "c", 1, 2) != 1) return 104;
   if (fsync(fd) != 0) return 105;
+  memset(&file_lock, 0, sizeof(file_lock));
+  file_lock.l_type = F_WRLCK;
+  file_lock.l_whence = SEEK_SET;
+  if (fcntl(fd, F_SETLK, &file_lock) != 0) return 179;
+  file_lock.l_type = F_UNLCK;
+  if (fcntl(fd, F_SETLK, &file_lock) != 0) return 180;
+  lock_result = flock(fd, LOCK_EX | LOCK_NB);
+  if (lock_result != 0) return 181;
+  if (flock(fd, LOCK_UN) != 0) return 182;
+  if (lockf(fd, F_TEST, 0) != 0) return 183;
+  if (lockf(fd, F_LOCK, 0) != 0) return 184;
+  if (lockf(fd, F_ULOCK, 0) != 0) return 185;
   if (!getcwd(cwd, sizeof(cwd))) return 64;
   if (access(path, F_OK) != 0) return 65;
   if (stat(path, &path_st) != 0 || path_st.st_size != 3) return 66;
@@ -3152,6 +3167,7 @@ cat > "$header_syntax_source_path" <<'C'
 #include <wchar.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
+#include <sys/file.h>
 #include <sys/ioctl.h>
 #include <sys/inotify.h>
 #include <sys/mman.h>
@@ -3177,7 +3193,7 @@ int main(void) {
     sizeof(struct addrinfo) + sizeof(struct sockaddr_in) +
     sizeof(regex_t) + sizeof(glob_t) + sizeof(struct passwd) +
     sizeof(struct group) + sizeof(struct statvfs) +
-    sizeof(struct epoll_event) + sizeof(struct iovec) +
+    sizeof(struct flock) + sizeof(struct epoll_event) + sizeof(struct iovec) +
     sizeof(sem_t) > 0;
 }
 C
