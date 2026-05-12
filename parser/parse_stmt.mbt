@@ -328,6 +328,7 @@ fn Parser::is_stmt_decl_start(self : Parser) -> Bool {
       name == "_Float16" ||
       name == "__float128" ||
       name == "_Float128" ||
+      name == "_BitInt" ||
       name == "_Complex" ||
       name == "__complex__" ||
       name == "__builtin_va_list" ||

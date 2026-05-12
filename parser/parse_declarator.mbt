@@ -275,6 +275,8 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
             self.advance()
             saw_primitive = true
             consumed = true
+          } else if name == "_BitInt" {
+            abort("_BitInt types are not supported")
           } else if name == "_Complex" || name == "__complex__" {
             abort("_Complex types are not supported")
           } else if !saw_primitive &&

@@ -456,6 +456,12 @@ C
 expect_compile_failure "unsupported _Complex smoke source" "$bad_source_path"
 
 cat > "$bad_source_path" <<'C'
+_BitInt(17) unsupported_bitint;
+int main(void) { return 0; }
+C
+expect_compile_failure "unsupported _BitInt smoke source" "$bad_source_path"
+
+cat > "$bad_source_path" <<'C'
 long double unsupported_long_double;
 int main(void) { return unsupported_long_double == 0.0L; }
 C
