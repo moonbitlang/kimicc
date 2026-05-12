@@ -11,6 +11,8 @@ priv struct DeclSpec {
   mut visibility : String?
   mut symbol_alias : String?
   mut section : String?
+  mut is_constructor : Bool
+  mut is_destructor : Bool
 }
 
 ///|
@@ -43,6 +45,8 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     visibility: None,
     symbol_alias: None,
     section: None,
+    is_constructor: false,
+    is_destructor: false,
   }
   let leading_attrs = self.skip_attributes_info()
   spec.align = merge_align(spec.align, leading_attrs.align)
@@ -51,6 +55,8 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
   spec.visibility = merge_visibility(spec.visibility, leading_attrs.visibility)
   spec.symbol_alias = merge_alias(spec.symbol_alias, leading_attrs.symbol_alias)
   spec.section = merge_section(spec.section, leading_attrs.section)
+  spec.is_constructor = spec.is_constructor || leading_attrs.is_constructor
+  spec.is_destructor = spec.is_destructor || leading_attrs.is_destructor
   let mut has_void = false
   let mut has_char = false
   let mut has_short = false
@@ -85,6 +91,8 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     spec.visibility = merge_visibility(spec.visibility, attrs.visibility)
     spec.symbol_alias = merge_alias(spec.symbol_alias, attrs.symbol_alias)
     spec.section = merge_section(spec.section, attrs.section)
+    spec.is_constructor = spec.is_constructor || attrs.is_constructor
+    spec.is_destructor = spec.is_destructor || attrs.is_destructor
     let mut consumed = false
     // Storage class specifiers
     if !consumed {

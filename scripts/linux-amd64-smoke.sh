@@ -143,6 +143,8 @@ pthread_source_path="/tmp/kimicc-linux-amd64-pthread.c"
 pthread_binary_path="/tmp/kimicc-linux-amd64-pthread"
 posix_runtime_source_path="/tmp/kimicc-linux-amd64-posix-runtime.c"
 posix_runtime_binary_path="/tmp/kimicc-linux-amd64-posix-runtime"
+ctor_source_path="/tmp/kimicc-linux-amd64-ctor.c"
+ctor_binary_path="/tmp/kimicc-linux-amd64-ctor"
 libm_source_path="/tmp/kimicc-linux-amd64-libm.c"
 libm_binary_path="/tmp/kimicc-linux-amd64-libm"
 multi_main_source_path="/tmp/kimicc-linux-amd64-multi-main.c"
@@ -1269,6 +1271,11 @@ int target_predefines(void) {
   target = target + 0;
 #else
   return 611;
+#endif
+#if __has_attribute(constructor) && __has_attribute(__destructor__)
+  target = target + 0;
+#else
+  return 612;
 #endif
 #if __has_attribute(visibility) && __has_attribute(__visibility__)
   target = target + 0;
@@ -2529,6 +2536,40 @@ status=$?
 set -e
 if [ "$status" -ne 42 ]; then
   echo "expected POSIX runtime smoke binary to exit 42, got $status" >&2
+  exit 1
+fi
+
+cat > "$ctor_source_path" <<'C'
+#include <stdlib.h>
+
+static int lifecycle_seen = 0;
+
+__attribute__((constructor))
+static void kimicc_ctor(void) {
+  lifecycle_seen = 40;
+}
+
+__attribute__((destructor))
+static void kimicc_dtor(void) {
+  if (lifecycle_seen == 42) {
+    _Exit(42);
+  }
+}
+
+int main(void) {
+  if (lifecycle_seen != 40) return 41;
+  lifecycle_seen = 42;
+  return 0;
+}
+C
+
+"$kimicc" -target linux-amd64 -o "$ctor_binary_path" "$ctor_source_path"
+set +e
+"$ctor_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 42 ]; then
+  echo "expected constructor/destructor smoke binary to exit 42, got $status" >&2
   exit 1
 fi
 

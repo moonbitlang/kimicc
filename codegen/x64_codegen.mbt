@@ -8588,6 +8588,35 @@ fn X64Codegen::emit_fp_literals(self : X64Codegen) -> Unit {
 }
 
 ///|
+fn X64Codegen::emit_lifecycle_array(
+  self : X64Codegen,
+  section : String,
+  decls : Array[@parser.FuncDecl],
+) -> Unit {
+  let mut emitted = false
+  for decl in decls {
+    let should_emit = if section == ".init_array" {
+      decl.is_constructor
+    } else {
+      decl.is_destructor
+    }
+    if should_emit && decl.body is Some(_) {
+      if !emitted {
+        let kind = if section == ".init_array" {
+          "init_array"
+        } else {
+          "fini_array"
+        }
+        self.emit("\t.section\t" + section + ",\"aw\",@" + kind)
+        self.emit("\t.align\t8")
+        emitted = true
+      }
+      self.emit("\t.quad\t" + decl.name)
+    }
+  }
+}
+
+///|
 fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
   self.emit("\t.intel_syntax noprefix")
   self.emit("\t.text")
@@ -8647,6 +8676,8 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
     self.emit_function(decl)
   }
   self.emit_globals(globals)
+  self.emit_lifecycle_array(".init_array", prog.decls)
+  self.emit_lifecycle_array(".fini_array", prog.decls)
   self.emit_strings()
   self.emit_fp_literals()
   self.emit("\t.section\t.note.GNU-stack,\"\",@progbits")

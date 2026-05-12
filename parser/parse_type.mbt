@@ -7,6 +7,8 @@ priv struct AttributeInfo {
   mut visibility : String?
   mut symbol_alias : String?
   mut section : String?
+  mut is_constructor : Bool
+  mut is_destructor : Bool
 }
 
 ///|
@@ -92,6 +94,8 @@ fn Parser::skip_attributes_info(self : Parser) -> AttributeInfo {
     visibility: None,
     symbol_alias: None,
     section: None,
+    is_constructor: false,
+    is_destructor: false,
   }
   while self.token == Ident("__attribute__") ||
         self.token == Ident("__attribute") ||
@@ -108,6 +112,10 @@ fn Parser::skip_attributes_info(self : Parser) -> AttributeInfo {
         match self.token {
           Ident("packed") | Ident("__packed__") => info.is_packed = true
           Ident("weak") | Ident("__weak__") => info.is_weak = true
+          Ident("constructor") | Ident("__constructor__") =>
+            info.is_constructor = true
+          Ident("destructor") | Ident("__destructor__") =>
+            info.is_destructor = true
           Ident("alias") | Ident("__alias__") => {
             self.advance()
             if self.token == LParen {

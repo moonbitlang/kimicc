@@ -29,9 +29,10 @@ the target split real and testable without claiming full C ABI coverage yet.
   reports true for GNU `packed`/`__packed__`, numeric
   `aligned`/`__aligned__`, `weak`/`__weak__`, and Linux/amd64
   `alias`/`__alias__`, `section`/`__section__`, and
-  `visibility`/`__visibility__` attributes, matching the layout and
-  symbol-binding attributes the parser and backend currently honor, plus
-  parser-accepted no-op GNU
+  `constructor`/`__constructor__`, `destructor`/`__destructor__`, and
+  `visibility`/`__visibility__` attributes, matching the layout,
+  symbol-binding, and lifecycle attributes the parser and backend currently
+  honor, plus parser-accepted no-op GNU
   diagnostic, optimization, allocation, and sanitizer attributes.
   Clang-style feature probes
   report true only for the covered `c_alignas`, `c_alignof`,
@@ -134,6 +135,9 @@ the target split real and testable without claiming full C ABI coverage yet.
 - GNU `__attribute__((section("name")))`/`__section__` on Linux/amd64 function
   and global declarations or definitions emits those symbols into the requested
   ELF section.
+- GNU `__attribute__((constructor))` and `__attribute__((destructor))` on
+  Linux/amd64 function definitions emit `.init_array` and `.fini_array`
+  entries.
 - GNU `__attribute__((visibility("hidden")))`,
   `visibility("protected")`, and `visibility("internal")` on Linux/amd64
   function and global declarations or definitions emit the corresponding ELF
@@ -502,7 +506,8 @@ reflected in emitted Linux/amd64 assembly. A POSIX runtime probe covers
 `lseek`, `read`, `fstat`, `clock_gettime`, `opendir`, `readdir`, `closedir`,
 `mmap`, `munmap`, `pipe`, `poll`, `select`, `socketpair`, `fork`, `_exit`,
 `execlp`, `waitpid`, `getpid`, `close`, and `unlink` through the Ubuntu glibc
-declarations. The
+declarations. A separate linked probe checks that GNU constructor and
+destructor functions run through `.init_array`/`.fini_array`. The
 script also checks that a strong clang-built
 function or global definition overrides a kimicc-built ELF weak definition at
 link time, and that undefined weak function/global references link and resolve

@@ -940,6 +940,21 @@ test "parse GNU section attributes" {
 }
 
 ///|
+test "parse GNU constructor and destructor attributes" {
+  let source =
+    #|__attribute__((constructor)) void init_fn(void) {}
+    #|__attribute__((destructor)) void fini_fn(void) {}
+  let prog = @parser.parse(source)
+  match prog.decls {
+    [
+      { name: "init_fn", is_constructor: true, is_destructor: false, .. },
+      { name: "fini_fn", is_constructor: false, is_destructor: true, .. },
+    ] => ()
+    _ => fail("Expected constructor and destructor attributes to be recorded")
+  }
+}
+
+///|
 test "parse pointer to struct member access" {
   let source =
     #|struct Node { int val; struct Node *next; };

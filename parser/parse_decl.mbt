@@ -5,6 +5,8 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
   let mut leading_visibility = leading_attrs.visibility
   let mut leading_alias = leading_attrs.symbol_alias
   let mut leading_section = leading_attrs.section
+  let mut leading_constructor = leading_attrs.is_constructor
+  let mut leading_destructor = leading_attrs.is_destructor
   let mut leading_inline = false
   while self.token == Inline {
     leading_inline = true
@@ -17,6 +19,8 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
     )
     leading_alias = merge_alias(leading_alias, inline_attrs.symbol_alias)
     leading_section = merge_section(leading_section, inline_attrs.section)
+    leading_constructor = leading_constructor || inline_attrs.is_constructor
+    leading_destructor = leading_destructor || inline_attrs.is_destructor
     self.skip_qualifiers()
   }
   let spec = self.parse_decl_specifiers()
@@ -29,6 +33,8 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
   spec.visibility = merge_visibility(spec.visibility, leading_visibility)
   spec.symbol_alias = merge_alias(spec.symbol_alias, leading_alias)
   spec.section = merge_section(spec.section, leading_section)
+  spec.is_constructor = spec.is_constructor || leading_constructor
+  spec.is_destructor = spec.is_destructor || leading_destructor
   let decl = self.parse_declarator(spec.base_type)
   let post_decl_attrs = self.skip_attributes_info()
   // If no name and no function suffix, skip to semicolon
@@ -50,6 +56,8 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       visibility: None,
       symbol_alias: None,
       section: None,
+      is_constructor: false,
+      is_destructor: false,
       body: None,
     }
   }
@@ -73,6 +81,8 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
         visibility: None,
         symbol_alias: None,
         section: None,
+        is_constructor: false,
+        is_destructor: false,
         body: None,
       }
     }
@@ -133,6 +143,8 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       visibility: merge_visibility(spec.visibility, post_decl_attrs.visibility),
       symbol_alias: merge_alias(spec.symbol_alias, post_decl_attrs.symbol_alias),
       section: merge_section(spec.section, post_decl_attrs.section),
+      is_constructor: spec.is_constructor || post_decl_attrs.is_constructor,
+      is_destructor: spec.is_destructor || post_decl_attrs.is_destructor,
       body,
     }
   }
@@ -153,6 +165,8 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       visibility: None,
       symbol_alias: None,
       section: None,
+      is_constructor: false,
+      is_destructor: false,
       body: None,
     }
   }
@@ -174,6 +188,8 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
     visibility: None,
     symbol_alias: None,
     section: None,
+    is_constructor: false,
+    is_destructor: false,
     body: None,
   }
 }

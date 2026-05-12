@@ -327,6 +327,8 @@ pub(all) struct FuncDecl {
   visibility : String?
   symbol_alias : String?
   section : String?
+  is_constructor : Bool
+  is_destructor : Bool
   body : Stmt?
 } derive(Eq)
 

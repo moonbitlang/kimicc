@@ -528,6 +528,11 @@ test "has attribute reflects supported packed layout" {
     #|#else
     #|int section_attr = 0;
     #|#endif
+    #|#if __has_attribute(constructor) && __has_attribute(__destructor__)
+    #|int lifecycle_attrs = 1;
+    #|#else
+    #|int lifecycle_attrs = 0;
+    #|#endif
     #|#if __has_attribute(visibility) && __has_attribute(__visibility__)
     #|int visibility_attr = 1;
     #|#else
@@ -572,7 +577,7 @@ test "has attribute reflects supported packed layout" {
     Ok(text) =>
       inspect(
         text,
-        content="int packed_attr=1;\nint aligned_attr=1;\nint mode_attr=1;\nint weak_attr=1;\nint alias_attr=1;\nint section_attr=1;\nint visibility_attr=1;\nint unused_attr=1;\nint fallthrough_attr=1;\nint function_hint_attrs=1;\nint diagnostic_attrs=1;\nint allocation_attrs=1;\nint sanitizer_attrs=1;\nint unsupported_type_attrs=0;\n",
+        content="int packed_attr=1;\nint aligned_attr=1;\nint mode_attr=1;\nint weak_attr=1;\nint alias_attr=1;\nint section_attr=1;\nint lifecycle_attrs=1;\nint visibility_attr=1;\nint unused_attr=1;\nint fallthrough_attr=1;\nint function_hint_attrs=1;\nint diagnostic_attrs=1;\nint allocation_attrs=1;\nint sanitizer_attrs=1;\nint unsupported_type_attrs=0;\n",
       )
     Err(err) => fail(err.to_string())
   }

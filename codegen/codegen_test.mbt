@@ -2162,6 +2162,30 @@ test "generate linux amd64 emits custom sections" {
 }
 
 ///|
+test "generate linux amd64 emits constructor and destructor arrays" {
+  let source =
+    #|__attribute__((constructor)) void init_fn(void) {}
+    #|__attribute__((destructor)) void fini_fn(void) {}
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(
+    assembly.contains("\t.section\t.init_array,\"aw\",@init_array"),
+    content="true",
+  )
+  inspect(assembly.contains("\t.quad\tinit_fn"), content="true")
+  inspect(
+    assembly.contains("\t.section\t.fini_array,\"aw\",@fini_array"),
+    content="true",
+  )
+  inspect(assembly.contains("\t.quad\tfini_fn"), content="true")
+}
+
+///|
 test "generate linux amd64 loads external declaration addresses through GOT" {
   let source =
     #|extern int strong_external(void);
