@@ -2439,9 +2439,12 @@ if [ "$status" -ne 42 ]; then
 fi
 
 cat > "$posix_runtime_source_path" <<'C'
+#include <arpa/inet.h>
 #include <dirent.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -2484,15 +2487,23 @@ int main(void) {
   char *mapped;
   int fds[2];
   int spair[2];
+  int net_fd;
+  int reuse_addr = 1;
   int dup_fd;
   int fd_flags;
   struct pollfd pfd;
   fd_set readfds;
   struct timeval tv;
+  struct sockaddr_in addr;
+  struct sockaddr_in bound_addr;
+  socklen_t bound_len = sizeof(bound_addr);
+  struct addrinfo hints;
+  struct addrinfo *resolved = 0;
   pid_t child;
   int wait_status = 0;
   char c = 0;
   char host[256];
+  char ipbuf[INET_ADDRSTRLEN];
   DIR *dir;
   if (fd < 0) return 11;
   if (write(fd, "abc", 3) != 3) return 12;
@@ -2588,6 +2599,33 @@ int main(void) {
   if (read(spair[1], &c, 1) != 1 || c != 'q') return 29;
   close(spair[0]);
   close(spair[1]);
+  memset(&addr, 0, sizeof(addr));
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(0);
+  if (inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr) != 1) return 114;
+  if (!inet_ntop(AF_INET, &addr.sin_addr, ipbuf, sizeof(ipbuf))) return 115;
+  if (strcmp(ipbuf, "127.0.0.1") != 0) return 116;
+  net_fd = socket(AF_INET, SOCK_STREAM, 0);
+  if (net_fd < 0) return 117;
+  if (setsockopt(net_fd, SOL_SOCKET, SO_REUSEADDR,
+                 &reuse_addr, sizeof(reuse_addr)) != 0) {
+    return 118;
+  }
+  if (bind(net_fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) return 119;
+  if (getsockname(net_fd, (struct sockaddr *)&bound_addr, &bound_len) != 0) {
+    return 120;
+  }
+  if (bound_addr.sin_family != AF_INET || bound_len < sizeof(bound_addr)) {
+    return 121;
+  }
+  if (ntohs(bound_addr.sin_port) == 0) return 122;
+  if (close(net_fd) != 0) return 123;
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = AF_INET;
+  hints.ai_socktype = SOCK_STREAM;
+  if (getaddrinfo("localhost", "80", &hints, &resolved) != 0) return 124;
+  if (!resolved || resolved->ai_family != AF_INET) return 125;
+  freeaddrinfo(resolved);
   child = fork();
   if (child < 0) return 30;
   if (child == 0) _exit(42);
@@ -2858,6 +2896,7 @@ if [ "$status" -ne 42 ]; then
 fi
 
 cat > "$header_syntax_source_path" <<'C'
+#include <arpa/inet.h>
 #include <assert.h>
 #include <ctype.h>
 #include <dirent.h>
@@ -2866,6 +2905,8 @@ cat > "$header_syntax_source_path" <<'C'
 #include <limits.h>
 #include <locale.h>
 #include <math.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <pthread.h>
 #include <setjmp.h>
 #include <signal.h>
@@ -2892,7 +2933,8 @@ int main(void) {
   return sizeof(DIR *) + sizeof(FILE *) + sizeof(jmp_buf) +
     sizeof(pthread_t) + sizeof(sigset_t) + sizeof(fd_set) +
     sizeof(struct timeval) + sizeof(struct rusage) +
-    sizeof(struct tms) + sizeof(struct utsname) > 0;
+    sizeof(struct tms) + sizeof(struct utsname) +
+    sizeof(struct addrinfo) + sizeof(struct sockaddr_in) > 0;
 }
 C
 
