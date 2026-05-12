@@ -107,10 +107,12 @@ test "parse extended float spellings in sizeof and alignof type names" {
   }
   let source =
     #|int main(void) {
+    #|  int f16_size[sizeof(_Float16)];
     #|  int f32_size[sizeof(_Float32)];
     #|  int f64_size[sizeof(_Float64)];
     #|  int f32x_size[sizeof(_Float32x)];
     #|  int f64x_size[sizeof(_Float64x)];
+    #|  int f16_align[__alignof__(_Float16)];
     #|  int f32_align[__alignof__(_Float32)];
     #|  int f64_align[__alignof__(_Float64)];
     #|  int f32x_align[__alignof__(_Float32x)];
@@ -122,10 +124,12 @@ test "parse extended float spellings in sizeof and alignof type names" {
     Some(
       Compound(
         [
+          VarDecl(Array(SInt, 2), "f16_size", None),
           VarDecl(Array(SInt, 4), "f32_size", None),
           VarDecl(Array(SInt, 8), "f64_size", None),
           VarDecl(Array(SInt, 8), "f32x_size", None),
           VarDecl(Array(SInt, 16), "f64x_size", None),
+          VarDecl(Array(SInt, 2), "f16_align", None),
           VarDecl(Array(SInt, 4), "f32_align", None),
           VarDecl(Array(SInt, 8), "f64_align", None),
           VarDecl(Array(SInt, 8), "f32x_align", None),

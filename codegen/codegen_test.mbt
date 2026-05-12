@@ -173,6 +173,27 @@ test "generate linux amd64 simple function" {
 }
 
 ///|
+test "generate linux amd64 float16 layout constants" {
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let source =
+    #|_Float16 global_half;
+    #|int main(void) {
+    #|  return sizeof(_Float16) + __alignof__(_Float16) + sizeof(global_half);
+    #|}
+  let prog = @parser.parse_for_target(source, target)
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(
+    assembly.contains("\t.align\t2\nglobal_half:\n\t.zero\t2"),
+    content="true",
+  )
+  inspect(assembly.contains("\tmov\trax, 2"), content="true")
+  inspect(assembly.contains("\tmov\trax, 4"), content="false")
+}
+
+///|
 test "generate linux amd64 function with params" {
   let source = "int add(int a, int b) { return a + b; }"
   let prog = @parser.parse(source)

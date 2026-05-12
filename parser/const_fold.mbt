@@ -176,6 +176,16 @@ fn Parser::long_double_align(self : Parser) -> Int {
 }
 
 ///|
+fn Parser::float16_size(_self : Parser) -> Int {
+  2
+}
+
+///|
+fn Parser::float16_align(_self : Parser) -> Int {
+  2
+}
+
+///|
 fn Parser::float128_size(self : Parser) -> Int {
   match self.target {
     DarwinArm64 => abort("__float128 size is not supported")
@@ -651,7 +661,7 @@ fn basic_type_size(ty : Type) -> Int {
     Bool | SChar | UChar => 1
     SShort | UShort => 2
     SInt | UInt | Float => 4
-    Float16 => abort("_Float16 size is not supported")
+    Float16 => 2
     Float128 => abort("__float128 size is not supported")
     LongDouble => 8
     SLong
@@ -677,7 +687,7 @@ fn basic_type_align(ty : Type) -> Int {
     Bool | SChar | UChar => 1
     SShort | UShort => 2
     SInt | UInt | Float => 4
-    Float16 => abort("_Float16 alignment is not supported")
+    Float16 => 2
     Float128 => abort("__float128 alignment is not supported")
     LongDouble => 8
     SLong
@@ -710,7 +720,7 @@ fn Parser::const_type_size(self : Parser, ty : Type) -> Int {
     Bool | SChar | UChar => 1
     SShort | UShort => 2
     SInt | UInt | Float => 4
-    Float16 => abort("_Float16 size is not supported")
+    Float16 => self.float16_size()
     Float128 => self.float128_size()
     LongDouble => self.long_double_size()
     SLong
@@ -736,7 +746,7 @@ fn Parser::const_type_align(self : Parser, ty : Type) -> Int {
     Bool | SChar | UChar => 1
     SShort | UShort => 2
     SInt | UInt | Float => 4
-    Float16 => abort("_Float16 alignment is not supported")
+    Float16 => self.float16_align()
     Float128 => self.float128_align()
     LongDouble => self.long_double_align()
     SLong

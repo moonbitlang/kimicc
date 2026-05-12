@@ -280,9 +280,8 @@ fn X64Codegen::type_size(self : X64Codegen, ty : @parser.Type) -> Int {
       match x64_core_type(ty) {
         Void => 0
         Bool | SChar | UChar => 1
-        SShort | UShort => 2
+        SShort | UShort | Float16 => 2
         SInt | UInt | Float => 4
-        Float16 => abort("_Float16 size is not supported")
         Float128 | LongDouble => 16
         SLong
         | ULong
@@ -356,9 +355,8 @@ fn X64Codegen::type_align(self : X64Codegen, ty : @parser.Type) -> Int {
       match x64_core_type(ty) {
         Void => 1
         Bool | SChar | UChar => 1
-        SShort | UShort => 2
+        SShort | UShort | Float16 => 2
         SInt | UInt | Float => 4
-        Float16 => abort("_Float16 alignment is not supported")
         Float128 | LongDouble => 16
         SLong
         | ULong

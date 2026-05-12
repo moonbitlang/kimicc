@@ -439,9 +439,9 @@ expect_compile_failure "invalid C smoke source" "$bad_source_path"
 
 cat > "$bad_source_path" <<'C'
 _Float16 unsupported_half;
-int main(void) { return 0; }
+int main(void) { return unsupported_half == (_Float16)0; }
 C
-expect_compile_failure "unsupported _Float16 smoke source" "$bad_source_path"
+expect_compile_failure "unsupported _Float16 value smoke source" "$bad_source_path"
 
 cat > "$bad_source_path" <<'C'
 __float128 unsupported_quad;
@@ -2367,6 +2367,8 @@ _Static_assert(LDBL_MANT_DIG == 64, "long double mantissa");
 _Static_assert(DECIMAL_DIG == 21, "decimal digits");
 _Static_assert(sizeof(long double) == 16, "long double width");
 _Static_assert(alignof(long double) == 16, "long double alignment");
+_Static_assert(sizeof(_Float16) == 2, "_Float16 width");
+_Static_assert(alignof(_Float16) == 2, "_Float16 alignment");
 _Static_assert(sizeof(uintptr_t) == 8, "stdint uintptr width");
 _Static_assert(sizeof(int64_t) == 8, "stdint int64 width");
 _Static_assert(sizeof(uint64_t) == 8, "stdint uint64 width");
