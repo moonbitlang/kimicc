@@ -141,6 +141,8 @@ libc_runtime_source_path="/tmp/kimicc-linux-amd64-libc-runtime.c"
 libc_runtime_binary_path="/tmp/kimicc-linux-amd64-libc-runtime"
 pthread_source_path="/tmp/kimicc-linux-amd64-pthread.c"
 pthread_binary_path="/tmp/kimicc-linux-amd64-pthread"
+posix_runtime_source_path="/tmp/kimicc-linux-amd64-posix-runtime.c"
+posix_runtime_binary_path="/tmp/kimicc-linux-amd64-posix-runtime"
 libm_source_path="/tmp/kimicc-linux-amd64-libm.c"
 libm_binary_path="/tmp/kimicc-linux-amd64-libm"
 multi_main_source_path="/tmp/kimicc-linux-amd64-multi-main.c"
@@ -2310,6 +2312,52 @@ status=$?
 set -e
 if [ "$status" -ne 42 ]; then
   echo "expected pthread smoke binary to exit 42, got $status" >&2
+  exit 1
+fi
+
+cat > "$posix_runtime_source_path" <<'C'
+#include <dirent.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <time.h>
+#include <unistd.h>
+
+int main(void) {
+  char path[] = "/tmp/kimicc-posix-runtime-XXXXXX";
+  int fd = mkstemp(path);
+  char buf[8];
+  struct stat st;
+  struct timespec ts;
+  DIR *dir;
+  if (fd < 0) return 11;
+  if (write(fd, "abc", 3) != 3) return 12;
+  if (lseek(fd, 0, SEEK_SET) != 0) return 13;
+  if (read(fd, buf, 3) != 3) return 14;
+  buf[3] = 0;
+  if (strcmp(buf, "abc") != 0) return 15;
+  if (fstat(fd, &st) != 0 || st.st_size != 3) return 16;
+  if (clock_gettime(CLOCK_REALTIME, &ts) != 0) return 17;
+  dir = opendir("/tmp");
+  if (!dir) return 18;
+  if (!readdir(dir)) return 19;
+  if (closedir(dir) != 0) return 20;
+  close(fd);
+  unlink(path);
+  return 42;
+}
+C
+
+"$kimicc" -target linux-amd64 -o "$posix_runtime_binary_path" \
+  "$posix_runtime_source_path"
+set +e
+"$posix_runtime_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 42 ]; then
+  echo "expected POSIX runtime smoke binary to exit 42, got $status" >&2
   exit 1
 fi
 
