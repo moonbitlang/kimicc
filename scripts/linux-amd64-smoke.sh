@@ -2442,10 +2442,15 @@ cat > "$posix_runtime_source_path" <<'C'
 #include <arpa/inet.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <fnmatch.h>
+#include <glob.h>
+#include <grp.h>
 #include <limits.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <poll.h>
+#include <pwd.h>
+#include <regex.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -2454,6 +2459,7 @@ cat > "$posix_runtime_source_path" <<'C'
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <sys/times.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -2471,14 +2477,21 @@ int main(void) {
   char sym_path[PATH_MAX];
   char renamed_path[PATH_MAX];
   char dir_path[PATH_MAX];
+  char glob_pattern[PATH_MAX];
   char link_buf[PATH_MAX];
   struct stat st;
   struct stat path_st;
+  struct statvfs vfs;
   struct timespec ts;
   struct timeval now;
   struct rusage usage;
   struct tms tmsbuf;
   struct utsname uts;
+  regex_t regex;
+  regmatch_t match[1];
+  glob_t paths;
+  struct passwd *pw;
+  struct group *gr;
   time_t now_time;
   clock_t ticks;
   ssize_t link_len;
@@ -2532,6 +2545,9 @@ int main(void) {
     return 82;
   }
   if (snprintf(dir_path, sizeof(dir_path), "%s.dir", path) <= 0) return 83;
+  if (snprintf(glob_pattern, sizeof(glob_pattern), "%s*", path) <= 0) {
+    return 126;
+  }
   if (link(path, hard_path) != 0) return 84;
   if (stat(hard_path, &path_st) != 0 || path_st.st_size != 3) return 85;
   if (symlink(path, sym_path) != 0) return 86;
@@ -2546,6 +2562,19 @@ int main(void) {
   if (rmdir(dir_path) != 0) return 93;
   if (unlink(sym_path) != 0) return 94;
   if (unlink(renamed_path) != 0) return 95;
+  if (fnmatch("kimicc-*.c", "kimicc-smoke.c", 0) != 0) return 127;
+  if (regcomp(&regex, "^a[bc]c$", REG_EXTENDED) != 0) return 128;
+  if (regexec(&regex, "abc", 1, match, 0) != 0) return 129;
+  if (match[0].rm_so != 0 || match[0].rm_eo != 3) return 130;
+  regfree(&regex);
+  if (glob(glob_pattern, 0, 0, &paths) != 0) return 131;
+  if (paths.gl_pathc < 1) return 132;
+  globfree(&paths);
+  pw = getpwuid(getuid());
+  if (!pw || !pw->pw_name || !pw->pw_name[0]) return 133;
+  gr = getgrgid(getgid());
+  if (!gr || !gr->gr_name || !gr->gr_name[0]) return 134;
+  if (statvfs("/tmp", &vfs) != 0 || vfs.f_bsize == 0) return 135;
   dup_fd = dup(fd);
   if (dup_fd < 0) return 67;
   if (lseek(dup_fd, 0, SEEK_SET) != 0) return 68;
@@ -2901,6 +2930,9 @@ cat > "$header_syntax_source_path" <<'C'
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
+#include <fnmatch.h>
+#include <glob.h>
+#include <grp.h>
 #include <inttypes.h>
 #include <limits.h>
 #include <locale.h>
@@ -2908,6 +2940,8 @@ cat > "$header_syntax_source_path" <<'C'
 #include <netdb.h>
 #include <netinet/in.h>
 #include <pthread.h>
+#include <pwd.h>
+#include <regex.h>
 #include <setjmp.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -2924,6 +2958,7 @@ cat > "$header_syntax_source_path" <<'C'
 #include <sys/resource.h>
 #include <sys/select.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <sys/times.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -2934,7 +2969,9 @@ int main(void) {
     sizeof(pthread_t) + sizeof(sigset_t) + sizeof(fd_set) +
     sizeof(struct timeval) + sizeof(struct rusage) +
     sizeof(struct tms) + sizeof(struct utsname) +
-    sizeof(struct addrinfo) + sizeof(struct sockaddr_in) > 0;
+    sizeof(struct addrinfo) + sizeof(struct sockaddr_in) +
+    sizeof(regex_t) + sizeof(glob_t) + sizeof(struct passwd) +
+    sizeof(struct group) + sizeof(struct statvfs) > 0;
 }
 C
 
