@@ -198,9 +198,10 @@ the target split real and testable without claiming full C ABI coverage yet.
   `__c11_atomic_exchange`, `__c11_atomic_compare_exchange_strong`,
   `__c11_atomic_compare_exchange_weak`, `__c11_atomic_thread_fence`,
   `__c11_atomic_signal_fence`, `__c11_atomic_is_lock_free`, and
-  `__sync_synchronize`, plus `__sync_bool_compare_and_swap` and
-  `__sync_val_compare_and_swap`. Lock-free query builtins currently report true
-  for the covered 1-, 2-, 4-, and 8-byte scalar widths.
+  `__sync_synchronize`, plus legacy `__sync_*` compare-and-swap,
+  read-modify-write, swap, and lock test/release builtins. Lock-free query
+  builtins currently report true for the covered 1-, 2-, 4-, and 8-byte scalar
+  widths.
 - Covered same-width integer overflow builtins lower without external calls:
   `__builtin_add_overflow`, `__builtin_sub_overflow`, and
   `__builtin_mul_overflow`, plus the signed/unsigned typed spellings such as

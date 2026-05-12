@@ -2483,6 +2483,21 @@ fn X64Codegen::emit_sync_compare_and_swap_builtin(
 }
 
 ///|
+fn X64Codegen::emit_sync_lock_release_builtin(
+  self : X64Codegen,
+  args : Array[@parser.Expr],
+) -> Unit {
+  if args.length() > 0 {
+    let elem_ty = x64_atomic_target_type(self.type_of(args[0]))
+    self.gen_expr(args[0])
+    self.emit("\tmov\tr10, rax")
+    self.emit("\txor\teax, eax")
+    self.emit_atomic_raw_store_from_rax("r10", elem_ty)
+  }
+  self.emit("\tmov\trax, 0")
+}
+
+///|
 fn X64Codegen::emit_atomic_lock_free_builtin(
   self : X64Codegen,
   args : Array[@parser.Expr],
@@ -2970,6 +2985,26 @@ fn X64Codegen::builtin_return_type(
       } else {
         Some(SLongLong)
       }
+    "__sync_fetch_and_add"
+    | "__sync_fetch_and_sub"
+    | "__sync_fetch_and_and"
+    | "__sync_fetch_and_or"
+    | "__sync_fetch_and_xor"
+    | "__sync_fetch_and_nand"
+    | "__sync_add_and_fetch"
+    | "__sync_sub_and_fetch"
+    | "__sync_and_and_fetch"
+    | "__sync_or_and_fetch"
+    | "__sync_xor_and_fetch"
+    | "__sync_nand_and_fetch"
+    | "__sync_swap"
+    | "__sync_lock_test_and_set" =>
+      if args.length() > 0 {
+        Some(x64_atomic_target_type(self.type_of(args[0])))
+      } else {
+        Some(SLongLong)
+      }
+    "__sync_lock_release" => Some(Void)
     "__builtin_clz"
     | "__builtin_clzl"
     | "__builtin_clzll"
@@ -3243,6 +3278,62 @@ fn X64Codegen::emit_builtin_call(
     }
     "__sync_val_compare_and_swap" => {
       self.emit_sync_compare_and_swap_builtin(args, true)
+      true
+    }
+    "__sync_fetch_and_add" => {
+      self.emit_atomic_update_builtin(args, "+", false)
+      true
+    }
+    "__sync_fetch_and_sub" => {
+      self.emit_atomic_update_builtin(args, "-", false)
+      true
+    }
+    "__sync_fetch_and_and" => {
+      self.emit_atomic_update_builtin(args, "&", false)
+      true
+    }
+    "__sync_fetch_and_or" => {
+      self.emit_atomic_update_builtin(args, "|", false)
+      true
+    }
+    "__sync_fetch_and_xor" => {
+      self.emit_atomic_update_builtin(args, "^", false)
+      true
+    }
+    "__sync_fetch_and_nand" => {
+      self.emit_atomic_update_builtin(args, "~&", false)
+      true
+    }
+    "__sync_add_and_fetch" => {
+      self.emit_atomic_update_builtin(args, "+", true)
+      true
+    }
+    "__sync_sub_and_fetch" => {
+      self.emit_atomic_update_builtin(args, "-", true)
+      true
+    }
+    "__sync_and_and_fetch" => {
+      self.emit_atomic_update_builtin(args, "&", true)
+      true
+    }
+    "__sync_or_and_fetch" => {
+      self.emit_atomic_update_builtin(args, "|", true)
+      true
+    }
+    "__sync_xor_and_fetch" => {
+      self.emit_atomic_update_builtin(args, "^", true)
+      true
+    }
+    "__sync_nand_and_fetch" => {
+      self.emit_atomic_update_builtin(args, "~&", true)
+      true
+    }
+    "__sync_swap" | "__sync_lock_test_and_set" => {
+      self.emit_atomic_exchange_builtin(args)
+      true
+    }
+    "__sync_lock_release" => {
+      self.emit_sync_lock_release_builtin(args)
       true
     }
     "__builtin_add_overflow"

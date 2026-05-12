@@ -438,6 +438,11 @@ test "linux amd64 has builtin reflects supported lowering" {
     #|#else
     #|int atomic_and_overflow = 0;
     #|#endif
+    #|#if __has_builtin(__sync_fetch_and_add) && __has_builtin(__sync_add_and_fetch) && __has_builtin(__sync_fetch_and_nand) && __has_builtin(__sync_nand_and_fetch) && __has_builtin(__sync_lock_test_and_set) && __has_builtin(__sync_lock_release) && __has_builtin(__sync_swap)
+    #|int sync_update_builtins = 1;
+    #|#else
+    #|int sync_update_builtins = 0;
+    #|#endif
     #|#if __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p) && __has_builtin(__builtin_classify_type)
     #|int compile_time_selection = 1;
     #|#else
@@ -457,7 +462,7 @@ test "linux amd64 has builtin reflects supported lowering" {
     Ok(text) =>
       inspect(
         text,
-        content="int memory_and_return_address=1;\nint gnu_copy_builtins=1;\nint atomic_and_overflow=1;\nint compile_time_selection=1;\nint floating_environment_query=1;\nint unsupported=0;\n",
+        content="int memory_and_return_address=1;\nint gnu_copy_builtins=1;\nint atomic_and_overflow=1;\nint sync_update_builtins=1;\nint compile_time_selection=1;\nint floating_environment_query=1;\nint unsupported=0;\n",
       )
     Err(err) => fail(err.to_string())
   }

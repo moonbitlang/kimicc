@@ -789,6 +789,21 @@ test "generate linux amd64 lowers atomic builtins" {
     #|  if (w != 17u) return 32;
     #|  if (__sync_val_compare_and_swap(&w, 12u, 19u) != 17u) return 33;
     #|  if (w != 17u) return 34;
+    #|  __atomic_store_n(&w, 1, 5);
+    #|  if (__sync_fetch_and_add(&w, 2u) != 1u) return 35;
+    #|  if (__sync_add_and_fetch(&w, 4u) != 7u) return 36;
+    #|  if (__sync_fetch_and_or(&w, 8u) != 7u) return 37;
+    #|  if (__sync_and_and_fetch(&w, 6u) != 6u) return 38;
+    #|  if (__sync_fetch_and_xor(&w, 3u) != 6u) return 39;
+    #|  if (__sync_sub_and_fetch(&w, 2u) != 3u) return 40;
+    #|  if (__sync_fetch_and_nand(&w, 15u) != 3u) return 41;
+    #|  __atomic_store_n(&w, 10, 5);
+    #|  if (__sync_nand_and_fetch(&w, 15u) != ~10u) return 42;
+    #|  __atomic_store_n(&w, 21, 5);
+    #|  if (__sync_swap(&w, 22u) != 21u) return 43;
+    #|  if (__sync_lock_test_and_set(&w, 23u) != 22u) return 44;
+    #|  __sync_lock_release(&w);
+    #|  if (w != 0u) return 45;
     #|  if (__c11_atomic_fetch_add(&a, 3, 5) != 5) return 5;
     #|  if (__c11_atomic_exchange(&a, 11, 5) != 8) return 6;
     #|  if (__c11_atomic_compare_exchange_strong(&a, &expected, 19, 5, 5)) return 7;
@@ -850,6 +865,13 @@ test "generate linux amd64 lowers atomic builtins" {
     assembly.contains("call\t__sync_val_compare_and_swap"),
     content="false",
   )
+  inspect(assembly.contains("call\t__sync_fetch_and_add"), content="false")
+  inspect(assembly.contains("call\t__sync_add_and_fetch"), content="false")
+  inspect(assembly.contains("call\t__sync_fetch_and_nand"), content="false")
+  inspect(assembly.contains("call\t__sync_nand_and_fetch"), content="false")
+  inspect(assembly.contains("call\t__sync_lock_test_and_set"), content="false")
+  inspect(assembly.contains("call\t__sync_lock_release"), content="false")
+  inspect(assembly.contains("call\t__sync_swap"), content="false")
 }
 
 ///|
