@@ -137,6 +137,8 @@ object_path="/tmp/kimicc-linux-amd64-smoke.o"
 dependency_path="/tmp/kimicc-linux-amd64-smoke.d"
 dependency_stdout_path="/tmp/kimicc-linux-amd64-smoke-mm.out"
 binary_path="/tmp/kimicc-linux-amd64-smoke"
+libc_runtime_source_path="/tmp/kimicc-linux-amd64-libc-runtime.c"
+libc_runtime_binary_path="/tmp/kimicc-linux-amd64-libc-runtime"
 libm_source_path="/tmp/kimicc-linux-amd64-libm.c"
 libm_binary_path="/tmp/kimicc-linux-amd64-libm"
 multi_main_source_path="/tmp/kimicc-linux-amd64-multi-main.c"
@@ -2231,6 +2233,50 @@ status=$?
 set -e
 if [ "$status" -ne 42 ]; then
   echo "expected smoke binary to exit 42, got $status" >&2
+  exit 1
+fi
+
+cat > "$libc_runtime_source_path" <<'C'
+#include <ctype.h>
+#include <errno.h>
+#include <math.h>
+#include <setjmp.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+static jmp_buf jb;
+
+int jump_once(int n) {
+  if (setjmp(jb) == 0) {
+    longjmp(jb, n);
+  }
+  return n;
+}
+
+int main(void) {
+  char buf[64];
+  char *end = 0;
+  long v = strtol("123x", &end, 10);
+  if (v != 123 || *end != 'x') return 11;
+  if (!isdigit('7') || tolower('A') != 'a') return 12;
+  if (snprintf(buf, sizeof(buf), "%ld:%s", v, strerror(EINVAL)) <= 0) {
+    return 13;
+  }
+  if (sqrt(81.0) != 9.0) return 14;
+  if (jump_once(42) != 42) return 15;
+  return 42;
+}
+C
+
+"$kimicc" -target linux-amd64 -o "$libc_runtime_binary_path" \
+  "$libc_runtime_source_path" -lm
+set +e
+"$libc_runtime_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 42 ]; then
+  echo "expected libc runtime smoke binary to exit 42, got $status" >&2
   exit 1
 fi
 

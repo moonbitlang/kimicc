@@ -465,7 +465,9 @@ libc/POSIX headers such as `assert.h`, `ctype.h`, `dirent.h`, `inttypes.h`,
 `locale.h`, `math.h`, `pthread.h`, `setjmp.h`, `wchar.h`, `sys/mman.h`,
 `sys/select.h`, `sys/time.h`, and `sys/wait.h`. A separate linked probe passes
 the generated `va_list` state to glibc `vsnprintf`, covering a real libc
-v-function smoke without claiming complete `va_list` interoperability. The
-script also checks that the built compiler returns a nonzero status for an
-invalid Linux/amd64 translation unit, so compiler failures are not masked by
-the test harness.
+v-function smoke without claiming complete `va_list` interoperability. Another
+linked libc runtime probe covers ordinary calls through glibc declarations such
+as `strtol`, `isdigit`, `tolower`, `snprintf`, `strerror`, `sqrt`, `setjmp`, and
+`longjmp`. The script also checks that the built compiler returns a nonzero
+status for an invalid Linux/amd64 translation unit, so compiler failures are not
+masked by the test harness.
