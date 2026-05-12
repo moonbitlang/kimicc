@@ -88,6 +88,8 @@ fn pp_has_attribute(name : String) -> Bool {
     | "__packed__"
     | "aligned"
     | "__aligned__"
+    | "mode"
+    | "__mode__"
     | "unused"
     | "__unused__"
     | "fallthrough"

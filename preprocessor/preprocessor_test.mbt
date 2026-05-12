@@ -508,6 +508,11 @@ test "has attribute reflects supported packed layout" {
     #|#else
     #|int aligned_attr = 0;
     #|#endif
+    #|#if __has_attribute(mode) && __has_attribute(__mode__)
+    #|int mode_attr = 1;
+    #|#else
+    #|int mode_attr = 0;
+    #|#endif
     #|#if __has_attribute(unused) && __has_attribute(__unused__)
     #|int unused_attr = 1;
     #|#else
@@ -547,7 +552,7 @@ test "has attribute reflects supported packed layout" {
     Ok(text) =>
       inspect(
         text,
-        content="int packed_attr=1;\nint aligned_attr=1;\nint unused_attr=1;\nint fallthrough_attr=1;\nint function_hint_attrs=1;\nint diagnostic_attrs=1;\nint allocation_attrs=1;\nint sanitizer_attrs=1;\nint unsupported_type_attrs=0;\n",
+        content="int packed_attr=1;\nint aligned_attr=1;\nint mode_attr=1;\nint unused_attr=1;\nint fallthrough_attr=1;\nint function_hint_attrs=1;\nint diagnostic_attrs=1;\nint allocation_attrs=1;\nint sanitizer_attrs=1;\nint unsupported_type_attrs=0;\n",
       )
     Err(err) => fail(err.to_string())
   }

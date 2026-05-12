@@ -1215,6 +1215,11 @@ int target_predefines(void) {
 #else
   return 516;
 #endif
+#if __has_attribute(mode) && __has_attribute(__mode__)
+  target = target + 0;
+#else
+  return 607;
+#endif
 #if __has_attribute(unused) && __has_attribute(__unused__) && __has_attribute(fallthrough) && __has_attribute(__fallthrough__)
   target = target + 0;
 #else

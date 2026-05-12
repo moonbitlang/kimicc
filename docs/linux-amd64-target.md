@@ -193,8 +193,9 @@ the target split real and testable without claiming full C ABI coverage yet.
   `_Float64x` as the existing SysV `long double` placeholder. Decimal/vendor
   spellings such as `_Decimal32`, `_Decimal64`, `_Decimal128`, `__bf16`, and
   `__ibm128` are rejected explicitly instead of being treated as identifiers.
-- GNU `__has_attribute` reports true for semantic layout attributes that are
-  implemented (`packed` and numeric `aligned`) and for parser-accepted no-op
+- GNU `__has_attribute` reports true for semantic layout/type attributes that
+  are implemented (`packed`, numeric `aligned`, and common scalar `mode`) and for
+  parser-accepted no-op
   diagnostic, optimization, allocation, and sanitizer attributes such as
   `format`, `nonnull`, `warn_unused_result`, `noreturn`, `noinline`,
   `always_inline`, `cold`, `hot`, `malloc`, `alloc_size`, `alloc_align`, and
