@@ -189,6 +189,34 @@ async test "e2e MIR oracle checks string builtin return sizes" {
 }
 
 ///|
+async test "e2e MIR oracle checks string alias builtin return sizes" {
+  let source =
+    #|char *dst;
+    #|char *src;
+    #|_Static_assert(sizeof(__builtin_mempcpy(dst, src, 1)) == sizeof(void *), "mempcpy");
+    #|_Static_assert(sizeof(__builtin___mempcpy_chk(dst, src, 1, 16)) == sizeof(void *), "mempcpy chk");
+    #|_Static_assert(sizeof(__builtin_strcat(dst, src)) == sizeof(char *), "strcat");
+    #|_Static_assert(sizeof(__builtin_stpcpy(dst, src)) == sizeof(char *), "stpcpy");
+    #|_Static_assert(sizeof(__builtin___stpcpy_chk(dst, src, 16)) == sizeof(char *), "stpcpy chk");
+    #|_Static_assert(sizeof(__builtin_strncpy(dst, src, 1)) == sizeof(char *), "strncpy");
+    #|_Static_assert(sizeof(__builtin_stpncpy(dst, src, 1)) == sizeof(char *), "stpncpy");
+    #|_Static_assert(sizeof(__builtin___stpncpy_chk(dst, src, 1, 16)) == sizeof(char *), "stpncpy chk");
+    #|_Static_assert(sizeof(__builtin_strncat(dst, src, 1)) == sizeof(char *), "strncat");
+    #|int main(void) {
+    #|  return sizeof(__builtin_mempcpy(dst, src, 1)) +
+    #|    sizeof(__builtin___mempcpy_chk(dst, src, 1, 16)) +
+    #|    sizeof(__builtin_strcat(dst, src)) +
+    #|    sizeof(__builtin_stpcpy(dst, src)) +
+    #|    sizeof(__builtin___stpcpy_chk(dst, src, 16)) +
+    #|    sizeof(__builtin_strncpy(dst, src, 1)) +
+    #|    sizeof(__builtin_stpncpy(dst, src, 1)) +
+    #|    sizeof(__builtin___stpncpy_chk(dst, src, 1, 16)) +
+    #|    sizeof(__builtin_strncat(dst, src, 1));
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks floating builtin return sizes" {
   let source =
     #|_Static_assert(sizeof(__builtin_fabsf(-1.0f)) == sizeof(float), "fabsf");

@@ -20,7 +20,7 @@ that both assembly backends walk.
   `__builtin_strncmp`, `__builtin_memcmp`, `__builtin_strchr`,
   `__builtin_strrchr`, `__builtin_strstr`, and `__builtin_memchr`.
   MIR and the parser also carry builtin return-type facts used by unevaluated
-  expressions such as `sizeof`, including selected string/memory and
+  expressions such as `sizeof`, including selected string/memory aliases and
   floating-point builtins, floating classification helpers, selected atomic
   helpers, scalar bit/count/rotation/alignment helpers, void control/varargs
   helpers, and pointer-valued helpers such as `__builtin_alloca`.

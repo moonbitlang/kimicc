@@ -239,6 +239,25 @@ test "mir interpreter models string builtin return sizes" {
 }
 
 ///|
+test "mir interpreter models string alias builtin return sizes" {
+  let source =
+    #|char *dst;
+    #|char *src;
+    #|int main(void) {
+    #|  return sizeof(__builtin_mempcpy(dst, src, 1)) +
+    #|    sizeof(__builtin___mempcpy_chk(dst, src, 1, 16)) +
+    #|    sizeof(__builtin_strcat(dst, src)) +
+    #|    sizeof(__builtin_stpcpy(dst, src)) +
+    #|    sizeof(__builtin___stpcpy_chk(dst, src, 16)) +
+    #|    sizeof(__builtin_strncpy(dst, src, 1)) +
+    #|    sizeof(__builtin_stpncpy(dst, src, 1)) +
+    #|    sizeof(__builtin___stpncpy_chk(dst, src, 1, 16)) +
+    #|    sizeof(__builtin_strncat(dst, src, 1));
+    #|}
+  expect_interp(source, 72L)
+}
+
+///|
 test "mir interpreter models floating builtin return sizes" {
   let source =
     #|int main(void) {
