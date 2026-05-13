@@ -835,8 +835,7 @@ fn Interpreter::call_func(
 ///
 /// This is intended as a compile-test oracle for scalar C snippets. It is
 /// deliberately conservative and returns `Err` for memory, aggregate, indirect
-/// call, goto, switch, varargs, and floating-point behavior that is not modeled
-/// yet.
+/// call, goto, varargs, and floating-point behavior that is not modeled yet.
 pub fn Program::interpret_i64(
   self : Program,
   entry : String,

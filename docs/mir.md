@@ -12,9 +12,9 @@ that both assembly backends walk.
   constant folds.
 - `Program::interpret_i64` is an integer-only interpreter intended for
   compile-test oracles. It supports scalar functions, locals, globals, calls,
-  casts, arithmetic, conditionals, and loops. It deliberately returns `Err` for
-  memory, aggregates, indirect calls, floating point, goto, switch, varargs, and
-  other behavior that is not modeled yet.
+  casts, arithmetic, conditionals, loops, and scalar switches. It deliberately
+  returns `Err` for memory, aggregates, indirect calls, floating point, goto,
+  varargs, and other behavior that is not modeled yet.
 - `test/e2e/mir_oracle_test.mbt` compares selected scalar compiled binaries
   against the MIR interpreter.
 - `codegen/semantic_facts_wbtest.mbt` checks that Darwin ARM64 and linux/amd64
