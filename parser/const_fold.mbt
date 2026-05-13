@@ -1201,6 +1201,27 @@ fn Parser::const_builtin_return_type(
       } else {
         Some(SInt)
       }
+    "__builtin_isgreater"
+    | "__builtin_isgreaterequal"
+    | "__builtin_isless"
+    | "__builtin_islessequal"
+    | "__builtin_islessgreater"
+    | "__builtin_isunordered"
+    | "__builtin_isnan"
+    | "__builtin_isnanf"
+    | "__builtin_isnanl"
+    | "__builtin_isinf"
+    | "__builtin_isinff"
+    | "__builtin_isinfl"
+    | "__builtin_isfinite"
+    | "__builtin_isfinitef"
+    | "__builtin_isfinitel"
+    | "__builtin_isnormal"
+    | "__builtin_isnormalf"
+    | "__builtin_isnormall"
+    | "__builtin_signbit"
+    | "__builtin_signbitf"
+    | "__builtin_signbitl" => Some(SInt)
     _ => None
   }
 }

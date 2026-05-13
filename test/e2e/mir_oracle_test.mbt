@@ -233,6 +233,56 @@ async test "e2e MIR oracle checks floating builtin return sizes" {
 }
 
 ///|
+async test "e2e MIR oracle checks floating classification return sizes" {
+  let source =
+    #|_Static_assert(sizeof(__builtin_isgreater(2.0, 1.0)) == sizeof(int), "isgreater");
+    #|_Static_assert(sizeof(__builtin_isgreaterequal(2.0, 2.0)) == sizeof(int), "isgreaterequal");
+    #|_Static_assert(sizeof(__builtin_isless(1.0, 2.0)) == sizeof(int), "isless");
+    #|_Static_assert(sizeof(__builtin_islessequal(2.0, 2.0)) == sizeof(int), "islessequal");
+    #|_Static_assert(sizeof(__builtin_islessgreater(1.0, 2.0)) == sizeof(int), "islessgreater");
+    #|_Static_assert(sizeof(__builtin_isunordered(__builtin_nan(""), 1.0)) == sizeof(int), "isunordered");
+    #|_Static_assert(sizeof(__builtin_isnan(__builtin_nan(""))) == sizeof(int), "isnan");
+    #|_Static_assert(sizeof(__builtin_isnanf(__builtin_nanf(""))) == sizeof(int), "isnanf");
+    #|_Static_assert(sizeof(__builtin_isnanl(__builtin_nanl(""))) == sizeof(int), "isnanl");
+    #|_Static_assert(sizeof(__builtin_isinf(__builtin_inf())) == sizeof(int), "isinf");
+    #|_Static_assert(sizeof(__builtin_isinff(__builtin_inff())) == sizeof(int), "isinff");
+    #|_Static_assert(sizeof(__builtin_isinfl(__builtin_infl())) == sizeof(int), "isinfl");
+    #|_Static_assert(sizeof(__builtin_isfinite(1.0)) == sizeof(int), "isfinite");
+    #|_Static_assert(sizeof(__builtin_isfinitef(1.0f)) == sizeof(int), "isfinitef");
+    #|_Static_assert(sizeof(__builtin_isfinitel(1.0L)) == sizeof(int), "isfinitel");
+    #|_Static_assert(sizeof(__builtin_isnormal(1.0)) == sizeof(int), "isnormal");
+    #|_Static_assert(sizeof(__builtin_isnormalf(1.0f)) == sizeof(int), "isnormalf");
+    #|_Static_assert(sizeof(__builtin_isnormall(1.0L)) == sizeof(int), "isnormall");
+    #|_Static_assert(sizeof(__builtin_signbit(-1.0)) == sizeof(int), "signbit");
+    #|_Static_assert(sizeof(__builtin_signbitf(-1.0f)) == sizeof(int), "signbitf");
+    #|_Static_assert(sizeof(__builtin_signbitl(-1.0L)) == sizeof(int), "signbitl");
+    #|int main(void) {
+    #|  return sizeof(__builtin_isgreater(2.0, 1.0)) +
+    #|    sizeof(__builtin_isgreaterequal(2.0, 2.0)) +
+    #|    sizeof(__builtin_isless(1.0, 2.0)) +
+    #|    sizeof(__builtin_islessequal(2.0, 2.0)) +
+    #|    sizeof(__builtin_islessgreater(1.0, 2.0)) +
+    #|    sizeof(__builtin_isunordered(__builtin_nan(""), 1.0)) +
+    #|    sizeof(__builtin_isnan(__builtin_nan(""))) +
+    #|    sizeof(__builtin_isnanf(__builtin_nanf(""))) +
+    #|    sizeof(__builtin_isnanl(__builtin_nanl(""))) +
+    #|    sizeof(__builtin_isinf(__builtin_inf())) +
+    #|    sizeof(__builtin_isinff(__builtin_inff())) +
+    #|    sizeof(__builtin_isinfl(__builtin_infl())) +
+    #|    sizeof(__builtin_isfinite(1.0)) +
+    #|    sizeof(__builtin_isfinitef(1.0f)) +
+    #|    sizeof(__builtin_isfinitel(1.0L)) +
+    #|    sizeof(__builtin_isnormal(1.0)) +
+    #|    sizeof(__builtin_isnormalf(1.0f)) +
+    #|    sizeof(__builtin_isnormall(1.0L)) +
+    #|    sizeof(__builtin_signbit(-1.0)) +
+    #|    sizeof(__builtin_signbitf(-1.0f)) +
+    #|    sizeof(__builtin_signbitl(-1.0L));
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks alloca return size" {
   let source =
     #|_Static_assert(sizeof(__builtin_alloca(16)) == sizeof(void *), "alloca pointer");

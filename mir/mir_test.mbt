@@ -260,6 +260,35 @@ test "mir interpreter models floating builtin return sizes" {
 }
 
 ///|
+test "mir interpreter models floating classification return sizes" {
+  let source =
+    #|int main(void) {
+    #|  return sizeof(__builtin_isgreater(2.0, 1.0)) +
+    #|    sizeof(__builtin_isgreaterequal(2.0, 2.0)) +
+    #|    sizeof(__builtin_isless(1.0, 2.0)) +
+    #|    sizeof(__builtin_islessequal(2.0, 2.0)) +
+    #|    sizeof(__builtin_islessgreater(1.0, 2.0)) +
+    #|    sizeof(__builtin_isunordered(__builtin_nan(""), 1.0)) +
+    #|    sizeof(__builtin_isnan(__builtin_nan(""))) +
+    #|    sizeof(__builtin_isnanf(__builtin_nanf(""))) +
+    #|    sizeof(__builtin_isnanl(__builtin_nanl(""))) +
+    #|    sizeof(__builtin_isinf(__builtin_inf())) +
+    #|    sizeof(__builtin_isinff(__builtin_inff())) +
+    #|    sizeof(__builtin_isinfl(__builtin_infl())) +
+    #|    sizeof(__builtin_isfinite(1.0)) +
+    #|    sizeof(__builtin_isfinitef(1.0f)) +
+    #|    sizeof(__builtin_isfinitel(1.0L)) +
+    #|    sizeof(__builtin_isnormal(1.0)) +
+    #|    sizeof(__builtin_isnormalf(1.0f)) +
+    #|    sizeof(__builtin_isnormall(1.0L)) +
+    #|    sizeof(__builtin_signbit(-1.0)) +
+    #|    sizeof(__builtin_signbitf(-1.0f)) +
+    #|    sizeof(__builtin_signbitl(-1.0L));
+    #|}
+  expect_interp(source, 84L)
+}
+
+///|
 test "mir interpreter models alloca return size" {
   let source =
     #|int main(void) {
