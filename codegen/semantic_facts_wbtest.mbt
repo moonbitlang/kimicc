@@ -1,0 +1,250 @@
+///|
+fn semantic_linux_target() -> @target.Target {
+  match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("linux target did not parse")
+  }
+}
+
+///|
+fn expect_semantic_int(label : String, actual : Int, expected : Int) -> Unit {
+  if actual != expected {
+    abort(
+      label +
+      ": expected " +
+      expected.to_string() +
+      ", got " +
+      actual.to_string(),
+    )
+  }
+}
+
+///|
+fn expect_semantic_opt_int(
+  label : String,
+  actual : Int?,
+  expected : Int?,
+) -> Unit {
+  if actual != expected {
+    abort(label + ": optional int mismatch")
+  }
+}
+
+///|
+fn init_darwin_codegen_facts(prog : @parser.Program) -> Codegen {
+  let codegen = Codegen::new()
+  for decl in prog.structs {
+    codegen.struct_decls[decl.name] = decl
+  }
+  for decl in prog.structs {
+    codegen.compute_struct_layout(decl)
+  }
+  codegen
+}
+
+///|
+fn init_x64_codegen_facts(prog : @parser.Program) -> X64Codegen {
+  let codegen = X64Codegen::new()
+  for decl in prog.structs {
+    codegen.struct_decls[decl.name] = decl
+  }
+  for decl in prog.structs {
+    codegen.compute_struct_layout(decl)
+  }
+  codegen
+}
+
+///|
+fn expect_darwin_type_facts(
+  codegen : Codegen,
+  mir : @mir.Program,
+  ty : @parser.Type,
+) -> Unit {
+  expect_semantic_int(
+    "darwin size " + ty.to_string(),
+    codegen.type_size(ty),
+    mir.type_size(ty),
+  )
+  expect_semantic_int(
+    "darwin align " + ty.to_string(),
+    codegen.type_align(ty),
+    mir.type_align(ty),
+  )
+}
+
+///|
+fn expect_x64_type_facts(
+  codegen : X64Codegen,
+  mir : @mir.Program,
+  ty : @parser.Type,
+) -> Unit {
+  expect_semantic_int(
+    "x64 size " + ty.to_string(),
+    codegen.type_size(ty),
+    mir.type_size(ty),
+  )
+  expect_semantic_int(
+    "x64 align " + ty.to_string(),
+    codegen.type_align(ty),
+    mir.type_align(ty),
+  )
+}
+
+///|
+fn darwin_field_bit_width(width : Int) -> Int? {
+  if width > 0 {
+    Some(width)
+  } else {
+    None
+  }
+}
+
+///|
+fn x64_field_bit_width(width : Int) -> Int? {
+  if width > 0 {
+    Some(width)
+  } else {
+    None
+  }
+}
+
+///|
+fn expect_darwin_field_facts(
+  codegen : Codegen,
+  mir : @mir.Program,
+  ty : @parser.Type,
+  field : String,
+) -> Unit {
+  match
+    (codegen.find_field_layout_for_type(ty, field), mir.field_layout(ty, field)) {
+    (Some(cg), Some(m)) => {
+      expect_semantic_int("darwin field offset " + field, cg.2, m.offset)
+      expect_semantic_int("darwin field size " + field, cg.3, m.size)
+      expect_semantic_int(
+        "darwin field bit offset " + field,
+        cg.4,
+        m.bit_offset,
+      )
+      expect_semantic_opt_int(
+        "darwin field bit width " + field,
+        darwin_field_bit_width(cg.5),
+        m.bit_width,
+      )
+    }
+    _ => abort("missing darwin field fact: " + field)
+  }
+}
+
+///|
+fn expect_x64_field_facts(
+  codegen : X64Codegen,
+  mir : @mir.Program,
+  ty : @parser.Type,
+  field : String,
+) -> Unit {
+  match (codegen.field_layout(ty, field), mir.field_layout(ty, field)) {
+    (Some(cg), Some(m)) => {
+      expect_semantic_int("x64 field offset " + field, cg.2, m.offset)
+      expect_semantic_int("x64 field size " + field, cg.3, m.size)
+      expect_semantic_int("x64 field bit offset " + field, cg.4, m.bit_offset)
+      expect_semantic_opt_int(
+        "x64 field bit width " + field,
+        x64_field_bit_width(cg.5),
+        m.bit_width,
+      )
+    }
+    _ => abort("missing x64 field fact: " + field)
+  }
+}
+
+///|
+fn semantic_fact_source() -> String {
+  (
+    #|struct S { char c; long double ld; int i; };
+    #|struct __attribute__((packed)) P { char c; long double ld; int i; };
+    #|struct B { unsigned a:3; unsigned b:5; unsigned c:9; };
+    #|union U { char c; long double ld; int i; };
+    #|int main(void) { return 0; }
+  )
+}
+
+///|
+test "darwin codegen layout facts match MIR facts" {
+  let prog = @parser.parse(semantic_fact_source())
+  let mir = @mir.lower(prog, @target.Target::default())
+  let codegen = init_darwin_codegen_facts(prog)
+  let types : Array[@parser.Type] = [
+    Bool,
+    SChar,
+    UChar,
+    SShort,
+    UShort,
+    SInt,
+    UInt,
+    SLong,
+    ULong,
+    SLongLong,
+    ULongLong,
+    SInt128,
+    UInt128,
+    Float,
+    Double,
+    LongDouble,
+    Pointer(SInt),
+    Array(SInt, 3),
+    Struct("S"),
+    Struct("P"),
+    Struct("B"),
+    Union("U"),
+  ]
+  for ty in types {
+    expect_darwin_type_facts(codegen, mir, ty)
+  }
+  expect_darwin_field_facts(codegen, mir, Struct("S"), "ld")
+  expect_darwin_field_facts(codegen, mir, Struct("S"), "i")
+  expect_darwin_field_facts(codegen, mir, Struct("B"), "b")
+  expect_darwin_field_facts(codegen, mir, Struct("B"), "c")
+  expect_darwin_field_facts(codegen, mir, Union("U"), "ld")
+}
+
+///|
+test "linux amd64 codegen layout facts match MIR facts" {
+  let target = semantic_linux_target()
+  let prog = @parser.parse_for_target(semantic_fact_source(), target)
+  let mir = @mir.lower(prog, target)
+  let codegen = init_x64_codegen_facts(prog)
+  let types : Array[@parser.Type] = [
+    Bool,
+    SChar,
+    UChar,
+    SShort,
+    UShort,
+    SInt,
+    UInt,
+    SLong,
+    ULong,
+    SLongLong,
+    ULongLong,
+    SInt128,
+    UInt128,
+    Float,
+    Float16,
+    Double,
+    LongDouble,
+    Float128,
+    Pointer(SInt),
+    Array(SInt, 3),
+    Struct("S"),
+    Struct("P"),
+    Struct("B"),
+    Union("U"),
+  ]
+  for ty in types {
+    expect_x64_type_facts(codegen, mir, ty)
+  }
+  expect_x64_field_facts(codegen, mir, Struct("S"), "ld")
+  expect_x64_field_facts(codegen, mir, Struct("S"), "i")
+  expect_x64_field_facts(codegen, mir, Struct("B"), "b")
+  expect_x64_field_facts(codegen, mir, Struct("B"), "c")
+  expect_x64_field_facts(codegen, mir, Union("U"), "ld")
+}

@@ -4,3 +4,7 @@ import {
   "bobzhang/kimicc/target",
   "bobzhang/kimicc/parser",
 }
+
+import {
+  "bobzhang/kimicc/mir",
+} for "wbtest"
