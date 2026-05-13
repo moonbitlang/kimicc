@@ -361,7 +361,7 @@ fn Codegen::collect_expr_locals(self : Codegen, expr : @parser.Expr) -> Unit {
     | PostfixDec(e)
     | DesignatedField(_, e) => self.collect_expr_locals(e)
     Call(func, args) => {
-      let ret_ty = self.call_return_type(func, 0)
+      let ret_ty = self.call_return_type(func, args, 0)
       if self.is_indirect_aggregate(ret_ty) {
         let size = self.type_size(ret_ty)
         if size > self.sret_scratch_size {

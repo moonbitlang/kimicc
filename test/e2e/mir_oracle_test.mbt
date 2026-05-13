@@ -333,6 +333,50 @@ async test "e2e MIR oracle checks fortified builtin return sizes" {
 }
 
 ///|
+async test "e2e MIR oracle checks atomic builtin return sizes" {
+  let source =
+    #|int atomic_int_value;
+    #|long atomic_long_value;
+    #|_Atomic int c11_atomic_int_value;
+    #|int expected_atomic_value;
+    #|_Static_assert(sizeof(__atomic_load_n(&atomic_int_value, 0)) == sizeof(int), "atomic load int");
+    #|_Static_assert(sizeof(__atomic_load_n(&atomic_long_value, 0)) == sizeof(long), "atomic load long");
+    #|_Static_assert(sizeof(__c11_atomic_load(&c11_atomic_int_value, 0)) == sizeof(int), "c11 load");
+    #|_Static_assert(sizeof(__atomic_add_fetch(&atomic_int_value, 1, 0)) == sizeof(int), "atomic add fetch");
+    #|_Static_assert(sizeof(__atomic_sub_fetch(&atomic_int_value, 1, 0)) == sizeof(int), "atomic sub fetch");
+    #|_Static_assert(sizeof(__c11_atomic_fetch_add(&c11_atomic_int_value, 1, 0)) == sizeof(int), "c11 fetch add");
+    #|_Static_assert(sizeof(__c11_atomic_fetch_sub(&c11_atomic_int_value, 1, 0)) == sizeof(int), "c11 fetch sub");
+    #|_Static_assert(sizeof(__c11_atomic_fetch_and(&c11_atomic_int_value, 1, 0)) == sizeof(int), "c11 fetch and");
+    #|_Static_assert(sizeof(__c11_atomic_fetch_or(&c11_atomic_int_value, 1, 0)) == sizeof(int), "c11 fetch or");
+    #|_Static_assert(sizeof(__c11_atomic_fetch_xor(&c11_atomic_int_value, 1, 0)) == sizeof(int), "c11 fetch xor");
+    #|_Static_assert(sizeof(__c11_atomic_exchange(&c11_atomic_int_value, 1, 0)) == sizeof(int), "c11 exchange");
+    #|_Static_assert(sizeof(__c11_atomic_compare_exchange_strong(&c11_atomic_int_value, &expected_atomic_value, 1, 0, 0)) == sizeof(_Bool), "c11 compare exchange strong");
+    #|_Static_assert(sizeof(__c11_atomic_compare_exchange_weak(&c11_atomic_int_value, &expected_atomic_value, 1, 0, 0)) == sizeof(_Bool), "c11 compare exchange weak");
+    #|_Static_assert(sizeof(__atomic_store_n(&atomic_int_value, 1, 0)) == 0, "atomic store void");
+    #|_Static_assert(sizeof(__c11_atomic_store(&c11_atomic_int_value, 1, 0)) == 0, "c11 store void");
+    #|_Static_assert(sizeof(__sync_synchronize()) == 0, "sync synchronize void");
+    #|int main(void) {
+    #|  return sizeof(__atomic_load_n(&atomic_int_value, 0)) +
+    #|    sizeof(__atomic_load_n(&atomic_long_value, 0)) +
+    #|    sizeof(__c11_atomic_load(&c11_atomic_int_value, 0)) +
+    #|    sizeof(__atomic_add_fetch(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_sub_fetch(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_fetch_add(&c11_atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_fetch_sub(&c11_atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_fetch_and(&c11_atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_fetch_or(&c11_atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_fetch_xor(&c11_atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_exchange(&c11_atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_compare_exchange_strong(&c11_atomic_int_value, &expected_atomic_value, 1, 0, 0)) +
+    #|    sizeof(__c11_atomic_compare_exchange_weak(&c11_atomic_int_value, &expected_atomic_value, 1, 0, 0)) +
+    #|    sizeof(__atomic_store_n(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_store(&c11_atomic_int_value, 1, 0)) +
+    #|    sizeof(__sync_synchronize());
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks literal string comparison builtins" {
   let source =
     #|int main(void) {

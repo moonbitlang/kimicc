@@ -1132,6 +1132,17 @@ fn type_of_expr(expr : Expr) -> Type {
 }
 
 ///|
+fn const_atomic_target_type(ty : Type) -> Type {
+  match ty {
+    Pointer(Atomic(inner)) | Array(Atomic(inner), _) => inner
+    Pointer(Aligned(inner, _)) | Array(Aligned(inner, _), _) => inner
+    Pointer(inner) | Array(inner, _) => inner
+    Atomic(inner) | Aligned(inner, _) => inner
+    _ => SLongLong
+  }
+}
+
+///|
 fn Parser::const_builtin_return_type(
   self : Parser,
   name : String,
@@ -1187,6 +1198,25 @@ fn Parser::const_builtin_return_type(
     | "__builtin_nanl"
     | "__builtin_huge_vall"
     | "__builtin_infl" => Some(LongDouble)
+    "__atomic_load_n"
+    | "__c11_atomic_load"
+    | "__atomic_add_fetch"
+    | "__atomic_sub_fetch"
+    | "__c11_atomic_fetch_add"
+    | "__c11_atomic_fetch_sub"
+    | "__c11_atomic_fetch_and"
+    | "__c11_atomic_fetch_or"
+    | "__c11_atomic_fetch_xor"
+    | "__c11_atomic_exchange" =>
+      if args.length() > 0 {
+        Some(const_atomic_target_type(self.const_expr_type(args[0])))
+      } else {
+        Some(SLongLong)
+      }
+    "__c11_atomic_compare_exchange_strong"
+    | "__c11_atomic_compare_exchange_weak" => Some(Bool)
+    "__atomic_store_n" | "__c11_atomic_store" | "__sync_synchronize" =>
+      Some(Void)
     "__builtin_assume_aligned" =>
       if args.length() > 0 {
         Some(self.const_expr_type(args[0]))

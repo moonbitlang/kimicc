@@ -322,6 +322,34 @@ test "mir interpreter models fortified builtin return sizes" {
 }
 
 ///|
+test "mir interpreter models atomic builtin return sizes" {
+  let source =
+    #|int atomic_int_value;
+    #|long atomic_long_value;
+    #|_Atomic int c11_atomic_int_value;
+    #|int expected_atomic_value;
+    #|int main(void) {
+    #|  return sizeof(__atomic_load_n(&atomic_int_value, 0)) +
+    #|    sizeof(__atomic_load_n(&atomic_long_value, 0)) +
+    #|    sizeof(__c11_atomic_load(&c11_atomic_int_value, 0)) +
+    #|    sizeof(__atomic_add_fetch(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_sub_fetch(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_fetch_add(&c11_atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_fetch_sub(&c11_atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_fetch_and(&c11_atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_fetch_or(&c11_atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_fetch_xor(&c11_atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_exchange(&c11_atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_compare_exchange_strong(&c11_atomic_int_value, &expected_atomic_value, 1, 0, 0)) +
+    #|    sizeof(__c11_atomic_compare_exchange_weak(&c11_atomic_int_value, &expected_atomic_value, 1, 0, 0)) +
+    #|    sizeof(__atomic_store_n(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_store(&c11_atomic_int_value, 1, 0)) +
+    #|    sizeof(__sync_synchronize());
+    #|}
+  expect_interp(source, 50L)
+}
+
+///|
 test "mir interpreter models literal string comparison builtins" {
   let source =
     #|int main(void) {

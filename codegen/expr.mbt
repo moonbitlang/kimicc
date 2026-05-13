@@ -113,7 +113,7 @@ fn Codegen::type_of(
     Unary("!", _) => SInt
     Unary("~", operand) =>
       unary_integer_result_type(self.type_of(operand, frame_size))
-    Call(func, _) => self.call_return_type(func, frame_size)
+    Call(func, args) => self.call_return_type(func, args, frame_size)
     Assign(_, rhs) => self.type_of(rhs, frame_size)
     CompoundAssign(_, lhs, _) => self.type_of(lhs, frame_size)
     MemberAccess(obj, field) => {
@@ -722,6 +722,7 @@ fn Codegen::emit_call_arg_conversion(
 fn Codegen::call_return_type(
   self : Codegen,
   func : @parser.Expr,
+  args : Array[@parser.Expr],
   frame_size : Int,
 ) -> @parser.Type {
   match self.type_of(func, frame_size) {
@@ -752,6 +753,25 @@ fn Codegen::call_return_type(
             "__builtin_rotateleft64" | "__builtin_rotateright64" => ULongLong
             "__builtin_object_size" | "__builtin_dynamic_object_size" => ULong
             "__builtin_flt_rounds" => SInt
+            "__atomic_load_n"
+            | "__c11_atomic_load"
+            | "__atomic_add_fetch"
+            | "__atomic_sub_fetch"
+            | "__c11_atomic_fetch_add"
+            | "__c11_atomic_fetch_sub"
+            | "__c11_atomic_fetch_and"
+            | "__c11_atomic_fetch_or"
+            | "__c11_atomic_fetch_xor"
+            | "__c11_atomic_exchange" =>
+              if args.length() > 0 {
+                atomic_target_type(self.type_of(args[0], frame_size))
+              } else {
+                SLongLong
+              }
+            "__c11_atomic_compare_exchange_strong"
+            | "__c11_atomic_compare_exchange_weak" => Bool
+            "__atomic_store_n" | "__c11_atomic_store" | "__sync_synchronize" =>
+              Void
             "__builtin_isgreater"
             | "__builtin_isgreaterequal"
             | "__builtin_isless"
@@ -3839,7 +3859,7 @@ fn Codegen::gen_expr(
             }
             src_slot += arg_slot_counts[i]
           }
-          let ret_ty = self.call_return_type(signature_func, frame_size)
+          let ret_ty = self.call_return_type(signature_func, args, frame_size)
           if needs_indirect_callee {
             self.emit("\tldr\tx15, [sp, #" + callee_offset.to_string() + "]")
             self.emit_call_sret_addr(ret_ty, frame_size)
@@ -4187,7 +4207,7 @@ fn Codegen::gen_expr(
           if temp_area > 0 {
             self.emit("\tadd\tsp, sp, #" + temp_area.to_string())
           }
-          let ret_ty = self.call_return_type(signature_func, frame_size)
+          let ret_ty = self.call_return_type(signature_func, args, frame_size)
           if needs_indirect_callee {
             self.emit_call_sret_addr(ret_ty, frame_size)
             self.emit("\tblr\tx15")
