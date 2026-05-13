@@ -211,6 +211,19 @@ test "mir interpreter evaluates integer overflow builtins" {
 }
 
 ///|
+test "mir interpreter evaluates scalar compound literals" {
+  let source =
+    #|int main(void) {
+    #|  int a = (int){40};
+    #|  unsigned char b = (unsigned char){255 + 1};
+    #|  long long c = (long long){-9223372036854775807LL - 1LL};
+    #|  unsigned long long d = (unsigned long long){0xffffffffffffffffULL};
+    #|  return a + b + (c < 0 ? 2 : 0) + (d == 0xffffffffffffffffULL ? 0 : 100);
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter applies target layout and integer casts" {
   let source =
     #|int main(void) {

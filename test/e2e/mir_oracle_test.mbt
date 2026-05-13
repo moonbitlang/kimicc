@@ -89,6 +89,19 @@ async test "e2e MIR oracle checks integer overflow builtins" {
 }
 
 ///|
+async test "e2e MIR oracle checks scalar compound literals" {
+  let source =
+    #|int main(void) {
+    #|  int a = (int){40};
+    #|  unsigned char b = (unsigned char){255 + 1};
+    #|  long long c = (long long){-9223372036854775807LL - 1LL};
+    #|  unsigned long long d = (unsigned long long){0xffffffffffffffffULL};
+    #|  return a + b + (c < 0 ? 2 : 0) + (d == 0xffffffffffffffffULL ? 0 : 100);
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks scalar switch fallthrough" {
   let source =
     #|int main(void) {

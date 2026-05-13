@@ -1238,7 +1238,19 @@ fn Interpreter::eval_expr(
           0L
         }
       }
-    Array(_) | CompoundLiteral(_, _, _) => {
+    CompoundLiteral(ty, init_exprs, _) =>
+      if self.program.runtime_int_type(ty) {
+        let value = if init_exprs.length() > 0 {
+          self.eval_expr(frame, init_exprs[0])
+        } else {
+          0L
+        }
+        self.program.runtime_cast_int(value, ty)
+      } else {
+        self.fail("unsupported MIR interpreter aggregate expression")
+        0L
+      }
+    Array(_) => {
       self.fail("unsupported MIR interpreter aggregate expression")
       0L
     }
