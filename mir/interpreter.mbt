@@ -864,7 +864,11 @@ fn Interpreter::literal_printf_format_length(
                 self.fail("unsupported MIR interpreter " + name + " format")
                 return None
               }
-              if has_precision && format[conversion_index].to_int() != 115 {
+              if has_precision &&
+                format[conversion_index].to_int() != 100 &&
+                format[conversion_index].to_int() != 105 &&
+                format[conversion_index].to_int() != 115 &&
+                format[conversion_index].to_int() != 117 {
                 self.fail("unsupported MIR interpreter " + name + " format")
                 return None
               }
@@ -940,7 +944,24 @@ fn Interpreter::literal_printf_format_length(
                   return None
                 }
                 let value = values[value_index]
-                conversion_length = value.to_string().length().to_int64()
+                if has_precision && value < 0L {
+                  self.fail(
+                    "unsupported MIR interpreter " +
+                    name +
+                    " precision argument",
+                  )
+                  return None
+                }
+                conversion_length = if has_precision &&
+                  value == 0L &&
+                  precision == 0L {
+                  0L
+                } else {
+                  value.to_string().length().to_int64()
+                }
+                if has_precision && precision > conversion_length {
+                  conversion_length = precision
+                }
                 if value >= 0L && (plus_flag || space_flag) {
                   conversion_length += 1L
                 }
