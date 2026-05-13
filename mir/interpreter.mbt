@@ -559,6 +559,37 @@ fn string_literal_byte_at(value : String, index : Int64) -> Int64 {
 }
 
 ///|
+fn literal_string_arg(expr : @parser.Expr) -> String? {
+  match expr {
+    String(value) => Some(value)
+    Cast(_, inner) => literal_string_arg(inner)
+    _ => None
+  }
+}
+
+///|
+fn compare_string_literal_bytes(
+  left : String,
+  right : String,
+  limit : Int64?,
+  stop_at_nul : Bool,
+) -> Int64 {
+  let mut index = 0L
+  while limit is None || index < limit.unwrap() {
+    let lhs = string_literal_byte_at(left, index)
+    let rhs = string_literal_byte_at(right, index)
+    if lhs != rhs {
+      return if lhs < rhs { -1L } else { 1L }
+    }
+    if stop_at_nul && lhs == 0L {
+      return 0L
+    }
+    index += 1L
+  }
+  0L
+}
+
+///|
 fn Interpreter::eval_builtin_call(
   self : Interpreter,
   frame : InterpFrame,
@@ -698,6 +729,39 @@ fn Interpreter::eval_builtin_call(
           String(value) => Some(value.length().to_int64())
           _ => {
             self.fail("unsupported MIR interpreter strlen argument")
+            Some(0L)
+          }
+        }
+      }
+    "__builtin_strcmp" =>
+      if args.length() < 2 {
+        Some(0L)
+      } else {
+        match (literal_string_arg(args[0]), literal_string_arg(args[1])) {
+          (Some(left), Some(right)) =>
+            Some(compare_string_literal_bytes(left, right, None, true))
+          _ => {
+            self.fail("unsupported MIR interpreter strcmp argument")
+            Some(0L)
+          }
+        }
+      }
+    "__builtin_memcmp" =>
+      if args.length() < 3 {
+        Some(0L)
+      } else {
+        match (literal_string_arg(args[0]), literal_string_arg(args[1])) {
+          (Some(left), Some(right)) =>
+            Some(
+              compare_string_literal_bytes(
+                left,
+                right,
+                Some(self.eval_expr(frame, args[2])),
+                false,
+              ),
+            )
+          _ => {
+            self.fail("unsupported MIR interpreter memcmp argument")
             Some(0L)
           }
         }

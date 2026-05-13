@@ -2753,6 +2753,16 @@ test "generate builtin sqrtf" {
 }
 
 ///|
+test "generate builtin memcmp" {
+  let source = "int foo(char *a, char *b) { return __builtin_memcmp(a, b, 3); }"
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(assembly.contains("bl\t_memcmp"), content="true")
+  inspect(assembly.contains("__builtin_memcmp"), content="false")
+}
+
+///|
 test "generate builtin nanf" {
   let source = "float foo() { return __builtin_nanf(\"\"); }"
   let prog = @parser.parse(source)

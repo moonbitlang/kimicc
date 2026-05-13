@@ -1842,6 +1842,13 @@ fn Codegen::emit_builtin_call(
       self.emit("\tmov\tx9, x0")
       true
     }
+    "__builtin_memcmp" => {
+      if args.length() >= 3 {
+        self.emit_builtin_lib_call("_memcmp", args, 3, frame_size)
+      }
+      self.emit("\tmov\tx9, x0")
+      true
+    }
     "__builtin_strlen" => {
       if args.length() > 0 {
         self.gen_expr(args[0], frame_size)

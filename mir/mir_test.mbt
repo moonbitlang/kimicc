@@ -220,6 +220,21 @@ test "mir interpreter models string literal scalar facts" {
 }
 
 ///|
+test "mir interpreter models literal string comparison builtins" {
+  let source =
+    #|int main(void) {
+    #|  if (__builtin_strcmp("abc", "abc") != 0) return 1;
+    #|  if (__builtin_strcmp("abc", "abd") >= 0) return 2;
+    #|  if (__builtin_strcmp((const char *)"abd", "abc") <= 0) return 3;
+    #|  if (__builtin_memcmp("abc", "abd", 2) != 0) return 4;
+    #|  if (__builtin_memcmp("abc", "abd", 3) >= 0) return 5;
+    #|  if (__builtin_memcmp("abd", "abc", 3) <= 0) return 6;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter reports unsupported memory behavior" {
   let source = "int main(void) { int x = 1; return *&x; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())

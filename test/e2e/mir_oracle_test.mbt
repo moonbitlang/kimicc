@@ -169,6 +169,21 @@ async test "e2e MIR oracle checks string literal scalar facts" {
 }
 
 ///|
+async test "e2e MIR oracle checks literal string comparison builtins" {
+  let source =
+    #|int main(void) {
+    #|  if (__builtin_strcmp("abc", "abc") != 0) return 1;
+    #|  if (__builtin_strcmp("abc", "abd") >= 0) return 2;
+    #|  if (__builtin_strcmp((const char *)"abd", "abc") <= 0) return 3;
+    #|  if (__builtin_memcmp("abc", "abd", 2) != 0) return 4;
+    #|  if (__builtin_memcmp("abc", "abd", 3) >= 0) return 5;
+    #|  if (__builtin_memcmp("abd", "abc", 3) <= 0) return 6;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks scalar bit builtins" {
   let source =
     #|int main(void) {

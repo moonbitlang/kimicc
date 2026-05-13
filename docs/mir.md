@@ -15,7 +15,8 @@ that both assembly backends walk.
   casts, arithmetic, conditionals, loops, scalar switches, simple gotos, and
   selected scalar builtin calls. It also models narrow string-literal facts that
   are useful in compile tests: literal pointer non-nullness, literal byte access,
-  `sizeof`/`__alignof__` on string literals, and literal `__builtin_strlen`.
+  `sizeof`/`__alignof__` on string literals, literal `__builtin_strlen`, and
+  literal-only `__builtin_strcmp`/`__builtin_memcmp`.
   Frame/return-address builtins are modeled only for nullness: depth 0 returns a
   synthetic non-null pointer, and nonzero depths return null. Tests should
   compare those values only against null or pass them through identity helpers,
