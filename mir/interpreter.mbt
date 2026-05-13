@@ -5,6 +5,7 @@ priv enum ExecFlow {
   Returned(Int64)
   Broke
   Continued
+  Jump(String)
 }
 
 ///|
@@ -555,6 +556,7 @@ fn Interpreter::exec_while(
       Normal | Continued => ()
       Broke => return Normal
       Returned(value) => return Returned(value)
+      Jump(label) => return Jump(label)
     }
   }
   Normal
@@ -572,6 +574,7 @@ fn Interpreter::exec_do_while(
       Normal | Continued => ()
       Broke => return Normal
       Returned(value) => return Returned(value)
+      Jump(label) => return Jump(label)
     }
     if self.eval_expr(frame, cond) == 0L {
       return Normal
@@ -602,6 +605,7 @@ fn Interpreter::exec_for(
       Normal | Continued => ()
       Broke => return Normal
       Returned(value) => return Returned(value)
+      Jump(label) => return Jump(label)
     }
     match inc {
       Some(expr) => ignore(self.eval_expr(frame, expr))
@@ -766,7 +770,8 @@ fn Interpreter::exec_stmt(
     Break => Broke
     Continue => Continued
     Switch(expr, body, cases) => self.exec_switch(frame, expr, body, cases)
-    Goto(_) | ComputedGoto(_) => {
+    Goto(name) => Jump(name)
+    ComputedGoto(_) => {
       self.fail("unsupported MIR interpreter control statement")
       Normal
     }
@@ -774,6 +779,73 @@ fn Interpreter::exec_stmt(
     For(init, cond, inc, body) => self.exec_for(frame, init, cond, inc, body)
     DoWhile(cond, body) => self.exec_do_while(frame, cond, body)
   }
+}
+
+///|
+fn Interpreter::exec_func_body_from_label(
+  self : Interpreter,
+  frame : InterpFrame,
+  body : @parser.Stmt,
+  target : String,
+) -> ExecFlow {
+  let stmts = match body {
+    Compound(stmts) | StmtList(stmts) => stmts
+    _ => {
+      self.fail("unsupported MIR interpreter goto body")
+      return Normal
+    }
+  }
+  let mut active = false
+  let mut found = false
+  for stmt in stmts {
+    if !active {
+      match switch_stmt_label(stmt) {
+        Some(got) if got == target => {
+          active = true
+          found = true
+        }
+        _ => {
+          let (nested_found, flow) = self.exec_stmt_from_leading_label(
+            frame, stmt, target,
+          )
+          if nested_found {
+            active = true
+            found = true
+            match flow {
+              Normal => continue
+              flow => return flow
+            }
+          } else {
+            continue
+          }
+        }
+      }
+    }
+    match self.exec_stmt(frame, stmt) {
+      Normal => ()
+      flow => return flow
+    }
+  }
+  if !found {
+    self.fail("unknown label in MIR interpreter goto: " + target)
+  }
+  Normal
+}
+
+///|
+fn Interpreter::exec_func_body(
+  self : Interpreter,
+  frame : InterpFrame,
+  body : @parser.Stmt,
+) -> ExecFlow {
+  let mut flow = self.exec_stmt(frame, body)
+  while !self.failed() {
+    match flow {
+      Jump(label) => flow = self.exec_func_body_from_label(frame, body, label)
+      _ => break
+    }
+  }
+  flow
 }
 
 ///|
@@ -815,11 +887,15 @@ fn Interpreter::call_func(
               )
             }
           }
-          match self.exec_stmt(frame, body) {
+          match self.exec_func_body(frame, body) {
             Returned(value) => self.program.runtime_cast_int(value, decl.ret)
             Normal => 0L
             Broke | Continued => {
               self.fail("break or continue escaped function in MIR interpreter")
+              0L
+            }
+            Jump(label) => {
+              self.fail("unknown label in MIR interpreter goto: " + label)
               0L
             }
           }
@@ -835,7 +911,8 @@ fn Interpreter::call_func(
 ///
 /// This is intended as a compile-test oracle for scalar C snippets. It is
 /// deliberately conservative and returns `Err` for memory, aggregate, indirect
-/// call, goto, varargs, and floating-point behavior that is not modeled yet.
+/// call, computed goto, varargs, and floating-point behavior that is not
+/// modeled yet.
 pub fn Program::interpret_i64(
   self : Program,
   entry : String,

@@ -70,3 +70,20 @@ async test "e2e MIR oracle checks scalar switch fallthrough" {
     #|}
   run_source_against_mir_oracle(source)
 }
+
+///|
+async test "e2e MIR oracle checks scalar goto" {
+  let source =
+    #|int main(void) {
+    #|  int total = 0;
+    #|  int i = 0;
+    #|loop:
+    #|  i++;
+    #|  if (i == 2) goto skip;
+    #|  total += i;
+    #|skip:
+    #|  if (i < 5) goto loop;
+    #|  return total;
+    #|}
+  run_source_against_mir_oracle(source)
+}
