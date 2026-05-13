@@ -201,6 +201,23 @@ test "mir interpreter models frame and return address nullness" {
 }
 
 ///|
+test "mir interpreter models string literal scalar facts" {
+  let source =
+    #|int main(void) {
+    #|  if (sizeof("abc") != 4) return 1;
+    #|  if (__alignof__("abc") != 1) return 2;
+    #|  if (!"abc") return 3;
+    #|  if (*"abc" != 'a') return 4;
+    #|  if ("abc"[1] != 'b') return 5;
+    #|  if ("abc"[3] != 0) return 6;
+    #|  if (__func__[0] != 'm') return 7;
+    #|  if (__builtin_strlen("hello") != 5) return 8;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter reports unsupported memory behavior" {
   let source = "int main(void) { int x = 1; return *&x; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())

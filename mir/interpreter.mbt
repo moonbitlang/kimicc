@@ -550,6 +550,15 @@ fn rotate_bits(value : Int64, shift : Int64, width : Int, left : Bool) -> Int64 
 }
 
 ///|
+fn string_literal_byte_at(value : String, index : Int64) -> Int64 {
+  if index < 0L || index >= value.length().to_int64() {
+    0L
+  } else {
+    value[index.to_int()].to_int().to_int64()
+  }
+}
+
+///|
 fn Interpreter::eval_builtin_call(
   self : Interpreter,
   frame : InterpFrame,
@@ -681,6 +690,18 @@ fn Interpreter::eval_builtin_call(
       } else {
         Some(0L)
       }
+    "__builtin_strlen" =>
+      if args.length() == 0 {
+        Some(0L)
+      } else {
+        match args[0] {
+          String(value) => Some(value.length().to_int64())
+          _ => {
+            self.fail("unsupported MIR interpreter strlen argument")
+            Some(0L)
+          }
+        }
+      }
     _ => None
   }
 }
@@ -701,10 +722,7 @@ fn Interpreter::eval_expr(
       self.fail("unsupported MIR interpreter floating expression")
       0L
     }
-    String(_) => {
-      self.fail("unsupported MIR interpreter string expression")
-      0L
-    }
+    String(_) => 1L
     Var(name) => self.read_var(frame, name)
     Binary("&&", lhs, rhs) =>
       if self.eval_expr(frame, lhs) == 0L {
@@ -794,14 +812,20 @@ fn Interpreter::eval_expr(
       )
       self.write_lvalue(frame, lhs, value)
     }
+    Deref(String(value)) => string_literal_byte_at(value, 0L)
+    ArrayAccess(String(value), index) =>
+      string_literal_byte_at(value, self.eval_expr(frame, index))
     MemberAccess(_, _) | Deref(_) | AddrOf(_) | ArrayAccess(_, _) => {
       self.fail("unsupported MIR interpreter memory expression")
       0L
     }
     Sizeof(ty) => self.program.type_size(ty).to_int64()
+    SizeofExpr(String(value)) => (value.length() + 1).to_int64()
     SizeofExpr(e) =>
       self.program.type_size(self.program.expr_type(e, scope)).to_int64()
     Alignof(ty) => self.program.type_align(ty).to_int64()
+    AlignofExpr(String(value)) =>
+      self.program.type_align(Array(SChar, value.length() + 1)).to_int64()
     AlignofExpr(e) =>
       self.program.type_align(self.program.expr_type(e, scope)).to_int64()
     Cast(ty, value) =>
