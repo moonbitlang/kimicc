@@ -1865,6 +1865,13 @@ fn Codegen::emit_builtin_call(
       self.emit("\tmov\tx9, x0")
       true
     }
+    "__builtin_strncmp" => {
+      if args.length() >= 3 {
+        self.emit_builtin_lib_call("_strncmp", args, 3, frame_size)
+      }
+      self.emit("\tmov\tx9, x0")
+      true
+    }
     "__builtin_strcpy" => {
       if args.length() >= 2 {
         self.emit_builtin_lib_call("_strcpy", args, 2, frame_size)

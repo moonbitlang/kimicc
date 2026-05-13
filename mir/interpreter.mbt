@@ -746,6 +746,26 @@ fn Interpreter::eval_builtin_call(
           }
         }
       }
+    "__builtin_strncmp" =>
+      if args.length() < 3 {
+        Some(0L)
+      } else {
+        match (literal_string_arg(args[0]), literal_string_arg(args[1])) {
+          (Some(left), Some(right)) =>
+            Some(
+              compare_string_literal_bytes(
+                left,
+                right,
+                Some(self.eval_expr(frame, args[2])),
+                true,
+              ),
+            )
+          _ => {
+            self.fail("unsupported MIR interpreter strncmp argument")
+            Some(0L)
+          }
+        }
+      }
     "__builtin_memcmp" =>
       if args.length() < 3 {
         Some(0L)
