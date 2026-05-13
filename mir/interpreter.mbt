@@ -30,6 +30,18 @@ priv struct Interpreter {
 }
 
 ///|
+fn Program::switch_control_type(
+  self : Program,
+  ty : @parser.Type,
+) -> @parser.Type {
+  match ty {
+    Atomic(inner) | Aligned(inner, _) => self.switch_control_type(inner)
+    Bool | SChar | UChar | SShort | UShort => SInt
+    _ => ty
+  }
+}
+
+///|
 fn Program::runtime_int_type(self : Program, ty : @parser.Type) -> Bool {
   match self.core_type(ty) {
     Pointer(_) | FuncPtr(_, _, _) => true
@@ -600,6 +612,124 @@ fn Interpreter::exec_for(
 }
 
 ///|
+fn switch_stmt_label(stmt : @parser.Stmt) -> String? {
+  match stmt {
+    Label(name, _) => Some(name)
+    _ => None
+  }
+}
+
+///|
+fn Interpreter::exec_stmt_from_leading_label(
+  self : Interpreter,
+  frame : InterpFrame,
+  stmt : @parser.Stmt,
+  target : String,
+) -> (Bool, ExecFlow) {
+  match stmt {
+    Label(name, body) =>
+      if name == target {
+        (true, self.exec_stmt(frame, body))
+      } else {
+        self.exec_stmt_from_leading_label(frame, body, target)
+      }
+    _ => (false, Normal)
+  }
+}
+
+///|
+fn Interpreter::exec_switch_body(
+  self : Interpreter,
+  frame : InterpFrame,
+  body : @parser.Stmt,
+  target : String?,
+) -> ExecFlow {
+  let stmts = match body {
+    Compound(stmts) | StmtList(stmts) => stmts
+    _ => {
+      self.fail("unsupported MIR interpreter switch body")
+      return Normal
+    }
+  }
+  let mut active = target is None
+  let mut found = target is None
+  for stmt in stmts {
+    if !active {
+      match (target, switch_stmt_label(stmt)) {
+        (Some(want), Some(got)) if want == got => {
+          active = true
+          found = true
+        }
+        (Some(want), _) => {
+          let (nested_found, flow) = self.exec_stmt_from_leading_label(
+            frame, stmt, want,
+          )
+          if nested_found {
+            active = true
+            found = true
+            match flow {
+              Normal => continue
+              Broke => return Normal
+              flow => return flow
+            }
+          } else {
+            continue
+          }
+        }
+        _ => continue
+      }
+    }
+    match self.exec_stmt(frame, stmt) {
+      Normal => ()
+      Broke => return Normal
+      flow => return flow
+    }
+  }
+  if !found {
+    self.fail("unsupported nested MIR interpreter switch label")
+  }
+  Normal
+}
+
+///|
+fn Interpreter::exec_switch(
+  self : Interpreter,
+  frame : InterpFrame,
+  expr : @parser.Expr,
+  body : @parser.Stmt,
+  cases : Array[(Int64?, String)],
+) -> ExecFlow {
+  let control_ty = self.program.switch_control_type(
+    self.program.expr_type(expr, frame.scope()),
+  )
+  let control_value = self.program.runtime_cast_int(
+    self.eval_expr(frame, expr),
+    control_ty,
+  )
+  let mut target : String? = None
+  let mut default_target : String? = None
+  for c in cases {
+    match c.0 {
+      Some(value) => {
+        let case_value = self.program.runtime_cast_int(value, control_ty)
+        if target is None && case_value == control_value {
+          target = Some(c.1)
+        }
+      }
+      None => if default_target is None { default_target = Some(c.1) }
+    }
+  }
+  match target {
+    Some(_) => ()
+    None => target = default_target
+  }
+  match target {
+    Some(_) => self.exec_switch_body(frame, body, target)
+    None => Normal
+  }
+}
+
+///|
 fn Interpreter::exec_stmt(
   self : Interpreter,
   frame : InterpFrame,
@@ -635,7 +765,8 @@ fn Interpreter::exec_stmt(
     }
     Break => Broke
     Continue => Continued
-    Switch(_, _, _) | Goto(_) | ComputedGoto(_) => {
+    Switch(expr, body, cases) => self.exec_switch(frame, expr, body, cases)
+    Goto(_) | ComputedGoto(_) => {
       self.fail("unsupported MIR interpreter control statement")
       Normal
     }

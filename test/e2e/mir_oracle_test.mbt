@@ -45,3 +45,28 @@ async test "e2e MIR oracle checks scalar globals and casts" {
     #|}
   run_source_against_mir_oracle(source)
 }
+
+///|
+async test "e2e MIR oracle checks scalar switch fallthrough" {
+  let source =
+    #|int main(void) {
+    #|  int total = 0;
+    #|  for (int i = 0; i < 5; i++) {
+    #|    switch (i) {
+    #|    case 0:
+    #|      total += 3;
+    #|      break;
+    #|    case 1:
+    #|    case 2:
+    #|      total += 5;
+    #|      break;
+    #|    case 4:
+    #|      total += 7;
+    #|    default:
+    #|      total += 11;
+    #|    }
+    #|  }
+    #|  return total;
+    #|}
+  run_source_against_mir_oracle(source)
+}
