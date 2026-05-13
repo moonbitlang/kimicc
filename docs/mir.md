@@ -43,13 +43,13 @@ that both assembly backends walk.
   Runtime `__builtin___snprintf_chk` is modeled only for zero output size and a
   literal format string with `%c`, literal-string `%s`, decimal `%d`/`%i`,
   nonnegative `%u`/`%o`/`%x`/`%X`, optional integer length modifiers
-  `l`/`ll`/`z`/`t`/`j`, simple numeric field widths with `0`/`-` flags, or
-  escaped `%%`.
+  `l`/`ll`/`z`/`t`/`j`, simple numeric field widths with `0`/`-` flags,
+  `+`/space sign flags for decimal `%d`/`%i`, or escaped `%%`.
   Runtime `__builtin___sprintf_chk` is modeled only for a literal format string
   with `%c`, literal-string `%s`, decimal `%d`/`%i`, nonnegative
   `%u`/`%o`/`%x`/`%X`, optional integer length modifiers `l`/`ll`/`z`/`t`/`j`,
-  simple numeric field widths with `0`/`-` flags, or escaped `%%`; output
-  contents are not modeled.
+  simple numeric field widths with `0`/`-` flags, `+`/space sign flags for
+  decimal `%d`/`%i`, or escaped `%%`; output contents are not modeled.
   Runtime `__builtin___printf_chk` is modeled with the same literal-format
   return-value restriction; output is not modeled.
   Runtime `__builtin_bzero` evaluates its arguments but does not model memory

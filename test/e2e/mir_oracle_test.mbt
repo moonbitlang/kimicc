@@ -909,6 +909,22 @@ async test "e2e MIR oracle checks width checked printf lengths" {
 }
 
 ///|
+async test "e2e MIR oracle checks signed flag checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(32);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"%+d", n += 7) != 2) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 32, (const char *)"% d%%", 12) != 4) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"x=%+05d", 9) != 7) return 3;
+    #|  if (__builtin___printf_chk(1, (const char *)"n=% d", -5) != 4) return 4;
+    #|  if (n != 7) return 5;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks char checked printf lengths" {
   let source =
     #|int main(void) {

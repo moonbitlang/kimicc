@@ -787,12 +787,21 @@ fn Interpreter::literal_printf_format_length(
             index += 2
           } else {
             let mut conversion_index = index + 1
-            while conversion_index < format.length() &&
-                  (
-                    format[conversion_index].to_int() == 45 ||
-                    format[conversion_index].to_int() == 48
-                  ) {
-              conversion_index += 1
+            let mut plus_flag = false
+            let mut space_flag = false
+            while conversion_index < format.length() {
+              let flag = format[conversion_index].to_int()
+              if flag == 45 || flag == 48 {
+                conversion_index += 1
+              } else if flag == 43 {
+                plus_flag = true
+                conversion_index += 1
+              } else if flag == 32 {
+                space_flag = true
+                conversion_index += 1
+              } else {
+                break
+              }
             }
             let mut width = 0L
             while conversion_index < format.length() &&
@@ -834,6 +843,12 @@ fn Interpreter::literal_printf_format_length(
                   format[conversion_index].to_int() == 99 ||
                   format[conversion_index].to_int() == 115
                 ) {
+                self.fail("unsupported MIR interpreter " + name + " format")
+                return None
+              }
+              if (plus_flag || space_flag) &&
+                format[conversion_index].to_int() != 100 &&
+                format[conversion_index].to_int() != 105 {
                 self.fail("unsupported MIR interpreter " + name + " format")
                 return None
               }
@@ -880,10 +895,11 @@ fn Interpreter::literal_printf_format_length(
                   )
                   return None
                 }
-                conversion_length = values[value_index]
-                  .to_string()
-                  .length()
-                  .to_int64()
+                let value = values[value_index]
+                conversion_length = value.to_string().length().to_int64()
+                if value >= 0L && (plus_flag || space_flag) {
+                  conversion_length += 1L
+                }
               }
               if width > conversion_length {
                 length += width
