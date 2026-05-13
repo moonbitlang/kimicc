@@ -771,6 +771,22 @@ async test "e2e MIR oracle checks memory builtin return pointers" {
 }
 
 ///|
+async test "e2e MIR oracle checks string destination return pointers" {
+  let source =
+    #|int main(void) {
+    #|  char *dst = __builtin_alloca(16);
+    #|  __builtin_memset(dst, 0, 16);
+    #|  if (__builtin_strcpy(dst, "") != dst) return 1;
+    #|  if (__builtin___strcpy_chk(dst, "", 16) != dst) return 2;
+    #|  if (__builtin___strcat_chk(dst, "", 16) != dst) return 3;
+    #|  if (__builtin___strncpy_chk(dst, "", 0, 16) != dst) return 4;
+    #|  if (__builtin___strncat_chk(dst, "", 0, 16) != dst) return 5;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks literal string comparison builtins" {
   let source =
     #|int main(void) {

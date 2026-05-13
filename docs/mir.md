@@ -34,6 +34,8 @@ that both assembly backends walk.
   no-ops for scalar tests that do not inspect `va_list` contents.
   `memcpy`/`memmove`/`memset` and their checked aliases model only the returned
   destination pointer; memory contents are not modeled.
+  `strcpy`/`strcat`/`strncpy`/`strncat` and checked destination-return aliases
+  are modeled the same way.
   Frame/return-address builtins are modeled only for nullness: depth 0 returns a
   synthetic non-null pointer, and nonzero depths return null. Tests should
   compare those values only against null or pass them through identity helpers,

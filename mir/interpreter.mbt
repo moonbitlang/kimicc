@@ -848,6 +848,15 @@ fn Interpreter::eval_builtin_call(
     | "__builtin_memset"
     | "__builtin___memset_chk" =>
       Some(self.eval_return_first_call_arg(frame, args, 3))
+    "__builtin_strcpy"
+    | "__builtin___strcpy_chk"
+    | "__builtin_strcat"
+    | "__builtin___strcat_chk"
+    | "__builtin_strncpy"
+    | "__builtin___strncpy_chk"
+    | "__builtin_strncat"
+    | "__builtin___strncat_chk" =>
+      Some(self.eval_return_first_call_arg(frame, args, args.length()))
     "__builtin_alloca" => {
       if args.length() > 0 {
         ignore(self.eval_expr(frame, args[0]))

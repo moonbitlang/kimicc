@@ -626,6 +626,25 @@ test "mir interpreter models memory builtin return pointers" {
 }
 
 ///|
+test "mir interpreter models string destination return pointers" {
+  let source =
+    #|int main(void) {
+    #|  char *dst = __builtin_alloca(16);
+    #|  __builtin_memset(dst, 0, 16);
+    #|  if (__builtin_strcpy(dst, "") != dst) return 1;
+    #|  if (__builtin___strcpy_chk(dst, "", 16) != dst) return 2;
+    #|  if (__builtin_strcat(dst, "") != dst) return 3;
+    #|  if (__builtin___strcat_chk(dst, "", 16) != dst) return 4;
+    #|  if (__builtin_strncpy(dst, "", 0) != dst) return 5;
+    #|  if (__builtin___strncpy_chk(dst, "", 0, 16) != dst) return 6;
+    #|  if (__builtin_strncat(dst, "", 0) != dst) return 7;
+    #|  if (__builtin___strncat_chk(dst, "", 0, 16) != dst) return 8;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter models literal string comparison builtins" {
   let source =
     #|int main(void) {
