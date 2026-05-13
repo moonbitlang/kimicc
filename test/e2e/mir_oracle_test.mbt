@@ -116,6 +116,29 @@ async test "e2e MIR oracle checks scalar builtin calls" {
 }
 
 ///|
+async test "e2e MIR oracle checks parser folded compile-time builtins" {
+  let source =
+    #|struct Item { char tag; int x; };
+    #|struct Outer { char head; struct Item items[3]; char tail; };
+    #|struct S { int x; };
+    #|union U { int x; double y; };
+    #|int main(void) {
+    #|  int total = 0;
+    #|  total += __builtin_choose_expr(__builtin_types_compatible_p(int, signed int), 7, missing());
+    #|  total += __builtin_choose_expr(__builtin_types_compatible_p(int, unsigned int), missing(), 5);
+    #|  total += __builtin_classify_type(0);
+    #|  total += __builtin_classify_type((double)0);
+    #|  total += __builtin_classify_type((int*)0);
+    #|  total += __builtin_classify_type((struct S){0});
+    #|  total += __builtin_classify_type((union U){0});
+    #|  if (__builtin_offsetof(struct Outer, items[2].x) != 24) return 50;
+    #|  if (__builtin_offsetof(struct Outer, tail) != 28) return 60;
+    #|  return total;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks scalar bit builtins" {
   let source =
     #|int main(void) {
