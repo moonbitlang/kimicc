@@ -1179,10 +1179,24 @@ fn Interpreter::eval_expr(
     }
     Deref(AddrOf(value)) => self.read_lvalue(frame, value)
     AddrOf(Deref(value)) => self.eval_expr(frame, value)
-    Deref(String(value)) => string_literal_byte_at(value, 0L)
-    ArrayAccess(String(value), index) =>
-      string_literal_byte_at(value, self.eval_expr(frame, index))
-    MemberAccess(_, _) | Deref(_) | AddrOf(_) | ArrayAccess(_, _) => {
+    Deref(value) =>
+      match literal_string_arg(value) {
+        Some(literal) => string_literal_byte_at(literal, 0L)
+        None => {
+          self.fail("unsupported MIR interpreter memory expression")
+          0L
+        }
+      }
+    ArrayAccess(base, index) =>
+      match literal_string_arg(base) {
+        Some(literal) =>
+          string_literal_byte_at(literal, self.eval_expr(frame, index))
+        None => {
+          self.fail("unsupported MIR interpreter memory expression")
+          0L
+        }
+      }
+    MemberAccess(_, _) | AddrOf(_) => {
       self.fail("unsupported MIR interpreter memory expression")
       0L
     }

@@ -218,6 +218,9 @@ async test "e2e MIR oracle checks string literal scalar facts" {
     #|  if ("abc"[3] != 0) return 6;
     #|  if (__func__[0] != 'm') return 7;
     #|  if (__builtin_strlen("hello") != 5) return 8;
+    #|  if (*((char *)"abc") != 'a') return 9;
+    #|  if (((char *)"abc")[2] != 'c') return 10;
+    #|  if (((unsigned char *)"abc")[3] != 0) return 11;
     #|  return 42;
     #|}
   run_source_against_mir_oracle(source)
