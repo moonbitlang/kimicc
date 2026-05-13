@@ -40,6 +40,8 @@ that both assembly backends walk.
   return value when the source is a string literal. Runtime
   `__builtin___strlcat_chk` is modeled only for zero destination size and a
   string-literal source, where the destination contents are not inspected.
+  Runtime `__builtin___snprintf_chk` is modeled only for zero output size and a
+  literal format string with no conversions.
   Runtime `__builtin_bzero` evaluates its arguments but does not model memory
   contents.
   Frame/return-address builtins are modeled only for nullness: depth 0 returns a

@@ -671,6 +671,18 @@ test "mir interpreter models zero-size checked strlcat literal length" {
 }
 
 ///|
+test "mir interpreter models zero-size checked snprintf literal length" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  if (__builtin___snprintf_chk((char *)0, ((n += 1), 0), 0, 0, (const char *)"ready") != 5) return 1;
+    #|  if (n != 1) return 2;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter evaluates bzero arguments" {
   let source =
     #|int main(void) {

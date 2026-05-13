@@ -813,6 +813,18 @@ async test "e2e MIR oracle checks zero-size checked strlcat literal length" {
 }
 
 ///|
+async test "e2e MIR oracle checks zero-size checked snprintf literal length" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  if (__builtin___snprintf_chk((char *)0, ((n += 1), 0), 0, 0, (const char *)"ready") != 5) return 1;
+    #|  if (n != 1) return 2;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks bzero argument evaluation" {
   let source =
     #|int main(void) {

@@ -897,6 +897,29 @@ fn Interpreter::eval_builtin_call(
         }
       }
     }
+    "__builtin___snprintf_chk" => {
+      let values = self.eval_call_args(frame, args)
+      if args.length() < 5 {
+        Some(0L)
+      } else if values[1] != 0L {
+        self.fail("unsupported MIR interpreter snprintf buffer size")
+        Some(0L)
+      } else {
+        match literal_string_arg(args[4]) {
+          Some(format) =>
+            if format.contains("%") {
+              self.fail("unsupported MIR interpreter snprintf format")
+              Some(0L)
+            } else {
+              Some(format.length().to_int64())
+            }
+          None => {
+            self.fail("unsupported MIR interpreter snprintf format argument")
+            Some(0L)
+          }
+        }
+      }
+    }
     "__builtin_alloca" => {
       if args.length() > 0 {
         ignore(self.eval_expr(frame, args[0]))
