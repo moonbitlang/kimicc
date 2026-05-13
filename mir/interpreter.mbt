@@ -787,6 +787,7 @@ fn Interpreter::literal_printf_format_length(
           } else if index + 1 < format.length() &&
             (
               format[index + 1].to_int() == 88 ||
+              format[index + 1].to_int() == 99 ||
               format[index + 1].to_int() == 100 ||
               format[index + 1].to_int() == 105 ||
               format[index + 1].to_int() == 111 ||
@@ -797,7 +798,9 @@ fn Interpreter::literal_printf_format_length(
               self.fail("unsupported MIR interpreter " + name + " argument")
               return None
             }
-            if format[index + 1].to_int() == 111 ||
+            if format[index + 1].to_int() == 99 {
+              length += 1L
+            } else if format[index + 1].to_int() == 111 ||
               format[index + 1].to_int() == 88 ||
               format[index + 1].to_int() == 120 {
               let radix = if format[index + 1].to_int() == 88 ||

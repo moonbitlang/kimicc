@@ -735,6 +735,21 @@ test "mir interpreter models decimal checked printf lengths" {
 }
 
 ///|
+test "mir interpreter models char checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(16);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"c=%c", n += 65) != 3) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 16, (const char *)"%c%%", 'Z') != 2) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"z=%c", 0) != 3) return 3;
+    #|  if (n != 65) return 4;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter models unsigned checked printf lengths" {
   let source =
     #|int main(void) {
