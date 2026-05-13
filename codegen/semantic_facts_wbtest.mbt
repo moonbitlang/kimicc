@@ -205,6 +205,21 @@ fn expect_x64_global_expr_type_facts(
 }
 
 ///|
+fn expect_x64_fold_const_facts(
+  codegen : X64Codegen,
+  mir : @mir.Program,
+  expr : @parser.Expr,
+) -> Unit {
+  let scope = @mir.Scope::{
+    locals: codegen.var_types,
+    current_func: codegen.func_name,
+  }
+  if codegen.fold_const(expr) != mir.fold_const(expr, scope) {
+    abort("x64 constant fold mismatch")
+  }
+}
+
+///|
 fn semantic_fact_source() -> String {
   (
     #|struct S { char c; long double ld; int i; };
@@ -319,5 +334,22 @@ test "linux amd64 codegen layout facts match MIR facts" {
     codegen,
     mir,
     AddrOf(MemberAccess(Var("ga"), "arr")),
+  )
+  expect_x64_fold_const_facts(codegen, mir, Binary("/", Number(1), Number(2)))
+  expect_x64_fold_const_facts(
+    codegen,
+    mir,
+    Binary(">", Cast(ULong, Unary("-", Number(1))), Number(1)),
+  )
+  expect_x64_fold_const_facts(codegen, mir, SizeofExpr(Var("ga")))
+  expect_x64_fold_const_facts(
+    codegen,
+    mir,
+    AlignofExpr(MemberAccess(Var("ga"), "arr")),
+  )
+  expect_x64_fold_const_facts(
+    codegen,
+    mir,
+    OffsetOf(Struct("A"), [OffsetField("arr"), OffsetIndex(2)]),
   )
 }

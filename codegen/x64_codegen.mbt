@@ -7900,6 +7900,18 @@ fn X64Codegen::fold_const_int(
 
 ///|
 fn X64Codegen::fold_const(self : X64Codegen, expr : @parser.Expr) -> Int64? {
+  match self.mir {
+    Some(mir) =>
+      match
+        mir.fold_const(expr, {
+          locals: self.var_types,
+          current_func: self.func_name,
+        }) {
+        Some(value) => return Some(value)
+        None => ()
+      }
+    None => ()
+  }
   match self.fold_const_int(expr) {
     Some(value) => Some(value.bits)
     None => None
