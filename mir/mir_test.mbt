@@ -696,6 +696,18 @@ test "mir interpreter models checked sprintf literal length" {
 }
 
 ///|
+test "mir interpreter models escaped percent checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  char *dst = __builtin_alloca(16);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"%%ok%%") != 4) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 16, (const char *)"done%%") != 5) return 2;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter evaluates bzero arguments" {
   let source =
     #|int main(void) {

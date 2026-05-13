@@ -838,6 +838,18 @@ async test "e2e MIR oracle checks checked sprintf literal length" {
 }
 
 ///|
+async test "e2e MIR oracle checks escaped percent checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  char *dst = __builtin_alloca(16);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"%%ok%%") != 4) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 16, (const char *)"done%%") != 5) return 2;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks bzero argument evaluation" {
   let source =
     #|int main(void) {

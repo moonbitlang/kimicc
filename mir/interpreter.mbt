@@ -752,19 +752,31 @@ fn literal_string_arg(expr : @parser.Expr) -> String? {
 }
 
 ///|
-fn Interpreter::plain_literal_format_length(
+fn Interpreter::literal_printf_format_length(
   self : Interpreter,
   expr : @parser.Expr,
   name : String,
 ) -> Int64? {
   match literal_string_arg(expr) {
-    Some(format) =>
-      if format.contains("%") {
-        self.fail("unsupported MIR interpreter " + name + " format")
-        None
-      } else {
-        Some(format.length().to_int64())
+    Some(format) => {
+      let mut index = 0
+      let mut length = 0L
+      while index < format.length() {
+        if format[index].to_int() == 37 {
+          if index + 1 < format.length() && format[index + 1].to_int() == 37 {
+            length += 1L
+            index += 2
+          } else {
+            self.fail("unsupported MIR interpreter " + name + " format")
+            return None
+          }
+        } else {
+          length += 1L
+          index += 1
+        }
       }
+      Some(length)
+    }
     None => {
       self.fail("unsupported MIR interpreter " + name + " format argument")
       None
@@ -926,7 +938,7 @@ fn Interpreter::eval_builtin_call(
         self.fail("unsupported MIR interpreter snprintf buffer size")
         Some(0L)
       } else {
-        match self.plain_literal_format_length(args[4], "snprintf") {
+        match self.literal_printf_format_length(args[4], "snprintf") {
           Some(value) => Some(value)
           None => Some(0L)
         }
@@ -937,7 +949,7 @@ fn Interpreter::eval_builtin_call(
       if args.length() < 4 {
         Some(0L)
       } else {
-        match self.plain_literal_format_length(args[3], "sprintf") {
+        match self.literal_printf_format_length(args[3], "sprintf") {
           Some(value) => Some(value)
           None => Some(0L)
         }
