@@ -369,11 +369,15 @@ async test "e2e MIR oracle checks floating classification return sizes" {
 }
 
 ///|
-async test "e2e MIR oracle checks alloca return size" {
+async test "e2e MIR oracle checks alloca return size and nullness" {
   let source =
     #|_Static_assert(sizeof(__builtin_alloca(16)) == sizeof(void *), "alloca pointer");
     #|int main(void) {
-    #|  return sizeof(__builtin_alloca(16));
+    #|  int n = 16;
+    #|  void *p = __builtin_alloca(n += 1);
+    #|  if (n != 17) return 1;
+    #|  if (p == 0) return 2;
+    #|  return sizeof(__builtin_alloca(16)) + 34;
     #|}
   run_source_against_mir_oracle(source)
 }

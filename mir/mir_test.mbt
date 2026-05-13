@@ -371,12 +371,16 @@ test "mir interpreter models floating classification return sizes" {
 }
 
 ///|
-test "mir interpreter models alloca return size" {
+test "mir interpreter models alloca return size and nullness" {
   let source =
     #|int main(void) {
-    #|  return sizeof(__builtin_alloca(16));
+    #|  int n = 16;
+    #|  void *p = __builtin_alloca(n += 1);
+    #|  if (n != 17) return 1;
+    #|  if (p == 0) return 2;
+    #|  return sizeof(__builtin_alloca(16)) + 34;
     #|}
-  expect_interp(source, 8L)
+  expect_interp(source, 42L)
 }
 
 ///|

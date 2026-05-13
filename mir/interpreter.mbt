@@ -822,6 +822,12 @@ fn Interpreter::eval_builtin_call(
     "__builtin_flt_rounds" => Some(1L)
     "__builtin_assume" | "__builtin_prefetch" => Some(0L)
     "__builtin_object_size" | "__builtin_dynamic_object_size" => Some(-1L)
+    "__builtin_alloca" => {
+      if args.length() > 0 {
+        ignore(self.eval_expr(frame, args[0]))
+      }
+      Some(1L)
+    }
     "__builtin_frame_address" | "__builtin_return_address" => {
       let level = if args.length() > 0 {
         self.eval_expr(frame, args[0])
