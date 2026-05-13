@@ -1621,7 +1621,8 @@ pub fn generate_assembly_for_target(
 ) -> String {
   match target {
     DarwinArm64 => Codegen::new().generate(prog)
-    LinuxAmd64 => X64Codegen::new().generate(prog)
+    LinuxAmd64 =>
+      X64Codegen::new_with_mir(@mir.lower(prog, target)).generate(prog)
   }
 }
 

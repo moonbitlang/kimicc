@@ -1,6 +1,7 @@
 ///|
 priv struct X64Codegen {
   output : StringBuilder
+  mut mir : @mir.Program?
   mut label_counter : Int
   mut local_offsets : Map[String, Int]
   mut var_types : Map[String, @parser.Type]
@@ -44,6 +45,7 @@ priv struct X64Codegen {
 fn X64Codegen::new() -> X64Codegen {
   {
     output: StringBuilder::new(),
+    mir: None,
     label_counter: 0,
     local_offsets: {},
     var_types: {},
@@ -79,6 +81,13 @@ fn X64Codegen::new() -> X64Codegen {
     emitted_labels: {},
     defined_labels: {},
   }
+}
+
+///|
+fn X64Codegen::new_with_mir(mir : @mir.Program) -> X64Codegen {
+  let codegen = X64Codegen::new()
+  codegen.mir = Some(mir)
+  codegen
 }
 
 ///|
@@ -278,6 +287,10 @@ fn x64_signed_i32_bits(value : Int64) -> Int64 {
 
 ///|
 fn X64Codegen::type_size(self : X64Codegen, ty : @parser.Type) -> Int {
+  match self.mir {
+    Some(mir) => return mir.type_size(ty)
+    None => ()
+  }
   match ty {
     Atomic(inner) | Aligned(inner, _) => self.type_size(inner)
     _ =>
@@ -345,6 +358,10 @@ fn X64Codegen::type_size(self : X64Codegen, ty : @parser.Type) -> Int {
 
 ///|
 fn X64Codegen::type_align(self : X64Codegen, ty : @parser.Type) -> Int {
+  match self.mir {
+    Some(mir) => return mir.type_align(ty)
+    None => ()
+  }
   match ty {
     Atomic(inner) => self.type_align(inner)
     Aligned(inner, align) => {
@@ -3983,6 +4000,27 @@ fn X64Codegen::field_layout(
   ty : @parser.Type,
   field_name : String,
 ) -> (String, @parser.Type, Int, Int, Int, Int)? {
+  match self.mir {
+    Some(mir) =>
+      return match mir.field_layout(ty, field_name) {
+        Some(field) =>
+          Some(
+            (
+              field.name,
+              field.ty,
+              field.offset,
+              field.size,
+              field.bit_offset,
+              match field.bit_width {
+                Some(width) => width
+                None => -1
+              },
+            ),
+          )
+        None => None
+      }
+    None => ()
+  }
   let struct_name = match x64_core_type(ty) {
     Struct(name) | Union(name) => name
     _ => return None
