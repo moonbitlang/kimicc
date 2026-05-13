@@ -358,6 +358,48 @@ fn Interpreter::eval_first_call_arg_or_zero(
 }
 
 ///|
+fn mask_int_width(value : Int64, width : Int) -> Int64 {
+  if width >= 64 {
+    value
+  } else {
+    value & ((1L << width) - 1L)
+  }
+}
+
+///|
+fn count_leading_zero_bits(value : Int64, width : Int) -> Int64 {
+  let value = mask_int_width(value, width)
+  for i in 0..<width {
+    let shift = width - 1 - i
+    if ((value >> shift) & 1L) != 0L {
+      return i.to_int64()
+    }
+  }
+  width.to_int64()
+}
+
+///|
+fn count_trailing_zero_bits(value : Int64, width : Int) -> Int64 {
+  let value = mask_int_width(value, width)
+  for i in 0..<width {
+    if ((value >> i) & 1L) != 0L {
+      return i.to_int64()
+    }
+  }
+  width.to_int64()
+}
+
+///|
+fn byte_swap_bits(value : Int64, width : Int) -> Int64 {
+  let value = mask_int_width(value, width)
+  let mut result = 0L
+  for i in 0..<(width / 8) {
+    result = (result << 8) | ((value >> (i * 8)) & 0xFFL)
+  }
+  result
+}
+
+///|
 fn Interpreter::eval_builtin_call(
   self : Interpreter,
   frame : InterpFrame,
@@ -370,6 +412,40 @@ fn Interpreter::eval_builtin_call(
     "__builtin_flt_rounds" => Some(1L)
     "__builtin_assume" | "__builtin_prefetch" => Some(0L)
     "__builtin_object_size" | "__builtin_dynamic_object_size" => Some(-1L)
+    "__builtin_clz" | "__builtin_clzl" =>
+      Some(
+        count_leading_zero_bits(
+          self.eval_first_call_arg_or_zero(frame, args),
+          32,
+        ),
+      )
+    "__builtin_clzll" =>
+      Some(
+        count_leading_zero_bits(
+          self.eval_first_call_arg_or_zero(frame, args),
+          64,
+        ),
+      )
+    "__builtin_ctz" | "__builtin_ctzl" =>
+      Some(
+        count_trailing_zero_bits(
+          self.eval_first_call_arg_or_zero(frame, args),
+          32,
+        ),
+      )
+    "__builtin_ctzll" =>
+      Some(
+        count_trailing_zero_bits(
+          self.eval_first_call_arg_or_zero(frame, args),
+          64,
+        ),
+      )
+    "__builtin_bswap16" =>
+      Some(byte_swap_bits(self.eval_first_call_arg_or_zero(frame, args), 16))
+    "__builtin_bswap32" =>
+      Some(byte_swap_bits(self.eval_first_call_arg_or_zero(frame, args), 32))
+    "__builtin_bswap64" =>
+      Some(byte_swap_bits(self.eval_first_call_arg_or_zero(frame, args), 64))
     _ => None
   }
 }

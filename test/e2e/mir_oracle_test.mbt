@@ -109,3 +109,19 @@ async test "e2e MIR oracle checks scalar builtin calls" {
     #|}
   run_source_against_mir_oracle(source)
 }
+
+///|
+async test "e2e MIR oracle checks scalar bit builtins" {
+  let source =
+    #|int main(void) {
+    #|  if (__builtin_clz(8) != 28) return 1;
+    #|  if (__builtin_clzll(8ull) != 60) return 2;
+    #|  if (__builtin_ctz(40) != 3) return 3;
+    #|  if (__builtin_ctzll(48ull) != 4) return 4;
+    #|  if ((__builtin_bswap16(0x0102) & 0xffff) != 0x0201) return 5;
+    #|  if (__builtin_bswap32(0x01020304u) != 0x04030201u) return 6;
+    #|  if ((__builtin_bswap64(0x0102030405060708ull) & 255) != 1) return 7;
+    #|  return 0;
+    #|}
+  run_source_against_mir_oracle(source)
+}
