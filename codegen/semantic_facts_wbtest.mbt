@@ -51,6 +51,18 @@ fn init_x64_codegen_facts(prog : @parser.Program) -> X64Codegen {
   for decl in prog.structs {
     codegen.compute_struct_layout(decl)
   }
+  for decl in prog.decls {
+    codegen.func_rets[decl.name] = decl.ret
+    codegen.func_variadic[decl.name] = decl.variadic
+    let param_types = []
+    for param in decl.params {
+      param_types.push(param.ty)
+    }
+    codegen.func_param_types[decl.name] = param_types
+  }
+  for global in prog.globals {
+    codegen.globals[global.name] = global
+  }
   codegen
 }
 
@@ -182,6 +194,17 @@ fn expect_x64_offset_facts(
 }
 
 ///|
+fn expect_x64_global_expr_type_facts(
+  codegen : X64Codegen,
+  mir : @mir.Program,
+  expr : @parser.Expr,
+) -> Unit {
+  if codegen.global_expr_type(expr) != mir.global_expr_type(expr) {
+    abort("x64 global expression type mismatch")
+  }
+}
+
+///|
 fn semantic_fact_source() -> String {
   (
     #|struct S { char c; long double ld; int i; };
@@ -189,6 +212,8 @@ fn semantic_fact_source() -> String {
     #|struct B { unsigned a:3; unsigned b:5; unsigned c:9; };
     #|struct A { char tag; int arr[4]; };
     #|union U { char c; long double ld; int i; };
+    #|struct A ga;
+    #|long callee(int x, ...);
     #|int main(void) { return 0; }
   )
 }
@@ -282,4 +307,17 @@ test "linux amd64 codegen layout facts match MIR facts" {
     OffsetField("arr"),
     OffsetIndex(2),
   ])
+  expect_x64_global_expr_type_facts(codegen, mir, Number(2147483648L))
+  expect_x64_global_expr_type_facts(codegen, mir, FloatLiteral(1.0))
+  expect_x64_global_expr_type_facts(codegen, mir, Var("callee"))
+  expect_x64_global_expr_type_facts(
+    codegen,
+    mir,
+    ArrayAccess(MemberAccess(Var("ga"), "arr"), Number(2)),
+  )
+  expect_x64_global_expr_type_facts(
+    codegen,
+    mir,
+    AddrOf(MemberAccess(Var("ga"), "arr")),
+  )
 }
