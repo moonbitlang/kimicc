@@ -2720,6 +2720,26 @@ test "generate builtin fabsf" {
 }
 
 ///|
+test "generate builtin sqrt" {
+  let source = "double foo(double a) { return __builtin_sqrt(a); }"
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(assembly.contains("fsqrt\td9, d9"), content="true")
+  inspect(assembly.contains("__builtin_sqrt"), content="false")
+}
+
+///|
+test "generate builtin sqrtf" {
+  let source = "float foo(float a) { return __builtin_sqrtf(a); }"
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(assembly.contains("fsqrt\ts9, s9"), content="true")
+  inspect(assembly.contains("__builtin_sqrtf"), content="false")
+}
+
+///|
 test "generate builtin nanf" {
   let source = "float foo() { return __builtin_nanf(\"\"); }"
   let prog = @parser.parse(source)

@@ -237,7 +237,7 @@ fn Codegen::emit_numeric_conversion(
   }
   match (src, dst) {
     (src, Bool) => if is_int128_type(src) { self.emit("\torr\tx9, x9, x10") }
-    (src, Double) =>
+    (src, Double) | (src, LongDouble) =>
       if src.is_integer() {
         if is_unsigned_integer_type(src) {
           self.emit("\tucvtf\td9, x9")
@@ -258,12 +258,12 @@ fn Codegen::emit_numeric_conversion(
           self.emit("\tscvtf\ts9, x9")
         }
         self.emit("\tfmov\tw9, s9")
-      } else if src == Double {
+      } else if src == Double || src == LongDouble {
         self.emit("\tfmov\td9, x9")
         self.emit("\tfcvt\ts9, d9")
         self.emit("\tfmov\tw9, s9")
       }
-    (Double, dst) =>
+    (Double, dst) | (LongDouble, dst) =>
       if dst.is_integer() {
         self.emit("\tfmov\td9, x9")
         if dst.is_signed() {
@@ -731,14 +731,17 @@ fn Codegen::call_return_type(
         Var(name) =>
           match name {
             "__builtin_fabsf"
+            | "__builtin_sqrtf"
             | "__builtin_nanf"
             | "__builtin_huge_valf"
             | "__builtin_inff" => Float
             "__builtin_fabs"
+            | "__builtin_sqrt"
             | "__builtin_nan"
             | "__builtin_huge_val"
             | "__builtin_inf" => Double
             "__builtin_fabsl"
+            | "__builtin_sqrtl"
             | "__builtin_nanl"
             | "__builtin_huge_vall"
             | "__builtin_infl" => LongDouble
@@ -1582,6 +1585,34 @@ fn Codegen::emit_builtin_parity(
 }
 
 ///|
+fn Codegen::emit_builtin_unary_fp(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+  ty : @parser.Type,
+  instr : String,
+) -> Unit {
+  if args.length() > 0 {
+    self.gen_expr(args[0], frame_size)
+    self.emit_numeric_conversion(self.type_of(args[0], frame_size), ty)
+    match ty {
+      Float => {
+        self.emit("\tfmov\ts9, w9")
+        self.emit("\t" + instr + "\ts9, s9")
+        self.emit("\tfmov\tw9, s9")
+      }
+      _ => {
+        self.emit("\tfmov\td9, x9")
+        self.emit("\t" + instr + "\td9, d9")
+        self.emit("\tfmov\tx9, d9")
+      }
+    }
+  } else {
+    self.emit("\tmov\tx9, #0")
+  }
+}
+
+///|
 fn Codegen::emit_builtin_call(
   self : Codegen,
   name : String,
@@ -1962,25 +1993,19 @@ fn Codegen::emit_builtin_call(
       true
     }
     "__builtin_fabs" => {
-      if args.length() > 0 {
-        self.gen_expr(args[0], frame_size)
-        self.emit("\tfmov\td9, x9")
-        self.emit("\tfabs\td9, d9")
-        self.emit("\tfmov\tx9, d9")
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
+      self.emit_builtin_unary_fp(args, frame_size, Double, "fabs")
       true
     }
     "__builtin_fabsf" => {
-      if args.length() > 0 {
-        self.gen_expr(args[0], frame_size)
-        self.emit("\tfmov\ts9, w9")
-        self.emit("\tfabs\ts9, s9")
-        self.emit("\tfmov\tw9, s9")
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
+      self.emit_builtin_unary_fp(args, frame_size, Float, "fabs")
+      true
+    }
+    "__builtin_sqrt" | "__builtin_sqrtl" => {
+      self.emit_builtin_unary_fp(args, frame_size, Double, "fsqrt")
+      true
+    }
+    "__builtin_sqrtf" => {
+      self.emit_builtin_unary_fp(args, frame_size, Float, "fsqrt")
       true
     }
     "__builtin_nan" | "__builtin_nanf" | "__builtin_nanl" => {
@@ -2012,14 +2037,7 @@ fn Codegen::emit_builtin_call(
     }
     "__builtin_fabsl" => {
       // long double is same as double on macOS ARM64
-      if args.length() > 0 {
-        self.gen_expr(args[0], frame_size)
-        self.emit("\tfmov\td9, x9")
-        self.emit("\tfabs\td9, d9")
-        self.emit("\tfmov\tx9, d9")
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
+      self.emit_builtin_unary_fp(args, frame_size, Double, "fabs")
       true
     }
     "__builtin_infl" => {

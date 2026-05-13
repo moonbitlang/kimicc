@@ -2457,6 +2457,16 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
             "fabs",
           ),
         )
+      } else if line.has_prefix("fsqrt\t") {
+        append_u32_to_section(
+          sections[current_section],
+          encode_fp_two_register(
+            slice_from(line, 6),
+            0x1e61c000U,
+            0x1e21c000U,
+            "fsqrt",
+          ),
+        )
       } else if line.has_prefix("fcvt\t") {
         append_u32_to_section(
           sections[current_section],

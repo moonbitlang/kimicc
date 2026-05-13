@@ -2871,6 +2871,19 @@ async test "e2e local floating builtins produce infinities and nan" {
 }
 
 ///|
+async test "e2e floating square root builtins lower" {
+  let source =
+    #|int main(void) {
+    #|  double d = __builtin_sqrt(144.0);
+    #|  float f = __builtin_sqrtf(361.0f);
+    #|  long double l = __builtin_sqrtl(121.0L);
+    #|  return (int)d + (int)f + (int)l;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e nested designator advances following struct initializer" {
   let source =
     #|typedef union ValueUnion {

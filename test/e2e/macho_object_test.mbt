@@ -622,6 +622,19 @@ async test "direct macho object supports floating absolute value" {
 }
 
 ///|
+async test "direct macho object supports floating square root" {
+  let source =
+    #|int main(void) {
+    #|  double d = __builtin_sqrt(144.0);
+    #|  float f = __builtin_sqrtf(361.0f);
+    #|  long double l = __builtin_sqrtl(121.0L);
+    #|  return (int)d + (int)f + (int)l;
+    #|}
+  let exit_code = run_source_direct_object_async(source, "macho_fsqrt")
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object supports floating register offset memory" {
   let source =
     #|int main(void) {
