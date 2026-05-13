@@ -257,6 +257,15 @@ test "mir interpreter models floating builtin return sizes" {
 }
 
 ///|
+test "mir interpreter models alloca return size" {
+  let source =
+    #|int main(void) {
+    #|  return sizeof(__builtin_alloca(16));
+    #|}
+  expect_interp(source, 8L)
+}
+
+///|
 test "mir interpreter models literal string comparison builtins" {
   let source =
     #|int main(void) {

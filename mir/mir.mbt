@@ -778,6 +778,7 @@ fn Program::builtin_return_type(
     | "__builtin_frame_address"
     | "__builtin_extract_return_addr"
     | "__builtin_frob_return_addr" => Some(Pointer(Void))
+    "__builtin_alloca" => Some(Pointer(Void))
     "__builtin_memcpy"
     | "__builtin_memmove"
     | "__builtin_memset"

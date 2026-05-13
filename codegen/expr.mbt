@@ -753,6 +753,7 @@ fn Codegen::call_return_type(
             "__builtin_labs" => SLong
             "__builtin_llabs" => SLongLong
             "__builtin_assume_aligned" => Pointer(Void)
+            "__builtin_alloca" => Pointer(Void)
             "__builtin_memcpy"
             | "__builtin_memmove"
             | "__builtin_memset"

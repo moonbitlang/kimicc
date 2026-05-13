@@ -227,6 +227,16 @@ async test "e2e MIR oracle checks floating builtin return sizes" {
 }
 
 ///|
+async test "e2e MIR oracle checks alloca return size" {
+  let source =
+    #|_Static_assert(sizeof(__builtin_alloca(16)) == sizeof(void *), "alloca pointer");
+    #|int main(void) {
+    #|  return sizeof(__builtin_alloca(16));
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks literal string comparison builtins" {
   let source =
     #|int main(void) {
