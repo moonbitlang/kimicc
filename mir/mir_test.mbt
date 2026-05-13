@@ -658,6 +658,19 @@ test "mir interpreter models checked strlcpy literal length" {
 }
 
 ///|
+test "mir interpreter models zero-size checked strlcat literal length" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(1);
+    #|  if (__builtin___strlcat_chk(dst, (const char *)"abc", ((n += 1), 0), 1) != 3) return 1;
+    #|  if (n != 1) return 2;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter evaluates bzero arguments" {
   let source =
     #|int main(void) {

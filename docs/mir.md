@@ -37,7 +37,9 @@ that both assembly backends walk.
   `strcpy`/`strcat`/`strncpy`/`strncat` and checked destination-return aliases
   are modeled the same way.
   Runtime `__builtin___strlcpy_chk` evaluates its arguments and models only the
-  return value when the source is a string literal.
+  return value when the source is a string literal. Runtime
+  `__builtin___strlcat_chk` is modeled only for zero destination size and a
+  string-literal source, where the destination contents are not inspected.
   Runtime `__builtin_bzero` evaluates its arguments but does not model memory
   contents.
   Frame/return-address builtins are modeled only for nullness: depth 0 returns a

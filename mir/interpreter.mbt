@@ -875,6 +875,28 @@ fn Interpreter::eval_builtin_call(
         }
       }
     }
+    "__builtin___strlcat_chk" => {
+      let values = self.eval_call_args(frame, args)
+      if args.length() < 3 {
+        Some(0L)
+      } else {
+        match literal_string_arg(args[1]) {
+          Some(value) =>
+            if values[2] == 0L {
+              Some(value.length().to_int64())
+            } else {
+              self.fail(
+                "unsupported MIR interpreter strlcat destination length",
+              )
+              Some(0L)
+            }
+          None => {
+            self.fail("unsupported MIR interpreter strlcat source argument")
+            Some(0L)
+          }
+        }
+      }
+    }
     "__builtin_alloca" => {
       if args.length() > 0 {
         ignore(self.eval_expr(frame, args[0]))
