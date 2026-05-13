@@ -158,11 +158,36 @@ fn expect_x64_field_facts(
 }
 
 ///|
+fn expect_darwin_offset_facts(
+  codegen : Codegen,
+  mir : @mir.Program,
+  ty : @parser.Type,
+  path : Array[@parser.OffsetDesignator],
+) -> Unit {
+  if codegen.offset_of_path(ty, path) != mir.offset_of_path(ty, path) {
+    abort("darwin offsetof path mismatch")
+  }
+}
+
+///|
+fn expect_x64_offset_facts(
+  codegen : X64Codegen,
+  mir : @mir.Program,
+  ty : @parser.Type,
+  path : Array[@parser.OffsetDesignator],
+) -> Unit {
+  if codegen.offset_of_path(ty, path) != mir.offset_of_path(ty, path) {
+    abort("x64 offsetof path mismatch")
+  }
+}
+
+///|
 fn semantic_fact_source() -> String {
   (
     #|struct S { char c; long double ld; int i; };
     #|struct __attribute__((packed)) P { char c; long double ld; int i; };
     #|struct B { unsigned a:3; unsigned b:5; unsigned c:9; };
+    #|struct A { char tag; int arr[4]; };
     #|union U { char c; long double ld; int i; };
     #|int main(void) { return 0; }
   )
@@ -195,6 +220,7 @@ test "darwin codegen layout facts match MIR facts" {
     Struct("S"),
     Struct("P"),
     Struct("B"),
+    Struct("A"),
     Union("U"),
   ]
   for ty in types {
@@ -205,6 +231,10 @@ test "darwin codegen layout facts match MIR facts" {
   expect_darwin_field_facts(codegen, mir, Struct("B"), "b")
   expect_darwin_field_facts(codegen, mir, Struct("B"), "c")
   expect_darwin_field_facts(codegen, mir, Union("U"), "ld")
+  expect_darwin_offset_facts(codegen, mir, Struct("A"), [
+    OffsetField("arr"),
+    OffsetIndex(2),
+  ])
 }
 
 ///|
@@ -237,6 +267,7 @@ test "linux amd64 codegen layout facts match MIR facts" {
     Struct("S"),
     Struct("P"),
     Struct("B"),
+    Struct("A"),
     Union("U"),
   ]
   for ty in types {
@@ -247,4 +278,8 @@ test "linux amd64 codegen layout facts match MIR facts" {
   expect_x64_field_facts(codegen, mir, Struct("B"), "b")
   expect_x64_field_facts(codegen, mir, Struct("B"), "c")
   expect_x64_field_facts(codegen, mir, Union("U"), "ld")
+  expect_x64_offset_facts(codegen, mir, Struct("A"), [
+    OffsetField("arr"),
+    OffsetIndex(2),
+  ])
 }

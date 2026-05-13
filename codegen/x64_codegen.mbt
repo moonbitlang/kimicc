@@ -4040,6 +4040,10 @@ fn X64Codegen::offset_of_path(
   ty : @parser.Type,
   path : Array[@parser.OffsetDesignator],
 ) -> Int? {
+  match self.mir {
+    Some(mir) => return mir.offset_of_path(ty, path)
+    None => ()
+  }
   let mut current_ty = ty
   let mut offset = 0
   for designator in path {
