@@ -609,6 +609,23 @@ test "mir interpreter evaluates unobserved varargs setup builtins" {
 }
 
 ///|
+test "mir interpreter models memory builtin return pointers" {
+  let source =
+    #|int main(void) {
+    #|  char *dst = __builtin_alloca(8);
+    #|  char *src = __builtin_alloca(8);
+    #|  if (__builtin_memcpy(dst, src, 0) != dst) return 1;
+    #|  if (__builtin_memmove(dst, src, 0) != dst) return 2;
+    #|  if (__builtin_memset(dst, 0, 0) != dst) return 3;
+    #|  if (__builtin___memcpy_chk(dst, src, 0, 8) != dst) return 4;
+    #|  if (__builtin___memmove_chk(dst, src, 0, 8) != dst) return 5;
+    #|  if (__builtin___memset_chk(dst, 0, 0, 8) != dst) return 6;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter models literal string comparison builtins" {
   let source =
     #|int main(void) {

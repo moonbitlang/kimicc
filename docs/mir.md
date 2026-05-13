@@ -32,6 +32,8 @@ that both assembly backends walk.
   side effects and pointer nullness only; the allocated memory is not modeled.
   Runtime `__builtin_va_start`, `__builtin_va_copy`, and `__builtin_va_end` are
   no-ops for scalar tests that do not inspect `va_list` contents.
+  `memcpy`/`memmove`/`memset` and their checked aliases model only the returned
+  destination pointer; memory contents are not modeled.
   Frame/return-address builtins are modeled only for nullness: depth 0 returns a
   synthetic non-null pointer, and nonzero depths return null. Tests should
   compare those values only against null or pass them through identity helpers,

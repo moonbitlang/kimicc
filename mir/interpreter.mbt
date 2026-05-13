@@ -363,6 +363,24 @@ fn Interpreter::eval_first_call_arg_or_zero(
 }
 
 ///|
+fn Interpreter::eval_return_first_call_arg(
+  self : Interpreter,
+  frame : InterpFrame,
+  args : Array[@parser.Expr],
+  count : Int,
+) -> Int64 {
+  let limit = if args.length() < count { args.length() } else { count }
+  let mut result = 0L
+  for i in 0..<limit {
+    let value = self.eval_expr(frame, args[i])
+    if i == 0 {
+      result = value
+    }
+  }
+  result
+}
+
+///|
 fn Interpreter::eval_builtin_abs(
   self : Interpreter,
   frame : InterpFrame,
@@ -823,6 +841,13 @@ fn Interpreter::eval_builtin_call(
     "__builtin_assume" | "__builtin_prefetch" => Some(0L)
     "__builtin_object_size" | "__builtin_dynamic_object_size" => Some(-1L)
     "__builtin_va_start" | "__builtin_va_end" | "__builtin_va_copy" => Some(0L)
+    "__builtin_memcpy"
+    | "__builtin___memcpy_chk"
+    | "__builtin_memmove"
+    | "__builtin___memmove_chk"
+    | "__builtin_memset"
+    | "__builtin___memset_chk" =>
+      Some(self.eval_return_first_call_arg(frame, args, 3))
     "__builtin_alloca" => {
       if args.length() > 0 {
         ignore(self.eval_expr(frame, args[0]))
