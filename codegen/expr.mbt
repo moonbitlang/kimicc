@@ -753,6 +753,14 @@ fn Codegen::call_return_type(
             "__builtin_labs" => SLong
             "__builtin_llabs" => SLongLong
             "__builtin_assume_aligned" => Pointer(Void)
+            "__builtin_memcpy"
+            | "__builtin_memmove"
+            | "__builtin_memset"
+            | "__builtin_memchr" => Pointer(Void)
+            "__builtin_strcpy"
+            | "__builtin_strchr"
+            | "__builtin_strrchr"
+            | "__builtin_strstr" => Pointer(SChar)
             "__builtin_frame_address"
             | "__builtin_return_address"
             | "__builtin_extract_return_addr"
@@ -1849,6 +1857,13 @@ fn Codegen::emit_builtin_call(
       self.emit("\tmov\tx9, x0")
       true
     }
+    "__builtin_memchr" => {
+      if args.length() >= 3 {
+        self.emit_builtin_lib_call("_memchr", args, 3, frame_size)
+      }
+      self.emit("\tmov\tx9, x0")
+      true
+    }
     "__builtin_strlen" => {
       if args.length() > 0 {
         self.gen_expr(args[0], frame_size)
@@ -1868,6 +1883,27 @@ fn Codegen::emit_builtin_call(
     "__builtin_strncmp" => {
       if args.length() >= 3 {
         self.emit_builtin_lib_call("_strncmp", args, 3, frame_size)
+      }
+      self.emit("\tmov\tx9, x0")
+      true
+    }
+    "__builtin_strchr" => {
+      if args.length() >= 2 {
+        self.emit_builtin_lib_call("_strchr", args, 2, frame_size)
+      }
+      self.emit("\tmov\tx9, x0")
+      true
+    }
+    "__builtin_strrchr" => {
+      if args.length() >= 2 {
+        self.emit_builtin_lib_call("_strrchr", args, 2, frame_size)
+      }
+      self.emit("\tmov\tx9, x0")
+      true
+    }
+    "__builtin_strstr" => {
+      if args.length() >= 2 {
+        self.emit_builtin_lib_call("_strstr", args, 2, frame_size)
       }
       self.emit("\tmov\tx9, x0")
       true

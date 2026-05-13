@@ -2773,6 +2773,28 @@ test "generate builtin strncmp" {
 }
 
 ///|
+test "generate string search builtins" {
+  let source =
+    #|int foo(char *a, char *b) {
+    #|  return (__builtin_memchr(a, 97, 3) != 0)
+    #|    + (__builtin_strchr(a, 97) != 0)
+    #|    + (__builtin_strrchr(a, 97) != 0)
+    #|    + (__builtin_strstr(a, b) != 0);
+    #|}
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(assembly.contains("bl\t_memchr"), content="true")
+  inspect(assembly.contains("bl\t_strchr"), content="true")
+  inspect(assembly.contains("bl\t_strrchr"), content="true")
+  inspect(assembly.contains("bl\t_strstr"), content="true")
+  inspect(assembly.contains("__builtin_memchr"), content="false")
+  inspect(assembly.contains("__builtin_strchr"), content="false")
+  inspect(assembly.contains("__builtin_strrchr"), content="false")
+  inspect(assembly.contains("__builtin_strstr"), content="false")
+}
+
+///|
 test "generate builtin nanf" {
   let source = "float foo() { return __builtin_nanf(\"\"); }"
   let prog = @parser.parse(source)

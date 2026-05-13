@@ -590,6 +590,50 @@ fn compare_string_literal_bytes(
 }
 
 ///|
+fn string_literal_contains_byte(
+  value : String,
+  byte : Int64,
+  limit : Int64?,
+  stop_at_nul : Bool,
+) -> Bool {
+  let needle = byte & 0xFFL
+  let mut index = 0L
+  while limit is None || index < limit.unwrap() {
+    let current = string_literal_byte_at(value, index)
+    if current == needle {
+      return true
+    }
+    if stop_at_nul && current == 0L {
+      return false
+    }
+    index += 1L
+  }
+  false
+}
+
+///|
+fn string_literal_contains_string(haystack : String, needle : String) -> Bool {
+  if needle.length() == 0 {
+    return true
+  }
+  if needle.length() > haystack.length() {
+    return false
+  }
+  for start in 0..<=(haystack.length() - needle.length()) {
+    let mut matched = true
+    for i in 0..<needle.length() {
+      if haystack[start + i] != needle[i] {
+        matched = false
+      }
+    }
+    if matched {
+      return true
+    }
+  }
+  false
+}
+
+///|
 fn Interpreter::eval_builtin_call(
   self : Interpreter,
   frame : InterpFrame,
@@ -782,6 +826,73 @@ fn Interpreter::eval_builtin_call(
             )
           _ => {
             self.fail("unsupported MIR interpreter memcmp argument")
+            Some(0L)
+          }
+        }
+      }
+    "__builtin_strchr" | "__builtin_strrchr" =>
+      if args.length() < 2 {
+        Some(0L)
+      } else {
+        match literal_string_arg(args[0]) {
+          Some(value) =>
+            Some(
+              if string_literal_contains_byte(
+                  value,
+                  self.eval_expr(frame, args[1]),
+                  None,
+                  true,
+                ) {
+                1L
+              } else {
+                0L
+              },
+            )
+          None => {
+            self.fail("unsupported MIR interpreter string search argument")
+            Some(0L)
+          }
+        }
+      }
+    "__builtin_memchr" =>
+      if args.length() < 3 {
+        Some(0L)
+      } else {
+        match literal_string_arg(args[0]) {
+          Some(value) =>
+            Some(
+              if string_literal_contains_byte(
+                  value,
+                  self.eval_expr(frame, args[1]),
+                  Some(self.eval_expr(frame, args[2])),
+                  false,
+                ) {
+                1L
+              } else {
+                0L
+              },
+            )
+          None => {
+            self.fail("unsupported MIR interpreter memchr argument")
+            Some(0L)
+          }
+        }
+      }
+    "__builtin_strstr" =>
+      if args.length() < 2 {
+        Some(0L)
+      } else {
+        match (literal_string_arg(args[0]), literal_string_arg(args[1])) {
+          (Some(haystack), Some(needle)) =>
+            Some(
+              if string_literal_contains_string(haystack, needle) {
+                1L
+              } else {
+                0L
+              },
+            )
+          _ => {
+            self.fail("unsupported MIR interpreter strstr argument")
             Some(0L)
           }
         }

@@ -238,6 +238,24 @@ test "mir interpreter models literal string comparison builtins" {
 }
 
 ///|
+test "mir interpreter models literal string search nullness" {
+  let source =
+    #|int main(void) {
+    #|  if (__builtin_strchr("abc", 'b') == 0) return 1;
+    #|  if (__builtin_strchr("abc", 'x') != 0) return 2;
+    #|  if (__builtin_strchr("abc", 0) == 0) return 3;
+    #|  if (__builtin_strrchr("abba", 'b') == 0) return 4;
+    #|  if (__builtin_memchr("abc", 'b', 2) == 0) return 5;
+    #|  if (__builtin_memchr("abc", 'c', 2) != 0) return 6;
+    #|  if (__builtin_strstr("abcde", "cd") == 0) return 7;
+    #|  if (__builtin_strstr("abcde", "ce") != 0) return 8;
+    #|  if (__builtin_strstr("abc", "") == 0) return 9;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter reports unsupported memory behavior" {
   let source = "int main(void) { int x = 1; return *&x; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
