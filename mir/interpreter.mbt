@@ -771,6 +771,7 @@ fn Interpreter::literal_printf_format_length(
   self : Interpreter,
   expr : @parser.Expr,
   name : String,
+  args : Array[@parser.Expr],
   values : Array[Int64],
   first_value_index : Int,
 ) -> Int64? {
@@ -791,6 +792,7 @@ fn Interpreter::literal_printf_format_length(
               format[index + 1].to_int() == 100 ||
               format[index + 1].to_int() == 105 ||
               format[index + 1].to_int() == 111 ||
+              format[index + 1].to_int() == 115 ||
               format[index + 1].to_int() == 117 ||
               format[index + 1].to_int() == 120
             ) {
@@ -800,6 +802,16 @@ fn Interpreter::literal_printf_format_length(
             }
             if format[index + 1].to_int() == 99 {
               length += 1L
+            } else if format[index + 1].to_int() == 115 {
+              match literal_string_arg(args[value_index]) {
+                Some(value) => length += value.length().to_int64()
+                None => {
+                  self.fail(
+                    "unsupported MIR interpreter " + name + " string argument",
+                  )
+                  return None
+                }
+              }
             } else if format[index + 1].to_int() == 111 ||
               format[index + 1].to_int() == 88 ||
               format[index + 1].to_int() == 120 {
@@ -1002,7 +1014,13 @@ fn Interpreter::eval_builtin_call(
         Some(0L)
       } else {
         match
-          self.literal_printf_format_length(args[4], "snprintf", values, 5) {
+          self.literal_printf_format_length(
+            args[4],
+            "snprintf",
+            args,
+            values,
+            5,
+          ) {
           Some(value) => Some(value)
           None => Some(0L)
         }
@@ -1013,7 +1031,8 @@ fn Interpreter::eval_builtin_call(
       if args.length() < 4 {
         Some(0L)
       } else {
-        match self.literal_printf_format_length(args[3], "sprintf", values, 4) {
+        match
+          self.literal_printf_format_length(args[3], "sprintf", args, values, 4) {
           Some(value) => Some(value)
           None => Some(0L)
         }
@@ -1024,7 +1043,8 @@ fn Interpreter::eval_builtin_call(
       if args.length() < 2 {
         Some(0L)
       } else {
-        match self.literal_printf_format_length(args[1], "printf", values, 2) {
+        match
+          self.literal_printf_format_length(args[1], "printf", args, values, 2) {
           Some(value) => Some(value)
           None => Some(0L)
         }
