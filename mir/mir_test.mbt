@@ -277,6 +277,7 @@ test "mir interpreter models string literal scalar facts" {
     #|  if (*((char *)"abc") != 'a') return 9;
     #|  if (((char *)"abc")[2] != 'c') return 10;
     #|  if (((unsigned char *)"abc")[3] != 0) return 11;
+    #|  if (__builtin_strlen((const char *)"hello") != 5) return 12;
     #|  return 42;
     #|}
   expect_interp(source, 42L)

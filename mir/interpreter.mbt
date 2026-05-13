@@ -945,8 +945,8 @@ fn Interpreter::eval_builtin_call(
       if args.length() == 0 {
         Some(0L)
       } else {
-        match args[0] {
-          String(value) => Some(value.length().to_int64())
+        match literal_string_arg(args[0]) {
+          Some(value) => Some(value.length().to_int64())
           _ => {
             self.fail("unsupported MIR interpreter strlen argument")
             Some(0L)
