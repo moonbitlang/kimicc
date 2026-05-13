@@ -708,6 +708,18 @@ test "mir interpreter models escaped percent checked printf lengths" {
 }
 
 ///|
+test "mir interpreter models checked printf literal length" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  if (__builtin___printf_chk(1, (const char *)"ok%%", n += 1) != 3) return 1;
+    #|  if (n != 1) return 2;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter evaluates bzero arguments" {
   let source =
     #|int main(void) {

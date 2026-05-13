@@ -955,6 +955,17 @@ fn Interpreter::eval_builtin_call(
         }
       }
     }
+    "__builtin___printf_chk" => {
+      ignore(self.eval_call_args(frame, args))
+      if args.length() < 2 {
+        Some(0L)
+      } else {
+        match self.literal_printf_format_length(args[1], "printf") {
+          Some(value) => Some(value)
+          None => Some(0L)
+        }
+      }
+    }
     "__builtin_alloca" => {
       if args.length() > 0 {
         ignore(self.eval_expr(frame, args[0]))

@@ -44,6 +44,8 @@ that both assembly backends walk.
   literal format string with no conversions other than escaped `%%`.
   Runtime `__builtin___sprintf_chk` is modeled only for a literal format string
   with no conversions other than escaped `%%`; output contents are not modeled.
+  Runtime `__builtin___printf_chk` is modeled with the same literal-format
+  return-value restriction; output is not modeled.
   Runtime `__builtin_bzero` evaluates its arguments but does not model memory
   contents.
   Frame/return-address builtins are modeled only for nullness: depth 0 returns a
