@@ -123,6 +123,34 @@ async test "e2e builtin compile-time selection skips unchosen calls" {
 }
 
 ///|
+async test "e2e integer overflow builtins lower and store results" {
+  let source =
+    #|int main(void) {
+    #|  int i = 0;
+    #|  unsigned int u = 0;
+    #|  long long l = 0;
+    #|  unsigned long long ul = 0;
+    #|  if (__builtin_add_overflow(1, 2, &i)) return 1;
+    #|  if (i != 3) return 2;
+    #|  if (!__builtin_sub_overflow(0u, 1u, &u)) return 3;
+    #|  if (u != 0xffffffffu) return 4;
+    #|  if (!__builtin_mul_overflow(2000000000, 2, &i)) return 5;
+    #|  if (i != -294967296) return 6;
+    #|  if (!__builtin_mul_overflow(0xffffffffu, 2u, &u)) return 7;
+    #|  if (u != 0xfffffffeu) return 8;
+    #|  if (__builtin_add_overflow(l, 1LL, &l)) return 9;
+    #|  if (l != 1LL) return 10;
+    #|  if (!__builtin_ssubll_overflow(-9223372036854775807LL - 1LL, 1LL, &l)) return 11;
+    #|  if (l != 9223372036854775807LL) return 12;
+    #|  if (!__builtin_uaddll_overflow(0xffffffffffffffffULL, 1ULL, &ul)) return 13;
+    #|  if (ul != 0ULL) return 14;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e GNU typeof specifier infers without evaluating operand" {
   let source =
     #|int main(void) {

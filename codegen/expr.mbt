@@ -1665,6 +1665,186 @@ fn Codegen::emit_builtin_align_value(
 }
 
 ///|
+fn overflow_builtin_operator(name : String) -> String? {
+  match name {
+    "__builtin_add_overflow"
+    | "__builtin_sadd_overflow"
+    | "__builtin_saddl_overflow"
+    | "__builtin_saddll_overflow"
+    | "__builtin_uadd_overflow"
+    | "__builtin_uaddl_overflow"
+    | "__builtin_uaddll_overflow" => Some("+")
+    "__builtin_sub_overflow"
+    | "__builtin_ssub_overflow"
+    | "__builtin_ssubl_overflow"
+    | "__builtin_ssubll_overflow"
+    | "__builtin_usub_overflow"
+    | "__builtin_usubl_overflow"
+    | "__builtin_usubll_overflow" => Some("-")
+    "__builtin_mul_overflow"
+    | "__builtin_smul_overflow"
+    | "__builtin_smull_overflow"
+    | "__builtin_smulll_overflow"
+    | "__builtin_umul_overflow"
+    | "__builtin_umull_overflow"
+    | "__builtin_umulll_overflow" => Some("*")
+    _ => None
+  }
+}
+
+///|
+fn Codegen::overflow_result_type(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> @parser.Type {
+  if args.length() >= 3 {
+    match pointer_or_array_element_type(self.type_of(args[2], frame_size)) {
+      Some(ty) => peel_aligned_type(ty)
+      None => SLongLong
+    }
+  } else {
+    SLongLong
+  }
+}
+
+///|
+fn overflow_small_int_range(ty : @parser.Type) -> (Int64, Int64)? {
+  match peel_aligned_type(ty) {
+    SChar => Some((-128L, 127L))
+    UChar => Some((0L, 255L))
+    SShort => Some((-32768L, 32767L))
+    UShort => Some((0L, 65535L))
+    SInt => Some((-2147483648L, 2147483647L))
+    UInt => Some((0L, 4294967295L))
+    _ => None
+  }
+}
+
+///|
+fn Codegen::emit_overflow_range_check(
+  self : Codegen,
+  result_ty : @parser.Type,
+) -> Unit {
+  match overflow_small_int_range(result_ty) {
+    Some((min_value, max_value)) =>
+      if is_unsigned_integer_type(result_ty) {
+        self.emit_load_int("x12", max_value)
+        self.emit("\tcmp\tx9, x12")
+        self.emit("\tcset\tx11, hi")
+      } else {
+        self.emit_load_int("x12", min_value)
+        self.emit("\tcmp\tx9, x12")
+        self.emit("\tcset\tx11, lt")
+        self.emit_load_int("x12", max_value)
+        self.emit("\tcmp\tx9, x12")
+        self.emit("\tcset\tx12, gt")
+        self.emit("\torr\tx11, x11, x12")
+      }
+    None => self.emit("\tmov\tx11, #0")
+  }
+}
+
+///|
+fn Codegen::emit_small_overflow_arithmetic(
+  self : Codegen,
+  result_ty : @parser.Type,
+  op : String,
+) -> Unit {
+  match op {
+    "+" => self.emit("\tadd\tx9, x9, x10")
+    "-" => self.emit("\tsub\tx9, x9, x10")
+    "*" =>
+      if self.type_size(result_ty) == 4 {
+        if is_unsigned_integer_type(result_ty) {
+          self.emit("\tumull\tx9, w9, w10")
+        } else {
+          self.emit("\tsmull\tx9, w9, w10")
+        }
+      } else {
+        self.emit("\tmul\tx9, x9, x10")
+      }
+    _ => ()
+  }
+  self.emit_overflow_range_check(result_ty)
+}
+
+///|
+fn Codegen::emit_i64_overflow_arithmetic(
+  self : Codegen,
+  result_ty : @parser.Type,
+  op : String,
+) -> Unit {
+  let unsigned = is_unsigned_integer_type(result_ty)
+  match op {
+    "+" => {
+      self.emit("\tadds\tx9, x9, x10")
+      let cond = if unsigned { "cs" } else { "vs" }
+      self.emit("\tcset\tx11, " + cond)
+    }
+    "-" => {
+      self.emit("\tsubs\tx9, x9, x10")
+      let cond = if unsigned { "lo" } else { "vs" }
+      self.emit("\tcset\tx11, " + cond)
+    }
+    "*" =>
+      if unsigned {
+        self.emit("\tumulh\tx11, x9, x10")
+        self.emit("\tmul\tx9, x9, x10")
+        self.emit("\tcmp\tx11, #0")
+        self.emit("\tcset\tx11, ne")
+      } else {
+        self.emit("\tmul\tx12, x9, x10")
+        self.emit("\tsmulh\tx11, x9, x10")
+        self.emit("\tasr\tx13, x12, #63")
+        self.emit("\tcmp\tx11, x13")
+        self.emit("\tcset\tx11, ne")
+        self.emit("\tmov\tx9, x12")
+      }
+    _ => self.emit("\tmov\tx11, #0")
+  }
+}
+
+///|
+fn Codegen::emit_overflow_arithmetic_builtin(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+  op : String,
+) -> Unit {
+  if args.length() < 3 {
+    self.emit("\tmov\tx9, #0")
+    return
+  }
+  let result_ty = self.overflow_result_type(args, frame_size)
+  if !result_ty.is_integer() || is_int128_type(result_ty) {
+    abort(
+      "unsupported Darwin ARM64 overflow builtin result type: " +
+      result_ty.to_string(),
+    )
+  }
+  self.gen_expr(args[2], frame_size)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.gen_expr(args[0], frame_size)
+  self.emit_numeric_conversion(self.type_of(args[0], frame_size), result_ty)
+  self.emit_scalar_conversion_to(result_ty)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.gen_expr(args[1], frame_size)
+  self.emit_numeric_conversion(self.type_of(args[1], frame_size), result_ty)
+  self.emit_scalar_conversion_to(result_ty)
+  self.emit("\tmov\tx10, x9")
+  self.emit("\tldr\tx9, [sp], #16")
+  if self.type_size(result_ty) < 8 {
+    self.emit_small_overflow_arithmetic(result_ty, op)
+  } else {
+    self.emit_i64_overflow_arithmetic(result_ty, op)
+  }
+  self.emit("\tldr\tx10, [sp], #16")
+  self.emit_store_typed("x9", "x10", result_ty)
+  self.emit("\tmov\tx9, x11")
+}
+
+///|
 fn Codegen::emit_builtin_ffs(
   self : Codegen,
   args : Array[@parser.Expr],
@@ -1822,6 +2002,13 @@ fn Codegen::emit_builtin_call(
   args : Array[@parser.Expr],
   frame_size : Int,
 ) -> Bool {
+  match overflow_builtin_operator(name) {
+    Some(op) => {
+      self.emit_overflow_arithmetic_builtin(args, frame_size, op)
+      return true
+    }
+    None => ()
+  }
   match name {
     "__builtin_expect"
     | "__builtin_expect_with_probability"

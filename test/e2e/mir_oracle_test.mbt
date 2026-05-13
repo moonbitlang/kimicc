@@ -58,6 +58,25 @@ async test "e2e MIR oracle checks scalar address dereference cancellation" {
 }
 
 ///|
+async test "e2e MIR oracle checks integer overflow builtins" {
+  let source =
+    #|int main(void) {
+    #|  int i = 0;
+    #|  unsigned u = 0;
+    #|  int total = 0;
+    #|  total += __builtin_add_overflow(1, 2, &i);
+    #|  if (i != 3) return 10;
+    #|  total += __builtin_add_overflow(2147483647, 1, &i);
+    #|  if (i >= 0) return 20;
+    #|  total += __builtin_sub_overflow(0u, 1u, &u);
+    #|  if (u != 4294967295u) return 30;
+    #|  total += __builtin_mul_overflow(50000, 50000, &i);
+    #|  return total;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks scalar switch fallthrough" {
   let source =
     #|int main(void) {

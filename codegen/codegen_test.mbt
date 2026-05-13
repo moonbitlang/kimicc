@@ -182,6 +182,39 @@ test "generate darwin arm64 lowers return address builtin" {
 }
 
 ///|
+test "generate darwin arm64 lowers overflow builtins" {
+  let source =
+    #|int main(void) {
+    #|  int i = 0;
+    #|  unsigned int u = 0;
+    #|  long long l = 0;
+    #|  unsigned long long ul = 0;
+    #|  if (__builtin_add_overflow(1, 2, &i)) return 1;
+    #|  if (!__builtin_sub_overflow(0u, 1u, &u)) return 2;
+    #|  if (!__builtin_mul_overflow(2000000000, 2, &i)) return 3;
+    #|  if (!__builtin_mul_overflow(0xffffffffu, 2u, &u)) return 4;
+    #|  if (__builtin_add_overflow(l, 1LL, &l)) return 5;
+    #|  if (!__builtin_ssubll_overflow(-9223372036854775807LL - 1LL, 1LL, &l)) return 6;
+    #|  if (!__builtin_uaddll_overflow(0xffffffffffffffffULL, 1ULL, &ul)) return 7;
+    #|  return i + (int)u + (int)l + (int)ul;
+    #|}
+  let prog = @parser.parse(source)
+  let assembly = @codegen.generate_assembly_for_target(
+    prog,
+    @target.Target::default(),
+  )
+  inspect(assembly.contains("\tcset\tx11, vs"), content="true")
+  inspect(assembly.contains("\tcset\tx11, hi"), content="true")
+  inspect(assembly.contains("\tumull\tx9, w9, w10"), content="true")
+  inspect(assembly.contains("\tsmull\tx9, w9, w10"), content="true")
+  inspect(assembly.contains("__builtin_add_overflow"), content="false")
+  inspect(assembly.contains("__builtin_sub_overflow"), content="false")
+  inspect(assembly.contains("__builtin_mul_overflow"), content="false")
+  inspect(assembly.contains("__builtin_ssubll_overflow"), content="false")
+  inspect(assembly.contains("__builtin_uaddll_overflow"), content="false")
+}
+
+///|
 test "generate linux amd64 simple function" {
   let source = "int main() { return 42; }"
   let prog = @parser.parse(source)
