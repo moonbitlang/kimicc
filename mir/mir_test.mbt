@@ -645,6 +645,19 @@ test "mir interpreter models string destination return pointers" {
 }
 
 ///|
+test "mir interpreter evaluates bzero arguments" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(1);
+    #|  __builtin_bzero(dst, n += 1);
+    #|  if (n != 1) return 1;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter models literal string comparison builtins" {
   let source =
     #|int main(void) {

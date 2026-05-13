@@ -36,6 +36,8 @@ that both assembly backends walk.
   destination pointer; memory contents are not modeled.
   `strcpy`/`strcat`/`strncpy`/`strncat` and checked destination-return aliases
   are modeled the same way.
+  Runtime `__builtin_bzero` evaluates its arguments but does not model memory
+  contents.
   Frame/return-address builtins are modeled only for nullness: depth 0 returns a
   synthetic non-null pointer, and nonzero depths return null. Tests should
   compare those values only against null or pass them through identity helpers,

@@ -841,6 +841,10 @@ fn Interpreter::eval_builtin_call(
     "__builtin_assume" | "__builtin_prefetch" => Some(0L)
     "__builtin_object_size" | "__builtin_dynamic_object_size" => Some(-1L)
     "__builtin_va_start" | "__builtin_va_end" | "__builtin_va_copy" => Some(0L)
+    "__builtin_bzero" => {
+      ignore(self.eval_call_args(frame, args))
+      Some(0L)
+    }
     "__builtin_memcpy"
     | "__builtin___memcpy_chk"
     | "__builtin_memmove"
