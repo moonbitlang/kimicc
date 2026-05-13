@@ -1322,7 +1322,10 @@ fn Program::fold_const_int(
     SizeofExpr(e) =>
       Some(
         self.const_int(
-          self.type_size(self.expr_type(e, scope)).to_int64(),
+          match e {
+            String(value) => value.length().to_int64() + 1L
+            _ => self.type_size(self.expr_type(e, scope)).to_int64()
+          },
           ULong,
         ),
       )
@@ -1330,7 +1333,11 @@ fn Program::fold_const_int(
     AlignofExpr(e) =>
       Some(
         self.const_int(
-          self.type_align(self.expr_type(e, scope)).to_int64(),
+          match e {
+            String(value) =>
+              self.type_align(Array(SChar, value.length() + 1)).to_int64()
+            _ => self.type_align(self.expr_type(e, scope)).to_int64()
+          },
           ULong,
         ),
       )

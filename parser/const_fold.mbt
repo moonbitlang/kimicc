@@ -125,6 +125,8 @@ pub fn fold_const(expr : Expr) -> Int64? {
     SizeofExpr(String(s)) => Some((s.length() + 1).to_int64())
     SizeofExpr(e) => Some(basic_type_size(type_of_expr(e)).to_int64())
     Alignof(ty) => Some(basic_type_align(ty).to_int64())
+    AlignofExpr(String(s)) =>
+      Some(basic_type_align(Array(SChar, s.length() + 1)).to_int64())
     AlignofExpr(e) => Some(basic_type_align(type_of_expr(e)).to_int64())
     DesignatedField(_, e) => fold_const(e)
     DesignatedIndex(_, e) => fold_const(e)
@@ -620,7 +622,10 @@ fn Parser::fold_const_int(self : Parser, expr : Expr) -> ConstIntValue? {
     SizeofExpr(e) =>
       Some(
         const_int(
-          self.const_type_size(self.const_expr_type(e)).to_int64(),
+          match e {
+            String(value) => value.length().to_int64() + 1L
+            _ => self.const_type_size(self.const_expr_type(e)).to_int64()
+          },
           ULong,
         ),
       )
@@ -628,7 +633,11 @@ fn Parser::fold_const_int(self : Parser, expr : Expr) -> ConstIntValue? {
     AlignofExpr(e) =>
       Some(
         const_int(
-          self.const_type_align(self.const_expr_type(e)).to_int64(),
+          match e {
+            String(value) =>
+              self.const_type_align(Array(SChar, value.length() + 1)).to_int64()
+            _ => self.const_type_align(self.const_expr_type(e)).to_int64()
+          },
           ULong,
         ),
       )

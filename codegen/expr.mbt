@@ -4203,7 +4203,10 @@ fn Codegen::gen_expr(
       self.emit_load_int("x9", align.to_int64())
     }
     AlignofExpr(expr) => {
-      let align = self.type_align(self.type_of(expr, frame_size))
+      let align = match expr {
+        String(s) => self.type_align(Array(SChar, s.length() + 1))
+        _ => self.type_align(self.type_of(expr, frame_size))
+      }
       self.emit_load_int("x9", align.to_int64())
     }
     Cast(ty, expr) => {

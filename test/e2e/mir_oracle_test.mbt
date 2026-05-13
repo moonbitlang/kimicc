@@ -152,6 +152,23 @@ async test "e2e MIR oracle checks parser folded compile-time builtins" {
 }
 
 ///|
+async test "e2e MIR oracle checks string literal scalar facts" {
+  let source =
+    #|int main(void) {
+    #|  if (sizeof("abc") != 4) return 1;
+    #|  if (__alignof__("abc") != 1) return 2;
+    #|  if (!"abc") return 3;
+    #|  if (*"abc" != 'a') return 4;
+    #|  if ("abc"[1] != 'b') return 5;
+    #|  if ("abc"[3] != 0) return 6;
+    #|  if (__func__[0] != 'm') return 7;
+    #|  if (__builtin_strlen("hello") != 5) return 8;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks scalar bit builtins" {
   let source =
     #|int main(void) {

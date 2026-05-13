@@ -118,6 +118,8 @@ test "mir folds constants with target layout" {
     scope,
     16L,
   )
+  expect_const(mir, SizeofExpr(String("abc")), scope, 4L)
+  expect_const(mir, AlignofExpr(String("abc")), scope, 1L)
   expect_const(mir, Binary("/", Number(1), Number(2)), scope, 0L)
   expect_const(
     mir,

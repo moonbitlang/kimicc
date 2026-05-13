@@ -6738,11 +6738,21 @@ fn X64Codegen::gen_expr(self : X64Codegen, expr : @parser.Expr) -> Unit {
       self.emit_load_indirect(self.type_of(expr))
     }
     Sizeof(ty) => self.emit("\tmov\trax, " + self.type_size(ty).to_string())
-    SizeofExpr(e) =>
-      self.emit("\tmov\trax, " + self.type_size(self.type_of(e)).to_string())
+    SizeofExpr(e) => {
+      let size = match e {
+        String(s) => self.type_size(Array(SChar, s.length() + 1))
+        _ => self.type_size(self.type_of(e))
+      }
+      self.emit("\tmov\trax, " + size.to_string())
+    }
     Alignof(ty) => self.emit("\tmov\trax, " + self.type_align(ty).to_string())
-    AlignofExpr(e) =>
-      self.emit("\tmov\trax, " + self.type_align(self.type_of(e)).to_string())
+    AlignofExpr(e) => {
+      let align = match e {
+        String(s) => self.type_align(Array(SChar, s.length() + 1))
+        _ => self.type_align(self.type_of(e))
+      }
+      self.emit("\tmov\trax, " + align.to_string())
+    }
     Cast(ty, e) => self.gen_expr_as_scalar(e, ty)
     PrefixInc(e) => self.gen_inc_dec(e, 1, false)
     PrefixDec(e) => self.gen_inc_dec(e, -1, false)

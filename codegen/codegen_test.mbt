@@ -218,6 +218,19 @@ test "generate linux amd64 float16 layout constants" {
 }
 
 ///|
+test "generate linux amd64 string literal size and alignment constants" {
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let source = "long main(void) { return sizeof(\"abc\") + __alignof__(\"abc\"); }"
+  let prog = @parser.parse_for_target(source, target)
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(assembly.contains("\tmov\trax, 4"), content="true")
+  inspect(assembly.contains("\tmov\trax, 1"), content="true")
+}
+
+///|
 test "generate linux amd64 function with params" {
   let source = "int add(int a, int b) { return a + b; }"
   let prog = @parser.parse(source)
