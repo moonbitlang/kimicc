@@ -969,6 +969,19 @@ async test "e2e MIR oracle checks string checked printf lengths" {
 }
 
 ///|
+async test "e2e MIR oracle checks precision string checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  char *dst = __builtin_alloca(16);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"s=%.3s", (const char *)"abcdef") != 5) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 16, (const char *)"%5.2s%%", (const char *)"abcd") != 6) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"z=%.0s", (const char *)"hide") != 2) return 3;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks unsigned checked printf lengths" {
   let source =
     #|int main(void) {

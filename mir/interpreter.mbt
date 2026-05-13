@@ -815,6 +815,20 @@ fn Interpreter::literal_printf_format_length(
                 (format[conversion_index].to_int() - 48).to_int64()
               conversion_index += 1
             }
+            let mut has_precision = false
+            let mut precision = 0L
+            if conversion_index < format.length() &&
+              format[conversion_index].to_int() == 46 {
+              has_precision = true
+              conversion_index += 1
+              while conversion_index < format.length() &&
+                    format[conversion_index].to_int() >= 48 &&
+                    format[conversion_index].to_int() <= 57 {
+                precision = precision * 10L +
+                  (format[conversion_index].to_int() - 48).to_int64()
+                conversion_index += 1
+              }
+            }
             let mut modified = false
             if conversion_index < format.length() {
               if format[conversion_index].to_int() == 108 {
@@ -850,6 +864,10 @@ fn Interpreter::literal_printf_format_length(
                 self.fail("unsupported MIR interpreter " + name + " format")
                 return None
               }
+              if has_precision && format[conversion_index].to_int() != 115 {
+                self.fail("unsupported MIR interpreter " + name + " format")
+                return None
+              }
               if (plus_flag || space_flag) &&
                 format[conversion_index].to_int() != 100 &&
                 format[conversion_index].to_int() != 105 {
@@ -872,7 +890,12 @@ fn Interpreter::literal_printf_format_length(
                 conversion_length = 1L
               } else if format[conversion_index].to_int() == 115 {
                 match literal_string_arg(args[value_index]) {
-                  Some(value) => conversion_length = value.length().to_int64()
+                  Some(value) => {
+                    conversion_length = value.length().to_int64()
+                    if has_precision && precision < conversion_length {
+                      conversion_length = precision
+                    }
+                  }
                   None => {
                     self.fail(
                       "unsupported MIR interpreter " + name + " string argument",
