@@ -752,6 +752,21 @@ fn literal_string_arg(expr : @parser.Expr) -> String? {
 }
 
 ///|
+fn nonnegative_hex_length(value : Int64) -> Int64? {
+  if value < 0L {
+    None
+  } else {
+    let mut n = value
+    let mut length = 1L
+    while n >= 16L {
+      n = n / 16L
+      length += 1L
+    }
+    Some(length)
+  }
+}
+
+///|
 fn Interpreter::literal_printf_format_length(
   self : Interpreter,
   expr : @parser.Expr,
@@ -773,19 +788,32 @@ fn Interpreter::literal_printf_format_length(
             (
               format[index + 1].to_int() == 100 ||
               format[index + 1].to_int() == 105 ||
-              format[index + 1].to_int() == 117
+              format[index + 1].to_int() == 117 ||
+              format[index + 1].to_int() == 120
             ) {
             if value_index >= values.length() {
               self.fail("unsupported MIR interpreter " + name + " argument")
               return None
             }
-            if format[index + 1].to_int() == 117 && values[value_index] < 0L {
-              self.fail(
-                "unsupported MIR interpreter " + name + " unsigned argument",
-              )
-              return None
+            if format[index + 1].to_int() == 120 {
+              match nonnegative_hex_length(values[value_index]) {
+                Some(hex_length) => length += hex_length
+                None => {
+                  self.fail(
+                    "unsupported MIR interpreter " + name + " hex argument",
+                  )
+                  return None
+                }
+              }
+            } else {
+              if format[index + 1].to_int() == 117 && values[value_index] < 0L {
+                self.fail(
+                  "unsupported MIR interpreter " + name + " unsigned argument",
+                )
+                return None
+              }
+              length += values[value_index].to_string().length().to_int64()
             }
-            length += values[value_index].to_string().length().to_int64()
             value_index += 1
             index += 2
           } else {
