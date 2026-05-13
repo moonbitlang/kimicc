@@ -41,10 +41,10 @@ that both assembly backends walk.
   `__builtin___strlcat_chk` is modeled only for zero destination size and a
   string-literal source, where the destination contents are not inspected.
   Runtime `__builtin___snprintf_chk` is modeled only for zero output size and a
-  literal format string with decimal `%d`/`%i`, nonnegative `%u`/`%x`, or
+  literal format string with decimal `%d`/`%i`, nonnegative `%u`/`%o`/`%x`, or
   escaped `%%`.
   Runtime `__builtin___sprintf_chk` is modeled only for a literal format string
-  with decimal `%d`/`%i`, nonnegative `%u`/`%x`, or escaped `%%`; output
+  with decimal `%d`/`%i`, nonnegative `%u`/`%o`/`%x`, or escaped `%%`; output
   contents are not modeled.
   Runtime `__builtin___printf_chk` is modeled with the same literal-format
   return-value restriction; output is not modeled.

@@ -752,14 +752,14 @@ fn literal_string_arg(expr : @parser.Expr) -> String? {
 }
 
 ///|
-fn nonnegative_hex_length(value : Int64) -> Int64? {
+fn nonnegative_radix_length(value : Int64, radix : Int64) -> Int64? {
   if value < 0L {
     None
   } else {
     let mut n = value
     let mut length = 1L
-    while n >= 16L {
-      n = n / 16L
+    while n >= radix {
+      n = n / radix
       length += 1L
     }
     Some(length)
@@ -788,6 +788,7 @@ fn Interpreter::literal_printf_format_length(
             (
               format[index + 1].to_int() == 100 ||
               format[index + 1].to_int() == 105 ||
+              format[index + 1].to_int() == 111 ||
               format[index + 1].to_int() == 117 ||
               format[index + 1].to_int() == 120
             ) {
@@ -795,12 +796,18 @@ fn Interpreter::literal_printf_format_length(
               self.fail("unsupported MIR interpreter " + name + " argument")
               return None
             }
-            if format[index + 1].to_int() == 120 {
-              match nonnegative_hex_length(values[value_index]) {
-                Some(hex_length) => length += hex_length
+            if format[index + 1].to_int() == 111 ||
+              format[index + 1].to_int() == 120 {
+              let radix = if format[index + 1].to_int() == 120 {
+                16L
+              } else {
+                8L
+              }
+              match nonnegative_radix_length(values[value_index], radix) {
+                Some(radix_length) => length += radix_length
                 None => {
                   self.fail(
-                    "unsupported MIR interpreter " + name + " hex argument",
+                    "unsupported MIR interpreter " + name + " radix argument",
                   )
                   return None
                 }
