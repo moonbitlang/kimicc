@@ -468,7 +468,10 @@ fn Interpreter::eval_builtin_call(
   args : Array[@parser.Expr],
 ) -> Int64? {
   match name {
-    "__builtin_expect" => Some(self.eval_first_call_arg_or_zero(frame, args))
+    "__builtin_expect"
+    | "__builtin_expect_with_probability"
+    | "__builtin_unpredictable" =>
+      Some(self.eval_first_call_arg_or_zero(frame, args))
     "__builtin_constant_p" => Some(0L)
     "__builtin_flt_rounds" => Some(1L)
     "__builtin_assume" | "__builtin_prefetch" => Some(0L)

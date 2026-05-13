@@ -1446,7 +1446,9 @@ fn Codegen::emit_builtin_call(
   frame_size : Int,
 ) -> Bool {
   match name {
-    "__builtin_expect" => {
+    "__builtin_expect"
+    | "__builtin_expect_with_probability"
+    | "__builtin_unpredictable" => {
       // __builtin_expect(exp, c) -> just return exp
       if args.length() > 0 {
         self.gen_expr(args[0], frame_size)

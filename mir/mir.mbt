@@ -800,7 +800,9 @@ fn Program::builtin_return_type(
     "__builtin_bswap64"
     | "__builtin_rotateleft64"
     | "__builtin_rotateright64" => Some(ULongLong)
-    "__builtin_expect" | "__builtin_expect_with_probability" =>
+    "__builtin_expect"
+    | "__builtin_expect_with_probability"
+    | "__builtin_unpredictable" =>
       if args.length() > 0 {
         Some(self.expr_type(args[0], scope))
       } else {
