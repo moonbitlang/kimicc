@@ -757,6 +757,9 @@ fn Codegen::call_return_type(
             | "__builtin_memmove"
             | "__builtin_memset"
             | "__builtin_memchr" => Pointer(Void)
+            "__builtin_strlen" => ULong
+            "__builtin_memcmp" | "__builtin_strcmp" | "__builtin_strncmp" =>
+              SInt
             "__builtin_strcpy"
             | "__builtin_strchr"
             | "__builtin_strrchr"

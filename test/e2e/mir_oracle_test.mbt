@@ -169,6 +169,26 @@ async test "e2e MIR oracle checks string literal scalar facts" {
 }
 
 ///|
+async test "e2e MIR oracle checks string builtin return sizes" {
+  let source =
+    #|_Static_assert(sizeof(__builtin_strlen("abc")) == 8, "strlen size");
+    #|_Static_assert(sizeof(__builtin_memchr("abc", 'a', 3)) == 8, "memchr pointer");
+    #|_Static_assert(sizeof(__builtin_strchr("abc", 'a')) == 8, "strchr pointer");
+    #|_Static_assert(sizeof(__builtin_strcmp("a", "b")) == 4, "strcmp int");
+    #|_Static_assert(sizeof(__builtin_strncmp("a", "b", 1)) == 4, "strncmp int");
+    #|_Static_assert(sizeof(__builtin_memcmp("a", "b", 1)) == 4, "memcmp int");
+    #|int main(void) {
+    #|  return sizeof(__builtin_strlen("abc")) +
+    #|    sizeof(__builtin_memchr("abc", 'a', 3)) +
+    #|    sizeof(__builtin_strchr("abc", 'a')) +
+    #|    sizeof(__builtin_strcmp("a", "b")) +
+    #|    sizeof(__builtin_strncmp("a", "b", 1)) +
+    #|    sizeof(__builtin_memcmp("a", "b", 1));
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks literal string comparison builtins" {
   let source =
     #|int main(void) {

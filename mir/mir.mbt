@@ -778,6 +778,16 @@ fn Program::builtin_return_type(
     | "__builtin_frame_address"
     | "__builtin_extract_return_addr"
     | "__builtin_frob_return_addr" => Some(Pointer(Void))
+    "__builtin_memcpy"
+    | "__builtin_memmove"
+    | "__builtin_memset"
+    | "__builtin_memchr" => Some(Pointer(Void))
+    "__builtin_strlen" => Some(ULong)
+    "__builtin_memcmp" | "__builtin_strcmp" | "__builtin_strncmp" => Some(SInt)
+    "__builtin_strcpy"
+    | "__builtin_strchr"
+    | "__builtin_strrchr"
+    | "__builtin_strstr" => Some(Pointer(SChar))
     "__builtin_constant_p"
     | "__builtin_clz"
     | "__builtin_clzl"

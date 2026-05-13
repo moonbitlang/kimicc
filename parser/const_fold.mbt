@@ -1132,6 +1132,46 @@ fn type_of_expr(expr : Expr) -> Type {
 }
 
 ///|
+fn Parser::const_builtin_return_type(
+  self : Parser,
+  name : String,
+  args : Array[Expr],
+) -> Type? {
+  match name {
+    "__builtin_object_size" | "__builtin_dynamic_object_size" => Some(ULong)
+    "__builtin_return_address"
+    | "__builtin_frame_address"
+    | "__builtin_extract_return_addr"
+    | "__builtin_frob_return_addr" => Some(Pointer(Void))
+    "__builtin_memcpy"
+    | "__builtin_memmove"
+    | "__builtin_memset"
+    | "__builtin_memchr" => Some(Pointer(Void))
+    "__builtin_strlen" => Some(ULong)
+    "__builtin_memcmp" | "__builtin_strcmp" | "__builtin_strncmp" => Some(SInt)
+    "__builtin_strcpy"
+    | "__builtin_strchr"
+    | "__builtin_strrchr"
+    | "__builtin_strstr" => Some(Pointer(SChar))
+    "__builtin_assume_aligned" =>
+      if args.length() > 0 {
+        Some(self.const_expr_type(args[0]))
+      } else {
+        Some(Pointer(Void))
+      }
+    "__builtin_expect"
+    | "__builtin_expect_with_probability"
+    | "__builtin_unpredictable" =>
+      if args.length() > 0 {
+        Some(self.const_expr_type(args[0]))
+      } else {
+        Some(SInt)
+      }
+    _ => None
+  }
+}
+
+///|
 fn Parser::const_expr_type(self : Parser, expr : Expr) -> Type {
   match expr {
     Sizeof(_) | SizeofExpr(_) | Alignof(_) | AlignofExpr(_) | OffsetOf(_, _) =>
@@ -1163,6 +1203,11 @@ fn Parser::const_expr_type(self : Parser, expr : Expr) -> Type {
     FloatLiteral(_) => Double
     Number(_) => SInt
     CompoundLiteral(ty, _, _) => ty
+    Call(Var(name), args) =>
+      match self.const_builtin_return_type(name, args) {
+        Some(ty) => ty
+        None => type_of_expr(expr)
+      }
     DesignatedField(_, e) => self.const_expr_type(e)
     DesignatedIndex(_, e) => self.const_expr_type(e)
     DesignatedRange(_, _, e) => self.const_expr_type(e)

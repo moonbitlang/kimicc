@@ -220,6 +220,20 @@ test "mir interpreter models string literal scalar facts" {
 }
 
 ///|
+test "mir interpreter models string builtin return sizes" {
+  let source =
+    #|int main(void) {
+    #|  return sizeof(__builtin_strlen("abc")) +
+    #|    sizeof(__builtin_memchr("abc", 'a', 3)) +
+    #|    sizeof(__builtin_strchr("abc", 'a')) +
+    #|    sizeof(__builtin_strcmp("a", "b")) +
+    #|    sizeof(__builtin_strncmp("a", "b", 1)) +
+    #|    sizeof(__builtin_memcmp("a", "b", 1));
+    #|}
+  expect_interp(source, 36L)
+}
+
+///|
 test "mir interpreter models literal string comparison builtins" {
   let source =
     #|int main(void) {
