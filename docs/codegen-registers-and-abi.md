@@ -1,9 +1,13 @@
 # Codegen Registers And ABI
 
-`kimicc` emits target assembly directly from the parser AST. It does not lower
-through a separate machine IR, and it does not have a general register
-allocator. The Darwin ARM64 backend is built around a fixed scratch-register
-discipline plus explicit Darwin ARM64 C ABI argument and return placement.
+`kimicc` still emits target assembly directly from the parser AST. It now has a
+small MIR package for target-sensitive semantic facts and compile-test
+interpretation, but not yet a full instruction-level machine IR or a general
+register allocator. The Darwin ARM64 backend is built around a fixed
+scratch-register discipline plus explicit Darwin ARM64 C ABI argument and
+return placement. The linux/amd64 backend uses MIR semantic facts for
+size/alignment/field-layout queries while it continues to emit assembly from
+the parser AST.
 
 This document describes the current implementation contract. It is not a claim
 of complete C ABI conformance for every C type or language feature. The accurate
