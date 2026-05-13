@@ -47,6 +47,17 @@ async test "e2e MIR oracle checks scalar globals and casts" {
 }
 
 ///|
+async test "e2e MIR oracle checks scalar address dereference cancellation" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  *&x += 5;
+    #|  return *&x;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks scalar switch fallthrough" {
   let source =
     #|int main(void) {

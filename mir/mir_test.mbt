@@ -169,6 +169,17 @@ test "mir interpreter executes integer control flow and globals" {
 }
 
 ///|
+test "mir interpreter evaluates scalar address dereference cancellation" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  *&x += 5;
+    #|  return *&x;
+    #|}
+  expect_interp(source, 9L)
+}
+
+///|
 test "mir interpreter applies target layout and integer casts" {
   let source =
     #|int main(void) {
@@ -566,7 +577,7 @@ test "mir interpreter models literal string search nullness" {
 
 ///|
 test "mir interpreter reports unsupported memory behavior" {
-  let source = "int main(void) { int x = 1; return *&x; }"
+  let source = "int main(void) { int *p = (int*)0; return *p; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   match mir.interpret_i64("main", []) {
     Ok(_) => abort("expected MIR interpreter unsupported-memory error")

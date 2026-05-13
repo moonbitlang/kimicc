@@ -203,6 +203,7 @@ fn Interpreter::read_lvalue(
 ) -> Int64 {
   match expr {
     Var(name) => self.read_var(frame, name)
+    Deref(AddrOf(target)) => self.read_lvalue(frame, target)
     _ => {
       self.fail("unsupported MIR interpreter lvalue")
       0L
@@ -219,6 +220,7 @@ fn Interpreter::write_lvalue(
 ) -> Int64 {
   match expr {
     Var(name) => self.write_var(frame, name, value)
+    Deref(AddrOf(target)) => self.write_lvalue(frame, target, value)
     _ => {
       self.fail("unsupported MIR interpreter assignment target")
       0L
@@ -1007,6 +1009,8 @@ fn Interpreter::eval_expr(
       )
       self.write_lvalue(frame, lhs, value)
     }
+    Deref(AddrOf(value)) => self.read_lvalue(frame, value)
+    AddrOf(Deref(value)) => self.eval_expr(frame, value)
     Deref(String(value)) => string_literal_byte_at(value, 0L)
     ArrayAccess(String(value), index) =>
       string_literal_byte_at(value, self.eval_expr(frame, index))
