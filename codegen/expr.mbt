@@ -1408,6 +1408,52 @@ fn Codegen::emit_builtin_abs(
 }
 
 ///|
+fn Codegen::emit_builtin_is_aligned(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Unit {
+  if args.length() < 2 {
+    self.emit("\tmov\tx9, #0")
+    return
+  }
+  self.gen_expr(args[0], frame_size)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.gen_expr(args[1], frame_size)
+  self.emit("\tmov\tx10, x9")
+  self.emit("\tldr\tx9, [sp], #16")
+  self.emit("\tsub\tx10, x10, #1")
+  self.emit("\ttst\tx9, x10")
+  self.emit("\tcset\tx9, eq")
+}
+
+///|
+fn Codegen::emit_builtin_align_value(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+  round_up : Bool,
+) -> Unit {
+  if args.length() < 2 {
+    self.emit("\tmov\tx9, #0")
+    return
+  }
+  self.gen_expr(args[0], frame_size)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.gen_expr(args[1], frame_size)
+  self.emit("\tmov\tx10, x9")
+  if round_up {
+    self.emit("\tsub\tx11, x10, #1")
+  }
+  self.emit("\tldr\tx9, [sp], #16")
+  if round_up {
+    self.emit("\tadd\tx9, x9, x11")
+  }
+  self.emit("\tneg\tx10, x10")
+  self.emit("\tand\tx9, x9, x10")
+}
+
+///|
 fn Codegen::emit_builtin_ffs(
   self : Codegen,
   args : Array[@parser.Expr],
@@ -1583,6 +1629,18 @@ fn Codegen::emit_builtin_call(
     }
     "__builtin_labs" | "__builtin_llabs" => {
       self.emit_builtin_abs(args, frame_size, 64)
+      true
+    }
+    "__builtin_is_aligned" => {
+      self.emit_builtin_is_aligned(args, frame_size)
+      true
+    }
+    "__builtin_align_up" => {
+      self.emit_builtin_align_value(args, frame_size, true)
+      true
+    }
+    "__builtin_align_down" => {
+      self.emit_builtin_align_value(args, frame_size, false)
       true
     }
     "__builtin_clz" => {

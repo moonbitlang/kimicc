@@ -372,6 +372,40 @@ fn Interpreter::eval_builtin_abs(
 }
 
 ///|
+fn Interpreter::eval_builtin_is_aligned(
+  self : Interpreter,
+  frame : InterpFrame,
+  args : Array[@parser.Expr],
+) -> Int64 {
+  if args.length() < 2 {
+    return 0L
+  }
+  let value = self.eval_expr(frame, args[0])
+  let align = self.eval_expr(frame, args[1])
+  if (value & (align - 1L)) == 0L {
+    1L
+  } else {
+    0L
+  }
+}
+
+///|
+fn Interpreter::eval_builtin_align_value(
+  self : Interpreter,
+  frame : InterpFrame,
+  args : Array[@parser.Expr],
+  round_up : Bool,
+) -> Int64 {
+  if args.length() < 2 {
+    return 0L
+  }
+  let value = self.eval_expr(frame, args[0])
+  let align = self.eval_expr(frame, args[1])
+  let adjusted = if round_up { value + align - 1L } else { value }
+  adjusted & -align
+}
+
+///|
 fn mask_int_width(value : Int64, width : Int) -> Int64 {
   if width >= 64 {
     value
@@ -531,6 +565,11 @@ fn Interpreter::eval_builtin_call(
     "__builtin_abs" => Some(self.eval_builtin_abs(frame, args, SInt))
     "__builtin_labs" => Some(self.eval_builtin_abs(frame, args, SLong))
     "__builtin_llabs" => Some(self.eval_builtin_abs(frame, args, SLongLong))
+    "__builtin_is_aligned" => Some(self.eval_builtin_is_aligned(frame, args))
+    "__builtin_align_up" =>
+      Some(self.eval_builtin_align_value(frame, args, true))
+    "__builtin_align_down" =>
+      Some(self.eval_builtin_align_value(frame, args, false))
     "__builtin_clz" =>
       Some(
         count_leading_zero_bits(

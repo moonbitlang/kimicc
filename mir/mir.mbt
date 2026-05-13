@@ -796,6 +796,13 @@ fn Program::builtin_return_type(
     | "__builtin_flt_rounds" => Some(SInt)
     "__builtin_labs" => Some(SLong)
     "__builtin_llabs" => Some(SLongLong)
+    "__builtin_is_aligned" => Some(Bool)
+    "__builtin_align_up" | "__builtin_align_down" =>
+      if args.length() > 0 {
+        Some(self.expr_type(args[0], scope))
+      } else {
+        Some(ULong)
+      }
     "__builtin_bswap16" => Some(UShort)
     "__builtin_bswap32"
     | "__builtin_rotateleft32"

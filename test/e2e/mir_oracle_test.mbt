@@ -166,6 +166,20 @@ async test "e2e MIR oracle checks scalar abs builtins" {
 }
 
 ///|
+async test "e2e MIR oracle checks scalar alignment builtins" {
+  let source =
+    #|int main(void) {
+    #|  if (!__builtin_is_aligned(32, 16)) return 1;
+    #|  if (__builtin_is_aligned(34, 16)) return 2;
+    #|  if (__builtin_align_up(33, 16) != 48) return 3;
+    #|  if (__builtin_align_down(47, 16) != 32) return 4;
+    #|  if (__builtin_align_up(0x1234567890ull, 256) != 0x1234567900ull) return 5;
+    #|  return 0;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks scalar rotate builtins" {
   let source =
     #|int main(void) {
