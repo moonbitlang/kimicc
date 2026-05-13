@@ -1,5 +1,9 @@
 ///|
 fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
+  match self.mir {
+    Some(mir) => return mir.type_size(ty)
+    None => ()
+  }
   match ty {
     Void => 0
     Bool | SChar | UChar => 1
@@ -82,6 +86,10 @@ fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
 
 ///|
 fn Codegen::type_align(self : Codegen, ty : @parser.Type) -> Int {
+  match self.mir {
+    Some(mir) => return mir.type_align(ty)
+    None => ()
+  }
   match ty {
     Void => 1
     Bool | SChar | UChar => 1
@@ -324,6 +332,36 @@ fn Codegen::find_field_layout(
   struct_name : String,
   field : String,
 ) -> (String, @parser.Type, Int, Int, Int, Int)? {
+  match self.mir {
+    Some(mir) => {
+      let ty = if self.struct_decls.contains(struct_name) &&
+        self.struct_decls[struct_name].is_union {
+        @parser.Type::Union(struct_name)
+      } else {
+        @parser.Type::Struct(struct_name)
+      }
+      match mir.field_layout(ty, field) {
+        Some(layout) => {
+          let bit_width = match layout.bit_width {
+            Some(width) => width
+            None => 0
+          }
+          return Some(
+            (
+              layout.name,
+              layout.ty,
+              layout.offset,
+              layout.size,
+              layout.bit_offset,
+              bit_width,
+            ),
+          )
+        }
+        None => return None
+      }
+    }
+    None => ()
+  }
   if !self.struct_layouts.contains(struct_name) {
     return None
   }
@@ -353,6 +391,10 @@ fn Codegen::offset_of_path(
   ty : @parser.Type,
   path : Array[@parser.OffsetDesignator],
 ) -> Int? {
+  match self.mir {
+    Some(mir) => return mir.offset_of_path(ty, path)
+    None => ()
+  }
   let mut current_ty = ty
   let mut offset = 0
   for designator in path {

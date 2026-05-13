@@ -6,6 +6,7 @@
 /// details and use `generate` as the stable entry point.
 pub struct Codegen {
   output : StringBuilder
+  mut mir : @mir.Program?
   mut label_counter : Int
   mut local_offsets : Map[String, Int]
   mut var_types : Map[String, @parser.Type]
@@ -326,6 +327,10 @@ fn Codegen::global_expr_type(
   self : Codegen,
   expr : @parser.Expr,
 ) -> @parser.Type {
+  match self.mir {
+    Some(mir) => return mir.global_expr_type(expr)
+    None => ()
+  }
   match expr {
     Var(name) =>
       if self.globals.contains(name) {
@@ -871,6 +876,14 @@ fn Codegen::fold_const_int(
 
 ///|
 fn Codegen::fold_const(self : Codegen, expr : @parser.Expr) -> Int64? {
+  match self.mir {
+    Some(mir) =>
+      return mir.fold_const(expr, {
+        locals: self.var_types,
+        current_func: self.func_name,
+      })
+    None => ()
+  }
   match self.fold_const_int(expr) {
     Some(value) => Some(value.bits)
     None => None
@@ -1103,6 +1116,7 @@ fn Codegen::global_offset_bytes(
 pub fn Codegen::new() -> Codegen {
   {
     output: StringBuilder::new(),
+    mir: None,
     label_counter: 0,
     local_offsets: {},
     var_types: {},
@@ -1127,6 +1141,13 @@ pub fn Codegen::new() -> Codegen {
     sret_scratch_size: 0,
     pending_sret_offset: -1,
   }
+}
+
+///|
+fn Codegen::new_with_mir(mir : @mir.Program) -> Codegen {
+  let codegen = Codegen::new()
+  codegen.mir = Some(mir)
+  codegen
 }
 
 ///|
@@ -1490,6 +1511,9 @@ fn Codegen::emit_global_p2align(self : Codegen, ty : @parser.Type) -> Unit {
 /// The input must come from `bobzhang/kimicc/parser`. The returned string is
 /// assembly text intended for the macOS assembler and linker.
 pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
+  if self.mir is None {
+    self.mir = Some(@mir.lower(prog, @target.Target::default()))
+  }
   self.output.write_string(
     "\t.section\t__TEXT,__text,regular,pure_instructions\n",
   )
@@ -1620,7 +1644,8 @@ pub fn generate_assembly_for_target(
   target : @target.Target,
 ) -> String {
   match target {
-    DarwinArm64 => Codegen::new().generate(prog)
+    DarwinArm64 =>
+      Codegen::new_with_mir(@mir.lower(prog, target)).generate(prog)
     LinuxAmd64 =>
       X64Codegen::new_with_mir(@mir.lower(prog, target)).generate(prog)
   }
