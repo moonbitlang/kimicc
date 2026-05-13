@@ -194,6 +194,9 @@ async test "e2e MIR oracle checks floating builtin return sizes" {
     #|_Static_assert(sizeof(__builtin_fabsf(-1.0f)) == sizeof(float), "fabsf");
     #|_Static_assert(sizeof(__builtin_fabs(-1.0)) == sizeof(double), "fabs");
     #|_Static_assert(sizeof(__builtin_fabsl(-1.0L)) == sizeof(long double), "fabsl");
+    #|_Static_assert(sizeof(__builtin_copysignf(1.0f, -1.0f)) == sizeof(float), "copysignf");
+    #|_Static_assert(sizeof(__builtin_copysign(1.0, -1.0)) == sizeof(double), "copysign");
+    #|_Static_assert(sizeof(__builtin_copysignl(1.0L, -1.0L)) == sizeof(long double), "copysignl");
     #|_Static_assert(sizeof(__builtin_sqrtf(4.0f)) == sizeof(float), "sqrtf");
     #|_Static_assert(sizeof(__builtin_sqrt(4.0)) == sizeof(double), "sqrt");
     #|_Static_assert(sizeof(__builtin_sqrtl(4.0L)) == sizeof(long double), "sqrtl");
@@ -210,6 +213,9 @@ async test "e2e MIR oracle checks floating builtin return sizes" {
     #|  return sizeof(__builtin_fabsf(-1.0f)) +
     #|    sizeof(__builtin_fabs(-1.0)) +
     #|    sizeof(__builtin_fabsl(-1.0L)) +
+    #|    sizeof(__builtin_copysignf(1.0f, -1.0f)) +
+    #|    sizeof(__builtin_copysign(1.0, -1.0)) +
+    #|    sizeof(__builtin_copysignl(1.0L, -1.0L)) +
     #|    sizeof(__builtin_sqrtf(4.0f)) +
     #|    sizeof(__builtin_sqrt(4.0)) +
     #|    sizeof(__builtin_sqrtl(4.0L)) +

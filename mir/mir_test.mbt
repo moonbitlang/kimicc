@@ -240,6 +240,9 @@ test "mir interpreter models floating builtin return sizes" {
     #|  return sizeof(__builtin_fabsf(-1.0f)) +
     #|    sizeof(__builtin_fabs(-1.0)) +
     #|    sizeof(__builtin_fabsl(-1.0L)) +
+    #|    sizeof(__builtin_copysignf(1.0f, -1.0f)) +
+    #|    sizeof(__builtin_copysign(1.0, -1.0)) +
+    #|    sizeof(__builtin_copysignl(1.0L, -1.0L)) +
     #|    sizeof(__builtin_sqrtf(4.0f)) +
     #|    sizeof(__builtin_sqrt(4.0)) +
     #|    sizeof(__builtin_sqrtl(4.0L)) +
@@ -253,7 +256,7 @@ test "mir interpreter models floating builtin return sizes" {
     #|    sizeof(__builtin_inf()) +
     #|    sizeof(__builtin_infl());
     #|}
-  expect_interp(source, 100L)
+  expect_interp(source, 120L)
 }
 
 ///|
