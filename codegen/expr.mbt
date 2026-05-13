@@ -1360,6 +1360,85 @@ fn Codegen::emit_builtin_rotate(
 }
 
 ///|
+fn Codegen::emit_builtin_ffs(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+  width : Int,
+) -> Unit {
+  if args.length() == 0 {
+    self.emit("\tmov\tx9, #0")
+    return
+  }
+  self.gen_expr(args[0], frame_size)
+  let zero_label = self.new_label()
+  let done_label = self.new_label()
+  if width == 32 {
+    self.emit("\tcbz\tw9, " + zero_label)
+    self.emit("\trbit\tw9, w9")
+    self.emit("\tclz\tw9, w9")
+    self.emit("\tadd\tw9, w9, #1")
+  } else {
+    self.emit("\tcbz\tx9, " + zero_label)
+    self.emit("\trbit\tx9, x9")
+    self.emit("\tclz\tx9, x9")
+    self.emit("\tadd\tx9, x9, #1")
+  }
+  self.emit("\tb\t" + done_label)
+  self.emit(zero_label + ":")
+  self.emit("\tmov\tx9, #0")
+  self.emit(done_label + ":")
+}
+
+///|
+fn Codegen::emit_builtin_popcount(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+  width : Int,
+) -> Unit {
+  if args.length() == 0 {
+    self.emit("\tmov\tx9, #0")
+    return
+  }
+  self.gen_expr(args[0], frame_size)
+  if width == 32 {
+    self.emit("\tmov\tw9, w9")
+  }
+  self.emit("\tlsr\tx10, x9, #1")
+  self.emit_load_int("x11", 6148914691236517205L)
+  self.emit("\tand\tx10, x10, x11")
+  self.emit("\tsub\tx9, x9, x10")
+  self.emit_load_int("x11", 3689348814741910323L)
+  self.emit("\tand\tx10, x9, x11")
+  self.emit("\tlsr\tx12, x9, #2")
+  self.emit("\tand\tx12, x12, x11")
+  self.emit("\tadd\tx9, x10, x12")
+  self.emit("\tlsr\tx10, x9, #4")
+  self.emit("\tadd\tx9, x9, x10")
+  self.emit_load_int("x11", 1085102592571150095L)
+  self.emit("\tand\tx9, x9, x11")
+  self.emit("\tlsr\tx10, x9, #8")
+  self.emit("\tadd\tx9, x9, x10")
+  self.emit("\tlsr\tx10, x9, #16")
+  self.emit("\tadd\tx9, x9, x10")
+  self.emit("\tlsr\tx10, x9, #32")
+  self.emit("\tadd\tx9, x9, x10")
+  self.emit("\tand\tx9, x9, #127")
+}
+
+///|
+fn Codegen::emit_builtin_parity(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+  width : Int,
+) -> Unit {
+  self.emit_builtin_popcount(args, frame_size, width)
+  self.emit("\tand\tx9, x9, #1")
+}
+
+///|
 fn Codegen::emit_builtin_call(
   self : Codegen,
   name : String,
@@ -1404,7 +1483,7 @@ fn Codegen::emit_builtin_call(
       self.emit("\tmov\tx9, #0")
       true
     }
-    "__builtin_clz" | "__builtin_clzl" => {
+    "__builtin_clz" => {
       if args.length() > 0 {
         self.gen_expr(args[0], frame_size)
         self.emit("\tclz\tw9, w9")
@@ -1413,7 +1492,7 @@ fn Codegen::emit_builtin_call(
       }
       true
     }
-    "__builtin_clzll" => {
+    "__builtin_clzl" | "__builtin_clzll" => {
       if args.length() > 0 {
         self.gen_expr(args[0], frame_size)
         self.emit("\tclz\tx9, x9")
@@ -1422,7 +1501,7 @@ fn Codegen::emit_builtin_call(
       }
       true
     }
-    "__builtin_ctz" | "__builtin_ctzl" => {
+    "__builtin_ctz" => {
       if args.length() > 0 {
         self.gen_expr(args[0], frame_size)
         self.emit("\trbit\tw9, w9")
@@ -1432,7 +1511,7 @@ fn Codegen::emit_builtin_call(
       }
       true
     }
-    "__builtin_ctzll" => {
+    "__builtin_ctzl" | "__builtin_ctzll" => {
       if args.length() > 0 {
         self.gen_expr(args[0], frame_size)
         self.emit("\trbit\tx9, x9")
@@ -1486,17 +1565,28 @@ fn Codegen::emit_builtin_call(
       self.emit_builtin_rotate(args, frame_size, 64, false)
       true
     }
-    "__builtin_popcount" | "__builtin_popcountl" | "__builtin_popcountll" => {
-      if args.length() > 0 {
-        self.gen_expr(args[0], frame_size)
-        // ARM64 doesn't have scalar popcount; use a software fallback
-        // Store arg, call stub
-        self.emit("\tstr\tx9, [sp, #-16]!")
-        self.emit("\tbl\t___popcountdi2")
-        self.emit("\tadd\tsp, sp, #16")
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
+    "__builtin_ffs" => {
+      self.emit_builtin_ffs(args, frame_size, 32)
+      true
+    }
+    "__builtin_ffsl" | "__builtin_ffsll" => {
+      self.emit_builtin_ffs(args, frame_size, 64)
+      true
+    }
+    "__builtin_popcount" => {
+      self.emit_builtin_popcount(args, frame_size, 32)
+      true
+    }
+    "__builtin_popcountl" | "__builtin_popcountll" => {
+      self.emit_builtin_popcount(args, frame_size, 64)
+      true
+    }
+    "__builtin_parity" => {
+      self.emit_builtin_parity(args, frame_size, 32)
+      true
+    }
+    "__builtin_parityl" | "__builtin_parityll" => {
+      self.emit_builtin_parity(args, frame_size, 64)
       true
     }
     "__builtin_memcpy" => {

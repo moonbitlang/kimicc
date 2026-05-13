@@ -121,6 +121,27 @@ async test "e2e MIR oracle checks scalar bit builtins" {
     #|  if ((__builtin_bswap16(0x0102) & 0xffff) != 0x0201) return 5;
     #|  if (__builtin_bswap32(0x01020304u) != 0x04030201u) return 6;
     #|  if ((__builtin_bswap64(0x0102030405060708ull) & 255) != 1) return 7;
+    #|  if (__builtin_clzl(8ul) != 60) return 8;
+    #|  if (__builtin_ctzl(48ul) != 4) return 9;
+    #|  return 0;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks scalar population builtins" {
+  let source =
+    #|int main(void) {
+    #|  if (__builtin_ffs(0u) != 0) return 1;
+    #|  if (__builtin_ffs(8u) != 4) return 2;
+    #|  if (__builtin_ffsl(16ul) != 5) return 3;
+    #|  if (__builtin_ffsll(32ull) != 6) return 4;
+    #|  if (__builtin_popcount(0xf0f0u) != 8) return 5;
+    #|  if (__builtin_popcountl(0x0f0f0f0f0f0f0f0ful) != 32) return 6;
+    #|  if (__builtin_popcountll(0x0f0f0f0f0f0f0f0full) != 32) return 7;
+    #|  if (__builtin_parity(0xf0f1u) != 1) return 8;
+    #|  if (__builtin_parityl(0x0f0f0f0f0f0f0f0ful) != 0) return 9;
+    #|  if (__builtin_parityll(0x0f0f0f0f0f0f0f0eull) != 1) return 10;
     #|  return 0;
     #|}
   run_source_against_mir_oracle(source)

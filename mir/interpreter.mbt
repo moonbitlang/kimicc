@@ -390,6 +390,27 @@ fn count_trailing_zero_bits(value : Int64, width : Int) -> Int64 {
 }
 
 ///|
+fn first_set_bit(value : Int64, width : Int) -> Int64 {
+  let value = mask_int_width(value, width)
+  if value == 0L {
+    0L
+  } else {
+    count_trailing_zero_bits(value, width) + 1L
+  }
+}
+
+///|
+fn count_one_bits(value : Int64, width : Int) -> Int64 {
+  let mut value = mask_int_width(value, width)
+  let mut count = 0L
+  for _ in 0..<width {
+    count += value & 1L
+    value = value >> 1
+  }
+  count
+}
+
+///|
 fn byte_swap_bits(value : Int64, width : Int) -> Int64 {
   let value = mask_int_width(value, width)
   let mut result = 0L
@@ -452,40 +473,56 @@ fn Interpreter::eval_builtin_call(
     "__builtin_flt_rounds" => Some(1L)
     "__builtin_assume" | "__builtin_prefetch" => Some(0L)
     "__builtin_object_size" | "__builtin_dynamic_object_size" => Some(-1L)
-    "__builtin_clz" | "__builtin_clzl" =>
+    "__builtin_clz" =>
       Some(
         count_leading_zero_bits(
           self.eval_first_call_arg_or_zero(frame, args),
           32,
         ),
       )
-    "__builtin_clzll" =>
+    "__builtin_clzl" | "__builtin_clzll" =>
       Some(
         count_leading_zero_bits(
           self.eval_first_call_arg_or_zero(frame, args),
           64,
         ),
       )
-    "__builtin_ctz" | "__builtin_ctzl" =>
+    "__builtin_ctz" =>
       Some(
         count_trailing_zero_bits(
           self.eval_first_call_arg_or_zero(frame, args),
           32,
         ),
       )
-    "__builtin_ctzll" =>
+    "__builtin_ctzl" | "__builtin_ctzll" =>
       Some(
         count_trailing_zero_bits(
           self.eval_first_call_arg_or_zero(frame, args),
           64,
         ),
       )
+    "__builtin_ffs" =>
+      Some(first_set_bit(self.eval_first_call_arg_or_zero(frame, args), 32))
+    "__builtin_ffsl" | "__builtin_ffsll" =>
+      Some(first_set_bit(self.eval_first_call_arg_or_zero(frame, args), 64))
     "__builtin_bswap16" =>
       Some(byte_swap_bits(self.eval_first_call_arg_or_zero(frame, args), 16))
     "__builtin_bswap32" =>
       Some(byte_swap_bits(self.eval_first_call_arg_or_zero(frame, args), 32))
     "__builtin_bswap64" =>
       Some(byte_swap_bits(self.eval_first_call_arg_or_zero(frame, args), 64))
+    "__builtin_popcount" =>
+      Some(count_one_bits(self.eval_first_call_arg_or_zero(frame, args), 32))
+    "__builtin_popcountl" | "__builtin_popcountll" =>
+      Some(count_one_bits(self.eval_first_call_arg_or_zero(frame, args), 64))
+    "__builtin_parity" =>
+      Some(
+        count_one_bits(self.eval_first_call_arg_or_zero(frame, args), 32) & 1L,
+      )
+    "__builtin_parityl" | "__builtin_parityll" =>
+      Some(
+        count_one_bits(self.eval_first_call_arg_or_zero(frame, args), 64) & 1L,
+      )
     "__builtin_rotateleft32" | "__builtin_rotateright32" =>
       if args.length() >= 2 {
         Some(
