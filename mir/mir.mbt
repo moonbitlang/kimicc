@@ -792,7 +792,10 @@ fn Program::builtin_return_type(
     | "__builtin_parity"
     | "__builtin_parityl"
     | "__builtin_parityll"
+    | "__builtin_abs"
     | "__builtin_flt_rounds" => Some(SInt)
+    "__builtin_labs" => Some(SLong)
+    "__builtin_llabs" => Some(SLongLong)
     "__builtin_bswap16" => Some(UShort)
     "__builtin_bswap32"
     | "__builtin_rotateleft32"

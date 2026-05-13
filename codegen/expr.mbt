@@ -746,6 +746,9 @@ fn Codegen::call_return_type(
             "__builtin_rotateleft64" | "__builtin_rotateright64" => ULongLong
             "__builtin_object_size" | "__builtin_dynamic_object_size" => ULong
             "__builtin_flt_rounds" => SInt
+            "__builtin_abs" => SInt
+            "__builtin_labs" => SLong
+            "__builtin_llabs" => SLongLong
             _ => self.func_rets.get_or_default(name, SInt)
           }
         _ => SInt
@@ -1380,6 +1383,31 @@ fn Codegen::generic_builtin_bit_width(
 }
 
 ///|
+fn Codegen::emit_builtin_abs(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+  width : Int,
+) -> Unit {
+  if args.length() == 0 {
+    self.emit("\tmov\tx9, #0")
+    return
+  }
+  self.gen_expr(args[0], frame_size)
+  let done = self.new_label()
+  if width == 32 {
+    self.emit("\tcmp\tw9, #0")
+    self.emit("\tb.ge\t" + done)
+    self.emit("\tneg\tw9, w9")
+  } else {
+    self.emit("\tcmp\tx9, #0")
+    self.emit("\tb.ge\t" + done)
+    self.emit("\tneg\tx9, x9")
+  }
+  self.emit(done + ":")
+}
+
+///|
 fn Codegen::emit_builtin_ffs(
   self : Codegen,
   args : Array[@parser.Expr],
@@ -1547,6 +1575,14 @@ fn Codegen::emit_builtin_call(
     }
     "__builtin_prefetch" => {
       self.emit("\tmov\tx9, #0")
+      true
+    }
+    "__builtin_abs" => {
+      self.emit_builtin_abs(args, frame_size, 32)
+      true
+    }
+    "__builtin_labs" | "__builtin_llabs" => {
+      self.emit_builtin_abs(args, frame_size, 64)
       true
     }
     "__builtin_clz" => {

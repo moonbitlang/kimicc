@@ -153,6 +153,19 @@ async test "e2e MIR oracle checks scalar population builtins" {
 }
 
 ///|
+async test "e2e MIR oracle checks scalar abs builtins" {
+  let source =
+    #|int main(void) {
+    #|  if (__builtin_abs(-7) != 7) return 1;
+    #|  if (__builtin_abs(5) != 5) return 2;
+    #|  if (__builtin_labs(-1234567890123L) != 1234567890123L) return 3;
+    #|  if (__builtin_llabs(-900000000000000000LL) != 900000000000000000LL) return 4;
+    #|  return 0;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks scalar rotate builtins" {
   let source =
     #|int main(void) {

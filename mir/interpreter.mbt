@@ -358,6 +358,20 @@ fn Interpreter::eval_first_call_arg_or_zero(
 }
 
 ///|
+fn Interpreter::eval_builtin_abs(
+  self : Interpreter,
+  frame : InterpFrame,
+  args : Array[@parser.Expr],
+  ty : @parser.Type,
+) -> Int64 {
+  let value = self.program.runtime_cast_int(
+    self.eval_first_call_arg_or_zero(frame, args),
+    ty,
+  )
+  self.program.runtime_cast_int(if value < 0L { -value } else { value }, ty)
+}
+
+///|
 fn mask_int_width(value : Int64, width : Int) -> Int64 {
   if width >= 64 {
     value
@@ -514,6 +528,9 @@ fn Interpreter::eval_builtin_call(
     "__builtin_flt_rounds" => Some(1L)
     "__builtin_assume" | "__builtin_prefetch" => Some(0L)
     "__builtin_object_size" | "__builtin_dynamic_object_size" => Some(-1L)
+    "__builtin_abs" => Some(self.eval_builtin_abs(frame, args, SInt))
+    "__builtin_labs" => Some(self.eval_builtin_abs(frame, args, SLong))
+    "__builtin_llabs" => Some(self.eval_builtin_abs(frame, args, SLongLong))
     "__builtin_clz" =>
       Some(
         count_leading_zero_bits(
