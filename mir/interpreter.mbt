@@ -568,6 +568,15 @@ fn Interpreter::eval_builtin_call(
     "__builtin_flt_rounds" => Some(1L)
     "__builtin_assume" | "__builtin_prefetch" => Some(0L)
     "__builtin_object_size" | "__builtin_dynamic_object_size" => Some(-1L)
+    "__builtin_frame_address" | "__builtin_return_address" => {
+      let level = if args.length() > 0 {
+        self.eval_expr(frame, args[0])
+      } else {
+        0L
+      }
+      // The MIR oracle models address nullness only, not exact machine PCs/FPs.
+      Some(if level == 0L { 1L } else { 0L })
+    }
     "__builtin_abs" => Some(self.eval_builtin_abs(frame, args, SInt))
     "__builtin_labs" => Some(self.eval_builtin_abs(frame, args, SLong))
     "__builtin_llabs" => Some(self.eval_builtin_abs(frame, args, SLongLong))

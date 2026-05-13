@@ -110,6 +110,14 @@ async test "e2e MIR oracle checks scalar builtin calls" {
     #|  if ((unsigned long)__builtin_assume_aligned((void*)32, 16) != 32ul) return 70;
     #|  if ((unsigned long)__builtin_extract_return_addr((void*)77) != 77ul) return 80;
     #|  if ((unsigned long)__builtin_frob_return_addr((void*)88) != 88ul) return 90;
+    #|  void *fa = __builtin_frame_address(0);
+    #|  void *ra = __builtin_return_address(0);
+    #|  if (fa == 0) return 100;
+    #|  if (ra == 0) return 110;
+    #|  if (__builtin_frame_address(1) != 0) return 120;
+    #|  if (__builtin_return_address(1) != 0) return 130;
+    #|  if (__builtin_extract_return_addr(ra) != ra) return 140;
+    #|  if (__builtin_frob_return_addr(ra) != ra) return 150;
     #|  return total + value();
     #|}
   run_source_against_mir_oracle(source)
