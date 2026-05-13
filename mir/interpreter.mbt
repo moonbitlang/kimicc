@@ -556,7 +556,8 @@ fn Interpreter::eval_builtin_call(
   match name {
     "__builtin_expect"
     | "__builtin_expect_with_probability"
-    | "__builtin_unpredictable" =>
+    | "__builtin_unpredictable"
+    | "__builtin_assume_aligned" =>
       Some(self.eval_first_call_arg_or_zero(frame, args))
     "__builtin_constant_p" => Some(0L)
     "__builtin_flt_rounds" => Some(1L)

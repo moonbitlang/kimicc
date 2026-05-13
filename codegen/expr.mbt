@@ -749,6 +749,7 @@ fn Codegen::call_return_type(
             "__builtin_abs" => SInt
             "__builtin_labs" => SLong
             "__builtin_llabs" => SLongLong
+            "__builtin_assume_aligned" => Pointer(Void)
             _ => self.func_rets.get_or_default(name, SInt)
           }
         _ => SInt
@@ -1587,7 +1588,15 @@ fn Codegen::emit_builtin_call(
     "__builtin_expect"
     | "__builtin_expect_with_probability"
     | "__builtin_unpredictable" => {
-      // __builtin_expect(exp, c) -> just return exp
+      // Prediction hints return their value operand.
+      if args.length() > 0 {
+        self.gen_expr(args[0], frame_size)
+      } else {
+        self.emit("\tmov\tx9, #0")
+      }
+      true
+    }
+    "__builtin_assume_aligned" => {
       if args.length() > 0 {
         self.gen_expr(args[0], frame_size)
       } else {

@@ -107,6 +107,7 @@ async test "e2e MIR oracle checks scalar builtin calls" {
     #|  if (__builtin_dynamic_object_size(0, 0) + 1 != 0) return 60;
     #|  total += __builtin_assume(1);
     #|  total += __builtin_prefetch(0, 0, 0);
+    #|  if ((unsigned long)__builtin_assume_aligned((void*)32, 16) != 32ul) return 70;
     #|  return total + value();
     #|}
   run_source_against_mir_oracle(source)
