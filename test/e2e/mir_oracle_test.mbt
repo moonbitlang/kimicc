@@ -737,6 +737,23 @@ async test "e2e MIR oracle checks void builtin return sizes" {
 }
 
 ///|
+async test "e2e MIR oracle checks unobserved varargs setup builtins" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|int variadic(int last, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, last);
+    #|  __builtin_va_copy(ap, ap);
+    #|  __builtin_va_end(ap);
+    #|  return last + 1;
+    #|}
+    #|int main(void) {
+    #|  return variadic(41, 1, 2);
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks literal string comparison builtins" {
   let source =
     #|int main(void) {

@@ -592,6 +592,23 @@ test "mir interpreter models void builtin return sizes" {
 }
 
 ///|
+test "mir interpreter evaluates unobserved varargs setup builtins" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|int variadic(int last, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, last);
+    #|  __builtin_va_copy(ap, ap);
+    #|  __builtin_va_end(ap);
+    #|  return last + 1;
+    #|}
+    #|int main(void) {
+    #|  return variadic(41, 1, 2);
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter models literal string comparison builtins" {
   let source =
     #|int main(void) {
