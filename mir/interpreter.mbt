@@ -861,6 +861,20 @@ fn Interpreter::eval_builtin_call(
     | "__builtin_strncat"
     | "__builtin___strncat_chk" =>
       Some(self.eval_return_first_call_arg(frame, args, args.length()))
+    "__builtin___strlcpy_chk" => {
+      ignore(self.eval_call_args(frame, args))
+      if args.length() < 2 {
+        Some(0L)
+      } else {
+        match literal_string_arg(args[1]) {
+          Some(value) => Some(value.length().to_int64())
+          None => {
+            self.fail("unsupported MIR interpreter strlcpy source argument")
+            Some(0L)
+          }
+        }
+      }
+    }
     "__builtin_alloca" => {
       if args.length() > 0 {
         ignore(self.eval_expr(frame, args[0]))

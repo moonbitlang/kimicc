@@ -645,6 +645,19 @@ test "mir interpreter models string destination return pointers" {
 }
 
 ///|
+test "mir interpreter models checked strlcpy literal length" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(8);
+    #|  if (__builtin___strlcpy_chk(dst, (const char *)"abcdef", n += 4, 8) != 6) return 1;
+    #|  if (n != 4) return 2;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter evaluates bzero arguments" {
   let source =
     #|int main(void) {

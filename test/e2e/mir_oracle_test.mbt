@@ -787,6 +787,19 @@ async test "e2e MIR oracle checks string destination return pointers" {
 }
 
 ///|
+async test "e2e MIR oracle checks checked strlcpy literal length" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(8);
+    #|  if (__builtin___strlcpy_chk(dst, (const char *)"abcdef", n += 4, 8) != 6) return 1;
+    #|  if (n != 4) return 2;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks bzero argument evaluation" {
   let source =
     #|int main(void) {
