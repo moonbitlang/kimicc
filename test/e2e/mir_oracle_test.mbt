@@ -189,6 +189,44 @@ async test "e2e MIR oracle checks string builtin return sizes" {
 }
 
 ///|
+async test "e2e MIR oracle checks floating builtin return sizes" {
+  let source =
+    #|_Static_assert(sizeof(__builtin_fabsf(-1.0f)) == sizeof(float), "fabsf");
+    #|_Static_assert(sizeof(__builtin_fabs(-1.0)) == sizeof(double), "fabs");
+    #|_Static_assert(sizeof(__builtin_fabsl(-1.0L)) == sizeof(long double), "fabsl");
+    #|_Static_assert(sizeof(__builtin_sqrtf(4.0f)) == sizeof(float), "sqrtf");
+    #|_Static_assert(sizeof(__builtin_sqrt(4.0)) == sizeof(double), "sqrt");
+    #|_Static_assert(sizeof(__builtin_sqrtl(4.0L)) == sizeof(long double), "sqrtl");
+    #|_Static_assert(sizeof(__builtin_nanf("")) == sizeof(float), "nanf");
+    #|_Static_assert(sizeof(__builtin_nan("")) == sizeof(double), "nan");
+    #|_Static_assert(sizeof(__builtin_nanl("")) == sizeof(long double), "nanl");
+    #|_Static_assert(sizeof(__builtin_huge_valf()) == sizeof(float), "huge_valf");
+    #|_Static_assert(sizeof(__builtin_huge_val()) == sizeof(double), "huge_val");
+    #|_Static_assert(sizeof(__builtin_huge_vall()) == sizeof(long double), "huge_vall");
+    #|_Static_assert(sizeof(__builtin_inff()) == sizeof(float), "inff");
+    #|_Static_assert(sizeof(__builtin_inf()) == sizeof(double), "inf");
+    #|_Static_assert(sizeof(__builtin_infl()) == sizeof(long double), "infl");
+    #|int main(void) {
+    #|  return sizeof(__builtin_fabsf(-1.0f)) +
+    #|    sizeof(__builtin_fabs(-1.0)) +
+    #|    sizeof(__builtin_fabsl(-1.0L)) +
+    #|    sizeof(__builtin_sqrtf(4.0f)) +
+    #|    sizeof(__builtin_sqrt(4.0)) +
+    #|    sizeof(__builtin_sqrtl(4.0L)) +
+    #|    sizeof(__builtin_nanf("")) +
+    #|    sizeof(__builtin_nan("")) +
+    #|    sizeof(__builtin_nanl("")) +
+    #|    sizeof(__builtin_huge_valf()) +
+    #|    sizeof(__builtin_huge_val()) +
+    #|    sizeof(__builtin_huge_vall()) +
+    #|    sizeof(__builtin_inff()) +
+    #|    sizeof(__builtin_inf()) +
+    #|    sizeof(__builtin_infl());
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks literal string comparison builtins" {
   let source =
     #|int main(void) {

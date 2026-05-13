@@ -19,6 +19,9 @@ that both assembly backends walk.
   literal-only string comparison/search builtins such as `__builtin_strcmp`,
   `__builtin_strncmp`, `__builtin_memcmp`, `__builtin_strchr`,
   `__builtin_strrchr`, `__builtin_strstr`, and `__builtin_memchr`.
+  MIR and the parser also carry builtin return-type facts used by unevaluated
+  expressions such as `sizeof`, including selected string/memory and
+  floating-point builtins.
   Frame/return-address builtins are modeled only for nullness: depth 0 returns a
   synthetic non-null pointer, and nonzero depths return null. Tests should
   compare those values only against null or pass them through identity helpers,

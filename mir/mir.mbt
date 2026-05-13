@@ -788,6 +788,21 @@ fn Program::builtin_return_type(
     | "__builtin_strchr"
     | "__builtin_strrchr"
     | "__builtin_strstr" => Some(Pointer(SChar))
+    "__builtin_fabsf"
+    | "__builtin_sqrtf"
+    | "__builtin_nanf"
+    | "__builtin_huge_valf"
+    | "__builtin_inff" => Some(Float)
+    "__builtin_fabs"
+    | "__builtin_sqrt"
+    | "__builtin_nan"
+    | "__builtin_huge_val"
+    | "__builtin_inf" => Some(Double)
+    "__builtin_fabsl"
+    | "__builtin_sqrtl"
+    | "__builtin_nanl"
+    | "__builtin_huge_vall"
+    | "__builtin_infl" => Some(LongDouble)
     "__builtin_constant_p"
     | "__builtin_clz"
     | "__builtin_clzl"

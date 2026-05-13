@@ -234,6 +234,29 @@ test "mir interpreter models string builtin return sizes" {
 }
 
 ///|
+test "mir interpreter models floating builtin return sizes" {
+  let source =
+    #|int main(void) {
+    #|  return sizeof(__builtin_fabsf(-1.0f)) +
+    #|    sizeof(__builtin_fabs(-1.0)) +
+    #|    sizeof(__builtin_fabsl(-1.0L)) +
+    #|    sizeof(__builtin_sqrtf(4.0f)) +
+    #|    sizeof(__builtin_sqrt(4.0)) +
+    #|    sizeof(__builtin_sqrtl(4.0L)) +
+    #|    sizeof(__builtin_nanf("")) +
+    #|    sizeof(__builtin_nan("")) +
+    #|    sizeof(__builtin_nanl("")) +
+    #|    sizeof(__builtin_huge_valf()) +
+    #|    sizeof(__builtin_huge_val()) +
+    #|    sizeof(__builtin_huge_vall()) +
+    #|    sizeof(__builtin_inff()) +
+    #|    sizeof(__builtin_inf()) +
+    #|    sizeof(__builtin_infl());
+    #|}
+  expect_interp(source, 100L)
+}
+
+///|
 test "mir interpreter models literal string comparison builtins" {
   let source =
     #|int main(void) {
