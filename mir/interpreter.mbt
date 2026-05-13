@@ -400,6 +400,46 @@ fn byte_swap_bits(value : Int64, width : Int) -> Int64 {
 }
 
 ///|
+fn normalized_bit_shift(shift : Int64, width : Int) -> Int {
+  let mut amount = (shift % width.to_int64()).to_int()
+  if amount < 0 {
+    amount += width
+  }
+  amount
+}
+
+///|
+fn logical_right_shift_bits(value : Int64, width : Int, shift : Int) -> Int64 {
+  if shift == 0 {
+    mask_int_width(value, width)
+  } else if width >= 64 {
+    (value.reinterpret_as_uint64() >> shift).reinterpret_as_int64()
+  } else {
+    mask_int_width(value, width) >> shift
+  }
+}
+
+///|
+fn rotate_bits(value : Int64, shift : Int64, width : Int, left : Bool) -> Int64 {
+  let amount = normalized_bit_shift(shift, width)
+  let value = mask_int_width(value, width)
+  if amount == 0 {
+    value
+  } else if left {
+    mask_int_width(
+      (value << amount) | logical_right_shift_bits(value, width, width - amount),
+      width,
+    )
+  } else {
+    mask_int_width(
+      logical_right_shift_bits(value, width, amount) |
+      (value << (width - amount)),
+      width,
+    )
+  }
+}
+
+///|
 fn Interpreter::eval_builtin_call(
   self : Interpreter,
   frame : InterpFrame,
@@ -446,6 +486,32 @@ fn Interpreter::eval_builtin_call(
       Some(byte_swap_bits(self.eval_first_call_arg_or_zero(frame, args), 32))
     "__builtin_bswap64" =>
       Some(byte_swap_bits(self.eval_first_call_arg_or_zero(frame, args), 64))
+    "__builtin_rotateleft32" | "__builtin_rotateright32" =>
+      if args.length() >= 2 {
+        Some(
+          rotate_bits(
+            self.eval_expr(frame, args[0]),
+            self.eval_expr(frame, args[1]),
+            32,
+            name == "__builtin_rotateleft32",
+          ),
+        )
+      } else {
+        Some(0L)
+      }
+    "__builtin_rotateleft64" | "__builtin_rotateright64" =>
+      if args.length() >= 2 {
+        Some(
+          rotate_bits(
+            self.eval_expr(frame, args[0]),
+            self.eval_expr(frame, args[1]),
+            64,
+            name == "__builtin_rotateleft64",
+          ),
+        )
+      } else {
+        Some(0L)
+      }
     _ => None
   }
 }

@@ -125,3 +125,16 @@ async test "e2e MIR oracle checks scalar bit builtins" {
     #|}
   run_source_against_mir_oracle(source)
 }
+
+///|
+async test "e2e MIR oracle checks scalar rotate builtins" {
+  let source =
+    #|int main(void) {
+    #|  if ((__builtin_rotateleft32(0x12345678u, 8) & 255) != 0x12) return 1;
+    #|  if ((__builtin_rotateright32(0x12345678u, 8) & 255) != 0x56) return 2;
+    #|  if ((__builtin_rotateleft64(0x0123456789abcdefull, 16) & 255) != 0x23) return 3;
+    #|  if ((__builtin_rotateright64(0x0123456789abcdefull, 16) & 255) != 0xab) return 4;
+    #|  return 0;
+    #|}
+  run_source_against_mir_oracle(source)
+}

@@ -776,6 +776,21 @@ fn Program::builtin_return_type(
     "__builtin_object_size" | "__builtin_dynamic_object_size" => Some(ULong)
     "__builtin_return_address" | "__builtin_frame_address" =>
       Some(Pointer(Void))
+    "__builtin_constant_p"
+    | "__builtin_clz"
+    | "__builtin_clzl"
+    | "__builtin_clzll"
+    | "__builtin_ctz"
+    | "__builtin_ctzl"
+    | "__builtin_ctzll"
+    | "__builtin_flt_rounds" => Some(SInt)
+    "__builtin_bswap16" => Some(UShort)
+    "__builtin_bswap32"
+    | "__builtin_rotateleft32"
+    | "__builtin_rotateright32" => Some(UInt)
+    "__builtin_bswap64"
+    | "__builtin_rotateleft64"
+    | "__builtin_rotateright64" => Some(ULongLong)
     "__builtin_expect" | "__builtin_expect_with_probability" =>
       if args.length() > 0 {
         Some(self.expr_type(args[0], scope))
