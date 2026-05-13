@@ -123,14 +123,19 @@ async test "e2e MIR oracle checks parser folded compile-time builtins" {
     #|struct S { int x; };
     #|union U { int x; double y; };
     #|int main(void) {
+    #|  int x = 0;
+    #|  double d;
+    #|  int a[2];
+    #|  struct S s;
+    #|  union U u;
     #|  int total = 0;
     #|  total += __builtin_choose_expr(__builtin_types_compatible_p(int, signed int), 7, missing());
     #|  total += __builtin_choose_expr(__builtin_types_compatible_p(int, unsigned int), missing(), 5);
-    #|  total += __builtin_classify_type(0);
-    #|  total += __builtin_classify_type((double)0);
-    #|  total += __builtin_classify_type((int*)0);
-    #|  total += __builtin_classify_type((struct S){0});
-    #|  total += __builtin_classify_type((union U){0});
+    #|  total += __builtin_classify_type(x);
+    #|  total += __builtin_classify_type(d);
+    #|  total += __builtin_classify_type(a);
+    #|  total += __builtin_classify_type(s);
+    #|  total += __builtin_classify_type(u);
     #|  if (__builtin_offsetof(struct Outer, items[2].x) != 24) return 50;
     #|  if (__builtin_offsetof(struct Outer, tail) != 28) return 60;
     #|  return total;

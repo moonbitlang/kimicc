@@ -192,3 +192,39 @@ test "mir interpreter reports unsupported memory behavior" {
     Err(err) => inspect(err.contains("memory"), content="true")
   }
 }
+
+///|
+test "mir interpreter defers unused unsupported local declarations" {
+  let source =
+    #|struct S { int x; };
+    #|union U { int x; double y; };
+    #|int main(void) {
+    #|  double d;
+    #|  int a[2];
+    #|  struct S s;
+    #|  union U u;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
+test "mir interpreter reports unsupported local reads" {
+  let source = "int main(void) { double d; return (int)d; }"
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match mir.interpret_i64("main", []) {
+    Ok(_) => abort("expected MIR interpreter unsupported-local-value error")
+    Err(err) => inspect(err.contains("local value"), content="true")
+  }
+}
+
+///|
+test "mir interpreter reports unsupported local initializers" {
+  let source = "int main(void) { double d = 0.0; return 0; }"
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match mir.interpret_i64("main", []) {
+    Ok(_) =>
+      abort("expected MIR interpreter unsupported-local-initializer error")
+    Err(err) => inspect(err.contains("local initializer"), content="true")
+  }
+}

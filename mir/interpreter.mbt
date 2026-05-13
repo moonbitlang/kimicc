@@ -156,6 +156,9 @@ fn Interpreter::read_var(
 ) -> Int64 {
   if frame.locals.contains(name) {
     frame.locals[name]
+  } else if frame.local_types.contains(name) {
+    self.fail("unsupported MIR interpreter local value: " + name)
+    0L
   } else if self.globals.contains(name) {
     self.globals[name]
   } else {
@@ -853,7 +856,10 @@ fn Interpreter::declare_local(
   init : @parser.Expr?,
 ) -> Unit {
   if !self.program.runtime_int_type(ty) {
-    self.fail("unsupported MIR interpreter local type: " + name)
+    frame.local_types[name] = ty
+    if init is Some(_) {
+      self.fail("unsupported MIR interpreter local initializer: " + name)
+    }
     return
   }
   let value = match init {
