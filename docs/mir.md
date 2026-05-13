@@ -14,7 +14,7 @@ that both assembly backends walk.
   compile-test oracles. It supports scalar functions, locals, globals, calls,
   casts, arithmetic, conditionals, loops, scalar switches, simple gotos, selected
   scalar builtin calls including direct-lvalue integer overflow helpers for
-  32-bit-and-smaller result types, and scalar `*&` / `&*` cancellation that does
+  non-128-bit result types, and scalar `*&` / `&*` cancellation that does
   not require modeling general memory. It also models narrow string-literal facts
   that are useful in compile tests: literal pointer non-nullness, literal byte access,
   `sizeof`/`__alignof__` on string literals, literal `__builtin_strlen`, and

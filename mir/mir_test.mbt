@@ -185,6 +185,8 @@ test "mir interpreter evaluates integer overflow builtins" {
     #|int main(void) {
     #|  int i = 0;
     #|  unsigned u = 0;
+    #|  long long l = 0;
+    #|  unsigned long long ul = 0;
     #|  int total = 0;
     #|  total += __builtin_add_overflow(1, 2, &i);
     #|  if (i != 3) return 10;
@@ -193,9 +195,19 @@ test "mir interpreter evaluates integer overflow builtins" {
     #|  total += __builtin_sub_overflow(0u, 1u, &u);
     #|  if (u != 4294967295u) return 30;
     #|  total += __builtin_mul_overflow(50000, 50000, &i);
+    #|  total += __builtin_add_overflow(l, 1LL, &l);
+    #|  if (l != 1LL) return 40;
+    #|  total += __builtin_ssubll_overflow(-9223372036854775807LL - 1LL, 1LL, &l);
+    #|  if (l != 9223372036854775807LL) return 50;
+    #|  total += __builtin_uaddll_overflow(0xffffffffffffffffULL, 1ULL, &ul);
+    #|  if (ul != 0ULL) return 60;
+    #|  total += __builtin_smulll_overflow(3037000500LL, 3037000500LL, &l);
+    #|  if (l != -9223372036709301616LL) return 70;
+    #|  total += __builtin_umulll_overflow(0xffffffffffffffffULL, 2ULL, &ul);
+    #|  if (ul != 0xfffffffffffffffeULL) return 80;
     #|  return total;
     #|}
-  expect_interp(source, 3L)
+  expect_interp(source, 7L)
 }
 
 ///|

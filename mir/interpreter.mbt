@@ -439,18 +439,88 @@ fn overflow_builtin_op(name : String) -> String? {
 }
 
 ///|
-fn Program::small_int_range(
+fn unsigned_overflow_arithmetic(
+  op : String,
+  left : Int64,
+  right : Int64,
+  width : Int,
+) -> (Int64, Bool) {
+  let x = left.reinterpret_as_uint64()
+  let y = right.reinterpret_as_uint64()
+  let result = match op {
+    "+" => x + y
+    "-" => x - y
+    "*" => x * y
+    _ => 0UL
+  }
+  let overflow = if width >= 64 {
+    match op {
+      "+" => result < x
+      "-" => x < y
+      "*" => x != 0UL && y > 18446744073709551615UL / x
+      _ => false
+    }
+  } else {
+    result > (1UL << width) - 1UL
+  }
+  (result.reinterpret_as_int64(), overflow)
+}
+
+///|
+fn signed_overflow_arithmetic(
+  op : String,
+  left : Int64,
+  right : Int64,
+  width : Int,
+) -> (Int64, Bool) {
+  let result = match op {
+    "+" => left + right
+    "-" => left - right
+    "*" => left * right
+    _ => 0L
+  }
+  let overflow = if width >= 64 {
+    let min_value = -9223372036854775807L - 1L
+    match op {
+      "+" => ((left ^ result) & (right ^ result)) < 0L
+      "-" => ((left ^ right) & (left ^ result)) < 0L
+      "*" =>
+        if left == 0L || right == 0L {
+          false
+        } else if (left == min_value && right == -1L) ||
+          (right == min_value && left == -1L) {
+          true
+        } else {
+          result / right != left
+        }
+      _ => false
+    }
+  } else {
+    let min_value = -(1L << (width - 1))
+    let max_value = (1L << (width - 1)) - 1L
+    result < min_value || result > max_value
+  }
+  (result, overflow)
+}
+
+///|
+fn Program::overflow_arithmetic_result(
   self : Program,
   ty : @parser.Type,
-) -> (Int64, Int64)? {
+  op : String,
+  left : Int64,
+  right : Int64,
+) -> (Int64, Bool)? {
   let core = self.core_type(ty)
   match const_type_int_width(core) {
-    Some(width) if width <= 32 =>
-      if const_type_is_unsigned(core) {
-        Some((0L, (1L << width) - 1L))
-      } else {
-        Some((-(1L << (width - 1)), (1L << (width - 1)) - 1L))
-      }
+    Some(width) if width <= 64 =>
+      Some(
+        if const_type_is_unsigned(core) {
+          unsigned_overflow_arithmetic(op, left, right, width)
+        } else {
+          signed_overflow_arithmetic(op, left, right, width)
+        },
+      )
     _ => None
   }
 }
@@ -480,17 +550,16 @@ fn Interpreter::eval_overflow_builtin(
       return 0L
     }
   }
-  let left = self.eval_expr(frame, args[0])
-  let right = self.eval_expr(frame, args[1])
-  let result = match op {
-    "+" => left + right
-    "-" => left - right
-    "*" => left * right
-    _ => 0L
-  }
-  match self.program.small_int_range(result_ty) {
-    Some((min_value, max_value)) => {
-      let overflow = result < min_value || result > max_value
+  let left = self.program.runtime_cast_int(
+    self.eval_expr(frame, args[0]),
+    result_ty,
+  )
+  let right = self.program.runtime_cast_int(
+    self.eval_expr(frame, args[1]),
+    result_ty,
+  )
+  match self.program.overflow_arithmetic_result(result_ty, op, left, right) {
+    Some((result, overflow)) => {
       ignore(self.write_lvalue(frame, result_lvalue, result))
       if overflow {
         1L
