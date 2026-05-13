@@ -751,6 +751,22 @@ test "mir interpreter models length-modified checked printf lengths" {
 }
 
 ///|
+test "mir interpreter models width checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(32);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"n=%05d", n += 7) != 7) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 32, (const char *)"%-4s%%", (const char *)"hi") != 5) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"c=%3c", 'A') != 5) return 3;
+    #|  if (__builtin___printf_chk(1, (const char *)"x=%4x", 0xabc) != 6) return 4;
+    #|  if (n != 7) return 5;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter models char checked printf lengths" {
   let source =
     #|int main(void) {

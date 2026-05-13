@@ -787,6 +787,21 @@ fn Interpreter::literal_printf_format_length(
             index += 2
           } else {
             let mut conversion_index = index + 1
+            while conversion_index < format.length() &&
+                  (
+                    format[conversion_index].to_int() == 45 ||
+                    format[conversion_index].to_int() == 48
+                  ) {
+              conversion_index += 1
+            }
+            let mut width = 0L
+            while conversion_index < format.length() &&
+                  format[conversion_index].to_int() >= 48 &&
+                  format[conversion_index].to_int() <= 57 {
+              width = width * 10L +
+                (format[conversion_index].to_int() - 48).to_int64()
+              conversion_index += 1
+            }
             let mut modified = false
             if conversion_index < format.length() {
               if format[conversion_index].to_int() == 108 {
@@ -826,11 +841,12 @@ fn Interpreter::literal_printf_format_length(
                 self.fail("unsupported MIR interpreter " + name + " argument")
                 return None
               }
+              let mut conversion_length = 0L
               if format[conversion_index].to_int() == 99 {
-                length += 1L
+                conversion_length = 1L
               } else if format[conversion_index].to_int() == 115 {
                 match literal_string_arg(args[value_index]) {
-                  Some(value) => length += value.length().to_int64()
+                  Some(value) => conversion_length = value.length().to_int64()
                   None => {
                     self.fail(
                       "unsupported MIR interpreter " + name + " string argument",
@@ -848,7 +864,7 @@ fn Interpreter::literal_printf_format_length(
                   8L
                 }
                 match nonnegative_radix_length(values[value_index], radix) {
-                  Some(radix_length) => length += radix_length
+                  Some(radix_length) => conversion_length = radix_length
                   None => {
                     self.fail(
                       "unsupported MIR interpreter " + name + " radix argument",
@@ -864,7 +880,15 @@ fn Interpreter::literal_printf_format_length(
                   )
                   return None
                 }
-                length += values[value_index].to_string().length().to_int64()
+                conversion_length = values[value_index]
+                  .to_string()
+                  .length()
+                  .to_int64()
+              }
+              if width > conversion_length {
+                length += width
+              } else {
+                length += conversion_length
               }
               value_index += 1
               index = conversion_index + 1
