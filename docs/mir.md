@@ -42,6 +42,8 @@ that both assembly backends walk.
   string-literal source, where the destination contents are not inspected.
   Runtime `__builtin___snprintf_chk` is modeled only for zero output size and a
   literal format string with no conversions.
+  Runtime `__builtin___sprintf_chk` is modeled only for a literal format string
+  with no conversions; output contents are not modeled.
   Runtime `__builtin_bzero` evaluates its arguments but does not model memory
   contents.
   Frame/return-address builtins are modeled only for nullness: depth 0 returns a

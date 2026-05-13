@@ -825,6 +825,19 @@ async test "e2e MIR oracle checks zero-size checked snprintf literal length" {
 }
 
 ///|
+async test "e2e MIR oracle checks checked sprintf literal length" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(16);
+    #|  if (__builtin___sprintf_chk(((n += 1), dst), 0, 16, (const char *)"ready") != 5) return 1;
+    #|  if (n != 1) return 2;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks bzero argument evaluation" {
   let source =
     #|int main(void) {
