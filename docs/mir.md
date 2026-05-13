@@ -13,9 +13,13 @@ that both assembly backends walk.
 - `Program::interpret_i64` is an integer-only interpreter intended for
   compile-test oracles. It supports scalar functions, locals, globals, calls,
   casts, arithmetic, conditionals, loops, scalar switches, simple gotos, and
-  selected scalar builtin calls. It deliberately returns `Err` for memory,
-  aggregates, indirect calls, floating point, computed goto, varargs, and other
-  behavior that is not modeled yet.
+  selected scalar builtin calls. Frame/return-address builtins are modeled only
+  for nullness: depth 0 returns a synthetic non-null pointer, and nonzero depths
+  return null. Tests should compare those values only against null or pass them
+  through identity helpers, not inspect the synthetic address itself. The
+  interpreter deliberately returns `Err` for memory, aggregates, indirect calls,
+  floating point, computed goto, varargs, and other behavior that is not modeled
+  yet.
 - `test/e2e/mir_oracle_test.mbt` compares selected scalar compiled binaries
   against the MIR interpreter.
 - `codegen/semantic_facts_wbtest.mbt` checks that Darwin ARM64 and linux/amd64

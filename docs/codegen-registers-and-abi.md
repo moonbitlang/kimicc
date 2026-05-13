@@ -57,6 +57,10 @@ slots. Aggregate parameters are copied according to their current size class.
 
 After that entry copy, reads and writes of C locals normally go through
 `emit_load_local`, `emit_store_local`, `gen_addr`, and typed load/store helpers.
+Because `x29` points at the saved `{x29, x30}` pair, `__builtin_frame_address(0)`
+returns `x29` and `__builtin_return_address(0)` loads the saved link register
+from `[x29, #8]`; nonzero depths currently return null. Return-address
+extract/frob helpers are identity operations.
 
 ## Expression Evaluation
 
