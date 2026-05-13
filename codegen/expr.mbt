@@ -750,8 +750,10 @@ fn Codegen::call_return_type(
             "__builtin_labs" => SLong
             "__builtin_llabs" => SLongLong
             "__builtin_assume_aligned" => Pointer(Void)
-            "__builtin_extract_return_addr" | "__builtin_frob_return_addr" =>
-              Pointer(Void)
+            "__builtin_frame_address"
+            | "__builtin_return_address"
+            | "__builtin_extract_return_addr"
+            | "__builtin_frob_return_addr" => Pointer(Void)
             _ => self.func_rets.get_or_default(name, SInt)
           }
         _ => SInt
@@ -1630,6 +1632,17 @@ fn Codegen::emit_builtin_call(
         }
       } else {
         self.emit("\tmov\tx9, x29")
+      }
+      true
+    }
+    "__builtin_return_address" => {
+      if args.length() > 0 {
+        match args[0] {
+          Number(0L) => self.emit("\tldr\tx9, [x29, #8]")
+          _ => self.emit("\tmov\tx9, #0")
+        }
+      } else {
+        self.emit("\tldr\tx9, [x29, #8]")
       }
       true
     }

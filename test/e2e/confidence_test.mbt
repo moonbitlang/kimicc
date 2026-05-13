@@ -2274,8 +2274,13 @@ async test "e2e builtin frame address bzero and darwin fd helpers lower" {
     #|
     #|int main(void) {
     #|  struct fd_set fds;
+    #|  void *ra = __builtin_return_address(0);
     #|  if (__builtin_frame_address(0) == 0) return 1;
     #|  if (__builtin_frame_address(1) != 0) return 2;
+    #|  if (ra == 0) return 6;
+    #|  if (__builtin_return_address(1) != 0) return 7;
+    #|  if (__builtin_extract_return_addr(ra) != ra) return 8;
+    #|  if (__builtin_frob_return_addr(ra) != ra) return 9;
     #|  __builtin_bzero(&fds, sizeof(fds));
     #|  __darwin_fd_set(9, &fds);
     #|  if (!__darwin_fd_isset(9, &fds)) return 3;

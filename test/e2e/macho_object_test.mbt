@@ -708,6 +708,23 @@ async test "direct macho object supports negative offset loads" {
 }
 
 ///|
+async test "direct macho object supports return address builtin" {
+  let source =
+    #|int main(void) {
+    #|  void *ra = __builtin_return_address(0);
+    #|  if (ra == 0) return 1;
+    #|  if (__builtin_return_address(1) != 0) return 2;
+    #|  if (__builtin_extract_return_addr(ra) != ra) return 3;
+    #|  if (__builtin_frob_return_addr(ra) != ra) return 4;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_direct_object_async(
+    source, "macho_return_address_builtin",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object supports zero-argument internal call" {
   let source = "int answer(void) { return 42; } int main(void) { return answer(); }"
   let exit_code = run_source_direct_object_async(source, "macho_internal_call0")

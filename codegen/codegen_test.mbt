@@ -158,6 +158,30 @@ test "generate darwin arm64 global bit-field initializers" {
 }
 
 ///|
+test "generate darwin arm64 lowers return address builtin" {
+  let source =
+    #|int main(void) {
+    #|  void *fa = __builtin_frame_address(0);
+    #|  void *ra = __builtin_return_address(0);
+    #|  if (fa == 0) return 1;
+    #|  if (ra == 0) return 2;
+    #|  if (__builtin_return_address(1) != 0) return 3;
+    #|  if (__builtin_extract_return_addr(ra) != ra) return 4;
+    #|  if (__builtin_frob_return_addr(ra) != ra) return 5;
+    #|  return 0;
+    #|}
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(assembly.contains("\tmov\tx9, x29"), content="true")
+  inspect(assembly.contains("\tldr\tx9, [x29, #8]"), content="true")
+  inspect(assembly.contains("__builtin_return_address"), content="false")
+  inspect(assembly.contains("__builtin_frame_address"), content="false")
+  inspect(assembly.contains("__builtin_extract_return_addr"), content="false")
+  inspect(assembly.contains("__builtin_frob_return_addr"), content="false")
+}
+
+///|
 test "generate linux amd64 simple function" {
   let source = "int main() { return 42; }"
   let prog = @parser.parse(source)
