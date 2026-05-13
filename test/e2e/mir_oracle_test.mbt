@@ -160,6 +160,8 @@ async test "e2e MIR oracle checks scalar rotate builtins" {
     #|  if ((__builtin_rotateright32(0x12345678u, 8) & 255) != 0x56) return 2;
     #|  if ((__builtin_rotateleft64(0x0123456789abcdefull, 16) & 255) != 0x23) return 3;
     #|  if ((__builtin_rotateright64(0x0123456789abcdefull, 16) & 255) != 0xab) return 4;
+    #|  if (__builtin_rotateleft(0x12345678u, 8) != 0x34567812u) return 5;
+    #|  if ((__builtin_rotateright(0x0123456789abcdefull, 16) & 255) != 0xab) return 6;
     #|  return 0;
     #|}
   run_source_against_mir_oracle(source)

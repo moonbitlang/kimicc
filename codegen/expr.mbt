@@ -1360,6 +1360,26 @@ fn Codegen::emit_builtin_rotate(
 }
 
 ///|
+fn Codegen::generic_builtin_bit_width(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Int {
+  if args.length() == 0 {
+    return 32
+  }
+  let width = self.type_size(
+      peel_aligned_type(self.type_of(args[0], frame_size)),
+    ) *
+    8
+  if width <= 32 {
+    32
+  } else {
+    64
+  }
+}
+
+///|
 fn Codegen::emit_builtin_ffs(
   self : Codegen,
   args : Array[@parser.Expr],
@@ -1577,6 +1597,24 @@ fn Codegen::emit_builtin_call(
     }
     "__builtin_bswap64" => {
       self.emit_builtin_bswap(args, frame_size, 64)
+      true
+    }
+    "__builtin_rotateleft" => {
+      self.emit_builtin_rotate(
+        args,
+        frame_size,
+        self.generic_builtin_bit_width(args, frame_size),
+        true,
+      )
+      true
+    }
+    "__builtin_rotateright" => {
+      self.emit_builtin_rotate(
+        args,
+        frame_size,
+        self.generic_builtin_bit_width(args, frame_size),
+        false,
+      )
       true
     }
     "__builtin_rotateleft32" => {

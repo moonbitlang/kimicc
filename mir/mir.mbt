@@ -806,6 +806,12 @@ fn Program::builtin_return_type(
       } else {
         Some(UInt)
       }
+    "__builtin_rotateleft" | "__builtin_rotateright" =>
+      if args.length() > 0 {
+        Some(self.expr_type(args[0], scope))
+      } else {
+        Some(UInt)
+      }
     "__builtin_expect"
     | "__builtin_expect_with_probability"
     | "__builtin_unpredictable" =>

@@ -441,6 +441,24 @@ fn Program::generic_builtin_bswap_width(
 }
 
 ///|
+fn Program::generic_builtin_bit_width(
+  self : Program,
+  frame : InterpFrame,
+  args : Array[@parser.Expr],
+) -> Int {
+  if args.length() == 0 {
+    return 32
+  }
+  let ty = self.core_type(self.expr_type(args[0], frame.scope()))
+  let width = const_type_int_width(ty).unwrap_or(64)
+  if width <= 32 {
+    32
+  } else {
+    64
+  }
+}
+
+///|
 fn normalized_bit_shift(shift : Int64, width : Int) -> Int {
   let mut amount = (shift % width.to_int64()).to_int()
   if amount < 0 {
@@ -553,6 +571,19 @@ fn Interpreter::eval_builtin_call(
       Some(
         count_one_bits(self.eval_first_call_arg_or_zero(frame, args), 64) & 1L,
       )
+    "__builtin_rotateleft" | "__builtin_rotateright" =>
+      if args.length() >= 2 {
+        Some(
+          rotate_bits(
+            self.eval_expr(frame, args[0]),
+            self.eval_expr(frame, args[1]),
+            self.program.generic_builtin_bit_width(frame, args),
+            name == "__builtin_rotateleft",
+          ),
+        )
+      } else {
+        Some(0L)
+      }
     "__builtin_rotateleft32" | "__builtin_rotateright32" =>
       if args.length() >= 2 {
         Some(

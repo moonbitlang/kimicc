@@ -436,6 +436,8 @@ async test "direct macho object supports bit count and byte swap builtins" {
     #|  if (__builtin_rotateright32(0x12345678u, 8) != 0x78123456u) return 8;
     #|  if (__builtin_rotateleft64(0x0123456789abcdefull, 16) != 0x456789abcdef0123ull) return 9;
     #|  if (__builtin_rotateright64(0x0123456789abcdefull, 16) != 0xcdef0123456789abull) return 10;
+    #|  if (__builtin_rotateleft(0x12345678u, 8) != 0x34567812u) return 11;
+    #|  if ((__builtin_rotateright(0x0123456789abcdefull, 16) & 255) != 0xab) return 12;
     #|  __builtin_prefetch((void*)0, 0, 3);
     #|  return 42;
     #|}
