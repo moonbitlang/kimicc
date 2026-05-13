@@ -87,3 +87,25 @@ async test "e2e MIR oracle checks scalar goto" {
     #|}
   run_source_against_mir_oracle(source)
 }
+
+///|
+async test "e2e MIR oracle checks scalar builtin calls" {
+  let source =
+    #|int value(void) {
+    #|  return 9;
+    #|}
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int y = 0;
+    #|  int total = 0;
+    #|  total += __builtin_expect(x, 1 / y);
+    #|  total += __builtin_constant_p(1 / y);
+    #|  total += __builtin_flt_rounds();
+    #|  if (__builtin_object_size(0, 0) + 1 != 0) return 50;
+    #|  if (__builtin_dynamic_object_size(0, 0) + 1 != 0) return 60;
+    #|  total += __builtin_assume(1);
+    #|  total += __builtin_prefetch(0, 0, 0);
+    #|  return total + value();
+    #|}
+  run_source_against_mir_oracle(source)
+}

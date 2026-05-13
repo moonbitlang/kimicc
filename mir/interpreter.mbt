@@ -332,6 +332,49 @@ fn Interpreter::eval_binary_values(
 }
 
 ///|
+fn Interpreter::eval_call_args(
+  self : Interpreter,
+  frame : InterpFrame,
+  args : Array[@parser.Expr],
+) -> Array[Int64] {
+  let values : Array[Int64] = []
+  for arg in args {
+    values.push(self.eval_expr(frame, arg))
+  }
+  values
+}
+
+///|
+fn Interpreter::eval_first_call_arg_or_zero(
+  self : Interpreter,
+  frame : InterpFrame,
+  args : Array[@parser.Expr],
+) -> Int64 {
+  if args.length() > 0 {
+    self.eval_expr(frame, args[0])
+  } else {
+    0L
+  }
+}
+
+///|
+fn Interpreter::eval_builtin_call(
+  self : Interpreter,
+  frame : InterpFrame,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Int64? {
+  match name {
+    "__builtin_expect" => Some(self.eval_first_call_arg_or_zero(frame, args))
+    "__builtin_constant_p" => Some(0L)
+    "__builtin_flt_rounds" => Some(1L)
+    "__builtin_assume" | "__builtin_prefetch" => Some(0L)
+    "__builtin_object_size" | "__builtin_dynamic_object_size" => Some(-1L)
+    _ => None
+  }
+}
+
+///|
 fn Interpreter::eval_expr(
   self : Interpreter,
   frame : InterpFrame,
@@ -412,25 +455,18 @@ fn Interpreter::eval_expr(
       self.fail("unsupported MIR interpreter unary operator: " + op)
       0L
     }
-    Call(func, args) => {
-      let values : Array[Int64] = []
-      for arg in args {
-        values.push(self.eval_expr(frame, arg))
-      }
+    Call(func, args) =>
       match func {
-        Var("__builtin_expect") =>
-          if values.length() > 0 {
-            values[0]
-          } else {
-            0L
+        Var(name) =>
+          match self.eval_builtin_call(frame, name, args) {
+            Some(value) => value
+            None => self.call_func(name, self.eval_call_args(frame, args))
           }
-        Var(name) => self.call_func(name, values)
         _ => {
           self.fail("unsupported MIR interpreter indirect call")
           0L
         }
       }
-    }
     Assign(lhs, rhs) => {
       let value = self.eval_expr(frame, rhs)
       self.write_lvalue(frame, lhs, value)
