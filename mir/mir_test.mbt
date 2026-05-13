@@ -720,6 +720,21 @@ test "mir interpreter models checked printf literal length" {
 }
 
 ///|
+test "mir interpreter models decimal checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(16);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"n=%d", n += 7) != 3) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 16, (const char *)"neg=%i%%", -12) != 8) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"sum=%d", n) != 5) return 3;
+    #|  if (n != 7) return 4;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter evaluates bzero arguments" {
   let source =
     #|int main(void) {

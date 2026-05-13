@@ -862,6 +862,21 @@ async test "e2e MIR oracle checks checked printf literal length" {
 }
 
 ///|
+async test "e2e MIR oracle checks decimal checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(16);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"n=%d", n += 7) != 3) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 16, (const char *)"neg=%i%%", -12) != 8) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"sum=%d", n) != 5) return 3;
+    #|  if (n != 7) return 4;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks bzero argument evaluation" {
   let source =
     #|int main(void) {

@@ -756,15 +756,30 @@ fn Interpreter::literal_printf_format_length(
   self : Interpreter,
   expr : @parser.Expr,
   name : String,
+  values : Array[Int64],
+  first_value_index : Int,
 ) -> Int64? {
   match literal_string_arg(expr) {
     Some(format) => {
       let mut index = 0
       let mut length = 0L
+      let mut value_index = first_value_index
       while index < format.length() {
         if format[index].to_int() == 37 {
           if index + 1 < format.length() && format[index + 1].to_int() == 37 {
             length += 1L
+            index += 2
+          } else if index + 1 < format.length() &&
+            (
+              format[index + 1].to_int() == 100 ||
+              format[index + 1].to_int() == 105
+            ) {
+            if value_index >= values.length() {
+              self.fail("unsupported MIR interpreter " + name + " argument")
+              return None
+            }
+            length += values[value_index].to_string().length().to_int64()
+            value_index += 1
             index += 2
           } else {
             self.fail("unsupported MIR interpreter " + name + " format")
@@ -938,29 +953,30 @@ fn Interpreter::eval_builtin_call(
         self.fail("unsupported MIR interpreter snprintf buffer size")
         Some(0L)
       } else {
-        match self.literal_printf_format_length(args[4], "snprintf") {
+        match
+          self.literal_printf_format_length(args[4], "snprintf", values, 5) {
           Some(value) => Some(value)
           None => Some(0L)
         }
       }
     }
     "__builtin___sprintf_chk" => {
-      ignore(self.eval_call_args(frame, args))
+      let values = self.eval_call_args(frame, args)
       if args.length() < 4 {
         Some(0L)
       } else {
-        match self.literal_printf_format_length(args[3], "sprintf") {
+        match self.literal_printf_format_length(args[3], "sprintf", values, 4) {
           Some(value) => Some(value)
           None => Some(0L)
         }
       }
     }
     "__builtin___printf_chk" => {
-      ignore(self.eval_call_args(frame, args))
+      let values = self.eval_call_args(frame, args)
       if args.length() < 2 {
         Some(0L)
       } else {
-        match self.literal_printf_format_length(args[1], "printf") {
+        match self.literal_printf_format_length(args[1], "printf", values, 2) {
           Some(value) => Some(value)
           None => Some(0L)
         }
