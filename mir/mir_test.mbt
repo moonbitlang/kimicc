@@ -23,6 +23,18 @@ fn expect_const(
 }
 
 ///|
+fn expect_interp(source : String, expected : Int64) -> Unit {
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match mir.interpret_i64("main", []) {
+    Ok(value) =>
+      if value != expected {
+        abort("unexpected MIR interpreter result")
+      }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "mir records target-specific scalar layout" {
   let source = "int main(void) { return 0; }"
   let darwin = @mir.lower(@parser.parse(source), @target.Target::default())
@@ -113,4 +125,70 @@ test "mir folds constants with target layout" {
     scope,
     1L,
   )
+}
+
+///|
+test "mir interpreter executes scalar calls and locals" {
+  let source =
+    #|int helper(int x) { return x * 2; }
+    #|int main(void) {
+    #|  int a = 20;
+    #|  return helper(a) + 2;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
+test "mir interpreter executes integer control flow and globals" {
+  let source =
+    #|int g = 1;
+    #|int bump(int n) {
+    #|  g += n;
+    #|  return g;
+    #|}
+    #|int main(void) {
+    #|  int sum = 0;
+    #|  for (int i = 0; i < 8; i++) {
+    #|    if (i == 2) continue;
+    #|    if (i == 6) break;
+    #|    sum += i;
+    #|  }
+    #|  while (sum < 20) {
+    #|    sum++;
+    #|  }
+    #|  return bump(sum) + (sum == 20 ? 21 : 0);
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
+test "mir interpreter applies target layout and integer casts" {
+  let source =
+    #|int main(void) {
+    #|  unsigned char x = 255 + 1;
+    #|  return sizeof(long double) + x;
+    #|}
+  let darwin = @mir.lower(@parser.parse(source), @target.Target::default())
+  let linux = @mir.lower(
+    @parser.parse_for_target(source, linux_target()),
+    linux_target(),
+  )
+  match darwin.interpret_i64("main", []) {
+    Ok(value) => inspect(value, content="8")
+    Err(err) => abort(err)
+  }
+  match linux.interpret_i64("main", []) {
+    Ok(value) => inspect(value, content="16")
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "mir interpreter reports unsupported memory behavior" {
+  let source = "int main(void) { int x = 1; return *&x; }"
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match mir.interpret_i64("main", []) {
+    Ok(_) => abort("expected MIR interpreter unsupported-memory error")
+    Err(err) => inspect(err.contains("memory"), content="true")
+  }
 }
