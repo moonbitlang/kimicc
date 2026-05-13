@@ -243,6 +243,46 @@ async test "e2e MIR oracle checks alloca return size" {
 }
 
 ///|
+async test "e2e MIR oracle checks fortified builtin return sizes" {
+  let source =
+    #|_Static_assert(sizeof(__builtin___memcpy_chk(0, 0, 0, 0)) == sizeof(void *), "memcpy chk");
+    #|_Static_assert(sizeof(__builtin___memset_chk(0, 0, 0, 0)) == sizeof(void *), "memset chk");
+    #|_Static_assert(sizeof(__builtin___memmove_chk(0, 0, 0, 0)) == sizeof(void *), "memmove chk");
+    #|_Static_assert(sizeof(__builtin___strcpy_chk(0, 0, 0)) == sizeof(char *), "strcpy chk");
+    #|_Static_assert(sizeof(__builtin___strcat_chk(0, 0, 0)) == sizeof(char *), "strcat chk");
+    #|_Static_assert(sizeof(__builtin___strncpy_chk(0, 0, 0, 0)) == sizeof(char *), "strncpy chk");
+    #|_Static_assert(sizeof(__builtin___strncat_chk(0, 0, 0, 0)) == sizeof(char *), "strncat chk");
+    #|_Static_assert(sizeof(__builtin___strlcpy_chk(0, 0, 0, 0)) == sizeof(unsigned long), "strlcpy chk");
+    #|_Static_assert(sizeof(__builtin___strlcat_chk(0, 0, 0, 0)) == sizeof(unsigned long), "strlcat chk");
+    #|_Static_assert(sizeof(__builtin___snprintf_chk(0, 0, 0, 0, 0)) == sizeof(int), "snprintf chk");
+    #|_Static_assert(sizeof(__builtin___vsnprintf_chk(0, 0, 0, 0, 0, 0)) == sizeof(int), "vsnprintf chk");
+    #|_Static_assert(sizeof(__builtin___sprintf_chk(0, 0, 0, 0)) == sizeof(int), "sprintf chk");
+    #|_Static_assert(sizeof(__builtin___vsprintf_chk(0, 0, 0, 0, 0)) == sizeof(int), "vsprintf chk");
+    #|_Static_assert(sizeof(__builtin___printf_chk(0, 0)) == sizeof(int), "printf chk");
+    #|_Static_assert(sizeof(__builtin___fprintf_chk(0, 0, 0)) == sizeof(int), "fprintf chk");
+    #|_Static_assert(sizeof(__builtin___vfprintf_chk(0, 0, 0, 0)) == sizeof(int), "vfprintf chk");
+    #|int main(void) {
+    #|  return sizeof(__builtin___memcpy_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___memset_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___memmove_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___strcpy_chk(0, 0, 0)) +
+    #|    sizeof(__builtin___strcat_chk(0, 0, 0)) +
+    #|    sizeof(__builtin___strncpy_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___strncat_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___strlcpy_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___strlcat_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___snprintf_chk(0, 0, 0, 0, 0)) +
+    #|    sizeof(__builtin___vsnprintf_chk(0, 0, 0, 0, 0, 0)) +
+    #|    sizeof(__builtin___sprintf_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___vsprintf_chk(0, 0, 0, 0, 0)) +
+    #|    sizeof(__builtin___printf_chk(0, 0)) +
+    #|    sizeof(__builtin___fprintf_chk(0, 0, 0)) +
+    #|    sizeof(__builtin___vfprintf_chk(0, 0, 0, 0));
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks literal string comparison builtins" {
   let source =
     #|int main(void) {

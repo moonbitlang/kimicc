@@ -758,16 +758,31 @@ fn Codegen::call_return_type(
             "__builtin_assume_aligned" => Pointer(Void)
             "__builtin_alloca" => Pointer(Void)
             "__builtin_memcpy"
+            | "__builtin___memcpy_chk"
             | "__builtin_memmove"
+            | "__builtin___memmove_chk"
             | "__builtin_memset"
+            | "__builtin___memset_chk"
             | "__builtin_memchr" => Pointer(Void)
             "__builtin_strlen" => ULong
             "__builtin_memcmp" | "__builtin_strcmp" | "__builtin_strncmp" =>
               SInt
             "__builtin_strcpy"
+            | "__builtin___strcpy_chk"
+            | "__builtin___strcat_chk"
+            | "__builtin___strncpy_chk"
+            | "__builtin___strncat_chk"
             | "__builtin_strchr"
             | "__builtin_strrchr"
             | "__builtin_strstr" => Pointer(SChar)
+            "__builtin___strlcpy_chk" | "__builtin___strlcat_chk" => ULong
+            "__builtin___snprintf_chk"
+            | "__builtin___vsnprintf_chk"
+            | "__builtin___sprintf_chk"
+            | "__builtin___vsprintf_chk"
+            | "__builtin___printf_chk"
+            | "__builtin___fprintf_chk"
+            | "__builtin___vfprintf_chk" => SInt
             "__builtin_frame_address"
             | "__builtin_return_address"
             | "__builtin_extract_return_addr"

@@ -269,6 +269,30 @@ test "mir interpreter models alloca return size" {
 }
 
 ///|
+test "mir interpreter models fortified builtin return sizes" {
+  let source =
+    #|int main(void) {
+    #|  return sizeof(__builtin___memcpy_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___memset_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___memmove_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___strcpy_chk(0, 0, 0)) +
+    #|    sizeof(__builtin___strcat_chk(0, 0, 0)) +
+    #|    sizeof(__builtin___strncpy_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___strncat_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___strlcpy_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___strlcat_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___snprintf_chk(0, 0, 0, 0, 0)) +
+    #|    sizeof(__builtin___vsnprintf_chk(0, 0, 0, 0, 0, 0)) +
+    #|    sizeof(__builtin___sprintf_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___vsprintf_chk(0, 0, 0, 0, 0)) +
+    #|    sizeof(__builtin___printf_chk(0, 0)) +
+    #|    sizeof(__builtin___fprintf_chk(0, 0, 0)) +
+    #|    sizeof(__builtin___vfprintf_chk(0, 0, 0, 0));
+    #|}
+  expect_interp(source, 100L)
+}
+
+///|
 test "mir interpreter models literal string comparison builtins" {
   let source =
     #|int main(void) {
