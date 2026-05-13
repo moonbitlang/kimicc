@@ -925,6 +925,22 @@ async test "e2e MIR oracle checks signed flag checked printf lengths" {
 }
 
 ///|
+async test "e2e MIR oracle checks alternate checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  unsigned int n = 0;
+    #|  char *dst = __builtin_alloca(32);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"o=%#o", n += 8) != 5) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 32, (const char *)"%#x%%", 0x2au) != 5) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"X=%#X", 0xABu) != 6) return 3;
+    #|  if (__builtin___printf_chk(1, (const char *)"z=%#x", 0u) != 3) return 4;
+    #|  if (n != 8) return 5;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks char checked printf lengths" {
   let source =
     #|int main(void) {

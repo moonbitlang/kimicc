@@ -789,9 +789,13 @@ fn Interpreter::literal_printf_format_length(
             let mut conversion_index = index + 1
             let mut plus_flag = false
             let mut space_flag = false
+            let mut alternate_flag = false
             while conversion_index < format.length() {
               let flag = format[conversion_index].to_int()
               if flag == 45 || flag == 48 {
+                conversion_index += 1
+              } else if flag == 35 {
+                alternate_flag = true
                 conversion_index += 1
               } else if flag == 43 {
                 plus_flag = true
@@ -852,6 +856,13 @@ fn Interpreter::literal_printf_format_length(
                 self.fail("unsupported MIR interpreter " + name + " format")
                 return None
               }
+              if alternate_flag &&
+                format[conversion_index].to_int() != 111 &&
+                format[conversion_index].to_int() != 88 &&
+                format[conversion_index].to_int() != 120 {
+                self.fail("unsupported MIR interpreter " + name + " format")
+                return None
+              }
               if value_index >= values.length() {
                 self.fail("unsupported MIR interpreter " + name + " argument")
                 return None
@@ -878,8 +889,18 @@ fn Interpreter::literal_printf_format_length(
                 } else {
                   8L
                 }
-                match nonnegative_radix_length(values[value_index], radix) {
-                  Some(radix_length) => conversion_length = radix_length
+                let value = values[value_index]
+                match nonnegative_radix_length(value, radix) {
+                  Some(radix_length) => {
+                    conversion_length = radix_length
+                    if alternate_flag && value != 0L {
+                      if format[conversion_index].to_int() == 111 {
+                        conversion_length += 1L
+                      } else {
+                        conversion_length += 2L
+                      }
+                    }
+                  }
                   None => {
                     self.fail(
                       "unsupported MIR interpreter " + name + " radix argument",
