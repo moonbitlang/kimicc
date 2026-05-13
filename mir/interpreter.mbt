@@ -786,6 +786,7 @@ fn Interpreter::literal_printf_format_length(
             index += 2
           } else if index + 1 < format.length() &&
             (
+              format[index + 1].to_int() == 88 ||
               format[index + 1].to_int() == 100 ||
               format[index + 1].to_int() == 105 ||
               format[index + 1].to_int() == 111 ||
@@ -797,8 +798,10 @@ fn Interpreter::literal_printf_format_length(
               return None
             }
             if format[index + 1].to_int() == 111 ||
+              format[index + 1].to_int() == 88 ||
               format[index + 1].to_int() == 120 {
-              let radix = if format[index + 1].to_int() == 120 {
+              let radix = if format[index + 1].to_int() == 88 ||
+                format[index + 1].to_int() == 120 {
                 16L
               } else {
                 8L

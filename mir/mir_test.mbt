@@ -765,6 +765,21 @@ test "mir interpreter models hex checked printf lengths" {
 }
 
 ///|
+test "mir interpreter models uppercase hex checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  unsigned int n = 0;
+    #|  char *dst = __builtin_alloca(16);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"X=%X", n += 0xABCD) != 6) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 16, (const char *)"%X%%", 0x10u) != 3) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"z=%X", 0u) != 3) return 3;
+    #|  if (n != 0xABCD) return 4;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter models octal checked printf lengths" {
   let source =
     #|int main(void) {

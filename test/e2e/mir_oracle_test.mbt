@@ -907,6 +907,21 @@ async test "e2e MIR oracle checks hex checked printf lengths" {
 }
 
 ///|
+async test "e2e MIR oracle checks uppercase hex checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  unsigned int n = 0;
+    #|  char *dst = __builtin_alloca(16);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"X=%X", n += 0xABCD) != 6) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 16, (const char *)"%X%%", 0x10u) != 3) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"z=%X", 0u) != 3) return 3;
+    #|  if (n != 0xABCD) return 4;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks octal checked printf lengths" {
   let source =
     #|int main(void) {
