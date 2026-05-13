@@ -491,6 +491,56 @@ async test "e2e MIR oracle checks scalar builtin return sizes" {
 }
 
 ///|
+async test "e2e MIR oracle checks overflow builtin return sizes" {
+  let source =
+    #|_Static_assert(sizeof(__builtin_add_overflow(1, 2, 0)) == sizeof(_Bool), "add overflow");
+    #|_Static_assert(sizeof(__builtin_sub_overflow(1, 2, 0)) == sizeof(_Bool), "sub overflow");
+    #|_Static_assert(sizeof(__builtin_mul_overflow(1, 2, 0)) == sizeof(_Bool), "mul overflow");
+    #|_Static_assert(sizeof(__builtin_sadd_overflow(1, 2, 0)) == sizeof(_Bool), "sadd overflow");
+    #|_Static_assert(sizeof(__builtin_saddl_overflow(1, 2, 0)) == sizeof(_Bool), "saddl overflow");
+    #|_Static_assert(sizeof(__builtin_saddll_overflow(1, 2, 0)) == sizeof(_Bool), "saddll overflow");
+    #|_Static_assert(sizeof(__builtin_uadd_overflow(1, 2, 0)) == sizeof(_Bool), "uadd overflow");
+    #|_Static_assert(sizeof(__builtin_uaddl_overflow(1, 2, 0)) == sizeof(_Bool), "uaddl overflow");
+    #|_Static_assert(sizeof(__builtin_uaddll_overflow(1, 2, 0)) == sizeof(_Bool), "uaddll overflow");
+    #|_Static_assert(sizeof(__builtin_ssub_overflow(1, 2, 0)) == sizeof(_Bool), "ssub overflow");
+    #|_Static_assert(sizeof(__builtin_ssubl_overflow(1, 2, 0)) == sizeof(_Bool), "ssubl overflow");
+    #|_Static_assert(sizeof(__builtin_ssubll_overflow(1, 2, 0)) == sizeof(_Bool), "ssubll overflow");
+    #|_Static_assert(sizeof(__builtin_usub_overflow(1, 2, 0)) == sizeof(_Bool), "usub overflow");
+    #|_Static_assert(sizeof(__builtin_usubl_overflow(1, 2, 0)) == sizeof(_Bool), "usubl overflow");
+    #|_Static_assert(sizeof(__builtin_usubll_overflow(1, 2, 0)) == sizeof(_Bool), "usubll overflow");
+    #|_Static_assert(sizeof(__builtin_smul_overflow(1, 2, 0)) == sizeof(_Bool), "smul overflow");
+    #|_Static_assert(sizeof(__builtin_smull_overflow(1, 2, 0)) == sizeof(_Bool), "smull overflow");
+    #|_Static_assert(sizeof(__builtin_smulll_overflow(1, 2, 0)) == sizeof(_Bool), "smulll overflow");
+    #|_Static_assert(sizeof(__builtin_umul_overflow(1, 2, 0)) == sizeof(_Bool), "umul overflow");
+    #|_Static_assert(sizeof(__builtin_umull_overflow(1, 2, 0)) == sizeof(_Bool), "umull overflow");
+    #|_Static_assert(sizeof(__builtin_umulll_overflow(1, 2, 0)) == sizeof(_Bool), "umulll overflow");
+    #|int main(void) {
+    #|  return sizeof(__builtin_add_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_sub_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_mul_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_sadd_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_saddl_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_saddll_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_uadd_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_uaddl_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_uaddll_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_ssub_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_ssubl_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_ssubll_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_usub_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_usubl_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_usubll_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_smul_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_smull_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_smulll_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_umul_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_umull_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_umulll_overflow(1, 2, 0));
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks void builtin return sizes" {
   let source =
     #|typedef __builtin_va_list va_list;
