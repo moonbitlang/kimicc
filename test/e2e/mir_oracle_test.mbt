@@ -377,6 +377,92 @@ async test "e2e MIR oracle checks atomic builtin return sizes" {
 }
 
 ///|
+async test "e2e MIR oracle checks scalar builtin return sizes" {
+  let source =
+    #|_Static_assert(sizeof(__builtin_clz(8)) == sizeof(int), "clz");
+    #|_Static_assert(sizeof(__builtin_clzl(8ul)) == sizeof(int), "clzl");
+    #|_Static_assert(sizeof(__builtin_clzll(8ull)) == sizeof(int), "clzll");
+    #|_Static_assert(sizeof(__builtin_ctz(40)) == sizeof(int), "ctz");
+    #|_Static_assert(sizeof(__builtin_ctzl(48ul)) == sizeof(int), "ctzl");
+    #|_Static_assert(sizeof(__builtin_ctzll(48ull)) == sizeof(int), "ctzll");
+    #|_Static_assert(sizeof(__builtin_ffs(8u)) == sizeof(int), "ffs");
+    #|_Static_assert(sizeof(__builtin_ffsl(16ul)) == sizeof(int), "ffsl");
+    #|_Static_assert(sizeof(__builtin_ffsll(32ull)) == sizeof(int), "ffsll");
+    #|_Static_assert(sizeof(__builtin_popcount(0xf0f0u)) == sizeof(int), "popcount");
+    #|_Static_assert(sizeof(__builtin_popcountl(0xf0f0ul)) == sizeof(int), "popcountl");
+    #|_Static_assert(sizeof(__builtin_popcountll(0xf0f0ull)) == sizeof(int), "popcountll");
+    #|_Static_assert(sizeof(__builtin_parity(0xf0f1u)) == sizeof(int), "parity");
+    #|_Static_assert(sizeof(__builtin_parityl(0xf0f1ul)) == sizeof(int), "parityl");
+    #|_Static_assert(sizeof(__builtin_parityll(0xf0f1ull)) == sizeof(int), "parityll");
+    #|_Static_assert(sizeof(__builtin_bswap16(0x0102)) == sizeof(unsigned short), "bswap16");
+    #|_Static_assert(sizeof(__builtin_bswap32(0x01020304u)) == sizeof(unsigned int), "bswap32");
+    #|_Static_assert(sizeof(__builtin_bswap64(0x0102030405060708ull)) == sizeof(unsigned long long), "bswap64");
+    #|_Static_assert(sizeof(__builtin_bswap((unsigned short)0x0102)) == sizeof(unsigned short), "generic bswap short");
+    #|_Static_assert(sizeof(__builtin_bswap((unsigned int)0x01020304)) == sizeof(unsigned int), "generic bswap int");
+    #|_Static_assert(sizeof(__builtin_bswap((unsigned long long)0x0102030405060708)) == sizeof(unsigned long long), "generic bswap long long");
+    #|_Static_assert(sizeof(__builtin_abs(-7)) == sizeof(int), "abs");
+    #|_Static_assert(sizeof(__builtin_labs(-123456789L)) == sizeof(long), "labs");
+    #|_Static_assert(sizeof(__builtin_llabs(-123456789LL)) == sizeof(long long), "llabs");
+    #|_Static_assert(sizeof(__builtin_is_aligned(32, 16)) == sizeof(_Bool), "is aligned");
+    #|_Static_assert(sizeof(__builtin_align_up(33, 16)) == sizeof(int), "align up int");
+    #|_Static_assert(sizeof(__builtin_align_down((long)47, 16)) == sizeof(long), "align down long");
+    #|_Static_assert(sizeof(__builtin_align_up((unsigned long long)0x1234567890, 256)) == sizeof(unsigned long long), "align up long long");
+    #|_Static_assert(sizeof(__builtin_rotateleft32(0x12345678u, 8)) == sizeof(unsigned int), "rotateleft32");
+    #|_Static_assert(sizeof(__builtin_rotateright32(0x12345678u, 8)) == sizeof(unsigned int), "rotateright32");
+    #|_Static_assert(sizeof(__builtin_rotateleft64(0x0123456789abcdefull, 16)) == sizeof(unsigned long long), "rotateleft64");
+    #|_Static_assert(sizeof(__builtin_rotateright64(0x0123456789abcdefull, 16)) == sizeof(unsigned long long), "rotateright64");
+    #|_Static_assert(sizeof(__builtin_rotateleft((unsigned int)0x12345678, 8)) == sizeof(unsigned int), "generic rotateleft");
+    #|_Static_assert(sizeof(__builtin_rotateright((unsigned long long)0x0123456789abcdef, 16)) == sizeof(unsigned long long), "generic rotateright");
+    #|_Static_assert(sizeof(__builtin_expect((long)0x1234567890, 0L)) == sizeof(long), "expect");
+    #|_Static_assert(sizeof(__builtin_expect_with_probability((long long)0x1234567890, 0LL, 0.5)) == sizeof(long long), "expect probability");
+    #|_Static_assert(sizeof(__builtin_unpredictable((unsigned long long)0x1234567890)) == sizeof(unsigned long long), "unpredictable");
+    #|_Static_assert(sizeof(__builtin_assume_aligned((char *)0, 16)) == sizeof(char *), "assume aligned");
+    #|_Static_assert(sizeof(__builtin_constant_p(1)) == sizeof(int), "constant p");
+    #|int main(void) {
+    #|  return sizeof(__builtin_clz(8)) +
+    #|    sizeof(__builtin_clzl(8ul)) +
+    #|    sizeof(__builtin_clzll(8ull)) +
+    #|    sizeof(__builtin_ctz(40)) +
+    #|    sizeof(__builtin_ctzl(48ul)) +
+    #|    sizeof(__builtin_ctzll(48ull)) +
+    #|    sizeof(__builtin_ffs(8u)) +
+    #|    sizeof(__builtin_ffsl(16ul)) +
+    #|    sizeof(__builtin_ffsll(32ull)) +
+    #|    sizeof(__builtin_popcount(0xf0f0u)) +
+    #|    sizeof(__builtin_popcountl(0xf0f0ul)) +
+    #|    sizeof(__builtin_popcountll(0xf0f0ull)) +
+    #|    sizeof(__builtin_parity(0xf0f1u)) +
+    #|    sizeof(__builtin_parityl(0xf0f1ul)) +
+    #|    sizeof(__builtin_parityll(0xf0f1ull)) +
+    #|    sizeof(__builtin_bswap16(0x0102)) +
+    #|    sizeof(__builtin_bswap32(0x01020304u)) +
+    #|    sizeof(__builtin_bswap64(0x0102030405060708ull)) +
+    #|    sizeof(__builtin_bswap((unsigned short)0x0102)) +
+    #|    sizeof(__builtin_bswap((unsigned int)0x01020304)) +
+    #|    sizeof(__builtin_bswap((unsigned long long)0x0102030405060708)) +
+    #|    sizeof(__builtin_abs(-7)) +
+    #|    sizeof(__builtin_labs(-123456789L)) +
+    #|    sizeof(__builtin_llabs(-123456789LL)) +
+    #|    sizeof(__builtin_is_aligned(32, 16)) +
+    #|    sizeof(__builtin_align_up(33, 16)) +
+    #|    sizeof(__builtin_align_down((long)47, 16)) +
+    #|    sizeof(__builtin_align_up((unsigned long long)0x1234567890, 256)) +
+    #|    sizeof(__builtin_rotateleft32(0x12345678u, 8)) +
+    #|    sizeof(__builtin_rotateright32(0x12345678u, 8)) +
+    #|    sizeof(__builtin_rotateleft64(0x0123456789abcdefull, 16)) +
+    #|    sizeof(__builtin_rotateright64(0x0123456789abcdefull, 16)) +
+    #|    sizeof(__builtin_rotateleft((unsigned int)0x12345678, 8)) +
+    #|    sizeof(__builtin_rotateright((unsigned long long)0x0123456789abcdef, 16)) +
+    #|    sizeof(__builtin_expect((long)0x1234567890, 0L)) +
+    #|    sizeof(__builtin_expect_with_probability((long long)0x1234567890, 0LL, 0.5)) +
+    #|    sizeof(__builtin_unpredictable((unsigned long long)0x1234567890)) +
+    #|    sizeof(__builtin_assume_aligned((char *)0, 16)) +
+    #|    sizeof(__builtin_constant_p(1));
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks literal string comparison builtins" {
   let source =
     #|int main(void) {

@@ -22,7 +22,8 @@ that both assembly backends walk.
   MIR and the parser also carry builtin return-type facts used by unevaluated
   expressions such as `sizeof`, including selected string/memory and
   floating-point builtins, floating classification helpers, selected atomic
-  helpers, and pointer-valued helpers such as `__builtin_alloca`.
+  helpers, scalar bit/count/rotation/alignment helpers, and pointer-valued
+  helpers such as `__builtin_alloca`.
   Frame/return-address builtins are modeled only for nullness: depth 0 returns a
   synthetic non-null pointer, and nonzero depths return null. Tests should
   compare those values only against null or pass them through identity helpers,

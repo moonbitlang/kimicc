@@ -1231,6 +1231,46 @@ fn Parser::const_builtin_return_type(
       } else {
         Some(SInt)
       }
+    "__builtin_constant_p"
+    | "__builtin_clz"
+    | "__builtin_clzl"
+    | "__builtin_clzll"
+    | "__builtin_ctz"
+    | "__builtin_ctzl"
+    | "__builtin_ctzll"
+    | "__builtin_ffs"
+    | "__builtin_ffsl"
+    | "__builtin_ffsll"
+    | "__builtin_popcount"
+    | "__builtin_popcountl"
+    | "__builtin_popcountll"
+    | "__builtin_parity"
+    | "__builtin_parityl"
+    | "__builtin_parityll"
+    | "__builtin_abs"
+    | "__builtin_flt_rounds" => Some(SInt)
+    "__builtin_labs" => Some(SLong)
+    "__builtin_llabs" => Some(SLongLong)
+    "__builtin_is_aligned" => Some(Bool)
+    "__builtin_align_up" | "__builtin_align_down" =>
+      if args.length() > 0 {
+        Some(self.const_expr_type(args[0]))
+      } else {
+        Some(ULong)
+      }
+    "__builtin_bswap16" => Some(UShort)
+    "__builtin_bswap32"
+    | "__builtin_rotateleft32"
+    | "__builtin_rotateright32" => Some(UInt)
+    "__builtin_bswap64"
+    | "__builtin_rotateleft64"
+    | "__builtin_rotateright64" => Some(ULongLong)
+    "__builtin_bswap" | "__builtin_rotateleft" | "__builtin_rotateright" =>
+      if args.length() > 0 {
+        Some(self.const_expr_type(args[0]))
+      } else {
+        Some(UInt)
+      }
     "__builtin_isgreater"
     | "__builtin_isgreaterequal"
     | "__builtin_isless"

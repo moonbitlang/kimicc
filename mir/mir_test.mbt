@@ -28,7 +28,12 @@ fn expect_interp(source : String, expected : Int64) -> Unit {
   match mir.interpret_i64("main", []) {
     Ok(value) =>
       if value != expected {
-        abort("unexpected MIR interpreter result")
+        abort(
+          "unexpected MIR interpreter result: expected " +
+          expected.to_string() +
+          ", got " +
+          value.to_string(),
+        )
       }
     Err(err) => abort(err)
   }
@@ -347,6 +352,53 @@ test "mir interpreter models atomic builtin return sizes" {
     #|    sizeof(__sync_synchronize());
     #|}
   expect_interp(source, 50L)
+}
+
+///|
+test "mir interpreter models scalar builtin return sizes" {
+  let source =
+    #|int main(void) {
+    #|  return sizeof(__builtin_clz(8)) +
+    #|    sizeof(__builtin_clzl(8ul)) +
+    #|    sizeof(__builtin_clzll(8ull)) +
+    #|    sizeof(__builtin_ctz(40)) +
+    #|    sizeof(__builtin_ctzl(48ul)) +
+    #|    sizeof(__builtin_ctzll(48ull)) +
+    #|    sizeof(__builtin_ffs(8u)) +
+    #|    sizeof(__builtin_ffsl(16ul)) +
+    #|    sizeof(__builtin_ffsll(32ull)) +
+    #|    sizeof(__builtin_popcount(0xf0f0u)) +
+    #|    sizeof(__builtin_popcountl(0xf0f0ul)) +
+    #|    sizeof(__builtin_popcountll(0xf0f0ull)) +
+    #|    sizeof(__builtin_parity(0xf0f1u)) +
+    #|    sizeof(__builtin_parityl(0xf0f1ul)) +
+    #|    sizeof(__builtin_parityll(0xf0f1ull)) +
+    #|    sizeof(__builtin_bswap16(0x0102)) +
+    #|    sizeof(__builtin_bswap32(0x01020304u)) +
+    #|    sizeof(__builtin_bswap64(0x0102030405060708ull)) +
+    #|    sizeof(__builtin_bswap((unsigned short)0x0102)) +
+    #|    sizeof(__builtin_bswap((unsigned int)0x01020304)) +
+    #|    sizeof(__builtin_bswap((unsigned long long)0x0102030405060708)) +
+    #|    sizeof(__builtin_abs(-7)) +
+    #|    sizeof(__builtin_labs(-123456789L)) +
+    #|    sizeof(__builtin_llabs(-123456789LL)) +
+    #|    sizeof(__builtin_is_aligned(32, 16)) +
+    #|    sizeof(__builtin_align_up(33, 16)) +
+    #|    sizeof(__builtin_align_down((long)47, 16)) +
+    #|    sizeof(__builtin_align_up((unsigned long long)0x1234567890, 256)) +
+    #|    sizeof(__builtin_rotateleft32(0x12345678u, 8)) +
+    #|    sizeof(__builtin_rotateright32(0x12345678u, 8)) +
+    #|    sizeof(__builtin_rotateleft64(0x0123456789abcdefull, 16)) +
+    #|    sizeof(__builtin_rotateright64(0x0123456789abcdefull, 16)) +
+    #|    sizeof(__builtin_rotateleft((unsigned int)0x12345678, 8)) +
+    #|    sizeof(__builtin_rotateright((unsigned long long)0x0123456789abcdef, 16)) +
+    #|    sizeof(__builtin_expect((long)0x1234567890, 0L)) +
+    #|    sizeof(__builtin_expect_with_probability((long long)0x1234567890, 0LL, 0.5)) +
+    #|    sizeof(__builtin_unpredictable((unsigned long long)0x1234567890)) +
+    #|    sizeof(__builtin_assume_aligned((char *)0, 16)) +
+    #|    sizeof(__builtin_constant_p(1));
+    #|}
+  expect_interp(source, 201L)
 }
 
 ///|

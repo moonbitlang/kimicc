@@ -751,8 +751,56 @@ fn Codegen::call_return_type(
             | "__builtin_infl" => LongDouble
             "__builtin_rotateleft32" | "__builtin_rotateright32" => UInt
             "__builtin_rotateleft64" | "__builtin_rotateright64" => ULongLong
+            "__builtin_bswap"
+            | "__builtin_rotateleft"
+            | "__builtin_rotateright" =>
+              if args.length() > 0 {
+                self.type_of(args[0], frame_size)
+              } else {
+                UInt
+              }
+            "__builtin_bswap16" => UShort
+            "__builtin_bswap32" => UInt
+            "__builtin_bswap64" => ULongLong
             "__builtin_object_size" | "__builtin_dynamic_object_size" => ULong
-            "__builtin_flt_rounds" => SInt
+            "__builtin_expect"
+            | "__builtin_expect_with_probability"
+            | "__builtin_unpredictable" =>
+              if args.length() > 0 {
+                self.type_of(args[0], frame_size)
+              } else {
+                SInt
+              }
+            "__builtin_assume_aligned" =>
+              if args.length() > 0 {
+                self.type_of(args[0], frame_size)
+              } else {
+                Pointer(Void)
+              }
+            "__builtin_is_aligned" => Bool
+            "__builtin_align_up" | "__builtin_align_down" =>
+              if args.length() > 0 {
+                self.type_of(args[0], frame_size)
+              } else {
+                ULong
+              }
+            "__builtin_constant_p"
+            | "__builtin_flt_rounds"
+            | "__builtin_clz"
+            | "__builtin_clzl"
+            | "__builtin_clzll"
+            | "__builtin_ctz"
+            | "__builtin_ctzl"
+            | "__builtin_ctzll"
+            | "__builtin_ffs"
+            | "__builtin_ffsl"
+            | "__builtin_ffsll"
+            | "__builtin_popcount"
+            | "__builtin_popcountl"
+            | "__builtin_popcountll"
+            | "__builtin_parity"
+            | "__builtin_parityl"
+            | "__builtin_parityll" => SInt
             "__atomic_load_n"
             | "__c11_atomic_load"
             | "__atomic_add_fetch"
@@ -796,7 +844,6 @@ fn Codegen::call_return_type(
             "__builtin_abs" => SInt
             "__builtin_labs" => SLong
             "__builtin_llabs" => SLongLong
-            "__builtin_assume_aligned" => Pointer(Void)
             "__builtin_alloca" => Pointer(Void)
             "__builtin_memcpy"
             | "__builtin___memcpy_chk"
