@@ -772,10 +772,17 @@ fn Interpreter::literal_printf_format_length(
           } else if index + 1 < format.length() &&
             (
               format[index + 1].to_int() == 100 ||
-              format[index + 1].to_int() == 105
+              format[index + 1].to_int() == 105 ||
+              format[index + 1].to_int() == 117
             ) {
             if value_index >= values.length() {
               self.fail("unsupported MIR interpreter " + name + " argument")
+              return None
+            }
+            if format[index + 1].to_int() == 117 && values[value_index] < 0L {
+              self.fail(
+                "unsupported MIR interpreter " + name + " unsigned argument",
+              )
               return None
             }
             length += values[value_index].to_string().length().to_int64()
