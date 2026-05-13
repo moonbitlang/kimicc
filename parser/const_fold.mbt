@@ -1211,21 +1211,68 @@ fn Parser::const_builtin_return_type(
     | "__c11_atomic_load"
     | "__atomic_add_fetch"
     | "__atomic_sub_fetch"
+    | "__atomic_and_fetch"
+    | "__atomic_or_fetch"
+    | "__atomic_xor_fetch"
+    | "__atomic_nand_fetch"
+    | "__atomic_fetch_add"
+    | "__atomic_fetch_sub"
+    | "__atomic_fetch_and"
+    | "__atomic_fetch_or"
+    | "__atomic_fetch_xor"
+    | "__atomic_fetch_nand"
+    | "__atomic_exchange_n"
     | "__c11_atomic_fetch_add"
     | "__c11_atomic_fetch_sub"
     | "__c11_atomic_fetch_and"
     | "__c11_atomic_fetch_or"
     | "__c11_atomic_fetch_xor"
-    | "__c11_atomic_exchange" =>
+    | "__c11_atomic_exchange"
+    | "__sync_val_compare_and_swap"
+    | "__sync_fetch_and_add"
+    | "__sync_fetch_and_sub"
+    | "__sync_fetch_and_and"
+    | "__sync_fetch_and_or"
+    | "__sync_fetch_and_xor"
+    | "__sync_fetch_and_nand"
+    | "__sync_fetch_and_max"
+    | "__sync_fetch_and_min"
+    | "__sync_fetch_and_umax"
+    | "__sync_fetch_and_umin"
+    | "__sync_add_and_fetch"
+    | "__sync_sub_and_fetch"
+    | "__sync_and_and_fetch"
+    | "__sync_or_and_fetch"
+    | "__sync_xor_and_fetch"
+    | "__sync_nand_and_fetch"
+    | "__sync_swap"
+    | "__sync_lock_test_and_set" =>
       if args.length() > 0 {
         Some(const_atomic_target_type(self.const_expr_type(args[0])))
       } else {
         Some(SLongLong)
       }
-    "__c11_atomic_compare_exchange_strong"
-    | "__c11_atomic_compare_exchange_weak" => Some(Bool)
-    "__atomic_store_n" | "__c11_atomic_store" | "__sync_synchronize" =>
-      Some(Void)
+    "__atomic_test_and_set"
+    | "__atomic_compare_exchange"
+    | "__atomic_compare_exchange_n"
+    | "__c11_atomic_compare_exchange_strong"
+    | "__c11_atomic_compare_exchange_weak"
+    | "__sync_bool_compare_and_swap"
+    | "__atomic_always_lock_free"
+    | "__atomic_is_lock_free"
+    | "__c11_atomic_is_lock_free" => Some(Bool)
+    "__atomic_clear"
+    | "__atomic_exchange"
+    | "__atomic_load"
+    | "__atomic_store"
+    | "__atomic_store_n"
+    | "__atomic_thread_fence"
+    | "__atomic_signal_fence"
+    | "__c11_atomic_store"
+    | "__c11_atomic_thread_fence"
+    | "__c11_atomic_signal_fence"
+    | "__sync_synchronize"
+    | "__sync_lock_release" => Some(Void)
     "__builtin_assume_aligned" =>
       if args.length() > 0 {
         Some(self.const_expr_type(args[0]))

@@ -374,6 +374,63 @@ test "mir interpreter models atomic builtin return sizes" {
 }
 
 ///|
+test "mir interpreter models extended atomic builtin return sizes" {
+  let source =
+    #|int atomic_int_value;
+    #|int expected_atomic_value;
+    #|int desired_atomic_value;
+    #|int main(void) {
+    #|  return sizeof(__atomic_and_fetch(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_or_fetch(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_xor_fetch(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_nand_fetch(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_fetch_add(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_fetch_sub(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_fetch_and(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_fetch_or(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_fetch_xor(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_fetch_nand(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_exchange_n(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__sync_val_compare_and_swap(&atomic_int_value, 0, 1)) +
+    #|    sizeof(__sync_fetch_and_add(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_fetch_and_sub(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_fetch_and_and(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_fetch_and_or(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_fetch_and_xor(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_fetch_and_nand(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_fetch_and_max(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_fetch_and_min(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_fetch_and_umax(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_fetch_and_umin(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_add_and_fetch(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_sub_and_fetch(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_and_and_fetch(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_or_and_fetch(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_xor_and_fetch(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_nand_and_fetch(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_swap(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_lock_test_and_set(&atomic_int_value, 1)) +
+    #|    sizeof(__atomic_test_and_set(&atomic_int_value, 0)) +
+    #|    sizeof(__atomic_compare_exchange(&atomic_int_value, &expected_atomic_value, &desired_atomic_value, 0, 0, 0)) +
+    #|    sizeof(__atomic_compare_exchange_n(&atomic_int_value, &expected_atomic_value, desired_atomic_value, 0, 0, 0)) +
+    #|    sizeof(__sync_bool_compare_and_swap(&atomic_int_value, 0, 1)) +
+    #|    sizeof(__atomic_always_lock_free(4, 0)) +
+    #|    sizeof(__atomic_is_lock_free(4, 0)) +
+    #|    sizeof(__c11_atomic_is_lock_free(4)) +
+    #|    sizeof(__atomic_clear(&atomic_int_value, 0)) +
+    #|    sizeof(__atomic_exchange(&atomic_int_value, &desired_atomic_value, &expected_atomic_value, 0)) +
+    #|    sizeof(__atomic_load(&atomic_int_value, &expected_atomic_value, 0)) +
+    #|    sizeof(__atomic_store(&atomic_int_value, &desired_atomic_value, 0)) +
+    #|    sizeof(__atomic_thread_fence(0)) +
+    #|    sizeof(__atomic_signal_fence(0)) +
+    #|    sizeof(__c11_atomic_thread_fence(0)) +
+    #|    sizeof(__c11_atomic_signal_fence(0)) +
+    #|    sizeof(__sync_lock_release(&atomic_int_value));
+    #|}
+  expect_interp(source, 127L)
+}
+
+///|
 test "mir interpreter models scalar builtin return sizes" {
   let source =
     #|int main(void) {
