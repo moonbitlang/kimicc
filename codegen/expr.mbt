@@ -1391,6 +1391,50 @@ fn Codegen::emit_builtin_ffs(
 }
 
 ///|
+fn Codegen::emit_builtin_bswap(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+  width : Int,
+) -> Unit {
+  if args.length() == 0 {
+    self.emit("\tmov\tx9, #0")
+    return
+  }
+  self.gen_expr(args[0], frame_size)
+  if width == 16 {
+    self.emit("\trev\tw9, w9")
+    self.emit("\tlsr\tw9, w9, #16")
+  } else if width == 32 {
+    self.emit("\trev\tw9, w9")
+  } else {
+    self.emit("\trev\tx9, x9")
+  }
+}
+
+///|
+fn Codegen::generic_builtin_bswap_width(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Int {
+  if args.length() == 0 {
+    return 32
+  }
+  let width = self.type_size(
+      peel_aligned_type(self.type_of(args[0], frame_size)),
+    ) *
+    8
+  if width <= 16 {
+    16
+  } else if width <= 32 {
+    32
+  } else {
+    64
+  }
+}
+
+///|
 fn Codegen::emit_builtin_popcount(
   self : Codegen,
   args : Array[@parser.Expr],
@@ -1524,31 +1568,15 @@ fn Codegen::emit_builtin_call(
       true
     }
     "__builtin_bswap16" => {
-      if args.length() > 0 {
-        self.gen_expr(args[0], frame_size)
-        self.emit("\trev\tw9, w9")
-        self.emit("\tlsr\tw9, w9, #16")
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
+      self.emit_builtin_bswap(args, frame_size, 16)
       true
     }
     "__builtin_bswap32" => {
-      if args.length() > 0 {
-        self.gen_expr(args[0], frame_size)
-        self.emit("\trev\tw9, w9")
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
+      self.emit_builtin_bswap(args, frame_size, 32)
       true
     }
     "__builtin_bswap64" => {
-      if args.length() > 0 {
-        self.gen_expr(args[0], frame_size)
-        self.emit("\trev\tx9, x9")
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
+      self.emit_builtin_bswap(args, frame_size, 64)
       true
     }
     "__builtin_rotateleft32" => {
@@ -1988,13 +2016,11 @@ fn Codegen::emit_builtin_call(
       true
     }
     "__builtin_bswap" => {
-      // Generic bswap - assume 32-bit for int, 64-bit for long
-      if args.length() > 0 {
-        self.gen_expr(args[0], frame_size)
-        self.emit("\trev\tx9, x9")
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
+      self.emit_builtin_bswap(
+        args,
+        frame_size,
+        self.generic_builtin_bswap_width(args, frame_size),
+      )
       true
     }
     "__builtin_isgreater" => {

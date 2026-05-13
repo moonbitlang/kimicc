@@ -125,6 +125,9 @@ async test "e2e MIR oracle checks scalar bit builtins" {
     #|  if ((__builtin_bswap64(0x0102030405060708ull) & 255) != 1) return 7;
     #|  if (__builtin_clzl(8ul) != 60) return 8;
     #|  if (__builtin_ctzl(48ul) != 4) return 9;
+    #|  if ((__builtin_bswap((unsigned short)0x0102) & 0xffff) != 0x0201) return 10;
+    #|  if (__builtin_bswap(0x01020304u) != 0x04030201u) return 11;
+    #|  if ((__builtin_bswap(0x0102030405060708ull) & 255) != 1) return 12;
     #|  return 0;
     #|}
   run_source_against_mir_oracle(source)

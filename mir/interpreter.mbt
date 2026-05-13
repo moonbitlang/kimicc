@@ -421,6 +421,26 @@ fn byte_swap_bits(value : Int64, width : Int) -> Int64 {
 }
 
 ///|
+fn Program::generic_builtin_bswap_width(
+  self : Program,
+  frame : InterpFrame,
+  args : Array[@parser.Expr],
+) -> Int {
+  if args.length() == 0 {
+    return 32
+  }
+  let ty = self.core_type(self.expr_type(args[0], frame.scope()))
+  let width = const_type_int_width(ty).unwrap_or(64)
+  if width <= 16 {
+    16
+  } else if width <= 32 {
+    32
+  } else {
+    64
+  }
+}
+
+///|
 fn normalized_bit_shift(shift : Int64, width : Int) -> Int {
   let mut amount = (shift % width.to_int64()).to_int()
   if amount < 0 {
@@ -514,6 +534,13 @@ fn Interpreter::eval_builtin_call(
       Some(byte_swap_bits(self.eval_first_call_arg_or_zero(frame, args), 32))
     "__builtin_bswap64" =>
       Some(byte_swap_bits(self.eval_first_call_arg_or_zero(frame, args), 64))
+    "__builtin_bswap" =>
+      Some(
+        byte_swap_bits(
+          self.eval_first_call_arg_or_zero(frame, args),
+          self.program.generic_builtin_bswap_width(frame, args),
+        ),
+      )
     "__builtin_popcount" =>
       Some(count_one_bits(self.eval_first_call_arg_or_zero(frame, args), 32))
     "__builtin_popcountl" | "__builtin_popcountll" =>
