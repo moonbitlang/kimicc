@@ -18,8 +18,9 @@ that both assembly backends walk.
 - `test/e2e/mir_oracle_test.mbt` compares selected scalar compiled binaries
   against the MIR interpreter.
 - `codegen/semantic_facts_wbtest.mbt` checks that Darwin ARM64 and linux/amd64
-  backend-local layout facts agree with MIR for representative scalar,
-  aggregate, packed, union, and bit-field cases.
+  backend-local facts agree with MIR for representative scalar, aggregate,
+  packed, union, bit-field, offsetof, global-expression type, and integer
+  constant-folding cases.
 
 ## Backend Sharing
 
@@ -27,10 +28,11 @@ Darwin ARM64 still owns its existing layout/type helpers inside `Codegen`. That
 keeps the public `Codegen` struct stable while MIR is still young.
 
 Linux/amd64 now receives a lowered MIR program through `generate_assembly_for_target`.
-The private `X64Codegen` delegates size, alignment, and field-layout queries to
-MIR when that lowered program is present. Its older local layout path remains in
-place for whitebox consistency tests and as a fallback for direct private
-construction in tests.
+The private `X64Codegen` delegates size, alignment, field-layout, offsetof path,
+global-expression type, and covered integer constant-folding queries to MIR when
+that lowered program is present. Its older local semantic paths remain in place
+for whitebox consistency tests and as fallbacks for direct private construction
+in tests.
 
 ## Why This Layer Is Useful
 
