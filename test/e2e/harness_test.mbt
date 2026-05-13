@@ -39,6 +39,25 @@ fn run_source(source : String) -> Int {
 }
 
 ///|
+fn run_source_against_mir_oracle(source : String) -> Unit {
+  let program = @parser.parse(source)
+  let expected = match
+    @mir.lower(program, @target.Target::default()).interpret_i64("main", []) {
+    Ok(value) => value
+    Err(err) => abort("MIR oracle failed: " + err)
+  }
+  let actual = run_source(source)
+  if actual != expected.to_int() {
+    abort(
+      "MIR oracle mismatch: expected " +
+      expected.to_string() +
+      ", compiled exit code " +
+      actual.to_string(),
+    )
+  }
+}
+
+///|
 fn run_source_async(source : String) -> Int {
   run_source(source)
 }
