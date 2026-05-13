@@ -557,7 +557,9 @@ fn Interpreter::eval_builtin_call(
     "__builtin_expect"
     | "__builtin_expect_with_probability"
     | "__builtin_unpredictable"
-    | "__builtin_assume_aligned" =>
+    | "__builtin_assume_aligned"
+    | "__builtin_extract_return_addr"
+    | "__builtin_frob_return_addr" =>
       Some(self.eval_first_call_arg_or_zero(frame, args))
     "__builtin_constant_p" => Some(0L)
     "__builtin_flt_rounds" => Some(1L)

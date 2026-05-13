@@ -750,6 +750,8 @@ fn Codegen::call_return_type(
             "__builtin_labs" => SLong
             "__builtin_llabs" => SLongLong
             "__builtin_assume_aligned" => Pointer(Void)
+            "__builtin_extract_return_addr" | "__builtin_frob_return_addr" =>
+              Pointer(Void)
             _ => self.func_rets.get_or_default(name, SInt)
           }
         _ => SInt
@@ -1597,6 +1599,14 @@ fn Codegen::emit_builtin_call(
       true
     }
     "__builtin_assume_aligned" => {
+      if args.length() > 0 {
+        self.gen_expr(args[0], frame_size)
+      } else {
+        self.emit("\tmov\tx9, #0")
+      }
+      true
+    }
+    "__builtin_extract_return_addr" | "__builtin_frob_return_addr" => {
       if args.length() > 0 {
         self.gen_expr(args[0], frame_size)
       } else {

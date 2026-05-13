@@ -774,8 +774,10 @@ fn Program::builtin_return_type(
 ) -> @parser.Type? {
   match name {
     "__builtin_object_size" | "__builtin_dynamic_object_size" => Some(ULong)
-    "__builtin_return_address" | "__builtin_frame_address" =>
-      Some(Pointer(Void))
+    "__builtin_return_address"
+    | "__builtin_frame_address"
+    | "__builtin_extract_return_addr"
+    | "__builtin_frob_return_addr" => Some(Pointer(Void))
     "__builtin_constant_p"
     | "__builtin_clz"
     | "__builtin_clzl"
