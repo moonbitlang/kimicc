@@ -785,65 +785,93 @@ fn Interpreter::literal_printf_format_length(
           if index + 1 < format.length() && format[index + 1].to_int() == 37 {
             length += 1L
             index += 2
-          } else if index + 1 < format.length() &&
-            (
-              format[index + 1].to_int() == 88 ||
-              format[index + 1].to_int() == 99 ||
-              format[index + 1].to_int() == 100 ||
-              format[index + 1].to_int() == 105 ||
-              format[index + 1].to_int() == 111 ||
-              format[index + 1].to_int() == 115 ||
-              format[index + 1].to_int() == 117 ||
-              format[index + 1].to_int() == 120
-            ) {
-            if value_index >= values.length() {
-              self.fail("unsupported MIR interpreter " + name + " argument")
-              return None
+          } else {
+            let mut conversion_index = index + 1
+            let mut modified = false
+            if conversion_index < format.length() {
+              if format[conversion_index].to_int() == 108 {
+                modified = true
+                conversion_index += 1
+                if conversion_index < format.length() &&
+                  format[conversion_index].to_int() == 108 {
+                  conversion_index += 1
+                }
+              } else if format[conversion_index].to_int() == 106 ||
+                format[conversion_index].to_int() == 116 ||
+                format[conversion_index].to_int() == 122 {
+                modified = true
+                conversion_index += 1
+              }
             }
-            if format[index + 1].to_int() == 99 {
-              length += 1L
-            } else if format[index + 1].to_int() == 115 {
-              match literal_string_arg(args[value_index]) {
-                Some(value) => length += value.length().to_int64()
-                None => {
-                  self.fail(
-                    "unsupported MIR interpreter " + name + " string argument",
-                  )
-                  return None
-                }
-              }
-            } else if format[index + 1].to_int() == 111 ||
-              format[index + 1].to_int() == 88 ||
-              format[index + 1].to_int() == 120 {
-              let radix = if format[index + 1].to_int() == 88 ||
-                format[index + 1].to_int() == 120 {
-                16L
-              } else {
-                8L
-              }
-              match nonnegative_radix_length(values[value_index], radix) {
-                Some(radix_length) => length += radix_length
-                None => {
-                  self.fail(
-                    "unsupported MIR interpreter " + name + " radix argument",
-                  )
-                  return None
-                }
-              }
-            } else {
-              if format[index + 1].to_int() == 117 && values[value_index] < 0L {
-                self.fail(
-                  "unsupported MIR interpreter " + name + " unsigned argument",
-                )
+            if conversion_index < format.length() &&
+              (
+                format[conversion_index].to_int() == 88 ||
+                format[conversion_index].to_int() == 99 ||
+                format[conversion_index].to_int() == 100 ||
+                format[conversion_index].to_int() == 105 ||
+                format[conversion_index].to_int() == 111 ||
+                format[conversion_index].to_int() == 115 ||
+                format[conversion_index].to_int() == 117 ||
+                format[conversion_index].to_int() == 120
+              ) {
+              if modified &&
+                (
+                  format[conversion_index].to_int() == 99 ||
+                  format[conversion_index].to_int() == 115
+                ) {
+                self.fail("unsupported MIR interpreter " + name + " format")
                 return None
               }
-              length += values[value_index].to_string().length().to_int64()
+              if value_index >= values.length() {
+                self.fail("unsupported MIR interpreter " + name + " argument")
+                return None
+              }
+              if format[conversion_index].to_int() == 99 {
+                length += 1L
+              } else if format[conversion_index].to_int() == 115 {
+                match literal_string_arg(args[value_index]) {
+                  Some(value) => length += value.length().to_int64()
+                  None => {
+                    self.fail(
+                      "unsupported MIR interpreter " + name + " string argument",
+                    )
+                    return None
+                  }
+                }
+              } else if format[conversion_index].to_int() == 111 ||
+                format[conversion_index].to_int() == 88 ||
+                format[conversion_index].to_int() == 120 {
+                let radix = if format[conversion_index].to_int() == 88 ||
+                  format[conversion_index].to_int() == 120 {
+                  16L
+                } else {
+                  8L
+                }
+                match nonnegative_radix_length(values[value_index], radix) {
+                  Some(radix_length) => length += radix_length
+                  None => {
+                    self.fail(
+                      "unsupported MIR interpreter " + name + " radix argument",
+                    )
+                    return None
+                  }
+                }
+              } else {
+                if format[conversion_index].to_int() == 117 &&
+                  values[value_index] < 0L {
+                  self.fail(
+                    "unsupported MIR interpreter " + name + " unsigned argument",
+                  )
+                  return None
+                }
+                length += values[value_index].to_string().length().to_int64()
+              }
+              value_index += 1
+              index = conversion_index + 1
+            } else {
+              self.fail("unsupported MIR interpreter " + name + " format")
+              return None
             }
-            value_index += 1
-            index += 2
-          } else {
-            self.fail("unsupported MIR interpreter " + name + " format")
-            return None
           }
         } else {
           length += 1L
