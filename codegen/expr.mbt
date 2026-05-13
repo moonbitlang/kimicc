@@ -784,6 +784,14 @@ fn Codegen::call_return_type(
               } else {
                 ULong
               }
+            "__builtin_unreachable"
+            | "__builtin_trap"
+            | "__builtin_assume"
+            | "__builtin_prefetch"
+            | "__builtin_bzero"
+            | "__builtin_va_start"
+            | "__builtin_va_end"
+            | "__builtin_va_copy" => Void
             "__builtin_constant_p"
             | "__builtin_flt_rounds"
             | "__builtin_clz"

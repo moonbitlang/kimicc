@@ -463,6 +463,36 @@ async test "e2e MIR oracle checks scalar builtin return sizes" {
 }
 
 ///|
+async test "e2e MIR oracle checks void builtin return sizes" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|void *ptr;
+    #|_Static_assert(sizeof(__builtin_unreachable()) == 0, "unreachable");
+    #|_Static_assert(sizeof(__builtin_trap()) == 0, "trap");
+    #|_Static_assert(sizeof(__builtin_assume(1)) == 0, "assume");
+    #|_Static_assert(sizeof(__builtin_prefetch(ptr)) == 0, "prefetch");
+    #|_Static_assert(sizeof(__builtin_bzero(ptr, 0)) == 0, "bzero");
+    #|int variadic(int last, ...) {
+    #|  va_list ap;
+    #|  _Static_assert(sizeof(__builtin_va_start(ap, last)) == 0, "va start");
+    #|  _Static_assert(sizeof(__builtin_va_copy(ap, ap)) == 0, "va copy");
+    #|  _Static_assert(sizeof(__builtin_va_end(ap)) == 0, "va end");
+    #|  return sizeof(__builtin_va_start(ap, last)) +
+    #|    sizeof(__builtin_va_copy(ap, ap)) +
+    #|    sizeof(__builtin_va_end(ap));
+    #|}
+    #|int main(void) {
+    #|  return sizeof(__builtin_unreachable()) +
+    #|    sizeof(__builtin_trap()) +
+    #|    sizeof(__builtin_assume(1)) +
+    #|    sizeof(__builtin_prefetch(ptr)) +
+    #|    sizeof(__builtin_bzero(ptr, 0)) +
+    #|    variadic(0, 1);
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks literal string comparison builtins" {
   let source =
     #|int main(void) {

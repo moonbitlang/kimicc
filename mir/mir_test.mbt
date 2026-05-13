@@ -402,6 +402,28 @@ test "mir interpreter models scalar builtin return sizes" {
 }
 
 ///|
+test "mir interpreter models void builtin return sizes" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|void *ptr;
+    #|int variadic(int last, ...) {
+    #|  va_list ap;
+    #|  return sizeof(__builtin_va_start(ap, last)) +
+    #|    sizeof(__builtin_va_copy(ap, ap)) +
+    #|    sizeof(__builtin_va_end(ap));
+    #|}
+    #|int main(void) {
+    #|  return sizeof(__builtin_unreachable()) +
+    #|    sizeof(__builtin_trap()) +
+    #|    sizeof(__builtin_assume(1)) +
+    #|    sizeof(__builtin_prefetch(ptr)) +
+    #|    sizeof(__builtin_bzero(ptr, 0)) +
+    #|    variadic(0, 1);
+    #|}
+  expect_interp(source, 0L)
+}
+
+///|
 test "mir interpreter models literal string comparison builtins" {
   let source =
     #|int main(void) {

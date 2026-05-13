@@ -900,6 +900,14 @@ fn Program::builtin_return_type(
       } else {
         Some(ULong)
       }
+    "__builtin_unreachable"
+    | "__builtin_trap"
+    | "__builtin_assume"
+    | "__builtin_prefetch"
+    | "__builtin_bzero"
+    | "__builtin_va_start"
+    | "__builtin_va_end"
+    | "__builtin_va_copy" => Some(Void)
     "__builtin_bswap16" => Some(UShort)
     "__builtin_bswap32"
     | "__builtin_rotateleft32"
