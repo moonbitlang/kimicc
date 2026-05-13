@@ -411,6 +411,101 @@ fn Interpreter::eval_builtin_align_value(
 }
 
 ///|
+fn overflow_builtin_op(name : String) -> String? {
+  match name {
+    "__builtin_add_overflow"
+    | "__builtin_sadd_overflow"
+    | "__builtin_saddl_overflow"
+    | "__builtin_saddll_overflow"
+    | "__builtin_uadd_overflow"
+    | "__builtin_uaddl_overflow"
+    | "__builtin_uaddll_overflow" => Some("+")
+    "__builtin_sub_overflow"
+    | "__builtin_ssub_overflow"
+    | "__builtin_ssubl_overflow"
+    | "__builtin_ssubll_overflow"
+    | "__builtin_usub_overflow"
+    | "__builtin_usubl_overflow"
+    | "__builtin_usubll_overflow" => Some("-")
+    "__builtin_mul_overflow"
+    | "__builtin_smul_overflow"
+    | "__builtin_smull_overflow"
+    | "__builtin_smulll_overflow"
+    | "__builtin_umul_overflow"
+    | "__builtin_umull_overflow"
+    | "__builtin_umulll_overflow" => Some("*")
+    _ => None
+  }
+}
+
+///|
+fn Program::small_int_range(
+  self : Program,
+  ty : @parser.Type,
+) -> (Int64, Int64)? {
+  let core = self.core_type(ty)
+  match const_type_int_width(core) {
+    Some(width) if width <= 32 =>
+      if const_type_is_unsigned(core) {
+        Some((0L, (1L << width) - 1L))
+      } else {
+        Some((-(1L << (width - 1)), (1L << (width - 1)) - 1L))
+      }
+    _ => None
+  }
+}
+
+///|
+fn Interpreter::eval_overflow_builtin(
+  self : Interpreter,
+  frame : InterpFrame,
+  op : String,
+  args : Array[@parser.Expr],
+) -> Int64 {
+  if args.length() < 3 {
+    return 0L
+  }
+  let result_lvalue = match args[2] {
+    AddrOf(target) => target
+    _ => {
+      self.fail("unsupported MIR interpreter overflow result pointer")
+      return 0L
+    }
+  }
+  let result_ty = match
+    self.program.pointer_element(self.program.expr_type(args[2], frame.scope())) {
+    Some(ty) => ty
+    None => {
+      self.fail("unsupported MIR interpreter overflow result type")
+      return 0L
+    }
+  }
+  let left = self.eval_expr(frame, args[0])
+  let right = self.eval_expr(frame, args[1])
+  let result = match op {
+    "+" => left + right
+    "-" => left - right
+    "*" => left * right
+    _ => 0L
+  }
+  match self.program.small_int_range(result_ty) {
+    Some((min_value, max_value)) => {
+      let overflow = result < min_value || result > max_value
+      ignore(self.write_lvalue(frame, result_lvalue, result))
+      if overflow {
+        1L
+      } else {
+        0L
+      }
+    }
+    None => {
+      self.fail("unsupported MIR interpreter overflow result type")
+      0L
+    }
+  }
+}
+
+///|
 fn mask_int_width(value : Int64, width : Int) -> Int64 {
   if width >= 64 {
     value
@@ -642,6 +737,10 @@ fn Interpreter::eval_builtin_call(
   name : String,
   args : Array[@parser.Expr],
 ) -> Int64? {
+  match overflow_builtin_op(name) {
+    Some(op) => return Some(self.eval_overflow_builtin(frame, op, args))
+    None => ()
+  }
   match name {
     "__builtin_expect"
     | "__builtin_expect_with_probability"
