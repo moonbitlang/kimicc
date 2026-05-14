@@ -338,6 +338,7 @@ test "darwin codegen layout facts match MIR facts" {
   let mir = @mir.lower(prog, @target.Target::default())
   let codegen = init_darwin_codegen_facts(prog)
   codegen.var_types["p"] = Pointer(SInt)
+  codegen.var_types["ip"] = Pointer(SInt)
   codegen.var_types["s"] = Struct("A")
   codegen.func_name = "main"
   let types : Array[@parser.Type] = [
@@ -411,6 +412,36 @@ test "darwin codegen layout facts match MIR facts" {
     mir,
     Call(Var("__builtin_fabsl"), [FloatLiteral(1.0)]),
   )
+  expect_darwin_expr_type_facts(
+    codegen,
+    mir,
+    Call(Var("__builtin_memcpy"), [Var("p"), Var("p"), Number(4)]),
+  )
+  expect_darwin_expr_type_facts(
+    codegen,
+    mir,
+    Call(Var("__builtin_strchr"), [String("abc"), Number(98)]),
+  )
+  expect_darwin_expr_type_facts(
+    codegen,
+    mir,
+    Call(Var("__builtin_strlen"), [String("abc")]),
+  )
+  expect_darwin_expr_type_facts(
+    codegen,
+    mir,
+    Call(Var("__builtin_expect"), [Cast(SLong, Number(1)), Number(1)]),
+  )
+  expect_darwin_expr_type_facts(
+    codegen,
+    mir,
+    Call(Var("__builtin_bswap"), [Cast(UShort, Number(1))]),
+  )
+  expect_darwin_expr_type_facts(
+    codegen,
+    mir,
+    Call(Var("__atomic_load_n"), [Var("ip"), Number(0)]),
+  )
   expect_darwin_expr_type_facts(codegen, mir, SizeofExpr(Var("s")))
   expect_darwin_fold_const_facts(
     codegen,
@@ -436,6 +467,7 @@ test "linux amd64 codegen layout facts match MIR facts" {
   let mir = @mir.lower(prog, target)
   let codegen = init_x64_codegen_facts(prog)
   codegen.var_types["p"] = Pointer(SInt)
+  codegen.var_types["ip"] = Pointer(SInt)
   codegen.var_types["s"] = Struct("A")
   codegen.func_name = "main"
   let types : Array[@parser.Type] = [
@@ -511,6 +543,36 @@ test "linux amd64 codegen layout facts match MIR facts" {
     codegen,
     mir,
     Call(Var("__builtin_fabsl"), [FloatLiteral(1.0)]),
+  )
+  expect_x64_expr_type_facts(
+    codegen,
+    mir,
+    Call(Var("__builtin_memcpy"), [Var("p"), Var("p"), Number(4)]),
+  )
+  expect_x64_expr_type_facts(
+    codegen,
+    mir,
+    Call(Var("__builtin_strchr"), [String("abc"), Number(98)]),
+  )
+  expect_x64_expr_type_facts(
+    codegen,
+    mir,
+    Call(Var("__builtin_strlen"), [String("abc")]),
+  )
+  expect_x64_expr_type_facts(
+    codegen,
+    mir,
+    Call(Var("__builtin_expect"), [Cast(SLong, Number(1)), Number(1)]),
+  )
+  expect_x64_expr_type_facts(
+    codegen,
+    mir,
+    Call(Var("__builtin_bswap"), [Cast(UShort, Number(1))]),
+  )
+  expect_x64_expr_type_facts(
+    codegen,
+    mir,
+    Call(Var("__atomic_load_n"), [Var("ip"), Number(0)]),
   )
   expect_x64_expr_type_facts(codegen, mir, SizeofExpr(Var("s")))
   expect_x64_fold_const_facts(codegen, mir, Binary("/", Number(1), Number(2)))
