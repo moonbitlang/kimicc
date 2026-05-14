@@ -384,19 +384,45 @@ fn Interpreter::eval_return_first_call_arg(
 }
 
 ///|
+fn interpreter_can_write_lvalue(expr : @parser.Expr) -> Bool {
+  match expr {
+    Var(_) => true
+    Deref(AddrOf(target)) => interpreter_can_write_lvalue(target)
+    _ => false
+  }
+}
+
+///|
 fn Interpreter::eval_ignored_expr_side_effects(
   self : Interpreter,
   frame : InterpFrame,
   expr : @parser.Expr,
 ) -> Unit {
   match expr {
-    Assign(_, _)
-    | CompoundAssign(_, _, _)
-    | PrefixInc(_)
-    | PrefixDec(_)
-    | PostfixInc(_)
-    | PostfixDec(_)
-    | Call(_, _) => ignore(self.eval_expr(frame, expr))
+    Assign(lhs, rhs) =>
+      if interpreter_can_write_lvalue(lhs) {
+        ignore(self.eval_expr(frame, expr))
+      } else {
+        self.eval_ignored_expr_side_effects(frame, lhs)
+        self.eval_ignored_expr_side_effects(frame, rhs)
+      }
+    CompoundAssign(_, lhs, rhs) =>
+      if interpreter_can_write_lvalue(lhs) {
+        ignore(self.eval_expr(frame, expr))
+      } else {
+        self.eval_ignored_expr_side_effects(frame, lhs)
+        self.eval_ignored_expr_side_effects(frame, rhs)
+      }
+    PrefixInc(target)
+    | PrefixDec(target)
+    | PostfixInc(target)
+    | PostfixDec(target) =>
+      if interpreter_can_write_lvalue(target) {
+        ignore(self.eval_expr(frame, expr))
+      } else {
+        self.eval_ignored_expr_side_effects(frame, target)
+      }
+    Call(_, _) => ignore(self.eval_expr(frame, expr))
     Binary("&&", lhs, rhs) =>
       if self.eval_expr(frame, lhs) != 0L {
         self.eval_ignored_expr_side_effects(frame, rhs)
@@ -1883,8 +1909,9 @@ fn Interpreter::declare_local(
 ) -> Unit {
   if !self.program.runtime_int_type(ty) {
     frame.local_types[name] = ty
-    if init is Some(_) {
-      self.fail("unsupported MIR interpreter local initializer: " + name)
+    match init {
+      Some(expr) => self.eval_ignored_expr_side_effects(frame, expr)
+      None => ()
     }
     return
   }

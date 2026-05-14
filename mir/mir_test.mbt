@@ -1380,12 +1380,24 @@ test "mir interpreter reports unsupported local reads" {
 }
 
 ///|
-test "mir interpreter reports unsupported local initializers" {
-  let source = "int main(void) { double d = 0.0; return 0; }"
+test "mir interpreter evaluates ignored unsupported local initializer side effects" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  int a[2];
+    #|  double d = (a[side += 1] = side += 2);
+    #|  double e = side += 4;
+    #|  return side + 35;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
+test "mir interpreter reports unsupported initialized local reads" {
+  let source = "int main(void) { double d = 0.0; return (int)d; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   match mir.interpret_i64("main", []) {
-    Ok(_) =>
-      abort("expected MIR interpreter unsupported-local-initializer error")
-    Err(err) => inspect(err.contains("local initializer"), content="true")
+    Ok(_) => abort("expected MIR interpreter unsupported-local-value error")
+    Err(err) => inspect(err.contains("local value"), content="true")
   }
 }

@@ -92,9 +92,11 @@ that both assembly backends walk.
   compare those values only against null or pass them through identity helpers,
   not inspect the synthetic address itself. Aggregate globals are retained as
   type-only declarations so compile tests can query object-size facts, but
-  runtime aggregate reads still return `Err`. The interpreter deliberately
-  returns `Err` for general memory, aggregate values, indirect calls, floating
-  point, computed goto, varargs, and other behavior that is not modeled yet.
+  runtime aggregate reads still return `Err`. Unsupported local initializer
+  values are not stored, but their side effects are evaluated before later reads
+  of those locals return `Err`. The interpreter deliberately returns `Err` for
+  general memory, aggregate values, indirect calls, floating point, computed
+  goto, varargs, and other behavior that is not modeled yet.
 - `test/e2e/mir_oracle_test.mbt` compares selected scalar compiled binaries
   against the MIR interpreter.
 - `codegen/semantic_facts_wbtest.mbt` checks that Darwin ARM64 and linux/amd64

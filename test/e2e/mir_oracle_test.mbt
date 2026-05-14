@@ -102,6 +102,19 @@ async test "e2e MIR oracle checks scalar compound literals" {
 }
 
 ///|
+async test "e2e MIR oracle checks ignored unsupported local initializer side effects" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  int a[2];
+    #|  double d = (a[side += 1] = side += 2);
+    #|  double e = side += 4;
+    #|  return side + 35;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks scalar switch fallthrough" {
   let source =
     #|int main(void) {
