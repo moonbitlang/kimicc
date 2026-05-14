@@ -1603,10 +1603,15 @@ test "parse object size builtin constants in static asserts" {
     #|_Static_assert(__builtin_object_size(&global_x, 0) == sizeof(global_x), "global object size");
     #|_Static_assert(__builtin_dynamic_object_size((void *)global_buf, 2) == sizeof(global_buf), "global array size");
     #|_Static_assert(__builtin_object_size(&global_buf[3], 0) == sizeof(global_buf) - 3, "global array element remaining size");
-    #|_Static_assert(__builtin_object_size(&global_buf[3], 1) == 1, "global array element subobject size");
-    #|_Static_assert(__builtin_object_size(&global_s.buf, 0) == sizeof(global_s.buf), "global member object size");
-    #|_Static_assert(__builtin_dynamic_object_size(global_s.buf, 2) == sizeof(global_s.buf), "global member array size");
-    #|_Static_assert(__builtin_dynamic_object_size(&global_s.buf[4], 2) == sizeof(global_s.buf) - 4, "global member element remaining size");
+    #|_Static_assert(__builtin_object_size(&global_buf[3], 1) == sizeof(global_buf) - 3, "global array element subobject size");
+    #|_Static_assert(__builtin_object_size(global_buf + 3, 0) == sizeof(global_buf) - 3, "global array pointer remaining size");
+    #|_Static_assert(__builtin_object_size(3 + global_buf, 1) == sizeof(global_buf) - 3, "global commuted pointer remaining size");
+    #|_Static_assert(__builtin_object_size(&global_s.buf, 0) == sizeof(global_s) - __builtin_offsetof(struct S, buf), "global member whole object size");
+    #|_Static_assert(__builtin_object_size(&global_s.buf, 1) == sizeof(global_s.buf), "global member subobject size");
+    #|_Static_assert(__builtin_dynamic_object_size(global_s.buf, 2) == sizeof(global_s) - __builtin_offsetof(struct S, buf), "global member array whole size");
+    #|_Static_assert(__builtin_dynamic_object_size(global_s.buf, 3) == sizeof(global_s.buf), "global member array subobject size");
+    #|_Static_assert(__builtin_dynamic_object_size(&global_s.buf[4], 2) == sizeof(global_s) - __builtin_offsetof(struct S, buf) - 4, "global member element whole remaining size");
+    #|_Static_assert(__builtin_dynamic_object_size(&global_s.buf[4], 3) == sizeof(global_s.buf) - 4, "global member element subobject remaining size");
     #|_Static_assert(__builtin_constant_p(1 + 2) == 1, "constant expression");
     #|_Static_assert(__builtin_constant_p(global_x) == 0, "runtime object is not constant");
     #|_Static_assert(__builtin_abs(-7) == 7, "abs constant");
@@ -1621,9 +1626,11 @@ test "parse object size builtin constants in static asserts" {
     #|  _Static_assert(__builtin_object_size(&local_x, 0) == sizeof(local_x), "local object size");
     #|  _Static_assert(__builtin_dynamic_object_size((void *)local_buf, 2) == sizeof(local_buf), "local array size");
     #|  _Static_assert(__builtin_object_size(&local_buf[3], 0) == sizeof(local_buf) - 3, "local array element remaining size");
-    #|  _Static_assert(__builtin_object_size(&local_s.buf, 0) == sizeof(local_s.buf), "local member object size");
-    #|  _Static_assert(__builtin_dynamic_object_size(local_s.buf, 2) == sizeof(local_s.buf), "local member array size");
-    #|  _Static_assert(__builtin_object_size(&local_s.buf[4], 1) == 1, "local member element subobject size");
+    #|  _Static_assert(__builtin_object_size(local_buf + 3, 1) == sizeof(local_buf) - 3, "local array pointer remaining size");
+    #|  _Static_assert(__builtin_object_size(&local_s.buf, 0) == sizeof(local_s) - __builtin_offsetof(struct S, buf), "local member whole object size");
+    #|  _Static_assert(__builtin_dynamic_object_size(local_s.buf, 2) == sizeof(local_s) - __builtin_offsetof(struct S, buf), "local member array whole size");
+    #|  _Static_assert(__builtin_dynamic_object_size(local_s.buf, 3) == sizeof(local_s.buf), "local member array subobject size");
+    #|  _Static_assert(__builtin_object_size(&local_s.buf[4], 1) == sizeof(local_s.buf) - 4, "local member element subobject size");
     #|  return 0;
     #|}
   ignore(@parser.parse(source))

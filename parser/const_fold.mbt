@@ -212,12 +212,55 @@ fn Parser::const_object_size_lvalue_type(self : Parser, expr : Expr) -> Type? {
 }
 
 ///|
-fn Parser::const_object_size_array_element_size(
+priv struct ConstObjectSizeFact {
+  whole : Int
+  subobject : Int
+}
+
+///|
+fn const_object_size_fact_value(
+  fact : ConstObjectSizeFact,
+  mode : Int64,
+) -> Int {
+  if (mode & 1L) != 0L {
+    fact.subobject
+  } else {
+    fact.whole
+  }
+}
+
+///|
+fn const_object_size_subtract_offset(
+  fact : ConstObjectSizeFact,
+  offset : Int,
+) -> ConstObjectSizeFact? {
+  if offset < 0 || offset > fact.whole || offset > fact.subobject {
+    None
+  } else {
+    Some({ whole: fact.whole - offset, subobject: fact.subobject - offset })
+  }
+}
+
+///|
+fn Parser::const_object_size_var_fact(
+  self : Parser,
+  name : String,
+) -> ConstObjectSizeFact? {
+  if self.value_types.contains(name) {
+    let size = self.const_type_size(self.value_types[name])
+    Some({ whole: size, subobject: size })
+  } else {
+    None
+  }
+}
+
+///|
+fn Parser::const_object_size_array_element_fact(
   self : Parser,
   base_ty : Type,
   index : Expr,
-  mode : Int64,
-) -> Int? {
+  base_fact : ConstObjectSizeFact,
+) -> ConstObjectSizeFact? {
   match const_type_core(base_ty) {
     Array(elem, n) =>
       match self.fold_const(index) {
@@ -228,15 +271,9 @@ fn Parser::const_object_size_array_element_size(
             let index = raw_index.to_int()
             if index > n {
               None
-            } else if index == n {
-              Some(0)
             } else {
               let elem_size = self.const_type_size(elem)
-              if (mode & 1L) != 0L {
-                Some(elem_size)
-              } else {
-                Some((n - index) * elem_size)
-              }
+              const_object_size_subtract_offset(base_fact, index * elem_size)
             }
           }
         None => None
@@ -246,51 +283,90 @@ fn Parser::const_object_size_array_element_size(
 }
 
 ///|
-fn Parser::const_object_size_lvalue_size(
+fn Parser::const_object_size_lvalue_fact(
   self : Parser,
   expr : Expr,
-  mode : Int64,
-) -> Int? {
+) -> ConstObjectSizeFact? {
   match expr {
-    Var(name) =>
-      if self.value_types.contains(name) {
-        Some(self.const_type_size(self.value_types[name]))
-      } else {
-        None
-      }
+    Var(name) => self.const_object_size_var_fact(name)
     ArrayAccess(base, index) =>
-      match self.const_object_size_lvalue_type(base) {
-        Some(base_ty) =>
-          self.const_object_size_array_element_size(base_ty, index, mode)
-        None => None
+      match
+        (
+          self.const_object_size_lvalue_type(base),
+          self.const_object_size_lvalue_fact(base),
+        ) {
+        (Some(base_ty), Some(base_fact)) =>
+          self.const_object_size_array_element_fact(base_ty, index, base_fact)
+        _ => None
       }
     MemberAccess(obj, field) =>
-      match self.const_object_size_lvalue_type(obj) {
-        Some(obj_ty) =>
-          match self.const_member_type(obj_ty, field) {
-            Some(field_ty) => Some(self.const_type_size(field_ty))
+      match
+        (
+          self.const_object_size_lvalue_type(obj),
+          self.const_object_size_lvalue_fact(obj),
+        ) {
+        (Some(obj_ty), Some(obj_fact)) =>
+          match self.const_field_layout(obj_ty, field) {
+            Some((_, field_ty, offset, _, _, _)) =>
+              match const_object_size_subtract_offset(obj_fact, offset) {
+                Some(fact) =>
+                  Some({
+                    whole: fact.whole,
+                    subobject: self.const_type_size(field_ty),
+                  })
+                None => None
+              }
             None => None
           }
-        None => None
+        _ => None
       }
     _ => None
   }
 }
 
 ///|
-fn Parser::const_object_size_expr_size(
+fn Parser::const_object_size_offset_expr_fact(
+  self : Parser,
+  base : Expr,
+  offset_expr : Expr,
+) -> ConstObjectSizeFact? {
+  match
+    (
+      self.const_object_size_expr_fact(base),
+      self.fold_const(offset_expr),
+      const_pointer_or_array_element_type(self.const_expr_type(base)),
+    ) {
+    (Some(fact), Some(index), Some(elem)) =>
+      if index < 0L {
+        None
+      } else {
+        const_object_size_subtract_offset(
+          fact,
+          index.to_int() * self.const_type_size(elem),
+        )
+      }
+    _ => None
+  }
+}
+
+///|
+fn Parser::const_object_size_expr_fact(
   self : Parser,
   expr : Expr,
-  mode : Int64,
-) -> Int? {
+) -> ConstObjectSizeFact? {
   match expr {
-    Cast(_, inner) => self.const_object_size_expr_size(inner, mode)
-    AddrOf(inner) => self.const_object_size_lvalue_size(inner, mode)
+    Cast(_, inner) => self.const_object_size_expr_fact(inner)
+    AddrOf(inner) => self.const_object_size_lvalue_fact(inner)
+    Binary("+", lhs, rhs) =>
+      match self.const_object_size_offset_expr_fact(lhs, rhs) {
+        Some(fact) => Some(fact)
+        None => self.const_object_size_offset_expr_fact(rhs, lhs)
+      }
     Var(name) =>
       if self.value_types.contains(name) {
         let ty = self.value_types[name]
         match const_type_core(ty) {
-          Array(_, _) => Some(self.const_type_size(ty))
+          Array(_, _) => self.const_object_size_var_fact(name)
           _ => None
         }
       } else {
@@ -300,7 +376,7 @@ fn Parser::const_object_size_expr_size(
       match self.const_object_size_lvalue_type(expr) {
         Some(ty) =>
           match const_type_core(ty) {
-            Array(_, _) => Some(self.const_type_size(ty))
+            Array(_, _) => self.const_object_size_lvalue_fact(expr)
             _ => None
           }
         None => None
@@ -320,8 +396,8 @@ fn Parser::const_builtin_object_size_value(
       Some(value) => return (value.length() + 1).to_int64()
       None => ()
     }
-    match self.const_object_size_expr_size(args[0], mode) {
-      Some(size) => return size.to_int64()
+    match self.const_object_size_expr_fact(args[0]) {
+      Some(fact) => return const_object_size_fact_value(fact, mode).to_int64()
       None => ()
     }
   }
@@ -349,6 +425,14 @@ fn const_type_core(ty : Type) -> Type {
   match ty {
     Atomic(inner) | Aligned(inner, _) => const_type_core(inner)
     _ => ty
+  }
+}
+
+///|
+fn const_pointer_or_array_element_type(ty : Type) -> Type? {
+  match const_type_core(ty) {
+    Pointer(elem) | Array(elem, _) => Some(elem)
+    _ => None
   }
 }
 

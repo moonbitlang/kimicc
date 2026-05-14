@@ -2198,8 +2198,8 @@ fn X64Codegen::builtin_object_size_value(
     } else {
       0L
     }
-    match self.object_size_expr_size(args[0], mode) {
-      Some(size) => return size.to_int64()
+    match self.object_size_expr_fact(args[0]) {
+      Some(fact) => return x64_object_size_fact_value(fact, mode).to_int64()
       None => ()
     }
   }
@@ -2254,12 +2254,53 @@ fn X64Codegen::object_size_lvalue_type(
 }
 
 ///|
-fn X64Codegen::object_size_array_element_size(
+priv struct X64ObjectSizeFact {
+  whole : Int
+  subobject : Int
+}
+
+///|
+fn x64_object_size_fact_value(fact : X64ObjectSizeFact, mode : Int64) -> Int {
+  if (mode & 1L) != 0L {
+    fact.subobject
+  } else {
+    fact.whole
+  }
+}
+
+///|
+fn x64_object_size_subtract_offset(
+  fact : X64ObjectSizeFact,
+  offset : Int,
+) -> X64ObjectSizeFact? {
+  if offset < 0 || offset > fact.whole || offset > fact.subobject {
+    None
+  } else {
+    Some({ whole: fact.whole - offset, subobject: fact.subobject - offset })
+  }
+}
+
+///|
+fn X64Codegen::object_size_var_fact(
+  self : X64Codegen,
+  name : String,
+) -> X64ObjectSizeFact? {
+  match self.object_size_var_type(name) {
+    Some(ty) => {
+      let size = self.type_size(ty)
+      Some({ whole: size, subobject: size })
+    }
+    None => None
+  }
+}
+
+///|
+fn X64Codegen::object_size_array_element_fact(
   self : X64Codegen,
   base_ty : @parser.Type,
   index : @parser.Expr,
-  mode : Int64,
-) -> Int? {
+  base_fact : X64ObjectSizeFact,
+) -> X64ObjectSizeFact? {
   match x64_core_type(base_ty) {
     Array(elem, n) =>
       match self.fold_const(index) {
@@ -2270,15 +2311,9 @@ fn X64Codegen::object_size_array_element_size(
             let index = raw_index.to_int()
             if index > n {
               None
-            } else if index == n {
-              Some(0)
             } else {
               let elem_size = self.type_size(elem)
-              if (mode & 1L) != 0L {
-                Some(elem_size)
-              } else {
-                Some((n - index) * elem_size)
-              }
+              x64_object_size_subtract_offset(base_fact, index * elem_size)
             }
           }
         None => None
@@ -2288,50 +2323,84 @@ fn X64Codegen::object_size_array_element_size(
 }
 
 ///|
-fn X64Codegen::object_size_lvalue_size(
+fn X64Codegen::object_size_lvalue_fact(
   self : X64Codegen,
   expr : @parser.Expr,
-  mode : Int64,
-) -> Int? {
+) -> X64ObjectSizeFact? {
   match expr {
-    Var(name) =>
-      match self.object_size_var_type(name) {
-        Some(ty) => Some(self.type_size(ty))
-        None => None
-      }
+    Var(name) => self.object_size_var_fact(name)
     ArrayAccess(base, index) =>
-      match self.object_size_lvalue_type(base) {
-        Some(base_ty) =>
-          self.object_size_array_element_size(base_ty, index, mode)
-        None => None
+      match
+        (self.object_size_lvalue_type(base), self.object_size_lvalue_fact(base)) {
+        (Some(base_ty), Some(base_fact)) =>
+          self.object_size_array_element_fact(base_ty, index, base_fact)
+        _ => None
       }
     MemberAccess(obj, field) =>
-      match self.object_size_lvalue_type(obj) {
-        Some(obj_ty) =>
+      match
+        (self.object_size_lvalue_type(obj), self.object_size_lvalue_fact(obj)) {
+        (Some(obj_ty), Some(obj_fact)) =>
           match self.field_layout(obj_ty, field) {
-            Some((_, field_ty, _, _, _, _)) => Some(self.type_size(field_ty))
+            Some((_, field_ty, offset, _, _, _)) =>
+              match x64_object_size_subtract_offset(obj_fact, offset) {
+                Some(fact) =>
+                  Some({
+                    whole: fact.whole,
+                    subobject: self.type_size(field_ty),
+                  })
+                None => None
+              }
             None => None
           }
-        None => None
+        _ => None
       }
     _ => None
   }
 }
 
 ///|
-fn X64Codegen::object_size_expr_size(
+fn X64Codegen::object_size_offset_expr_fact(
+  self : X64Codegen,
+  base : @parser.Expr,
+  offset_expr : @parser.Expr,
+) -> X64ObjectSizeFact? {
+  match
+    (
+      self.object_size_expr_fact(base),
+      self.fold_const(offset_expr),
+      x64_pointer_element(self.type_of(base)),
+    ) {
+    (Some(fact), Some(index), Some(elem)) =>
+      if index < 0L {
+        None
+      } else {
+        x64_object_size_subtract_offset(
+          fact,
+          index.to_int() * self.type_size(elem),
+        )
+      }
+    _ => None
+  }
+}
+
+///|
+fn X64Codegen::object_size_expr_fact(
   self : X64Codegen,
   expr : @parser.Expr,
-  mode : Int64,
-) -> Int? {
+) -> X64ObjectSizeFact? {
   match expr {
-    Cast(_, inner) => self.object_size_expr_size(inner, mode)
-    AddrOf(inner) => self.object_size_lvalue_size(inner, mode)
+    Cast(_, inner) => self.object_size_expr_fact(inner)
+    AddrOf(inner) => self.object_size_lvalue_fact(inner)
+    Binary("+", lhs, rhs) =>
+      match self.object_size_offset_expr_fact(lhs, rhs) {
+        Some(fact) => Some(fact)
+        None => self.object_size_offset_expr_fact(rhs, lhs)
+      }
     Var(name) =>
       match self.object_size_var_type(name) {
         Some(ty) =>
           match x64_core_type(ty) {
-            Array(_, _) => Some(self.type_size(ty))
+            Array(_, _) => self.object_size_var_fact(name)
             _ => None
           }
         None => None
@@ -2340,7 +2409,7 @@ fn X64Codegen::object_size_expr_size(
       match self.object_size_lvalue_type(expr) {
         Some(ty) =>
           match x64_core_type(ty) {
-            Array(_, _) => Some(self.type_size(ty))
+            Array(_, _) => self.object_size_lvalue_fact(expr)
             _ => None
           }
         None => None

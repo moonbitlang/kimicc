@@ -217,7 +217,25 @@ test "mir folds constants with target layout" {
       Number(1),
     ]),
     scope,
-    1L,
+    13L,
+  )
+  expect_const(
+    mir,
+    Call(Var("__builtin_object_size"), [
+      Binary("+", Var("global_buf"), Number(3)),
+      Number(0),
+    ]),
+    scope,
+    13L,
+  )
+  expect_const(
+    mir,
+    Call(Var("__builtin_object_size"), [
+      Binary("+", AddrOf(ArrayAccess(Var("global_buf"), Number(3))), Number(2)),
+      Number(1),
+    ]),
+    scope,
+    11L,
   )
   expect_const(
     mir,
@@ -297,7 +315,7 @@ test "mir folds constants with target layout" {
       Number(1),
     ]),
     local_scope,
-    4L,
+    8L,
   )
   expect_const(
     mir,
@@ -924,13 +942,19 @@ test "mir interpreter models literal object size builtins" {
     #|  if (side != 0) return 8;
     #|  if (__builtin_object_size(&x, 0) != sizeof(x)) return 9;
     #|  if (__builtin_dynamic_object_size((void *)buf, 2) != sizeof(buf)) return 10;
-    #|  if (__builtin_object_size(&global_s.buf, 0) != sizeof(global_s.buf)) return 11;
+    #|  if (__builtin_object_size(&global_s.buf, 0) != sizeof(global_s) - __builtin_offsetof(struct S, buf)) return 11;
     #|  if (__builtin_dynamic_object_size((void *)global_buf, 2) != sizeof(global_buf)) return 12;
-    #|  if (__builtin_dynamic_object_size(global_s.buf, 2) != sizeof(global_s.buf)) return 13;
-    #|  if (__builtin_object_size(&local_s.buf, 0) != sizeof(local_s.buf)) return 14;
-    #|  if (__builtin_dynamic_object_size(local_s.buf, 2) != sizeof(local_s.buf)) return 15;
-    #|  if (!__builtin_constant_p(1 + 2)) return 16;
-    #|  if (__builtin_constant_p(side)) return 17;
+    #|  if (__builtin_dynamic_object_size(global_s.buf, 2) != sizeof(global_s) - __builtin_offsetof(struct S, buf)) return 13;
+    #|  if (__builtin_dynamic_object_size(global_s.buf, 3) != sizeof(global_s.buf)) return 14;
+    #|  if (__builtin_object_size(&local_s.buf, 0) != sizeof(local_s) - __builtin_offsetof(struct S, buf)) return 15;
+    #|  if (__builtin_dynamic_object_size(local_s.buf, 2) != sizeof(local_s) - __builtin_offsetof(struct S, buf)) return 16;
+    #|  if (__builtin_dynamic_object_size(local_s.buf, 3) != sizeof(local_s.buf)) return 17;
+    #|  if (__builtin_object_size(&buf[3], 1) != sizeof(buf) - 3) return 18;
+    #|  if (__builtin_object_size(buf + 3, 0) != sizeof(buf) - 3) return 19;
+    #|  if (__builtin_dynamic_object_size(&global_s.buf[4], 2) != sizeof(global_s) - __builtin_offsetof(struct S, buf) - 4) return 20;
+    #|  if (__builtin_dynamic_object_size(&global_s.buf[4], 3) != sizeof(global_s.buf) - 4) return 21;
+    #|  if (!__builtin_constant_p(1 + 2)) return 23;
+    #|  if (__builtin_constant_p(side)) return 22;
     #|  return 42;
     #|}
   expect_interp(source, 42L)

@@ -1395,13 +1395,55 @@ fn Program::object_size_lvalue_type(
 }
 
 ///|
-fn Program::object_size_array_element_size(
+priv struct ObjectSizeFact {
+  whole : Int
+  subobject : Int
+}
+
+///|
+fn object_size_fact_value(fact : ObjectSizeFact, mode : Int64) -> Int {
+  if (mode & 1L) != 0L {
+    fact.subobject
+  } else {
+    fact.whole
+  }
+}
+
+///|
+fn object_size_subtract_offset(
+  fact : ObjectSizeFact,
+  offset : Int,
+) -> ObjectSizeFact? {
+  if offset < 0 || offset > fact.whole || offset > fact.subobject {
+    None
+  } else {
+    Some({ whole: fact.whole - offset, subobject: fact.subobject - offset })
+  }
+}
+
+///|
+fn Program::object_size_var_fact(
+  self : Program,
+  name : String,
+  scope : Scope,
+) -> ObjectSizeFact? {
+  match self.object_size_var_type(name, scope) {
+    Some(ty) => {
+      let size = self.type_size(ty)
+      Some({ whole: size, subobject: size })
+    }
+    None => None
+  }
+}
+
+///|
+fn Program::object_size_array_element_fact(
   self : Program,
   base_ty : @parser.Type,
   index : @parser.Expr,
   scope : Scope,
-  mode : Int64,
-) -> Int? {
+  base_fact : ObjectSizeFact,
+) -> ObjectSizeFact? {
   match self.core_type(base_ty) {
     Array(elem, n) =>
       match self.fold_const(index, scope) {
@@ -1412,15 +1454,9 @@ fn Program::object_size_array_element_size(
             let index = raw_index.to_int()
             if index > n {
               None
-            } else if index == n {
-              Some(0)
             } else {
               let elem_size = self.type_size(elem)
-              if (mode & 1L) != 0L {
-                Some(elem_size)
-              } else {
-                Some((n - index) * elem_size)
-              }
+              object_size_subtract_offset(base_fact, index * elem_size)
             }
           }
         None => None
@@ -1430,52 +1466,90 @@ fn Program::object_size_array_element_size(
 }
 
 ///|
-fn Program::object_size_lvalue_size(
+fn Program::object_size_lvalue_fact(
   self : Program,
   expr : @parser.Expr,
   scope : Scope,
-  mode : Int64,
-) -> Int? {
+) -> ObjectSizeFact? {
   match expr {
-    Var(name) =>
-      match self.object_size_var_type(name, scope) {
-        Some(ty) => Some(self.type_size(ty))
-        None => None
-      }
+    Var(name) => self.object_size_var_fact(name, scope)
     ArrayAccess(base, index) =>
-      match self.object_size_lvalue_type(base, scope) {
-        Some(base_ty) =>
-          self.object_size_array_element_size(base_ty, index, scope, mode)
-        None => None
+      match
+        (
+          self.object_size_lvalue_type(base, scope),
+          self.object_size_lvalue_fact(base, scope),
+        ) {
+        (Some(base_ty), Some(base_fact)) =>
+          self.object_size_array_element_fact(base_ty, index, scope, base_fact)
+        _ => None
       }
     MemberAccess(obj, field) =>
-      match self.object_size_lvalue_type(obj, scope) {
-        Some(obj_ty) =>
+      match
+        (
+          self.object_size_lvalue_type(obj, scope),
+          self.object_size_lvalue_fact(obj, scope),
+        ) {
+        (Some(obj_ty), Some(obj_fact)) =>
           match self.field_layout(obj_ty, field) {
-            Some(layout) => Some(self.type_size(layout.ty))
+            Some(layout) =>
+              match object_size_subtract_offset(obj_fact, layout.offset) {
+                Some(fact) =>
+                  Some({
+                    whole: fact.whole,
+                    subobject: self.type_size(layout.ty),
+                  })
+                None => None
+              }
             None => None
           }
-        None => None
+        _ => None
       }
     _ => None
   }
 }
 
 ///|
-fn Program::object_size_expr_size(
+fn Program::object_size_offset_expr_fact(
+  self : Program,
+  base : @parser.Expr,
+  offset_expr : @parser.Expr,
+  scope : Scope,
+) -> ObjectSizeFact? {
+  match
+    (
+      self.object_size_expr_fact(base, scope),
+      self.fold_const(offset_expr, scope),
+      self.pointer_element(self.expr_type(base, scope)),
+    ) {
+    (Some(fact), Some(index), Some(elem)) =>
+      if index < 0L {
+        None
+      } else {
+        object_size_subtract_offset(fact, index.to_int() * self.type_size(elem))
+      }
+    _ => None
+  }
+}
+
+///|
+fn Program::object_size_expr_fact(
   self : Program,
   expr : @parser.Expr,
   scope : Scope,
-  mode : Int64,
-) -> Int? {
+) -> ObjectSizeFact? {
   match expr {
-    Cast(_, inner) => self.object_size_expr_size(inner, scope, mode)
-    AddrOf(inner) => self.object_size_lvalue_size(inner, scope, mode)
+    Cast(_, inner) => self.object_size_expr_fact(inner, scope)
+    AddrOf(inner) => self.object_size_lvalue_fact(inner, scope)
+    Binary("+", lhs, rhs) =>
+      match self.object_size_offset_expr_fact(lhs, rhs, scope) {
+        Some(fact) => Some(fact)
+        None => self.object_size_offset_expr_fact(rhs, lhs, scope)
+      }
     Var(name) =>
       match self.object_size_var_type(name, scope) {
         Some(ty) =>
           match self.core_type(ty) {
-            Array(_, _) => Some(self.type_size(ty))
+            Array(_, _) => self.object_size_var_fact(name, scope)
             _ => None
           }
         None => None
@@ -1484,7 +1558,7 @@ fn Program::object_size_expr_size(
       match self.object_size_lvalue_type(expr, scope) {
         Some(ty) =>
           match self.core_type(ty) {
-            Array(_, _) => Some(self.type_size(ty))
+            Array(_, _) => self.object_size_lvalue_fact(expr, scope)
             _ => None
           }
         None => None
@@ -1504,8 +1578,8 @@ fn Program::object_size_value(
     Some(literal) => return (literal.length() + 1).to_int64()
     None => ()
   }
-  match self.object_size_expr_size(expr, scope, mode) {
-    Some(size) => size.to_int64()
+  match self.object_size_expr_fact(expr, scope) {
+    Some(fact) => object_size_fact_value(fact, mode).to_int64()
     None => unknown_object_size(mode)
   }
 }
