@@ -966,25 +966,27 @@ fn Interpreter::literal_printf_format_length(
                 }
                 let value = values[value_index]
                 if has_precision && value < 0L {
-                  self.fail(
-                    "unsupported MIR interpreter " +
-                    name +
-                    " precision argument",
-                  )
-                  return None
-                }
-                conversion_length = if has_precision &&
-                  value == 0L &&
-                  precision == 0L {
-                  0L
+                  let digit_length = value.to_string().length().to_int64() - 1L
+                  let padded_digits = if precision > digit_length {
+                    precision
+                  } else {
+                    digit_length
+                  }
+                  conversion_length = 1L + padded_digits
                 } else {
-                  value.to_string().length().to_int64()
-                }
-                if has_precision && precision > conversion_length {
-                  conversion_length = precision
-                }
-                if value >= 0L && (plus_flag || space_flag) {
-                  conversion_length += 1L
+                  conversion_length = if has_precision &&
+                    value == 0L &&
+                    precision == 0L {
+                    0L
+                  } else {
+                    value.to_string().length().to_int64()
+                  }
+                  if has_precision && precision > conversion_length {
+                    conversion_length = precision
+                  }
+                  if value >= 0L && (plus_flag || space_flag) {
+                    conversion_length += 1L
+                  }
                 }
               }
               if width > conversion_length {

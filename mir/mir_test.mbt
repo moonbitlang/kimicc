@@ -870,6 +870,21 @@ test "mir interpreter models decimal precision checked printf lengths" {
 }
 
 ///|
+test "mir interpreter models signed decimal precision checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(32);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"n=%.4d", n -= 12) != 7) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 32, (const char *)"%+.3d%%", -8) != 5) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"w=%7.3i", -5) != 9) return 3;
+    #|  if (n != -12) return 4;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter models radix precision checked printf lengths" {
   let source =
     #|int main(void) {
