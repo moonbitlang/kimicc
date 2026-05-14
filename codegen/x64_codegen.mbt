@@ -3074,17 +3074,17 @@ fn X64Codegen::builtin_return_type(
     | "__builtin_huge_valf"
     | "__builtin_inff" => Some(Float)
     "__builtin_fabs"
-    | "__builtin_fabsl"
     | "__builtin_copysign"
-    | "__builtin_copysignl"
     | "__builtin_sqrt"
-    | "__builtin_sqrtl"
     | "__builtin_nan"
-    | "__builtin_nanl"
     | "__builtin_huge_val"
+    | "__builtin_inf" => Some(Double)
+    "__builtin_fabsl"
+    | "__builtin_copysignl"
+    | "__builtin_sqrtl"
+    | "__builtin_nanl"
     | "__builtin_huge_vall"
-    | "__builtin_inf"
-    | "__builtin_infl" => Some(Double)
+    | "__builtin_infl" => Some(LongDouble)
     "__builtin_isgreater"
     | "__builtin_isgreaterequal"
     | "__builtin_isless"

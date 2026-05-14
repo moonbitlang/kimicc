@@ -406,6 +406,11 @@ test "darwin codegen layout facts match MIR facts" {
   )
   expect_darwin_expr_type_facts(codegen, mir, Var("callee"))
   expect_darwin_expr_type_facts(codegen, mir, Call(Var("callee"), [Number(1)]))
+  expect_darwin_expr_type_facts(
+    codegen,
+    mir,
+    Call(Var("__builtin_fabsl"), [FloatLiteral(1.0)]),
+  )
   expect_darwin_expr_type_facts(codegen, mir, SizeofExpr(Var("s")))
   expect_darwin_fold_const_facts(
     codegen,
@@ -502,6 +507,11 @@ test "linux amd64 codegen layout facts match MIR facts" {
   )
   expect_x64_expr_type_facts(codegen, mir, Var("callee"))
   expect_x64_expr_type_facts(codegen, mir, Call(Var("callee"), [Number(1)]))
+  expect_x64_expr_type_facts(
+    codegen,
+    mir,
+    Call(Var("__builtin_fabsl"), [FloatLiteral(1.0)]),
+  )
   expect_x64_expr_type_facts(codegen, mir, SizeofExpr(Var("s")))
   expect_x64_fold_const_facts(codegen, mir, Binary("/", Number(1), Number(2)))
   expect_x64_fold_const_facts(
