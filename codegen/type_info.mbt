@@ -327,6 +327,24 @@ fn Codegen::compute_union_layout(
 }
 
 ///|
+fn darwin_field_layout_tuple(
+  layout : @mir.FieldLayout,
+) -> (String, @parser.Type, Int, Int, Int, Int) {
+  let bit_width = match layout.bit_width {
+    Some(width) => width
+    None => 0
+  }
+  (
+    layout.name,
+    layout.ty,
+    layout.offset,
+    layout.size,
+    layout.bit_offset,
+    bit_width,
+  )
+}
+
+///|
 fn Codegen::find_field_layout(
   self : Codegen,
   struct_name : String,
@@ -341,22 +359,7 @@ fn Codegen::find_field_layout(
         @parser.Type::Struct(struct_name)
       }
       match mir.field_layout(ty, field) {
-        Some(layout) => {
-          let bit_width = match layout.bit_width {
-            Some(width) => width
-            None => 0
-          }
-          return Some(
-            (
-              layout.name,
-              layout.ty,
-              layout.offset,
-              layout.size,
-              layout.bit_offset,
-              bit_width,
-            ),
-          )
-        }
+        Some(layout) => return Some(darwin_field_layout_tuple(layout))
         None => return None
       }
     }
@@ -379,6 +382,14 @@ fn Codegen::find_field_layout_for_type(
   ty : @parser.Type,
   field : String,
 ) -> (String, @parser.Type, Int, Int, Int, Int)? {
+  match self.mir {
+    Some(mir) =>
+      match mir.field_layout(ty, field) {
+        Some(layout) => return Some(darwin_field_layout_tuple(layout))
+        None => return None
+      }
+    None => ()
+  }
   match peel_aligned_type(ty) {
     Struct(name) | Union(name) => self.find_field_layout(name, field)
     _ => None

@@ -716,6 +716,7 @@ test "attached darwin arm64 semantic queries use MIR state" {
   codegen.func_name = "main"
   expect_darwin_type_facts(codegen, mir, Struct("A"))
   expect_darwin_field_facts(codegen, mir, Struct("A"), "arr")
+  expect_darwin_field_facts(codegen, mir, Union("U"), "ld")
   expect_darwin_offset_facts(codegen, mir, Struct("A"), [
     OffsetField("arr"),
     OffsetIndex(2),
@@ -752,6 +753,7 @@ test "attached linux amd64 semantic queries use MIR state" {
   codegen.func_name = "main"
   expect_x64_type_facts(codegen, mir, Struct("A"))
   expect_x64_field_facts(codegen, mir, Struct("A"), "arr")
+  expect_x64_field_facts(codegen, mir, Union("U"), "ld")
   expect_x64_offset_facts(codegen, mir, Struct("A"), [
     OffsetField("arr"),
     OffsetIndex(2),
