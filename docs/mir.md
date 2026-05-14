@@ -98,17 +98,19 @@ that both assembly backends walk.
   backend-local facts agree with MIR for representative scalar, aggregate,
   packed, union, bit-field, offsetof, expression type, global-expression type,
   builtin-return type, and integer and floating constant-folding cases. It also
-  pins attached-backend scalar builtin constant-folding delegation to MIR.
+  pins attached-backend semantic queries and scalar builtin constant-folding
+  delegation to MIR without relying on pre-populated backend layout tables.
 
 ## Backend Sharing
 
-Darwin ARM64 attaches a lowered MIR program during assembly generation and
-delegates size, alignment, field-layout, offsetof path, expression type,
-global-expression type, and covered integer/floating constant-folding queries to
-MIR when that lowered program is present. Runtime `__builtin_object_size` and
-`__builtin_dynamic_object_size` lowering also use the MIR object-size fact when
-available. Its older local semantic paths remain in place as fallbacks for
-direct private construction in tests.
+Darwin ARM64 receives a lowered MIR program through `generate_assembly_for_target`,
+and direct `Codegen::generate` construction attaches a darwin/arm64 MIR program
+if one is not already present. It delegates size, alignment, field-layout,
+offsetof path, expression type, global-expression type, and covered
+integer/floating constant-folding queries to MIR when that lowered program is
+present. Runtime `__builtin_object_size` and `__builtin_dynamic_object_size`
+lowering also use the MIR object-size fact when available. Its older local
+semantic paths remain in place for whitebox consistency tests and as fallbacks.
 
 Linux/amd64 receives a lowered MIR program through `generate_assembly_for_target`,
 and direct private `X64Codegen::generate` construction attaches a linux/amd64 MIR

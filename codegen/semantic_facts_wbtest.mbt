@@ -706,6 +706,77 @@ test "linux amd64 codegen layout facts match MIR facts" {
 }
 
 ///|
+test "attached darwin arm64 semantic queries use MIR state" {
+  let prog = @parser.parse(semantic_fact_source())
+  let mir = @mir.lower(prog, @target.Target::default())
+  let codegen = Codegen::new()
+  codegen.mir = Some(mir)
+  codegen.var_types["local_buf"] = Array(SChar, 16)
+  codegen.var_types["s"] = Struct("A")
+  codegen.func_name = "main"
+  expect_darwin_type_facts(codegen, mir, Struct("A"))
+  expect_darwin_field_facts(codegen, mir, Struct("A"), "arr")
+  expect_darwin_offset_facts(codegen, mir, Struct("A"), [
+    OffsetField("arr"),
+    OffsetIndex(2),
+  ])
+  expect_darwin_global_expr_type_facts(
+    codegen,
+    mir,
+    AddrOf(MemberAccess(Var("ga"), "arr")),
+  )
+  expect_darwin_expr_type_facts(codegen, mir, MemberAccess(Var("s"), "arr"))
+  expect_darwin_object_size_facts(codegen, mir, [AddrOf(Var("ga")), Number(0)])
+  expect_darwin_object_size_facts(codegen, mir, [Var("local_buf"), Number(2)])
+  expect_darwin_fold_const_facts(
+    codegen,
+    mir,
+    OffsetOf(Struct("A"), [OffsetField("arr"), OffsetIndex(2)]),
+  )
+  expect_darwin_fold_float_const_facts(
+    codegen,
+    mir,
+    Binary("/", Cast(Double, Number(1)), Number(2)),
+  )
+}
+
+///|
+test "attached linux amd64 semantic queries use MIR state" {
+  let target = semantic_linux_target()
+  let prog = @parser.parse_for_target(semantic_fact_source(), target)
+  let mir = @mir.lower(prog, target)
+  let codegen = X64Codegen::new()
+  codegen.mir = Some(mir)
+  codegen.var_types["local_buf"] = Array(SChar, 16)
+  codegen.var_types["s"] = Struct("A")
+  codegen.func_name = "main"
+  expect_x64_type_facts(codegen, mir, Struct("A"))
+  expect_x64_field_facts(codegen, mir, Struct("A"), "arr")
+  expect_x64_offset_facts(codegen, mir, Struct("A"), [
+    OffsetField("arr"),
+    OffsetIndex(2),
+  ])
+  expect_x64_global_expr_type_facts(
+    codegen,
+    mir,
+    AddrOf(MemberAccess(Var("ga"), "arr")),
+  )
+  expect_x64_expr_type_facts(codegen, mir, MemberAccess(Var("s"), "arr"))
+  expect_x64_object_size_facts(codegen, mir, [AddrOf(Var("ga")), Number(0)])
+  expect_x64_object_size_facts(codegen, mir, [Var("local_buf"), Number(2)])
+  expect_x64_fold_const_facts(
+    codegen,
+    mir,
+    OffsetOf(Struct("A"), [OffsetField("arr"), OffsetIndex(2)]),
+  )
+  expect_x64_fold_float_const_facts(
+    codegen,
+    mir,
+    Binary("/", Cast(Double, Number(1)), Number(2)),
+  )
+}
+
+///|
 test "direct linux amd64 codegen attaches MIR facts" {
   let target = semantic_linux_target()
   let prog = @parser.parse_for_target(
