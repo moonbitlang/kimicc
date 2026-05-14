@@ -107,6 +107,10 @@ fn Interpreter::init_globals(self : Interpreter) -> Unit {
       !seen.contains(original.name) {
       seen[original.name] = true
       let decl = self.program.globals[original.name]
+      if !self.program.runtime_int_type(decl.ty) {
+        // Non-runtime globals still provide type facts through Program::globals.
+        continue
+      }
       let value = match decl.init {
         None => 0L
         Some(Scalar(expr)) =>
@@ -124,11 +128,7 @@ fn Interpreter::init_globals(self : Interpreter) -> Unit {
           0L
         }
       }
-      if self.program.runtime_int_type(decl.ty) {
-        self.globals[decl.name] = self.program.runtime_cast_int(value, decl.ty)
-      } else {
-        self.fail("unsupported global type for MIR interpreter: " + decl.name)
-      }
+      self.globals[decl.name] = self.program.runtime_cast_int(value, decl.ty)
     }
   }
 }
@@ -161,6 +161,9 @@ fn Interpreter::read_var(
     0L
   } else if self.globals.contains(name) {
     self.globals[name]
+  } else if self.program.globals.contains(name) {
+    self.fail("unsupported MIR interpreter global value: " + name)
+    0L
   } else {
     self.fail("unknown variable in MIR interpreter: " + name)
     0L

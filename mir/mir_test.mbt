@@ -862,6 +862,8 @@ test "mir interpreter evaluates ignored hint operand side effects" {
 test "mir interpreter models literal object size builtins" {
   let source =
     #|struct S { int x; char buf[9]; };
+    #|char global_buf[16];
+    #|struct S global_s;
     #|int main(void) {
     #|  int side = 0;
     #|  int x;
@@ -877,13 +879,31 @@ test "mir interpreter models literal object size builtins" {
     #|  if (side != 0) return 8;
     #|  if (__builtin_object_size(&x, 0) != sizeof(x)) return 9;
     #|  if (__builtin_dynamic_object_size((void *)buf, 2) != sizeof(buf)) return 10;
-    #|  if (__builtin_object_size(&local_s.buf, 0) != sizeof(local_s.buf)) return 11;
-    #|  if (__builtin_dynamic_object_size(local_s.buf, 2) != sizeof(local_s.buf)) return 12;
-    #|  if (!__builtin_constant_p(1 + 2)) return 13;
-    #|  if (__builtin_constant_p(side)) return 14;
+    #|  if (__builtin_object_size(&global_s.buf, 0) != sizeof(global_s.buf)) return 11;
+    #|  if (__builtin_dynamic_object_size((void *)global_buf, 2) != sizeof(global_buf)) return 12;
+    #|  if (__builtin_dynamic_object_size(global_s.buf, 2) != sizeof(global_s.buf)) return 13;
+    #|  if (__builtin_object_size(&local_s.buf, 0) != sizeof(local_s.buf)) return 14;
+    #|  if (__builtin_dynamic_object_size(local_s.buf, 2) != sizeof(local_s.buf)) return 15;
+    #|  if (!__builtin_constant_p(1 + 2)) return 16;
+    #|  if (__builtin_constant_p(side)) return 17;
     #|  return 42;
     #|}
   expect_interp(source, 42L)
+}
+
+///|
+test "mir interpreter reports unsupported global aggregate reads" {
+  let source =
+    #|char global_buf[16];
+    #|int main(void) {
+    #|  return global_buf;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match mir.interpret_i64("main", []) {
+    Ok(_) => abort("expected MIR interpreter unsupported-global-value error")
+    Err(message) =>
+      assert_eq(message, "unsupported MIR interpreter global value: global_buf")
+  }
 }
 
 ///|
