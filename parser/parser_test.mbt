@@ -1592,6 +1592,8 @@ test "parse builtin choose expr and types compatible fold constants" {
 ///|
 test "parse object size builtin constants in static asserts" {
   let source =
+    #|struct S { int x; char buf[9]; };
+    #|struct S global_s;
     #|int global_x;
     #|char global_buf[16];
     #|_Static_assert(__builtin_object_size("abc", 0) == 4, "literal object size");
@@ -1600,6 +1602,8 @@ test "parse object size builtin constants in static asserts" {
     #|_Static_assert(__builtin_dynamic_object_size((void *)0, 2) == 0, "unknown min object size");
     #|_Static_assert(__builtin_object_size(&global_x, 0) == sizeof(global_x), "global object size");
     #|_Static_assert(__builtin_dynamic_object_size((void *)global_buf, 2) == sizeof(global_buf), "global array size");
+    #|_Static_assert(__builtin_object_size(&global_s.buf, 0) == sizeof(global_s.buf), "global member object size");
+    #|_Static_assert(__builtin_dynamic_object_size(global_s.buf, 2) == sizeof(global_s.buf), "global member array size");
     #|_Static_assert(__builtin_constant_p(1 + 2) == 1, "constant expression");
     #|_Static_assert(__builtin_constant_p(global_x) == 0, "runtime object is not constant");
     #|_Static_assert(__builtin_abs(-7) == 7, "abs constant");
@@ -1610,8 +1614,11 @@ test "parse object size builtin constants in static asserts" {
     #|int main(void) {
     #|  int local_x;
     #|  char local_buf[16];
+    #|  struct S local_s;
     #|  _Static_assert(__builtin_object_size(&local_x, 0) == sizeof(local_x), "local object size");
     #|  _Static_assert(__builtin_dynamic_object_size((void *)local_buf, 2) == sizeof(local_buf), "local array size");
+    #|  _Static_assert(__builtin_object_size(&local_s.buf, 0) == sizeof(local_s.buf), "local member object size");
+    #|  _Static_assert(__builtin_dynamic_object_size(local_s.buf, 2) == sizeof(local_s.buf), "local member array size");
     #|  return 0;
     #|}
   ignore(@parser.parse(source))

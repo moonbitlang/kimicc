@@ -188,12 +188,7 @@ fn const_builtin_object_size_value(args : Array[Expr], mode : Int64) -> Int64 {
 fn Parser::const_object_size_type(self : Parser, expr : Expr) -> Type? {
   match expr {
     Cast(_, inner) => self.const_object_size_type(inner)
-    AddrOf(Var(name)) =>
-      if self.value_types.contains(name) {
-        Some(self.value_types[name])
-      } else {
-        None
-      }
+    AddrOf(inner) => self.const_object_size_lvalue_type(inner)
     Var(name) =>
       if self.value_types.contains(name) {
         let ty = self.value_types[name]
@@ -203,6 +198,33 @@ fn Parser::const_object_size_type(self : Parser, expr : Expr) -> Type? {
         }
       } else {
         None
+      }
+    MemberAccess(_, _) =>
+      match self.const_object_size_lvalue_type(expr) {
+        Some(ty) =>
+          match const_type_core(ty) {
+            Array(_, _) => Some(ty)
+            _ => None
+          }
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
+fn Parser::const_object_size_lvalue_type(self : Parser, expr : Expr) -> Type? {
+  match expr {
+    Var(name) =>
+      if self.value_types.contains(name) {
+        Some(self.value_types[name])
+      } else {
+        None
+      }
+    MemberAccess(obj, field) =>
+      match self.const_object_size_lvalue_type(obj) {
+        Some(obj_ty) => self.const_member_type(obj_ty, field)
+        None => None
       }
     _ => None
   }
