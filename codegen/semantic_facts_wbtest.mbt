@@ -229,6 +229,36 @@ fn expect_darwin_global_expr_type_facts(
 }
 
 ///|
+fn expect_x64_expr_type_facts(
+  codegen : X64Codegen,
+  mir : @mir.Program,
+  expr : @parser.Expr,
+) -> Unit {
+  let scope = @mir.Scope::{
+    locals: codegen.var_types,
+    current_func: codegen.func_name,
+  }
+  if codegen.type_of(expr) != mir.expr_type(expr, scope) {
+    abort("x64 expression type mismatch")
+  }
+}
+
+///|
+fn expect_darwin_expr_type_facts(
+  codegen : Codegen,
+  mir : @mir.Program,
+  expr : @parser.Expr,
+) -> Unit {
+  let scope = @mir.Scope::{
+    locals: codegen.var_types,
+    current_func: codegen.func_name,
+  }
+  if codegen.type_of(expr, 0) != mir.expr_type(expr, scope) {
+    abort("darwin expression type mismatch")
+  }
+}
+
+///|
 fn expect_x64_fold_const_facts(
   codegen : X64Codegen,
   mir : @mir.Program,
@@ -307,6 +337,9 @@ test "darwin codegen layout facts match MIR facts" {
   let prog = @parser.parse(semantic_fact_source())
   let mir = @mir.lower(prog, @target.Target::default())
   let codegen = init_darwin_codegen_facts(prog)
+  codegen.var_types["p"] = Pointer(SInt)
+  codegen.var_types["s"] = Struct("A")
+  codegen.func_name = "main"
   let types : Array[@parser.Type] = [
     Bool,
     SChar,
@@ -353,6 +386,22 @@ test "darwin codegen layout facts match MIR facts" {
     mir,
     AddrOf(MemberAccess(Var("ga"), "arr")),
   )
+  expect_darwin_expr_type_facts(codegen, mir, Binary("+", Var("p"), Number(1)))
+  expect_darwin_expr_type_facts(codegen, mir, Binary("-", Var("p"), Var("p")))
+  expect_darwin_expr_type_facts(codegen, mir, MemberAccess(Var("s"), "arr"))
+  expect_darwin_expr_type_facts(
+    codegen,
+    mir,
+    ArrayAccess(MemberAccess(Var("s"), "arr"), Number(2)),
+  )
+  expect_darwin_expr_type_facts(
+    codegen,
+    mir,
+    AddrOf(MemberAccess(Var("s"), "arr")),
+  )
+  expect_darwin_expr_type_facts(codegen, mir, Var("callee"))
+  expect_darwin_expr_type_facts(codegen, mir, Call(Var("callee"), [Number(1)]))
+  expect_darwin_expr_type_facts(codegen, mir, SizeofExpr(Var("s")))
   expect_darwin_fold_const_facts(
     codegen,
     mir,
@@ -376,6 +425,9 @@ test "linux amd64 codegen layout facts match MIR facts" {
   let prog = @parser.parse_for_target(semantic_fact_source(), target)
   let mir = @mir.lower(prog, target)
   let codegen = init_x64_codegen_facts(prog)
+  codegen.var_types["p"] = Pointer(SInt)
+  codegen.var_types["s"] = Struct("A")
+  codegen.func_name = "main"
   let types : Array[@parser.Type] = [
     Bool,
     SChar,
@@ -429,6 +481,22 @@ test "linux amd64 codegen layout facts match MIR facts" {
     mir,
     AddrOf(MemberAccess(Var("ga"), "arr")),
   )
+  expect_x64_expr_type_facts(codegen, mir, Binary("+", Var("p"), Number(1)))
+  expect_x64_expr_type_facts(codegen, mir, Binary("-", Var("p"), Var("p")))
+  expect_x64_expr_type_facts(codegen, mir, MemberAccess(Var("s"), "arr"))
+  expect_x64_expr_type_facts(
+    codegen,
+    mir,
+    ArrayAccess(MemberAccess(Var("s"), "arr"), Number(2)),
+  )
+  expect_x64_expr_type_facts(
+    codegen,
+    mir,
+    AddrOf(MemberAccess(Var("s"), "arr")),
+  )
+  expect_x64_expr_type_facts(codegen, mir, Var("callee"))
+  expect_x64_expr_type_facts(codegen, mir, Call(Var("callee"), [Number(1)]))
+  expect_x64_expr_type_facts(codegen, mir, SizeofExpr(Var("s")))
   expect_x64_fold_const_facts(codegen, mir, Binary("/", Number(1), Number(2)))
   expect_x64_fold_const_facts(
     codegen,
