@@ -69,6 +69,14 @@ test "mir records target-specific scalar layout" {
   inspect(linux.type_align(LongDouble), content="16")
   inspect(linux.type_size(Float16), content="2")
   inspect(linux.type_align(Float16), content="2")
+  let scope = @mir.Scope::empty()
+  let long_double_builtin : @parser.Expr = Call(Var("__builtin_fabsl"), [
+    FloatLiteral(1.0),
+  ])
+  inspect(darwin.expr_type(long_double_builtin, scope), content="LongDouble")
+  inspect(linux.expr_type(long_double_builtin, scope), content="LongDouble")
+  expect_const(darwin, SizeofExpr(long_double_builtin), scope, 8L)
+  expect_const(linux, SizeofExpr(long_double_builtin), scope, 16L)
 }
 
 ///|
