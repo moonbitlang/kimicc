@@ -52,9 +52,10 @@ that both assembly backends walk.
   absolute value, alignment predicates/helpers, bit counts, byte swaps, parity,
   first/leading/trailing set-bit queries, rotations, and `__builtin_flt_rounds`.
   MIR also folds the covered floating constant subset used by global
-  initializers: floating literals, integer-to-floating and floating-to-integer
-  cast paths, arithmetic, ternaries selected by integer constants, and the
-  modeled NaN/infinity builtins.
+  initializers and compile-test predicates: floating literals,
+  integer-to-floating and floating-to-integer cast paths, arithmetic, ternaries
+  selected by integer constants, modeled NaN/infinity builtins, and foldable
+  `__builtin_fabs`, `__builtin_copysign`, and `__builtin_sqrt` calls.
   Runtime `__builtin_object_size` and `__builtin_dynamic_object_size` model
   string-literal object sizes, direct named objects (`&x`), direct named arrays
   (`buf`), and direct aggregate member subobjects such as `&s.buf` or `s.buf`.

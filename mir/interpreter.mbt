@@ -533,15 +533,6 @@ fn Interpreter::eval_builtin_fp_compare(
 }
 
 ///|
-fn fp_abs(value : Double) -> Double {
-  if value < 0.0 {
-    -value
-  } else {
-    value
-  }
-}
-
-///|
 fn fp_class_bool(value : Bool) -> Int64 {
   if value {
     1L
@@ -586,9 +577,9 @@ fn Interpreter::eval_builtin_fp_class(
     "__builtin_isfinite" | "__builtin_isfinitef" | "__builtin_isfinitel" =>
       finite
     "__builtin_isnormal" | "__builtin_isnormalf" | "__builtin_isnormall" =>
-      finite && fp_abs(value) >= fp_class_normal_min(name)
+      finite && floating_abs(value) >= fp_class_normal_min(name)
     "__builtin_signbit" | "__builtin_signbitf" | "__builtin_signbitl" =>
-      value < 0.0 || (value == 0.0 && 1.0 / value == neg_inf)
+      floating_signbit(value)
     _ => false
   }
   fp_class_bool(result)
@@ -2024,7 +2015,16 @@ fn Interpreter::eval_expr(
       self.program.type_align(self.program.expr_type(e, scope)).to_int64()
     Cast(ty, value) =>
       if self.program.runtime_int_type(ty) {
-        self.program.runtime_cast_int(self.eval_expr(frame, value), ty)
+        if self.program.is_floating_type(self.program.expr_type(value, scope)) {
+          match self.program.fold_float_const(value, scope) {
+            Some(value) =>
+              self.program.runtime_cast_int(value.to_int().to_int64(), ty)
+            None =>
+              self.program.runtime_cast_int(self.eval_expr(frame, value), ty)
+          }
+        } else {
+          self.program.runtime_cast_int(self.eval_expr(frame, value), ty)
+        }
       } else {
         self.fail("unsupported MIR interpreter cast target")
         0L

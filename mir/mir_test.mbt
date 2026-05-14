@@ -388,6 +388,32 @@ test "mir folds constants with target layout" {
     scope,
     3.75,
   )
+  expect_float_const(
+    mir,
+    Call(Var("__builtin_fabs"), [FloatLiteral(-4.5)]),
+    scope,
+    4.5,
+  )
+  expect_float_const(
+    mir,
+    Call(Var("__builtin_copysign"), [FloatLiteral(3.0), FloatLiteral(-1.0)]),
+    scope,
+    -3.0,
+  )
+  expect_float_const(
+    mir,
+    Call(Var("__builtin_sqrt"), [FloatLiteral(81.0)]),
+    scope,
+    9.0,
+  )
+  match
+    mir.fold_float_const(
+      Call(Var("__builtin_sqrt"), [FloatLiteral(-1.0)]),
+      scope,
+    ) {
+    Some(value) => if value == value { abort("expected folded NaN") }
+    None => abort("expected folded NaN")
+  }
   match mir.fold_float_const(Call(Var("__builtin_huge_valf"), []), scope) {
     Some(value) => if !(value > 1000000.0) { abort("expected folded infinity") }
     None => abort("expected folded infinity")
@@ -1413,6 +1439,25 @@ test "mir interpreter models constant floating classification builtins" {
     #|  if (__builtin_signbit(1.0)) return 21;
     #|  if (!__builtin_signbitf(-0.0f)) return 22;
     #|  if (!__builtin_signbitl(-1.0L)) return 23;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
+test "mir interpreter casts folded floating builtins" {
+  let source =
+    #|int main(void) {
+    #|  if ((int)__builtin_fabs(-4.5) != 4) return 1;
+    #|  if ((int)__builtin_fabsf(-3.5f) != 3) return 2;
+    #|  if ((int)__builtin_fabsl(-2.5L) != 2) return 3;
+    #|  if ((int)__builtin_copysign(3.0, -1.0) != -3) return 4;
+    #|  if ((int)__builtin_copysign(-3.0, 1.0) != 3) return 5;
+    #|  if (!__builtin_signbit(__builtin_copysign(0.0, -1.0))) return 6;
+    #|  if ((int)__builtin_sqrt(81.0) != 9) return 7;
+    #|  if ((int)__builtin_sqrtf(25.0f) != 5) return 8;
+    #|  if ((int)__builtin_sqrtl(16.0L) != 4) return 9;
+    #|  if (!__builtin_isnan(__builtin_sqrt(-1.0))) return 10;
     #|  return 42;
     #|}
   expect_interp(source, 42L)

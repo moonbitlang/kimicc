@@ -2077,6 +2077,31 @@ pub fn Program::fold_const(
 }
 
 ///|
+fn floating_abs(value : Double) -> Double {
+  if value < 0.0 {
+    -value
+  } else {
+    value
+  }
+}
+
+///|
+fn floating_signbit(value : Double) -> Bool {
+  let neg_inf = -(1.0 / 0.0)
+  value < 0.0 || (value == 0.0 && 1.0 / value == neg_inf)
+}
+
+///|
+fn floating_copysign(magnitude : Double, sign : Double) -> Double {
+  let value = floating_abs(magnitude)
+  if floating_signbit(sign) {
+    -value
+  } else {
+    value
+  }
+}
+
+///|
 pub fn Program::fold_float_const(
   self : Program,
   expr : @parser.Expr,
@@ -2140,8 +2165,42 @@ pub fn Program::fold_float_const(
       | DesignatedField(_, e)
       | DesignatedIndex(_, e)
       | DesignatedRange(_, _, e) => self.fold_float_const(e, scope)
-      Call(Var(name), _) =>
+      Call(Var(name), args) =>
         match name {
+          "__builtin_fabs" | "__builtin_fabsf" | "__builtin_fabsl" =>
+            if args.length() > 0 {
+              match self.fold_float_const(args[0], scope) {
+                Some(value) => Some(floating_abs(value))
+                None => None
+              }
+            } else {
+              None
+            }
+          "__builtin_copysign"
+          | "__builtin_copysignf"
+          | "__builtin_copysignl" =>
+            if args.length() > 1 {
+              match
+                (
+                  self.fold_float_const(args[0], scope),
+                  self.fold_float_const(args[1], scope),
+                ) {
+                (Some(magnitude), Some(sign)) =>
+                  Some(floating_copysign(magnitude, sign))
+                _ => None
+              }
+            } else {
+              None
+            }
+          "__builtin_sqrt" | "__builtin_sqrtf" | "__builtin_sqrtl" =>
+            if args.length() > 0 {
+              match self.fold_float_const(args[0], scope) {
+                Some(value) => Some(value.sqrt())
+                None => None
+              }
+            } else {
+              None
+            }
           "__builtin_nan" | "__builtin_nanf" | "__builtin_nanl" =>
             Some(0.0 / 0.0)
           "__builtin_huge_val"

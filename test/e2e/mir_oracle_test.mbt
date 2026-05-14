@@ -1267,6 +1267,22 @@ async test "e2e MIR oracle checks floating classification builtins" {
 }
 
 ///|
+async test "e2e MIR oracle checks folded floating builtin casts" {
+  let source =
+    #|int main(void) {
+    #|  if ((int)__builtin_fabs(-4.5) != 4) return 1;
+    #|  if ((int)__builtin_fabsf(-3.5f) != 3) return 2;
+    #|  if ((int)__builtin_fabsl(-2.5L) != 2) return 3;
+    #|  if ((int)__builtin_sqrt(81.0) != 9) return 4;
+    #|  if ((int)__builtin_sqrtf(25.0f) != 5) return 5;
+    #|  if ((int)__builtin_sqrtl(16.0L) != 4) return 6;
+    #|  if (!__builtin_isnan(__builtin_sqrt(-1.0))) return 7;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks literal string comparison builtins" {
   let source =
     #|int main(void) {
