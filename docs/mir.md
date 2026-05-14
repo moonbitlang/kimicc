@@ -40,8 +40,9 @@ that both assembly backends walk.
   return value when the source is a string literal. Runtime
   `__builtin___strlcat_chk` is modeled only for zero destination size and a
   string-literal source, where the destination contents are not inspected.
-  Runtime `__builtin___snprintf_chk` is modeled only for zero output size and a
-  literal format string with `%c`, literal-string `%s`, decimal `%d`/`%i`,
+  Runtime `__builtin___snprintf_chk` is modeled only for return length, with no
+  output-content modeling, and a literal format string with `%c`,
+  literal-string `%s`, decimal `%d`/`%i`,
   nonnegative `%u`/`%o`/`%x`/`%X`, optional integer length modifiers
   `l`/`ll`/`z`/`t`/`j`, simple numeric field widths with `0`/`-` flags,
   `+`/space sign flags for decimal `%d`/`%i`, `#` alternate form for

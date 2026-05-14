@@ -825,6 +825,20 @@ async test "e2e MIR oracle checks zero-size checked snprintf literal length" {
 }
 
 ///|
+async test "e2e MIR oracle checks checked snprintf nonzero buffer length" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(4);
+    #|  if (__builtin___snprintf_chk(dst, ((n += 1), 4), 0, 4, (const char *)"abcdef") != 6) return 1;
+    #|  if (__builtin___snprintf_chk(dst, 4, 0, 4, (const char *)"n=%05d", n += 6) != 7) return 2;
+    #|  if (n != 7) return 3;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks checked sprintf literal length" {
   let source =
     #|int main(void) {

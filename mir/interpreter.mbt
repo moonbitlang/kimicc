@@ -1163,9 +1163,6 @@ fn Interpreter::eval_builtin_call(
       let values = self.eval_call_args(frame, args)
       if args.length() < 5 {
         Some(0L)
-      } else if values[1] != 0L {
-        self.fail("unsupported MIR interpreter snprintf buffer size")
-        Some(0L)
       } else {
         match
           self.literal_printf_format_length(

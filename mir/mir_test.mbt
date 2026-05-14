@@ -683,6 +683,20 @@ test "mir interpreter models zero-size checked snprintf literal length" {
 }
 
 ///|
+test "mir interpreter models checked snprintf nonzero buffer length" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(4);
+    #|  if (__builtin___snprintf_chk(dst, ((n += 1), 4), 0, 4, (const char *)"abcdef") != 6) return 1;
+    #|  if (__builtin___snprintf_chk(dst, 4, 0, 4, (const char *)"n=%05d", n += 6) != 7) return 2;
+    #|  if (n != 7) return 3;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter models checked sprintf literal length" {
   let source =
     #|int main(void) {
