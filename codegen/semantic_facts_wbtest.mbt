@@ -259,6 +259,44 @@ fn expect_darwin_expr_type_facts(
 }
 
 ///|
+fn expect_x64_object_size_facts(
+  codegen : X64Codegen,
+  mir : @mir.Program,
+  args : Array[@parser.Expr],
+) -> Unit {
+  let scope = @mir.Scope::{
+    locals: codegen.var_types,
+    current_func: codegen.func_name,
+  }
+  match mir.fold_const(Call(Var("__builtin_object_size"), args), scope) {
+    Some(value) =>
+      if codegen.builtin_object_size_value(args) != value {
+        abort("x64 object size mismatch")
+      }
+    None => abort("missing x64 MIR object size fact")
+  }
+}
+
+///|
+fn expect_darwin_object_size_facts(
+  codegen : Codegen,
+  mir : @mir.Program,
+  args : Array[@parser.Expr],
+) -> Unit {
+  let scope = @mir.Scope::{
+    locals: codegen.var_types,
+    current_func: codegen.func_name,
+  }
+  match mir.fold_const(Call(Var("__builtin_object_size"), args), scope) {
+    Some(value) =>
+      if codegen.builtin_object_size_value(args) != value {
+        abort("darwin object size mismatch")
+      }
+    None => abort("missing darwin MIR object size fact")
+  }
+}
+
+///|
 fn expect_x64_fold_const_facts(
   codegen : X64Codegen,
   mir : @mir.Program,
@@ -339,6 +377,7 @@ test "darwin codegen layout facts match MIR facts" {
   let codegen = init_darwin_codegen_facts(prog)
   codegen.var_types["p"] = Pointer(SInt)
   codegen.var_types["ip"] = Pointer(SInt)
+  codegen.var_types["local_buf"] = Array(SChar, 16)
   codegen.var_types["s"] = Struct("A")
   codegen.func_name = "main"
   let types : Array[@parser.Type] = [
@@ -442,6 +481,13 @@ test "darwin codegen layout facts match MIR facts" {
     mir,
     Call(Var("__atomic_load_n"), [Var("ip"), Number(0)]),
   )
+  expect_darwin_object_size_facts(codegen, mir, [String("abc"), Number(0)])
+  expect_darwin_object_size_facts(codegen, mir, [AddrOf(Var("ga")), Number(0)])
+  expect_darwin_object_size_facts(codegen, mir, [Var("local_buf"), Number(2)])
+  expect_darwin_object_size_facts(codegen, mir, [
+    Cast(Pointer(Void), Number(0)),
+    Number(0),
+  ])
   expect_darwin_expr_type_facts(codegen, mir, SizeofExpr(Var("s")))
   expect_darwin_fold_const_facts(
     codegen,
@@ -468,6 +514,7 @@ test "linux amd64 codegen layout facts match MIR facts" {
   let codegen = init_x64_codegen_facts(prog)
   codegen.var_types["p"] = Pointer(SInt)
   codegen.var_types["ip"] = Pointer(SInt)
+  codegen.var_types["local_buf"] = Array(SChar, 16)
   codegen.var_types["s"] = Struct("A")
   codegen.func_name = "main"
   let types : Array[@parser.Type] = [
@@ -574,6 +621,13 @@ test "linux amd64 codegen layout facts match MIR facts" {
     mir,
     Call(Var("__atomic_load_n"), [Var("ip"), Number(0)]),
   )
+  expect_x64_object_size_facts(codegen, mir, [String("abc"), Number(0)])
+  expect_x64_object_size_facts(codegen, mir, [AddrOf(Var("ga")), Number(0)])
+  expect_x64_object_size_facts(codegen, mir, [Var("local_buf"), Number(2)])
+  expect_x64_object_size_facts(codegen, mir, [
+    Cast(Pointer(Void), Number(0)),
+    Number(0),
+  ])
   expect_x64_expr_type_facts(codegen, mir, SizeofExpr(Var("s")))
   expect_x64_fold_const_facts(codegen, mir, Binary("/", Number(1), Number(2)))
   expect_x64_fold_const_facts(

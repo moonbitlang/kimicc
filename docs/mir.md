@@ -104,15 +104,19 @@ that both assembly backends walk.
 Darwin ARM64 attaches a lowered MIR program during assembly generation and
 delegates size, alignment, field-layout, offsetof path, expression type,
 global-expression type, and covered integer/floating constant-folding queries to
-MIR when that lowered program is present. Its older local semantic paths remain
-in place as fallbacks for direct private construction in tests.
+MIR when that lowered program is present. Runtime `__builtin_object_size` and
+`__builtin_dynamic_object_size` lowering also use the MIR object-size fact when
+available. Its older local semantic paths remain in place as fallbacks for
+direct private construction in tests.
 
 Linux/amd64 receives a lowered MIR program through `generate_assembly_for_target`,
 and direct private `X64Codegen::generate` construction attaches a linux/amd64 MIR
 program if one is not already present. The private `X64Codegen` delegates size,
 alignment, field-layout, offsetof path, expression type, global-expression type,
 and covered integer/floating constant-folding queries to MIR when that lowered
-program is present. Its older local semantic paths remain in place for whitebox
+program is present. Runtime `__builtin_object_size` and
+`__builtin_dynamic_object_size` lowering also use the MIR object-size fact when
+available. Its older local semantic paths remain in place for whitebox
 consistency tests and as fallbacks for direct private construction in tests.
 
 ## Why This Layer Is Useful

@@ -1730,6 +1730,18 @@ fn Codegen::builtin_object_size_value(
   self : Codegen,
   args : Array[@parser.Expr],
 ) -> Int64 {
+  match self.mir {
+    Some(mir) =>
+      match
+        mir.fold_const(Call(Var("__builtin_object_size"), args), @mir.Scope::{
+          locals: self.var_types,
+          current_func: self.func_name,
+        }) {
+        Some(value) => return value
+        None => ()
+      }
+    None => ()
+  }
   if args.length() > 0 {
     match codegen_literal_string_arg(args[0]) {
       Some(value) => return (value.length() + 1).to_int64()
