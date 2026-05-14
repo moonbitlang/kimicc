@@ -1238,7 +1238,13 @@ fn Interpreter::eval_builtin_call(
       }
       Some(result)
     }
-    "__builtin_constant_p" => Some(0L)
+    "__builtin_constant_p" =>
+      if args.length() > 0 &&
+        self.program.fold_const(args[0], frame.scope()) is Some(_) {
+        Some(1L)
+      } else {
+        Some(0L)
+      }
     "__builtin_flt_rounds" => Some(1L)
     "__builtin_assume" => Some(0L)
     "__builtin_prefetch" => {

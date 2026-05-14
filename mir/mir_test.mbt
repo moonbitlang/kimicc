@@ -188,6 +188,18 @@ test "mir folds constants with target layout" {
     local_scope,
     16L,
   )
+  expect_const(
+    mir,
+    Call(Var("__builtin_constant_p"), [Binary("+", Number(1), Number(2))]),
+    scope,
+    1L,
+  )
+  expect_const(
+    mir,
+    Call(Var("__builtin_constant_p"), [Var("global_x")]),
+    scope,
+    0L,
+  )
   expect_const(mir, Binary("/", Number(1), Number(2)), scope, 0L)
   expect_const(
     mir,
@@ -741,6 +753,8 @@ test "mir interpreter models literal object size builtins" {
     #|  if (side != 0) return 8;
     #|  if (__builtin_object_size(&x, 0) != sizeof(x)) return 9;
     #|  if (__builtin_dynamic_object_size((void *)buf, 2) != sizeof(buf)) return 10;
+    #|  if (!__builtin_constant_p(1 + 2)) return 11;
+    #|  if (__builtin_constant_p(side)) return 12;
     #|  return 42;
     #|}
   expect_interp(source, 42L)

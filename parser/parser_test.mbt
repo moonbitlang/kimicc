@@ -1600,6 +1600,8 @@ test "parse object size builtin constants in static asserts" {
     #|_Static_assert(__builtin_dynamic_object_size((void *)0, 2) == 0, "unknown min object size");
     #|_Static_assert(__builtin_object_size(&global_x, 0) == sizeof(global_x), "global object size");
     #|_Static_assert(__builtin_dynamic_object_size((void *)global_buf, 2) == sizeof(global_buf), "global array size");
+    #|_Static_assert(__builtin_constant_p(1 + 2) == 1, "constant expression");
+    #|_Static_assert(__builtin_constant_p(global_x) == 0, "runtime object is not constant");
     #|int main(void) {
     #|  int local_x;
     #|  char local_buf[16];

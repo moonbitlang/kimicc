@@ -143,6 +143,12 @@ pub fn fold_const(expr : Expr) -> Int64? {
       }
       Some(const_builtin_object_size_value(args, mode))
     }
+    Call(Var("__builtin_constant_p"), args) =>
+      if args.length() > 0 && fold_const(args[0]) is Some(_) {
+        Some(1L)
+      } else {
+        Some(0L)
+      }
     Array(_) => None
     CompoundLiteral(_, _, _) => None
     _ => None
@@ -744,6 +750,14 @@ fn Parser::fold_const_int(self : Parser, expr : Expr) -> ConstIntValue? {
         0L
       }
       Some(const_int(self.const_builtin_object_size_value(args, mode), ULong))
+    }
+    Call(Var("__builtin_constant_p"), args) => {
+      let value = if args.length() > 0 && self.fold_const(args[0]) is Some(_) {
+        1L
+      } else {
+        0L
+      }
+      Some(const_int(value, SInt))
     }
     Array(_) => None
     CompoundLiteral(_, _, _) => None

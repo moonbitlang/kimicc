@@ -3434,7 +3434,12 @@ fn X64Codegen::emit_builtin_call(
       true
     }
     "__builtin_constant_p" => {
-      self.emit("\tmov\trax, 0")
+      let value = if args.length() > 0 && self.fold_const(args[0]) is Some(_) {
+        1L
+      } else {
+        0L
+      }
+      self.emit("\tmov\trax, " + value.to_string())
       true
     }
     "__builtin_flt_rounds" => {

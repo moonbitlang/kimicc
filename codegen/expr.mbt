@@ -2469,8 +2469,12 @@ fn Codegen::emit_builtin_call(
       true
     }
     "__builtin_constant_p" => {
-      // Always report non-constant (safe fallback)
-      self.emit("\tmov\tx9, #0")
+      let value = if args.length() > 0 && self.fold_const(args[0]) is Some(_) {
+        1L
+      } else {
+        0L
+      }
+      self.emit_load_int("x9", value)
       true
     }
     "__builtin_flt_rounds" => {

@@ -176,6 +176,8 @@ the target split real and testable without claiming full C ABI coverage yet.
   `__builtin_frame_address`, `__builtin_return_address`,
   `__builtin_extract_return_addr`, `__builtin_frob_return_addr`,
   `__builtin_trap`, and `__builtin_unreachable`.
+  `__builtin_constant_p` reports `1` for expressions covered by the shared
+  integer constant folder and `0` otherwise.
   String-literal object-size queries return the full literal object size, and
   direct named objects/arrays return their known size; unknown results use the C
   builtin mode fallbacks: `-1` for modes 0/1 and `0` for modes 2/3.

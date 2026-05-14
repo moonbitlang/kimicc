@@ -1597,6 +1597,15 @@ fn Program::fold_const_int(
       }
       Some(self.const_int(value, ULong))
     }
+    Call(Var("__builtin_constant_p"), args) => {
+      let value = if args.length() > 0 &&
+        self.fold_const(args[0], scope) is Some(_) {
+        1L
+      } else {
+        0L
+      }
+      Some(self.const_int(value, SInt))
+    }
     _ => None
   }
 }

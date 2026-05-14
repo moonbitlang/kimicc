@@ -2430,7 +2430,9 @@ async test "__builtin_constant_p" {
   let source =
     #|int main() {
     #|  int x = 42;
-    #|  return __builtin_constant_p(x);
+    #|  if (__builtin_constant_p(x)) return 1;
+    #|  if (!__builtin_constant_p(1 + 2)) return 2;
+    #|  return 0;
     #|}
   let exit_code = run_source_async(source)
   inspect(exit_code, content="0")

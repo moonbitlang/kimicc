@@ -158,6 +158,7 @@ async test "e2e MIR oracle checks scalar builtin calls" {
     #|  total += __builtin_expect_with_probability(x, 1 / y, 0.9);
     #|  total += __builtin_unpredictable(x);
     #|  total += __builtin_constant_p(1 / y);
+    #|  total += __builtin_constant_p(1 + 2);
     #|  total += __builtin_flt_rounds();
     #|  if (__builtin_object_size(0, 0) + 1 != 0) return 50;
     #|  if (__builtin_object_size(0, 2) != 0) return 55;
