@@ -312,6 +312,17 @@ fn expect_x64_fold_const_facts(
 }
 
 ///|
+fn expect_x64_attached_fold_const_facts(
+  codegen : X64Codegen,
+  mir : @mir.Program,
+  expr : @parser.Expr,
+) -> Unit {
+  codegen.mir = Some(mir)
+  expect_x64_fold_const_facts(codegen, mir, expr)
+  codegen.mir = None
+}
+
+///|
 fn expect_x64_fold_float_const_facts(
   codegen : X64Codegen,
   mir : @mir.Program,
@@ -342,6 +353,17 @@ fn expect_darwin_fold_const_facts(
 }
 
 ///|
+fn expect_darwin_attached_fold_const_facts(
+  codegen : Codegen,
+  mir : @mir.Program,
+  expr : @parser.Expr,
+) -> Unit {
+  codegen.mir = Some(mir)
+  expect_darwin_fold_const_facts(codegen, mir, expr)
+  codegen.mir = None
+}
+
+///|
 fn expect_darwin_fold_float_const_facts(
   codegen : Codegen,
   mir : @mir.Program,
@@ -354,6 +376,25 @@ fn expect_darwin_fold_float_const_facts(
   if codegen.fold_float_const(expr) != mir.fold_float_const(expr, scope) {
     abort("darwin floating constant fold mismatch")
   }
+}
+
+///|
+fn semantic_scalar_builtin_fold_cases() -> Array[@parser.Expr] {
+  [
+    Call(Var("__builtin_constant_p"), [Binary("+", Number(1), Number(2))]),
+    Call(Var("__builtin_flt_rounds"), []),
+    Call(Var("__builtin_is_aligned"), [Number(32), Number(16)]),
+    Call(Var("__builtin_align_up"), [Number(33), Number(16)]),
+    Call(Var("__builtin_align_down"), [Number(47), Number(16)]),
+    Call(Var("__builtin_clz"), [Number(1)]),
+    Call(Var("__builtin_ctz"), [Number(8)]),
+    Call(Var("__builtin_ffs"), [Number(8)]),
+    Call(Var("__builtin_popcount"), [Number(0xf0f0)]),
+    Call(Var("__builtin_parity"), [Number(0xf0f1)]),
+    Call(Var("__builtin_bswap32"), [Number(0x01020304)]),
+    Call(Var("__builtin_rotateleft32"), [Number(0x12345678), Number(8)]),
+    Call(Var("__builtin_rotateright32"), [Number(0x12345678), Number(8)]),
+  ]
 }
 
 ///|
@@ -494,6 +535,9 @@ test "darwin codegen layout facts match MIR facts" {
     mir,
     OffsetOf(Struct("A"), [OffsetField("arr"), OffsetIndex(3)]),
   )
+  for expr in semantic_scalar_builtin_fold_cases() {
+    expect_darwin_attached_fold_const_facts(codegen, mir, expr)
+  }
   expect_darwin_fold_float_const_facts(
     codegen,
     mir,
@@ -646,6 +690,9 @@ test "linux amd64 codegen layout facts match MIR facts" {
     mir,
     OffsetOf(Struct("A"), [OffsetField("arr"), OffsetIndex(2)]),
   )
+  for expr in semantic_scalar_builtin_fold_cases() {
+    expect_x64_attached_fold_const_facts(codegen, mir, expr)
+  }
   expect_x64_fold_float_const_facts(
     codegen,
     mir,

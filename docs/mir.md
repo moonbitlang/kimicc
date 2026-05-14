@@ -97,7 +97,8 @@ that both assembly backends walk.
 - `codegen/semantic_facts_wbtest.mbt` checks that Darwin ARM64 and linux/amd64
   backend-local facts agree with MIR for representative scalar, aggregate,
   packed, union, bit-field, offsetof, expression type, global-expression type,
-  builtin-return type, and integer and floating constant-folding cases.
+  builtin-return type, and integer and floating constant-folding cases. It also
+  pins attached-backend scalar builtin constant-folding delegation to MIR.
 
 ## Backend Sharing
 
