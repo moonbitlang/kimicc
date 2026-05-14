@@ -4161,14 +4161,33 @@ fn X64Codegen::field_info(
 }
 
 ///|
+fn x64_field_receiver_type(ty : @parser.Type) -> @parser.Type? {
+  match x64_core_type(ty) {
+    Struct(name) => Some(Struct(name))
+    Union(name) => Some(Union(name))
+    Pointer(inner) =>
+      match x64_core_type(inner) {
+        Struct(name) => Some(Struct(name))
+        Union(name) => Some(Union(name))
+        _ => None
+      }
+    _ => None
+  }
+}
+
+///|
 fn X64Codegen::field_layout(
   self : X64Codegen,
   ty : @parser.Type,
   field_name : String,
 ) -> (String, @parser.Type, Int, Int, Int, Int)? {
+  let lookup_ty = match x64_field_receiver_type(ty) {
+    Some(lookup_ty) => lookup_ty
+    None => return None
+  }
   match self.mir {
     Some(mir) =>
-      return match mir.field_layout(ty, field_name) {
+      return match mir.field_layout(lookup_ty, field_name) {
         Some(field) =>
           Some(
             (
@@ -4187,7 +4206,7 @@ fn X64Codegen::field_layout(
       }
     None => ()
   }
-  let struct_name = match x64_core_type(ty) {
+  let struct_name = match lookup_ty {
     Struct(name) | Union(name) => name
     _ => return None
   }

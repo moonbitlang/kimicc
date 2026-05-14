@@ -181,7 +181,19 @@ fn expect_x64_field_facts(
   ty : @parser.Type,
   field : String,
 ) -> Unit {
-  match (codegen.field_layout(ty, field), mir.field_layout(ty, field)) {
+  expect_x64_field_lookup_facts(codegen, mir, ty, ty, field)
+}
+
+///|
+fn expect_x64_field_lookup_facts(
+  codegen : X64Codegen,
+  mir : @mir.Program,
+  lookup_ty : @parser.Type,
+  mir_ty : @parser.Type,
+  field : String,
+) -> Unit {
+  match
+    (codegen.field_layout(lookup_ty, field), mir.field_layout(mir_ty, field)) {
     (Some(cg), Some(m)) => {
       expect_semantic_int("x64 field offset " + field, cg.2, m.offset)
       expect_semantic_int("x64 field size " + field, cg.3, m.size)
@@ -192,7 +204,7 @@ fn expect_x64_field_facts(
         m.bit_width,
       )
     }
-    _ => abort("missing x64 field fact: " + field)
+    _ => abort("missing x64 field lookup fact: " + field)
   }
 }
 
@@ -625,6 +637,20 @@ test "linux amd64 codegen layout facts match MIR facts" {
   expect_x64_field_facts(codegen, mir, Struct("B"), "b")
   expect_x64_field_facts(codegen, mir, Struct("B"), "c")
   expect_x64_field_facts(codegen, mir, Union("U"), "ld")
+  expect_x64_field_lookup_facts(
+    codegen,
+    mir,
+    Pointer(Struct("A")),
+    Struct("A"),
+    "arr",
+  )
+  expect_x64_field_lookup_facts(
+    codegen,
+    mir,
+    Pointer(Union("U")),
+    Union("U"),
+    "ld",
+  )
   expect_x64_offset_facts(codegen, mir, Struct("A"), [
     OffsetField("arr"),
     OffsetIndex(2),
@@ -801,6 +827,20 @@ test "attached linux amd64 semantic queries use MIR state" {
   expect_x64_type_facts(codegen, mir, Struct("A"))
   expect_x64_field_facts(codegen, mir, Struct("A"), "arr")
   expect_x64_field_facts(codegen, mir, Union("U"), "ld")
+  expect_x64_field_lookup_facts(
+    codegen,
+    mir,
+    Pointer(Struct("A")),
+    Struct("A"),
+    "arr",
+  )
+  expect_x64_field_lookup_facts(
+    codegen,
+    mir,
+    Pointer(Union("U")),
+    Union("U"),
+    "ld",
+  )
   expect_x64_offset_facts(codegen, mir, Struct("A"), [
     OffsetField("arr"),
     OffsetIndex(2),
