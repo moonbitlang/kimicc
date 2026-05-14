@@ -8866,6 +8866,9 @@ fn X64Codegen::emit_lifecycle_array(
 
 ///|
 fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
+  if self.mir is None {
+    self.mir = Some(@mir.lower(prog, LinuxAmd64))
+  }
   self.emit("\t.intel_syntax noprefix")
   self.emit("\t.text")
   for sdecl in prog.structs {

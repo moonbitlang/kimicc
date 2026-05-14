@@ -531,3 +531,13 @@ test "linux amd64 codegen layout facts match MIR facts" {
     Cast(Double, Cast(SInt, FloatLiteral(1.75))),
   )
 }
+
+///|
+test "direct linux amd64 codegen attaches MIR facts" {
+  let target = semantic_linux_target()
+  let prog = @parser.parse_for_target(
+    "long g = sizeof(__builtin_fabsl(-1.0L));", target,
+  )
+  let assembly = X64Codegen::new().generate(prog)
+  inspect(assembly.contains("g:\n\t.quad\t16"), content="true")
+}
