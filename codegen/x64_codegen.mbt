@@ -2169,10 +2169,16 @@ fn X64Codegen::emit_builtin_align_value(
 }
 
 ///|
-fn X64Codegen::builtin_object_size_unknown_value(
+fn X64Codegen::builtin_object_size_value(
   self : X64Codegen,
   args : Array[@parser.Expr],
 ) -> Int64 {
+  if args.length() > 0 {
+    match codegen_literal_string_arg(args[0]) {
+      Some(value) => return (value.length() + 1).to_int64()
+      None => ()
+    }
+  }
   let mode = if args.length() > 1 {
     match self.fold_const(args[1]) {
       Some(value) => value
@@ -2181,11 +2187,7 @@ fn X64Codegen::builtin_object_size_unknown_value(
   } else {
     0L
   }
-  if (mode & 2L) != 0L {
-    0L
-  } else {
-    -1L
-  }
+  codegen_unknown_object_size(mode)
 }
 
 ///|
@@ -3414,8 +3416,7 @@ fn X64Codegen::emit_builtin_call(
     }
     "__builtin_object_size" | "__builtin_dynamic_object_size" => {
       self.emit(
-        "\tmov\trax, " +
-        self.builtin_object_size_unknown_value(args).to_string(),
+        "\tmov\trax, " + self.builtin_object_size_value(args).to_string(),
       )
       true
     }

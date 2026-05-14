@@ -2445,6 +2445,8 @@ async test "__builtin_object_size stubs" {
     #|  if (__builtin_dynamic_object_size(&x, 0) + 1 != 0) return 2;
     #|  if (__builtin_object_size(&x, 2) != 0) return 3;
     #|  if (__builtin_dynamic_object_size(&x, 2) != 0) return 4;
+    #|  if (__builtin_object_size("abc", 0) != 4) return 5;
+    #|  if (__builtin_dynamic_object_size("a\0bc", 2) != 5) return 6;
     #|  return 42;
     #|}
   let exit_code = run_source_async(source)

@@ -1665,10 +1665,34 @@ fn Codegen::emit_builtin_align_value(
 }
 
 ///|
-fn Codegen::builtin_object_size_unknown_value(
+fn codegen_literal_string_arg(expr : @parser.Expr) -> String? {
+  match expr {
+    String(value) => Some(value)
+    Cast(_, inner) => codegen_literal_string_arg(inner)
+    _ => None
+  }
+}
+
+///|
+fn codegen_unknown_object_size(mode : Int64) -> Int64 {
+  if (mode & 2L) != 0L {
+    0L
+  } else {
+    -1L
+  }
+}
+
+///|
+fn Codegen::builtin_object_size_value(
   self : Codegen,
   args : Array[@parser.Expr],
 ) -> Int64 {
+  if args.length() > 0 {
+    match codegen_literal_string_arg(args[0]) {
+      Some(value) => return (value.length() + 1).to_int64()
+      None => ()
+    }
+  }
   let mode = if args.length() > 1 {
     match self.fold_const(args[1]) {
       Some(value) => value
@@ -1677,11 +1701,7 @@ fn Codegen::builtin_object_size_unknown_value(
   } else {
     0L
   }
-  if (mode & 2L) != 0L {
-    0L
-  } else {
-    -1L
-  }
+  codegen_unknown_object_size(mode)
 }
 
 ///|
@@ -2419,7 +2439,7 @@ fn Codegen::emit_builtin_call(
       true
     }
     "__builtin_object_size" | "__builtin_dynamic_object_size" => {
-      self.emit_load_int("x9", self.builtin_object_size_unknown_value(args))
+      self.emit_load_int("x9", self.builtin_object_size_value(args))
       true
     }
     // Fortified function stubs: fall back to unchecked versions
