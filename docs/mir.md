@@ -50,9 +50,10 @@ that both assembly backends walk.
   cast paths, arithmetic, ternaries selected by integer constants, and the
   modeled NaN/infinity builtins.
   Runtime `__builtin_object_size` and `__builtin_dynamic_object_size` model
-  string-literal object sizes, direct named objects (`&x`), and direct named
-  arrays (`buf`); other objects use the C builtin unknown-size fallbacks (`-1`
-  for modes 0/1, `0` for modes 2/3).
+  string-literal object sizes, direct named objects (`&x`), direct named arrays
+  (`buf`), and direct aggregate member subobjects such as `&s.buf` or `s.buf`;
+  other objects use the C builtin unknown-size fallbacks (`-1` for modes 0/1,
+  `0` for modes 2/3).
   `memcpy`/`memmove`/`memset` and their checked aliases model only the returned
   destination pointer; memory contents are not modeled.
   `mempcpy` and its checked alias model the returned `dest + n` pointer, with no

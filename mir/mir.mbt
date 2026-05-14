@@ -1369,6 +1369,27 @@ fn Program::object_size_var_type(
 }
 
 ///|
+fn Program::object_size_lvalue_type(
+  self : Program,
+  expr : @parser.Expr,
+  scope : Scope,
+) -> @parser.Type? {
+  match expr {
+    Var(name) => self.object_size_var_type(name, scope)
+    MemberAccess(obj, field) =>
+      match self.object_size_lvalue_type(obj, scope) {
+        Some(obj_ty) =>
+          match self.field_layout(obj_ty, field) {
+            Some(layout) => Some(layout.ty)
+            None => None
+          }
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
 fn Program::object_size_expr_type(
   self : Program,
   expr : @parser.Expr,
@@ -1376,9 +1397,18 @@ fn Program::object_size_expr_type(
 ) -> @parser.Type? {
   match expr {
     Cast(_, inner) => self.object_size_expr_type(inner, scope)
-    AddrOf(Var(name)) => self.object_size_var_type(name, scope)
+    AddrOf(inner) => self.object_size_lvalue_type(inner, scope)
     Var(name) =>
       match self.object_size_var_type(name, scope) {
+        Some(ty) =>
+          match self.core_type(ty) {
+            Array(_, _) => Some(ty)
+            _ => None
+          }
+        None => None
+      }
+    MemberAccess(_, _) =>
+      match self.object_size_lvalue_type(expr, scope) {
         Some(ty) =>
           match self.core_type(ty) {
             Array(_, _) => Some(ty)

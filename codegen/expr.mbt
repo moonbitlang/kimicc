@@ -1684,15 +1684,44 @@ fn Codegen::object_size_var_type(
 }
 
 ///|
+fn Codegen::object_size_lvalue_type(
+  self : Codegen,
+  expr : @parser.Expr,
+) -> @parser.Type? {
+  match expr {
+    Var(name) => self.object_size_var_type(name)
+    MemberAccess(obj, field) =>
+      match self.object_size_lvalue_type(obj) {
+        Some(obj_ty) =>
+          match self.find_field_layout_for_type(obj_ty, field) {
+            Some((_, field_ty, _, _, _, _)) => Some(field_ty)
+            None => None
+          }
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
 fn Codegen::object_size_expr_type(
   self : Codegen,
   expr : @parser.Expr,
 ) -> @parser.Type? {
   match expr {
     Cast(_, inner) => self.object_size_expr_type(inner)
-    AddrOf(Var(name)) => self.object_size_var_type(name)
+    AddrOf(inner) => self.object_size_lvalue_type(inner)
     Var(name) =>
       match self.object_size_var_type(name) {
+        Some(ty) =>
+          match peel_aligned_type(ty) {
+            Array(_, _) => Some(ty)
+            _ => None
+          }
+        None => None
+      }
+    MemberAccess(_, _) =>
+      match self.object_size_lvalue_type(expr) {
         Some(ty) =>
           match peel_aligned_type(ty) {
             Array(_, _) => Some(ty)

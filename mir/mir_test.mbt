@@ -141,6 +141,7 @@ test "mir computes expression and global expression types" {
 test "mir folds constants with target layout" {
   let source =
     #|struct S { char c; int i; int arr[3]; };
+    #|struct S global_s;
     #|int global_x;
     #|char global_buf[16];
     #|int main(void) { return 0; }
@@ -200,9 +201,28 @@ test "mir folds constants with target layout" {
     scope,
     16L,
   )
+  expect_const(
+    mir,
+    Call(Var("__builtin_object_size"), [
+      AddrOf(MemberAccess(Var("global_s"), "arr")),
+      Number(0),
+    ]),
+    scope,
+    12L,
+  )
+  expect_const(
+    mir,
+    Call(Var("__builtin_dynamic_object_size"), [
+      MemberAccess(Var("global_s"), "arr"),
+      Number(2),
+    ]),
+    scope,
+    12L,
+  )
   let local_types : Map[String, @parser.Type] = {}
   local_types["local_x"] = SInt
   local_types["local_buf"] = Array(SChar, 16)
+  local_types["local_s"] = Struct("S")
   let local_scope : @mir.Scope = { locals: local_types, current_func: "main" }
   expect_const(
     mir,
@@ -215,6 +235,24 @@ test "mir folds constants with target layout" {
     Call(Var("__builtin_dynamic_object_size"), [Var("local_buf"), Number(2)]),
     local_scope,
     16L,
+  )
+  expect_const(
+    mir,
+    Call(Var("__builtin_object_size"), [
+      AddrOf(MemberAccess(Var("local_s"), "arr")),
+      Number(0),
+    ]),
+    local_scope,
+    12L,
+  )
+  expect_const(
+    mir,
+    Call(Var("__builtin_dynamic_object_size"), [
+      MemberAccess(Var("local_s"), "arr"),
+      Number(2),
+    ]),
+    local_scope,
+    12L,
   )
   expect_const(
     mir,
@@ -823,10 +861,12 @@ test "mir interpreter evaluates ignored hint operand side effects" {
 ///|
 test "mir interpreter models literal object size builtins" {
   let source =
+    #|struct S { int x; char buf[9]; };
     #|int main(void) {
     #|  int side = 0;
     #|  int x;
     #|  char buf[16];
+    #|  struct S local_s;
     #|  if (__builtin_object_size("abc", 0) != 4) return 1;
     #|  if (__builtin_object_size((const char *)"abc", 1) != 4) return 2;
     #|  if (__builtin_dynamic_object_size("hello", 2) != 6) return 3;
@@ -837,8 +877,10 @@ test "mir interpreter models literal object size builtins" {
     #|  if (side != 0) return 8;
     #|  if (__builtin_object_size(&x, 0) != sizeof(x)) return 9;
     #|  if (__builtin_dynamic_object_size((void *)buf, 2) != sizeof(buf)) return 10;
-    #|  if (!__builtin_constant_p(1 + 2)) return 11;
-    #|  if (__builtin_constant_p(side)) return 12;
+    #|  if (__builtin_object_size(&local_s.buf, 0) != sizeof(local_s.buf)) return 11;
+    #|  if (__builtin_dynamic_object_size(local_s.buf, 2) != sizeof(local_s.buf)) return 12;
+    #|  if (!__builtin_constant_p(1 + 2)) return 13;
+    #|  if (__builtin_constant_p(side)) return 14;
     #|  return 42;
     #|}
   expect_interp(source, 42L)
