@@ -878,10 +878,14 @@ fn Codegen::fold_const_int(
 fn Codegen::fold_const(self : Codegen, expr : @parser.Expr) -> Int64? {
   match self.mir {
     Some(mir) =>
-      return mir.fold_const(expr, {
-        locals: self.var_types,
-        current_func: self.func_name,
-      })
+      match
+        mir.fold_const(expr, {
+          locals: self.var_types,
+          current_func: self.func_name,
+        }) {
+        Some(value) => return Some(value)
+        None => ()
+      }
     None => ()
   }
   match self.fold_const_int(expr) {
