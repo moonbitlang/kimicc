@@ -464,6 +464,7 @@ test "darwin codegen layout facts match MIR facts" {
   codegen.var_types["ip"] = Pointer(SInt)
   codegen.var_types["local_buf"] = Array(SChar, 16)
   codegen.var_types["s"] = Struct("A")
+  codegen.var_types["record"] = Struct("S")
   codegen.func_name = "main"
   let types : Array[@parser.Type] = [
     Bool,
@@ -612,6 +613,22 @@ test "darwin codegen layout facts match MIR facts" {
     Number(0),
   ])
   expect_darwin_object_size_facts(codegen, mir, [
+    AddrOf(MemberAccess(Var("record"), "ld")),
+    Number(0),
+  ])
+  expect_darwin_object_size_facts(codegen, mir, [
+    AddrOf(MemberAccess(Var("record"), "ld")),
+    Number(1),
+  ])
+  expect_darwin_object_size_facts(codegen, mir, [
+    AddrOf(MemberAccess(Var("record"), "i")),
+    Number(0),
+  ])
+  expect_darwin_object_size_facts(codegen, mir, [
+    AddrOf(MemberAccess(Var("record"), "i")),
+    Number(1),
+  ])
+  expect_darwin_object_size_facts(codegen, mir, [
     Cast(Pointer(Void), Number(0)),
     Number(0),
   ])
@@ -646,6 +663,7 @@ test "linux amd64 codegen layout facts match MIR facts" {
   codegen.var_types["ip"] = Pointer(SInt)
   codegen.var_types["local_buf"] = Array(SChar, 16)
   codegen.var_types["s"] = Struct("A")
+  codegen.var_types["record"] = Struct("S")
   codegen.func_name = "main"
   let types : Array[@parser.Type] = [
     Bool,
@@ -797,6 +815,22 @@ test "linux amd64 codegen layout facts match MIR facts" {
     Number(0),
   ])
   expect_x64_object_size_facts(codegen, mir, [
+    AddrOf(MemberAccess(Var("record"), "ld")),
+    Number(0),
+  ])
+  expect_x64_object_size_facts(codegen, mir, [
+    AddrOf(MemberAccess(Var("record"), "ld")),
+    Number(1),
+  ])
+  expect_x64_object_size_facts(codegen, mir, [
+    AddrOf(MemberAccess(Var("record"), "i")),
+    Number(0),
+  ])
+  expect_x64_object_size_facts(codegen, mir, [
+    AddrOf(MemberAccess(Var("record"), "i")),
+    Number(1),
+  ])
+  expect_x64_object_size_facts(codegen, mir, [
     Cast(Pointer(Void), Number(0)),
     Number(0),
   ])
@@ -841,6 +875,7 @@ test "attached darwin arm64 semantic queries use MIR state" {
   codegen.mir = Some(mir)
   codegen.var_types["local_buf"] = Array(SChar, 16)
   codegen.var_types["s"] = Struct("A")
+  codegen.var_types["record"] = Struct("S")
   codegen.func_name = "main"
   expect_darwin_type_facts(codegen, mir, Struct("A"))
   expect_darwin_field_facts(codegen, mir, Struct("A"), "arr")
@@ -899,6 +934,14 @@ test "attached darwin arm64 semantic queries use MIR state" {
     AddrOf(ArrayAccess(MemberAccess(Var("s"), "arr"), Number(1))),
     Number(1),
   ])
+  expect_darwin_object_size_facts(codegen, mir, [
+    AddrOf(MemberAccess(Var("record"), "ld")),
+    Number(0),
+  ])
+  expect_darwin_object_size_facts(codegen, mir, [
+    AddrOf(MemberAccess(Var("record"), "ld")),
+    Number(1),
+  ])
   expect_darwin_fold_const_facts(
     codegen,
     mir,
@@ -925,6 +968,7 @@ test "attached linux amd64 semantic queries use MIR state" {
   codegen.mir = Some(mir)
   codegen.var_types["local_buf"] = Array(SChar, 16)
   codegen.var_types["s"] = Struct("A")
+  codegen.var_types["record"] = Struct("S")
   codegen.func_name = "main"
   expect_x64_type_facts(codegen, mir, Struct("A"))
   expect_x64_field_facts(codegen, mir, Struct("A"), "arr")
@@ -981,6 +1025,14 @@ test "attached linux amd64 semantic queries use MIR state" {
   ])
   expect_x64_object_size_facts(codegen, mir, [
     AddrOf(ArrayAccess(MemberAccess(Var("s"), "arr"), Number(1))),
+    Number(1),
+  ])
+  expect_x64_object_size_facts(codegen, mir, [
+    AddrOf(MemberAccess(Var("record"), "ld")),
+    Number(0),
+  ])
+  expect_x64_object_size_facts(codegen, mir, [
+    AddrOf(MemberAccess(Var("record"), "ld")),
     Number(1),
   ])
   expect_x64_fold_const_facts(
