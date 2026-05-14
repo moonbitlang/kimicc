@@ -222,6 +222,84 @@ fn Interpreter::eval_global_scalar_initializer(
 }
 
 ///|
+fn global_char_array_length(ty : @parser.Type) -> Int? {
+  match ty {
+    Array(SChar, length) | Array(UChar, length) => Some(length)
+    _ => None
+  }
+}
+
+///|
+fn Interpreter::char_initializer_value(
+  self : Interpreter,
+  expr : @parser.Expr,
+) -> Int64? {
+  match self.program.fold_const(expr, Scope::empty()) {
+    Some(value) => Some(value & 0xFFL)
+    None => None
+  }
+}
+
+///|
+fn Interpreter::string_from_char_initializers(
+  self : Interpreter,
+  exprs : Array[@parser.Expr],
+  length : Int,
+) -> String? {
+  let buf = StringBuilder::new()
+  let limit = if exprs.length() < length { exprs.length() } else { length }
+  for i in 0..<limit {
+    match self.char_initializer_value(exprs[i]) {
+      Some(value) => buf.write_char(value.to_int().unsafe_to_char())
+      None => return None
+    }
+  }
+  for _ in limit..<length {
+    buf.write_char('\u0000')
+  }
+  Some(buf.to_string())
+}
+
+///|
+fn string_from_fixed_char_string(value : String, length : Int) -> String {
+  let buf = StringBuilder::new()
+  let limit = if value.length() < length { value.length() } else { length }
+  for i in 0..<limit {
+    buf.write_char(value[i].to_int().unsafe_to_char())
+  }
+  for _ in limit..<length {
+    buf.write_char('\u0000')
+  }
+  buf.to_string()
+}
+
+///|
+fn Interpreter::init_global_string_array(
+  self : Interpreter,
+  name : String,
+  ty : @parser.Type,
+  init : @parser.GlobalInit?,
+) -> Unit {
+  match global_char_array_length(ty) {
+    Some(length) =>
+      match init {
+        Some(Scalar(String(value))) =>
+          self.globals[name] = self.fresh_string_object_base(
+            string_from_fixed_char_string(value, length),
+          )
+        Some(Array(exprs)) =>
+          match self.string_from_char_initializers(exprs, length) {
+            Some(value) =>
+              self.globals[name] = self.fresh_string_object_base(value)
+            None => ()
+          }
+        _ => ()
+      }
+    None => ()
+  }
+}
+
+///|
 fn Interpreter::init_globals(self : Interpreter) -> Unit {
   let seen : Map[String, Bool] = {}
   for original in self.program.source.globals {
@@ -231,6 +309,7 @@ fn Interpreter::init_globals(self : Interpreter) -> Unit {
       let decl = self.program.globals[original.name]
       if !self.program.runtime_int_type(decl.ty) {
         // Non-runtime globals still provide type facts through Program::globals.
+        self.init_global_string_array(decl.name, decl.ty, decl.init)
         continue
       }
       let value = match decl.init {
@@ -1082,6 +1161,30 @@ priv struct LiteralStringPointer {
 }
 
 ///|
+fn Interpreter::record_string_object(
+  self : Interpreter,
+  value : String,
+  base : Int64,
+) -> Unit {
+  for i in 0..<=value.length() {
+    let offset = i.to_int64()
+    self.string_values[base + offset] = value
+    self.string_offsets[base + offset] = offset
+  }
+}
+
+///|
+fn Interpreter::fresh_string_object_base(
+  self : Interpreter,
+  value : String,
+) -> Int64 {
+  let base = self.next_string_base
+  self.record_string_object(value, base)
+  self.next_string_base += value.length().to_int64() + 16L
+  base
+}
+
+///|
 fn Interpreter::string_literal_base(
   self : Interpreter,
   value : String,
@@ -1089,14 +1192,8 @@ fn Interpreter::string_literal_base(
   if self.string_bases.contains(value) {
     self.string_bases[value]
   } else {
-    let base = self.next_string_base
+    let base = self.fresh_string_object_base(value)
     self.string_bases[value] = base
-    for i in 0..<=value.length() {
-      let offset = i.to_int64()
-      self.string_values[base + offset] = value
-      self.string_offsets[base + offset] = offset
-    }
-    self.next_string_base += value.length().to_int64() + 16L
     base
   }
 }

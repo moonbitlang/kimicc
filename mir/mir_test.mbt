@@ -621,6 +621,26 @@ test "mir interpreter models global string pointer initializers" {
 }
 
 ///|
+test "mir interpreter models global string array initializers" {
+  let source =
+    #|char g[] = "abc";
+    #|unsigned char u[] = { 'x', 'y', 0, 'z' };
+    #|char padded[5] = { 'q' };
+    #|int main(void) {
+    #|  if (g[0] != 'a') return 1;
+    #|  if (g[3] != 0) return 2;
+    #|  if (__builtin_strlen(g) != 3) return 3;
+    #|  if (__builtin_strcmp(g, "abc") != 0) return 4;
+    #|  if (__builtin_strlen((char *)u) != 2) return 5;
+    #|  if (u[3] != 'z') return 6;
+    #|  if (padded[0] != 'q') return 7;
+    #|  if (padded[1] != 0 || padded[4] != 0) return 8;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter models embedded nul string literal lengths" {
   let source =
     #|int main(void) {
