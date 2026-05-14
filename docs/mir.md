@@ -24,7 +24,8 @@ that both assembly backends walk.
   `__builtin_strncmp`, `__builtin_memcmp`, `__builtin_strchr`,
   `__builtin_strrchr`, `__builtin_strstr`, and `__builtin_memchr`. The pointer
   returning literal search builtins model returned offsets inside the synthetic
-  literal pointer, but not general memory.
+  literal pointer, but not general memory. Modeled C string lengths stop at the
+  first embedded NUL byte, while `sizeof` still uses the full literal object.
   MIR and the parser also carry builtin return-type facts used by unevaluated
   expressions such as `sizeof`, including selected string/memory aliases and
   floating-point builtins, floating classification helpers, selected atomic

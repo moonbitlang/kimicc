@@ -284,6 +284,24 @@ test "mir interpreter models string literal scalar facts" {
 }
 
 ///|
+test "mir interpreter models embedded nul string literal lengths" {
+  let source =
+    #|int main(void) {
+    #|  char *dst = (char *)__builtin_alloca(8);
+    #|  if (sizeof("a\0bc") != 5) return 1;
+    #|  if (__builtin_strlen("a\0bc") != 1) return 2;
+    #|  if (__builtin_stpcpy(dst, "a\0bc") != dst + 1) return 3;
+    #|  if (__builtin_stpncpy(dst, "a\0bc", 4) != dst + 1) return 4;
+    #|  if (__builtin___strlcpy_chk(dst, "a\0bc", 8, 8) != 1) return 5;
+    #|  if (__builtin___strlcat_chk(dst, "a\0bc", 0, 8) != 1) return 6;
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"%s", "a\0bc") != 1) return 7;
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"%.3s", "a\0bc") != 1) return 8;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter models string builtin return sizes" {
   let source =
     #|int main(void) {

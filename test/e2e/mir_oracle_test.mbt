@@ -261,6 +261,18 @@ async test "e2e MIR oracle checks string literal scalar facts" {
 }
 
 ///|
+async test "e2e MIR oracle checks embedded nul string literal lengths" {
+  let source =
+    #|int main(void) {
+    #|  if (sizeof("a\0bc") != 5) return 1;
+    #|  if (__builtin_strlen("a\0bc") != 1) return 2;
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"%s", "a\0bc") != 1) return 3;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks string builtin return sizes" {
   let source =
     #|_Static_assert(sizeof(__builtin_strlen("abc")) == 8, "strlen size");

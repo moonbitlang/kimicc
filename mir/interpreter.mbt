@@ -995,7 +995,7 @@ fn Interpreter::literal_printf_format_length(
               } else if format[conversion_index].to_int() == 115 {
                 match literal_string_arg(args[value_index]) {
                   Some(value) => {
-                    conversion_length = value.length().to_int64()
+                    conversion_length = string_literal_c_length(value).to_int64()
                     if has_precision && precision < conversion_length {
                       conversion_length = precision
                     }
@@ -1290,7 +1290,8 @@ fn Interpreter::eval_builtin_call(
         Some(0L)
       } else {
         match literal_string_arg(args[1]) {
-          Some(value) => Some(values[0] + value.length().to_int64())
+          Some(value) =>
+            Some(values[0] + string_literal_c_length(value).to_int64())
           None => {
             self.fail("unsupported MIR interpreter stpcpy source argument")
             Some(0L)
@@ -1305,7 +1306,11 @@ fn Interpreter::eval_builtin_call(
       } else {
         match literal_string_arg(args[1]) {
           Some(value) =>
-            match nonnegative_min(value.length().to_int64(), values[2]) {
+            match
+              nonnegative_min(
+                string_literal_c_length(value).to_int64(),
+                values[2],
+              ) {
               Some(offset) => Some(values[0] + offset)
               None => {
                 self.fail("unsupported MIR interpreter stpncpy length")
@@ -1325,7 +1330,7 @@ fn Interpreter::eval_builtin_call(
         Some(0L)
       } else {
         match literal_string_arg(args[1]) {
-          Some(value) => Some(value.length().to_int64())
+          Some(value) => Some(string_literal_c_length(value).to_int64())
           None => {
             self.fail("unsupported MIR interpreter strlcpy source argument")
             Some(0L)
@@ -1341,7 +1346,7 @@ fn Interpreter::eval_builtin_call(
         match literal_string_arg(args[1]) {
           Some(value) =>
             if values[2] == 0L {
-              Some(value.length().to_int64())
+              Some(string_literal_c_length(value).to_int64())
             } else {
               self.fail(
                 "unsupported MIR interpreter strlcat destination length",
@@ -1521,7 +1526,7 @@ fn Interpreter::eval_builtin_call(
         Some(0L)
       } else {
         match literal_string_arg(args[0]) {
-          Some(value) => Some(value.length().to_int64())
+          Some(value) => Some(string_literal_c_length(value).to_int64())
           _ => {
             self.fail("unsupported MIR interpreter strlen argument")
             Some(0L)
