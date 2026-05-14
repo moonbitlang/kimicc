@@ -22,7 +22,9 @@ that both assembly backends walk.
   literal `__builtin_strlen` through transparent casts, and literal-only string
   comparison/search builtins such as `__builtin_strcmp`,
   `__builtin_strncmp`, `__builtin_memcmp`, `__builtin_strchr`,
-  `__builtin_strrchr`, `__builtin_strstr`, and `__builtin_memchr`.
+  `__builtin_strrchr`, `__builtin_strstr`, and `__builtin_memchr`. The pointer
+  returning literal search builtins model returned offsets inside the synthetic
+  literal pointer, but not general memory.
   MIR and the parser also carry builtin return-type facts used by unevaluated
   expressions such as `sizeof`, including selected string/memory aliases and
   floating-point builtins, floating classification helpers, selected atomic

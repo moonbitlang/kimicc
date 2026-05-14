@@ -1031,6 +1031,24 @@ test "mir interpreter models literal string search nullness" {
 }
 
 ///|
+test "mir interpreter models literal string search pointer offsets" {
+  let source =
+    #|int main(void) {
+    #|  if (__builtin_strchr("abc", 'a') != "abc") return 1;
+    #|  if (__builtin_strchr("abc", 'b') != "abc" + 1) return 2;
+    #|  if (__builtin_strchr("abc", 0) != "abc" + 3) return 3;
+    #|  if (__builtin_strrchr("abba", 'b') != "abba" + 2) return 4;
+    #|  if (__builtin_strrchr("abba", 0) != "abba" + 4) return 5;
+    #|  if (__builtin_memchr("abc", 'b', 2) != "abc" + 1) return 6;
+    #|  if (__builtin_memchr("abc", 0, 4) != "abc" + 3) return 7;
+    #|  if (__builtin_strstr("abcde", "cd") != "abcde" + 2) return 8;
+    #|  if (__builtin_strstr("abc", "") != "abc") return 9;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter reports unsupported memory behavior" {
   let source = "int main(void) { int *p = (int*)0; return *p; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())

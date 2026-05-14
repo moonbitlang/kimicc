@@ -1049,47 +1049,80 @@ fn compare_string_literal_bytes(
 }
 
 ///|
-fn string_literal_contains_byte(
+fn string_literal_find_byte(
   value : String,
   byte : Int64,
   limit : Int64?,
   stop_at_nul : Bool,
-) -> Bool {
+) -> Int64? {
   let needle = byte & 0xFFL
   let mut index = 0L
   while limit is None || index < limit.unwrap() {
     let current = string_literal_byte_at(value, index)
     if current == needle {
-      return true
+      return Some(index)
     }
     if stop_at_nul && current == 0L {
-      return false
+      return None
     }
     index += 1L
   }
-  false
+  None
 }
 
 ///|
-fn string_literal_contains_string(haystack : String, needle : String) -> Bool {
+fn string_literal_find_last_byte(value : String, byte : Int64) -> Int64? {
+  let needle = byte & 0xFFL
+  let mut index = 0L
+  let mut found : Int64? = None
+  while true {
+    let current = string_literal_byte_at(value, index)
+    if current == needle {
+      found = Some(index)
+    }
+    if current == 0L {
+      return found
+    }
+    index += 1L
+  }
+  None
+}
+
+///|
+fn string_literal_c_length(value : String) -> Int {
+  for i in 0..<value.length() {
+    if value[i].to_int() == 0 {
+      return i
+    }
+  }
+  value.length()
+}
+
+///|
+fn string_literal_find_string(haystack : String, needle : String) -> Int64? {
   if needle.length() == 0 {
-    return true
+    return Some(0L)
   }
-  if needle.length() > haystack.length() {
-    return false
+  let haystack_length = string_literal_c_length(haystack)
+  let needle_length = string_literal_c_length(needle)
+  if needle_length == 0 {
+    return Some(0L)
   }
-  for start in 0..<=(haystack.length() - needle.length()) {
+  if needle_length > haystack_length {
+    return None
+  }
+  for start in 0..<=(haystack_length - needle_length) {
     let mut matched = true
-    for i in 0..<needle.length() {
+    for i in 0..<needle_length {
       if haystack[start + i] != needle[i] {
         matched = false
       }
     }
     if matched {
-      return true
+      return Some(start.to_int64())
     }
   }
-  false
+  None
 }
 
 ///|
@@ -1449,19 +1482,25 @@ fn Interpreter::eval_builtin_call(
         Some(0L)
       } else {
         match literal_string_arg(args[0]) {
-          Some(value) =>
-            Some(
-              if string_literal_contains_byte(
-                  value,
-                  self.eval_expr(frame, args[1]),
-                  None,
-                  true,
-                ) {
-                1L
-              } else {
-                0L
-              },
-            )
+          Some(value) => {
+            let offset = if name == "__builtin_strrchr" {
+              string_literal_find_last_byte(
+                value,
+                self.eval_expr(frame, args[1]),
+              )
+            } else {
+              string_literal_find_byte(
+                value,
+                self.eval_expr(frame, args[1]),
+                None,
+                true,
+              )
+            }
+            match offset {
+              Some(index) => Some(self.eval_expr(frame, args[0]) + index)
+              None => Some(0L)
+            }
+          }
           None => {
             self.fail("unsupported MIR interpreter string search argument")
             Some(0L)
@@ -1473,19 +1512,24 @@ fn Interpreter::eval_builtin_call(
         Some(0L)
       } else {
         match literal_string_arg(args[0]) {
-          Some(value) =>
-            Some(
-              if string_literal_contains_byte(
+          Some(value) => {
+            let limit = self.eval_expr(frame, args[2])
+            if limit < 0L {
+              self.fail("unsupported MIR interpreter memchr length")
+              Some(0L)
+            } else {
+              match
+                string_literal_find_byte(
                   value,
                   self.eval_expr(frame, args[1]),
-                  Some(self.eval_expr(frame, args[2])),
+                  Some(limit),
                   false,
                 ) {
-                1L
-              } else {
-                0L
-              },
-            )
+                Some(index) => Some(self.eval_expr(frame, args[0]) + index)
+                None => Some(0L)
+              }
+            }
+          }
           None => {
             self.fail("unsupported MIR interpreter memchr argument")
             Some(0L)
@@ -1498,13 +1542,10 @@ fn Interpreter::eval_builtin_call(
       } else {
         match (literal_string_arg(args[0]), literal_string_arg(args[1])) {
           (Some(haystack), Some(needle)) =>
-            Some(
-              if string_literal_contains_string(haystack, needle) {
-                1L
-              } else {
-                0L
-              },
-            )
+            match string_literal_find_string(haystack, needle) {
+              Some(index) => Some(self.eval_expr(frame, args[0]) + index)
+              None => Some(0L)
+            }
           _ => {
             self.fail("unsupported MIR interpreter strstr argument")
             Some(0L)
