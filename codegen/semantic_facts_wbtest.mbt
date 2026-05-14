@@ -388,6 +388,11 @@ test "darwin codegen layout facts match MIR facts" {
   )
   expect_darwin_expr_type_facts(codegen, mir, Binary("+", Var("p"), Number(1)))
   expect_darwin_expr_type_facts(codegen, mir, Binary("-", Var("p"), Var("p")))
+  expect_darwin_expr_type_facts(
+    codegen,
+    mir,
+    Binary("<<", Number(1), Number(40)),
+  )
   expect_darwin_expr_type_facts(codegen, mir, MemberAccess(Var("s"), "arr"))
   expect_darwin_expr_type_facts(
     codegen,
@@ -483,6 +488,7 @@ test "linux amd64 codegen layout facts match MIR facts" {
   )
   expect_x64_expr_type_facts(codegen, mir, Binary("+", Var("p"), Number(1)))
   expect_x64_expr_type_facts(codegen, mir, Binary("-", Var("p"), Var("p")))
+  expect_x64_expr_type_facts(codegen, mir, Binary("<<", Number(1), Number(40)))
   expect_x64_expr_type_facts(codegen, mir, MemberAccess(Var("s"), "arr"))
   expect_x64_expr_type_facts(
     codegen,

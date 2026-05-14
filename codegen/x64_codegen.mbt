@@ -4386,6 +4386,12 @@ fn X64Codegen::type_of(self : X64Codegen, expr : @parser.Expr) -> @parser.Type {
     Binary(op, lhs, rhs) => {
       let lhs_ty = self.type_of(lhs)
       let rhs_ty = self.type_of(rhs)
+      if op == "<<" || op == ">>" {
+        match (lhs, rhs) {
+          (Number(_), Number(shift)) => if shift >= 32L { return ULongLong }
+          _ => ()
+        }
+      }
       if op == "-" && x64_is_pointer_like(lhs_ty) && x64_is_pointer_like(rhs_ty) {
         return SLong
       }
