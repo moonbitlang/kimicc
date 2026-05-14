@@ -4476,7 +4476,7 @@ fn X64Codegen::global_expr_type(
           self.func_variadic.get_or_default(name, false),
         )
       } else {
-        SInt
+        Pointer(Void)
       }
     DesignatedField(_, e) | DesignatedIndex(_, e) | DesignatedRange(_, _, e) =>
       self.global_expr_type(e)

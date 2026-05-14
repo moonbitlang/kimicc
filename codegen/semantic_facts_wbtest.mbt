@@ -347,6 +347,7 @@ test "darwin codegen layout facts match MIR facts" {
   expect_darwin_global_expr_type_facts(codegen, mir, Number(2147483648L))
   expect_darwin_global_expr_type_facts(codegen, mir, FloatLiteral(1.0))
   expect_darwin_global_expr_type_facts(codegen, mir, Var("callee"))
+  expect_darwin_global_expr_type_facts(codegen, mir, Var("external_unknown"))
   expect_darwin_global_expr_type_facts(
     codegen,
     mir,
@@ -417,6 +418,7 @@ test "linux amd64 codegen layout facts match MIR facts" {
   expect_x64_global_expr_type_facts(codegen, mir, Number(2147483648L))
   expect_x64_global_expr_type_facts(codegen, mir, FloatLiteral(1.0))
   expect_x64_global_expr_type_facts(codegen, mir, Var("callee"))
+  expect_x64_global_expr_type_facts(codegen, mir, Var("external_unknown"))
   expect_x64_global_expr_type_facts(
     codegen,
     mir,
