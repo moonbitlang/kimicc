@@ -4537,30 +4537,17 @@ fn X64Codegen::global_expr_type(
         Array(elem, _) | Pointer(elem) => elem
         _ => SInt
       }
-    MemberAccess(obj, field) =>
-      match peel_aligned_type(self.global_expr_type(obj)) {
-        Struct(name) =>
-          match self.field_layout(Struct(name), field) {
-            Some((_, ty, _, _, _, _)) => ty
-            None => SInt
-          }
-        Union(name) =>
-          match self.field_layout(Union(name), field) {
-            Some((_, ty, _, _, _, _)) => ty
-            None => SInt
-          }
-        Pointer(Struct(name)) =>
-          match self.field_layout(Struct(name), field) {
-            Some((_, ty, _, _, _, _)) => ty
-            None => SInt
-          }
-        Pointer(Union(name)) =>
-          match self.field_layout(Union(name), field) {
+    MemberAccess(obj, field) => {
+      let obj_ty = self.global_expr_type(obj)
+      match peel_aligned_type(obj_ty) {
+        Struct(_) | Union(_) | Pointer(Struct(_)) | Pointer(Union(_)) =>
+          match self.field_layout(obj_ty, field) {
             Some((_, ty, _, _, _, _)) => ty
             None => SInt
           }
         _ => SInt
       }
+    }
     CompoundLiteral(ty, _, _) => ty
     _ => SInt
   }
@@ -8242,28 +8229,18 @@ fn X64Codegen::global_lvalue_reloc(
       }
     MemberAccess(obj, field) =>
       match self.global_lvalue_reloc(obj) {
-        Some((label, base_offset)) =>
-          match peel_aligned_type(self.global_expr_type(obj)) {
-            Struct(_) | Union(_) =>
-              match self.field_layout(self.global_expr_type(obj), field) {
-                Some((_, _, field_offset, _, _, _)) =>
-                  Some((label, base_offset + field_offset))
-                None => None
-              }
-            Pointer(Struct(name)) =>
-              match self.field_layout(Struct(name), field) {
-                Some((_, _, field_offset, _, _, _)) =>
-                  Some((label, base_offset + field_offset))
-                None => None
-              }
-            Pointer(Union(name)) =>
-              match self.field_layout(Union(name), field) {
+        Some((label, base_offset)) => {
+          let obj_ty = self.global_expr_type(obj)
+          match peel_aligned_type(obj_ty) {
+            Struct(_) | Union(_) | Pointer(Struct(_)) | Pointer(Union(_)) =>
+              match self.field_layout(obj_ty, field) {
                 Some((_, _, field_offset, _, _, _)) =>
                   Some((label, base_offset + field_offset))
                 None => None
               }
             _ => None
           }
+        }
         None => None
       }
     _ => None
@@ -8381,10 +8358,9 @@ fn X64Codegen::designator_matches_type(
   expr : @parser.Expr,
 ) -> Bool {
   match (x64_core_type(ty), expr) {
-    (Struct(name), DesignatedField(field, _)) =>
-      self.field_layout(Struct(name), field) is Some(_)
-    (Union(name), DesignatedField(field, _)) =>
-      self.field_layout(Union(name), field) is Some(_)
+    (Struct(_), DesignatedField(field, _))
+    | (Union(_), DesignatedField(field, _)) =>
+      self.field_layout(ty, field) is Some(_)
     (Array(_, _), DesignatedIndex(_, _))
     | (Array(_, _), DesignatedRange(_, _, _)) => true
     _ => false
@@ -8650,8 +8626,7 @@ fn X64Codegen::emit_global_array(
       if exprs.length() > 0 {
         let init_expr = exprs[0]
         let field = match init_expr {
-          DesignatedField(field_name, _) =>
-            self.field_layout(Union(name), field_name)
+          DesignatedField(field_name, _) => self.field_layout(ty, field_name)
           _ => if layout.length() > 0 { Some(layout[0]) } else { None }
         }
         match field {
