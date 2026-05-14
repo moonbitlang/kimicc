@@ -147,6 +147,8 @@ async test "e2e MIR oracle checks scalar goto" {
 async test "e2e MIR oracle checks scalar builtin calls" {
   let source =
     #|struct S { int x; char buf[9]; };
+    #|char global_buf[16];
+    #|struct S global_s;
     #|int value(void) {
     #|  return 9;
     #|}
@@ -174,6 +176,9 @@ async test "e2e MIR oracle checks scalar builtin calls" {
     #|  if (__builtin_dynamic_object_size((void *)buf, 2) != 16) return 72;
     #|  if (__builtin_object_size(&local_s.buf, 0) != sizeof(local_s.buf)) return 73;
     #|  if (__builtin_dynamic_object_size(local_s.buf, 2) != sizeof(local_s.buf)) return 74;
+    #|  if (__builtin_object_size(global_buf, 0) != sizeof(global_buf)) return 75;
+    #|  if (__builtin_object_size(&global_s.buf, 0) != sizeof(global_s.buf)) return 76;
+    #|  if (__builtin_dynamic_object_size(global_s.buf, 2) != sizeof(global_s.buf)) return 77;
     #|  total += __builtin_assume(1);
     #|  total += __builtin_prefetch(0, 0, 0);
     #|  if ((unsigned long)__builtin_assume_aligned((void*)32, 16) != 32ul) return 70;
