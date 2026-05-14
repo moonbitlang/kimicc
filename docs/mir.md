@@ -42,7 +42,8 @@ that both assembly backends walk.
   but does not model cache behavior; `__builtin_assume` remains a no-op and does
   not evaluate its predicate.
   Runtime `__builtin_object_size` and `__builtin_dynamic_object_size` model
-  string-literal object sizes; other objects remain unknown-size fallbacks.
+  string-literal object sizes; other objects use the C builtin unknown-size
+  fallbacks (`-1` for modes 0/1, `0` for modes 2/3).
   `memcpy`/`memmove`/`memset` and their checked aliases model only the returned
   destination pointer; memory contents are not modeled.
   `mempcpy` and its checked alias model the returned `dest + n` pointer, with no

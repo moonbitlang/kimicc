@@ -1665,6 +1665,26 @@ fn Codegen::emit_builtin_align_value(
 }
 
 ///|
+fn Codegen::builtin_object_size_unknown_value(
+  self : Codegen,
+  args : Array[@parser.Expr],
+) -> Int64 {
+  let mode = if args.length() > 1 {
+    match self.fold_const(args[1]) {
+      Some(value) => value
+      None => 0L
+    }
+  } else {
+    0L
+  }
+  if (mode & 2L) != 0L {
+    0L
+  } else {
+    -1L
+  }
+}
+
+///|
 fn overflow_builtin_operator(name : String) -> String? {
   match name {
     "__builtin_add_overflow"
@@ -2399,8 +2419,7 @@ fn Codegen::emit_builtin_call(
       true
     }
     "__builtin_object_size" | "__builtin_dynamic_object_size" => {
-      // Return -1 (unknown size) cast to size_t
-      self.emit("\tmov\tx9, #-1")
+      self.emit_load_int("x9", self.builtin_object_size_unknown_value(args))
       true
     }
     // Fortified function stubs: fall back to unchecked versions

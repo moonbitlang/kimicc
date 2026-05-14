@@ -573,6 +573,8 @@ test "generate linux amd64 lowers scalar hint builtins" {
     #|  __builtin_prefetch(p, 0, 3);
     #|  if (__builtin_constant_p(x)) return 2;
     #|  if (__builtin_object_size(p, 0) + 1 != 0) return 3;
+    #|  if (__builtin_object_size(p, 2) != 0) return 18;
+    #|  if (__builtin_dynamic_object_size(p, 2) != 0) return 19;
     #|  if (__builtin_frame_address(1) != 0) return 4;
     #|  if (__builtin_frame_address(0) == 0) return 5;
     #|  if (__builtin_assume_aligned(p, 16) != p) return 6;
@@ -615,6 +617,7 @@ test "generate linux amd64 lowers scalar hint builtins" {
   let assembly = @codegen.generate_assembly_for_target(prog, target)
   inspect(assembly.contains("\tud2"), content="true")
   inspect(assembly.contains("\tmov\trax, -1"), content="true")
+  inspect(assembly.contains("\tmov\trax, 0"), content="true")
   inspect(assembly.contains("\tmov\trax, rbp"), content="true")
   inspect(assembly.contains("\tmov\trax, QWORD PTR [rbp + 8]"), content="true")
   inspect(assembly.contains("side_effect_prefetch:"), content="true")

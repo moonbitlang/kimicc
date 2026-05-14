@@ -2169,6 +2169,26 @@ fn X64Codegen::emit_builtin_align_value(
 }
 
 ///|
+fn X64Codegen::builtin_object_size_unknown_value(
+  self : X64Codegen,
+  args : Array[@parser.Expr],
+) -> Int64 {
+  let mode = if args.length() > 1 {
+    match self.fold_const(args[1]) {
+      Some(value) => value
+      None => 0L
+    }
+  } else {
+    0L
+  }
+  if (mode & 2L) != 0L {
+    0L
+  } else {
+    -1L
+  }
+}
+
+///|
 fn X64Codegen::emit_atomic_raw_load_to_rax(
   self : X64Codegen,
   addr_reg : String,
@@ -3393,7 +3413,10 @@ fn X64Codegen::emit_builtin_call(
       true
     }
     "__builtin_object_size" | "__builtin_dynamic_object_size" => {
-      self.emit("\tmov\trax, -1")
+      self.emit(
+        "\tmov\trax, " +
+        self.builtin_object_size_unknown_value(args).to_string(),
+      )
       true
     }
     "__builtin_alloca" => {

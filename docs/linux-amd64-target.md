@@ -176,6 +176,8 @@ the target split real and testable without claiming full C ABI coverage yet.
   `__builtin_frame_address`, `__builtin_return_address`,
   `__builtin_extract_return_addr`, `__builtin_frob_return_addr`,
   `__builtin_trap`, and `__builtin_unreachable`.
+  Unknown `__builtin_object_size`/`__builtin_dynamic_object_size` results use
+  the C builtin mode fallbacks: `-1` for modes 0/1 and `0` for modes 2/3.
 - Common signed integer absolute-value builtins lower without external calls:
   `__builtin_abs`, `__builtin_labs`, and `__builtin_llabs`.
 - Common bit-manipulation builtins lower without external calls:
