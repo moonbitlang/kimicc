@@ -484,6 +484,47 @@ fn Interpreter::eval_builtin_object_size(
 }
 
 ///|
+fn Interpreter::eval_builtin_fp_compare(
+  self : Interpreter,
+  frame : InterpFrame,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Int64 {
+  if args.length() < 2 {
+    return 0L
+  }
+  let left = match self.program.fold_float_const(args[0], frame.scope()) {
+    Some(value) => value
+    None => {
+      self.fail("unsupported MIR interpreter " + name + " argument")
+      return 0L
+    }
+  }
+  let right = match self.program.fold_float_const(args[1], frame.scope()) {
+    Some(value) => value
+    None => {
+      self.fail("unsupported MIR interpreter " + name + " argument")
+      return 0L
+    }
+  }
+  let unordered = left != left || right != right
+  let result = match name {
+    "__builtin_isgreater" => !unordered && left > right
+    "__builtin_isgreaterequal" => !unordered && left >= right
+    "__builtin_isless" => !unordered && left < right
+    "__builtin_islessequal" => !unordered && left <= right
+    "__builtin_islessgreater" => !unordered && left != right
+    "__builtin_isunordered" => unordered
+    _ => false
+  }
+  if result {
+    1L
+  } else {
+    0L
+  }
+}
+
+///|
 fn Interpreter::eval_builtin_abs(
   self : Interpreter,
   frame : InterpFrame,
@@ -1284,6 +1325,13 @@ fn Interpreter::eval_builtin_call(
     }
     "__builtin_object_size" | "__builtin_dynamic_object_size" =>
       Some(self.eval_builtin_object_size(frame, args))
+    "__builtin_isgreater"
+    | "__builtin_isgreaterequal"
+    | "__builtin_isless"
+    | "__builtin_islessequal"
+    | "__builtin_islessgreater"
+    | "__builtin_isunordered" =>
+      Some(self.eval_builtin_fp_compare(frame, name, args))
     "__builtin_va_start" | "__builtin_va_end" | "__builtin_va_copy" => Some(0L)
     "__builtin_bzero" => {
       ignore(self.eval_call_args(frame, args))

@@ -1360,6 +1360,23 @@ test "mir interpreter evaluates bzero arguments" {
 }
 
 ///|
+test "mir interpreter models constant floating comparison builtins" {
+  let source =
+    #|int main(void) {
+    #|  if (!__builtin_isgreater(2.0, 1.0)) return 1;
+    #|  if (!__builtin_isgreaterequal(2.0, 2.0)) return 2;
+    #|  if (!__builtin_isless(1.0, 2.0)) return 3;
+    #|  if (!__builtin_islessequal(2.0, 2.0)) return 4;
+    #|  if (!__builtin_islessgreater(1.0, 2.0)) return 5;
+    #|  if (__builtin_islessgreater(2.0, 2.0)) return 6;
+    #|  if (!__builtin_isunordered(__builtin_nan(""), 1.0)) return 7;
+    #|  if (__builtin_isgreater(__builtin_nan(""), 1.0)) return 8;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter models literal string comparison builtins" {
   let source =
     #|int main(void) {

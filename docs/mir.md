@@ -33,6 +33,9 @@ that both assembly backends walk.
   control/varargs helpers, and pointer-valued helpers such as
   `__builtin_alloca`. Runtime `__builtin_alloca` calls are modeled for argument
   side effects and pointer nullness only; the allocated memory is not modeled.
+  Floating comparison builtins such as `__builtin_isgreater` and
+  `__builtin_isunordered` are modeled for operands covered by MIR floating
+  constant folding, returning only their integer predicate result.
   Runtime `__builtin_va_start`, `__builtin_va_copy`, and `__builtin_va_end` are
   no-ops for scalar tests that do not inspect `va_list` contents.
   Runtime `__builtin_expect`, `__builtin_expect_with_probability`, and
