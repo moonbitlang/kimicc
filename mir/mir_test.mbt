@@ -117,6 +117,10 @@ test "mir computes expression and global expression types" {
     mir.expr_type(Binary("-", Var("p"), Var("p")), scope),
     content="SLong",
   )
+  inspect(
+    mir.expr_type(Binary("<<", Number(1), Number(40)), scope),
+    content="ULongLong",
+  )
   inspect(mir.expr_type(MemberAccess(Var("s"), "y"), scope), content="Double")
   inspect(mir.global_expr_type(AddrOf(Var("g"))), content="Pointer(Struct(S))")
   inspect(

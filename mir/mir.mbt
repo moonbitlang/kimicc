@@ -1056,6 +1056,12 @@ pub fn Program::expr_type(
     Binary(op, lhs, rhs) => {
       let lhs_ty = self.expr_type(lhs, scope)
       let rhs_ty = self.expr_type(rhs, scope)
+      if op == "<<" || op == ">>" {
+        match (lhs, rhs) {
+          (Number(_), Number(shift)) => if shift >= 32L { return ULongLong }
+          _ => ()
+        }
+      }
       if op == "-" &&
         self.pointer_element(lhs_ty) is Some(_) &&
         self.pointer_element(rhs_ty) is Some(_) {

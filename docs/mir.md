@@ -102,17 +102,17 @@ that both assembly backends walk.
 ## Backend Sharing
 
 Darwin ARM64 attaches a lowered MIR program during assembly generation and
-delegates size, alignment, field-layout, offsetof path, global-expression type,
-and covered integer/floating constant-folding queries to MIR when that lowered
-program is present. Its older local semantic paths remain in place as fallbacks
-for direct private construction in tests.
+delegates size, alignment, field-layout, offsetof path, expression type,
+global-expression type, and covered integer/floating constant-folding queries to
+MIR when that lowered program is present. Its older local semantic paths remain
+in place as fallbacks for direct private construction in tests.
 
 Linux/amd64 now receives a lowered MIR program through `generate_assembly_for_target`.
 The private `X64Codegen` delegates size, alignment, field-layout, offsetof path,
-global-expression type, and covered integer/floating constant-folding queries to
-MIR when that lowered program is present. Its older local semantic paths remain
-in place for whitebox consistency tests and as fallbacks for direct private
-construction in tests.
+expression type, global-expression type, and covered integer/floating
+constant-folding queries to MIR when that lowered program is present. Its older
+local semantic paths remain in place for whitebox consistency tests and as
+fallbacks for direct private construction in tests.
 
 ## Why This Layer Is Useful
 

@@ -4357,6 +4357,14 @@ fn X64Codegen::emit_store_bitfield_value(
 
 ///|
 fn X64Codegen::type_of(self : X64Codegen, expr : @parser.Expr) -> @parser.Type {
+  match self.mir {
+    Some(mir) =>
+      return mir.expr_type(expr, @mir.Scope::{
+        locals: self.var_types,
+        current_func: self.func_name,
+      })
+    None => ()
+  }
   match expr {
     Number(value) => number_literal_type(value)
     FloatLiteral(_) => Double

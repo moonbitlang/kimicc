@@ -53,6 +53,14 @@ fn Codegen::type_of(
   expr : @parser.Expr,
   frame_size : Int,
 ) -> @parser.Type {
+  match self.mir {
+    Some(mir) =>
+      return mir.expr_type(expr, @mir.Scope::{
+        locals: self.var_types,
+        current_func: self.func_name,
+      })
+    None => ()
+  }
   match expr {
     Number(value) => number_literal_type(value)
     FloatLiteral(_) => Double
