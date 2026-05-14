@@ -381,6 +381,32 @@ fn Interpreter::eval_return_first_call_arg(
 }
 
 ///|
+fn Interpreter::eval_builtin_object_size(
+  self : Interpreter,
+  frame : InterpFrame,
+  args : Array[@parser.Expr],
+) -> Int64 {
+  let mode = if args.length() > 1 {
+    match self.program.fold_const(args[1], frame.scope()) {
+      Some(value) => value
+      None => {
+        self.fail("unsupported MIR interpreter object_size type argument")
+        0L
+      }
+    }
+  } else {
+    0L
+  }
+  if args.length() == 0 {
+    return unknown_object_size(mode)
+  }
+  match literal_string_arg(args[0]) {
+    Some(value) => (value.length() + 1).to_int64()
+    None => unknown_object_size(mode)
+  }
+}
+
+///|
 fn Interpreter::eval_builtin_abs(
   self : Interpreter,
   frame : InterpFrame,
@@ -759,6 +785,15 @@ fn nonnegative_min(left : Int64, right : Int64) -> Int64? {
     Some(left)
   } else {
     Some(right)
+  }
+}
+
+///|
+fn unknown_object_size(mode : Int64) -> Int64 {
+  if (mode & 2L) != 0L {
+    0L
+  } else {
+    -1L
   }
 }
 
@@ -1153,7 +1188,8 @@ fn Interpreter::eval_builtin_call(
       }
       Some(0L)
     }
-    "__builtin_object_size" | "__builtin_dynamic_object_size" => Some(-1L)
+    "__builtin_object_size" | "__builtin_dynamic_object_size" =>
+      Some(self.eval_builtin_object_size(frame, args))
     "__builtin_va_start" | "__builtin_va_end" | "__builtin_va_copy" => Some(0L)
     "__builtin_bzero" => {
       ignore(self.eval_call_args(frame, args))

@@ -623,6 +623,24 @@ test "mir interpreter evaluates prefetch address argument" {
 }
 
 ///|
+test "mir interpreter models literal object size builtins" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  if (__builtin_object_size("abc", 0) != 4) return 1;
+    #|  if (__builtin_object_size((const char *)"abc", 1) != 4) return 2;
+    #|  if (__builtin_dynamic_object_size("hello", 2) != 6) return 3;
+    #|  if (__builtin_dynamic_object_size((const void *)"hello", 3) != 6) return 4;
+    #|  if (__builtin_object_size((void *)1, 0) + 1 != 0) return 5;
+    #|  if (__builtin_object_size((void *)1, 2) != 0) return 6;
+    #|  if (__builtin_dynamic_object_size((void *)(long)(side += 1), 0) + 1 != 0) return 7;
+    #|  if (side != 0) return 8;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter evaluates unobserved varargs setup builtins" {
   let source =
     #|typedef __builtin_va_list va_list;
