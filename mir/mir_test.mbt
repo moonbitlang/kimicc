@@ -856,6 +856,24 @@ test "mir interpreter models decimal precision checked printf lengths" {
 }
 
 ///|
+test "mir interpreter models radix precision checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  unsigned int n = 0;
+    #|  char *dst = __builtin_alloca(32);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"x=%.4x", n += 0x2a) != 6) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 32, (const char *)"%#.4x%%", 0x2au) != 7) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"o=%#.4o", 8u) != 6) return 3;
+    #|  if (__builtin___printf_chk(1, (const char *)"q=%#.2o", 8u) != 5) return 4;
+    #|  if (__builtin___printf_chk(1, (const char *)"z=%.0x", 0u) != 2) return 5;
+    #|  if (__builtin___printf_chk(1, (const char *)"r=%#.0o", 0u) != 3) return 6;
+    #|  if (n != 0x2a) return 7;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter models unsigned checked printf lengths" {
   let source =
     #|int main(void) {

@@ -867,8 +867,11 @@ fn Interpreter::literal_printf_format_length(
               if has_precision &&
                 format[conversion_index].to_int() != 100 &&
                 format[conversion_index].to_int() != 105 &&
+                format[conversion_index].to_int() != 88 &&
+                format[conversion_index].to_int() != 111 &&
                 format[conversion_index].to_int() != 115 &&
-                format[conversion_index].to_int() != 117 {
+                format[conversion_index].to_int() != 117 &&
+                format[conversion_index].to_int() != 120 {
                 self.fail("unsupported MIR interpreter " + name + " format")
                 return None
               }
@@ -919,13 +922,31 @@ fn Interpreter::literal_printf_format_length(
                 let value = values[value_index]
                 match nonnegative_radix_length(value, radix) {
                   Some(radix_length) => {
-                    conversion_length = radix_length
-                    if alternate_flag && value != 0L {
-                      if format[conversion_index].to_int() == 111 {
+                    conversion_length = if has_precision &&
+                      value == 0L &&
+                      precision == 0L {
+                      0L
+                    } else {
+                      radix_length
+                    }
+                    if has_precision && precision > conversion_length {
+                      conversion_length = precision
+                    }
+                    if alternate_flag &&
+                      format[conversion_index].to_int() == 111 {
+                      if has_precision {
+                        if value == 0L {
+                          if precision == 0L {
+                            conversion_length = 1L
+                          }
+                        } else if precision <= radix_length {
+                          conversion_length += 1L
+                        }
+                      } else if value != 0L {
                         conversion_length += 1L
-                      } else {
-                        conversion_length += 2L
                       }
+                    } else if alternate_flag && value != 0L {
+                      conversion_length += 2L
                     }
                   }
                   None => {
