@@ -143,6 +143,21 @@ fn Interpreter::global_string_pointer_initializer(
     String(value) =>
       Some({ value, base: self.string_literal_base(value), offset: 0L })
     Cast(_, inner) => self.global_string_pointer_initializer(inner)
+    AddrOf(Deref(inner)) => self.global_string_pointer_initializer(inner)
+    AddrOf(ArrayAccess(base, index)) =>
+      match self.global_string_pointer_initializer(base) {
+        Some(ptr) =>
+          match self.global_pointer_offset(base, index) {
+            Some(offset) =>
+              Some({
+                value: ptr.value,
+                base: ptr.base,
+                offset: ptr.offset + offset,
+              })
+            None => None
+          }
+        None => None
+      }
     Var(name) =>
       if self.globals.contains(name) {
         self.string_literal_pointer_at(self.globals[name])
@@ -2422,6 +2437,14 @@ fn Interpreter::eval_expr(
     }
     Deref(AddrOf(value)) => self.read_lvalue(frame, value)
     AddrOf(Deref(value)) => self.eval_expr(frame, value)
+    AddrOf(ArrayAccess(base, index)) =>
+      match self.literal_string_pointer(frame, base) {
+        Some(ptr) => ptr.base + ptr.offset + self.eval_expr(frame, index)
+        None => {
+          self.fail("unsupported MIR interpreter memory expression")
+          0L
+        }
+      }
     Deref(value) =>
       match self.literal_string_pointer(frame, value) {
         Some(ptr) => string_literal_byte_at(ptr.value, ptr.offset)

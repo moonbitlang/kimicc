@@ -665,6 +665,25 @@ test "mir interpreter models local string array initializers" {
 }
 
 ///|
+test "mir interpreter models string array element addresses" {
+  let source =
+    #|char g[] = "abc";
+    #|char *gp = &g[1];
+    #|int main(void) {
+    #|  char s[] = "wxyz";
+    #|  char *p = &s[2];
+    #|  if (*p != 'y') return 1;
+    #|  *p = 'q';
+    #|  if (__builtin_strcmp(s, "wxqz") != 0) return 2;
+    #|  if (*gp != 'b') return 3;
+    #|  if (__builtin_strchr(g, 'c') != &g[2]) return 4;
+    #|  if (__builtin_strchr(s, 'z') != &s[3]) return 5;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter models embedded nul string literal lengths" {
   let source =
     #|int main(void) {

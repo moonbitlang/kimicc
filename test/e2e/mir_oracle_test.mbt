@@ -386,6 +386,21 @@ async test "e2e MIR oracle checks local string array initializers" {
 }
 
 ///|
+async test "e2e MIR oracle checks string array element addresses" {
+  let source =
+    #|int main(void) {
+    #|  char s[] = "wxyz";
+    #|  char *p = &s[2];
+    #|  if (*p != 'y') return 1;
+    #|  *p = 'q';
+    #|  if (__builtin_strcmp(s, "wxqz") != 0) return 2;
+    #|  if (__builtin_strchr(s, 'z') != &s[3]) return 3;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks embedded nul string literal lengths" {
   let source =
     #|int main(void) {
