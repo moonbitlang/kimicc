@@ -140,8 +140,22 @@ fn expect_darwin_field_facts(
   ty : @parser.Type,
   field : String,
 ) -> Unit {
+  expect_darwin_field_lookup_facts(codegen, mir, ty, ty, field)
+}
+
+///|
+fn expect_darwin_field_lookup_facts(
+  codegen : Codegen,
+  mir : @mir.Program,
+  lookup_ty : @parser.Type,
+  mir_ty : @parser.Type,
+  field : String,
+) -> Unit {
   match
-    (codegen.find_field_layout_for_type(ty, field), mir.field_layout(ty, field)) {
+    (
+      codegen.find_field_layout_for_type(lookup_ty, field),
+      mir.field_layout(mir_ty, field),
+    ) {
     (Some(cg), Some(m)) => {
       expect_semantic_int("darwin field offset " + field, cg.2, m.offset)
       expect_semantic_int("darwin field size " + field, cg.3, m.size)
@@ -156,7 +170,7 @@ fn expect_darwin_field_facts(
         m.bit_width,
       )
     }
-    _ => abort("missing darwin field fact: " + field)
+    _ => abort("missing darwin field lookup fact: " + field)
   }
 }
 
@@ -455,6 +469,20 @@ test "darwin codegen layout facts match MIR facts" {
   expect_darwin_field_facts(codegen, mir, Struct("B"), "b")
   expect_darwin_field_facts(codegen, mir, Struct("B"), "c")
   expect_darwin_field_facts(codegen, mir, Union("U"), "ld")
+  expect_darwin_field_lookup_facts(
+    codegen,
+    mir,
+    Pointer(Struct("A")),
+    Struct("A"),
+    "arr",
+  )
+  expect_darwin_field_lookup_facts(
+    codegen,
+    mir,
+    Pointer(Union("U")),
+    Union("U"),
+    "ld",
+  )
   expect_darwin_offset_facts(codegen, mir, Struct("A"), [
     OffsetField("arr"),
     OffsetIndex(2),
@@ -718,6 +746,20 @@ test "attached darwin arm64 semantic queries use MIR state" {
   expect_darwin_type_facts(codegen, mir, Struct("A"))
   expect_darwin_field_facts(codegen, mir, Struct("A"), "arr")
   expect_darwin_field_facts(codegen, mir, Union("U"), "ld")
+  expect_darwin_field_lookup_facts(
+    codegen,
+    mir,
+    Pointer(Struct("A")),
+    Struct("A"),
+    "arr",
+  )
+  expect_darwin_field_lookup_facts(
+    codegen,
+    mir,
+    Pointer(Union("U")),
+    Union("U"),
+    "ld",
+  )
   expect_darwin_offset_facts(codegen, mir, Struct("A"), [
     OffsetField("arr"),
     OffsetIndex(2),

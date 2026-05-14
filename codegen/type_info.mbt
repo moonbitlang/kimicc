@@ -345,6 +345,21 @@ fn darwin_field_layout_tuple(
 }
 
 ///|
+fn darwin_field_receiver_type(ty : @parser.Type) -> @parser.Type? {
+  match peel_aligned_type(ty) {
+    Struct(name) => Some(Struct(name))
+    Union(name) => Some(Union(name))
+    Pointer(inner) =>
+      match peel_aligned_type(inner) {
+        Struct(name) => Some(Struct(name))
+        Union(name) => Some(Union(name))
+        _ => None
+      }
+    _ => None
+  }
+}
+
+///|
 fn Codegen::find_field_layout(
   self : Codegen,
   struct_name : String,
@@ -382,15 +397,19 @@ fn Codegen::find_field_layout_for_type(
   ty : @parser.Type,
   field : String,
 ) -> (String, @parser.Type, Int, Int, Int, Int)? {
+  let lookup_ty = match darwin_field_receiver_type(ty) {
+    Some(lookup_ty) => lookup_ty
+    None => return None
+  }
   match self.mir {
     Some(mir) =>
-      match mir.field_layout(ty, field) {
+      match mir.field_layout(lookup_ty, field) {
         Some(layout) => return Some(darwin_field_layout_tuple(layout))
         None => return None
       }
     None => ()
   }
-  match peel_aligned_type(ty) {
+  match lookup_ty {
     Struct(name) | Union(name) => self.find_field_layout(name, field)
     _ => None
   }
