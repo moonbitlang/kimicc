@@ -896,6 +896,18 @@ fn Codegen::fold_const(self : Codegen, expr : @parser.Expr) -> Int64? {
 
 ///|
 fn Codegen::fold_float_const(self : Codegen, expr : @parser.Expr) -> Double? {
+  match self.mir {
+    Some(mir) =>
+      match
+        mir.fold_float_const(expr, {
+          locals: self.var_types,
+          current_func: self.func_name,
+        }) {
+        Some(value) => return Some(value)
+        None => ()
+      }
+    None => ()
+  }
   let expr_ty = self.type_of(expr, 0)
   if !expr_ty.is_floating() {
     match expr {

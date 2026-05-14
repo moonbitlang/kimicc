@@ -8087,6 +8087,18 @@ fn X64Codegen::fold_float_const(
   self : X64Codegen,
   expr : @parser.Expr,
 ) -> Double? {
+  match self.mir {
+    Some(mir) =>
+      match
+        mir.fold_float_const(expr, {
+          locals: self.var_types,
+          current_func: self.func_name,
+        }) {
+        Some(value) => return Some(value)
+        None => ()
+      }
+    None => ()
+  }
   let expr_ty = self.type_of(expr)
   if !x64_is_fp_type(expr_ty) {
     match expr {

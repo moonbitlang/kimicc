@@ -9,7 +9,7 @@ that both assembly backends walk.
 - `mir/` lowers a parsed C translation unit into reusable semantic facts:
   function signatures, selected global declarations, aggregate declarations,
   target-specific sizes/alignments, field layouts, expression types, and integer
-  constant folds.
+  and floating constant folds.
 - `Program::interpret_i64` is an integer-only interpreter intended for
   compile-test oracles. It supports scalar functions, locals, globals, calls,
   casts, arithmetic, conditionals, loops, scalar switches, simple gotos, selected
@@ -45,6 +45,10 @@ that both assembly backends walk.
   evaluating the operand. The covered compile-time scalar builtin folds include
   absolute value, alignment predicates/helpers, bit counts, byte swaps, parity,
   first/leading/trailing set-bit queries, rotations, and `__builtin_flt_rounds`.
+  MIR also folds the covered floating constant subset used by global
+  initializers: floating literals, integer-to-floating and floating-to-integer
+  cast paths, arithmetic, ternaries selected by integer constants, and the
+  modeled NaN/infinity builtins.
   Runtime `__builtin_object_size` and `__builtin_dynamic_object_size` model
   string-literal object sizes, direct named objects (`&x`), and direct named
   arrays (`buf`); other objects use the C builtin unknown-size fallbacks (`-1`

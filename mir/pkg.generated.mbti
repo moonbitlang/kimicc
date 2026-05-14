@@ -50,6 +50,7 @@ pub(all) struct Program {
 pub fn Program::expr_type(Self, @parser.Expr, Scope) -> @parser.Type
 pub fn Program::field_layout(Self, @parser.Type, String) -> FieldLayout?
 pub fn Program::fold_const(Self, @parser.Expr, Scope) -> Int64?
+pub fn Program::fold_float_const(Self, @parser.Expr, Scope) -> Double?
 pub fn Program::global_expr_type(Self, @parser.Expr) -> @parser.Type
 pub fn Program::interpret_i64(Self, String, Array[Int64]) -> Result[Int64, String]
 pub fn Program::offset_of_path(Self, @parser.Type, Array[@parser.OffsetDesignator]) -> Int?

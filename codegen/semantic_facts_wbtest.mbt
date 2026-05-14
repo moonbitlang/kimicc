@@ -233,6 +233,21 @@ fn expect_x64_fold_const_facts(
 }
 
 ///|
+fn expect_x64_fold_float_const_facts(
+  codegen : X64Codegen,
+  mir : @mir.Program,
+  expr : @parser.Expr,
+) -> Unit {
+  let scope = @mir.Scope::{
+    locals: codegen.var_types,
+    current_func: codegen.func_name,
+  }
+  if codegen.fold_float_const(expr) != mir.fold_float_const(expr, scope) {
+    abort("x64 floating constant fold mismatch")
+  }
+}
+
+///|
 fn expect_darwin_fold_const_facts(
   codegen : Codegen,
   mir : @mir.Program,
@@ -244,6 +259,21 @@ fn expect_darwin_fold_const_facts(
   }
   if codegen.fold_const(expr) != mir.fold_const(expr, scope) {
     abort("darwin constant fold mismatch")
+  }
+}
+
+///|
+fn expect_darwin_fold_float_const_facts(
+  codegen : Codegen,
+  mir : @mir.Program,
+  expr : @parser.Expr,
+) -> Unit {
+  let scope = @mir.Scope::{
+    locals: codegen.var_types,
+    current_func: codegen.func_name,
+  }
+  if codegen.fold_float_const(expr) != mir.fold_float_const(expr, scope) {
+    abort("darwin floating constant fold mismatch")
   }
 }
 
@@ -315,6 +345,16 @@ test "darwin codegen layout facts match MIR facts" {
     codegen,
     mir,
     OffsetOf(Struct("A"), [OffsetField("arr"), OffsetIndex(3)]),
+  )
+  expect_darwin_fold_float_const_facts(
+    codegen,
+    mir,
+    Binary("/", Cast(Double, Number(1)), Number(2)),
+  )
+  expect_darwin_fold_float_const_facts(
+    codegen,
+    mir,
+    Cast(Double, Cast(SInt, FloatLiteral(1.75))),
   )
 }
 
@@ -392,5 +432,15 @@ test "linux amd64 codegen layout facts match MIR facts" {
     codegen,
     mir,
     OffsetOf(Struct("A"), [OffsetField("arr"), OffsetIndex(2)]),
+  )
+  expect_x64_fold_float_const_facts(
+    codegen,
+    mir,
+    Binary("/", Cast(Double, Number(1)), Number(2)),
+  )
+  expect_x64_fold_float_const_facts(
+    codegen,
+    mir,
+    Cast(Double, Cast(SInt, FloatLiteral(1.75))),
   )
 }

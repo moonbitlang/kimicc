@@ -23,6 +23,22 @@ fn expect_const(
 }
 
 ///|
+fn expect_float_const(
+  mir : @mir.Program,
+  expr : @parser.Expr,
+  scope : @mir.Scope,
+  expected : Double,
+) -> Unit {
+  match mir.fold_float_const(expr, scope) {
+    Some(value) =>
+      if value != expected {
+        abort("unexpected floating constant fold result")
+      }
+    None => abort("expected floating constant fold result")
+  }
+}
+
+///|
 fn expect_interp(source : String, expected : Int64) -> Unit {
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   match mir.interpret_i64("main", []) {
@@ -237,6 +253,32 @@ test "mir folds constants with target layout" {
     scope,
     1L,
   )
+  expect_float_const(
+    mir,
+    Binary("/", Cast(Double, Number(1)), Number(2)),
+    scope,
+    0.5,
+  )
+  expect_float_const(
+    mir,
+    Cast(Double, Cast(SInt, FloatLiteral(1.75))),
+    scope,
+    1.0,
+  )
+  expect_float_const(
+    mir,
+    Ternary(
+      Number(0),
+      FloatLiteral(9.0),
+      Binary("+", FloatLiteral(1.25), FloatLiteral(2.5)),
+    ),
+    scope,
+    3.75,
+  )
+  match mir.fold_float_const(Call(Var("__builtin_huge_valf"), []), scope) {
+    Some(value) => if !(value > 1000000.0) { abort("expected folded infinity") }
+    None => abort("expected folded infinity")
+  }
 }
 
 ///|

@@ -1892,3 +1892,84 @@ pub fn Program::fold_const(
     None => None
   }
 }
+
+///|
+pub fn Program::fold_float_const(
+  self : Program,
+  expr : @parser.Expr,
+  scope : Scope,
+) -> Double? {
+  let expr_ty = self.expr_type(expr, scope)
+  if !self.is_floating_type(expr_ty) {
+    match expr {
+      Cast(_, e) if self.is_floating_type(self.expr_type(e, scope)) =>
+        match self.fold_float_const(e, scope) {
+          Some(value) => Some(value.to_int().to_double())
+          None => None
+        }
+      _ =>
+        match self.fold_const(expr, scope) {
+          Some(value) => Some(value.to_double())
+          None => None
+        }
+    }
+  } else {
+    match expr {
+      FloatLiteral(value) => Some(value)
+      Number(value) => Some(value.to_double())
+      Binary("+", a, b) =>
+        match
+          (self.fold_float_const(a, scope), self.fold_float_const(b, scope)) {
+          (Some(x), Some(y)) => Some(x + y)
+          _ => None
+        }
+      Binary("-", a, b) =>
+        match
+          (self.fold_float_const(a, scope), self.fold_float_const(b, scope)) {
+          (Some(x), Some(y)) => Some(x - y)
+          _ => None
+        }
+      Binary("*", a, b) =>
+        match
+          (self.fold_float_const(a, scope), self.fold_float_const(b, scope)) {
+          (Some(x), Some(y)) => Some(x * y)
+          _ => None
+        }
+      Binary("/", a, b) =>
+        match
+          (self.fold_float_const(a, scope), self.fold_float_const(b, scope)) {
+          (Some(x), Some(y)) => Some(x / y)
+          _ => None
+        }
+      Unary("-", e) =>
+        match self.fold_float_const(e, scope) {
+          Some(value) => Some(-value)
+          None => None
+        }
+      Unary("+", e) => self.fold_float_const(e, scope)
+      Ternary(cond, a, b) =>
+        match self.fold_const(cond, scope) {
+          Some(0L) => self.fold_float_const(b, scope)
+          Some(_) => self.fold_float_const(a, scope)
+          None => None
+        }
+      Cast(_, e)
+      | DesignatedField(_, e)
+      | DesignatedIndex(_, e)
+      | DesignatedRange(_, _, e) => self.fold_float_const(e, scope)
+      Call(Var(name), _) =>
+        match name {
+          "__builtin_nan" | "__builtin_nanf" | "__builtin_nanl" =>
+            Some(0.0 / 0.0)
+          "__builtin_huge_val"
+          | "__builtin_huge_valf"
+          | "__builtin_huge_vall"
+          | "__builtin_inf"
+          | "__builtin_inff"
+          | "__builtin_infl" => Some(1.0 / 0.0)
+          _ => None
+        }
+      _ => None
+    }
+  }
+}
