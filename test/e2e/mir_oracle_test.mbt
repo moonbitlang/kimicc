@@ -222,6 +222,10 @@ async test "e2e MIR oracle checks parser folded compile-time builtins" {
     #|struct Outer { char head; struct Item items[3]; char tail; };
     #|struct S { int x; };
     #|union U { int x; double y; };
+    #|_Static_assert(__builtin_object_size("abc", 0) == 4, "literal object size");
+    #|_Static_assert(__builtin_dynamic_object_size("a\0bc", 2) == 5, "embedded nul object size");
+    #|_Static_assert(__builtin_object_size((void *)0, 0) == (unsigned long)-1, "unknown max object size");
+    #|_Static_assert(__builtin_dynamic_object_size((void *)0, 2) == 0, "unknown min object size");
     #|int main(void) {
     #|  int x = 0;
     #|  double d;

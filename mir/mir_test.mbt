@@ -125,6 +125,39 @@ test "mir folds constants with target layout" {
   )
   expect_const(mir, SizeofExpr(String("abc")), scope, 4L)
   expect_const(mir, AlignofExpr(String("abc")), scope, 1L)
+  expect_const(
+    mir,
+    Call(Var("__builtin_object_size"), [String("abc"), Number(0)]),
+    scope,
+    4L,
+  )
+  expect_const(
+    mir,
+    Call(Var("__builtin_dynamic_object_size"), [
+      Cast(Pointer(SChar), String("abcd")),
+      Number(2),
+    ]),
+    scope,
+    5L,
+  )
+  expect_const(
+    mir,
+    Call(Var("__builtin_object_size"), [
+      Cast(Pointer(Void), Number(0)),
+      Number(0),
+    ]),
+    scope,
+    -1L,
+  )
+  expect_const(
+    mir,
+    Call(Var("__builtin_dynamic_object_size"), [
+      Cast(Pointer(Void), Number(0)),
+      Number(2),
+    ]),
+    scope,
+    0L,
+  )
   expect_const(mir, Binary("/", Number(1), Number(2)), scope, 0L)
   expect_const(
     mir,

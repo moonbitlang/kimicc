@@ -1590,6 +1590,17 @@ test "parse builtin choose expr and types compatible fold constants" {
 }
 
 ///|
+test "parse object size builtin constants in static asserts" {
+  let source =
+    #|_Static_assert(__builtin_object_size("abc", 0) == 4, "literal object size");
+    #|_Static_assert(__builtin_dynamic_object_size((const char *)"a\0bc", 2) == 5, "embedded nul object size");
+    #|_Static_assert(__builtin_object_size((void *)0, 0) == (unsigned long)-1, "unknown max object size");
+    #|_Static_assert(__builtin_dynamic_object_size((void *)0, 2) == 0, "unknown min object size");
+    #|int main(void) { return 0; }
+  ignore(@parser.parse(source))
+}
+
+///|
 test "parse GNU typeof type specifiers" {
   let source =
     #|int main(void) {

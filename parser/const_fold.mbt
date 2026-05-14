@@ -131,10 +131,51 @@ pub fn fold_const(expr : Expr) -> Int64? {
     DesignatedField(_, e) => fold_const(e)
     DesignatedIndex(_, e) => fold_const(e)
     DesignatedRange(_, _, e) => fold_const(e)
+    Call(Var("__builtin_object_size"), args)
+    | Call(Var("__builtin_dynamic_object_size"), args) => {
+      let mode = if args.length() > 1 {
+        match fold_const(args[1]) {
+          Some(value) => value
+          None => return None
+        }
+      } else {
+        0L
+      }
+      Some(const_builtin_object_size_value(args, mode))
+    }
     Array(_) => None
     CompoundLiteral(_, _, _) => None
     _ => None
   }
+}
+
+///|
+fn const_literal_string_arg(expr : Expr) -> String? {
+  match expr {
+    String(value) => Some(value)
+    Cast(_, inner) => const_literal_string_arg(inner)
+    _ => None
+  }
+}
+
+///|
+fn const_unknown_object_size(mode : Int64) -> Int64 {
+  if (mode & 2L) != 0L {
+    0L
+  } else {
+    -1L
+  }
+}
+
+///|
+fn const_builtin_object_size_value(args : Array[Expr], mode : Int64) -> Int64 {
+  if args.length() > 0 {
+    match const_literal_string_arg(args[0]) {
+      Some(value) => return (value.length() + 1).to_int64()
+      None => ()
+    }
+  }
+  const_unknown_object_size(mode)
 }
 
 ///|
@@ -649,6 +690,18 @@ fn Parser::fold_const_int(self : Parser, expr : Expr) -> ConstIntValue? {
     DesignatedField(_, e) => self.fold_const_int(e)
     DesignatedIndex(_, e) => self.fold_const_int(e)
     DesignatedRange(_, _, e) => self.fold_const_int(e)
+    Call(Var("__builtin_object_size"), args)
+    | Call(Var("__builtin_dynamic_object_size"), args) => {
+      let mode = if args.length() > 1 {
+        match self.fold_const(args[1]) {
+          Some(value) => value
+          None => return None
+        }
+      } else {
+        0L
+      }
+      Some(const_int(const_builtin_object_size_value(args, mode), ULong))
+    }
     Array(_) => None
     CompoundLiteral(_, _, _) => None
     _ => None

@@ -1526,6 +1526,26 @@ fn Program::fold_const_int(
         Some(offset) => Some(self.const_int(offset.to_int64(), ULong))
         None => None
       }
+    Call(Var("__builtin_object_size"), args)
+    | Call(Var("__builtin_dynamic_object_size"), args) => {
+      let mode = if args.length() > 1 {
+        match self.fold_const(args[1], scope) {
+          Some(value) => value
+          None => return None
+        }
+      } else {
+        0L
+      }
+      let value = if args.length() > 0 {
+        match literal_string_arg(args[0]) {
+          Some(literal) => (literal.length() + 1).to_int64()
+          None => unknown_object_size(mode)
+        }
+      } else {
+        unknown_object_size(mode)
+      }
+      Some(self.const_int(value, ULong))
+    }
     _ => None
   }
 }
