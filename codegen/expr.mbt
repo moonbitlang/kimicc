@@ -2262,6 +2262,135 @@ fn Codegen::emit_builtin_unary_fp(
 }
 
 ///|
+fn Codegen::emit_fp_class_constant(
+  self : Codegen,
+  reg : String,
+  ty : @parser.Type,
+  kind : String,
+) -> Unit {
+  match ty {
+    Float =>
+      match kind {
+        "inf" => self.emit("\tmovz\t" + reg + ", #0x7F80, lsl #16")
+        "normal_min" => self.emit("\tmovz\t" + reg + ", #0x80, lsl #16")
+        _ => self.emit("\tmov\t" + reg + ", #0")
+      }
+    _ =>
+      match kind {
+        "inf" => {
+          self.emit("\tmovz\t" + reg + ", #0")
+          self.emit("\tmovk\t" + reg + ", #0, lsl #16")
+          self.emit("\tmovk\t" + reg + ", #0, lsl #32")
+          self.emit("\tmovk\t" + reg + ", #0x7FF0, lsl #48")
+        }
+        "normal_min" => {
+          self.emit("\tmovz\t" + reg + ", #0")
+          self.emit("\tmovk\t" + reg + ", #0, lsl #16")
+          self.emit("\tmovk\t" + reg + ", #0, lsl #32")
+          self.emit("\tmovk\t" + reg + ", #0x10, lsl #48")
+        }
+        _ => self.emit("\tmov\t" + reg + ", #0")
+      }
+  }
+}
+
+///|
+fn Codegen::emit_builtin_fp_class(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+  ty : @parser.Type,
+  op : String,
+) -> Unit {
+  if args.length() == 0 {
+    self.emit("\tmov\tx9, #0")
+    return
+  }
+  self.gen_expr(args[0], frame_size)
+  self.emit_numeric_conversion(self.type_of(args[0], frame_size), ty)
+  match ty {
+    Float =>
+      if op == "signbit" {
+        self.emit("\tlsr\tw9, w9, #31")
+      } else {
+        self.emit("\tfmov\ts9, w9")
+        match op {
+          "isnan" => {
+            self.emit("\tfcmp\ts9, s9")
+            self.emit("\tcset\tx9, vs")
+          }
+          "isinf" => {
+            self.emit("\tfabs\ts9, s9")
+            self.emit_fp_class_constant("w10", ty, "inf")
+            self.emit("\tfmov\ts10, w10")
+            self.emit("\tfcmp\ts9, s10")
+            self.emit("\tcset\tx9, eq")
+          }
+          "isfinite" => {
+            self.emit("\tfabs\ts9, s9")
+            self.emit_fp_class_constant("w10", ty, "inf")
+            self.emit("\tfmov\ts10, w10")
+            self.emit("\tfcmp\ts9, s10")
+            self.emit("\tcset\tx9, mi")
+          }
+          "isnormal" => {
+            self.emit("\tfabs\ts9, s9")
+            self.emit_fp_class_constant("w10", ty, "normal_min")
+            self.emit("\tfmov\ts10, w10")
+            self.emit("\tfcmp\ts9, s10")
+            self.emit("\tcset\tx11, ge")
+            self.emit_fp_class_constant("w10", ty, "inf")
+            self.emit("\tfmov\ts10, w10")
+            self.emit("\tfcmp\ts9, s10")
+            self.emit("\tcset\tx9, mi")
+            self.emit("\tand\tx9, x9, x11")
+          }
+          _ => self.emit("\tmov\tx9, #0")
+        }
+      }
+    _ =>
+      if op == "signbit" {
+        self.emit("\tlsr\tx9, x9, #63")
+      } else {
+        self.emit("\tfmov\td9, x9")
+        match op {
+          "isnan" => {
+            self.emit("\tfcmp\td9, d9")
+            self.emit("\tcset\tx9, vs")
+          }
+          "isinf" => {
+            self.emit("\tfabs\td9, d9")
+            self.emit_fp_class_constant("x10", ty, "inf")
+            self.emit("\tfmov\td10, x10")
+            self.emit("\tfcmp\td9, d10")
+            self.emit("\tcset\tx9, eq")
+          }
+          "isfinite" => {
+            self.emit("\tfabs\td9, d9")
+            self.emit_fp_class_constant("x10", ty, "inf")
+            self.emit("\tfmov\td10, x10")
+            self.emit("\tfcmp\td9, d10")
+            self.emit("\tcset\tx9, mi")
+          }
+          "isnormal" => {
+            self.emit("\tfabs\td9, d9")
+            self.emit_fp_class_constant("x10", ty, "normal_min")
+            self.emit("\tfmov\td10, x10")
+            self.emit("\tfcmp\td9, d10")
+            self.emit("\tcset\tx11, ge")
+            self.emit_fp_class_constant("x10", ty, "inf")
+            self.emit("\tfmov\td10, x10")
+            self.emit("\tfcmp\td9, d10")
+            self.emit("\tcset\tx9, mi")
+            self.emit("\tand\tx9, x9, x11")
+          }
+          _ => self.emit("\tmov\tx9, #0")
+        }
+      }
+  }
+}
+
+///|
 fn Codegen::gen_ignored_expr_side_effects(
   self : Codegen,
   expr : @parser.Expr,
@@ -3066,6 +3195,46 @@ fn Codegen::emit_builtin_call(
       } else {
         self.emit("\tmov\tx9, #0")
       }
+      true
+    }
+    "__builtin_isnan" | "__builtin_isnanl" => {
+      self.emit_builtin_fp_class(args, frame_size, Double, "isnan")
+      true
+    }
+    "__builtin_isnanf" => {
+      self.emit_builtin_fp_class(args, frame_size, Float, "isnan")
+      true
+    }
+    "__builtin_isinf" | "__builtin_isinfl" => {
+      self.emit_builtin_fp_class(args, frame_size, Double, "isinf")
+      true
+    }
+    "__builtin_isinff" => {
+      self.emit_builtin_fp_class(args, frame_size, Float, "isinf")
+      true
+    }
+    "__builtin_isfinite" | "__builtin_isfinitel" => {
+      self.emit_builtin_fp_class(args, frame_size, Double, "isfinite")
+      true
+    }
+    "__builtin_isfinitef" => {
+      self.emit_builtin_fp_class(args, frame_size, Float, "isfinite")
+      true
+    }
+    "__builtin_isnormal" | "__builtin_isnormall" => {
+      self.emit_builtin_fp_class(args, frame_size, Double, "isnormal")
+      true
+    }
+    "__builtin_isnormalf" => {
+      self.emit_builtin_fp_class(args, frame_size, Float, "isnormal")
+      true
+    }
+    "__builtin_signbit" | "__builtin_signbitl" => {
+      self.emit_builtin_fp_class(args, frame_size, Double, "signbit")
+      true
+    }
+    "__builtin_signbitf" => {
+      self.emit_builtin_fp_class(args, frame_size, Float, "signbit")
       true
     }
     _ => false

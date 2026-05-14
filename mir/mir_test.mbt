@@ -1387,6 +1387,38 @@ test "mir interpreter models constant floating comparison builtins" {
 }
 
 ///|
+test "mir interpreter models constant floating classification builtins" {
+  let source =
+    #|int main(void) {
+    #|  if (!__builtin_isnan(__builtin_nan(""))) return 1;
+    #|  if (__builtin_isnan(1.0)) return 2;
+    #|  if (!__builtin_isnanf(__builtin_nanf(""))) return 3;
+    #|  if (!__builtin_isnanl(__builtin_nanl(""))) return 4;
+    #|  if (!__builtin_isinf(__builtin_inf())) return 5;
+    #|  if (!__builtin_isinf(-__builtin_inf())) return 6;
+    #|  if (__builtin_isinf(1.0)) return 7;
+    #|  if (!__builtin_isinff(__builtin_inff())) return 8;
+    #|  if (!__builtin_isinfl(__builtin_infl())) return 9;
+    #|  if (!__builtin_isfinite(1.0)) return 10;
+    #|  if (__builtin_isfinite(__builtin_inf())) return 11;
+    #|  if (!__builtin_isfinitef(1.0f)) return 12;
+    #|  if (!__builtin_isfinitel(1.0L)) return 13;
+    #|  if (!__builtin_isnormal(1.0)) return 14;
+    #|  if (__builtin_isnormal(0.0)) return 15;
+    #|  if (__builtin_isnormal(__builtin_inf())) return 16;
+    #|  if (!__builtin_isnormalf(1.0f)) return 17;
+    #|  if (!__builtin_isnormall(1.0L)) return 18;
+    #|  if (!__builtin_signbit(-1.0)) return 19;
+    #|  if (!__builtin_signbit(-0.0)) return 20;
+    #|  if (__builtin_signbit(1.0)) return 21;
+    #|  if (!__builtin_signbitf(-0.0f)) return 22;
+    #|  if (!__builtin_signbitl(-1.0L)) return 23;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter models literal string comparison builtins" {
   let source =
     #|int main(void) {

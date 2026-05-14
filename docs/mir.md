@@ -35,8 +35,9 @@ that both assembly backends walk.
   `__builtin_alloca`. Runtime `__builtin_alloca` calls are modeled for argument
   side effects and distinct synthetic non-null pointer values; the allocated
   memory is not modeled.
-  Floating comparison builtins such as `__builtin_isgreater` and
-  `__builtin_isunordered` are modeled for operands covered by MIR floating
+  Floating comparison and classification builtins such as
+  `__builtin_isgreater`, `__builtin_isunordered`, `__builtin_isnan`, and
+  `__builtin_signbit` are modeled for operands covered by MIR floating
   constant folding, returning only their integer predicate result.
   Runtime `__builtin_va_start`, `__builtin_va_copy`, and `__builtin_va_end` are
   no-ops for scalar tests that do not inspect `va_list` contents.

@@ -533,6 +533,68 @@ fn Interpreter::eval_builtin_fp_compare(
 }
 
 ///|
+fn fp_abs(value : Double) -> Double {
+  if value < 0.0 {
+    -value
+  } else {
+    value
+  }
+}
+
+///|
+fn fp_class_bool(value : Bool) -> Int64 {
+  if value {
+    1L
+  } else {
+    0L
+  }
+}
+
+///|
+fn fp_class_normal_min(name : String) -> Double {
+  match name {
+    "__builtin_isnormalf" => 1.1754943508222875e-38
+    _ => 2.2250738585072014e-308
+  }
+}
+
+///|
+fn Interpreter::eval_builtin_fp_class(
+  self : Interpreter,
+  frame : InterpFrame,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Int64 {
+  if args.length() == 0 {
+    return 0L
+  }
+  let value = match self.program.fold_float_const(args[0], frame.scope()) {
+    Some(value) => value
+    None => {
+      self.fail("unsupported MIR interpreter " + name + " argument")
+      return 0L
+    }
+  }
+  let nan = value != value
+  let pos_inf = 1.0 / 0.0
+  let neg_inf = -pos_inf
+  let inf = !nan && (value == pos_inf || value == neg_inf)
+  let finite = !nan && !inf
+  let result = match name {
+    "__builtin_isnan" | "__builtin_isnanf" | "__builtin_isnanl" => nan
+    "__builtin_isinf" | "__builtin_isinff" | "__builtin_isinfl" => inf
+    "__builtin_isfinite" | "__builtin_isfinitef" | "__builtin_isfinitel" =>
+      finite
+    "__builtin_isnormal" | "__builtin_isnormalf" | "__builtin_isnormall" =>
+      finite && fp_abs(value) >= fp_class_normal_min(name)
+    "__builtin_signbit" | "__builtin_signbitf" | "__builtin_signbitl" =>
+      value < 0.0 || (value == 0.0 && 1.0 / value == neg_inf)
+    _ => false
+  }
+  fp_class_bool(result)
+}
+
+///|
 fn Interpreter::eval_builtin_abs(
   self : Interpreter,
   frame : InterpFrame,
@@ -1385,6 +1447,22 @@ fn Interpreter::eval_builtin_call(
     | "__builtin_islessgreater"
     | "__builtin_isunordered" =>
       Some(self.eval_builtin_fp_compare(frame, name, args))
+    "__builtin_isnan"
+    | "__builtin_isnanf"
+    | "__builtin_isnanl"
+    | "__builtin_isinf"
+    | "__builtin_isinff"
+    | "__builtin_isinfl"
+    | "__builtin_isfinite"
+    | "__builtin_isfinitef"
+    | "__builtin_isfinitel"
+    | "__builtin_isnormal"
+    | "__builtin_isnormalf"
+    | "__builtin_isnormall"
+    | "__builtin_signbit"
+    | "__builtin_signbitf"
+    | "__builtin_signbitl" =>
+      Some(self.eval_builtin_fp_class(frame, name, args))
     "__builtin_va_start" | "__builtin_va_end" | "__builtin_va_copy" => Some(0L)
     "__builtin_bzero" => {
       ignore(self.eval_call_args(frame, args))
