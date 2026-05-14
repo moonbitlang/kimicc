@@ -575,6 +575,36 @@ test "mir interpreter models string literal scalar facts" {
 }
 
 ///|
+test "mir interpreter models string literal pointer locals" {
+  let source =
+    #|int main(void) {
+    #|  char *s = (char *)"abc";
+    #|  char *tail = s + 1;
+    #|  char *u = (char *)"abba";
+    #|  char *hay = (char *)"abcde";
+    #|  char *needle = (char *)"cd";
+    #|  if (*s != 'a') return 1;
+    #|  if (tail[1] != 'c') return 2;
+    #|  if (__builtin_strlen(s) != 3) return 3;
+    #|  if (__builtin_strlen(tail) != 2) return 4;
+    #|  if (__builtin_strcmp(s, "abc") != 0) return 5;
+    #|  if (__builtin_strncmp(tail, "bc", 2) != 0) return 6;
+    #|  if (__builtin_memcmp(tail, "bc", 2) != 0) return 7;
+    #|  if (__builtin_strchr(s, 'b') != s + 1) return 8;
+    #|  if (__builtin_strchr(tail, 'a') != 0) return 9;
+    #|  if (__builtin_strchr(s, 0) != s + 3) return 10;
+    #|  if (__builtin_strrchr(u, 'b') != u + 2) return 11;
+    #|  if (__builtin_strrchr(u + 1, 'a') != u + 3) return 12;
+    #|  if (__builtin_memchr(s, 'b', 2) != s + 1) return 13;
+    #|  if (__builtin_memchr(s, 0, 4) != s + 3) return 14;
+    #|  if (__builtin_strstr(hay + 1, needle) != hay + 2) return 15;
+    #|  if (__builtin_strstr(hay, needle + 1) != hay + 3) return 16;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter models embedded nul string literal lengths" {
   let source =
     #|int main(void) {

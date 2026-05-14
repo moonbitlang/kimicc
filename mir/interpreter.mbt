@@ -25,10 +25,14 @@ fn InterpFrame::scope(self : InterpFrame) -> Scope {
 priv struct Interpreter {
   program : Program
   globals : Map[String, Int64]
+  string_bases : Map[String, Int64]
+  string_values : Map[Int64, String]
+  string_offsets : Map[Int64, Int64]
   mut error : String?
   mut steps : Int
   mut call_depth : Int
   mut next_alloca : Int64
+  mut next_string_base : Int64
 }
 
 ///|
@@ -75,10 +79,14 @@ fn Interpreter::new(program : Program) -> Interpreter {
   let self = {
     program,
     globals: {},
+    string_bases: {},
+    string_values: {},
+    string_offsets: {},
     error: None,
     steps: 0,
     call_depth: 0,
     next_alloca: 4096L,
+    next_string_base: 1048576L,
   }
   self.init_globals()
   self
@@ -948,6 +956,18 @@ fn string_literal_byte_at(value : String, index : Int64) -> Int64 {
 }
 
 ///|
+fn string_literal_c_length_from(value : String, offset : Int64) -> Int64 {
+  let length = string_literal_c_length(value).to_int64()
+  if offset <= 0L {
+    length
+  } else if offset >= length {
+    0L
+  } else {
+    length - offset
+  }
+}
+
+///|
 fn literal_string_arg(expr : @parser.Expr) -> String? {
   match expr {
     String(value) => Some(value)
@@ -959,7 +979,45 @@ fn literal_string_arg(expr : @parser.Expr) -> String? {
 ///|
 priv struct LiteralStringPointer {
   value : String
+  base : Int64
   offset : Int64
+}
+
+///|
+fn Interpreter::string_literal_base(
+  self : Interpreter,
+  value : String,
+) -> Int64 {
+  if self.string_bases.contains(value) {
+    self.string_bases[value]
+  } else {
+    let base = self.next_string_base
+    self.string_bases[value] = base
+    for i in 0..<=value.length() {
+      let offset = i.to_int64()
+      self.string_values[base + offset] = value
+      self.string_offsets[base + offset] = offset
+    }
+    self.next_string_base += value.length().to_int64() + 16L
+    base
+  }
+}
+
+///|
+fn Interpreter::string_literal_pointer_at(
+  self : Interpreter,
+  address : Int64,
+) -> LiteralStringPointer? {
+  if self.string_values.contains(address) &&
+    self.string_offsets.contains(address) {
+    Some({
+      value: self.string_values[address],
+      base: address - self.string_offsets[address],
+      offset: self.string_offsets[address],
+    })
+  } else {
+    None
+  }
 }
 
 ///|
@@ -969,13 +1027,16 @@ fn Interpreter::literal_string_pointer(
   expr : @parser.Expr,
 ) -> LiteralStringPointer? {
   match expr {
-    String(value) => Some({ value, offset: 0L })
+    String(value) =>
+      Some({ value, base: self.string_literal_base(value), offset: 0L })
     Cast(_, inner) => self.literal_string_pointer(frame, inner)
+    Var(name) => self.string_literal_pointer_at(self.read_var(frame, name))
     Binary("+", lhs, rhs) =>
       match self.literal_string_pointer(frame, lhs) {
         Some(ptr) =>
           Some({
             value: ptr.value,
+            base: ptr.base,
             offset: ptr.offset + self.eval_expr(frame, rhs),
           })
         None =>
@@ -983,6 +1044,7 @@ fn Interpreter::literal_string_pointer(
             Some(ptr) =>
               Some({
                 value: ptr.value,
+                base: ptr.base,
                 offset: ptr.offset + self.eval_expr(frame, lhs),
               })
             None => None
@@ -993,6 +1055,7 @@ fn Interpreter::literal_string_pointer(
         Some(ptr) =>
           Some({
             value: ptr.value,
+            base: ptr.base,
             offset: ptr.offset - self.eval_expr(frame, rhs),
           })
         None => None
@@ -1286,16 +1349,18 @@ fn Interpreter::literal_printf_format_length(
 }
 
 ///|
-fn compare_string_literal_bytes(
+fn compare_string_literal_bytes_from(
   left : String,
+  left_offset : Int64,
   right : String,
+  right_offset : Int64,
   limit : Int64?,
   stop_at_nul : Bool,
 ) -> Int64 {
   let mut index = 0L
   while limit is None || index < limit.unwrap() {
-    let lhs = string_literal_byte_at(left, index)
-    let rhs = string_literal_byte_at(right, index)
+    let lhs = string_literal_byte_at(left, left_offset + index)
+    let rhs = string_literal_byte_at(right, right_offset + index)
     if lhs != rhs {
       return if lhs < rhs { -1L } else { 1L }
     }
@@ -1308,8 +1373,9 @@ fn compare_string_literal_bytes(
 }
 
 ///|
-fn string_literal_find_byte(
+fn string_literal_find_byte_from(
   value : String,
+  start_offset : Int64,
   byte : Int64,
   limit : Int64?,
   stop_at_nul : Bool,
@@ -1317,9 +1383,10 @@ fn string_literal_find_byte(
   let needle = byte & 0xFFL
   let mut index = 0L
   while limit is None || index < limit.unwrap() {
-    let current = string_literal_byte_at(value, index)
+    let absolute_index = start_offset + index
+    let current = string_literal_byte_at(value, absolute_index)
     if current == needle {
-      return Some(index)
+      return Some(absolute_index)
     }
     if stop_at_nul && current == 0L {
       return None
@@ -1330,9 +1397,13 @@ fn string_literal_find_byte(
 }
 
 ///|
-fn string_literal_find_last_byte(value : String, byte : Int64) -> Int64? {
+fn string_literal_find_last_byte_from(
+  value : String,
+  start_offset : Int64,
+  byte : Int64,
+) -> Int64? {
   let needle = byte & 0xFFL
-  let mut index = 0L
+  let mut index = start_offset
   let mut found : Int64? = None
   while true {
     let current = string_literal_byte_at(value, index)
@@ -1358,28 +1429,36 @@ fn string_literal_c_length(value : String) -> Int {
 }
 
 ///|
-fn string_literal_find_string(haystack : String, needle : String) -> Int64? {
-  if needle.length() == 0 {
-    return Some(0L)
-  }
-  let haystack_length = string_literal_c_length(haystack)
-  let needle_length = string_literal_c_length(needle)
+fn string_literal_find_string_from(
+  haystack : String,
+  start_offset : Int64,
+  needle : String,
+  needle_offset : Int64,
+) -> Int64? {
+  let haystack_length = string_literal_c_length(haystack).to_int64()
+  let needle_length = string_literal_c_length_from(needle, needle_offset)
   if needle_length == 0 {
-    return Some(0L)
+    return Some(start_offset)
   }
-  if needle_length > haystack_length {
+  if start_offset > haystack_length ||
+    needle_length > haystack_length - start_offset {
     return None
   }
-  for start in 0..<=(haystack_length - needle_length) {
+  let mut start = start_offset
+  while start <= haystack_length - needle_length {
     let mut matched = true
-    for i in 0..<needle_length {
-      if haystack[start + i] != needle[i] {
+    let mut i = 0L
+    while i < needle_length {
+      if string_literal_byte_at(haystack, start + i) !=
+        string_literal_byte_at(needle, needle_offset + i) {
         matched = false
       }
+      i += 1L
     }
     if matched {
-      return Some(start.to_int64())
+      return Some(start)
     }
+    start += 1L
   }
   None
 }
@@ -1732,8 +1811,8 @@ fn Interpreter::eval_builtin_call(
       if args.length() == 0 {
         Some(0L)
       } else {
-        match literal_string_arg(args[0]) {
-          Some(value) => Some(string_literal_c_length(value).to_int64())
+        match self.literal_string_pointer(frame, args[0]) {
+          Some(ptr) => Some(string_literal_c_length_from(ptr.value, ptr.offset))
           _ => {
             self.fail("unsupported MIR interpreter strlen argument")
             Some(0L)
@@ -1744,9 +1823,22 @@ fn Interpreter::eval_builtin_call(
       if args.length() < 2 {
         Some(0L)
       } else {
-        match (literal_string_arg(args[0]), literal_string_arg(args[1])) {
+        match
+          (
+            self.literal_string_pointer(frame, args[0]),
+            self.literal_string_pointer(frame, args[1]),
+          ) {
           (Some(left), Some(right)) =>
-            Some(compare_string_literal_bytes(left, right, None, true))
+            Some(
+              compare_string_literal_bytes_from(
+                left.value,
+                left.offset,
+                right.value,
+                right.offset,
+                None,
+                true,
+              ),
+            )
           _ => {
             self.fail("unsupported MIR interpreter strcmp argument")
             Some(0L)
@@ -1757,12 +1849,18 @@ fn Interpreter::eval_builtin_call(
       if args.length() < 3 {
         Some(0L)
       } else {
-        match (literal_string_arg(args[0]), literal_string_arg(args[1])) {
+        match
+          (
+            self.literal_string_pointer(frame, args[0]),
+            self.literal_string_pointer(frame, args[1]),
+          ) {
           (Some(left), Some(right)) =>
             Some(
-              compare_string_literal_bytes(
-                left,
-                right,
+              compare_string_literal_bytes_from(
+                left.value,
+                left.offset,
+                right.value,
+                right.offset,
                 Some(self.eval_expr(frame, args[2])),
                 true,
               ),
@@ -1777,12 +1875,18 @@ fn Interpreter::eval_builtin_call(
       if args.length() < 3 {
         Some(0L)
       } else {
-        match (literal_string_arg(args[0]), literal_string_arg(args[1])) {
+        match
+          (
+            self.literal_string_pointer(frame, args[0]),
+            self.literal_string_pointer(frame, args[1]),
+          ) {
           (Some(left), Some(right)) =>
             Some(
-              compare_string_literal_bytes(
-                left,
-                right,
+              compare_string_literal_bytes_from(
+                left.value,
+                left.offset,
+                right.value,
+                right.offset,
                 Some(self.eval_expr(frame, args[2])),
                 false,
               ),
@@ -1797,23 +1901,25 @@ fn Interpreter::eval_builtin_call(
       if args.length() < 2 {
         Some(0L)
       } else {
-        match literal_string_arg(args[0]) {
-          Some(value) => {
+        match self.literal_string_pointer(frame, args[0]) {
+          Some(ptr) => {
             let offset = if name == "__builtin_strrchr" {
-              string_literal_find_last_byte(
-                value,
+              string_literal_find_last_byte_from(
+                ptr.value,
+                ptr.offset,
                 self.eval_expr(frame, args[1]),
               )
             } else {
-              string_literal_find_byte(
-                value,
+              string_literal_find_byte_from(
+                ptr.value,
+                ptr.offset,
                 self.eval_expr(frame, args[1]),
                 None,
                 true,
               )
             }
             match offset {
-              Some(index) => Some(self.eval_expr(frame, args[0]) + index)
+              Some(index) => Some(ptr.base + index)
               None => Some(0L)
             }
           }
@@ -1827,21 +1933,22 @@ fn Interpreter::eval_builtin_call(
       if args.length() < 3 {
         Some(0L)
       } else {
-        match literal_string_arg(args[0]) {
-          Some(value) => {
+        match self.literal_string_pointer(frame, args[0]) {
+          Some(ptr) => {
             let limit = self.eval_expr(frame, args[2])
             if limit < 0L {
               self.fail("unsupported MIR interpreter memchr length")
               Some(0L)
             } else {
               match
-                string_literal_find_byte(
-                  value,
+                string_literal_find_byte_from(
+                  ptr.value,
+                  ptr.offset,
                   self.eval_expr(frame, args[1]),
                   Some(limit),
                   false,
                 ) {
-                Some(index) => Some(self.eval_expr(frame, args[0]) + index)
+                Some(index) => Some(ptr.base + index)
                 None => Some(0L)
               }
             }
@@ -1856,10 +1963,20 @@ fn Interpreter::eval_builtin_call(
       if args.length() < 2 {
         Some(0L)
       } else {
-        match (literal_string_arg(args[0]), literal_string_arg(args[1])) {
+        match
+          (
+            self.literal_string_pointer(frame, args[0]),
+            self.literal_string_pointer(frame, args[1]),
+          ) {
           (Some(haystack), Some(needle)) =>
-            match string_literal_find_string(haystack, needle) {
-              Some(index) => Some(self.eval_expr(frame, args[0]) + index)
+            match
+              string_literal_find_string_from(
+                haystack.value,
+                haystack.offset,
+                needle.value,
+                needle.offset,
+              ) {
+              Some(index) => Some(haystack.base + index)
               None => Some(0L)
             }
           _ => {
@@ -1888,7 +2005,7 @@ fn Interpreter::eval_expr(
       self.fail("unsupported MIR interpreter floating expression")
       0L
     }
-    String(_) => 1L
+    String(value) => self.string_literal_base(value)
     Var(name) => self.read_var(frame, name)
     Binary("&&", lhs, rhs) =>
       if self.eval_expr(frame, lhs) == 0L {
