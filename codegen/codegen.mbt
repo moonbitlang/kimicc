@@ -363,20 +363,22 @@ fn Codegen::global_expr_type(
         Array(elem, _) | Pointer(elem) => elem
         _ => SInt
       }
-    MemberAccess(obj, field) =>
-      match peel_aligned_type(self.global_expr_type(obj)) {
-        Struct(name) | Union(name) =>
-          match self.find_field_layout(name, field) {
+    MemberAccess(obj, field) => {
+      let obj_ty = self.global_expr_type(obj)
+      match peel_aligned_type(obj_ty) {
+        Struct(_) | Union(_) =>
+          match self.find_field_layout_for_type(obj_ty, field) {
             Some((_, ty, _, _, _, _)) => ty
             None => SInt
           }
-        Pointer(Struct(name)) | Pointer(Union(name)) =>
-          match self.find_field_layout(name, field) {
+        Pointer(Struct(_)) | Pointer(Union(_)) =>
+          match self.find_field_layout_for_type(obj_ty, field) {
             Some((_, ty, _, _, _, _)) => ty
             None => SInt
           }
         _ => SInt
       }
+    }
     _ => SInt
   }
 }
@@ -1000,9 +1002,9 @@ fn Codegen::designator_matches_type(
   expr : @parser.Expr,
 ) -> Bool {
   match (peel_aligned_type(ty), expr) {
-    (Struct(name), DesignatedField(field, _))
-    | (Union(name), DesignatedField(field, _)) =>
-      self.find_field_layout(name, field) is Some(_)
+    (Struct(_), DesignatedField(field, _))
+    | (Union(_), DesignatedField(field, _)) =>
+      self.find_field_layout_for_type(ty, field) is Some(_)
     (Array(_, _), DesignatedIndex(_, _))
     | (Array(_, _), DesignatedRange(_, _, _)) => true
     _ => false

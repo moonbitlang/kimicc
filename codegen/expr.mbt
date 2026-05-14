@@ -3238,7 +3238,7 @@ fn Codegen::emit_init_aggregate_at_addr(
       let field = if init_exprs.length() > 0 {
         match init_exprs[0] {
           DesignatedField(field_name, _) =>
-            self.find_field_layout(name, field_name)
+            self.find_field_layout_for_type(ty, field_name)
           _ =>
             if self.struct_layouts.contains(name) &&
               self.struct_layouts[name].length() > 0 {
