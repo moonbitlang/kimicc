@@ -716,6 +716,14 @@ fn Codegen::call_return_type(
   args : Array[@parser.Expr],
   frame_size : Int,
 ) -> @parser.Type {
+  match self.mir {
+    Some(mir) =>
+      return mir.expr_type(Call(func, args), @mir.Scope::{
+        locals: self.var_types,
+        current_func: self.func_name,
+      })
+    None => ()
+  }
   match self.type_of(func, frame_size) {
     FuncPtr(ret, _, _) => ret
     _ =>

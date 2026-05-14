@@ -285,6 +285,23 @@ fn expect_darwin_expr_type_facts(
 }
 
 ///|
+fn expect_darwin_call_return_facts(
+  codegen : Codegen,
+  mir : @mir.Program,
+  func : @parser.Expr,
+  args : Array[@parser.Expr],
+) -> Unit {
+  let scope = @mir.Scope::{
+    locals: codegen.var_types,
+    current_func: codegen.func_name,
+  }
+  if codegen.call_return_type(func, args, 0) !=
+    mir.expr_type(Call(func, args), scope) {
+    abort("darwin call return type mismatch")
+  }
+}
+
+///|
 fn expect_x64_object_size_facts(
   codegen : X64Codegen,
   mir : @mir.Program,
@@ -860,6 +877,11 @@ test "attached darwin arm64 semantic queries use MIR state" {
     mir,
     Binary("/", Cast(Double, Number(1)), Number(2)),
   )
+  expect_darwin_call_return_facts(codegen, mir, Var("__builtin_choose_expr"), [
+    Number(1),
+    FloatLiteral(1.25),
+    Number(2),
+  ])
 }
 
 ///|
