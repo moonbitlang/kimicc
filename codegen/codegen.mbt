@@ -365,18 +365,9 @@ fn Codegen::global_expr_type(
       }
     MemberAccess(obj, field) => {
       let obj_ty = self.global_expr_type(obj)
-      match peel_aligned_type(obj_ty) {
-        Struct(_) | Union(_) =>
-          match self.find_field_layout_for_type(obj_ty, field) {
-            Some((_, ty, _, _, _, _)) => ty
-            None => SInt
-          }
-        Pointer(Struct(_)) | Pointer(Union(_)) =>
-          match self.find_field_layout_for_type(obj_ty, field) {
-            Some((_, ty, _, _, _, _)) => ty
-            None => SInt
-          }
-        _ => SInt
+      match self.find_field_layout_for_type(obj_ty, field) {
+        Some((_, ty, _, _, _, _)) => ty
+        None => SInt
       }
     }
     _ => SInt
@@ -1040,14 +1031,10 @@ fn Codegen::global_lvalue_reloc(
       match self.global_lvalue_reloc(obj) {
         Some((label, base_offset)) => {
           let obj_ty = self.global_expr_type(obj)
-          match peel_aligned_type(obj_ty) {
-            Struct(_) | Union(_) | Pointer(Struct(_)) | Pointer(Union(_)) =>
-              match self.find_field_layout_for_type(obj_ty, field) {
-                Some((_, _, field_offset, _, _, _)) =>
-                  Some((label, base_offset + field_offset))
-                None => None
-              }
-            _ => None
+          match self.find_field_layout_for_type(obj_ty, field) {
+            Some((_, _, field_offset, _, _, _)) =>
+              Some((label, base_offset + field_offset))
+            None => None
           }
         }
         None => None
