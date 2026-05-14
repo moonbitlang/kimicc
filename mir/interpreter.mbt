@@ -451,10 +451,7 @@ fn Interpreter::eval_builtin_object_size(
   if args.length() == 0 {
     return unknown_object_size(mode)
   }
-  match literal_string_arg(args[0]) {
-    Some(value) => (value.length() + 1).to_int64()
-    None => unknown_object_size(mode)
-  }
+  self.program.object_size_value(args[0], frame.scope(), mode)
 }
 
 ///|

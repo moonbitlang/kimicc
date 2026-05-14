@@ -1348,6 +1348,60 @@ fn Program::const_shift(
 }
 
 ///|
+fn Program::object_size_var_type(
+  self : Program,
+  name : String,
+  scope : Scope,
+) -> @parser.Type? {
+  if scope.locals.contains(name) {
+    Some(scope.locals[name])
+  } else if self.globals.contains(name) {
+    Some(self.globals[name].ty)
+  } else {
+    None
+  }
+}
+
+///|
+fn Program::object_size_expr_type(
+  self : Program,
+  expr : @parser.Expr,
+  scope : Scope,
+) -> @parser.Type? {
+  match expr {
+    Cast(_, inner) => self.object_size_expr_type(inner, scope)
+    AddrOf(Var(name)) => self.object_size_var_type(name, scope)
+    Var(name) =>
+      match self.object_size_var_type(name, scope) {
+        Some(ty) =>
+          match self.core_type(ty) {
+            Array(_, _) => Some(ty)
+            _ => None
+          }
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
+fn Program::object_size_value(
+  self : Program,
+  expr : @parser.Expr,
+  scope : Scope,
+  mode : Int64,
+) -> Int64 {
+  match literal_string_arg(expr) {
+    Some(literal) => return (literal.length() + 1).to_int64()
+    None => ()
+  }
+  match self.object_size_expr_type(expr, scope) {
+    Some(ty) => self.type_size(ty).to_int64()
+    None => unknown_object_size(mode)
+  }
+}
+
+///|
 fn Program::fold_const_int(
   self : Program,
   expr : @parser.Expr,
@@ -1537,10 +1591,7 @@ fn Program::fold_const_int(
         0L
       }
       let value = if args.length() > 0 {
-        match literal_string_arg(args[0]) {
-          Some(literal) => (literal.length() + 1).to_int64()
-          None => unknown_object_size(mode)
-        }
+        self.object_size_value(args[0], scope, mode)
       } else {
         unknown_object_size(mode)
       }

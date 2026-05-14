@@ -2178,6 +2178,10 @@ fn X64Codegen::builtin_object_size_value(
       Some(value) => return (value.length() + 1).to_int64()
       None => ()
     }
+    match self.object_size_expr_type(args[0]) {
+      Some(ty) => return self.type_size(ty).to_int64()
+      None => ()
+    }
   }
   let mode = if args.length() > 1 {
     match self.fold_const(args[1]) {
@@ -2188,6 +2192,41 @@ fn X64Codegen::builtin_object_size_value(
     0L
   }
   codegen_unknown_object_size(mode)
+}
+
+///|
+fn X64Codegen::object_size_var_type(
+  self : X64Codegen,
+  name : String,
+) -> @parser.Type? {
+  if self.var_types.contains(name) {
+    Some(self.var_types[name])
+  } else if self.globals.contains(name) {
+    Some(self.globals[name].ty)
+  } else {
+    None
+  }
+}
+
+///|
+fn X64Codegen::object_size_expr_type(
+  self : X64Codegen,
+  expr : @parser.Expr,
+) -> @parser.Type? {
+  match expr {
+    Cast(_, inner) => self.object_size_expr_type(inner)
+    AddrOf(Var(name)) => self.object_size_var_type(name)
+    Var(name) =>
+      match self.object_size_var_type(name) {
+        Some(ty) =>
+          match x64_core_type(ty) {
+            Array(_, _) => Some(ty)
+            _ => None
+          }
+        None => None
+      }
+    _ => None
+  }
 }
 
 ///|

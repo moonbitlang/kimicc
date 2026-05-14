@@ -113,6 +113,8 @@ test "mir computes expression and global expression types" {
 test "mir folds constants with target layout" {
   let source =
     #|struct S { char c; int i; int arr[3]; };
+    #|int global_x;
+    #|char global_buf[16];
     #|int main(void) { return 0; }
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   let scope = @mir.Scope::empty()
@@ -157,6 +159,34 @@ test "mir folds constants with target layout" {
     ]),
     scope,
     0L,
+  )
+  expect_const(
+    mir,
+    Call(Var("__builtin_object_size"), [AddrOf(Var("global_x")), Number(0)]),
+    scope,
+    4L,
+  )
+  expect_const(
+    mir,
+    Call(Var("__builtin_dynamic_object_size"), [Var("global_buf"), Number(2)]),
+    scope,
+    16L,
+  )
+  let local_types : Map[String, @parser.Type] = {}
+  local_types["local_x"] = SInt
+  local_types["local_buf"] = Array(SChar, 16)
+  let local_scope : @mir.Scope = { locals: local_types, current_func: "main" }
+  expect_const(
+    mir,
+    Call(Var("__builtin_object_size"), [AddrOf(Var("local_x")), Number(0)]),
+    local_scope,
+    4L,
+  )
+  expect_const(
+    mir,
+    Call(Var("__builtin_dynamic_object_size"), [Var("local_buf"), Number(2)]),
+    local_scope,
+    16L,
   )
   expect_const(mir, Binary("/", Number(1), Number(2)), scope, 0L)
   expect_const(
@@ -699,6 +729,8 @@ test "mir interpreter models literal object size builtins" {
   let source =
     #|int main(void) {
     #|  int side = 0;
+    #|  int x;
+    #|  char buf[16];
     #|  if (__builtin_object_size("abc", 0) != 4) return 1;
     #|  if (__builtin_object_size((const char *)"abc", 1) != 4) return 2;
     #|  if (__builtin_dynamic_object_size("hello", 2) != 6) return 3;
@@ -707,6 +739,8 @@ test "mir interpreter models literal object size builtins" {
     #|  if (__builtin_object_size((void *)1, 2) != 0) return 6;
     #|  if (__builtin_dynamic_object_size((void *)(long)(side += 1), 0) + 1 != 0) return 7;
     #|  if (side != 0) return 8;
+    #|  if (__builtin_object_size(&x, 0) != sizeof(x)) return 9;
+    #|  if (__builtin_dynamic_object_size((void *)buf, 2) != sizeof(buf)) return 10;
     #|  return 42;
     #|}
   expect_interp(source, 42L)

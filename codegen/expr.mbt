@@ -1683,6 +1683,41 @@ fn codegen_unknown_object_size(mode : Int64) -> Int64 {
 }
 
 ///|
+fn Codegen::object_size_var_type(
+  self : Codegen,
+  name : String,
+) -> @parser.Type? {
+  if self.var_types.contains(name) {
+    Some(self.var_types[name])
+  } else if self.globals.contains(name) {
+    Some(self.globals[name].ty)
+  } else {
+    None
+  }
+}
+
+///|
+fn Codegen::object_size_expr_type(
+  self : Codegen,
+  expr : @parser.Expr,
+) -> @parser.Type? {
+  match expr {
+    Cast(_, inner) => self.object_size_expr_type(inner)
+    AddrOf(Var(name)) => self.object_size_var_type(name)
+    Var(name) =>
+      match self.object_size_var_type(name) {
+        Some(ty) =>
+          match peel_aligned_type(ty) {
+            Array(_, _) => Some(ty)
+            _ => None
+          }
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
 fn Codegen::builtin_object_size_value(
   self : Codegen,
   args : Array[@parser.Expr],
@@ -1690,6 +1725,10 @@ fn Codegen::builtin_object_size_value(
   if args.length() > 0 {
     match codegen_literal_string_arg(args[0]) {
       Some(value) => return (value.length() + 1).to_int64()
+      None => ()
+    }
+    match self.object_size_expr_type(args[0]) {
+      Some(ty) => return self.type_size(ty).to_int64()
       None => ()
     }
   }

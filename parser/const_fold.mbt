@@ -179,6 +179,49 @@ fn const_builtin_object_size_value(args : Array[Expr], mode : Int64) -> Int64 {
 }
 
 ///|
+fn Parser::const_object_size_type(self : Parser, expr : Expr) -> Type? {
+  match expr {
+    Cast(_, inner) => self.const_object_size_type(inner)
+    AddrOf(Var(name)) =>
+      if self.value_types.contains(name) {
+        Some(self.value_types[name])
+      } else {
+        None
+      }
+    Var(name) =>
+      if self.value_types.contains(name) {
+        let ty = self.value_types[name]
+        match const_type_core(ty) {
+          Array(_, _) => Some(ty)
+          _ => None
+        }
+      } else {
+        None
+      }
+    _ => None
+  }
+}
+
+///|
+fn Parser::const_builtin_object_size_value(
+  self : Parser,
+  args : Array[Expr],
+  mode : Int64,
+) -> Int64 {
+  if args.length() > 0 {
+    match const_literal_string_arg(args[0]) {
+      Some(value) => return (value.length() + 1).to_int64()
+      None => ()
+    }
+    match self.const_object_size_type(args[0]) {
+      Some(ty) => return self.const_type_size(ty).to_int64()
+      None => ()
+    }
+  }
+  const_unknown_object_size(mode)
+}
+
+///|
 priv struct ConstIntValue {
   bits : Int64
   ty : Type
@@ -700,7 +743,7 @@ fn Parser::fold_const_int(self : Parser, expr : Expr) -> ConstIntValue? {
       } else {
         0L
       }
-      Some(const_int(const_builtin_object_size_value(args, mode), ULong))
+      Some(const_int(self.const_builtin_object_size_value(args, mode), ULong))
     }
     Array(_) => None
     CompoundLiteral(_, _, _) => None

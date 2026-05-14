@@ -1592,11 +1592,21 @@ test "parse builtin choose expr and types compatible fold constants" {
 ///|
 test "parse object size builtin constants in static asserts" {
   let source =
+    #|int global_x;
+    #|char global_buf[16];
     #|_Static_assert(__builtin_object_size("abc", 0) == 4, "literal object size");
     #|_Static_assert(__builtin_dynamic_object_size((const char *)"a\0bc", 2) == 5, "embedded nul object size");
     #|_Static_assert(__builtin_object_size((void *)0, 0) == (unsigned long)-1, "unknown max object size");
     #|_Static_assert(__builtin_dynamic_object_size((void *)0, 2) == 0, "unknown min object size");
-    #|int main(void) { return 0; }
+    #|_Static_assert(__builtin_object_size(&global_x, 0) == sizeof(global_x), "global object size");
+    #|_Static_assert(__builtin_dynamic_object_size((void *)global_buf, 2) == sizeof(global_buf), "global array size");
+    #|int main(void) {
+    #|  int local_x;
+    #|  char local_buf[16];
+    #|  _Static_assert(__builtin_object_size(&local_x, 0) == sizeof(local_x), "local object size");
+    #|  _Static_assert(__builtin_dynamic_object_size((void *)local_buf, 2) == sizeof(local_buf), "local array size");
+    #|  return 0;
+    #|}
   ignore(@parser.parse(source))
 }
 

@@ -152,6 +152,7 @@ async test "e2e MIR oracle checks scalar builtin calls" {
     #|int main(void) {
     #|  int x = 4;
     #|  int y = 0;
+    #|  char buf[16];
     #|  int total = 0;
     #|  total += __builtin_expect(x, 1 / y);
     #|  total += __builtin_expect_with_probability(x, 1 / y, 0.9);
@@ -164,6 +165,10 @@ async test "e2e MIR oracle checks scalar builtin calls" {
     #|  if (__builtin_dynamic_object_size(0, 2) != 0) return 65;
     #|  if (__builtin_object_size("abc", 0) != 4) return 66;
     #|  if (__builtin_dynamic_object_size("a\0bc", 2) != 5) return 67;
+    #|  if (__builtin_object_size(&x, 0) != sizeof(x)) return 68;
+    #|  if (__builtin_dynamic_object_size((void *)&x, 2) != sizeof(x)) return 69;
+    #|  if (__builtin_object_size(buf, 0) != 16) return 71;
+    #|  if (__builtin_dynamic_object_size((void *)buf, 2) != 16) return 72;
     #|  total += __builtin_assume(1);
     #|  total += __builtin_prefetch(0, 0, 0);
     #|  if ((unsigned long)__builtin_assume_aligned((void*)32, 16) != 32ul) return 70;

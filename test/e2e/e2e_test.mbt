@@ -2441,12 +2441,15 @@ async test "__builtin_object_size stubs" {
   let source =
     #|int main() {
     #|  int x;
-    #|  if (__builtin_object_size(&x, 0) + 1 != 0) return 1;
-    #|  if (__builtin_dynamic_object_size(&x, 0) + 1 != 0) return 2;
-    #|  if (__builtin_object_size(&x, 2) != 0) return 3;
-    #|  if (__builtin_dynamic_object_size(&x, 2) != 0) return 4;
+    #|  char buf[16];
+    #|  if (__builtin_object_size(&x, 0) != sizeof(x)) return 1;
+    #|  if (__builtin_dynamic_object_size((void *)&x, 0) != sizeof(x)) return 2;
+    #|  if (__builtin_object_size(&x, 2) != sizeof(x)) return 3;
+    #|  if (__builtin_dynamic_object_size(&x, 2) != sizeof(x)) return 4;
     #|  if (__builtin_object_size("abc", 0) != 4) return 5;
     #|  if (__builtin_dynamic_object_size("a\0bc", 2) != 5) return 6;
+    #|  if (__builtin_object_size(buf, 0) != 16) return 7;
+    #|  if (__builtin_dynamic_object_size((void *)buf, 2) != 16) return 8;
     #|  return 42;
     #|}
   let exit_code = run_source_async(source)
