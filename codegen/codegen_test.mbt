@@ -590,6 +590,11 @@ test "generate linux amd64 lowers scalar hint builtins" {
     #|  if (__builtin_align_down(47, 16) != 32) return 17;
     #|  return 0;
     #|}
+    #|int side_effect_prefetch(void) {
+    #|  int side = 0;
+    #|  __builtin_prefetch((void *)(long)(side += 1), 0, 0);
+    #|  return side;
+    #|}
     #|int trapper(void) {
     #|  __builtin_trap();
     #|}
@@ -603,6 +608,8 @@ test "generate linux amd64 lowers scalar hint builtins" {
   inspect(assembly.contains("\tmov\trax, -1"), content="true")
   inspect(assembly.contains("\tmov\trax, rbp"), content="true")
   inspect(assembly.contains("\tmov\trax, QWORD PTR [rbp + 8]"), content="true")
+  inspect(assembly.contains("side_effect_prefetch:"), content="true")
+  inspect(assembly.contains("mov\tDWORD PTR [r10], eax"), content="true")
   inspect(assembly.contains("call\t__builtin_expect"), content="false")
   inspect(
     assembly.contains("call\t__builtin_expect_with_probability"),

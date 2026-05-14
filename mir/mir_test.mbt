@@ -611,6 +611,18 @@ test "mir interpreter models void builtin return sizes" {
 }
 
 ///|
+test "mir interpreter evaluates prefetch address argument" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  __builtin_prefetch((void *)(long)(side += 1), 0, 0);
+    #|  __builtin_assume(side += 10);
+    #|  return side + 41;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter evaluates unobserved varargs setup builtins" {
   let source =
     #|typedef __builtin_va_list va_list;

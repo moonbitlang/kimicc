@@ -179,6 +179,18 @@ async test "e2e MIR oracle checks scalar builtin calls" {
 }
 
 ///|
+async test "e2e MIR oracle checks prefetch address side effects" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  __builtin_prefetch((void *)(long)(side += 1), 0, 0);
+    #|  __builtin_assume(side += 10);
+    #|  return side;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks parser folded compile-time builtins" {
   let source =
     #|struct Item { char tag; int x; };

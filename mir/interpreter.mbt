@@ -1146,7 +1146,13 @@ fn Interpreter::eval_builtin_call(
       Some(self.eval_first_call_arg_or_zero(frame, args))
     "__builtin_constant_p" => Some(0L)
     "__builtin_flt_rounds" => Some(1L)
-    "__builtin_assume" | "__builtin_prefetch" => Some(0L)
+    "__builtin_assume" => Some(0L)
+    "__builtin_prefetch" => {
+      if args.length() > 0 {
+        ignore(self.eval_expr(frame, args[0]))
+      }
+      Some(0L)
+    }
     "__builtin_object_size" | "__builtin_dynamic_object_size" => Some(-1L)
     "__builtin_va_start" | "__builtin_va_end" | "__builtin_va_copy" => Some(0L)
     "__builtin_bzero" => {

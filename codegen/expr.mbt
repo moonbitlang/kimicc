@@ -2073,6 +2073,9 @@ fn Codegen::emit_builtin_call(
       true
     }
     "__builtin_prefetch" => {
+      if args.length() > 0 {
+        self.gen_expr(args[0], frame_size)
+      }
       self.emit("\tmov\tx9, #0")
       true
     }

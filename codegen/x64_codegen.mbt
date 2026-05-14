@@ -3282,7 +3282,14 @@ fn X64Codegen::emit_builtin_call(
       }
       true
     }
-    "__builtin_assume" | "__builtin_prefetch" => {
+    "__builtin_assume" => {
+      self.emit("\tmov\trax, 0")
+      true
+    }
+    "__builtin_prefetch" => {
+      if args.length() > 0 {
+        self.gen_expr(args[0])
+      }
       self.emit("\tmov\trax, 0")
       true
     }
