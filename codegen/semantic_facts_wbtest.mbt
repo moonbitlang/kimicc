@@ -32,14 +32,25 @@ fn expect_semantic_opt_int(
 
 ///|
 fn init_darwin_codegen_facts(prog : @parser.Program) -> Codegen {
-  let codegen = Codegen::new_with_mir(
-    @mir.lower(prog, @target.Target::default()),
-  )
+  let codegen = Codegen::new()
   for decl in prog.structs {
     codegen.struct_decls[decl.name] = decl
   }
   for decl in prog.structs {
     codegen.compute_struct_layout(decl)
+  }
+  for decl in prog.decls {
+    codegen.func_rets[decl.name] = decl.ret
+    codegen.func_variadic[decl.name] = decl.variadic
+    codegen.func_param_counts[decl.name] = decl.params.length()
+    let param_types = []
+    for param in decl.params {
+      param_types.push(param.ty)
+    }
+    codegen.func_param_types[decl.name] = param_types
+  }
+  for global in prog.globals {
+    codegen.globals[global.name] = global
   }
   codegen
 }

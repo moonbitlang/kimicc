@@ -332,6 +332,8 @@ fn Codegen::global_expr_type(
     None => ()
   }
   match expr {
+    Number(value) => number_literal_type(value)
+    FloatLiteral(_) => Double
     Var(name) =>
       if self.globals.contains(name) {
         self.globals[name].ty
