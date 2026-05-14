@@ -7,14 +7,6 @@ fn peel_aligned_type(ty : @parser.Type) -> @parser.Type {
 }
 
 ///|
-fn aggregate_owner_name(ty : @parser.Type) -> String? {
-  match peel_aligned_type(ty) {
-    Struct(n) | Union(n) => Some(n)
-    _ => None
-  }
-}
-
-///|
 fn array_element_type(ty : @parser.Type) -> @parser.Type? {
   match peel_aligned_type(ty) {
     Array(elem, _) => Some(elem)
@@ -126,19 +118,10 @@ fn Codegen::type_of(
     CompoundAssign(_, lhs, _) => self.type_of(lhs, frame_size)
     MemberAccess(obj, field) => {
       let obj_ty = self.type_of(obj, frame_size)
-      let struct_name = match aggregate_owner_name(obj_ty) {
-        Some(n) => n
-        None => return SInt
+      match self.find_field_layout_for_type(obj_ty, field) {
+        Some((_, field_ty, _, _, _, _)) => field_ty
+        None => SInt
       }
-      if self.struct_layouts.contains(struct_name) {
-        let fields = self.struct_layouts[struct_name]
-        for f in fields {
-          if f.0 == field {
-            return f.1
-          }
-        }
-      }
-      SInt
     }
     Deref(ptr) =>
       match peel_aligned_type(self.type_of(ptr, frame_size)) {
@@ -5092,22 +5075,12 @@ fn Codegen::gen_addr(
     MemberAccess(obj, field) => {
       self.gen_addr(obj, frame_size)
       let obj_ty = self.type_of(obj, frame_size)
-      let struct_name = match aggregate_owner_name(obj_ty) {
-        Some(n) => n
-        None => return
-      }
-      if self.struct_layouts.contains(struct_name) {
-        let fields = self.struct_layouts[struct_name]
-        let mut field_offset = 0
-        for f in fields {
-          if f.0 == field {
-            field_offset = f.2
-            break
+      match self.find_field_layout_for_type(obj_ty, field) {
+        Some((_, _, field_offset, _, _, _)) =>
+          if field_offset != 0 {
+            self.emit_add_offset_to_x9(field_offset)
           }
-        }
-        if field_offset != 0 {
-          self.emit_add_offset_to_x9(field_offset)
-        }
+        None => ()
       }
     }
     Deref(ptr) => self.gen_expr(ptr, frame_size)
