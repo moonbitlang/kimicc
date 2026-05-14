@@ -896,6 +896,51 @@ fn literal_string_arg(expr : @parser.Expr) -> String? {
 }
 
 ///|
+priv struct LiteralStringPointer {
+  value : String
+  offset : Int64
+}
+
+///|
+fn Interpreter::literal_string_pointer(
+  self : Interpreter,
+  frame : InterpFrame,
+  expr : @parser.Expr,
+) -> LiteralStringPointer? {
+  match expr {
+    String(value) => Some({ value, offset: 0L })
+    Cast(_, inner) => self.literal_string_pointer(frame, inner)
+    Binary("+", lhs, rhs) =>
+      match self.literal_string_pointer(frame, lhs) {
+        Some(ptr) =>
+          Some({
+            value: ptr.value,
+            offset: ptr.offset + self.eval_expr(frame, rhs),
+          })
+        None =>
+          match self.literal_string_pointer(frame, rhs) {
+            Some(ptr) =>
+              Some({
+                value: ptr.value,
+                offset: ptr.offset + self.eval_expr(frame, lhs),
+              })
+            None => None
+          }
+      }
+    Binary("-", lhs, rhs) =>
+      match self.literal_string_pointer(frame, lhs) {
+        Some(ptr) =>
+          Some({
+            value: ptr.value,
+            offset: ptr.offset - self.eval_expr(frame, rhs),
+          })
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
 fn nonnegative_min(left : Int64, right : Int64) -> Int64? {
   if left < 0L || right < 0L {
     None
@@ -1854,17 +1899,20 @@ fn Interpreter::eval_expr(
     Deref(AddrOf(value)) => self.read_lvalue(frame, value)
     AddrOf(Deref(value)) => self.eval_expr(frame, value)
     Deref(value) =>
-      match literal_string_arg(value) {
-        Some(literal) => string_literal_byte_at(literal, 0L)
+      match self.literal_string_pointer(frame, value) {
+        Some(ptr) => string_literal_byte_at(ptr.value, ptr.offset)
         None => {
           self.fail("unsupported MIR interpreter memory expression")
           0L
         }
       }
     ArrayAccess(base, index) =>
-      match literal_string_arg(base) {
-        Some(literal) =>
-          string_literal_byte_at(literal, self.eval_expr(frame, index))
+      match self.literal_string_pointer(frame, base) {
+        Some(ptr) =>
+          string_literal_byte_at(
+            ptr.value,
+            ptr.offset + self.eval_expr(frame, index),
+          )
         None => {
           self.fail("unsupported MIR interpreter memory expression")
           0L
