@@ -200,6 +200,36 @@ test "mir folds constants with target layout" {
     scope,
     0L,
   )
+  expect_const(
+    mir,
+    Call(Var("__builtin_abs"), [Unary("-", Number(7))]),
+    scope,
+    7L,
+  )
+  expect_const(
+    mir,
+    Call(Var("__builtin_align_up"), [Number(33), Number(16)]),
+    scope,
+    48L,
+  )
+  expect_const(
+    mir,
+    Call(Var("__builtin_popcount"), [Number(0xf0f0)]),
+    scope,
+    8L,
+  )
+  expect_const(
+    mir,
+    Call(Var("__builtin_bswap32"), [Number(0x01020304)]),
+    scope,
+    0x04030201L,
+  )
+  expect_const(
+    mir,
+    Call(Var("__builtin_rotateleft32"), [Number(0x12345678), Number(8)]),
+    scope,
+    0x34567812L,
+  )
   expect_const(mir, Binary("/", Number(1), Number(2)), scope, 0L)
   expect_const(
     mir,

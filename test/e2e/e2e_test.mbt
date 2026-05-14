@@ -2432,6 +2432,7 @@ async test "__builtin_constant_p" {
     #|  int x = 42;
     #|  if (__builtin_constant_p(x)) return 1;
     #|  if (!__builtin_constant_p(1 + 2)) return 2;
+    #|  if (!__builtin_constant_p(__builtin_bswap32(0x01020304u))) return 3;
     #|  return 0;
     #|}
   let exit_code = run_source_async(source)

@@ -1402,6 +1402,276 @@ fn Program::object_size_value(
 }
 
 ///|
+fn Program::generic_builtin_bswap_width_for_scope(
+  self : Program,
+  args : Array[@parser.Expr],
+  scope : Scope,
+) -> Int {
+  if args.length() == 0 {
+    return 32
+  }
+  let ty = self.core_type(self.expr_type(args[0], scope))
+  let width = const_type_int_width(ty).unwrap_or(64)
+  if width <= 16 {
+    16
+  } else if width <= 32 {
+    32
+  } else {
+    64
+  }
+}
+
+///|
+fn Program::generic_builtin_bit_width_for_scope(
+  self : Program,
+  args : Array[@parser.Expr],
+  scope : Scope,
+) -> Int {
+  if args.length() == 0 {
+    return 32
+  }
+  let ty = self.core_type(self.expr_type(args[0], scope))
+  let width = const_type_int_width(ty).unwrap_or(64)
+  if width <= 32 {
+    32
+  } else {
+    64
+  }
+}
+
+///|
+fn Program::fold_scalar_builtin_const(
+  self : Program,
+  name : String,
+  args : Array[@parser.Expr],
+  scope : Scope,
+) -> ConstIntValue? {
+  let arg0 = if args.length() > 0 {
+    match self.fold_const_int(args[0], scope) {
+      Some(value) => value
+      None => return None
+    }
+  } else {
+    self.const_int(0L, SInt)
+  }
+  match name {
+    "__builtin_flt_rounds" =>
+      if args.length() == 0 {
+        Some(self.const_int(1L, SInt))
+      } else {
+        None
+      }
+    "__builtin_abs" | "__builtin_labs" | "__builtin_llabs" =>
+      if args.length() > 0 {
+        let ty : @parser.Type = match name {
+          "__builtin_labs" => SLong
+          "__builtin_llabs" => SLongLong
+          _ => SInt
+        }
+        let value = self.const_cast_int(arg0, ty).bits
+        Some(
+          self.const_cast_int(
+            self.const_int(if value < 0L { -value } else { value }, ty),
+            ty,
+          ),
+        )
+      } else {
+        None
+      }
+    "__builtin_is_aligned" =>
+      if args.length() >= 2 {
+        match self.fold_const_int(args[1], scope) {
+          Some(align) =>
+            if align.bits > 0L {
+              Some(const_bool((arg0.bits & (align.bits - 1L)) == 0L))
+            } else {
+              None
+            }
+          None => None
+        }
+      } else {
+        None
+      }
+    "__builtin_align_up" | "__builtin_align_down" =>
+      if args.length() >= 2 {
+        match self.fold_const_int(args[1], scope) {
+          Some(align) =>
+            if align.bits > 0L {
+              let ty = self.expr_type(args[0], scope)
+              let adjusted = if name == "__builtin_align_up" {
+                arg0.bits + align.bits - 1L
+              } else {
+                arg0.bits
+              }
+              Some(
+                self.const_cast_int(
+                  self.const_int(adjusted & -align.bits, ty),
+                  ty,
+                ),
+              )
+            } else {
+              None
+            }
+          None => None
+        }
+      } else {
+        None
+      }
+    "__builtin_clz" | "__builtin_clzl" | "__builtin_clzll" =>
+      if args.length() > 0 {
+        let width = if name == "__builtin_clz" { 32 } else { 64 }
+        if mask_int_width(arg0.bits, width) == 0L {
+          None
+        } else {
+          Some(self.const_int(count_leading_zero_bits(arg0.bits, width), SInt))
+        }
+      } else {
+        None
+      }
+    "__builtin_ctz" | "__builtin_ctzl" | "__builtin_ctzll" =>
+      if args.length() > 0 {
+        let width = if name == "__builtin_ctz" { 32 } else { 64 }
+        if mask_int_width(arg0.bits, width) == 0L {
+          None
+        } else {
+          Some(self.const_int(count_trailing_zero_bits(arg0.bits, width), SInt))
+        }
+      } else {
+        None
+      }
+    "__builtin_ffs" =>
+      if args.length() > 0 {
+        Some(self.const_int(first_set_bit(arg0.bits, 32), SInt))
+      } else {
+        None
+      }
+    "__builtin_ffsl" | "__builtin_ffsll" =>
+      if args.length() > 0 {
+        Some(self.const_int(first_set_bit(arg0.bits, 64), SInt))
+      } else {
+        None
+      }
+    "__builtin_popcount" =>
+      if args.length() > 0 {
+        Some(self.const_int(count_one_bits(arg0.bits, 32), SInt))
+      } else {
+        None
+      }
+    "__builtin_popcountl" | "__builtin_popcountll" =>
+      if args.length() > 0 {
+        Some(self.const_int(count_one_bits(arg0.bits, 64), SInt))
+      } else {
+        None
+      }
+    "__builtin_parity" =>
+      if args.length() > 0 {
+        Some(self.const_int(count_one_bits(arg0.bits, 32) & 1L, SInt))
+      } else {
+        None
+      }
+    "__builtin_parityl" | "__builtin_parityll" =>
+      if args.length() > 0 {
+        Some(self.const_int(count_one_bits(arg0.bits, 64) & 1L, SInt))
+      } else {
+        None
+      }
+    "__builtin_bswap16" =>
+      if args.length() > 0 {
+        Some(
+          self.const_cast_int(
+            self.const_int(byte_swap_bits(arg0.bits, 16), UShort),
+            UShort,
+          ),
+        )
+      } else {
+        None
+      }
+    "__builtin_bswap32" =>
+      if args.length() > 0 {
+        Some(
+          self.const_cast_int(
+            self.const_int(byte_swap_bits(arg0.bits, 32), UInt),
+            UInt,
+          ),
+        )
+      } else {
+        None
+      }
+    "__builtin_bswap64" =>
+      if args.length() > 0 {
+        Some(
+          self.const_cast_int(
+            self.const_int(byte_swap_bits(arg0.bits, 64), ULongLong),
+            ULongLong,
+          ),
+        )
+      } else {
+        None
+      }
+    "__builtin_bswap" =>
+      if args.length() > 0 {
+        let ty = self.expr_type(args[0], scope)
+        Some(
+          self.const_cast_int(
+            self.const_int(
+              byte_swap_bits(
+                arg0.bits,
+                self.generic_builtin_bswap_width_for_scope(args, scope),
+              ),
+              ty,
+            ),
+            ty,
+          ),
+        )
+      } else {
+        None
+      }
+    "__builtin_rotateleft"
+    | "__builtin_rotateright"
+    | "__builtin_rotateleft32"
+    | "__builtin_rotateright32"
+    | "__builtin_rotateleft64"
+    | "__builtin_rotateright64" =>
+      if args.length() >= 2 {
+        match self.fold_const_int(args[1], scope) {
+          Some(shift) => {
+            let width = match name {
+              "__builtin_rotateleft32" | "__builtin_rotateright32" => 32
+              "__builtin_rotateleft64" | "__builtin_rotateright64" => 64
+              _ => self.generic_builtin_bit_width_for_scope(args, scope)
+            }
+            let ty : @parser.Type = match name {
+              "__builtin_rotateleft32" | "__builtin_rotateright32" => UInt
+              "__builtin_rotateleft64" | "__builtin_rotateright64" => ULongLong
+              _ => self.expr_type(args[0], scope)
+            }
+            Some(
+              self.const_cast_int(
+                self.const_int(
+                  rotate_bits(
+                    arg0.bits,
+                    shift.bits,
+                    width,
+                    name == "__builtin_rotateleft" ||
+                    name == "__builtin_rotateleft32" ||
+                    name == "__builtin_rotateleft64",
+                  ),
+                  ty,
+                ),
+                ty,
+              ),
+            )
+          }
+          None => None
+        }
+      } else {
+        None
+      }
+    _ => None
+  }
+}
+
+///|
 fn Program::fold_const_int(
   self : Program,
   expr : @parser.Expr,
@@ -1606,6 +1876,7 @@ fn Program::fold_const_int(
       }
       Some(self.const_int(value, SInt))
     }
+    Call(Var(name), args) => self.fold_scalar_builtin_const(name, args, scope)
     _ => None
   }
 }

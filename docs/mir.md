@@ -42,7 +42,9 @@ that both assembly backends walk.
   but does not model cache behavior; `__builtin_assume` remains a no-op and does
   not evaluate its predicate. Runtime `__builtin_constant_p` returns `1` for
   expressions covered by MIR integer constant folding and `0` otherwise, without
-  evaluating the operand.
+  evaluating the operand. The covered compile-time scalar builtin folds include
+  absolute value, alignment predicates/helpers, bit counts, byte swaps, parity,
+  first/leading/trailing set-bit queries, rotations, and `__builtin_flt_rounds`.
   Runtime `__builtin_object_size` and `__builtin_dynamic_object_size` model
   string-literal object sizes, direct named objects (`&x`), and direct named
   arrays (`buf`); other objects use the C builtin unknown-size fallbacks (`-1`

@@ -232,6 +232,9 @@ async test "e2e MIR oracle checks parser folded compile-time builtins" {
     #|_Static_assert(__builtin_dynamic_object_size("a\0bc", 2) == 5, "embedded nul object size");
     #|_Static_assert(__builtin_object_size((void *)0, 0) == (unsigned long)-1, "unknown max object size");
     #|_Static_assert(__builtin_dynamic_object_size((void *)0, 2) == 0, "unknown min object size");
+    #|_Static_assert(__builtin_popcount(0xf0f0u) == 8, "popcount constant");
+    #|_Static_assert(__builtin_bswap32(0x01020304u) == 0x04030201u, "bswap constant");
+    #|_Static_assert(__builtin_rotateleft32(0x12345678u, 8) == 0x34567812u, "rotate constant");
     #|int main(void) {
     #|  int x = 0;
     #|  double d;

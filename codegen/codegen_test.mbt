@@ -574,6 +574,7 @@ test "generate linux amd64 lowers scalar hint builtins" {
     #|  __builtin_prefetch(p, 0, 3);
     #|  if (__builtin_constant_p(x)) return 2;
     #|  if (!__builtin_constant_p(1 + 2)) return 24;
+    #|  if (!__builtin_constant_p(__builtin_bswap32(0x01020304u))) return 25;
     #|  if (__builtin_object_size(p, 0) + 1 != 0) return 3;
     #|  if (__builtin_object_size(p, 2) != 0) return 18;
     #|  if (__builtin_dynamic_object_size(p, 2) != 0) return 19;

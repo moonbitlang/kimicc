@@ -1602,6 +1602,11 @@ test "parse object size builtin constants in static asserts" {
     #|_Static_assert(__builtin_dynamic_object_size((void *)global_buf, 2) == sizeof(global_buf), "global array size");
     #|_Static_assert(__builtin_constant_p(1 + 2) == 1, "constant expression");
     #|_Static_assert(__builtin_constant_p(global_x) == 0, "runtime object is not constant");
+    #|_Static_assert(__builtin_abs(-7) == 7, "abs constant");
+    #|_Static_assert(__builtin_align_up(33, 16) == 48, "align up constant");
+    #|_Static_assert(__builtin_popcount(0xf0f0u) == 8, "popcount constant");
+    #|_Static_assert(__builtin_bswap32(0x01020304u) == 0x04030201u, "bswap constant");
+    #|_Static_assert(__builtin_rotateleft32(0x12345678u, 8) == 0x34567812u, "rotate constant");
     #|int main(void) {
     #|  int local_x;
     #|  char local_buf[16];
