@@ -185,15 +185,112 @@ fn const_builtin_object_size_value(args : Array[Expr], mode : Int64) -> Int64 {
 }
 
 ///|
-fn Parser::const_object_size_type(self : Parser, expr : Expr) -> Type? {
+fn Parser::const_object_size_lvalue_type(self : Parser, expr : Expr) -> Type? {
   match expr {
-    Cast(_, inner) => self.const_object_size_type(inner)
-    AddrOf(inner) => self.const_object_size_lvalue_type(inner)
+    Var(name) =>
+      if self.value_types.contains(name) {
+        Some(self.value_types[name])
+      } else {
+        None
+      }
+    ArrayAccess(base, _) =>
+      match self.const_object_size_lvalue_type(base) {
+        Some(base_ty) =>
+          match const_type_core(base_ty) {
+            Pointer(elem) | Array(elem, _) => Some(elem)
+            _ => None
+          }
+        None => None
+      }
+    MemberAccess(obj, field) =>
+      match self.const_object_size_lvalue_type(obj) {
+        Some(obj_ty) => self.const_member_type(obj_ty, field)
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
+fn Parser::const_object_size_array_element_size(
+  self : Parser,
+  base_ty : Type,
+  index : Expr,
+  mode : Int64,
+) -> Int? {
+  match const_type_core(base_ty) {
+    Array(elem, n) =>
+      match self.fold_const(index) {
+        Some(raw_index) =>
+          if raw_index < 0L {
+            None
+          } else {
+            let index = raw_index.to_int()
+            if index > n {
+              None
+            } else if index == n {
+              Some(0)
+            } else {
+              let elem_size = self.const_type_size(elem)
+              if (mode & 1L) != 0L {
+                Some(elem_size)
+              } else {
+                Some((n - index) * elem_size)
+              }
+            }
+          }
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
+fn Parser::const_object_size_lvalue_size(
+  self : Parser,
+  expr : Expr,
+  mode : Int64,
+) -> Int? {
+  match expr {
+    Var(name) =>
+      if self.value_types.contains(name) {
+        Some(self.const_type_size(self.value_types[name]))
+      } else {
+        None
+      }
+    ArrayAccess(base, index) =>
+      match self.const_object_size_lvalue_type(base) {
+        Some(base_ty) =>
+          self.const_object_size_array_element_size(base_ty, index, mode)
+        None => None
+      }
+    MemberAccess(obj, field) =>
+      match self.const_object_size_lvalue_type(obj) {
+        Some(obj_ty) =>
+          match self.const_member_type(obj_ty, field) {
+            Some(field_ty) => Some(self.const_type_size(field_ty))
+            None => None
+          }
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
+fn Parser::const_object_size_expr_size(
+  self : Parser,
+  expr : Expr,
+  mode : Int64,
+) -> Int? {
+  match expr {
+    Cast(_, inner) => self.const_object_size_expr_size(inner, mode)
+    AddrOf(inner) => self.const_object_size_lvalue_size(inner, mode)
     Var(name) =>
       if self.value_types.contains(name) {
         let ty = self.value_types[name]
         match const_type_core(ty) {
-          Array(_, _) => Some(ty)
+          Array(_, _) => Some(self.const_type_size(ty))
           _ => None
         }
       } else {
@@ -203,27 +300,9 @@ fn Parser::const_object_size_type(self : Parser, expr : Expr) -> Type? {
       match self.const_object_size_lvalue_type(expr) {
         Some(ty) =>
           match const_type_core(ty) {
-            Array(_, _) => Some(ty)
+            Array(_, _) => Some(self.const_type_size(ty))
             _ => None
           }
-        None => None
-      }
-    _ => None
-  }
-}
-
-///|
-fn Parser::const_object_size_lvalue_type(self : Parser, expr : Expr) -> Type? {
-  match expr {
-    Var(name) =>
-      if self.value_types.contains(name) {
-        Some(self.value_types[name])
-      } else {
-        None
-      }
-    MemberAccess(obj, field) =>
-      match self.const_object_size_lvalue_type(obj) {
-        Some(obj_ty) => self.const_member_type(obj_ty, field)
         None => None
       }
     _ => None
@@ -241,8 +320,8 @@ fn Parser::const_builtin_object_size_value(
       Some(value) => return (value.length() + 1).to_int64()
       None => ()
     }
-    match self.const_object_size_type(args[0]) {
-      Some(ty) => return self.const_type_size(ty).to_int64()
+    match self.const_object_size_expr_size(args[0], mode) {
+      Some(size) => return size.to_int64()
       None => ()
     }
   }

@@ -192,6 +192,9 @@ async test "e2e MIR oracle checks scalar builtin calls" {
     #|  if (__builtin_object_size(global_buf, 0) != sizeof(global_buf)) return 75;
     #|  if (__builtin_object_size(&global_s.buf, 0) != sizeof(global_s.buf)) return 76;
     #|  if (__builtin_dynamic_object_size(global_s.buf, 2) != sizeof(global_s.buf)) return 77;
+    #|  if (__builtin_object_size(&buf[3], 0) != 13) return 151;
+    #|  if (__builtin_object_size(&buf[3], 1) != 1) return 152;
+    #|  if (__builtin_dynamic_object_size(&global_s.buf[4], 2) != 5) return 153;
     #|  total += __builtin_assume(1);
     #|  total += __builtin_prefetch(0, 0, 0);
     #|  if ((unsigned long)__builtin_assume_aligned((void*)32, 16) != 32ul) return 70;

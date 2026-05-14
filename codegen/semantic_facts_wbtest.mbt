@@ -592,12 +592,24 @@ test "darwin codegen layout facts match MIR facts" {
   ])
   expect_darwin_object_size_facts(codegen, mir, [Var("local_buf"), Number(2)])
   expect_darwin_object_size_facts(codegen, mir, [
+    AddrOf(ArrayAccess(Var("local_buf"), Number(3))),
+    Number(0),
+  ])
+  expect_darwin_object_size_facts(codegen, mir, [
+    AddrOf(ArrayAccess(Var("local_buf"), Number(3))),
+    Number(1),
+  ])
+  expect_darwin_object_size_facts(codegen, mir, [
     AddrOf(MemberAccess(Var("s"), "arr")),
     Number(0),
   ])
   expect_darwin_object_size_facts(codegen, mir, [
     MemberAccess(Var("s"), "arr"),
     Number(2),
+  ])
+  expect_darwin_object_size_facts(codegen, mir, [
+    AddrOf(ArrayAccess(MemberAccess(Var("s"), "arr"), Number(1))),
+    Number(0),
   ])
   expect_darwin_object_size_facts(codegen, mir, [
     Cast(Pointer(Void), Number(0)),
@@ -765,12 +777,24 @@ test "linux amd64 codegen layout facts match MIR facts" {
   ])
   expect_x64_object_size_facts(codegen, mir, [Var("local_buf"), Number(2)])
   expect_x64_object_size_facts(codegen, mir, [
+    AddrOf(ArrayAccess(Var("local_buf"), Number(3))),
+    Number(0),
+  ])
+  expect_x64_object_size_facts(codegen, mir, [
+    AddrOf(ArrayAccess(Var("local_buf"), Number(3))),
+    Number(1),
+  ])
+  expect_x64_object_size_facts(codegen, mir, [
     AddrOf(MemberAccess(Var("s"), "arr")),
     Number(0),
   ])
   expect_x64_object_size_facts(codegen, mir, [
     MemberAccess(Var("s"), "arr"),
     Number(2),
+  ])
+  expect_x64_object_size_facts(codegen, mir, [
+    AddrOf(ArrayAccess(MemberAccess(Var("s"), "arr"), Number(1))),
+    Number(0),
   ])
   expect_x64_object_size_facts(codegen, mir, [
     Cast(Pointer(Void), Number(0)),
@@ -860,12 +884,20 @@ test "attached darwin arm64 semantic queries use MIR state" {
   ])
   expect_darwin_object_size_facts(codegen, mir, [Var("local_buf"), Number(2)])
   expect_darwin_object_size_facts(codegen, mir, [
+    AddrOf(ArrayAccess(Var("local_buf"), Number(3))),
+    Number(0),
+  ])
+  expect_darwin_object_size_facts(codegen, mir, [
     AddrOf(MemberAccess(Var("s"), "arr")),
     Number(0),
   ])
   expect_darwin_object_size_facts(codegen, mir, [
     MemberAccess(Var("s"), "arr"),
     Number(2),
+  ])
+  expect_darwin_object_size_facts(codegen, mir, [
+    AddrOf(ArrayAccess(MemberAccess(Var("s"), "arr"), Number(1))),
+    Number(1),
   ])
   expect_darwin_fold_const_facts(
     codegen,
@@ -936,12 +968,20 @@ test "attached linux amd64 semantic queries use MIR state" {
   ])
   expect_x64_object_size_facts(codegen, mir, [Var("local_buf"), Number(2)])
   expect_x64_object_size_facts(codegen, mir, [
+    AddrOf(ArrayAccess(Var("local_buf"), Number(3))),
+    Number(0),
+  ])
+  expect_x64_object_size_facts(codegen, mir, [
     AddrOf(MemberAccess(Var("s"), "arr")),
     Number(0),
   ])
   expect_x64_object_size_facts(codegen, mir, [
     MemberAccess(Var("s"), "arr"),
     Number(2),
+  ])
+  expect_x64_object_size_facts(codegen, mir, [
+    AddrOf(ArrayAccess(MemberAccess(Var("s"), "arr"), Number(1))),
+    Number(1),
   ])
   expect_x64_fold_const_facts(
     codegen,

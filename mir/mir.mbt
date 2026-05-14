@@ -1376,6 +1376,11 @@ fn Program::object_size_lvalue_type(
 ) -> @parser.Type? {
   match expr {
     Var(name) => self.object_size_var_type(name, scope)
+    ArrayAccess(base, _) =>
+      match self.object_size_lvalue_type(base, scope) {
+        Some(base_ty) => self.pointer_element(base_ty)
+        None => None
+      }
     MemberAccess(obj, field) =>
       match self.object_size_lvalue_type(obj, scope) {
         Some(obj_ty) =>
@@ -1390,19 +1395,87 @@ fn Program::object_size_lvalue_type(
 }
 
 ///|
-fn Program::object_size_expr_type(
+fn Program::object_size_array_element_size(
+  self : Program,
+  base_ty : @parser.Type,
+  index : @parser.Expr,
+  scope : Scope,
+  mode : Int64,
+) -> Int? {
+  match self.core_type(base_ty) {
+    Array(elem, n) =>
+      match self.fold_const(index, scope) {
+        Some(raw_index) =>
+          if raw_index < 0L {
+            None
+          } else {
+            let index = raw_index.to_int()
+            if index > n {
+              None
+            } else if index == n {
+              Some(0)
+            } else {
+              let elem_size = self.type_size(elem)
+              if (mode & 1L) != 0L {
+                Some(elem_size)
+              } else {
+                Some((n - index) * elem_size)
+              }
+            }
+          }
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
+fn Program::object_size_lvalue_size(
   self : Program,
   expr : @parser.Expr,
   scope : Scope,
-) -> @parser.Type? {
+  mode : Int64,
+) -> Int? {
   match expr {
-    Cast(_, inner) => self.object_size_expr_type(inner, scope)
-    AddrOf(inner) => self.object_size_lvalue_type(inner, scope)
+    Var(name) =>
+      match self.object_size_var_type(name, scope) {
+        Some(ty) => Some(self.type_size(ty))
+        None => None
+      }
+    ArrayAccess(base, index) =>
+      match self.object_size_lvalue_type(base, scope) {
+        Some(base_ty) =>
+          self.object_size_array_element_size(base_ty, index, scope, mode)
+        None => None
+      }
+    MemberAccess(obj, field) =>
+      match self.object_size_lvalue_type(obj, scope) {
+        Some(obj_ty) =>
+          match self.field_layout(obj_ty, field) {
+            Some(layout) => Some(self.type_size(layout.ty))
+            None => None
+          }
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
+fn Program::object_size_expr_size(
+  self : Program,
+  expr : @parser.Expr,
+  scope : Scope,
+  mode : Int64,
+) -> Int? {
+  match expr {
+    Cast(_, inner) => self.object_size_expr_size(inner, scope, mode)
+    AddrOf(inner) => self.object_size_lvalue_size(inner, scope, mode)
     Var(name) =>
       match self.object_size_var_type(name, scope) {
         Some(ty) =>
           match self.core_type(ty) {
-            Array(_, _) => Some(ty)
+            Array(_, _) => Some(self.type_size(ty))
             _ => None
           }
         None => None
@@ -1411,7 +1484,7 @@ fn Program::object_size_expr_type(
       match self.object_size_lvalue_type(expr, scope) {
         Some(ty) =>
           match self.core_type(ty) {
-            Array(_, _) => Some(ty)
+            Array(_, _) => Some(self.type_size(ty))
             _ => None
           }
         None => None
@@ -1431,8 +1504,8 @@ fn Program::object_size_value(
     Some(literal) => return (literal.length() + 1).to_int64()
     None => ()
   }
-  match self.object_size_expr_type(expr, scope) {
-    Some(ty) => self.type_size(ty).to_int64()
+  match self.object_size_expr_size(expr, scope, mode) {
+    Some(size) => size.to_int64()
     None => unknown_object_size(mode)
   }
 }

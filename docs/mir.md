@@ -52,8 +52,9 @@ that both assembly backends walk.
   Runtime `__builtin_object_size` and `__builtin_dynamic_object_size` model
   string-literal object sizes, direct named objects (`&x`), direct named arrays
   (`buf`), and direct aggregate member subobjects such as `&s.buf` or `s.buf`;
-  other objects use the C builtin unknown-size fallbacks (`-1` for modes 0/1,
-  `0` for modes 2/3).
+  constant array-element addresses such as `&buf[3]` report remaining bytes for
+  modes 0/2 and element bytes for modes 1/3. Other objects use the C builtin
+  unknown-size fallbacks (`-1` for modes 0/1, `0` for modes 2/3).
   `memcpy`/`memmove`/`memset` and their checked aliases model only the returned
   destination pointer; memory contents are not modeled.
   `mempcpy` and its checked alias model the returned `dest + n` pointer, with no

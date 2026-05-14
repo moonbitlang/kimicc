@@ -1602,8 +1602,11 @@ test "parse object size builtin constants in static asserts" {
     #|_Static_assert(__builtin_dynamic_object_size((void *)0, 2) == 0, "unknown min object size");
     #|_Static_assert(__builtin_object_size(&global_x, 0) == sizeof(global_x), "global object size");
     #|_Static_assert(__builtin_dynamic_object_size((void *)global_buf, 2) == sizeof(global_buf), "global array size");
+    #|_Static_assert(__builtin_object_size(&global_buf[3], 0) == sizeof(global_buf) - 3, "global array element remaining size");
+    #|_Static_assert(__builtin_object_size(&global_buf[3], 1) == 1, "global array element subobject size");
     #|_Static_assert(__builtin_object_size(&global_s.buf, 0) == sizeof(global_s.buf), "global member object size");
     #|_Static_assert(__builtin_dynamic_object_size(global_s.buf, 2) == sizeof(global_s.buf), "global member array size");
+    #|_Static_assert(__builtin_dynamic_object_size(&global_s.buf[4], 2) == sizeof(global_s.buf) - 4, "global member element remaining size");
     #|_Static_assert(__builtin_constant_p(1 + 2) == 1, "constant expression");
     #|_Static_assert(__builtin_constant_p(global_x) == 0, "runtime object is not constant");
     #|_Static_assert(__builtin_abs(-7) == 7, "abs constant");
@@ -1617,8 +1620,10 @@ test "parse object size builtin constants in static asserts" {
     #|  struct S local_s;
     #|  _Static_assert(__builtin_object_size(&local_x, 0) == sizeof(local_x), "local object size");
     #|  _Static_assert(__builtin_dynamic_object_size((void *)local_buf, 2) == sizeof(local_buf), "local array size");
+    #|  _Static_assert(__builtin_object_size(&local_buf[3], 0) == sizeof(local_buf) - 3, "local array element remaining size");
     #|  _Static_assert(__builtin_object_size(&local_s.buf, 0) == sizeof(local_s.buf), "local member object size");
     #|  _Static_assert(__builtin_dynamic_object_size(local_s.buf, 2) == sizeof(local_s.buf), "local member array size");
+    #|  _Static_assert(__builtin_object_size(&local_s.buf[4], 1) == 1, "local member element subobject size");
     #|  return 0;
     #|}
   ignore(@parser.parse(source))

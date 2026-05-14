@@ -204,6 +204,24 @@ test "mir folds constants with target layout" {
   expect_const(
     mir,
     Call(Var("__builtin_object_size"), [
+      AddrOf(ArrayAccess(Var("global_buf"), Number(3))),
+      Number(0),
+    ]),
+    scope,
+    13L,
+  )
+  expect_const(
+    mir,
+    Call(Var("__builtin_object_size"), [
+      AddrOf(ArrayAccess(Var("global_buf"), Number(3))),
+      Number(1),
+    ]),
+    scope,
+    1L,
+  )
+  expect_const(
+    mir,
+    Call(Var("__builtin_object_size"), [
       AddrOf(MemberAccess(Var("global_s"), "arr")),
       Number(0),
     ]),
@@ -218,6 +236,15 @@ test "mir folds constants with target layout" {
     ]),
     scope,
     12L,
+  )
+  expect_const(
+    mir,
+    Call(Var("__builtin_dynamic_object_size"), [
+      AddrOf(ArrayAccess(MemberAccess(Var("global_s"), "arr"), Number(1))),
+      Number(2),
+    ]),
+    scope,
+    8L,
   )
   let local_types : Map[String, @parser.Type] = {}
   local_types["local_x"] = SInt
@@ -239,6 +266,15 @@ test "mir folds constants with target layout" {
   expect_const(
     mir,
     Call(Var("__builtin_object_size"), [
+      AddrOf(ArrayAccess(Var("local_buf"), Number(3))),
+      Number(0),
+    ]),
+    local_scope,
+    13L,
+  )
+  expect_const(
+    mir,
+    Call(Var("__builtin_object_size"), [
       AddrOf(MemberAccess(Var("local_s"), "arr")),
       Number(0),
     ]),
@@ -253,6 +289,15 @@ test "mir folds constants with target layout" {
     ]),
     local_scope,
     12L,
+  )
+  expect_const(
+    mir,
+    Call(Var("__builtin_object_size"), [
+      AddrOf(ArrayAccess(MemberAccess(Var("local_s"), "arr"), Number(1))),
+      Number(1),
+    ]),
+    local_scope,
+    4L,
   )
   expect_const(
     mir,
