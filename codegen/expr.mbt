@@ -1345,16 +1345,12 @@ fn Codegen::find_bitfield_member(
   match expr {
     MemberAccess(obj, field) => {
       let obj_ty = self.type_of(obj, frame_size)
-      match aggregate_owner_name(obj_ty) {
-        Some(struct_name) =>
-          match self.find_field_layout(struct_name, field) {
-            Some((_, ty, _, size, bit_offset, bit_width)) =>
-              if bit_width > 0 {
-                Some({ ty, size, bit_offset, bit_width, stack_temp_size: 0 })
-              } else {
-                None
-              }
-            None => None
+      match self.find_field_layout_for_type(obj_ty, field) {
+        Some((_, ty, _, size, bit_offset, bit_width)) =>
+          if bit_width > 0 {
+            Some({ ty, size, bit_offset, bit_width, stack_temp_size: 0 })
+          } else {
+            None
           }
         None => None
       }
@@ -3023,12 +3019,8 @@ fn Codegen::emit_member_addr(
   match expr {
     MemberAccess(obj, field) => {
       let obj_ty = self.type_of(obj, frame_size)
-      let struct_name = match aggregate_owner_name(obj_ty) {
-        Some(n) => n
-        None => return None
-      }
       let stack_temp_size = self.emit_member_base_addr(obj, frame_size)
-      match self.find_field_layout(struct_name, field) {
+      match self.find_field_layout_for_type(obj_ty, field) {
         None => {
           if stack_temp_size > 0 {
             self.emit("\tadd\tsp, sp, #" + stack_temp_size.to_string())
@@ -3583,12 +3575,8 @@ fn Codegen::gen_expr(
       let is_bitfield = match lhs {
         MemberAccess(obj, field) => {
           let obj_ty = self.type_of(obj, frame_size)
-          match aggregate_owner_name(obj_ty) {
-            Some(struct_name) =>
-              match self.find_field_layout(struct_name, field) {
-                Some((_, _, _, _, _, bit_width)) => bit_width > 0
-                None => false
-              }
+          match self.find_field_layout_for_type(obj_ty, field) {
+            Some((_, _, _, _, _, bit_width)) => bit_width > 0
             None => false
           }
         }
@@ -3605,11 +3593,7 @@ fn Codegen::gen_expr(
         match lhs {
           MemberAccess(obj, field) => {
             let obj_ty = self.type_of(obj, frame_size)
-            let struct_name = match aggregate_owner_name(obj_ty) {
-              Some(n) => n
-              None => ""
-            }
-            match self.find_field_layout(struct_name, field) {
+            match self.find_field_layout_for_type(obj_ty, field) {
               Some((_, field_ty, _, size, bit_offset, bit_width)) => {
                 // Load container
                 match size {

@@ -406,6 +406,7 @@ fn semantic_fact_source() -> String {
     #|struct A { char tag; int arr[4]; };
     #|union U { char c; long double ld; int i; };
     #|struct A ga;
+    #|union U gu;
     #|long callee(int x, ...);
     #|int main(void) { return 0; }
   )
@@ -726,6 +727,10 @@ test "attached darwin arm64 semantic queries use MIR state" {
     mir,
     AddrOf(MemberAccess(Var("ga"), "arr")),
   )
+  match codegen.global_lvalue_reloc(MemberAccess(Var("gu"), "ld")) {
+    Some(("_gu", 0)) => ()
+    _ => abort("darwin attached union global lvalue mismatch")
+  }
   expect_darwin_expr_type_facts(codegen, mir, MemberAccess(Var("s"), "arr"))
   expect_darwin_object_size_facts(codegen, mir, [AddrOf(Var("ga")), Number(0)])
   expect_darwin_object_size_facts(codegen, mir, [Var("local_buf"), Number(2)])
@@ -763,6 +768,10 @@ test "attached linux amd64 semantic queries use MIR state" {
     mir,
     AddrOf(MemberAccess(Var("ga"), "arr")),
   )
+  match codegen.global_lvalue_reloc(MemberAccess(Var("gu"), "ld")) {
+    Some(("gu", 0)) => ()
+    _ => abort("x64 attached union global lvalue mismatch")
+  }
   expect_x64_expr_type_facts(codegen, mir, MemberAccess(Var("s"), "arr"))
   expect_x64_object_size_facts(codegen, mir, [AddrOf(Var("ga")), Number(0)])
   expect_x64_object_size_facts(codegen, mir, [Var("local_buf"), Number(2)])
