@@ -116,6 +116,112 @@ fn Interpreter::tick(self : Interpreter) -> Bool {
 }
 
 ///|
+fn Interpreter::global_pointer_offset(
+  self : Interpreter,
+  base : @parser.Expr,
+  offset : @parser.Expr,
+) -> Int64? {
+  match self.program.fold_const(offset, Scope::empty()) {
+    Some(value) =>
+      match
+        self.program.pointer_element(
+          self.program.expr_type(base, Scope::empty()),
+        ) {
+        Some(elem) => Some(value * self.program.type_size(elem).to_int64())
+        None => Some(value)
+      }
+    None => None
+  }
+}
+
+///|
+fn Interpreter::global_string_pointer_initializer(
+  self : Interpreter,
+  expr : @parser.Expr,
+) -> LiteralStringPointer? {
+  match expr {
+    String(value) =>
+      Some({ value, base: self.string_literal_base(value), offset: 0L })
+    Cast(_, inner) => self.global_string_pointer_initializer(inner)
+    Var(name) =>
+      if self.globals.contains(name) {
+        self.string_literal_pointer_at(self.globals[name])
+      } else {
+        None
+      }
+    Binary("+", lhs, rhs) =>
+      match self.global_string_pointer_initializer(lhs) {
+        Some(ptr) =>
+          match self.global_pointer_offset(lhs, rhs) {
+            Some(offset) =>
+              Some({
+                value: ptr.value,
+                base: ptr.base,
+                offset: ptr.offset + offset,
+              })
+            None => None
+          }
+        None =>
+          match self.global_string_pointer_initializer(rhs) {
+            Some(ptr) =>
+              match self.global_pointer_offset(rhs, lhs) {
+                Some(offset) =>
+                  Some({
+                    value: ptr.value,
+                    base: ptr.base,
+                    offset: ptr.offset + offset,
+                  })
+                None => None
+              }
+            None => None
+          }
+      }
+    Binary("-", lhs, rhs) =>
+      match self.global_string_pointer_initializer(lhs) {
+        Some(ptr) =>
+          match self.global_pointer_offset(lhs, rhs) {
+            Some(offset) =>
+              Some({
+                value: ptr.value,
+                base: ptr.base,
+                offset: ptr.offset - offset,
+              })
+            None => None
+          }
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
+fn Interpreter::eval_global_scalar_initializer(
+  self : Interpreter,
+  name : String,
+  ty : @parser.Type,
+  expr : @parser.Expr,
+) -> Int64 {
+  match self.program.fold_const(expr, Scope::empty()) {
+    Some(value) => value
+    None =>
+      match self.program.pointer_element(ty) {
+        Some(_) =>
+          match self.global_string_pointer_initializer(expr) {
+            Some(ptr) => ptr.base + ptr.offset
+            None => {
+              self.fail("unsupported non-constant global initializer: " + name)
+              0L
+            }
+          }
+        None => {
+          self.fail("unsupported non-constant global initializer: " + name)
+          0L
+        }
+      }
+  }
+}
+
+///|
 fn Interpreter::init_globals(self : Interpreter) -> Unit {
   let seen : Map[String, Bool] = {}
   for original in self.program.source.globals {
@@ -130,15 +236,7 @@ fn Interpreter::init_globals(self : Interpreter) -> Unit {
       let value = match decl.init {
         None => 0L
         Some(Scalar(expr)) =>
-          match self.program.fold_const(expr, Scope::empty()) {
-            Some(value) => value
-            None => {
-              self.fail(
-                "unsupported non-constant global initializer: " + decl.name,
-              )
-              0L
-            }
-          }
+          self.eval_global_scalar_initializer(decl.name, decl.ty, expr)
         Some(Array(_)) => {
           self.fail("unsupported aggregate global initializer: " + decl.name)
           0L

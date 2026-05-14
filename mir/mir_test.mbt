@@ -605,6 +605,22 @@ test "mir interpreter models string literal pointer locals" {
 }
 
 ///|
+test "mir interpreter models global string pointer initializers" {
+  let source =
+    #|char *g = "abc";
+    #|char *tail = (char *)"abc" + 1;
+    #|int main(void) {
+    #|  if (g[0] != 'a') return 1;
+    #|  if (tail[0] != 'b') return 2;
+    #|  if (__builtin_strlen(g) != 3) return 3;
+    #|  if (__builtin_strlen(tail) != 2) return 4;
+    #|  if (__builtin_strchr(g, 'c') != g + 2) return 5;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter models embedded nul string literal lengths" {
   let source =
     #|int main(void) {

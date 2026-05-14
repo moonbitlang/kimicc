@@ -19,8 +19,8 @@ that both assembly backends walk.
   not require modeling general memory. It also models narrow string-literal facts
   that are useful in compile tests: literal pointer non-nullness, literal byte
   access through transparent casts, constant/runtime pointer offsets, and
-  pointer locals initialized from string literals, `sizeof`/`__alignof__` on
-  string literals,
+  pointer locals/globals initialized from string literals,
+  `sizeof`/`__alignof__` on string literals,
   literal `__builtin_strlen` through transparent casts, and literal-only string
   comparison/search builtins such as `__builtin_strcmp`,
   `__builtin_strncmp`, `__builtin_memcmp`, `__builtin_strchr`,

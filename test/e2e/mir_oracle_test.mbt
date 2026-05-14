@@ -341,6 +341,19 @@ async test "e2e MIR oracle checks string literal pointer locals" {
 }
 
 ///|
+async test "e2e MIR oracle checks global string pointer initializers" {
+  let source =
+    #|char *g = "abc";
+    #|int main(void) {
+    #|  if (g[0] != 'a') return 1;
+    #|  if (__builtin_strlen(g) != 3) return 2;
+    #|  if (__builtin_strchr(g, 'c') != g + 2) return 3;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks embedded nul string literal lengths" {
   let source =
     #|int main(void) {
