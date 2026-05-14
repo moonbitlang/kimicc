@@ -34,8 +34,12 @@ that both assembly backends walk.
   no-ops for scalar tests that do not inspect `va_list` contents.
   `memcpy`/`memmove`/`memset` and their checked aliases model only the returned
   destination pointer; memory contents are not modeled.
+  `mempcpy` and its checked alias model the returned `dest + n` pointer, with no
+  memory-content modeling.
   `strcpy`/`strcat`/`strncpy`/`strncat` and checked destination-return aliases
   are modeled the same way.
+  `stpcpy` and `stpncpy`, plus checked aliases, model returned end pointers for
+  string-literal sources; destination contents are not modeled.
   Runtime `__builtin___strlcpy_chk` evaluates its arguments and models only the
   return value when the source is a string literal. Runtime
   `__builtin___strlcat_chk` is modeled only for zero destination size and a

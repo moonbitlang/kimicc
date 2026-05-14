@@ -752,6 +752,17 @@ fn literal_string_arg(expr : @parser.Expr) -> String? {
 }
 
 ///|
+fn nonnegative_min(left : Int64, right : Int64) -> Int64? {
+  if left < 0L || right < 0L {
+    None
+  } else if left < right {
+    Some(left)
+  } else {
+    Some(right)
+  }
+}
+
+///|
 fn nonnegative_radix_length(value : Int64, radix : Int64) -> Int64? {
   if value < 0L {
     None
@@ -1116,6 +1127,17 @@ fn Interpreter::eval_builtin_call(
     | "__builtin_memset"
     | "__builtin___memset_chk" =>
       Some(self.eval_return_first_call_arg(frame, args, 3))
+    "__builtin_mempcpy" | "__builtin___mempcpy_chk" => {
+      let values = self.eval_call_args(frame, args)
+      if args.length() < 3 {
+        Some(0L)
+      } else if values[2] < 0L {
+        self.fail("unsupported MIR interpreter mempcpy length")
+        Some(0L)
+      } else {
+        Some(values[0] + values[2])
+      }
+    }
     "__builtin_strcpy"
     | "__builtin___strcpy_chk"
     | "__builtin_strcat"
@@ -1125,6 +1147,41 @@ fn Interpreter::eval_builtin_call(
     | "__builtin_strncat"
     | "__builtin___strncat_chk" =>
       Some(self.eval_return_first_call_arg(frame, args, args.length()))
+    "__builtin_stpcpy" | "__builtin___stpcpy_chk" => {
+      let values = self.eval_call_args(frame, args)
+      if args.length() < 2 {
+        Some(0L)
+      } else {
+        match literal_string_arg(args[1]) {
+          Some(value) => Some(values[0] + value.length().to_int64())
+          None => {
+            self.fail("unsupported MIR interpreter stpcpy source argument")
+            Some(0L)
+          }
+        }
+      }
+    }
+    "__builtin_stpncpy" | "__builtin___stpncpy_chk" => {
+      let values = self.eval_call_args(frame, args)
+      if args.length() < 3 {
+        Some(0L)
+      } else {
+        match literal_string_arg(args[1]) {
+          Some(value) =>
+            match nonnegative_min(value.length().to_int64(), values[2]) {
+              Some(offset) => Some(values[0] + offset)
+              None => {
+                self.fail("unsupported MIR interpreter stpncpy length")
+                Some(0L)
+              }
+            }
+          None => {
+            self.fail("unsupported MIR interpreter stpncpy source argument")
+            Some(0L)
+          }
+        }
+      }
+    }
     "__builtin___strlcpy_chk" => {
       ignore(self.eval_call_args(frame, args))
       if args.length() < 2 {

@@ -317,6 +317,25 @@ test "mir interpreter models string alias builtin return sizes" {
 }
 
 ///|
+test "mir interpreter models string end pointer builtin returns" {
+  let source =
+    #|int main(void) {
+    #|  char *dst = (char *)__builtin_alloca(16);
+    #|  int side = 0;
+    #|  if (__builtin_mempcpy(((side += 1), dst), "uv", side + 1) != dst + 2) return 1;
+    #|  if (__builtin___mempcpy_chk(dst + 2, (const char *)"wx", 2, 16) != dst + 4) return 2;
+    #|  if (__builtin_stpcpy(((side += 1), dst), "hi") != dst + 2) return 3;
+    #|  if (__builtin___stpcpy_chk(dst, (const char *)"ok", 16) != dst + 2) return 4;
+    #|  if (__builtin_stpncpy(dst, "abc", 2) != dst + 2) return 5;
+    #|  if (__builtin_stpncpy(dst, "abc", 6) != dst + 3) return 6;
+    #|  if (__builtin___stpncpy_chk(((side += 1), dst), (const char *)"cd", 2, 16) != dst + 2) return 7;
+    #|  if (side != 3) return 8;
+    #|  return 42;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter models floating builtin return sizes" {
   let source =
     #|int main(void) {
