@@ -191,6 +191,27 @@ async test "e2e MIR oracle checks prefetch address side effects" {
 }
 
 ///|
+async test "e2e MIR oracle checks ignored hint operand side effects" {
+  let source =
+    #|int g = 0;
+    #|int bump(void) {
+    #|  g += 1;
+    #|  return 0;
+    #|}
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int y = 0;
+    #|  int side = 0;
+    #|  int total = 0;
+    #|  total += __builtin_expect(x, (side += 1, 1 / y));
+    #|  total += __builtin_expect_with_probability(x, bump(), 0.9);
+    #|  if ((unsigned long)__builtin_assume_aligned((void*)32, 16, (side += 2, 1 / y)) != 32ul) return 1;
+    #|  return total + side + g + 30;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks parser folded compile-time builtins" {
   let source =
     #|struct Item { char tag; int x; };

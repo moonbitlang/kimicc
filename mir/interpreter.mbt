@@ -381,6 +381,57 @@ fn Interpreter::eval_return_first_call_arg(
 }
 
 ///|
+fn Interpreter::eval_ignored_expr_side_effects(
+  self : Interpreter,
+  frame : InterpFrame,
+  expr : @parser.Expr,
+) -> Unit {
+  match expr {
+    Assign(_, _)
+    | CompoundAssign(_, _, _)
+    | PrefixInc(_)
+    | PrefixDec(_)
+    | PostfixInc(_)
+    | PostfixDec(_)
+    | Call(_, _) => ignore(self.eval_expr(frame, expr))
+    Binary("&&", lhs, rhs) =>
+      if self.eval_expr(frame, lhs) != 0L {
+        self.eval_ignored_expr_side_effects(frame, rhs)
+      }
+    Binary("||", lhs, rhs) =>
+      if self.eval_expr(frame, lhs) == 0L {
+        self.eval_ignored_expr_side_effects(frame, rhs)
+      }
+    Binary(_, lhs, rhs) => {
+      self.eval_ignored_expr_side_effects(frame, lhs)
+      self.eval_ignored_expr_side_effects(frame, rhs)
+    }
+    Unary(_, operand) | Cast(_, operand) | Deref(operand) | AddrOf(operand) =>
+      self.eval_ignored_expr_side_effects(frame, operand)
+    MemberAccess(obj, _) => self.eval_ignored_expr_side_effects(frame, obj)
+    ArrayAccess(base, index) => {
+      self.eval_ignored_expr_side_effects(frame, base)
+      self.eval_ignored_expr_side_effects(frame, index)
+    }
+    Ternary(cond, then_, else_) =>
+      if self.eval_expr(frame, cond) != 0L {
+        self.eval_ignored_expr_side_effects(frame, then_)
+      } else {
+        self.eval_ignored_expr_side_effects(frame, else_)
+      }
+    CompoundLiteral(_, init_exprs, _) | Array(init_exprs) =>
+      for init_expr in init_exprs {
+        self.eval_ignored_expr_side_effects(frame, init_expr)
+      }
+    DesignatedField(_, value)
+    | DesignatedIndex(_, value)
+    | DesignatedRange(_, _, value) =>
+      self.eval_ignored_expr_side_effects(frame, value)
+    _ => ()
+  }
+}
+
+///|
 fn Interpreter::eval_builtin_object_size(
   self : Interpreter,
   frame : InterpFrame,
@@ -1172,13 +1223,24 @@ fn Interpreter::eval_builtin_call(
     None => ()
   }
   match name {
-    "__builtin_expect"
-    | "__builtin_expect_with_probability"
-    | "__builtin_unpredictable"
-    | "__builtin_assume_aligned"
+    "__builtin_expect" | "__builtin_expect_with_probability" => {
+      let result = self.eval_first_call_arg_or_zero(frame, args)
+      if args.length() > 1 {
+        self.eval_ignored_expr_side_effects(frame, args[1])
+      }
+      Some(result)
+    }
+    "__builtin_unpredictable"
     | "__builtin_extract_return_addr"
     | "__builtin_frob_return_addr" =>
       Some(self.eval_first_call_arg_or_zero(frame, args))
+    "__builtin_assume_aligned" => {
+      let result = self.eval_first_call_arg_or_zero(frame, args)
+      if args.length() > 2 {
+        self.eval_ignored_expr_side_effects(frame, args[2])
+      }
+      Some(result)
+    }
     "__builtin_constant_p" => Some(0L)
     "__builtin_flt_rounds" => Some(1L)
     "__builtin_assume" => Some(0L)

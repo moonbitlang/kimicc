@@ -623,6 +623,27 @@ test "mir interpreter evaluates prefetch address argument" {
 }
 
 ///|
+test "mir interpreter evaluates ignored hint operand side effects" {
+  let source =
+    #|int g = 0;
+    #|int bump(void) {
+    #|  g += 1;
+    #|  return 0;
+    #|}
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int y = 0;
+    #|  int side = 0;
+    #|  int total = 0;
+    #|  total += __builtin_expect(x, (side += 1, 1 / y));
+    #|  total += __builtin_expect_with_probability(x, bump(), 0.9);
+    #|  if ((unsigned long)__builtin_assume_aligned((void*)32, 16, (side += 2, 1 / y)) != 32ul) return 1;
+    #|  return total + side + g + 30;
+    #|}
+  expect_interp(source, 42L)
+}
+
+///|
 test "mir interpreter models literal object size builtins" {
   let source =
     #|int main(void) {

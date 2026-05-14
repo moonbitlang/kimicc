@@ -3224,15 +3224,89 @@ fn X64Codegen::builtin_return_type(
 }
 
 ///|
+fn X64Codegen::gen_ignored_expr_side_effects(
+  self : X64Codegen,
+  expr : @parser.Expr,
+) -> Unit {
+  match expr {
+    Assign(_, _)
+    | CompoundAssign(_, _, _)
+    | PrefixInc(_)
+    | PrefixDec(_)
+    | PostfixInc(_)
+    | PostfixDec(_)
+    | Call(_, _) => self.gen_expr(expr)
+    Binary("&&", lhs, rhs) => {
+      let done_label = self.new_label()
+      self.gen_expr(lhs)
+      self.emit("\tcmp\trax, 0")
+      self.emit("\tje\t" + done_label)
+      self.gen_ignored_expr_side_effects(rhs)
+      self.emit(done_label + ":")
+    }
+    Binary("||", lhs, rhs) => {
+      let done_label = self.new_label()
+      self.gen_expr(lhs)
+      self.emit("\tcmp\trax, 0")
+      self.emit("\tjne\t" + done_label)
+      self.gen_ignored_expr_side_effects(rhs)
+      self.emit(done_label + ":")
+    }
+    Binary(_, lhs, rhs) => {
+      self.gen_ignored_expr_side_effects(lhs)
+      self.gen_ignored_expr_side_effects(rhs)
+    }
+    Unary(_, operand) | Cast(_, operand) | Deref(operand) | AddrOf(operand) =>
+      self.gen_ignored_expr_side_effects(operand)
+    MemberAccess(obj, _) => self.gen_ignored_expr_side_effects(obj)
+    ArrayAccess(base, index) => {
+      self.gen_ignored_expr_side_effects(base)
+      self.gen_ignored_expr_side_effects(index)
+    }
+    Ternary(cond, then_, else_) => {
+      let else_label = self.new_label()
+      let end_label = self.new_label()
+      self.gen_expr(cond)
+      self.emit("\tcmp\trax, 0")
+      self.emit("\tje\t" + else_label)
+      self.gen_ignored_expr_side_effects(then_)
+      self.emit("\tjmp\t" + end_label)
+      self.emit(else_label + ":")
+      self.gen_ignored_expr_side_effects(else_)
+      self.emit(end_label + ":")
+    }
+    CompoundLiteral(_, init_exprs, _) | Array(init_exprs) =>
+      for init_expr in init_exprs {
+        self.gen_ignored_expr_side_effects(init_expr)
+      }
+    DesignatedField(_, value)
+    | DesignatedIndex(_, value)
+    | DesignatedRange(_, _, value) => self.gen_ignored_expr_side_effects(value)
+    _ => ()
+  }
+}
+
+///|
 fn X64Codegen::emit_builtin_call(
   self : X64Codegen,
   name : String,
   args : Array[@parser.Expr],
 ) -> Bool {
   match name {
-    "__builtin_expect"
-    | "__builtin_expect_with_probability"
-    | "__builtin_unpredictable" => {
+    "__builtin_expect" | "__builtin_expect_with_probability" => {
+      if args.length() > 0 {
+        self.gen_expr(args[0])
+      } else {
+        self.emit("\tmov\trax, 0")
+      }
+      if args.length() > 1 {
+        self.emit_push_rax()
+        self.gen_ignored_expr_side_effects(args[1])
+        self.emit_pop_rax()
+      }
+      true
+    }
+    "__builtin_unpredictable" => {
       if args.length() > 0 {
         self.gen_expr(args[0])
       } else {
@@ -3245,6 +3319,11 @@ fn X64Codegen::emit_builtin_call(
         self.gen_expr(args[0])
       } else {
         self.emit("\tmov\trax, 0")
+      }
+      if args.length() > 2 {
+        self.emit_push_rax()
+        self.gen_ignored_expr_side_effects(args[2])
+        self.emit_pop_rax()
       }
       true
     }

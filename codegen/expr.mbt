@@ -1996,6 +1996,68 @@ fn Codegen::emit_builtin_unary_fp(
 }
 
 ///|
+fn Codegen::gen_ignored_expr_side_effects(
+  self : Codegen,
+  expr : @parser.Expr,
+  frame_size : Int,
+) -> Unit {
+  match expr {
+    Assign(_, _)
+    | CompoundAssign(_, _, _)
+    | PrefixInc(_)
+    | PrefixDec(_)
+    | PostfixInc(_)
+    | PostfixDec(_)
+    | Call(_, _) => self.gen_expr(expr, frame_size)
+    Binary("&&", lhs, rhs) => {
+      let done_label = self.new_label()
+      self.gen_expr(lhs, frame_size)
+      self.emit("\tcbz\tx9, " + done_label)
+      self.gen_ignored_expr_side_effects(rhs, frame_size)
+      self.emit(done_label + ":")
+    }
+    Binary("||", lhs, rhs) => {
+      let done_label = self.new_label()
+      self.gen_expr(lhs, frame_size)
+      self.emit("\tcbnz\tx9, " + done_label)
+      self.gen_ignored_expr_side_effects(rhs, frame_size)
+      self.emit(done_label + ":")
+    }
+    Binary(_, lhs, rhs) => {
+      self.gen_ignored_expr_side_effects(lhs, frame_size)
+      self.gen_ignored_expr_side_effects(rhs, frame_size)
+    }
+    Unary(_, operand) | Cast(_, operand) | Deref(operand) | AddrOf(operand) =>
+      self.gen_ignored_expr_side_effects(operand, frame_size)
+    MemberAccess(obj, _) => self.gen_ignored_expr_side_effects(obj, frame_size)
+    ArrayAccess(base, index) => {
+      self.gen_ignored_expr_side_effects(base, frame_size)
+      self.gen_ignored_expr_side_effects(index, frame_size)
+    }
+    Ternary(cond, then_, else_) => {
+      let else_label = self.new_label()
+      let end_label = self.new_label()
+      self.gen_expr(cond, frame_size)
+      self.emit("\tcbz\tx9, " + else_label)
+      self.gen_ignored_expr_side_effects(then_, frame_size)
+      self.emit("\tb\t" + end_label)
+      self.emit(else_label + ":")
+      self.gen_ignored_expr_side_effects(else_, frame_size)
+      self.emit(end_label + ":")
+    }
+    CompoundLiteral(_, init_exprs, _) | Array(init_exprs) =>
+      for init_expr in init_exprs {
+        self.gen_ignored_expr_side_effects(init_expr, frame_size)
+      }
+    DesignatedField(_, value)
+    | DesignatedIndex(_, value)
+    | DesignatedRange(_, _, value) =>
+      self.gen_ignored_expr_side_effects(value, frame_size)
+    _ => ()
+  }
+}
+
+///|
 fn Codegen::emit_builtin_call(
   self : Codegen,
   name : String,
@@ -2010,10 +2072,21 @@ fn Codegen::emit_builtin_call(
     None => ()
   }
   match name {
-    "__builtin_expect"
-    | "__builtin_expect_with_probability"
-    | "__builtin_unpredictable" => {
+    "__builtin_expect" | "__builtin_expect_with_probability" => {
       // Prediction hints return their value operand.
+      if args.length() > 0 {
+        self.gen_expr(args[0], frame_size)
+      } else {
+        self.emit("\tmov\tx9, #0")
+      }
+      if args.length() > 1 {
+        self.emit("\tstr\tx9, [sp, #-16]!")
+        self.gen_ignored_expr_side_effects(args[1], frame_size)
+        self.emit("\tldr\tx9, [sp], #16")
+      }
+      true
+    }
+    "__builtin_unpredictable" => {
       if args.length() > 0 {
         self.gen_expr(args[0], frame_size)
       } else {
@@ -2026,6 +2099,11 @@ fn Codegen::emit_builtin_call(
         self.gen_expr(args[0], frame_size)
       } else {
         self.emit("\tmov\tx9, #0")
+      }
+      if args.length() > 2 {
+        self.emit("\tstr\tx9, [sp, #-16]!")
+        self.gen_ignored_expr_side_effects(args[2], frame_size)
+        self.emit("\tldr\tx9, [sp], #16")
       }
       true
     }

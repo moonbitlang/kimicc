@@ -34,6 +34,9 @@ that both assembly backends walk.
   side effects and pointer nullness only; the allocated memory is not modeled.
   Runtime `__builtin_va_start`, `__builtin_va_copy`, and `__builtin_va_end` are
   no-ops for scalar tests that do not inspect `va_list` contents.
+  Runtime `__builtin_expect`, `__builtin_expect_with_probability`, and
+  `__builtin_assume_aligned` return the value operand while preserving modeled
+  side effects in ignored hint operands.
   Runtime `__builtin_prefetch` evaluates its address argument for side effects
   but does not model cache behavior; `__builtin_assume` remains a no-op and does
   not evaluate its predicate.
