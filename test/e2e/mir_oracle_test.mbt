@@ -368,6 +368,24 @@ async test "e2e MIR oracle checks global string array initializers" {
 }
 
 ///|
+async test "e2e MIR oracle checks local string array initializers" {
+  let source =
+    #|int main(void) {
+    #|  char s[] = "abc";
+    #|  char *tail = s + 1;
+    #|  if (s[0] != 'a') return 1;
+    #|  if (s[3] != 0) return 2;
+    #|  if (__builtin_strlen(s) != 3) return 3;
+    #|  s[1] = 'z';
+    #|  if (__builtin_strcmp(s, "azc") != 0) return 4;
+    #|  *tail = 'b';
+    #|  if (__builtin_strcmp(s, "abc") != 0) return 5;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks embedded nul string literal lengths" {
   let source =
     #|int main(void) {

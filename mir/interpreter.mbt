@@ -274,6 +274,15 @@ fn string_from_fixed_char_string(value : String, length : Int) -> String {
 }
 
 ///|
+fn zero_byte_string(length : Int) -> String {
+  let buf = StringBuilder::new()
+  for _ in 0..<length {
+    buf.write_char('\u0000')
+  }
+  buf.to_string()
+}
+
+///|
 fn Interpreter::init_global_string_array(
   self : Interpreter,
   name : String,
@@ -296,6 +305,43 @@ fn Interpreter::init_global_string_array(
         _ => ()
       }
     None => ()
+  }
+}
+
+///|
+fn Interpreter::init_local_string_array(
+  self : Interpreter,
+  frame : InterpFrame,
+  ty : @parser.Type,
+  name : String,
+  init : @parser.Expr?,
+) -> Bool {
+  match global_char_array_length(ty) {
+    Some(length) => {
+      frame.local_types[name] = ty
+      let value = match init {
+        Some(String(value)) => string_from_fixed_char_string(value, length)
+        Some(Array(exprs)) =>
+          match self.string_from_char_initializers(exprs, length) {
+            Some(value) => value
+            None => {
+              for expr in exprs {
+                self.eval_ignored_expr_side_effects(frame, expr)
+              }
+              zero_byte_string(length)
+            }
+          }
+        Some(Number(_)) => zero_byte_string(length)
+        None => zero_byte_string(length)
+        Some(expr) => {
+          self.eval_ignored_expr_side_effects(frame, expr)
+          zero_byte_string(length)
+        }
+      }
+      frame.locals[name] = self.fresh_string_object_base(value)
+      true
+    }
+    None => false
   }
 }
 
@@ -400,6 +446,26 @@ fn Interpreter::read_lvalue(
   match expr {
     Var(name) => self.read_var(frame, name)
     Deref(AddrOf(target)) => self.read_lvalue(frame, target)
+    Deref(value) =>
+      match self.literal_string_pointer(frame, value) {
+        Some(ptr) => string_literal_byte_at(ptr.value, ptr.offset)
+        None => {
+          self.fail("unsupported MIR interpreter lvalue")
+          0L
+        }
+      }
+    ArrayAccess(base, index) =>
+      match self.literal_string_pointer(frame, base) {
+        Some(ptr) =>
+          string_literal_byte_at(
+            ptr.value,
+            ptr.offset + self.eval_expr(frame, index),
+          )
+        None => {
+          self.fail("unsupported MIR interpreter lvalue")
+          0L
+        }
+      }
     _ => {
       self.fail("unsupported MIR interpreter lvalue")
       0L
@@ -417,6 +483,26 @@ fn Interpreter::write_lvalue(
   match expr {
     Var(name) => self.write_var(frame, name, value)
     Deref(AddrOf(target)) => self.write_lvalue(frame, target, value)
+    Deref(target) =>
+      match self.literal_string_pointer(frame, target) {
+        Some(ptr) => self.write_string_byte(ptr.base + ptr.offset, value)
+        None => {
+          self.fail("unsupported MIR interpreter assignment target")
+          0L
+        }
+      }
+    ArrayAccess(base, index) =>
+      match self.literal_string_pointer(frame, base) {
+        Some(ptr) =>
+          self.write_string_byte(
+            ptr.base + ptr.offset + self.eval_expr(frame, index),
+            value,
+          )
+        None => {
+          self.fail("unsupported MIR interpreter assignment target")
+          0L
+        }
+      }
     _ => {
       self.fail("unsupported MIR interpreter assignment target")
       0L
@@ -1170,6 +1256,50 @@ fn Interpreter::record_string_object(
     let offset = i.to_int64()
     self.string_values[base + offset] = value
     self.string_offsets[base + offset] = offset
+  }
+}
+
+///|
+fn replace_string_byte(value : String, offset : Int64, byte : Int64) -> String? {
+  if offset < 0L || offset >= value.length().to_int64() {
+    None
+  } else {
+    let target = offset.to_int()
+    let buf = StringBuilder::new()
+    for i in 0..<value.length() {
+      if i == target {
+        buf.write_char((byte & 0xFFL).to_int().unsafe_to_char())
+      } else {
+        buf.write_char(value[i].to_int().unsafe_to_char())
+      }
+    }
+    Some(buf.to_string())
+  }
+}
+
+///|
+fn Interpreter::write_string_byte(
+  self : Interpreter,
+  address : Int64,
+  value : Int64,
+) -> Int64 {
+  if self.string_values.contains(address) &&
+    self.string_offsets.contains(address) {
+    let old_value = self.string_values[address]
+    let offset = self.string_offsets[address]
+    match replace_string_byte(old_value, offset, value) {
+      Some(new_value) => {
+        self.record_string_object(new_value, address - offset)
+        value & 0xFFL
+      }
+      None => {
+        self.fail("unsupported MIR interpreter string object write")
+        0L
+      }
+    }
+  } else {
+    self.fail("unsupported MIR interpreter string object write")
+    0L
   }
 }
 
@@ -2407,6 +2537,9 @@ fn Interpreter::declare_local(
   init : @parser.Expr?,
 ) -> Unit {
   if !self.program.runtime_int_type(ty) {
+    if self.init_local_string_array(frame, ty, name, init) {
+      return
+    }
     frame.local_types[name] = ty
     match init {
       Some(expr) => self.eval_ignored_expr_side_effects(frame, expr)
