@@ -33,7 +33,8 @@ that both assembly backends walk.
   helpers, scalar bit/count/rotation/alignment helpers, overflow helpers, void
   control/varargs helpers, and pointer-valued helpers such as
   `__builtin_alloca`. Runtime `__builtin_alloca` calls are modeled for argument
-  side effects and pointer nullness only; the allocated memory is not modeled.
+  side effects and distinct synthetic non-null pointer values; the allocated
+  memory is not modeled.
   Floating comparison builtins such as `__builtin_isgreater` and
   `__builtin_isunordered` are modeled for operands covered by MIR floating
   constant folding, returning only their integer predicate result.

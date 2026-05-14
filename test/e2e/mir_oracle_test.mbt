@@ -473,6 +473,11 @@ async test "e2e MIR oracle checks alloca return size and nullness" {
     #|  void *p = __builtin_alloca(n += 1);
     #|  if (n != 17) return 1;
     #|  if (p == 0) return 2;
+    #|  char *a = __builtin_alloca(n += 2);
+    #|  char *b = __builtin_alloca(n += 3);
+    #|  if (n != 22) return 3;
+    #|  if (a == 0 || b == 0) return 4;
+    #|  if (a == b || a == p || b == p) return 5;
     #|  return sizeof(__builtin_alloca(16)) + 34;
     #|}
   run_source_against_mir_oracle(source)

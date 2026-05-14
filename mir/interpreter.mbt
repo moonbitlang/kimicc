@@ -28,6 +28,7 @@ priv struct Interpreter {
   mut error : String?
   mut steps : Int
   mut call_depth : Int
+  mut next_alloca : Int64
 }
 
 ///|
@@ -71,7 +72,14 @@ fn Program::find_func_decl(self : Program, name : String) -> @parser.FuncDecl? {
 
 ///|
 fn Interpreter::new(program : Program) -> Interpreter {
-  let self = { program, globals: {}, error: None, steps: 0, call_depth: 0 }
+  let self = {
+    program,
+    globals: {},
+    error: None,
+    steps: 0,
+    call_depth: 0,
+    next_alloca: 4096L,
+  }
   self.init_globals()
   self
 }
@@ -1528,10 +1536,15 @@ fn Interpreter::eval_builtin_call(
       }
     }
     "__builtin_alloca" => {
-      if args.length() > 0 {
-        ignore(self.eval_expr(frame, args[0]))
+      let size = if args.length() > 0 {
+        self.eval_expr(frame, args[0])
+      } else {
+        0L
       }
-      Some(1L)
+      let ptr = self.next_alloca
+      let bump = if size <= 0L { 16L } else { (size + 15L) & -16L }
+      self.next_alloca += bump
+      Some(ptr)
     }
     "__builtin_frame_address" | "__builtin_return_address" => {
       let level = if args.length() > 0 {
