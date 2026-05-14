@@ -2262,6 +2262,41 @@ fn Codegen::emit_builtin_unary_fp(
 }
 
 ///|
+fn Codegen::emit_builtin_copysign(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+  ty : @parser.Type,
+) -> Unit {
+  if args.length() < 2 {
+    self.emit("\tmov\tx9, #0")
+    return
+  }
+  self.gen_expr(args[0], frame_size)
+  self.emit_numeric_conversion(self.type_of(args[0], frame_size), ty)
+  match ty {
+    Float => {
+      self.emit("\tlsl\tw10, w9, #1")
+      self.emit("\tlsr\tw10, w10, #1")
+      self.gen_expr(args[1], frame_size)
+      self.emit_numeric_conversion(self.type_of(args[1], frame_size), ty)
+      self.emit("\tlsr\tw9, w9, #31")
+      self.emit("\tlsl\tw9, w9, #31")
+      self.emit("\torr\tw9, w9, w10")
+    }
+    _ => {
+      self.emit("\tlsl\tx10, x9, #1")
+      self.emit("\tlsr\tx10, x10, #1")
+      self.gen_expr(args[1], frame_size)
+      self.emit_numeric_conversion(self.type_of(args[1], frame_size), ty)
+      self.emit("\tlsr\tx9, x9, #63")
+      self.emit("\tlsl\tx9, x9, #63")
+      self.emit("\torr\tx9, x9, x10")
+    }
+  }
+}
+
+///|
 fn Codegen::emit_fp_class_constant(
   self : Codegen,
   reg : String,
@@ -2909,6 +2944,14 @@ fn Codegen::emit_builtin_call(
     }
     "__builtin_fabsf" => {
       self.emit_builtin_unary_fp(args, frame_size, Float, "fabs")
+      true
+    }
+    "__builtin_copysign" | "__builtin_copysignl" => {
+      self.emit_builtin_copysign(args, frame_size, Double)
+      true
+    }
+    "__builtin_copysignf" => {
+      self.emit_builtin_copysign(args, frame_size, Float)
       true
     }
     "__builtin_sqrt" | "__builtin_sqrtl" => {

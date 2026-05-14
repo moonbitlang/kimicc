@@ -2795,6 +2795,30 @@ test "generate builtin fabsf" {
 }
 
 ///|
+test "generate builtin copysign" {
+  let source = "double foo(double a, double b) { return __builtin_copysign(a, b); }"
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(assembly.contains("lsl\tx10, x9, #1"), content="true")
+  inspect(assembly.contains("lsr\tx9, x9, #63"), content="true")
+  inspect(assembly.contains("orr\tx9, x9, x10"), content="true")
+  inspect(assembly.contains("__builtin_copysign"), content="false")
+}
+
+///|
+test "generate builtin copysignf" {
+  let source = "float foo(float a, float b) { return __builtin_copysignf(a, b); }"
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(assembly.contains("lsl\tw10, w9, #1"), content="true")
+  inspect(assembly.contains("lsr\tw9, w9, #31"), content="true")
+  inspect(assembly.contains("orr\tw9, w9, w10"), content="true")
+  inspect(assembly.contains("__builtin_copysignf"), content="false")
+}
+
+///|
 test "generate builtin sqrt" {
   let source = "double foo(double a) { return __builtin_sqrt(a); }"
   let prog = @parser.parse(source)

@@ -622,6 +622,18 @@ async test "direct macho object supports floating absolute value" {
 }
 
 ///|
+async test "direct macho object supports floating copysign" {
+  let source =
+    #|int main(void) {
+    #|  return (int)__builtin_copysign(20.0, -1.0) +
+    #|    (int)__builtin_copysignf(5.0f, -1.0f) +
+    #|    (int)__builtin_copysignl(9.0L, 1.0L) + 58;
+    #|}
+  let exit_code = run_source_direct_object_async(source, "macho_copysign")
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object supports floating square root" {
   let source =
     #|int main(void) {
