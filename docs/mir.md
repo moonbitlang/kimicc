@@ -214,9 +214,10 @@ projects transitional `Program` values to `MirModule` first.
 `generate_assembly_for_target_strict` is the frontend strict path: it lowers
 parser output directly to `MirModule` and returns an error if MIR coverage is
 insufficient. `generate_assembly_for_target` is the frontend compatibility
-wrapper that lowers parser output and then calls
-`generate_assembly_from_mir_with_parser_fallback`, which keeps existing source
-compilation working while coverage continues to migrate. The parser-free
+wrapper around `generate_assembly_for_target_with_parser_fallback`, which lowers
+parser output and then calls `generate_assembly_from_mir_with_parser_fallback`.
+This keeps existing source compilation working while coverage continues to
+migrate. The parser-free
 checking contract itself is `generate_assembly_from_mir_module_strict`: it
 accepts a `MirModule`, rejects modules that need unsupported MIR body or
 global-initializer coverage, and emits through MIR-only backend paths when the

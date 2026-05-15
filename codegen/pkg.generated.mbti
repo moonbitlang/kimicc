@@ -12,6 +12,8 @@ pub fn generate_assembly_for_target(@parser.Program, @target.Target) -> String
 
 pub fn generate_assembly_for_target_strict(@parser.Program, @target.Target) -> Result[String, String]
 
+pub fn generate_assembly_for_target_with_parser_fallback(@parser.Program, @target.Target) -> String
+
 pub fn generate_assembly_from_mir(@mir.Program) -> String
 
 pub fn generate_assembly_from_mir_module(@mir.MirModule) -> String

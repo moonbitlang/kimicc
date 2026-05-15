@@ -556,6 +556,13 @@ test "parser AST codegen fallback is explicit" {
   let assembly = @codegen.generate_assembly_from_mir_with_parser_fallback(mir)
   inspect(assembly.contains("kimicc: mir-body"), content="false")
   inspect(assembly.contains("_main:"), content="true")
+  let prog = @parser.parse(source)
+  let target_assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog,
+    @target.Target::default(),
+  )
+  inspect(target_assembly.contains("kimicc: mir-body"), content="false")
+  inspect(target_assembly.contains("_main:"), content="true")
 }
 
 ///|

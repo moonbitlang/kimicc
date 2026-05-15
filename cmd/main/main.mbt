@@ -2310,7 +2310,10 @@ fn generate_assembly_from_preprocessed(
       }
     }
   } else {
-    @codegen.generate_assembly_for_target(prog, opts.target)
+    @codegen.generate_assembly_for_target_with_parser_fallback(
+      prog,
+      opts.target,
+    )
   }
 }
 

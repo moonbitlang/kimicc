@@ -2288,7 +2288,21 @@ fn Codegen::generate_mir_only(
 ///
 /// `DarwinArm64` preserves the existing macOS ARM64 assembly output.
 /// `LinuxAmd64` emits GNU assembler syntax for the System V x86-64 ABI.
+///
+/// This is the compatibility entry point and may fall back to parser AST
+/// codegen. Use `generate_assembly_for_target_strict` to require parser-free
+/// MIR-module backend emission.
 pub fn generate_assembly_for_target(
+  prog : @parser.Program,
+  target : @target.Target,
+) -> String {
+  generate_assembly_for_target_with_parser_fallback(prog, target)
+}
+
+///|
+/// Lowers a parsed C translation unit and generates assembly, falling back to
+/// parser AST codegen when MIR coverage is not sufficient yet.
+pub fn generate_assembly_for_target_with_parser_fallback(
   prog : @parser.Program,
   target : @target.Target,
 ) -> String {
