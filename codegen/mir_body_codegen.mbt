@@ -296,6 +296,37 @@ fn mir_body_unsigned_binary(
 }
 
 ///|
+fn mir_body_pointer_integer_op(
+  op : String,
+  lhs : @parser.Type,
+  rhs : @parser.Type,
+) -> Bool {
+  match pointer_or_array_element_type(lhs) {
+    Some(_) => (op == "+" || op == "-") && rhs.is_integer()
+    None =>
+      op == "+" &&
+      lhs.is_integer() &&
+      pointer_or_array_element_type(rhs) is Some(_)
+  }
+}
+
+///|
+fn mir_body_pointer_diff_elem(
+  op : String,
+  lhs : @parser.Type,
+  rhs : @parser.Type,
+) -> @parser.Type? {
+  if op != "-" {
+    return None
+  }
+  match
+    (pointer_or_array_element_type(lhs), pointer_or_array_element_type(rhs)) {
+    (Some(elem), Some(_)) => Some(elem)
+    _ => None
+  }
+}
+
+///|
 fn Codegen::mir_body_offsets(
   self : Codegen,
   body : @mir.MirFuncBody,
@@ -594,9 +625,51 @@ fn Codegen::gen_mir_binary(
   self.emit_numeric_conversion(rhs.ty(), right_ty)
   self.emit_scalar_conversion_to(right_ty)
   self.emit("\tldr\tx10, [sp], #16")
+  if mir_body_pointer_integer_op(op, lhs.ty(), rhs.ty()) {
+    match pointer_or_array_element_type(lhs.ty()) {
+      Some(elem_ty) => {
+        let scale = self.type_size(elem_ty)
+        if scale != 1 {
+          self.emit_load_int("x11", scale.to_int64())
+          self.emit("\tmul\tx9, x9, x11")
+        }
+        if op == "+" {
+          self.emit("\tadd\tx9, x10, x9")
+        } else {
+          self.emit("\tsub\tx9, x10, x9")
+        }
+      }
+      None =>
+        match pointer_or_array_element_type(rhs.ty()) {
+          Some(elem_ty) => {
+            let scale = self.type_size(elem_ty)
+            if scale != 1 {
+              self.emit_load_int("x11", scale.to_int64())
+              self.emit("\tmul\tx10, x10, x11")
+            }
+            self.emit("\tadd\tx9, x9, x10")
+          }
+          None => ()
+        }
+    }
+    self.emit_scalar_conversion_to(ty)
+    return
+  }
   match op {
     "+" => self.emit("\tadd\tx9, x9, x10")
-    "-" => self.emit("\tsub\tx9, x10, x9")
+    "-" => {
+      self.emit("\tsub\tx9, x10, x9")
+      match mir_body_pointer_diff_elem(op, lhs.ty(), rhs.ty()) {
+        Some(elem_ty) => {
+          let scale = self.type_size(elem_ty)
+          if scale > 1 {
+            self.emit_load_int("x10", scale.to_int64())
+            self.emit("\tsdiv\tx9, x9, x10")
+          }
+        }
+        None => ()
+      }
+    }
     "*" => self.emit("\tmul\tx9, x10, x9")
     "/" =>
       if mir_body_unsigned_binary(op, lhs.ty(), rhs.ty()) {
@@ -1190,9 +1263,50 @@ fn X64Codegen::gen_mir_binary(
   self.emit_int_conversion_to(right_ty)
   self.emit("\tmov\tr10, rax")
   self.emit_mir_pop_rax()
+  if mir_body_pointer_integer_op(op, lhs.ty(), rhs.ty()) {
+    match pointer_or_array_element_type(lhs.ty()) {
+      Some(elem_ty) => {
+        let scale = self.type_size(elem_ty)
+        if scale != 1 {
+          self.emit("\timul\tr10, r10, " + scale.to_string())
+        }
+        if op == "+" {
+          self.emit("\tadd\trax, r10")
+        } else {
+          self.emit("\tsub\trax, r10")
+        }
+      }
+      None =>
+        match pointer_or_array_element_type(rhs.ty()) {
+          Some(elem_ty) => {
+            let scale = self.type_size(elem_ty)
+            if scale != 1 {
+              self.emit("\timul\trax, rax, " + scale.to_string())
+            }
+            self.emit("\tadd\trax, r10")
+          }
+          None => ()
+        }
+    }
+    self.emit_int_conversion_to(ty)
+    return
+  }
   match op {
     "+" => self.emit("\tadd\trax, r10")
-    "-" => self.emit("\tsub\trax, r10")
+    "-" => {
+      self.emit("\tsub\trax, r10")
+      match mir_body_pointer_diff_elem(op, lhs.ty(), rhs.ty()) {
+        Some(elem_ty) => {
+          let scale = self.type_size(elem_ty)
+          if scale > 1 {
+            self.emit("\tmov\tr10, " + scale.to_string())
+            self.emit("\tcqo")
+            self.emit("\tidiv\tr10")
+          }
+        }
+        None => ()
+      }
+    }
     "*" => self.emit("\timul\trax, r10")
     "/" =>
       if mir_body_unsigned_binary(op, lhs.ty(), rhs.ty()) {

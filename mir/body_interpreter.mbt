@@ -327,6 +327,10 @@ fn BodyInterpreter::eval_binary_values(
   right : Int64,
   right_ty : @parser.Type,
 ) -> Int64 {
+  match self.eval_pointer_binary_values(op, left, left_ty, right, right_ty) {
+    Some(value) => return value
+    None => ()
+  }
   let left_value = self.program.const_cast_int(
     self.program.const_int(left, left_ty),
     left_ty,
@@ -383,6 +387,38 @@ fn BodyInterpreter::eval_binary_values(
       0L
     }
   }
+}
+
+///|
+fn BodyInterpreter::eval_pointer_binary_values(
+  self : BodyInterpreter,
+  op : String,
+  left : Int64,
+  left_ty : @parser.Type,
+  right : Int64,
+  right_ty : @parser.Type,
+) -> Int64? {
+  match self.program.pointer_element(left_ty) {
+    Some(_) =>
+      if right_ty.is_integer() {
+        if op == "+" {
+          return Some(left - right)
+        } else if op == "-" {
+          return Some(left + right)
+        }
+      }
+    None => ()
+  }
+  match self.program.pointer_element(right_ty) {
+    Some(_) =>
+      if op == "+" && left_ty.is_integer() {
+        return Some(right - left)
+      } else if op == "-" && self.program.pointer_element(left_ty) is Some(_) {
+        return Some(right - left)
+      }
+    None => ()
+  }
+  None
 }
 
 ///|

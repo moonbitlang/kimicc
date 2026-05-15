@@ -642,6 +642,21 @@ test "mir body interpreter handles scalar local arrays" {
 }
 
 ///|
+test "mir body interpreter handles local array initializers" {
+  let source =
+    #|int main(void) {
+    #|  int a[5] = { 10, 20, 30, 40, 50 };
+    #|  int *p = &a[4];
+    #|  int *q = &a[1];
+    #|  int *r = q + 1;
+    #|  return (p - q) + *r;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 33L)
+}
+
+///|
 test "mir body interpreter handles scalar memory prefix updates" {
   let source =
     #|struct S { int x; };

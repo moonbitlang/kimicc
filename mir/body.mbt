@@ -210,6 +210,15 @@ fn mir_body_array_local_type(ty : @parser.Type) -> Bool {
 }
 
 ///|
+fn mir_body_array_local_info(ty : @parser.Type) -> (@parser.Type, Int)? {
+  match ty {
+    Array(elem, len) => Some((elem, len))
+    Aligned(inner, _) => mir_body_array_local_info(inner)
+    _ => None
+  }
+}
+
+///|
 fn lower_mir_local_update(
   name : String,
   op : String,
@@ -371,6 +380,69 @@ fn mir_body_scalar_initializer_expr(expr : @parser.Expr) -> @parser.Expr {
     | DesignatedRange(_, _, value) => mir_body_scalar_initializer_expr(value)
     _ => expr
   }
+}
+
+///|
+fn Program::lower_mir_local_array_init(
+  self : Program,
+  binding : MirLocal,
+  init : @parser.Expr,
+  ctx : BodyLowerContext,
+) -> Array[MirStmt]? {
+  let (elem_ty, len) = match mir_body_array_local_info(binding.ty) {
+    Some(info) => info
+    None => return None
+  }
+  if !mir_body_scalar_type(elem_ty) {
+    return None
+  }
+  let items : Array[@parser.Expr] = match init {
+    Number(value) => if value == 0L { [] } else { return None }
+    Array(values) | CompoundLiteral(_, values, _) => values
+    _ => return None
+  }
+  let stores : Array[MirStmt] = []
+  for i in 0..<len {
+    let addr = MirElemAddr(
+      MirAddrLocal(binding),
+      MirConst(i.to_int64(), SInt),
+      elem_ty,
+    )
+    stores.push(MirExprStmt(MirStore(addr, MirConst(0L, elem_ty), elem_ty)))
+  }
+  let mut next_index = 0
+  for item in items {
+    let (index, value_expr) = match item {
+      DesignatedIndex(i, value) => {
+        if i < 0L || i >= len.to_int64() {
+          return None
+        }
+        next_index = i.to_int() + 1
+        (i.to_int(), value)
+      }
+      DesignatedRange(_, _, _) | DesignatedField(_, _) => return None
+      _ => {
+        if next_index >= len {
+          return None
+        }
+        let index = next_index
+        next_index += 1
+        (index, item)
+      }
+    }
+    let value = match
+      self.lower_mir_expr(mir_body_scalar_initializer_expr(value_expr), ctx) {
+      Some(value) => value
+      None => return None
+    }
+    let addr = MirElemAddr(
+      MirAddrLocal(binding),
+      MirConst(index.to_int64(), SInt),
+      elem_ty,
+    )
+    stores.push(MirExprStmt(MirStore(addr, value, elem_ty)))
+  }
+  Some(stores)
 }
 
 ///|
@@ -1106,6 +1178,18 @@ fn Program::lower_mir_stmt(
           if self.core_type(ty) is Struct(_) {
             let binding = ctx.declare_local(name, ty)
             match self.lower_mir_local_struct_init(binding, expr, ctx) {
+              Some(stores) => {
+                let stmts : Array[MirStmt] = [MirDeclare(binding, None)]
+                for store in stores {
+                  stmts.push(store)
+                }
+                return Some(stmts)
+              }
+              None => return None
+            }
+          } else if mir_body_array_local_type(ty) {
+            let binding = ctx.declare_local(name, ty)
+            match self.lower_mir_local_array_init(binding, expr, ctx) {
               Some(stores) => {
                 let stmts : Array[MirStmt] = [MirDeclare(binding, None)]
                 for store in stores {
