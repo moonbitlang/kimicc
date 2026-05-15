@@ -547,6 +547,48 @@ fn X64Codegen::compute_struct_layout(
 }
 
 ///|
+fn x64_field_layout_tuple(
+  layout : @mir.FieldLayout,
+) -> (String, @parser.Type, Int, Int, Int, Int) {
+  (
+    layout.name,
+    layout.ty,
+    layout.offset,
+    layout.size,
+    layout.bit_offset,
+    match layout.bit_width {
+      Some(width) => width
+      None => -1
+    },
+  )
+}
+
+///|
+fn X64Codegen::register_mir_aggregate_layouts(
+  self : X64Codegen,
+  mir : @mir.Program,
+) -> Unit {
+  for decl in mir.aggregate_decls {
+    let ty = if decl.is_union {
+      @parser.Type::Union(decl.name)
+    } else {
+      @parser.Type::Struct(decl.name)
+    }
+    let _ = mir.type_size(ty)
+    match mir.layouts.get(decl.name) {
+      Some(layout) => {
+        let fields : Array[(String, @parser.Type, Int, Int, Int, Int)] = []
+        for field in layout.fields {
+          fields.push(x64_field_layout_tuple(field))
+        }
+        self.struct_layouts[decl.name] = fields
+      }
+      None => ()
+    }
+  }
+}
+
+///|
 fn X64Codegen::alloc_local(
   self : X64Codegen,
   name : String,
@@ -9141,8 +9183,12 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
   for sdecl in prog.structs {
     self.struct_decls[sdecl.name] = sdecl
   }
-  for sdecl in prog.structs {
-    self.compute_struct_layout(sdecl)
+  match self.mir {
+    Some(mir) => self.register_mir_aggregate_layouts(mir)
+    None =>
+      for sdecl in prog.structs {
+        self.compute_struct_layout(sdecl)
+      }
   }
   match self.mir {
     Some(mir) => self.register_mir_function_decls(mir)

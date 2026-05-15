@@ -213,7 +213,9 @@ emission path. Both backend global-symbol lookup maps are seeded from merged
 `Program.global_decls`, so type and extern/alias questions during expression
 codegen no longer require parser global declaration records. Global initializer
 emission itself still uses the parser fallback path while MIR data initializers
-are being expanded.
+are being expanded. Both backends also seed their aggregate layout tables from
+MIR `Program.layouts` during normal generation, while keeping parser aggregate
+declarations available for legacy fallback paths.
 
 ## Why This Layer Is Useful
 

@@ -1555,9 +1555,13 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   for sdecl in prog.structs {
     self.struct_decls[sdecl.name] = sdecl
   }
-  // Then compute layouts in a second pass
-  for sdecl in prog.structs {
-    self.compute_struct_layout(sdecl)
+  // Then seed layouts in a second pass
+  match self.mir {
+    Some(mir) => self.register_mir_aggregate_layouts(mir)
+    None =>
+      for sdecl in prog.structs {
+        self.compute_struct_layout(sdecl)
+      }
   }
   // Precompute function return types, variadic flags, and param counts
   match self.mir {

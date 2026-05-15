@@ -345,6 +345,31 @@ fn darwin_field_layout_tuple(
 }
 
 ///|
+fn Codegen::register_mir_aggregate_layouts(
+  self : Codegen,
+  mir : @mir.Program,
+) -> Unit {
+  for decl in mir.aggregate_decls {
+    let ty = if decl.is_union {
+      @parser.Type::Union(decl.name)
+    } else {
+      @parser.Type::Struct(decl.name)
+    }
+    let _ = mir.type_size(ty)
+    match mir.layouts.get(decl.name) {
+      Some(layout) => {
+        let fields : Array[(String, @parser.Type, Int, Int, Int, Int)] = []
+        for field in layout.fields {
+          fields.push(darwin_field_layout_tuple(field))
+        }
+        self.struct_layouts[decl.name] = fields
+      }
+      None => ()
+    }
+  }
+}
+
+///|
 fn darwin_field_receiver_type(ty : @parser.Type) -> @parser.Type? {
   match peel_aligned_type(ty) {
     Struct(name) => Some(Struct(name))
