@@ -184,6 +184,22 @@ test "strict MIR assembly rejects parser body fallback" {
 }
 
 ///|
+test "strict MIR assembly rejects parser global initializer fallback" {
+  let source =
+    #|int g[3] = { [2] = 9 };
+    #|int main(void) { return 0; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_strict(mir) {
+    Ok(_) => abort("expected strict MIR global initializer rejection")
+    Err(err) =>
+      inspect(
+        err.contains("unsupported MIR global initializer for g"),
+        content="true",
+      )
+  }
+}
+
+///|
 test "generate darwin arm64 MIR body direct call" {
   let source =
     #|int add(int a, int b) { return a + b; }

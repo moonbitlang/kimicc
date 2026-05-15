@@ -201,18 +201,20 @@ already lowered MIR program. `generate_assembly_for_target` is now a frontend
 wrapper that parses/lower callers can keep using while codegen moves toward a
 MIR-only contract. `generate_assembly_from_mir_strict` adds a guardrail for this
 migration: it returns an error when any source function definition would fall
-back to parser statement/expression codegen. This strict gate does not yet mean
-the entire backend is parser-independent; global/data declaration emission is
-still being migrated into MIR-owned records.
+back to parser statement/expression codegen, or when any global initializer
+would require parser initializer fallback. This strict gate does not yet mean
+the entire backend is parser-independent; some legacy setup and fallback paths
+still depend on parser declarations while the MIR boundary is completed.
 Both assembly backends also seed their function return/parameter metadata from
 `Program.decls`, rather than rebuilding those facts from parser function
 declarations. The linux/amd64 backend also emits function alias, weak
 declaration, visibility, constructor, and destructor lifecycle directives from
 `Program.decls`, leaving parser function declarations out of that metadata-only
 emission path. Supported MIR-body function emission also uses `Program.decls`
-for function binding metadata. Both backend global-symbol lookup maps are seeded from merged
-`Program.global_decls`, so type and extern/alias questions during expression
-codegen no longer require parser global declaration records. Global initializer
+for function binding metadata. Both backend global-symbol lookup maps are
+seeded from merged `Program.global_decls`, so type and extern/alias questions
+during expression codegen no longer require parser global declaration records.
+Global initializer
 emission itself still uses the parser fallback path while MIR data initializers
 are being expanded. Both backends also seed their aggregate layout tables from
 MIR `Program.layouts` during normal generation, while keeping parser aggregate

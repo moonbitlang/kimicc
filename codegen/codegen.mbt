@@ -1932,8 +1932,47 @@ pub fn generate_assembly_from_mir_strict(
 ) -> Result[String, String] {
   match mir_body_codegen_strict_error(mir) {
     Some(err) => Err(err)
-    None => Ok(generate_assembly_from_mir(mir))
+    None =>
+      match mir_global_codegen_strict_error(mir) {
+        Some(err) => Err(err)
+        None => Ok(generate_assembly_from_mir(mir))
+      }
   }
+}
+
+///|
+fn mir_global_codegen_strict_error(mir : @mir.Program) -> String? {
+  match mir.target {
+    DarwinArm64 => {
+      let codegen = Codegen::new_with_mir(mir)
+      for g in @mir.merge_global_decls(mir.global_decls) {
+        if g.has_init {
+          match g.init {
+            Some(init) =>
+              if !codegen.mir_global_init_supported(g.ty, init) {
+                return Some("unsupported MIR global initializer for " + g.name)
+              }
+            None => return Some("missing MIR global initializer for " + g.name)
+          }
+        }
+      }
+    }
+    LinuxAmd64 => {
+      let codegen = X64Codegen::new_with_mir(mir)
+      for g in @mir.merge_global_decls(mir.global_decls) {
+        if g.has_init {
+          match g.init {
+            Some(init) =>
+              if !codegen.mir_global_init_supported(g.ty, init) {
+                return Some("unsupported MIR global initializer for " + g.name)
+              }
+            None => return Some("missing MIR global initializer for " + g.name)
+          }
+        }
+      }
+    }
+  }
+  None
 }
 
 ///|
