@@ -97,6 +97,25 @@ test "mir records target-specific scalar layout" {
 }
 
 ///|
+test "mir module projection carries parser-free semantic facts" {
+  let source =
+    #|struct Pair { int a; int b; };
+    #|int g = 3;
+    #|int main(void) { return g; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  let mir_module = mir.to_module()
+  inspect(mir_module.decls[0].name, content="main")
+  inspect(mir_module.global_decls[0].name, content="g")
+  inspect(mir_module.globals["g"].has_init.to_string(), content="true")
+  inspect(mir_module.aggregate_decls[0].name, content="Pair")
+  inspect(
+    mir_module.aggregates["Pair"].fields.length().to_string(),
+    content="2",
+  )
+  inspect(mir_module.bodies.contains("main").to_string(), content="true")
+}
+
+///|
 test "mir owns function declaration metadata" {
   let source =
     #|int ext(long x);

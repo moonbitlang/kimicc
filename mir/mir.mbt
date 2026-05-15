@@ -141,6 +141,39 @@ pub(all) struct Program {
 }
 
 ///|
+/// Parser-free MIR module facts intended for backend consumers.
+///
+/// This is the long-term codegen boundary. `Program` keeps parser source while
+/// lowering and fallback consumers are still migrating; `MirModule` contains
+/// only MIR-owned declarations, layouts, and lowered bodies.
+pub(all) struct MirModule {
+  target : @target.Target
+  decls : Array[MirFuncDecl]
+  global_decls : Array[MirGlobalDecl]
+  aggregate_decls : Array[MirAggregateDecl]
+  funcs : Map[String, FuncSig]
+  globals : Map[String, MirGlobalDecl]
+  aggregates : Map[String, MirAggregateDecl]
+  layouts : Map[String, AggregateLayout]
+  bodies : Map[String, MirFuncBody]
+}
+
+///|
+pub fn Program::to_module(self : Program) -> MirModule {
+  {
+    target: self.target,
+    decls: self.decls,
+    global_decls: self.global_decls,
+    aggregate_decls: self.aggregate_decls,
+    funcs: self.funcs,
+    globals: self.globals,
+    aggregates: self.aggregates,
+    layouts: self.layouts,
+    bodies: self.bodies,
+  }
+}
+
+///|
 pub fn Scope::empty() -> Scope {
   { locals: {}, current_func: "" }
 }

@@ -93,7 +93,7 @@ fn X64Codegen::new_with_mir(mir : @mir.Program) -> X64Codegen {
 ///|
 fn X64Codegen::register_mir_function_decls(
   self : X64Codegen,
-  mir : @mir.Program,
+  mir : @mir.MirModule,
 ) -> Unit {
   for decl in mir.decls {
     self.func_rets[decl.name] = decl.ret
@@ -120,7 +120,7 @@ fn X64Codegen::register_mir_function_decls(
 ///|
 fn X64Codegen::register_mir_global_decls(
   self : X64Codegen,
-  mir : @mir.Program,
+  mir : @mir.MirModule,
 ) -> Unit {
   for global in @mir.merge_global_decls(mir.global_decls) {
     self.globals[global.name] = global
@@ -9434,6 +9434,10 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
   }
   self.emit("\t.intel_syntax noprefix")
   self.emit("\t.text")
+  let mir_module = match self.mir {
+    Some(mir) => Some(mir.to_module())
+    None => None
+  }
   for sdecl in prog.structs {
     self.struct_decls[sdecl.name] = sdecl
   }
@@ -9444,7 +9448,7 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
         self.compute_struct_layout(sdecl)
       }
   }
-  match self.mir {
+  match mir_module {
     Some(mir) => self.register_mir_function_decls(mir)
     None => ()
   }
@@ -9453,15 +9457,15 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
   for g in parser_globals {
     parser_global_fallbacks[g.name] = g
   }
-  match self.mir {
+  match mir_module {
     Some(mir) => self.register_mir_global_decls(mir)
     None => ()
   }
   let mir_globals : Array[@mir.MirGlobalDecl] = match self.mir {
-    Some(mir) => @mir.merge_global_decls(mir.global_decls)
+    Some(mir) => @mir.merge_global_decls(mir.to_module().global_decls)
     None => []
   }
-  match self.mir {
+  match mir_module {
     Some(mir) =>
       for decl in mir.decls {
         self.emit_mir_function_decl_directives(decl)
@@ -9472,7 +9476,7 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
     self.emit_function(decl)
   }
   self.emit_globals(mir_globals, parser_global_fallbacks)
-  match self.mir {
+  match mir_module {
     Some(mir) => {
       self.emit_lifecycle_array(".init_array", mir.decls)
       self.emit_lifecycle_array(".fini_array", mir.decls)
@@ -9490,25 +9494,26 @@ fn X64Codegen::generate_mir_only(
   self : X64Codegen,
   mir : @mir.Program,
 ) -> String {
+  let mir_module = mir.to_module()
   self.emit("\t.intel_syntax noprefix")
   self.emit("\t.text")
   self.register_mir_aggregate_layouts(mir)
-  self.register_mir_function_decls(mir)
-  self.register_mir_global_decls(mir)
-  for decl in mir.decls {
+  self.register_mir_function_decls(mir_module)
+  self.register_mir_global_decls(mir_module)
+  for decl in mir_module.decls {
     self.emit_mir_function_decl_directives(decl)
   }
-  for decl in mir.decls {
+  for decl in mir_module.decls {
     if decl.has_body {
-      match mir.bodies.get(decl.name) {
+      match mir_module.bodies.get(decl.name) {
         Some(body) => self.gen_mir_func(decl, body)
         None => ()
       }
     }
   }
-  self.emit_mir_globals(@mir.merge_global_decls(mir.global_decls))
-  self.emit_lifecycle_array(".init_array", mir.decls)
-  self.emit_lifecycle_array(".fini_array", mir.decls)
+  self.emit_mir_globals(@mir.merge_global_decls(mir_module.global_decls))
+  self.emit_lifecycle_array(".init_array", mir_module.decls)
+  self.emit_lifecycle_array(".fini_array", mir_module.decls)
   self.emit_strings()
   self.emit_fp_literals()
   self.emit("\t.section\t.note.GNU-stack,\"\",@progbits")

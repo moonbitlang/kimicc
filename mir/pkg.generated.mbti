@@ -106,6 +106,18 @@ pub(all) struct MirLocal {
   ty : @parser.Type
 } derive(Eq)
 
+pub(all) struct MirModule {
+  target : @target.Target
+  decls : Array[MirFuncDecl]
+  global_decls : Array[MirGlobalDecl]
+  aggregate_decls : Array[MirAggregateDecl]
+  funcs : Map[String, FuncSig]
+  globals : Map[String, MirGlobalDecl]
+  aggregates : Map[String, MirAggregateDecl]
+  layouts : Map[String, AggregateLayout]
+  bodies : Map[String, MirFuncBody]
+}
+
 pub(all) struct MirParam {
   name : String
   ty : @parser.Type
@@ -168,6 +180,7 @@ pub fn Program::global_expr_type(Self, @parser.Expr) -> @parser.Type
 pub fn Program::interpret_body_i64(Self, String, Array[Int64]) -> Result[Int64, String]
 pub fn Program::interpret_i64(Self, String, Array[Int64]) -> Result[Int64, String]
 pub fn Program::offset_of_path(Self, @parser.Type, Array[@parser.OffsetDesignator]) -> Int?
+pub fn Program::to_module(Self) -> MirModule
 pub fn Program::type_align(Self, @parser.Type) -> Int
 pub fn Program::type_size(Self, @parser.Type) -> Int
 

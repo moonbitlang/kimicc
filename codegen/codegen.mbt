@@ -1159,7 +1159,7 @@ fn Codegen::new_with_mir(mir : @mir.Program) -> Codegen {
 ///|
 fn Codegen::register_mir_function_decls(
   self : Codegen,
-  mir : @mir.Program,
+  mir : @mir.MirModule,
 ) -> Unit {
   for decl in mir.decls {
     self.func_rets[decl.name] = decl.ret
@@ -1176,7 +1176,7 @@ fn Codegen::register_mir_function_decls(
 ///|
 fn Codegen::register_mir_global_decls(
   self : Codegen,
-  mir : @mir.Program,
+  mir : @mir.MirModule,
 ) -> Unit {
   for global in @mir.merge_global_decls(mir.global_decls) {
     self.globals[global.name] = global
@@ -1766,6 +1766,10 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
     self.struct_decls[sdecl.name] = sdecl
   }
   // Then seed layouts in a second pass
+  let mir_module = match self.mir {
+    Some(mir) => Some(mir.to_module())
+    None => None
+  }
   match self.mir {
     Some(mir) => self.register_mir_aggregate_layouts(mir)
     None =>
@@ -1774,7 +1778,7 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
       }
   }
   // Precompute function return types, variadic flags, and param counts
-  match self.mir {
+  match mir_module {
     Some(mir) => self.register_mir_function_decls(mir)
     None => ()
   }
@@ -1800,16 +1804,16 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
     parser_global_fallbacks[g.name] = g
   }
   // Record global variables
-  match self.mir {
+  match mir_module {
     Some(mir) => self.register_mir_global_decls(mir)
     None => ()
   }
   let mir_globals : Array[@mir.MirGlobalDecl] = match self.mir {
-    Some(mir) => @mir.merge_global_decls(mir.global_decls)
+    Some(mir) => @mir.merge_global_decls(mir.to_module().global_decls)
     None => []
   }
   let mir_func_decls : Array[@mir.MirFuncDecl] = match self.mir {
-    Some(mir) => mir.decls
+    Some(mir) => mir.to_module().decls
     None => []
   }
   let func_label_maps : Map[String, Map[String, String]] = {}
@@ -1898,22 +1902,23 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
 
 ///|
 fn Codegen::generate_mir_only(self : Codegen, mir : @mir.Program) -> String {
+  let mir_module = mir.to_module()
   self.output.write_string(
     "\t.section\t__TEXT,__text,regular,pure_instructions\n",
   )
   self.output.write_string("\t.build_version macos, 14, 0\n")
   self.register_mir_aggregate_layouts(mir)
-  self.register_mir_function_decls(mir)
-  self.register_mir_global_decls(mir)
-  for decl in mir.decls {
+  self.register_mir_function_decls(mir_module)
+  self.register_mir_global_decls(mir_module)
+  for decl in mir_module.decls {
     if decl.has_body {
-      match mir.bodies.get(decl.name) {
+      match mir_module.bodies.get(decl.name) {
         Some(body) => self.gen_mir_func(decl, body)
         None => ()
       }
     }
   }
-  let mir_globals = @mir.merge_global_decls(mir.global_decls)
+  let mir_globals = @mir.merge_global_decls(mir_module.global_decls)
   let mut has_data = false
   for g in mir_globals {
     if g.has_init {

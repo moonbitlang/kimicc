@@ -13,6 +13,10 @@ integer-scalar subset.
   function signatures, selected global declarations, aggregate declarations,
   target-specific sizes/alignments, field layouts, expression types, and integer
   and floating constant folds.
+- `Program::to_module` projects those facts into `MirModule`, a parser-free
+  backend-facing container for MIR declarations, layouts, globals, and lowered
+  bodies. `Program` still carries parser source for transitional fallback
+  consumers.
 - `Program.decls` stores MIR-owned function declaration metadata, including
   parameter facts, linkage-related attributes, aliases, lifecycle attributes,
   and whether a source body existed. Function body syntax is not stored there;
