@@ -68,6 +68,26 @@ test "generate darwin arm64 assembly from parser-free MIR module" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR scalar compound literals" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  int a = (int){40};
+    #|  unsigned char b = (unsigned char){255 + 1};
+    #|  int c = (int){side += 2};
+    #|  return a + b + c + side;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 MIR module uses module function metadata" {
   let source = "int main(void) { return 42; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
@@ -317,6 +337,30 @@ test "generate linux amd64 assembly from parser-free MIR module strict" {
       inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
       inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
       inspect(assembly.contains("\tadd\trax, r10"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR scalar compound literals" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  int a = (int){40};
+    #|  unsigned char b = (unsigned char){255 + 1};
+    #|  int c = (int){side += 2};
+    #|  return a + b + c + side;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
     }
     Err(err) => abort(err)
   }

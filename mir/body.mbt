@@ -364,6 +364,16 @@ fn mir_body_c_string_len(value : String) -> Int64 {
 }
 
 ///|
+fn mir_body_scalar_initializer_expr(expr : @parser.Expr) -> @parser.Expr {
+  match expr {
+    DesignatedField(_, value)
+    | DesignatedIndex(_, value)
+    | DesignatedRange(_, _, value) => mir_body_scalar_initializer_expr(value)
+    _ => expr
+  }
+}
+
+///|
 fn Program::lower_mir_identity_builtin(
   self : Program,
   args : Array[@parser.Expr],
@@ -769,6 +779,22 @@ fn Program::lower_mir_expr(
         (Some(c), Some(t), Some(e)) => Some(MirTernary(c, t, e, ty))
         _ => None
       }
+    CompoundLiteral(lit_ty, items, _) => {
+      if !mir_body_scalar_type(lit_ty) {
+        return None
+      }
+      if items.length() == 0 {
+        return Some(MirConst(0L, lit_ty))
+      }
+      if items.length() != 1 {
+        return None
+      }
+      let init = mir_body_scalar_initializer_expr(items[0])
+      match self.lower_mir_expr(init, ctx) {
+        Some(value) => Some(MirCast(lit_ty, value))
+        None => None
+      }
+    }
     Call(Var(name), args) => {
       if name == "__builtin_unpredictable" && args.length() == 1 {
         return self.lower_mir_expr(args[0], ctx)

@@ -44,9 +44,9 @@ integer-scalar subset.
   unary/binary scalar operators, conditionals, `while`, `for`, `do while`,
   directly labeled scalar `switch`, simple labels/goto, local compound
   assignment, local postfix updates, scalar globals and initialized global arrays, scalar memory
-  prefix/postfix updates, scalar `*&` / `&*` cancellation, simple scalar local
-  pointer loads/stores, scalar local arrays, string literal byte loads, scalar
-  aggregate fields including nested member access, foldable
+  prefix/postfix updates, scalar compound literals, scalar `*&` / `&*`
+  cancellation, simple scalar local pointer loads/stores, scalar local arrays,
+  string literal byte loads, scalar aggregate fields including nested member access, foldable
   `__builtin_constant_p`, literal `__builtin_strlen`, identity builtins such as
   `__builtin_expect` and `__builtin_assume_aligned` including their modeled
   hint-operand side effects,
@@ -61,9 +61,9 @@ integer-scalar subset.
   calls to other MIR-bodied functions or declared non-variadic integer-scalar
   externs, directly labeled scalar `switch`, simple labels/goto, local compound
   assignment, local postfix updates, scalar globals and initialized global arrays, scalar memory
-  prefix/postfix updates, scalar `*&` / `&*` cancellation, simple scalar local
-  pointer loads/stores, scalar local arrays, string literal byte loads, scalar
-  aggregate fields including nested member access, foldable
+  prefix/postfix updates, scalar compound literals, scalar `*&` / `&*`
+  cancellation, simple scalar local pointer loads/stores, scalar local arrays,
+  string literal byte loads, scalar aggregate fields including nested member access, foldable
   `__builtin_constant_p`, literal `__builtin_strlen`, identity builtins such as
   `__builtin_expect` and `__builtin_assume_aligned` including their modeled
   hint-operand side effects,

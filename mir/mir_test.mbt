@@ -856,6 +856,21 @@ test "mir body interpreter handles string literal byte loads" {
 }
 
 ///|
+test "mir body interpreter handles scalar compound literals" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  int a = (int){40};
+    #|  unsigned char b = (unsigned char){255 + 1};
+    #|  int c = (int){side += 2};
+    #|  return a + b + c + side;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 44L)
+}
+
+///|
 test "mir body lowering keeps side effecting ignored builtin operands" {
   let source =
     #|int main(void) {
