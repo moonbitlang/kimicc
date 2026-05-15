@@ -764,6 +764,23 @@ test "mir body lowering handles nested aggregate fields" {
 }
 
 ///|
+test "mir body interpreter handles nested global aggregate fields" {
+  let source =
+    #|struct Inner { int z; char c; };
+    #|struct S { struct Inner inner; int tail; };
+    #|struct S g;
+    #|int main(void) {
+    #|  g.inner.z = 9;
+    #|  g.inner.c = 4;
+    #|  g.tail = 11;
+    #|  return g.inner.z + g.inner.c + g.tail;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 24L)
+}
+
+///|
 test "mir body lowering refuses unsupported parser constructs" {
   let source =
     #|int main(void) {

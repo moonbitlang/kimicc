@@ -848,6 +848,23 @@ async test "nested struct field assignment" {
 }
 
 ///|
+async test "nested global struct field assignment" {
+  let source =
+    #|struct Inner { int z; char c; };
+    #|struct Outer { char tag; struct Inner inner; int tail; };
+    #|struct Outer g;
+    #|int main() {
+    #|  g.tag = 1;
+    #|  g.inner.z = 37;
+    #|  g.inner.c = 5;
+    #|  g.tail = 11;
+    #|  return g.inner.z + g.inner.c;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "bit-field read" {
   let source =
     #|struct S { unsigned int a:3; unsigned int b:4; };

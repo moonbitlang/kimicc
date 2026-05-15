@@ -44,6 +44,21 @@ fn mir_body_array_info(ty : @parser.Type) -> (@parser.Type, Int)? {
 }
 
 ///|
+fn Program::mir_body_addressable_global_type(
+  self : Program,
+  ty : @parser.Type,
+) -> Bool {
+  if mir_body_scalar_type(ty) || mir_body_array_local_type(ty) {
+    true
+  } else {
+    match self.core_type(ty) {
+      Struct(_) | Union(_) => true
+      _ => false
+    }
+  }
+}
+
+///|
 fn mir_body_global_scalar_init(init : MirGlobalInit?) -> Int64? {
   match init {
     Some(MirGlobalScalarInt(bits)) => Some(bits)
@@ -66,7 +81,7 @@ fn BodyInterpreter::new(program : Program) -> BodyInterpreter {
   let global_addrs : Map[String, Int64] = {}
   let mut next_global = 0
   for decl in program.globals.values() {
-    if mir_body_scalar_type(decl.ty) || mir_body_array_local_type(decl.ty) {
+    if program.mir_body_addressable_global_type(decl.ty) {
       let base = 1000000000L + next_global.to_int64() * 100000L
       global_addrs[decl.name] = base
       next_global += 1
@@ -170,14 +185,24 @@ fn BodyInterpreter::global_array_elem_addr(
   for name in self.global_addrs.keys() {
     match self.program.globals.get(name) {
       Some(decl) =>
-        match mir_body_array_len(decl.ty) {
-          Some(len) => {
-            let base = self.global_addrs[name]
-            if addr <= base && addr > base - len.to_int64() {
+        match self.program.core_type(decl.ty) {
+          Struct(_) | Union(_) => {
+            let base = mir_body_offset_addr(self.global_addrs[name], 0)
+            let size = self.program.type_size(decl.ty).to_int64()
+            if addr <= base && addr > base - size {
               return true
             }
           }
-          None => ()
+          _ =>
+            match mir_body_array_len(decl.ty) {
+              Some(len) => {
+                let base = self.global_addrs[name]
+                if addr <= base && addr > base - len.to_int64() {
+                  return true
+                }
+              }
+              None => ()
+            }
         }
       None => ()
     }
