@@ -728,6 +728,34 @@ test "generate linux amd64 lowers string builtins" {
   inspect(assembly.contains("call\t__builtin___strncat_chk"), content="false")
   inspect(assembly.contains("call\tstrlcpy"), content="true")
   inspect(assembly.contains("call\tstrlcat"), content="true")
+  inspect(
+    assembly.contains("call\tstrchr\n\tmovsxd\trax, eax"),
+    content="false",
+  )
+  inspect(
+    assembly.contains("call\tstrrchr\n\tmovsxd\trax, eax"),
+    content="false",
+  )
+  inspect(
+    assembly.contains("call\tstrstr\n\tmovsxd\trax, eax"),
+    content="false",
+  )
+  inspect(
+    assembly.contains("call\tmemchr\n\tmovsxd\trax, eax"),
+    content="false",
+  )
+  inspect(
+    assembly.contains("call\tmempcpy\n\tmovsxd\trax, eax"),
+    content="false",
+  )
+  inspect(
+    assembly.contains("call\tstpcpy\n\tmovsxd\trax, eax"),
+    content="false",
+  )
+  inspect(
+    assembly.contains("call\tstpncpy\n\tmovsxd\trax, eax"),
+    content="false",
+  )
   inspect(assembly.contains("call\t__builtin___strlcpy_chk"), content="false")
   inspect(assembly.contains("call\t__builtin___strlcat_chk"), content="false")
 }

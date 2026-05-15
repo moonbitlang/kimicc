@@ -4565,6 +4565,31 @@ fn X64Codegen::emit_store_bitfield_value(
 
 ///|
 fn X64Codegen::type_of(self : X64Codegen, expr : @parser.Expr) -> @parser.Type {
+  match expr {
+    Call(Var(name), args) =>
+      if !self.var_types.contains(name) && !self.globals.contains(name) {
+        match self.builtin_return_type(name, args) {
+          Some(ty) => return ty
+          None =>
+            if self.func_rets.contains(name) {
+              return self.func_rets[name]
+            }
+        }
+      }
+    Var(name) =>
+      if self.var_types.contains(name) {
+        return self.var_types[name]
+      } else if self.globals.contains(name) {
+        return self.globals[name].ty
+      } else if self.func_rets.contains(name) {
+        return FuncPtr(
+          self.func_rets[name],
+          self.func_param_types.get_or_default(name, []),
+          self.func_variadic.get_or_default(name, false),
+        )
+      }
+    _ => ()
+  }
   match self.mir {
     Some(mir) =>
       return mir.expr_type(expr, @mir.Scope::{

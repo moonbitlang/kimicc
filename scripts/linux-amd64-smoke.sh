@@ -1399,8 +1399,8 @@ int scalar_hint_builtins(void) {
   __builtin_assume(x);
   __builtin_prefetch(&x, 0, 3);
   if (__builtin_constant_p(x) != 0) return 280;
-  if (__builtin_object_size(&x, 0) + 1 != 0) return 281;
-  if (__builtin_dynamic_object_size(&x, 0) + 1 != 0) return 559;
+  if (__builtin_object_size(&x, 0) != sizeof(x)) return 281;
+  if (__builtin_dynamic_object_size(&x, 0) != sizeof(x)) return 559;
   if (__builtin_frame_address(1) != 0) return 282;
   if (__builtin_frame_address(0) == 0) return 283;
   if (__builtin_assume_aligned(&x, 16) != &x) return 434;
