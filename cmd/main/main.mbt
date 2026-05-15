@@ -83,6 +83,7 @@ priv struct DriverOptions {
   mut no_inline : Bool
   mut fast_math : Bool
   mut fast_math_explicit : Bool
+  mut strict_mir_codegen : Bool
   mut no_standard_includes : Bool
   mut show_help : Bool
   mut show_version : Bool
@@ -143,6 +144,7 @@ fn DriverOptions::new() -> DriverOptions {
     no_inline: true,
     fast_math: false,
     fast_math_explicit: false,
+    strict_mir_codegen: false,
     no_standard_includes: false,
     show_help: false,
     show_version: false,
@@ -1547,6 +1549,8 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
       "-S" => opts.output = EmitAssembly
       "-c" | "--compile" => opts.output = EmitObject
       "--preprocessed" => opts.already_preprocessed = true
+      "--strict-mir-codegen" | "-fno-parser-codegen-fallback" =>
+        opts.strict_mir_codegen = true
       "-nostdinc" => opts.no_standard_includes = true
       "-o" =>
         match option_value(argv, i, "-o", "-o") {
@@ -2297,7 +2301,17 @@ fn generate_assembly_from_preprocessed(
   opts : DriverOptions,
 ) -> String {
   let prog = @parser.parse_for_target(parser_input, opts.target)
-  @codegen.generate_assembly_for_target(prog, opts.target)
+  if opts.strict_mir_codegen {
+    match @codegen.generate_assembly_for_target_strict(prog, opts.target) {
+      Ok(assembly) => assembly
+      Err(err) => {
+        fail(err)
+        ""
+      }
+    }
+  } else {
+    @codegen.generate_assembly_for_target(prog, opts.target)
+  }
 }
 
 ///|
@@ -2516,6 +2530,8 @@ fn print_usage() -> Unit {
     #|  -Xpreprocessor OPT  forward one supported preprocessor option
     #|  -nostdinc           disable built-in system include paths
     #|  --preprocessed      skip preprocessing and parse input as already preprocessed C
+    #|  --strict-mir-codegen
+    #|                      require parser-free MIR codegen; reject unsupported coverage
     #|
     #|Output options:
     #|  -o PATH             set output path

@@ -224,6 +224,9 @@ checks pass. `generate_assembly_from_mir_strict` projects `Program` to
 `MirModule` before using that parser-free contract. This strict gate does not
 yet mean every C source program can compile without fallback; it means
 successful strict codegen does not carry the parser AST into backend emission.
+The command-line driver also exposes `--strict-mir-codegen`
+(`-fno-parser-codegen-fallback`) to force this strict path end to end and
+reject inputs that would otherwise need legacy parser-AST codegen fallback.
 Both assembly backends also seed their function return/parameter metadata from
 `Program.decls`, rather than rebuilding those facts from parser function
 declarations. The linux/amd64 backend also emits function alias, weak
