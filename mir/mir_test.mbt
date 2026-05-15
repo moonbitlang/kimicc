@@ -372,11 +372,13 @@ test "mir body lowering folds scalar builtin calls" {
   let source =
     #|int main(void) {
     #|  int x = 0;
-    #|  return __builtin_constant_p(1 + 2) * 10 + __builtin_constant_p(x);
+    #|  return __builtin_constant_p(1 + 2) * 10 +
+    #|    __builtin_constant_p(x) +
+    #|    __builtin_unpredictable(5);
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   inspect(mir.bodies.contains("main"), content="true")
-  expect_body_interp(source, 10L)
+  expect_body_interp(source, 15L)
 }
 
 ///|

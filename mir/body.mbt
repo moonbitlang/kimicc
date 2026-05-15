@@ -525,6 +525,9 @@ fn Program::lower_mir_expr(
         _ => None
       }
     Call(Var(name), args) => {
+      if name == "__builtin_unpredictable" && args.length() == 1 {
+        return self.lower_mir_expr(args[0], ctx)
+      }
       if name == "__builtin_constant_p" {
         match self.fold_const(expr, scope) {
           Some(value) => return Some(MirConst(value, ty))

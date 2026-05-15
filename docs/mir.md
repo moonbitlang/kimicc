@@ -24,9 +24,9 @@ integer-scalar subset.
   directly labeled scalar `switch`, simple labels/goto, local compound
   assignment, local postfix updates, scalar `*&` / `&*` cancellation,
   simple scalar local pointer loads/stores, scalar local arrays, direct scalar
-  aggregate fields, foldable `__builtin_constant_p`, `break`/`continue`, and
-  ternaries. Missing bodies return `Err` instead of falling back to parser AST
-  execution.
+  aggregate fields, foldable `__builtin_constant_p`, identity
+  `__builtin_unpredictable`, `break`/`continue`, and ternaries. Missing bodies
+  return `Err` instead of falling back to parser AST execution.
 - `codegen/mir_body_codegen.mbt` is the first production backend consumer of
   `MirFuncBody`. It emits Darwin ARM64 and linux/amd64 assembly for
   integer-scalar MIR bodies with local variables, assignments, branches,
@@ -35,9 +35,9 @@ integer-scalar subset.
   externs, directly labeled scalar `switch`, simple labels/goto, local compound
   assignment, local postfix updates, scalar `*&` / `&*` cancellation,
   simple scalar local pointer loads/stores, scalar local arrays, direct scalar
-  aggregate fields, foldable `__builtin_constant_p`, and arithmetic/logical
-  operators. Unsupported MIR bodies still fall back to the existing parser-AST
-  codegen path.
+  aggregate fields, foldable `__builtin_constant_p`, identity
+  `__builtin_unpredictable`, and arithmetic/logical operators. Unsupported MIR
+  bodies still fall back to the existing parser-AST codegen path.
 - `Program::interpret_i64` is an integer-only interpreter intended for
   compile-test oracles. It supports scalar functions, locals, globals, calls,
   casts, arithmetic, conditionals, loops, scalar switches, simple gotos, selected
