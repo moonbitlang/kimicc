@@ -139,6 +139,18 @@ fn BodyLowerContext::lookup_local(
 }
 
 ///|
+fn lower_mir_cancelled_local_lvalue(
+  expr : @parser.Expr,
+  ctx : BodyLowerContext,
+) -> MirLocal? {
+  match expr {
+    Var(name) => ctx.lookup_local(name)
+    Deref(AddrOf(Var(name))) => ctx.lookup_local(name)
+    _ => None
+  }
+}
+
+///|
 fn lower_mir_local_update(
   name : String,
   op : String,
@@ -206,6 +218,12 @@ fn Program::lower_mir_expr(
         Some(binding) => Some(MirLocal(binding))
         None => None
       }
+    Deref(AddrOf(Var(name))) =>
+      match ctx.lookup_local(name) {
+        Some(binding) => Some(MirLocal(binding))
+        None => None
+      }
+    AddrOf(Deref(inner)) => self.lower_mir_expr(inner, ctx)
     Binary(op, lhs, rhs) =>
       match (self.lower_mir_expr(lhs, ctx), self.lower_mir_expr(rhs, ctx)) {
         (Some(left), Some(right)) => Some(MirBinary(op, left, right, ty))
@@ -221,15 +239,24 @@ fn Program::lower_mir_expr(
         Some(value) => Some(MirCast(cast_ty, value))
         None => None
       }
-    Assign(Var(name), rhs) =>
-      match (ctx.lookup_local(name), self.lower_mir_expr(rhs, ctx)) {
+    Assign(lhs, rhs) =>
+      match
+        (
+          lower_mir_cancelled_local_lvalue(lhs, ctx),
+          self.lower_mir_expr(rhs, ctx),
+        ) {
         (Some(binding), Some(value)) => Some(MirAssignLocal(binding, value))
         _ => None
       }
-    CompoundAssign(op, Var(name), rhs) =>
-      match self.lower_mir_expr(rhs, ctx) {
-        Some(value) => lower_mir_local_update(name, op, value, ty, ctx)
-        None => None
+    CompoundAssign(op, lhs, rhs) =>
+      match
+        (
+          lower_mir_cancelled_local_lvalue(lhs, ctx),
+          self.lower_mir_expr(rhs, ctx),
+        ) {
+        (Some(binding), Some(value)) =>
+          lower_mir_local_update(binding.name, op, value, ty, ctx)
+        _ => None
       }
     PrefixInc(Var(name)) => lower_mir_local_step(name, "+", ty, ctx)
     PrefixDec(Var(name)) => lower_mir_local_step(name, "-", ty, ctx)
