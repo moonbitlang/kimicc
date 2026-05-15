@@ -8884,6 +8884,23 @@ fn X64Codegen::mir_global_init_supported(
         MirGlobalString(_) => self.mir_global_string_supported(ty)
         MirGlobalSymbol(_) => self.mir_global_symbol_supported(ty)
         MirGlobalSymbolOffset(_, _) => self.mir_global_symbol_supported(ty)
+        MirGlobalArraySparse(values) =>
+          match x64_core_type(ty) {
+            Array(elem_ty, n) => {
+              for item in values {
+                let index = item.0
+                let value = item.1
+                if index < 0 || index >= n {
+                  return false
+                }
+                if !self.mir_global_init_supported(elem_ty, value) {
+                  return false
+                }
+              }
+              true
+            }
+            _ => false
+          }
         MirGlobalArray(values) =>
           match x64_core_type(ty) {
             Array(elem_ty, n) => {
@@ -9018,6 +9035,27 @@ fn X64Codegen::emit_mir_global_init(
     MirGlobalSymbol(name) => self.emit("\t.quad\t" + name)
     MirGlobalSymbolOffset(name, offset) =>
       self.emit("\t.quad\t" + reloc_with_offset(name, offset))
+    MirGlobalArraySparse(values) =>
+      match x64_core_type(ty) {
+        Array(elem_ty, n) => {
+          let elem_size = self.type_size(elem_ty)
+          let slots : Array[@mir.MirGlobalInit?] = Array::make(n, None)
+          for item in values {
+            let index = item.0
+            let value = item.1
+            if index >= 0 && index < n {
+              slots[index] = Some(value)
+            }
+          }
+          for slot in slots {
+            match slot {
+              Some(value) => self.emit_mir_global_init(elem_ty, value)
+              None => self.emit("\t.zero\t" + elem_size.to_string())
+            }
+          }
+        }
+        _ => self.emit("\t.zero\t" + self.type_size(ty).to_string())
+      }
     MirGlobalArray(values) =>
       match x64_core_type(ty) {
         Array(elem_ty, n) => {

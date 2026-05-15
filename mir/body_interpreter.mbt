@@ -67,9 +67,18 @@ fn mir_body_global_scalar_init(init : MirGlobalInit?) -> Int64? {
 }
 
 ///|
-fn mir_body_global_array_init(init : MirGlobalInit?) -> Array[MirGlobalInit]? {
+fn mir_body_global_array_init(
+  init : MirGlobalInit?,
+) -> Array[(Int, MirGlobalInit)]? {
   match init {
-    Some(MirGlobalArray(items)) => Some(items)
+    Some(MirGlobalArray(items)) => {
+      let values : Array[(Int, MirGlobalInit)] = []
+      for i = 0; i < items.length(); i = i + 1 {
+        values.push((i, items[i]))
+      }
+      Some(values)
+    }
+    Some(MirGlobalArraySparse(items)) => Some(items)
     _ => None
   }
 }
@@ -100,11 +109,15 @@ fn BodyInterpreter::new(program : Program) -> BodyInterpreter {
             continue
           }
           let base = global_addrs[decl.name]
-          let limit = if items.length() < len { items.length() } else { len }
-          for i in 0..<limit {
-            match mir_body_global_scalar_init(Some(items[i])) {
+          for item in items {
+            let index = item.0
+            let init = item.1
+            if index < 0 || index >= len {
+              continue
+            }
+            match mir_body_global_scalar_init(Some(init)) {
               Some(bits) =>
-                global_memory[base - i.to_int64()] = program.runtime_cast_int(
+                global_memory[base - index.to_int64()] = program.runtime_cast_int(
                   bits, elem_ty,
                 )
               None => ()

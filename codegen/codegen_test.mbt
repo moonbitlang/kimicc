@@ -211,6 +211,24 @@ test "generate darwin arm64 strict MIR global aggregate initializer" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR sparse global array initializer" {
+  let source =
+    #|int g[4] = { [2] = 9, [0] = 1 };
+    #|int main(void) { return 0; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) =>
+      inspect(
+        assembly.contains(
+          "_g:\n\t.long\t1\n\t.space\t4\n\t.long\t9\n\t.space\t4",
+        ),
+        content="true",
+      )
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate linux amd64 assembly from MIR strict" {
   let source = "int main(void) { int x = 40; return x + 2; }"
   let target = match @target.Target::parse("linux-amd64") {
@@ -265,6 +283,26 @@ test "generate linux amd64 strict MIR global aggregate initializer" {
         assembly.contains(
           "g:\n\t.byte\t1\n\t.zero\t3\n\t.long\t33752069\n\t.long\t6",
         ),
+        content="true",
+      )
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR sparse global array initializer" {
+  let source =
+    #|int g[4] = { [2] = 9, [0] = 1 };
+    #|int main(void) { return 0; }
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) =>
+      inspect(
+        assembly.contains("g:\n\t.long\t1\n\t.zero\t4\n\t.long\t9\n\t.zero\t4"),
         content="true",
       )
     Err(err) => abort(err)
@@ -384,7 +422,8 @@ test "parser AST codegen fallback is explicit" {
 ///|
 test "strict MIR assembly rejects parser global initializer fallback" {
   let source =
-    #|int g[3] = { [2] = 9 };
+    #|struct S { int a; int b; };
+    #|struct S g = { .b = 9 };
     #|int main(void) { return 0; }
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   match @codegen.generate_assembly_from_mir_strict(mir) {

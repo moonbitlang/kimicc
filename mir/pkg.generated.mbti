@@ -99,6 +99,7 @@ pub(all) enum MirGlobalInit {
   MirGlobalSymbol(String)
   MirGlobalSymbolOffset(String, Int)
   MirGlobalArray(Array[MirGlobalInit])
+  MirGlobalArraySparse(Array[(Int, MirGlobalInit)])
   MirGlobalInitUnsupported
 } derive(Eq)
 

@@ -72,6 +72,7 @@ pub(all) enum MirGlobalInit {
   MirGlobalSymbol(String)
   MirGlobalSymbolOffset(String, Int)
   MirGlobalArray(Array[MirGlobalInit])
+  MirGlobalArraySparse(Array[(Int, MirGlobalInit)])
   MirGlobalInitUnsupported
 } derive(Eq)
 
@@ -329,22 +330,75 @@ fn Program::lower_mir_global_init(
           _ => ()
         }
       }
+      if mir_global_array_uses_sparse(exprs) {
+        return Some(self.lower_mir_global_sparse_array_init(exprs))
+      }
       let values : Array[MirGlobalInit] = []
       for expr in exprs {
-        match expr {
-          Array(nested) => {
-            let nested_values : Array[MirGlobalInit] = []
-            for nested_expr in nested {
-              nested_values.push(self.lower_mir_global_scalar_init(nested_expr))
-            }
-            values.push(MirGlobalArray(nested_values))
-          }
-          _ => values.push(self.lower_mir_global_scalar_init(expr))
-        }
+        values.push(self.lower_mir_global_array_value(expr))
       }
       Some(MirGlobalArray(values))
     }
   }
+}
+
+///|
+fn mir_global_array_uses_sparse(exprs : Array[@parser.Expr]) -> Bool {
+  for expr in exprs {
+    match expr {
+      DesignatedIndex(_, _) | DesignatedRange(_, _, _) => return true
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+fn Program::lower_mir_global_array_value(
+  self : Program,
+  expr : @parser.Expr,
+) -> MirGlobalInit {
+  match expr {
+    Array(nested) => {
+      let nested_values : Array[MirGlobalInit] = []
+      for nested_expr in nested {
+        nested_values.push(self.lower_mir_global_array_value(nested_expr))
+      }
+      MirGlobalArray(nested_values)
+    }
+    _ => self.lower_mir_global_scalar_init(expr)
+  }
+}
+
+///|
+fn Program::lower_mir_global_sparse_array_init(
+  self : Program,
+  exprs : Array[@parser.Expr],
+) -> MirGlobalInit {
+  let values : Array[(Int, MirGlobalInit)] = []
+  let mut cursor = 0
+  for expr in exprs {
+    match expr {
+      DesignatedIndex(index, value) => {
+        let idx = index.to_int()
+        values.push((idx, self.lower_mir_global_array_value(value)))
+        cursor = idx + 1
+      }
+      DesignatedRange(first, last, value) => {
+        let start = first.to_int()
+        let end = last.to_int()
+        for idx = start; idx <= end; idx = idx + 1 {
+          values.push((idx, self.lower_mir_global_array_value(value)))
+        }
+        cursor = end + 1
+      }
+      _ => {
+        values.push((cursor, self.lower_mir_global_array_value(expr)))
+        cursor += 1
+      }
+    }
+  }
+  MirGlobalArraySparse(values)
 }
 
 ///|

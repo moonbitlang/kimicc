@@ -244,8 +244,8 @@ test "mir owns simple global initializer metadata" {
     _ => abort("expected symbol offset MIR global initializer")
   }
   match mir.global_decls[6].init {
-    Some(MirGlobalArray([MirGlobalInitUnsupported])) => ()
-    _ => abort("expected unsupported designated MIR global initializer")
+    Some(MirGlobalArraySparse([(2, MirGlobalScalarInt(9))])) => ()
+    _ => abort("expected sparse designated MIR global initializer")
   }
 }
 
@@ -724,6 +724,18 @@ test "mir body interpreter handles initialized scalar global arrays" {
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   inspect(mir.bodies.contains("main"), content="true")
   expect_body_interp(source, 11L)
+}
+
+///|
+test "mir body interpreter handles sparse initialized scalar global arrays" {
+  let source =
+    #|int a[4] = { [2] = 9, [0] = 1 };
+    #|int main(void) {
+    #|  return a[0] + a[1] + a[2] + a[3];
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 10L)
 }
 
 ///|
