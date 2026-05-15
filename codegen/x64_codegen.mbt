@@ -8768,6 +8768,201 @@ fn X64Codegen::emit_global_scalar(
 }
 
 ///|
+fn X64Codegen::mir_global_scalar_int_supported(
+  self : X64Codegen,
+  ty : @parser.Type,
+) -> Bool {
+  match ty {
+    Aligned(inner, _) => self.mir_global_scalar_int_supported(inner)
+    _ =>
+      match x64_core_type(ty) {
+        Bool
+        | SChar
+        | UChar
+        | SShort
+        | UShort
+        | SInt
+        | UInt
+        | SLong
+        | ULong
+        | SLongLong
+        | ULongLong
+        | SInt128
+        | UInt128
+        | Float
+        | Double
+        | Pointer(_)
+        | FuncPtr(_, _, _) => true
+        _ => false
+      }
+  }
+}
+
+///|
+fn X64Codegen::mir_global_string_supported(
+  self : X64Codegen,
+  ty : @parser.Type,
+) -> Bool {
+  match ty {
+    Aligned(inner, _) => self.mir_global_string_supported(inner)
+    _ =>
+      match x64_core_type(ty) {
+        Array(SChar, _) | Array(UChar, _) | Pointer(_) => true
+        _ => false
+      }
+  }
+}
+
+///|
+fn X64Codegen::mir_global_init_supported(
+  self : X64Codegen,
+  ty : @parser.Type,
+  init : @mir.MirGlobalInit,
+) -> Bool {
+  match ty {
+    Aligned(inner, _) => self.mir_global_init_supported(inner, init)
+    _ =>
+      match init {
+        MirGlobalInitUnsupported => false
+        MirGlobalScalarInt(_) => self.mir_global_scalar_int_supported(ty)
+        MirGlobalString(_) => self.mir_global_string_supported(ty)
+        MirGlobalArray(values) =>
+          match x64_core_type(ty) {
+            Array(elem_ty, n) => {
+              if values.length() > n {
+                return false
+              }
+              for value in values {
+                if !self.mir_global_init_supported(elem_ty, value) {
+                  return false
+                }
+              }
+              true
+            }
+            _ => false
+          }
+      }
+  }
+}
+
+///|
+fn X64Codegen::emit_mir_global_scalar_int(
+  self : X64Codegen,
+  ty : @parser.Type,
+  value : Int64,
+) -> Unit {
+  match ty {
+    Aligned(inner, _) => {
+      self.emit_mir_global_scalar_int(inner, value)
+      return
+    }
+    _ => ()
+  }
+  match x64_core_type(ty) {
+    Bool | SChar | UChar => self.emit_global_int_by_size(1, value)
+    SShort | UShort => self.emit_global_int_by_size(2, value)
+    SInt | UInt => self.emit_global_int_by_size(4, value)
+    SInt128 => {
+      self.emit_global_int_by_size(8, value)
+      self.emit_global_int_by_size(8, if value < 0L { -1L } else { 0L })
+    }
+    UInt128 => {
+      self.emit_global_int_by_size(8, value)
+      self.emit_global_int_by_size(8, 0L)
+    }
+    Float | Double => self.emit_global_float(ty, value.to_double())
+    _ => self.emit_global_int_by_size(8, value)
+  }
+}
+
+///|
+fn X64Codegen::emit_mir_global_string(
+  self : X64Codegen,
+  ty : @parser.Type,
+  value : String,
+) -> Unit {
+  match ty {
+    Aligned(inner, _) => {
+      self.emit_mir_global_string(inner, value)
+      return
+    }
+    _ => ()
+  }
+  match x64_core_type(ty) {
+    Array(SChar, n) | Array(UChar, n) => {
+      self.emit("\t.asciz\t\"" + escape_string(value) + "\"")
+      let pad = n - value.length() - 1
+      if pad > 0 {
+        self.emit("\t.zero\t" + pad.to_string())
+      }
+    }
+    _ => {
+      let id = self.strings.length()
+      self.strings.push(value)
+      self.emit("\t.quad\t.Lstr" + id.to_string())
+    }
+  }
+}
+
+///|
+fn X64Codegen::emit_mir_global_init(
+  self : X64Codegen,
+  ty : @parser.Type,
+  init : @mir.MirGlobalInit,
+) -> Unit {
+  match ty {
+    Aligned(inner, _) => {
+      self.emit_mir_global_init(inner, init)
+      return
+    }
+    _ => ()
+  }
+  match init {
+    MirGlobalScalarInt(value) => self.emit_mir_global_scalar_int(ty, value)
+    MirGlobalString(value) => self.emit_mir_global_string(ty, value)
+    MirGlobalArray(values) =>
+      match x64_core_type(ty) {
+        Array(elem_ty, n) => {
+          let elem_size = self.type_size(elem_ty)
+          let mut emitted = 0
+          for value in values {
+            self.emit_mir_global_init(elem_ty, value)
+            emitted += 1
+          }
+          while emitted < n {
+            self.emit("\t.zero\t" + elem_size.to_string())
+            emitted += 1
+          }
+        }
+        _ => self.emit("\t.zero\t" + self.type_size(ty).to_string())
+      }
+    MirGlobalInitUnsupported =>
+      self.emit("\t.zero\t" + self.type_size(ty).to_string())
+  }
+}
+
+///|
+fn X64Codegen::try_emit_mir_global_init(
+  self : X64Codegen,
+  g : @parser.GlobalDecl,
+) -> Bool {
+  match self.globals.get(g.name) {
+    Some(global) =>
+      match global.init {
+        Some(init) =>
+          if self.mir_global_init_supported(global.ty, init) {
+            self.emit_mir_global_init(global.ty, init)
+            true
+          } else {
+            false
+          }
+        None => false
+      }
+    None => false
+  }
+}
+
+///|
 fn X64Codegen::emit_global_array(
   self : X64Codegen,
   ty : @parser.Type,
@@ -8967,10 +9162,12 @@ fn X64Codegen::emit_globals(
       self.emit_symbol_binding(g.name, g.is_static, g.is_weak, g.visibility)
       self.emit("\t.align\t" + self.type_align(g.ty).to_string())
       self.emit(g.name + ":")
-      match g.init {
-        Some(Scalar(expr)) => self.emit_global_scalar(g.ty, expr)
-        Some(Array(exprs)) => self.emit_global_array(g.ty, exprs)
-        None => ()
+      if !self.try_emit_mir_global_init(g) {
+        match g.init {
+          Some(Scalar(expr)) => self.emit_global_scalar(g.ty, expr)
+          Some(Array(exprs)) => self.emit_global_array(g.ty, exprs)
+          None => ()
+        }
       }
     }
   }

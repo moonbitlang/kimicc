@@ -1184,6 +1184,32 @@ test "generate linux amd64 MIR body scalar globals" {
 }
 
 ///|
+test "generate linux amd64 global scalar initializer uses MIR metadata" {
+  let source = "int g = 0; int main(void) { return g; }"
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  let g = mir.global_decls[0]
+  mir.global_decls[0] = {
+    ty: g.ty,
+    name: g.name,
+    init: Some(@mir.MirGlobalInit::MirGlobalScalarInt(7L)),
+    has_init: g.has_init,
+    is_static: g.is_static,
+    is_extern: g.is_extern,
+    is_weak: g.is_weak,
+    visibility: g.visibility,
+    symbol_alias: g.symbol_alias,
+    section: g.section,
+  }
+  let assembly = @codegen.generate_assembly_from_mir(mir)
+  inspect(assembly.contains("g:\n\t.long\t7"), content="true")
+  inspect(assembly.contains("g:\n\t.long\t0"), content="false")
+}
+
+///|
 test "generate linux amd64 MIR body scalar global arrays" {
   let source =
     #|int a[3];
