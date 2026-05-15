@@ -197,6 +197,22 @@ test "generate darwin arm64 MIR body scalar local array" {
 }
 
 ///|
+test "generate darwin arm64 MIR body folded builtin call" {
+  let source =
+    #|int main(void) {
+    #|  int x = 0;
+    #|  return __builtin_constant_p(1 + 2) * 10 + __builtin_constant_p(x);
+    #|}
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+}
+
+///|
 test "generate darwin arm64 MIR body scalar aggregate field" {
   let source =
     #|struct S { int x; unsigned char y; };
@@ -655,6 +671,25 @@ test "generate linux amd64 MIR body scalar local array" {
     #|  a[0] = 4;
     #|  a[1] = a[0] + 5;
     #|  return a[0] + a[1];
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+}
+
+///|
+test "generate linux amd64 MIR body folded builtin call" {
+  let source =
+    #|int main(void) {
+    #|  int x = 0;
+    #|  return __builtin_constant_p(1 + 2) * 10 + __builtin_constant_p(x);
     #|}
   let prog = @parser.parse(source)
   let target = match @target.Target::parse("linux-amd64") {

@@ -368,6 +368,18 @@ test "mir body interpreter handles scalar local arrays" {
 }
 
 ///|
+test "mir body lowering folds scalar builtin calls" {
+  let source =
+    #|int main(void) {
+    #|  int x = 0;
+    #|  return __builtin_constant_p(1 + 2) * 10 + __builtin_constant_p(x);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 10L)
+}
+
+///|
 test "mir body interpreter handles scalar aggregate fields" {
   let source =
     #|struct S { int x; unsigned char y; };
