@@ -667,6 +667,19 @@ fn Program::lower_mir_expr(
       if name == "__builtin_unpredictable" && args.length() == 1 {
         return self.lower_mir_expr(args[0], ctx)
       }
+      if name == "__builtin_assume" {
+        return Some(MirConst(0L, ty))
+      }
+      if name == "__builtin_prefetch" {
+        if args.length() == 0 {
+          return Some(MirConst(0L, ty))
+        }
+        match self.lower_mir_expr(args[0], ctx) {
+          Some(value) =>
+            return Some(MirBinary(",", value, MirConst(0L, ty), ty))
+          None => return None
+        }
+      }
       if name == "__builtin_expect" ||
         name == "__builtin_expect_with_probability" ||
         name == "__builtin_assume_aligned" {

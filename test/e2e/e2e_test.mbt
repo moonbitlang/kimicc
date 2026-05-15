@@ -111,6 +111,19 @@ async test "e2e MIR body scalar globals" {
 }
 
 ///|
+async test "e2e MIR body no-op builtins" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  __builtin_prefetch((void *)(long)(side += 1), 0, 0);
+    #|  __builtin_assume(side += 10);
+    #|  return side + 41;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e MIR body scalar memory postfix updates" {
   let source =
     #|struct S { int x; };

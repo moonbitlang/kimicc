@@ -488,6 +488,20 @@ test "mir body lowering handles side effect free identity builtins" {
 }
 
 ///|
+test "mir body interpreter handles no-op builtins" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  __builtin_prefetch((void *)(long)(side += 1), 0, 0);
+    #|  __builtin_assume(side += 10);
+    #|  return side + 41;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body interpreter handles scalar globals" {
   let source =
     #|int g = 5;

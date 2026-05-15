@@ -27,7 +27,8 @@ integer-scalar subset.
   pointer loads/stores, scalar local arrays, direct scalar aggregate fields, foldable
   `__builtin_constant_p`, side-effect-free identity builtins such as
   `__builtin_expect`, `__builtin_assume_aligned`, and return-address
-  transforms, identity `__builtin_unpredictable`, `break`/`continue`, and
+  transforms, no-op `__builtin_assume`, runtime `__builtin_prefetch` address
+  evaluation, identity `__builtin_unpredictable`, `break`/`continue`, and
   ternaries. Missing bodies return `Err` instead of falling back to parser AST
   execution.
 - `codegen/mir_body_codegen.mbt` is the first production backend consumer of
@@ -41,7 +42,8 @@ integer-scalar subset.
   pointer loads/stores, scalar local arrays, direct scalar aggregate fields, foldable
   `__builtin_constant_p`, side-effect-free identity builtins such as
   `__builtin_expect`, `__builtin_assume_aligned`, and return-address
-  transforms, identity `__builtin_unpredictable`, and arithmetic/logical
+  transforms, no-op `__builtin_assume`, runtime `__builtin_prefetch` address
+  evaluation, identity `__builtin_unpredictable`, and arithmetic/logical
   operators. Unsupported MIR bodies still fall back to the existing parser-AST
   codegen path.
 - `Program::interpret_i64` is an integer-only interpreter intended for
