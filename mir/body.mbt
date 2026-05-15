@@ -37,6 +37,8 @@ pub(all) enum MirStmt {
   MirWhile(MirValue, Array[MirStmt])
   MirFor(Array[MirStmt], MirValue, MirValue?, Array[MirStmt])
   MirDoWhile(MirValue, Array[MirStmt])
+  MirSwitch(MirValue, Array[(Int64?, String)], Array[MirStmt])
+  MirLabel(String)
   MirBreak
   MirContinue
   MirBlock(Array[MirStmt])
@@ -133,6 +135,30 @@ fn BodyLowerContext::lookup_local(
     }
   }
   None
+}
+
+///|
+fn mir_stmts_have_direct_label(stmts : Array[MirStmt], name : String) -> Bool {
+  for stmt in stmts {
+    match stmt {
+      MirLabel(label) if label == name => return true
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+fn mir_switch_cases_are_direct(
+  cases : Array[(Int64?, String)],
+  body : Array[MirStmt],
+) -> Bool {
+  for c in cases {
+    if !mir_stmts_have_direct_label(body, c.1) {
+      return false
+    }
+  }
+  true
 }
 
 ///|
@@ -286,6 +312,27 @@ fn Program::lower_mir_stmt(
         (Some(cond_value), Some(body_values)) =>
           Some([MirDoWhile(cond_value, body_values)])
         _ => None
+      }
+    Switch(expr, body, cases) =>
+      match (self.lower_mir_expr(expr, ctx), self.lower_mir_stmt(body, ctx)) {
+        (Some(control), Some(body_values)) =>
+          if mir_switch_cases_are_direct(cases, body_values) {
+            Some([MirSwitch(control, cases, body_values)])
+          } else {
+            None
+          }
+        _ => None
+      }
+    Label(name, body) =>
+      match self.lower_mir_stmt(body, ctx) {
+        Some(body_values) => {
+          let lowered : Array[MirStmt] = [MirLabel(name)]
+          for value in body_values {
+            lowered.push(value)
+          }
+          Some(lowered)
+        }
+        None => None
       }
     Break => Some([MirBreak])
     Continue => Some([MirContinue])

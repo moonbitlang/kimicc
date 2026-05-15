@@ -215,6 +215,73 @@ fn BodyInterpreter::eval_value(
 }
 
 ///|
+fn BodyInterpreter::exec_switch_body(
+  self : BodyInterpreter,
+  frame : BodyFrame,
+  body : Array[MirStmt],
+  target : String,
+) -> BodyFlow {
+  let mut active = false
+  let mut found = false
+  for stmt in body {
+    if !active {
+      match stmt {
+        MirLabel(name) if name == target => {
+          active = true
+          found = true
+        }
+        _ => continue
+      }
+    }
+    match self.exec_stmt(frame, stmt) {
+      BodyNormal => ()
+      BodyBroke => return BodyNormal
+      flow => return flow
+    }
+  }
+  if !found {
+    self.fail("unknown MIR body switch label: " + target)
+  }
+  BodyNormal
+}
+
+///|
+fn BodyInterpreter::exec_switch(
+  self : BodyInterpreter,
+  frame : BodyFrame,
+  control : MirValue,
+  cases : Array[(Int64?, String)],
+  body : Array[MirStmt],
+) -> BodyFlow {
+  let control_ty = self.program.switch_control_type(control.ty())
+  let control_value = self.program.runtime_cast_int(
+    self.eval_value(frame, control),
+    control_ty,
+  )
+  let mut target : String? = None
+  let mut default_target : String? = None
+  for c in cases {
+    match c.0 {
+      Some(value) => {
+        let case_value = self.program.runtime_cast_int(value, control_ty)
+        if target is None && case_value == control_value {
+          target = Some(c.1)
+        }
+      }
+      None => if default_target is None { default_target = Some(c.1) }
+    }
+  }
+  match target {
+    Some(_) => ()
+    None => target = default_target
+  }
+  match target {
+    Some(label) => self.exec_switch_body(frame, body, label)
+    None => BodyNormal
+  }
+}
+
+///|
 fn BodyInterpreter::exec_stmt(
   self : BodyInterpreter,
   frame : BodyFrame,
@@ -297,6 +364,9 @@ fn BodyInterpreter::exec_stmt(
       }
       BodyNormal
     }
+    MirSwitch(control, cases, body) =>
+      self.exec_switch(frame, control, cases, body)
+    MirLabel(_) => BodyNormal
     MirBreak => BodyBroke
     MirContinue => BodyContinued
     MirBlock(stmts) => self.exec_stmts(frame, stmts)

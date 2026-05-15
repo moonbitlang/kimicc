@@ -61,6 +61,8 @@ pub(all) enum MirStmt {
   MirWhile(MirValue, Array[MirStmt])
   MirFor(Array[MirStmt], MirValue, MirValue?, Array[MirStmt])
   MirDoWhile(MirValue, Array[MirStmt])
+  MirSwitch(MirValue, Array[(Int64?, String)], Array[MirStmt])
+  MirLabel(String)
   MirBreak
   MirContinue
   MirBlock(Array[MirStmt])

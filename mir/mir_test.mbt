@@ -247,13 +247,39 @@ test "mir body interpreter executes do while break and continue" {
 }
 
 ///|
+test "mir body interpreter executes switch fallthrough" {
+  let source =
+    #|int main(void) {
+    #|  int total = 0;
+    #|  for (int i = 0; i < 5; i = i + 1) {
+    #|    switch (i) {
+    #|    case 0:
+    #|      total = total + 3;
+    #|      break;
+    #|    case 1:
+    #|    case 2:
+    #|      total = total + 5;
+    #|      break;
+    #|    case 4:
+    #|      total = total + 7;
+    #|    default:
+    #|      total = total + 11;
+    #|    }
+    #|  }
+    #|  return total;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body lowering refuses unsupported parser constructs" {
   let source =
     #|int main(void) {
-    #|  switch (1) {
-    #|    case 1: return 1;
-    #|    default: return 0;
-    #|  }
+    #|  goto done;
+    #|done:
+    #|  return 0;
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   inspect(mir.bodies.contains("main"), content="false")

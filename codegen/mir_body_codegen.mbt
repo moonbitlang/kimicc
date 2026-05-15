@@ -152,6 +152,10 @@ fn mir_body_codegen_stmt_supported(
     MirDoWhile(cond, body) =>
       mir_body_codegen_value_supported(cond, int_arg_limit, mir) &&
       mir_body_codegen_stmts_supported(body, int_arg_limit, mir)
+    MirSwitch(control, _, body) =>
+      mir_body_codegen_value_supported(control, int_arg_limit, mir) &&
+      mir_body_codegen_stmts_supported(body, int_arg_limit, mir)
+    MirLabel(_) => true
     MirBreak => true
     MirContinue => true
     MirBlock(stmts) =>
@@ -561,6 +565,42 @@ fn Codegen::gen_mir_stmt(
       self.emit(end_label + ":")
       self.break_label = old_break
       self.continue_label = old_continue
+    }
+    MirSwitch(control, cases, body) => {
+      let end_label = self.new_label()
+      let old_break = self.break_label
+      self.break_label = Some(end_label)
+      let control_ty = switch_control_type(control.ty())
+      self.gen_mir_value(control, offsets, frame_size)
+      self.emit_scalar_conversion_to(control_ty)
+      for c in cases {
+        match c.0 {
+          Some(value) => {
+            self.emit_switch_case_compare(value, control_ty)
+            self.emit("\tb.eq\t" + self.label_ref(c.1))
+          }
+          None => ()
+        }
+      }
+      let mut default_label = end_label
+      for c in cases {
+        match c.0 {
+          None => {
+            default_label = self.label_ref(c.1)
+            break
+          }
+          Some(_) => ()
+        }
+      }
+      self.emit("\tb\t" + default_label)
+      self.gen_mir_stmts(body, offsets, frame_size)
+      self.emit(end_label + ":")
+      self.break_label = old_break
+    }
+    MirLabel(name) => {
+      let label = self.label_ref(name)
+      self.emit(label + ":")
+      self.defined_labels[name] = true
     }
     MirBreak =>
       match self.break_label {
@@ -995,6 +1035,42 @@ fn X64Codegen::gen_mir_stmt(
       self.emit(end_label + ":")
       self.break_label = old_break
       self.continue_label = old_continue
+    }
+    MirSwitch(control, cases, body) => {
+      let end_label = self.new_label()
+      let old_break = self.break_label
+      self.break_label = Some(end_label)
+      let control_ty = switch_control_type(control.ty())
+      self.gen_mir_value(control, offsets)
+      self.emit_int_conversion_to(control_ty)
+      for c in cases {
+        match c.0 {
+          Some(value) => {
+            self.emit_switch_case_compare(value, control_ty)
+            self.emit("\tje\t" + self.label_ref(c.1))
+          }
+          None => ()
+        }
+      }
+      let mut default_label = end_label
+      for c in cases {
+        match c.0 {
+          None => {
+            default_label = self.label_ref(c.1)
+            break
+          }
+          Some(_) => ()
+        }
+      }
+      self.emit("\tjmp\t" + default_label)
+      self.gen_mir_stmts(body, offsets)
+      self.emit(end_label + ":")
+      self.break_label = old_break
+    }
+    MirLabel(name) => {
+      let label = self.label_ref(name)
+      self.defined_labels[name] = true
+      self.emit(label + ":")
     }
     MirBreak =>
       match self.break_label {
