@@ -673,6 +673,19 @@ async test "address of aggregate compound literal" {
 }
 
 ///|
+async test "address of aggregate member object" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { struct Inner inner; };
+    #|int main(void) {
+    #|  struct S s = { { 42 } };
+    #|  return (&s.inner)->z;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "__int128 and _Atomic types" {
   let source =
     #|typedef unsigned __int128 uint128_t;
