@@ -8964,19 +8964,15 @@ fn X64Codegen::emit_mir_global_init(
 ///|
 fn X64Codegen::try_emit_mir_global_init(
   self : X64Codegen,
-  g : @parser.GlobalDecl,
+  g : @mir.MirGlobalDecl,
 ) -> Bool {
-  match self.globals.get(g.name) {
-    Some(global) =>
-      match global.init {
-        Some(init) =>
-          if self.mir_global_init_supported(global.ty, init) {
-            self.emit_mir_global_init(global.ty, init)
-            true
-          } else {
-            false
-          }
-        None => false
+  match g.init {
+    Some(init) =>
+      if self.mir_global_init_supported(g.ty, init) {
+        self.emit_mir_global_init(g.ty, init)
+        true
+      } else {
+        false
       }
     None => false
   }
@@ -9153,7 +9149,8 @@ fn X64Codegen::emit_global_array(
 ///|
 fn X64Codegen::emit_globals(
   self : X64Codegen,
-  globals : Array[@parser.GlobalDecl],
+  globals : Array[@mir.MirGlobalDecl],
+  parser_fallbacks : Map[String, @parser.GlobalDecl],
 ) -> Unit {
   for g in globals {
     match g.symbol_alias {
@@ -9167,32 +9164,36 @@ fn X64Codegen::emit_globals(
           Some("@object"),
         )
       None => {
-        if g.init is None && g.is_extern && g.is_weak && !g.is_static {
+        if !g.has_init && g.is_extern && g.is_weak && !g.is_static {
           self.emit("\t.weak\t" + g.name)
         }
-        if g.init is None && g.is_extern {
+        if !g.has_init && g.is_extern {
           self.emit_symbol_visibility(g.name, g.is_static, g.visibility)
         }
       }
     }
   }
   for g in globals {
-    if g.init is Some(_) && g.symbol_alias is None {
+    if g.has_init && g.symbol_alias is None {
       self.emit_global_data_section(g.section)
       self.emit_symbol_binding(g.name, g.is_static, g.is_weak, g.visibility)
       self.emit("\t.align\t" + self.type_align(g.ty).to_string())
       self.emit(g.name + ":")
       if !self.try_emit_mir_global_init(g) {
-        match g.init {
-          Some(Scalar(expr)) => self.emit_global_scalar(g.ty, expr)
-          Some(Array(exprs)) => self.emit_global_array(g.ty, exprs)
-          None => ()
+        match parser_fallbacks.get(g.name) {
+          Some(parser_global) =>
+            match parser_global.init {
+              Some(Scalar(expr)) => self.emit_global_scalar(g.ty, expr)
+              Some(Array(exprs)) => self.emit_global_array(g.ty, exprs)
+              None => ()
+            }
+          None => self.emit("\t.zero\t" + self.type_size(g.ty).to_string())
         }
       }
     }
   }
   for g in globals {
-    if g.init is None && !g.is_extern && g.symbol_alias is None {
+    if !g.has_init && !g.is_extern && g.symbol_alias is None {
       self.emit_global_bss_section(g.section)
       self.emit_symbol_binding(g.name, g.is_static, g.is_weak, g.visibility)
       self.emit("\t.align\t" + self.type_align(g.ty).to_string())
@@ -9411,10 +9412,18 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
     Some(mir) => self.register_mir_function_decls(mir)
     None => ()
   }
-  let globals = merge_global_decls(prog.globals)
+  let parser_globals = merge_global_decls(prog.globals)
+  let parser_global_fallbacks : Map[String, @parser.GlobalDecl] = {}
+  for g in parser_globals {
+    parser_global_fallbacks[g.name] = g
+  }
   match self.mir {
     Some(mir) => self.register_mir_global_decls(mir)
     None => ()
+  }
+  let mir_globals : Array[@mir.MirGlobalDecl] = match self.mir {
+    Some(mir) => @mir.merge_global_decls(mir.global_decls)
+    None => []
   }
   match self.mir {
     Some(mir) =>
@@ -9426,7 +9435,7 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
   for decl in prog.decls {
     self.emit_function(decl)
   }
-  self.emit_globals(globals)
+  self.emit_globals(mir_globals, parser_global_fallbacks)
   match self.mir {
     Some(mir) => {
       self.emit_lifecycle_array(".init_array", mir.decls)
