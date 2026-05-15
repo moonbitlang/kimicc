@@ -26,6 +26,15 @@ fn mir_body_codegen_scalar_type(ty : @parser.Type) -> Bool {
 }
 
 ///|
+fn mir_body_codegen_local_type(ty : @parser.Type) -> Bool {
+  match ty {
+    Aligned(_, _) => false
+    Array(elem, _) => mir_body_codegen_scalar_type(elem)
+    _ => mir_body_codegen_scalar_type(ty)
+  }
+}
+
+///|
 fn mir_body_codegen_value_supported(
   value : @mir.MirValue,
   int_arg_limit : Int,
@@ -37,7 +46,11 @@ fn mir_body_codegen_value_supported(
   match value {
     MirConst(_, ty) => mir_body_codegen_scalar_type(ty)
     MirLocal(binding) => mir_body_codegen_scalar_type(binding.ty)
-    MirAddrLocal(binding) => mir_body_codegen_scalar_type(binding.ty)
+    MirAddrLocal(binding) => mir_body_codegen_local_type(binding.ty)
+    MirElemAddr(base, index, elem_ty) =>
+      mir_body_codegen_scalar_type(elem_ty) &&
+      mir_body_codegen_value_supported(base, int_arg_limit, mir) &&
+      mir_body_codegen_value_supported(index, int_arg_limit, mir)
     MirLoad(ptr, ty) =>
       mir_body_codegen_scalar_type(ty) &&
       mir_body_codegen_value_supported(ptr, int_arg_limit, mir)
@@ -126,8 +139,12 @@ fn mir_body_codegen_stmt_supported(
 ) -> Bool {
   match stmt {
     MirDeclare(binding, init) => {
-      if !mir_body_codegen_scalar_type(binding.ty) {
+      if !mir_body_codegen_local_type(binding.ty) {
         return false
+      }
+      match peel_aligned_type(binding.ty) {
+        Array(_, _) => return init is None
+        _ => ()
       }
       match init {
         Some(value) =>
@@ -204,7 +221,7 @@ fn mir_body_codegen_func_supported(
     return false
   }
   for binding in body.locals {
-    if !mir_body_codegen_scalar_type(binding.ty) {
+    if !mir_body_codegen_local_type(binding.ty) {
       return false
     }
   }
@@ -292,6 +309,15 @@ fn Codegen::gen_mir_value(
     }
     MirAddrLocal(binding) =>
       self.emit_local_addr(offsets[binding.id], frame_size)
+    MirElemAddr(base, index, elem_ty) => {
+      self.gen_mir_value(base, offsets, frame_size)
+      self.emit("\tstr\tx9, [sp, #-16]!")
+      self.gen_mir_value(index, offsets, frame_size)
+      self.emit_load_int("x10", self.type_size(elem_ty).to_int64())
+      self.emit("\tmul\tx9, x9, x10")
+      self.emit("\tldr\tx10, [sp], #16")
+      self.emit("\tadd\tx9, x10, x9")
+    }
     MirLoad(ptr, ty) => {
       self.gen_mir_value(ptr, offsets, frame_size)
       self.emit_load_typed("x9", "x9", ty)
@@ -796,6 +822,18 @@ fn X64Codegen::gen_mir_value(
       self.emit_load_indirect(binding.ty)
     }
     MirAddrLocal(binding) => self.emit_local_addr(offsets[binding.id])
+    MirElemAddr(base, index, elem_ty) => {
+      self.gen_mir_value(base, offsets)
+      self.emit_mir_push_rax()
+      self.gen_mir_value(index, offsets)
+      let elem_size = self.type_size(elem_ty)
+      if elem_size != 1 {
+        self.emit("\timul\trax, rax, " + elem_size.to_string())
+      }
+      self.emit("\tmov\tr10, rax")
+      self.emit_mir_pop_rax()
+      self.emit("\tadd\trax, r10")
+    }
     MirLoad(ptr, ty) => {
       self.gen_mir_value(ptr, offsets)
       self.emit_load_indirect(ty)

@@ -20,6 +20,7 @@ pub(all) enum MirValue {
   MirConst(Int64, @parser.Type)
   MirLocal(MirLocal)
   MirAddrLocal(MirLocal)
+  MirElemAddr(MirValue, MirValue, @parser.Type)
   MirLoad(MirValue, @parser.Type)
   MirUnary(String, MirValue, @parser.Type)
   MirBinary(String, MirValue, MirValue, @parser.Type)
@@ -66,6 +67,7 @@ pub fn MirValue::ty(self : MirValue) -> @parser.Type {
     MirConst(_, ty) => ty
     MirLocal(binding) => binding.ty
     MirAddrLocal(binding) => Pointer(binding.ty)
+    MirElemAddr(_, _, elem_ty) => Pointer(elem_ty)
     MirLoad(_, ty) => ty
     MirUnary(_, _, ty) => ty
     MirBinary(_, _, _, ty) => ty
@@ -181,6 +183,15 @@ fn mir_body_scalar_type(ty : @parser.Type) -> Bool {
 }
 
 ///|
+fn mir_body_array_local_type(ty : @parser.Type) -> Bool {
+  match ty {
+    Array(elem, _) => mir_body_scalar_type(elem)
+    Aligned(inner, _) => mir_body_array_local_type(inner)
+    _ => false
+  }
+}
+
+///|
 fn lower_mir_local_update(
   name : String,
   op : String,
@@ -233,6 +244,47 @@ fn lower_mir_post_step(
   match lower_mir_cancelled_local_lvalue(expr, ctx) {
     Some(binding) => lower_mir_post_update(binding, op, MirConst(1L, SInt), ty)
     None => None
+  }
+}
+
+///|
+fn Program::lower_mir_array_base_addr(
+  self : Program,
+  base : @parser.Expr,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  match base {
+    Var(name) =>
+      match ctx.lookup_local(name) {
+        Some(binding) =>
+          if mir_body_array_local_type(binding.ty) {
+            Some(MirAddrLocal(binding))
+          } else {
+            self.lower_mir_expr(base, ctx)
+          }
+        None => self.lower_mir_expr(base, ctx)
+      }
+    _ => self.lower_mir_expr(base, ctx)
+  }
+}
+
+///|
+fn Program::lower_mir_array_elem_addr(
+  self : Program,
+  base : @parser.Expr,
+  index : @parser.Expr,
+  elem_ty : @parser.Type,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  match
+    (self.lower_mir_array_base_addr(base, ctx), self.lower_mir_expr(index, ctx)) {
+    (Some(base_addr), Some(index_value)) =>
+      if mir_body_scalar_type(elem_ty) {
+        Some(MirElemAddr(base_addr, index_value, elem_ty))
+      } else {
+        None
+      }
+    _ => None
   }
 }
 
@@ -291,6 +343,13 @@ fn Program::lower_mir_expr(
         None => None
       }
     AddrOf(Deref(inner)) => self.lower_mir_expr(inner, ctx)
+    AddrOf(ArrayAccess(base, index)) =>
+      self.lower_mir_array_elem_addr(
+        base,
+        index,
+        self.expr_type(ArrayAccess(base, index), scope),
+        ctx,
+      )
     Deref(Var(name)) =>
       match (ctx.lookup_local(name), self.lower_mir_expr(Var(name), ctx)) {
         (Some(_), Some(value)) =>
@@ -300,6 +359,11 @@ fn Program::lower_mir_expr(
             None
           }
         _ => None
+      }
+    ArrayAccess(base, index) =>
+      match self.lower_mir_array_elem_addr(base, index, ty, ctx) {
+        Some(addr) => Some(MirLoad(addr, ty))
+        None => None
       }
     Binary(op, lhs, rhs) =>
       match (self.lower_mir_expr(lhs, ctx), self.lower_mir_expr(rhs, ctx)) {
@@ -338,6 +402,11 @@ fn Program::lower_mir_expr(
               }
             None => None
           }
+        (ArrayAccess(base, index), Some(value)) =>
+          match self.lower_mir_array_elem_addr(base, index, lhs_ty, ctx) {
+            Some(addr) => Some(MirStore(addr, value, lhs_ty))
+            None => None
+          }
         _ => None
       }
     }
@@ -370,6 +439,18 @@ fn Program::lower_mir_expr(
               } else {
                 None
               }
+            None => None
+          }
+        (ArrayAccess(base, index), Some(value)) =>
+          match self.lower_mir_array_elem_addr(base, index, lhs_ty, ctx) {
+            Some(addr) =>
+              Some(
+                MirStore(
+                  addr,
+                  MirBinary(op, MirLoad(addr, lhs_ty), value, ty),
+                  lhs_ty,
+                ),
+              )
             None => None
           }
         _ => None

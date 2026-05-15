@@ -11,6 +11,7 @@ priv enum BodyFlow {
 priv struct BodyFrame {
   locals : Map[Int, Int64]
   bindings : Map[Int, MirLocal]
+  memory : Map[Int64, Int64]
 }
 
 ///|
@@ -51,17 +52,48 @@ fn BodyInterpreter::tick(self : BodyInterpreter) -> Bool {
 
 ///|
 fn mir_body_local_addr(binding : MirLocal) -> Int64 {
-  -1000000000L - binding.id.to_int64()
+  -1000000000L - binding.id.to_int64() * 100000L
+}
+
+///|
+fn mir_body_elem_addr(base : Int64, index : Int64) -> Int64 {
+  base - index
 }
 
 ///|
 fn BodyFrame::binding_for_addr(self : BodyFrame, addr : Int64) -> MirLocal? {
-  let id = (-1000000000L - addr).to_int()
-  if self.bindings.contains(id) {
-    Some(self.bindings[id])
-  } else {
-    None
+  for binding in self.bindings.values() {
+    if mir_body_local_addr(binding) == addr {
+      return Some(binding)
+    }
   }
+  None
+}
+
+///|
+fn BodyFrame::array_elem_addr(self : BodyFrame, addr : Int64) -> Bool {
+  for binding in self.bindings.values() {
+    match binding.ty {
+      Array(_, len) => {
+        let base = mir_body_local_addr(binding)
+        if addr <= base && addr > base - len.to_int64() {
+          return true
+        }
+      }
+      Aligned(inner, _) =>
+        match inner {
+          Array(_, len) => {
+            let base = mir_body_local_addr(binding)
+            if addr <= base && addr > base - len.to_int64() {
+              return true
+            }
+          }
+          _ => ()
+        }
+      _ => ()
+    }
+  }
+  false
 }
 
 ///|
@@ -150,19 +182,32 @@ fn BodyInterpreter::eval_value(
         0L
       }
     MirAddrLocal(binding) => mir_body_local_addr(binding)
+    MirElemAddr(base, index, _) =>
+      mir_body_elem_addr(
+        self.eval_value(frame, base),
+        self.eval_value(frame, index),
+      )
     MirLoad(ptr, ty) => {
       let addr = self.eval_value(frame, ptr)
-      match frame.binding_for_addr(addr) {
-        Some(binding) =>
-          if frame.locals.contains(binding.id) {
-            self.program.runtime_cast_int(frame.locals[binding.id], ty)
-          } else {
-            self.fail("unknown MIR body local value: " + binding.name)
+      if frame.array_elem_addr(addr) {
+        let value = match frame.memory.get(addr) {
+          Some(value) => value
+          None => 0L
+        }
+        self.program.runtime_cast_int(value, ty)
+      } else {
+        match frame.binding_for_addr(addr) {
+          Some(binding) =>
+            if frame.locals.contains(binding.id) {
+              self.program.runtime_cast_int(frame.locals[binding.id], ty)
+            } else {
+              self.fail("unknown MIR body local value: " + binding.name)
+              0L
+            }
+          None => {
+            self.fail("unsupported MIR body load address")
             0L
           }
-        None => {
-          self.fail("unsupported MIR body load address")
-          0L
         }
       }
     }
@@ -239,18 +284,27 @@ fn BodyInterpreter::eval_value(
     }
     MirStore(ptr, rhs, ty) => {
       let addr = self.eval_value(frame, ptr)
-      match frame.binding_for_addr(addr) {
-        Some(binding) => {
-          let assigned = self.program.runtime_cast_int(
-            self.eval_value(frame, rhs),
-            binding.ty,
-          )
-          frame.locals[binding.id] = assigned
-          self.program.runtime_cast_int(assigned, ty)
-        }
-        None => {
-          self.fail("unsupported MIR body store address")
-          0L
+      if frame.array_elem_addr(addr) {
+        let assigned = self.program.runtime_cast_int(
+          self.eval_value(frame, rhs),
+          ty,
+        )
+        frame.memory[addr] = assigned
+        assigned
+      } else {
+        match frame.binding_for_addr(addr) {
+          Some(binding) => {
+            let assigned = self.program.runtime_cast_int(
+              self.eval_value(frame, rhs),
+              binding.ty,
+            )
+            frame.locals[binding.id] = assigned
+            self.program.runtime_cast_int(assigned, ty)
+          }
+          None => {
+            self.fail("unsupported MIR body store address")
+            0L
+          }
         }
       }
     }
@@ -521,7 +575,7 @@ fn BodyInterpreter::call_func(
   for binding in body.locals {
     bindings[binding.id] = binding
   }
-  let frame = { locals: {}, bindings }
+  let frame = { locals: {}, bindings, memory: {} }
   for i in 0..<body.params.length() {
     let param = body.params[i]
     frame.locals[param.id] = self.program.runtime_cast_int(args[i], param.ty)
