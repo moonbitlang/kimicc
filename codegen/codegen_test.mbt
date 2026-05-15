@@ -26,6 +26,21 @@ test "generate darwin arm64 MIR body direct call" {
 }
 
 ///|
+test "generate darwin arm64 MIR body declared external call" {
+  let source =
+    #|int ext(int x);
+    #|int main(void) { return ext(42); }
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+  inspect(assembly.contains("\tbl\t_ext"), content="true")
+}
+
+///|
 test "generate darwin arm64 MIR body for loop control" {
   let source =
     #|int main(void) {
@@ -304,6 +319,24 @@ test "generate linux amd64 MIR body direct call" {
     content="true",
   )
   inspect(assembly.contains("\tcall\tadd"), content="true")
+}
+
+///|
+test "generate linux amd64 MIR body declared external call" {
+  let source =
+    #|int ext(int x);
+    #|int main(void) { return ext(42); }
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+  inspect(assembly.contains("\tcall\text"), content="true")
 }
 
 ///|

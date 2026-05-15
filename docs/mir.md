@@ -27,9 +27,9 @@ integer-scalar subset.
   `MirFuncBody`. It emits Darwin ARM64 and linux/amd64 assembly for
   integer-scalar MIR bodies with local variables, assignments, branches,
   `while`/`for`/`do while` loops, `break`/`continue`, ternaries, casts, direct
-  calls to other MIR-bodied functions, and arithmetic/logical operators.
-  Unsupported MIR bodies still fall back to the existing parser-AST codegen
-  path.
+  calls to other MIR-bodied functions or declared non-variadic integer-scalar
+  externs, and arithmetic/logical operators. Unsupported MIR bodies still fall
+  back to the existing parser-AST codegen path.
 - `Program::interpret_i64` is an integer-only interpreter intended for
   compile-test oracles. It supports scalar functions, locals, globals, calls,
   casts, arithmetic, conditionals, loops, scalar switches, simple gotos, selected
@@ -143,9 +143,10 @@ integer-scalar subset.
 Darwin ARM64 receives a lowered MIR program through `generate_assembly_for_target`,
 and direct `Codegen::generate` construction attaches a darwin/arm64 MIR program
 if one is not already present. For supported integer-scalar functions, including
-direct calls to other MIR-bodied functions, it emits from `MirFuncBody`; other
-function bodies still fall back to parser AST statement walking. It delegates
-size, alignment, field-layout,
+direct calls to other MIR-bodied functions and declared non-variadic
+integer-scalar externs, it emits from `MirFuncBody`; other function bodies still
+fall back to parser AST statement walking. It delegates size, alignment,
+field-layout,
 offsetof path, expression type, global-expression type, and covered
 integer/floating constant-folding queries to MIR when that lowered program is
 present. Runtime `__builtin_object_size` and `__builtin_dynamic_object_size`
@@ -155,9 +156,10 @@ semantic paths remain in place for whitebox consistency tests and as fallbacks.
 Linux/amd64 receives a lowered MIR program through `generate_assembly_for_target`,
 and direct private `X64Codegen::generate` construction attaches a linux/amd64 MIR
 program if one is not already present. For supported integer-scalar functions,
-including direct calls to other MIR-bodied functions, it emits from
-`MirFuncBody`; other function bodies still fall back to parser AST statement
-walking. The private `X64Codegen` delegates size,
+including direct calls to other MIR-bodied functions and declared non-variadic
+integer-scalar externs, it emits from `MirFuncBody`; other function bodies still
+fall back to parser AST statement walking. The private `X64Codegen` delegates
+size,
 alignment, field-layout, offsetof path, expression type, global-expression type,
 and covered integer/floating constant-folding queries to MIR when that lowered
 program is present. Runtime `__builtin_object_size` and
@@ -180,8 +182,8 @@ program behavior.
 2. Keep `Program::interpret_body_i64` as the first consumer for each new body
    feature so unsupported behavior fails explicitly before codegen depends on
    it.
-3. Extend MIR-body codegen from MIR-bodied direct calls to external/builtin
-   calls that have explicit MIR semantics and ABI tests.
+3. Extend MIR-body codegen from declared integer-scalar extern calls to builtin,
+   variadic, and richer ABI calls that have explicit MIR semantics and tests.
 4. Add backend differential tests that compare parser-AST codegen with MIR-body
    codegen as the supported subset expands.
 5. Once both backends consume MIR bodies for ordinary scalar functions, remove

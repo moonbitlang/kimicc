@@ -56,10 +56,7 @@ fn mir_body_codegen_value_supported(
       mir_body_codegen_value_supported(then_, int_arg_limit, mir) &&
       mir_body_codegen_value_supported(else_, int_arg_limit, mir)
     MirCall(name, args, ty) => {
-      if !mir.bodies.contains(name) {
-        return false
-      }
-      if args.length() > int_arg_limit || !mir_body_codegen_scalar_type(ty) {
+      if !mir_body_codegen_call_supported(name, args, ty, int_arg_limit, mir) {
         return false
       }
       for arg in args {
@@ -70,6 +67,43 @@ fn mir_body_codegen_value_supported(
       true
     }
   }
+}
+
+///|
+fn mir_body_codegen_call_supported(
+  name : String,
+  args : Array[@mir.MirValue],
+  ret : @parser.Type,
+  int_arg_limit : Int,
+  mir : @mir.Program,
+) -> Bool {
+  if name.has_prefix("__") ||
+    args.length() > int_arg_limit ||
+    !mir_body_codegen_scalar_type(ret) {
+    return false
+  }
+  if mir.bodies.contains(name) {
+    return true
+  }
+  if !mir.funcs.contains(name) {
+    return false
+  }
+  let sig = mir.funcs[name]
+  if sig.defined || sig.variadic || !mir_body_codegen_scalar_type(sig.ret) {
+    return false
+  }
+  if sig.params.length() != args.length() {
+    return false
+  }
+  if sig.params.length() > int_arg_limit {
+    return false
+  }
+  for ty in sig.params {
+    if !mir_body_codegen_scalar_type(ty) {
+      return false
+    }
+  }
+  true
 }
 
 ///|
@@ -291,7 +325,7 @@ fn Codegen::gen_mir_value(
       }
       self.emit("\tbl\t_" + name)
       self.emit("\tmov\tx9, x0")
-      self.emit_scalar_conversion_to(ty)
+      self.emit_mir_abi_int_return_conversion(ty)
     }
   }
 }
@@ -310,6 +344,23 @@ fn Codegen::mir_call_arg_type(
     }
   }
   actual
+}
+
+///|
+fn Codegen::emit_mir_abi_int_return_conversion(
+  self : Codegen,
+  ty : @parser.Type,
+) -> Unit {
+  match peel_aligned_type(ty) {
+    Bool | UChar => self.emit("\tand\tx9, x9, #0xFF")
+    SChar => self.emit("\tsxtb\tx9, w9")
+    UShort => self.emit("\tand\tx9, x9, #0xFFFF")
+    SShort => self.emit("\tsxth\tx9, w9")
+    UInt => self.emit("\tand\tx9, x9, #0xFFFFFFFF")
+    SInt => self.emit("\tsxtw\tx9, w9")
+    Atomic(inner) => self.emit_mir_abi_int_return_conversion(inner)
+    _ => ()
+  }
 }
 
 ///|
@@ -712,7 +763,7 @@ fn X64Codegen::gen_mir_value(
         self.emit("\tadd\trsp, 16")
       }
       self.emit("\tcall\t" + name)
-      self.emit_int_conversion_to(ty)
+      self.emit_abi_int_return_conversion(ty)
     }
   }
 }
