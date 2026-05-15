@@ -143,6 +143,7 @@ test "mir owns simple global initializer metadata" {
     #|char *text = "ok";
     #|int arr[2] = {1, 2};
     #|int expr = 1 + 2;
+    #|int *addr = &scalar;
     #|int main(void) { return scalar; }
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   match mir.global_decls[0].init {
@@ -158,8 +159,12 @@ test "mir owns simple global initializer metadata" {
     _ => abort("expected array MIR global initializer")
   }
   match mir.global_decls[3].init {
+    Some(MirGlobalScalarInt(3)) => ()
+    _ => abort("expected folded MIR global initializer")
+  }
+  match mir.global_decls[4].init {
     Some(MirGlobalInitUnsupported) => ()
-    _ => abort("expected unsupported MIR global initializer")
+    _ => abort("expected unsupported address MIR global initializer")
   }
 }
 

@@ -20,8 +20,9 @@ integer-scalar subset.
 - `Program.global_decls` stores source-order MIR-owned global declaration
   metadata, including type, linkage-related attributes, visibility/section
   attributes, and whether an initializer existed. Initializer payload lowering
-  has started for simple integer, string, and brace-list forms; unsupported
-  initializer expressions are marked explicitly while data lowering migrates.
+  has started for simple and constant-folded integer, string, and brace-list
+  forms; unsupported initializer expressions are marked explicitly while data
+  lowering migrates.
 - `Program.aggregate_decls` stores MIR-owned struct/union declaration metadata.
   Target-specific placement remains in `Program.layouts`, so source declaration
   facts and computed ABI/layout facts stay separated.

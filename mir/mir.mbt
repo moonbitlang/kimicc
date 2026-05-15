@@ -167,10 +167,32 @@ fn should_replace_global_decl(
 }
 
 ///|
-fn lower_mir_global_init(init : @parser.GlobalInit?) -> MirGlobalInit? {
+fn MirGlobalDecl::with_init(
+  self : MirGlobalDecl,
+  init : MirGlobalInit?,
+) -> MirGlobalDecl {
+  {
+    ty: self.ty,
+    name: self.name,
+    init,
+    has_init: self.has_init,
+    is_static: self.is_static,
+    is_extern: self.is_extern,
+    is_weak: self.is_weak,
+    visibility: self.visibility,
+    symbol_alias: self.symbol_alias,
+    section: self.section,
+  }
+}
+
+///|
+fn Program::lower_mir_global_init(
+  self : Program,
+  init : @parser.GlobalInit?,
+) -> MirGlobalInit? {
   match init {
     None => None
-    Some(Scalar(expr)) => Some(lower_mir_global_scalar_init(expr))
+    Some(Scalar(expr)) => Some(self.lower_mir_global_scalar_init(expr))
     Some(Array(exprs)) => {
       if exprs.length() == 1 {
         match exprs[0] {
@@ -184,11 +206,11 @@ fn lower_mir_global_init(init : @parser.GlobalInit?) -> MirGlobalInit? {
           Array(nested) => {
             let nested_values : Array[MirGlobalInit] = []
             for nested_expr in nested {
-              nested_values.push(lower_mir_global_scalar_init(nested_expr))
+              nested_values.push(self.lower_mir_global_scalar_init(nested_expr))
             }
             values.push(MirGlobalArray(nested_values))
           }
-          _ => values.push(lower_mir_global_scalar_init(expr))
+          _ => values.push(self.lower_mir_global_scalar_init(expr))
         }
       }
       Some(MirGlobalArray(values))
@@ -197,11 +219,18 @@ fn lower_mir_global_init(init : @parser.GlobalInit?) -> MirGlobalInit? {
 }
 
 ///|
-fn lower_mir_global_scalar_init(expr : @parser.Expr) -> MirGlobalInit {
+fn Program::lower_mir_global_scalar_init(
+  self : Program,
+  expr : @parser.Expr,
+) -> MirGlobalInit {
   match expr {
     Number(n) => MirGlobalScalarInt(n)
     String(s) => MirGlobalString(s)
-    _ => MirGlobalInitUnsupported
+    _ =>
+      match self.fold_const(expr, Scope::empty()) {
+        Some(n) => MirGlobalScalarInt(n)
+        None => MirGlobalInitUnsupported
+      }
   }
 }
 
@@ -249,7 +278,7 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
     global_decls.push({
       ty: g.ty,
       name: g.name,
-      init: lower_mir_global_init(g.init),
+      init: None,
       has_init: g.init is Some(_),
       is_static: g.is_static,
       is_extern: g.is_extern,
@@ -285,6 +314,12 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
     structs,
     layouts: {},
     bodies: {},
+  }
+  for i = 0; i < source.globals.length(); i = i + 1 {
+    let g = source.globals[i]
+    program.global_decls[i] = program.global_decls[i].with_init(
+      program.lower_mir_global_init(g.init),
+    )
   }
   for decl in source.decls {
     match program.lower_mir_func_body(decl) {
