@@ -286,6 +286,14 @@ fn mir_body_reusable_scalar_lvalue(expr : @parser.Expr) -> Bool {
 }
 
 ///|
+fn mir_body_memory_update_op(op : String) -> Bool {
+  match op {
+    "+" | "-" | "*" | "/" | "%" | "|" | "&" | "^" | "<<" | ">>" => true
+    _ => false
+  }
+}
+
+///|
 fn Program::lower_mir_scalar_lvalue_addr(
   self : Program,
   expr : @parser.Expr,
@@ -319,7 +327,7 @@ fn Program::lower_mir_compound_memory_update(
   }
   match self.lower_mir_scalar_lvalue_addr(lhs, lhs_ty, ctx) {
     Some(addr) =>
-      if op == "+" || op == "-" {
+      if mir_body_memory_update_op(op) {
         Some(MirPreUpdateMemory(addr, op, value, lhs_ty))
       } else if mir_body_reusable_scalar_lvalue(lhs) {
         Some(

@@ -395,20 +395,51 @@ fn Codegen::gen_mir_value(
       self.emit_scalar_conversion_to(ty)
     }
     MirPreUpdateMemory(ptr, op, rhs, ty) => {
+      let left_ty = mir_body_binary_left_type(op, ty, rhs.ty())
+      let right_ty = mir_body_binary_right_type(op, ty, rhs.ty())
       self.gen_mir_value(ptr, offsets, frame_size)
       self.emit("\tstr\tx9, [sp, #-16]!")
       self.emit_load_typed("x10", "x9", ty)
+      self.emit("\tmov\tx9, x10")
+      self.emit_numeric_conversion(ty, left_ty)
+      self.emit_scalar_conversion_to(left_ty)
+      self.emit("\tmov\tx10, x9")
       self.gen_mir_value(rhs, offsets, frame_size)
-      self.emit_scalar_conversion_to(rhs.ty())
+      self.emit_numeric_conversion(rhs.ty(), right_ty)
+      self.emit_scalar_conversion_to(right_ty)
       match op {
-        "+" => self.emit("\tadd\tx11, x10, x9")
-        "-" => self.emit("\tsub\tx11, x10, x9")
+        "+" => self.emit("\tadd\tx9, x9, x10")
+        "-" => self.emit("\tsub\tx9, x10, x9")
+        "*" => self.emit("\tmul\tx9, x10, x9")
+        "/" =>
+          if mir_body_unsigned_binary(op, ty, rhs.ty()) {
+            self.emit("\tudiv\tx9, x10, x9")
+          } else {
+            self.emit("\tsdiv\tx9, x10, x9")
+          }
+        "%" => {
+          if mir_body_unsigned_binary(op, ty, rhs.ty()) {
+            self.emit("\tudiv\tx11, x10, x9")
+          } else {
+            self.emit("\tsdiv\tx11, x10, x9")
+          }
+          self.emit("\tmsub\tx9, x11, x9, x10")
+        }
+        "|" => self.emit("\torr\tx9, x10, x9")
+        "&" => self.emit("\tand\tx9, x10, x9")
+        "^" => self.emit("\teor\tx9, x10, x9")
+        "<<" => self.emit("\tlsl\tx9, x10, x9")
+        ">>" =>
+          if is_unsigned_integer_type(left_ty) {
+            self.emit("\tlsr\tx9, x10, x9")
+          } else {
+            self.emit("\tasr\tx9, x10, x9")
+          }
         _ => abort("unsupported MIR body memory pre-update operator")
       }
-      self.emit("\tldr\tx12, [sp], #16")
-      self.emit_store_typed("x11", "x12", ty)
-      self.emit("\tmov\tx9, x11")
       self.emit_scalar_conversion_to(ty)
+      self.emit("\tldr\tx12, [sp], #16")
+      self.emit_store_typed("x9", "x12", ty)
     }
     MirPostUpdateMemory(ptr, op, rhs, ty) => {
       self.gen_mir_value(ptr, offsets, frame_size)
@@ -945,17 +976,54 @@ fn X64Codegen::gen_mir_value(
       self.emit_int_conversion_to(ty)
     }
     MirPreUpdateMemory(ptr, op, rhs, ty) => {
+      let left_ty = mir_body_binary_left_type(op, ty, rhs.ty())
+      let right_ty = mir_body_binary_right_type(op, ty, rhs.ty())
       self.gen_mir_value(ptr, offsets)
       self.emit_mir_push_rax()
       self.emit_load_indirect(ty)
       self.emit_mir_push_rax()
       self.gen_mir_value(rhs, offsets)
-      self.emit_int_conversion_to(rhs.ty())
+      self.emit_int_conversion_to(right_ty)
       self.emit("\tmov\tr10, rax")
       self.emit_mir_pop_rax()
+      self.emit_int_conversion_to(left_ty)
       match op {
         "+" => self.emit("\tadd\trax, r10")
         "-" => self.emit("\tsub\trax, r10")
+        "*" => self.emit("\timul\trax, r10")
+        "/" =>
+          if mir_body_unsigned_binary(op, ty, rhs.ty()) {
+            self.emit("\txor\trdx, rdx")
+            self.emit("\tdiv\tr10")
+          } else {
+            self.emit("\tcqo")
+            self.emit("\tidiv\tr10")
+          }
+        "%" => {
+          if mir_body_unsigned_binary(op, ty, rhs.ty()) {
+            self.emit("\txor\trdx, rdx")
+            self.emit("\tdiv\tr10")
+          } else {
+            self.emit("\tcqo")
+            self.emit("\tidiv\tr10")
+          }
+          self.emit("\tmov\trax, rdx")
+        }
+        "|" => self.emit("\tor\trax, r10")
+        "&" => self.emit("\tand\trax, r10")
+        "^" => self.emit("\txor\trax, r10")
+        "<<" => {
+          self.emit("\tmov\trcx, r10")
+          self.emit("\tshl\trax, cl")
+        }
+        ">>" => {
+          self.emit("\tmov\trcx, r10")
+          if is_unsigned_integer_type(left_ty) {
+            self.emit("\tshr\trax, cl")
+          } else {
+            self.emit("\tsar\trax, cl")
+          }
+        }
         _ => abort("unsupported MIR body memory pre-update operator")
       }
       self.emit_int_conversion_to(ty)

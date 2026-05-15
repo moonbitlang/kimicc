@@ -260,6 +260,25 @@ test "generate darwin arm64 MIR body side effecting memory compound update" {
 }
 
 ///|
+test "generate darwin arm64 MIR body side effecting non-additive compound update" {
+  let source =
+    #|int main(void) {
+    #|  int a[2];
+    #|  int i = 0;
+    #|  a[0] = 4;
+    #|  int got = (a[i++] *= 3);
+    #|  return got * 10 + a[0] + i;
+    #|}
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+}
+
+///|
 test "generate darwin arm64 MIR body scalar memory postfix updates" {
   let source =
     #|struct S { int x; };
@@ -833,6 +852,28 @@ test "generate linux amd64 MIR body side effecting memory compound update" {
     #|  int i = 0;
     #|  a[0] = 4;
     #|  int got = (a[i++] += 3);
+    #|  return got * 10 + a[0] + i;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+}
+
+///|
+test "generate linux amd64 MIR body side effecting non-additive compound update" {
+  let source =
+    #|int main(void) {
+    #|  int a[2];
+    #|  int i = 0;
+    #|  a[0] = 4;
+    #|  int got = (a[i++] *= 3);
     #|  return got * 10 + a[0] + i;
     #|}
   let prog = @parser.parse(source)

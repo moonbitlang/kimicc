@@ -419,17 +419,18 @@ test "mir body interpreter handles side effecting scalar memory compound updates
 }
 
 ///|
-test "mir body lowering keeps side effecting non-additive compound update unsupported" {
+test "mir body interpreter handles side effecting non-additive compound updates" {
   let source =
     #|int main(void) {
     #|  int a[2];
     #|  int i = 0;
     #|  a[0] = 4;
-    #|  a[i++] *= 3;
-    #|  return a[0] + i;
+    #|  int got = (a[i++] *= 3);
+    #|  return got * 10 + a[0] + i;
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
-  inspect(mir.bodies.contains("main"), content="false")
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 133L)
 }
 
 ///|
