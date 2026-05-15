@@ -2086,7 +2086,14 @@ pub fn generate_assembly_for_target(
 /// fallback stored on transitional MIR programs; unsupported MIR coverage is a
 /// hard error.
 pub fn generate_assembly_from_mir(mir : @mir.Program) -> String {
-  match generate_assembly_from_mir_strict(mir) {
+  generate_assembly_from_mir_module(mir.to_module())
+}
+
+///|
+/// Generates assembly from a parser-free MIR module, aborting when the current
+/// MIR-only backend coverage is insufficient.
+pub fn generate_assembly_from_mir_module(mir_module : @mir.MirModule) -> String {
+  match generate_assembly_from_mir_module_strict(mir_module) {
     Ok(assembly) => assembly
     Err(err) => abort(err)
   }

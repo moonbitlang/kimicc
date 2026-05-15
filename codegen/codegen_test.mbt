@@ -40,6 +40,16 @@ test "generate darwin arm64 assembly from parser-free MIR module strict" {
 }
 
 ///|
+test "generate darwin arm64 assembly from parser-free MIR module" {
+  let source = "int main(void) { int x = 40; return x + 2; }"
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  let assembly = @codegen.generate_assembly_from_mir_module(mir.to_module())
+  inspect(assembly.contains("_main:"), content="true")
+  inspect(assembly.contains("kimicc: mir-body"), content="true")
+  inspect(assembly.contains("\tadd\tx9, x9, x10"), content="true")
+}
+
+///|
 test "generate darwin arm64 MIR module uses module function metadata" {
   let source = "int main(void) { return 42; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
