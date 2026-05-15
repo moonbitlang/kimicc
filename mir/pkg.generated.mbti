@@ -156,7 +156,7 @@ pub(all) struct Program {
   aggregate_decls : Array[MirAggregateDecl]
   funcs : Map[String, FuncSig]
   globals : Map[String, @parser.GlobalDecl]
-  structs : Map[String, @parser.StructDecl]
+  aggregates : Map[String, MirAggregateDecl]
   layouts : Map[String, AggregateLayout]
   bodies : Map[String, MirFuncBody]
 }

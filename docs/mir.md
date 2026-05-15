@@ -25,7 +25,8 @@ integer-scalar subset.
   lowering migrates.
 - `Program.aggregate_decls` stores MIR-owned struct/union declaration metadata.
   Target-specific placement remains in `Program.layouts`, so source declaration
-  facts and computed ABI/layout facts stay separated.
+  facts and computed ABI/layout facts stay separated. MIR layout computation now
+  uses this aggregate metadata instead of retaining parser `StructDecl` nodes.
 - `Program.bodies` stores MIR-owned function bodies for the supported scalar
   subset. Body lowering assigns stable `MirLocal` IDs, records typed value and
   statement nodes, and deliberately omits functions that still need unsupported

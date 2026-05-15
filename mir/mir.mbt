@@ -135,7 +135,7 @@ pub(all) struct Program {
   aggregate_decls : Array[MirAggregateDecl]
   funcs : Map[String, FuncSig]
   globals : Map[String, @parser.GlobalDecl]
-  structs : Map[String, @parser.StructDecl]
+  aggregates : Map[String, MirAggregateDecl]
   layouts : Map[String, AggregateLayout]
   bodies : Map[String, MirFuncBody]
 }
@@ -512,20 +512,21 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
       section: g.section,
     })
   }
-  let structs : Map[String, @parser.StructDecl] = {}
+  let aggregates : Map[String, MirAggregateDecl] = {}
   let aggregate_decls : Array[MirAggregateDecl] = []
   for decl in source.structs {
-    structs[decl.name] = decl
     let fields : Array[MirAggregateField] = []
     for field in decl.fields {
       fields.push({ name: field.name, ty: field.ty, bit_width: field.bit_width })
     }
-    aggregate_decls.push({
+    let aggregate_decl = {
       name: decl.name,
       fields,
       is_union: decl.is_union,
       is_packed: decl.is_packed,
-    })
+    }
+    aggregates[decl.name] = aggregate_decl
+    aggregate_decls.push(aggregate_decl)
   }
   let program = {
     target,
@@ -535,7 +536,7 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
     aggregate_decls,
     funcs,
     globals,
-    structs,
+    aggregates,
     layouts: {},
     bodies: {},
   }
@@ -923,7 +924,7 @@ fn Program::flatten_anon_fields(
 ///|
 fn Program::compute_struct_layout(
   self : Program,
-  decl : @parser.StructDecl,
+  decl : MirAggregateDecl,
 ) -> AggregateLayout {
   let fields : Array[FieldLayout] = []
   let mut offset = 0
@@ -1035,7 +1036,7 @@ fn Program::compute_struct_layout(
 ///|
 fn Program::compute_union_layout(
   self : Program,
-  decl : @parser.StructDecl,
+  decl : MirAggregateDecl,
 ) -> AggregateLayout {
   let fields : Array[FieldLayout] = []
   let mut max_size = 0
@@ -1104,7 +1105,7 @@ fn Program::ensure_layout(self : Program, name : String) -> Unit {
   if self.layouts.contains(name) {
     return
   }
-  if !self.structs.contains(name) {
+  if !self.aggregates.contains(name) {
     self.layouts[name] = {
       fields: [],
       size: 8,
@@ -1114,7 +1115,7 @@ fn Program::ensure_layout(self : Program, name : String) -> Unit {
     }
     return
   }
-  let decl = self.structs[name]
+  let decl = self.aggregates[name]
   self.layouts[name] = if decl.is_union {
     self.compute_union_layout(decl)
   } else {
