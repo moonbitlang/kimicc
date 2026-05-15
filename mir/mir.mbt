@@ -73,6 +73,7 @@ pub(all) enum MirGlobalInit {
   MirGlobalSymbolOffset(String, Int)
   MirGlobalArray(Array[MirGlobalInit])
   MirGlobalArraySparse(Array[(Int, MirGlobalInit)])
+  MirGlobalAggregateSparse(Array[(Int, MirGlobalInit)])
   MirGlobalInitUnsupported
 } derive(Eq)
 
@@ -318,6 +319,7 @@ fn MirGlobalDecl::from_parser(g : @parser.GlobalDecl) -> MirGlobalDecl {
 ///|
 fn Program::lower_mir_global_init(
   self : Program,
+  ty : @parser.Type,
   init : @parser.GlobalInit?,
 ) -> MirGlobalInit? {
   match init {
@@ -333,6 +335,9 @@ fn Program::lower_mir_global_init(
       if mir_global_array_uses_sparse(exprs) {
         return Some(self.lower_mir_global_sparse_array_init(exprs))
       }
+      if mir_global_aggregate_uses_sparse(exprs) {
+        return Some(self.lower_mir_global_sparse_aggregate_init(ty, exprs))
+      }
       let values : Array[MirGlobalInit] = []
       for expr in exprs {
         values.push(self.lower_mir_global_array_value(expr))
@@ -347,6 +352,17 @@ fn mir_global_array_uses_sparse(exprs : Array[@parser.Expr]) -> Bool {
   for expr in exprs {
     match expr {
       DesignatedIndex(_, _) | DesignatedRange(_, _, _) => return true
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+fn mir_global_aggregate_uses_sparse(exprs : Array[@parser.Expr]) -> Bool {
+  for expr in exprs {
+    match expr {
+      DesignatedField(_, _) => return true
       _ => ()
     }
   }
@@ -399,6 +415,61 @@ fn Program::lower_mir_global_sparse_array_init(
     }
   }
   MirGlobalArraySparse(values)
+}
+
+///|
+fn aggregate_field_index(layout : AggregateLayout, field_name : String) -> Int {
+  for i = 0; i < layout.fields.length(); i = i + 1 {
+    if layout.fields[i].name == field_name {
+      return i
+    }
+  }
+  -1
+}
+
+///|
+fn Program::lower_mir_global_sparse_aggregate_init(
+  self : Program,
+  ty : @parser.Type,
+  exprs : Array[@parser.Expr],
+) -> MirGlobalInit {
+  let values : Array[(Int, MirGlobalInit)] = []
+  let layout = match self.core_type(ty) {
+    Struct(name) | Union(name) => self.aggregate_layout_by_name(name)
+    _ => return MirGlobalInitUnsupported
+  }
+  if layout.is_union {
+    if exprs.length() > 0 {
+      match exprs[0] {
+        DesignatedField(field_name, value) =>
+          values.push(
+            (
+              aggregate_field_index(layout, field_name),
+              self.lower_mir_global_array_value(value),
+            ),
+          )
+        value => values.push((0, self.lower_mir_global_array_value(value)))
+      }
+    }
+    return MirGlobalAggregateSparse(values)
+  }
+  let mut positional = 0
+  for expr in exprs {
+    match expr {
+      DesignatedField(field_name, value) => {
+        let index = aggregate_field_index(layout, field_name)
+        if index >= 0 {
+          positional = index + 1
+        }
+        values.push((index, self.lower_mir_global_array_value(value)))
+      }
+      value => {
+        values.push((positional, self.lower_mir_global_array_value(value)))
+        positional += 1
+      }
+    }
+  }
+  MirGlobalAggregateSparse(values)
 }
 
 ///|
@@ -627,7 +698,7 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
   for i = 0; i < source.globals.length(); i = i + 1 {
     let g = source.globals[i]
     program.global_decls[i] = program.global_decls[i].with_init(
-      program.lower_mir_global_init(g.init),
+      program.lower_mir_global_init(g.ty, g.init),
     )
   }
   for g in merge_global_decls(program.global_decls) {

@@ -217,6 +217,10 @@ test "mir owns simple global initializer metadata" {
     #|int *addr = &scalar;
     #|int *elem_addr = arr + 1;
     #|int designated[3] = { [2] = 9 };
+    #|struct S { int a; int b; int c; };
+    #|struct S field_designated = { .c = 9, .a = 1 };
+    #|union U { int i; char c; };
+    #|union U union_designated = { .c = 7 };
     #|int main(void) { return scalar; }
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   match mir.global_decls[0].init {
@@ -246,6 +250,18 @@ test "mir owns simple global initializer metadata" {
   match mir.global_decls[6].init {
     Some(MirGlobalArraySparse([(2, MirGlobalScalarInt(9))])) => ()
     _ => abort("expected sparse designated MIR global initializer")
+  }
+  match mir.global_decls[7].init {
+    Some(
+      MirGlobalAggregateSparse(
+        [(2, MirGlobalScalarInt(9)), (0, MirGlobalScalarInt(1))]
+      )
+    ) => ()
+    _ => abort("expected sparse aggregate field MIR global initializer")
+  }
+  match mir.global_decls[8].init {
+    Some(MirGlobalAggregateSparse([(1, MirGlobalScalarInt(7))])) => ()
+    _ => abort("expected sparse union field MIR global initializer")
   }
 }
 

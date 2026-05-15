@@ -8901,6 +8901,31 @@ fn X64Codegen::mir_global_init_supported(
             }
             _ => false
           }
+        MirGlobalAggregateSparse(values) =>
+          match x64_core_type(ty) {
+            Struct(name) | Union(name) => {
+              let layout = match self.mir_aggregate_layout(name) {
+                Some(layout) => layout
+                None => return false
+              }
+              for item in values {
+                let index = item.0
+                let value = item.1
+                if index < 0 || index >= layout.fields.length() {
+                  return false
+                }
+                let field = layout.fields[index]
+                if field.bit_width is Some(_) {
+                  return false
+                }
+                if !self.mir_global_init_supported(field.ty, value) {
+                  return false
+                }
+              }
+              true
+            }
+            _ => false
+          }
         MirGlobalArray(values) =>
           match x64_core_type(ty) {
             Array(elem_ty, n) => {
@@ -9056,6 +9081,12 @@ fn X64Codegen::emit_mir_global_init(
         }
         _ => self.emit("\t.zero\t" + self.type_size(ty).to_string())
       }
+    MirGlobalAggregateSparse(values) =>
+      match x64_core_type(ty) {
+        Struct(name) | Union(name) =>
+          self.emit_mir_global_sparse_aggregate(name, values)
+        _ => self.emit("\t.zero\t" + self.type_size(ty).to_string())
+      }
     MirGlobalArray(values) =>
       match x64_core_type(ty) {
         Array(elem_ty, n) => {
@@ -9107,6 +9138,67 @@ fn X64Codegen::emit_mir_global_aggregate(
     emitted = field.offset + field.size
     if layout.is_union {
       break
+    }
+  }
+  if layout.size > emitted {
+    self.emit("\t.zero\t" + (layout.size - emitted).to_string())
+  }
+}
+
+///|
+fn X64Codegen::emit_mir_global_sparse_aggregate(
+  self : X64Codegen,
+  name : String,
+  values : Array[(Int, @mir.MirGlobalInit)],
+) -> Unit {
+  let layout = match self.mir_aggregate_layout(name) {
+    Some(layout) => layout
+    None => {
+      self.emit("\t.zero\t8")
+      return
+    }
+  }
+  let slots : Array[@mir.MirGlobalInit?] = Array::make(
+    layout.fields.length(),
+    None,
+  )
+  for item in values {
+    let index = item.0
+    let value = item.1
+    if index >= 0 && index < layout.fields.length() {
+      slots[index] = Some(value)
+      if layout.is_union {
+        break
+      }
+    }
+  }
+  let mut emitted = 0
+  if layout.is_union {
+    for i = 0; i < layout.fields.length(); i = i + 1 {
+      match slots[i] {
+        Some(value) => {
+          let field = layout.fields[i]
+          if field.offset > emitted {
+            self.emit("\t.zero\t" + (field.offset - emitted).to_string())
+          }
+          self.emit_mir_global_init(field.ty, value)
+          emitted = field.offset + field.size
+          break
+        }
+        None => ()
+      }
+    }
+  } else {
+    for i = 0; i < layout.fields.length(); i = i + 1 {
+      let field = layout.fields[i]
+      if field.offset > emitted {
+        self.emit("\t.zero\t" + (field.offset - emitted).to_string())
+      }
+      match slots[i] {
+        Some(value) => self.emit_mir_global_init(field.ty, value)
+        None => self.emit("\t.zero\t" + field.size.to_string())
+      }
+      emitted = field.offset + field.size
     }
   }
   if layout.size > emitted {
