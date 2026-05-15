@@ -624,6 +624,18 @@ async test "compound literal" {
 }
 
 ///|
+async test "address of scalar compound literal" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  int *p = &(int){side += 3};
+    #|  return *p + side;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="6")
+}
+
+///|
 async test "__int128 and _Atomic types" {
   let source =
     #|typedef unsigned __int128 uint128_t;

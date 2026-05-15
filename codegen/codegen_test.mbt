@@ -88,6 +88,24 @@ test "generate darwin arm64 strict MIR scalar compound literals" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR address of scalar compound literal" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  int *p = &(int){side += 3};
+    #|  return *p + side;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR local struct initializer" {
   let source =
     #|struct S { int x; unsigned char y; int z; };
@@ -391,6 +409,28 @@ test "generate linux amd64 strict MIR scalar compound literals" {
     #|  unsigned char b = (unsigned char){255 + 1};
     #|  int c = (int){side += 2};
     #|  return a + b + c + side;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR address of scalar compound literal" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  int *p = &(int){side += 3};
+    #|  return *p + side;
     #|}
   let target = match @target.Target::parse("linux-amd64") {
     Some(target) => target

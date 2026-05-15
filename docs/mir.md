@@ -44,8 +44,8 @@ integer-scalar subset.
   unary/binary scalar operators, conditionals, `while`, `for`, `do while`,
   directly labeled scalar `switch`, simple labels/goto, local compound
   assignment, local postfix updates, scalar globals and initialized global arrays, scalar memory
-  prefix/postfix updates, scalar compound literals, scalar `*&` / `&*`
-  cancellation, simple scalar local pointer loads/stores, scalar local arrays,
+  prefix/postfix updates, scalar compound literals including address-taking,
+  scalar `*&` / `&*` cancellation, simple scalar local pointer loads/stores, scalar local arrays,
   string literal byte loads, simple local array/struct initializers, scalar
   aggregate fields including nested member access, foldable
   `__builtin_constant_p`, literal `__builtin_strlen`, identity builtins such as
@@ -62,8 +62,8 @@ integer-scalar subset.
   calls to other MIR-bodied functions or declared non-variadic integer-scalar
   externs, directly labeled scalar `switch`, simple labels/goto, local compound
   assignment, local postfix updates, scalar globals and initialized global arrays, scalar memory
-  prefix/postfix updates, scalar compound literals, scalar `*&` / `&*`
-  cancellation, simple scalar local pointer loads/stores, scalar local arrays,
+  prefix/postfix updates, scalar compound literals including address-taking,
+  scalar `*&` / `&*` cancellation, simple scalar local pointer loads/stores, scalar local arrays,
   string literal byte loads, simple local array/struct initializers, scalar
   aggregate fields including nested member access, foldable
   `__builtin_constant_p`, literal `__builtin_strlen`, identity builtins such as

@@ -825,6 +825,25 @@ fn Program::lower_mir_expr(
             None
           }
       }
+    AddrOf(CompoundLiteral(lit_ty, items, id)) => {
+      if !mir_body_scalar_type(lit_ty) {
+        return None
+      }
+      let value = match
+        self.lower_mir_expr(CompoundLiteral(lit_ty, items, id), ctx) {
+        Some(value) => value
+        None => return None
+      }
+      let temp = ctx.declare_temp(lit_ty)
+      Some(
+        MirBinary(
+          ",",
+          MirAssignLocal(temp, value),
+          MirAddrLocal(temp),
+          Pointer(lit_ty),
+        ),
+      )
+    }
     AddrOf(Var(name)) =>
       match ctx.lookup_local(name) {
         Some(binding) =>
