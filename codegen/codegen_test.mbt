@@ -882,7 +882,12 @@ test "generate darwin arm64 MIR body folded builtin call" {
     #|  int x = 0;
     #|  return __builtin_constant_p(1 + 2) * 10 +
     #|    __builtin_constant_p(x) +
-    #|    __builtin_unpredictable(5);
+    #|    __builtin_unpredictable(5) +
+    #|    (__builtin_bswap32(0x01020304u) == 0x04030201u) +
+    #|    __builtin_flt_rounds() +
+    #|    (__builtin_object_size("abc", 0) == 4) +
+    #|    (__builtin_dynamic_object_size("a\0bc", 2) == 5) +
+    #|    (__builtin_object_size(&x, 0) == sizeof(x));
     #|}
   let prog = @parser.parse(source)
   let codegen = @codegen.Codegen::new()
@@ -1650,7 +1655,12 @@ test "generate linux amd64 MIR body folded builtin call" {
     #|  int x = 0;
     #|  return __builtin_constant_p(1 + 2) * 10 +
     #|    __builtin_constant_p(x) +
-    #|    __builtin_unpredictable(5);
+    #|    __builtin_unpredictable(5) +
+    #|    (__builtin_bswap32(0x01020304u) == 0x04030201u) +
+    #|    __builtin_flt_rounds() +
+    #|    (__builtin_object_size("abc", 0) == 4) +
+    #|    (__builtin_dynamic_object_size("a\0bc", 2) == 5) +
+    #|    (__builtin_object_size(&x, 0) == sizeof(x));
     #|}
   let prog = @parser.parse(source)
   let target = match @target.Target::parse("linux-amd64") {
@@ -2527,33 +2537,51 @@ test "generate linux amd64 lowers fortified formatted builtins" {
 test "generate linux amd64 lowers bit builtins" {
   let source =
     #|int main(void) {
-    #|  if (__builtin_clz(1u) != 31) return 1;
-    #|  if (__builtin_clzl(1ul) != 63) return 2;
-    #|  if (__builtin_clzll(1ull) != 63) return 3;
-    #|  if (__builtin_ctz(8u) != 3) return 4;
-    #|  if (__builtin_ctzl(16ul) != 4) return 5;
-    #|  if (__builtin_ctzll(32ull) != 5) return 6;
+    #|  unsigned u1 = 1u;
+    #|  unsigned u8 = 8u;
+    #|  unsigned u16 = 16u;
+    #|  unsigned u32 = 32u;
+    #|  unsigned u0102 = 0x0102u;
+    #|  unsigned u01020304 = 0x01020304u;
+    #|  unsigned urot = 0x12345678u;
+    #|  unsigned upop = 0xf0f0u;
+    #|  unsigned upar = 0xf0f1u;
+    #|  unsigned long ul1 = 1ul;
+    #|  unsigned long ul16 = 16ul;
+    #|  unsigned long ulpop = 0x0f0f0f0f0f0f0f0ful;
+    #|  unsigned long long ull1 = 1ull;
+    #|  unsigned long long ull32 = 32ull;
+    #|  unsigned long long ullswap = 0x0102030405060708ull;
+    #|  unsigned long long ullrot = 0x0123456789abcdefull;
+    #|  unsigned long long ullpop = 0x0f0f0f0f0f0f0f0full;
+    #|  unsigned long long ullpar = 0x0f0f0f0f0f0f0f0eull;
+    #|  if (__builtin_clz(u1) != 31) return 1;
+    #|  if (__builtin_clzl(ul1) != 63) return 2;
+    #|  if (__builtin_clzll(ull1) != 63) return 3;
+    #|  if (__builtin_ctz(u8) != 3) return 4;
+    #|  if (__builtin_ctzl(ul16) != 4) return 5;
+    #|  if (__builtin_ctzll(ull32) != 5) return 6;
     #|  if (__builtin_ffs(0u) != 0) return 17;
-    #|  if (__builtin_ffs(8u) != 4) return 18;
-    #|  if (__builtin_ffsl(16ul) != 5) return 19;
-    #|  if (__builtin_ffsll(32ull) != 6) return 20;
-    #|  if ((__builtin_bswap16(0x0102u) & 255) != 1) return 7;
-    #|  if ((__builtin_bswap32(0x01020304u) & 255) != 1) return 8;
-    #|  if ((__builtin_bswap64(0x0102030405060708ull) & 255) != 1) return 9;
-    #|  if ((__builtin_bswap(0x01020304u) & 255) != 1) return 24;
-    #|  if ((__builtin_bswap(0x0102030405060708ull) & 255) != 1) return 25;
-    #|  if (__builtin_rotateleft32(0x12345678u, 8) != 0x34567812u) return 10;
-    #|  if ((__builtin_rotateright32(0x12345678u, 8) & 255) != 0x56) return 11;
-    #|  if ((__builtin_rotateleft64(0x0123456789abcdefull, 16) & 255) != 0x23) return 12;
-    #|  if ((__builtin_rotateright64(0x0123456789abcdefull, 16) & 255) != 0xab) return 13;
-    #|  if (__builtin_rotateleft(0x12345678u, 8) != 0x34567812u) return 26;
-    #|  if ((__builtin_rotateright(0x0123456789abcdefull, 16) & 255) != 0xab) return 27;
-    #|  if (__builtin_popcount(0xf0f0u) != 8) return 14;
-    #|  if (__builtin_popcountl(0x0f0f0f0f0f0f0f0ful) != 32) return 15;
-    #|  if (__builtin_popcountll(0x0f0f0f0f0f0f0f0full) != 32) return 16;
-    #|  if (__builtin_parity(0xf0f1u) != 1) return 21;
-    #|  if (__builtin_parityl(0x0f0f0f0f0f0f0f0ful) != 0) return 22;
-    #|  if (__builtin_parityll(0x0f0f0f0f0f0f0f0eull) != 1) return 23;
+    #|  if (__builtin_ffs(u8) != 4) return 18;
+    #|  if (__builtin_ffsl(ul16) != 5) return 19;
+    #|  if (__builtin_ffsll(ull32) != 6) return 20;
+    #|  if ((__builtin_bswap16(u0102) & 255) != 1) return 7;
+    #|  if ((__builtin_bswap32(u01020304) & 255) != 1) return 8;
+    #|  if ((__builtin_bswap64(ullswap) & 255) != 1) return 9;
+    #|  if ((__builtin_bswap(u01020304) & 255) != 1) return 24;
+    #|  if ((__builtin_bswap(ullswap) & 255) != 1) return 25;
+    #|  if (__builtin_rotateleft32(urot, 8) != 0x34567812u) return 10;
+    #|  if ((__builtin_rotateright32(urot, 8) & 255) != 0x56) return 11;
+    #|  if ((__builtin_rotateleft64(ullrot, 16) & 255) != 0x23) return 12;
+    #|  if ((__builtin_rotateright64(ullrot, 16) & 255) != 0xab) return 13;
+    #|  if (__builtin_rotateleft(urot, 8) != 0x34567812u) return 26;
+    #|  if ((__builtin_rotateright(ullrot, 16) & 255) != 0xab) return 27;
+    #|  if (__builtin_popcount(upop) != 8) return 14;
+    #|  if (__builtin_popcountl(ulpop) != 32) return 15;
+    #|  if (__builtin_popcountll(ullpop) != 32) return 16;
+    #|  if (__builtin_parity(upar) != 1) return 21;
+    #|  if (__builtin_parityl(ulpop) != 0) return 22;
+    #|  if (__builtin_parityll(ullpar) != 1) return 23;
     #|  return 0;
     #|}
   let prog = @parser.parse(source)
@@ -2820,10 +2848,14 @@ test "generate linux amd64 lowers overflow builtins" {
 test "generate linux amd64 lowers integer abs builtins" {
   let source =
     #|int main(void) {
-    #|  if (__builtin_abs(-7) != 7) return 1;
-    #|  if (__builtin_abs(5) != 5) return 2;
-    #|  if (__builtin_labs(-1234567890123L) != 1234567890123L) return 3;
-    #|  if (__builtin_llabs(-900000000000000000LL) != 900000000000000000LL) return 4;
+    #|  int neg = -7;
+    #|  int pos = 5;
+    #|  long lneg = -1234567890123L;
+    #|  long long llneg = -900000000000000000LL;
+    #|  if (__builtin_abs(neg) != 7) return 1;
+    #|  if (__builtin_abs(pos) != 5) return 2;
+    #|  if (__builtin_labs(lneg) != 1234567890123L) return 3;
+    #|  if (__builtin_llabs(llneg) != 900000000000000000LL) return 4;
     #|  return 0;
     #|}
   let prog = @parser.parse(source)

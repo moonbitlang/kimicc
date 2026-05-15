@@ -781,11 +781,9 @@ fn Program::lower_mir_expr(
         }
         return None
       }
-      if name == "__builtin_constant_p" {
-        match self.fold_const(expr, scope) {
-          Some(value) => return Some(MirConst(value, ty))
-          None => ()
-        }
+      match self.fold_const(expr, scope) {
+        Some(value) => return Some(MirConst(value, ty))
+        None => ()
       }
       let values : Array[MirValue] = []
       for arg in args {
