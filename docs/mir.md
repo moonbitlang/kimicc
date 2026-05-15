@@ -44,7 +44,8 @@ integer-scalar subset.
   unary/binary scalar operators, conditionals, `while`, `for`, `do while`,
   directly labeled scalar `switch`, simple labels/goto, local compound
   assignment, local postfix updates, scalar globals and initialized global arrays, scalar memory
-  prefix/postfix updates, scalar compound literals including address-taking,
+  prefix/postfix updates, scalar and aggregate compound literals including
+  address-taking,
   scalar `*&` / `&*` cancellation, simple scalar local pointer loads/stores,
   simple non-variadic indirect calls and function addresses, scalar local arrays,
   string literal byte loads, simple local array initializers, local struct
@@ -64,7 +65,8 @@ integer-scalar subset.
   calls to other MIR-bodied functions or declared non-variadic integer-scalar
   externs, directly labeled scalar `switch`, simple labels/goto, local compound
   assignment, local postfix updates, scalar globals and initialized global arrays, scalar memory
-  prefix/postfix updates, scalar compound literals including address-taking,
+  prefix/postfix updates, scalar and aggregate compound literals including
+  address-taking,
   scalar `*&` / `&*` cancellation, simple scalar local pointer loads/stores,
   simple non-variadic indirect calls and function addresses, scalar local arrays,
   string literal byte loads, simple local array initializers, local struct

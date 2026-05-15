@@ -945,6 +945,19 @@ test "mir body interpreter handles address of scalar compound literals" {
 }
 
 ///|
+test "mir body interpreter handles address of aggregate compound literals" {
+  let source =
+    #|struct Pair { int x; int y; };
+    #|int main(void) {
+    #|  return (&(struct Pair){ 20, 22 })->x +
+    #|    (&(struct Pair){ 20, 22 })->y;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body lowering keeps side effecting ignored builtin operands" {
   let source =
     #|int main(void) {

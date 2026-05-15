@@ -632,6 +632,22 @@ fn Program::lower_mir_local_struct_init(
 }
 
 ///|
+fn mir_body_sequence_exprs(
+  stmts : Array[MirStmt],
+  tail : MirValue,
+  ty : @parser.Type,
+) -> MirValue? {
+  let mut result = tail
+  for i = stmts.length() - 1; i >= 0; i = i - 1 {
+    match stmts[i] {
+      MirExprStmt(value) => result = MirBinary(",", value, result, ty)
+      _ => return None
+    }
+  }
+  Some(result)
+}
+
+///|
 fn Program::lower_mir_identity_builtin(
   self : Program,
   args : Array[@parser.Expr],
@@ -868,6 +884,8 @@ fn Program::lower_mir_object_addr(
         None => None
       }
     }
+    Deref(AddrOf(CompoundLiteral(lit_ty, items, id))) =>
+      self.lower_mir_expr(AddrOf(CompoundLiteral(lit_ty, items, id)), ctx)
     _ => None
   }
 }
@@ -954,23 +972,38 @@ fn Program::lower_mir_expr(
           }
       }
     AddrOf(CompoundLiteral(lit_ty, items, id)) => {
-      if !mir_body_scalar_type(lit_ty) {
-        return None
+      if mir_body_scalar_type(lit_ty) {
+        let value = match
+          self.lower_mir_expr(CompoundLiteral(lit_ty, items, id), ctx) {
+          Some(value) => value
+          None => return None
+        }
+        let temp = ctx.declare_temp(lit_ty)
+        return Some(
+          MirBinary(
+            ",",
+            MirAssignLocal(temp, value),
+            MirAddrLocal(temp),
+            Pointer(lit_ty),
+          ),
+        )
       }
-      let value = match
-        self.lower_mir_expr(CompoundLiteral(lit_ty, items, id), ctx) {
-        Some(value) => value
-        None => return None
+      match self.core_type(lit_ty) {
+        Struct(_) => {
+          let temp = ctx.declare_temp(lit_ty)
+          let stores = match
+            self.lower_mir_local_struct_init(
+              temp,
+              CompoundLiteral(lit_ty, items, id),
+              ctx,
+            ) {
+            Some(stores) => stores
+            None => return None
+          }
+          mir_body_sequence_exprs(stores, MirAddrLocal(temp), Pointer(lit_ty))
+        }
+        _ => None
       }
-      let temp = ctx.declare_temp(lit_ty)
-      Some(
-        MirBinary(
-          ",",
-          MirAssignLocal(temp, value),
-          MirAddrLocal(temp),
-          Pointer(lit_ty),
-        ),
-      )
     }
     AddrOf(Var(name)) =>
       match ctx.lookup_local(name) {
