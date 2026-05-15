@@ -35,6 +35,9 @@ pub(all) enum MirStmt {
   MirReturn(MirValue?)
   MirIf(MirValue, Array[MirStmt], Array[MirStmt])
   MirWhile(MirValue, Array[MirStmt])
+  MirFor(Array[MirStmt], MirValue, MirValue?, Array[MirStmt])
+  MirBreak
+  MirContinue
   MirBlock(Array[MirStmt])
 } derive(Eq)
 
@@ -236,6 +239,49 @@ fn Program::lower_mir_stmt(
           Some([MirWhile(cond_value, body_values)])
         _ => None
       }
+    For(init, cond, inc, body) => {
+      ctx.push_scope()
+      let init_values = match init {
+        Some(init_stmt) =>
+          match self.lower_mir_stmt(init_stmt, ctx) {
+            Some(values) => values
+            None => {
+              ctx.pop_scope()
+              return None
+            }
+          }
+        None => []
+      }
+      let cond_value = match self.lower_mir_expr(cond, ctx) {
+        Some(value) => value
+        None => {
+          ctx.pop_scope()
+          return None
+        }
+      }
+      let inc_value = match inc {
+        Some(expr) =>
+          match self.lower_mir_expr(expr, ctx) {
+            Some(value) => Some(value)
+            None => {
+              ctx.pop_scope()
+              return None
+            }
+          }
+        None => None
+      }
+      let body_values = match self.lower_mir_stmt(body, ctx) {
+        Some(values) => values
+        None => {
+          ctx.pop_scope()
+          return None
+        }
+      }
+      ctx.pop_scope()
+      Some([MirFor(init_values, cond_value, inc_value, body_values)])
+    }
+    Break => Some([MirBreak])
+    Continue => Some([MirContinue])
     Compound(stmts) | StmtList(stmts) => {
       ctx.push_scope()
       let values : Array[MirStmt] = []

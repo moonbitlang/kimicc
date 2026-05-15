@@ -20,14 +20,15 @@ integer-scalar subset.
   depending on parser statement/expression nodes.
 - `Program::interpret_body_i64` executes those lowered MIR bodies directly. It
   currently covers integer locals, assignments, direct calls, returns, casts,
-  unary/binary scalar operators, conditionals, `while`, and ternaries. Missing
-  bodies return `Err` instead of falling back to parser AST execution.
+  unary/binary scalar operators, conditionals, `while`, `for`,
+  `break`/`continue`, and ternaries. Missing bodies return `Err` instead of
+  falling back to parser AST execution.
 - `codegen/mir_body_codegen.mbt` is the first production backend consumer of
   `MirFuncBody`. It emits Darwin ARM64 and linux/amd64 assembly for
   integer-scalar MIR bodies with local variables, assignments, branches, loops,
-  ternaries, casts, direct calls to other MIR-bodied functions, and
-  arithmetic/logical operators. Unsupported MIR bodies still fall back to the
-  existing parser-AST codegen path.
+  `break`/`continue`, ternaries, casts, direct calls to other MIR-bodied
+  functions, and arithmetic/logical operators. Unsupported MIR bodies still fall
+  back to the existing parser-AST codegen path.
 - `Program::interpret_i64` is an integer-only interpreter intended for
   compile-test oracles. It supports scalar functions, locals, globals, calls,
   casts, arithmetic, conditionals, loops, scalar switches, simple gotos, selected
@@ -173,9 +174,8 @@ program behavior.
 
 ## Remaining Migration Path
 
-1. Expand MIR body lowering statement by statement, starting with `for`,
-   `break`/`continue`, `switch`, addressable locals, and simple aggregate/member
-   access.
+1. Expand MIR body lowering statement by statement, starting with `switch`,
+   addressable locals, and simple aggregate/member access.
 2. Keep `Program::interpret_body_i64` as the first consumer for each new body
    feature so unsupported behavior fails explicitly before codegen depends on
    it.

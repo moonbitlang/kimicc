@@ -59,6 +59,9 @@ pub(all) enum MirStmt {
   MirReturn(MirValue?)
   MirIf(MirValue, Array[MirStmt], Array[MirStmt])
   MirWhile(MirValue, Array[MirStmt])
+  MirFor(Array[MirStmt], MirValue, MirValue?, Array[MirStmt])
+  MirBreak
+  MirContinue
   MirBlock(Array[MirStmt])
 } derive(Eq)
 

@@ -211,14 +211,30 @@ test "mir body lowering uses scoped stable local ids" {
 }
 
 ///|
-test "mir body lowering refuses unsupported parser constructs" {
+test "mir body interpreter executes for break and continue" {
   let source =
     #|int main(void) {
     #|  int sum = 0;
-    #|  for (int i = 0; i < 4; i = i + 1) {
+    #|  for (int i = 0; i < 8; i = i + 1) {
+    #|    if (i == 2) continue;
+    #|    if (i == 6) break;
     #|    sum = sum + i;
     #|  }
     #|  return sum;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 13L)
+}
+
+///|
+test "mir body lowering refuses unsupported parser constructs" {
+  let source =
+    #|int main(void) {
+    #|  switch (1) {
+    #|    case 1: return 1;
+    #|    default: return 0;
+    #|  }
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   inspect(mir.bodies.contains("main"), content="false")

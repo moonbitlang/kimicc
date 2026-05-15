@@ -104,6 +104,19 @@ fn mir_body_codegen_stmt_supported(
     MirWhile(cond, body) =>
       mir_body_codegen_value_supported(cond, int_arg_limit, mir) &&
       mir_body_codegen_stmts_supported(body, int_arg_limit, mir)
+    MirFor(init, cond, inc, body) => {
+      let inc_supported = match inc {
+        Some(value) =>
+          mir_body_codegen_value_supported(value, int_arg_limit, mir)
+        None => true
+      }
+      mir_body_codegen_stmts_supported(init, int_arg_limit, mir) &&
+      mir_body_codegen_value_supported(cond, int_arg_limit, mir) &&
+      inc_supported &&
+      mir_body_codegen_stmts_supported(body, int_arg_limit, mir)
+    }
+    MirBreak => true
+    MirContinue => true
     MirBlock(stmts) =>
       mir_body_codegen_stmts_supported(stmts, int_arg_limit, mir)
   }
@@ -442,13 +455,52 @@ fn Codegen::gen_mir_stmt(
     MirWhile(cond, body) => {
       let start_label = self.new_label()
       let end_label = self.new_label()
+      let old_break = self.break_label
+      let old_continue = self.continue_label
+      self.break_label = Some(end_label)
+      self.continue_label = Some(start_label)
       self.emit(start_label + ":")
       self.gen_mir_value(cond, offsets, frame_size)
       self.emit("\tcbz\tx9, " + end_label)
       self.gen_mir_stmts(body, offsets, frame_size)
       self.emit("\tb\t" + start_label)
       self.emit(end_label + ":")
+      self.break_label = old_break
+      self.continue_label = old_continue
     }
+    MirFor(init, cond, inc, body) => {
+      let start_label = self.new_label()
+      let continue_label = self.new_label()
+      let end_label = self.new_label()
+      let old_break = self.break_label
+      let old_continue = self.continue_label
+      self.break_label = Some(end_label)
+      self.continue_label = Some(continue_label)
+      self.gen_mir_stmts(init, offsets, frame_size)
+      self.emit(start_label + ":")
+      self.gen_mir_value(cond, offsets, frame_size)
+      self.emit("\tcbz\tx9, " + end_label)
+      self.gen_mir_stmts(body, offsets, frame_size)
+      self.emit(continue_label + ":")
+      match inc {
+        Some(value) => self.gen_mir_value(value, offsets, frame_size)
+        None => ()
+      }
+      self.emit("\tb\t" + start_label)
+      self.emit(end_label + ":")
+      self.break_label = old_break
+      self.continue_label = old_continue
+    }
+    MirBreak =>
+      match self.break_label {
+        Some(label) => self.emit("\tb\t" + label)
+        None => abort("break outside MIR body loop")
+      }
+    MirContinue =>
+      match self.continue_label {
+        Some(label) => self.emit("\tb\t" + label)
+        None => abort("continue outside MIR body loop")
+      }
     MirBlock(stmts) => self.gen_mir_stmts(stmts, offsets, frame_size)
   }
 }
@@ -501,6 +553,8 @@ fn Codegen::gen_mir_func(
   self.sret_scratch_offset = -1
   self.sret_scratch_size = 0
   self.pending_sret_offset = -1
+  self.break_label = None
+  self.continue_label = None
   let offsets = self.mir_body_offsets(body)
   let frame_size = (self.stack_size + 15) / 16 * 16
   if !decl.is_static && !decl.is_inline {
@@ -815,6 +869,10 @@ fn X64Codegen::gen_mir_stmt(
     MirWhile(cond, body) => {
       let start_label = self.new_label()
       let end_label = self.new_label()
+      let old_break = self.break_label
+      let old_continue = self.continue_label
+      self.break_label = Some(end_label)
+      self.continue_label = Some(start_label)
       self.emit(start_label + ":")
       self.gen_mir_value(cond, offsets)
       self.emit("\tcmp\trax, 0")
@@ -822,7 +880,43 @@ fn X64Codegen::gen_mir_stmt(
       self.gen_mir_stmts(body, offsets)
       self.emit("\tjmp\t" + start_label)
       self.emit(end_label + ":")
+      self.break_label = old_break
+      self.continue_label = old_continue
     }
+    MirFor(init, cond, inc, body) => {
+      let start_label = self.new_label()
+      let continue_label = self.new_label()
+      let end_label = self.new_label()
+      let old_break = self.break_label
+      let old_continue = self.continue_label
+      self.break_label = Some(end_label)
+      self.continue_label = Some(continue_label)
+      self.gen_mir_stmts(init, offsets)
+      self.emit(start_label + ":")
+      self.gen_mir_value(cond, offsets)
+      self.emit("\tcmp\trax, 0")
+      self.emit("\tje\t" + end_label)
+      self.gen_mir_stmts(body, offsets)
+      self.emit(continue_label + ":")
+      match inc {
+        Some(value) => self.gen_mir_value(value, offsets)
+        None => ()
+      }
+      self.emit("\tjmp\t" + start_label)
+      self.emit(end_label + ":")
+      self.break_label = old_break
+      self.continue_label = old_continue
+    }
+    MirBreak =>
+      match self.break_label {
+        Some(label) => self.emit("\tjmp\t" + label)
+        None => abort("break outside MIR body loop")
+      }
+    MirContinue =>
+      match self.continue_label {
+        Some(label) => self.emit("\tjmp\t" + label)
+        None => abort("continue outside MIR body loop")
+      }
     MirBlock(stmts) => self.gen_mir_stmts(stmts, offsets)
   }
 }

@@ -2,6 +2,8 @@
 priv enum BodyFlow {
   BodyNormal
   BodyReturned(Int64)
+  BodyBroke
+  BodyContinued
 }
 
 ///|
@@ -255,10 +257,35 @@ fn BodyInterpreter::exec_stmt(
         match self.exec_stmts(frame, body) {
           BodyNormal => ()
           BodyReturned(value) => return BodyReturned(value)
+          BodyBroke => return BodyNormal
+          BodyContinued => ()
         }
       }
       BodyNormal
     }
+    MirFor(init, cond, inc, body) => {
+      match self.exec_stmts(frame, init) {
+        BodyNormal => ()
+        BodyReturned(value) => return BodyReturned(value)
+        BodyBroke => return BodyNormal
+        BodyContinued => ()
+      }
+      while self.eval_value(frame, cond) != 0L && !self.failed() {
+        match self.exec_stmts(frame, body) {
+          BodyNormal => ()
+          BodyReturned(value) => return BodyReturned(value)
+          BodyBroke => return BodyNormal
+          BodyContinued => ()
+        }
+        match inc {
+          Some(value) => ignore(self.eval_value(frame, value))
+          None => ()
+        }
+      }
+      BodyNormal
+    }
+    MirBreak => BodyBroke
+    MirContinue => BodyContinued
     MirBlock(stmts) => self.exec_stmts(frame, stmts)
   }
 }
@@ -273,6 +300,8 @@ fn BodyInterpreter::exec_stmts(
     match self.exec_stmt(frame, stmt) {
       BodyNormal => ()
       BodyReturned(value) => return BodyReturned(value)
+      BodyBroke => return BodyBroke
+      BodyContinued => return BodyContinued
     }
     if self.failed() {
       return BodyNormal
@@ -312,6 +341,14 @@ fn BodyInterpreter::call_func(
   let result = match self.exec_stmts(frame, body.body) {
     BodyReturned(value) => self.program.runtime_cast_int(value, body.ret)
     BodyNormal => 0L
+    BodyBroke => {
+      self.fail("break escaped MIR body function")
+      0L
+    }
+    BodyContinued => {
+      self.fail("continue escaped MIR body function")
+      0L
+    }
   }
   self.call_depth -= 1
   result
