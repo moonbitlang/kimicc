@@ -22,7 +22,8 @@ fn print_usage() -> Unit {
       #|  -h, --help  print this help
       #|
       #|environment:
-      #|  KIMICC_CSMITH_KIMICC       kimicc command, e.g. _build/native/debug/build/cmd/main/main.exe
+      #|  KIMICC_CSMITH_KIMICC       kimicc driver command, e.g. _build/native/debug/build/cmd/main/main.exe
+      #|  KIMICC_CSMITH_CLANG        clang command for reference preprocess/compile/run
       #|  KIMICC_CSMITH_RECORD_ROOT  record output root
       #|  KIMICC_CSMITH_BUG_DIR      saved bug case dir
       #|  KIMICC_CSMITH_INCLUDE_ROOT csmith include root override

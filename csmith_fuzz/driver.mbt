@@ -32,6 +32,15 @@ priv struct CommandResult {
 }
 
 ///|
+priv struct CaseContext {
+  config : Config
+  seed : Int
+  tag : String
+  prefix : String
+  record_dir : String
+}
+
+///|
 fn env(name : String) -> String? {
   match @env.get_env_var(name) {
     None | Some("") => None
@@ -111,12 +120,36 @@ fn timed_out(code : Int) -> Bool {
 }
 
 ///|
+fn CommandResult::details(self : CommandResult) -> String {
+  "exit code=\{self.code}\n\{self.output}"
+}
+
+///|
+fn CommandResult::stage(
+  self : CommandResult,
+  normal : String,
+  timeout : String,
+) -> String {
+  if timed_out(self.code) {
+    timeout
+  } else {
+    normal
+  }
+}
+
+///|
 fn Config::timed_command(
   self : Config,
   cmd : String,
   timeout_seconds : Int,
 ) -> String {
   "\{self.timeout_command} --kill-after=2s \{timeout_seconds}s \{cmd}"
+}
+
+///|
+fn shell_command_in_dir(dir : String, cmd : String) -> String {
+  let script = "cd \{shell_quote(dir)} && \{cmd}"
+  "sh -c \{shell_quote(script)}"
 }
 
 ///|
@@ -185,7 +218,29 @@ fn Config::include_check_command(self : Config) -> String {
 }
 
 ///|
-fn Config::preprocess_command(
+fn Config::kimicc_driver_command(self : Config) -> String {
+  match self.kimicc_command {
+    Some(command) => command
+    None => "moon run cmd/main --target native --"
+  }
+}
+
+///|
+fn Config::kimicc_preprocess_command(
+  self : Config,
+  source_path : String,
+  preprocessed_path : String,
+  compat_path : String,
+) -> String {
+  let include_dir = self.include_dir_word()
+  let compat = shell_quote(compat_path)
+  let source = shell_quote(source_path)
+  let preprocessed = shell_quote(preprocessed_path)
+  "\{self.kimicc_driver_command()} -E -DCSMITH_MINIMAL -I \{include_dir} -include \{compat} \{source} -o \{preprocessed}"
+}
+
+///|
+fn Config::clang_preprocess_command(
   self : Config,
   source_path : String,
   preprocessed_path : String,
@@ -203,12 +258,9 @@ fn Config::preprocess_command(
 fn Config::kimicc_compile_command(
   self : Config,
   preprocessed_path : String,
+  output_path : String,
 ) -> String {
-  match self.kimicc_command {
-    Some(command) => "\{command} \{shell_quote(preprocessed_path)}"
-    None =>
-      "moon run cmd/main --target native -- \{shell_quote(preprocessed_path)}"
-  }
+  "\{self.kimicc_driver_command()} --preprocessed \{shell_quote(preprocessed_path)} -o \{shell_quote(output_path)}"
 }
 
 ///|
@@ -239,111 +291,189 @@ pub fn require_toolchain(config : Config) -> Unit {
 }
 
 ///|
-fn Config::record_dir(self : Config, tag : String, seed : Int) -> String {
-  path_join(self.record_root, "\{tag}_\{seed}")
+fn Config::case_context(self : Config, seed : Int, tag : String) -> CaseContext {
+  {
+    config: self,
+    seed,
+    tag,
+    prefix: "\{tag}_csmith",
+    record_dir: path_join(self.record_root, "\{tag}_\{seed}"),
+  }
 }
 
 ///|
-fn Config::bug_case_path(
-  self : Config,
-  seed : Int,
-  stage_slug : String,
-) -> String {
-  path_join(self.bug_dir, "csmith_seed_\{seed}_\{stage_slug}.c")
+fn CaseContext::log(self : CaseContext, stage : String) -> Unit {
+  log(self.tag, self.seed, stage)
 }
 
 ///|
-async fn Config::save_bug_case(
-  self : Config,
-  seed : Int,
-  tag : String,
-  preprocessed_path : String,
-  stage_slug : String,
+fn CaseContext::path(
+  self : CaseContext,
+  name : String,
+  suffix : String,
 ) -> String {
+  temp_file_path("\{self.prefix}_\{name}", self.seed.to_string(), suffix)
+}
+
+///|
+fn CaseContext::generate(self : CaseContext) -> Unit {
+  let source = self.path("source", ".c")
+  let compat = self.path("compat", ".h")
+  let generate_dir = self.path("generate", ".d")
+  write_text_file(compat, compat_header_source())
   run_command_checked(
-    "mkdir -p \{shell_quote(self.bug_dir)}",
-    "prepare csmith bug case dir",
+    "mkdir -p \{shell_quote(generate_dir)}",
+    "prepare csmith generate dir",
   )
-  let bug_path = self.bug_case_path(seed, stage_slug)
-  write_text_file(bug_path, @fs.read_file(preprocessed_path).text())
-  log(tag, seed, "saved \{bug_path}")
-  bug_path
+  self.log("generate")
+  run_command_checked(
+    self.config.timed_command(
+      shell_command_in_dir(
+        generate_dir,
+        self.config.generate_command(self.seed, source),
+      ),
+      COMPILE_TIMEOUT_SEC,
+    ),
+    "generate csmith \{self.tag}",
+  )
 }
 
 ///|
-async fn Config::record_failure(
-  self : Config,
-  record_dir : String,
-  seed : Int,
-  tag : String,
-  source_path : String,
-  preprocessed_path : String,
+fn CaseContext::preprocess_with(
+  self : CaseContext,
+  stage : String,
+  command : String,
+) -> Unit {
+  self.log(stage)
+  run_command_checked(
+    self.config.timed_command(command, COMPILE_TIMEOUT_SEC),
+    "\{stage} csmith \{self.tag}",
+  )
+}
+
+///|
+fn CaseContext::preprocess(self : CaseContext) -> Unit {
+  let source = self.path("source", ".c")
+  let compat = self.path("compat", ".h")
+  self.preprocess_with(
+    "kimicc preprocess",
+    self.config.kimicc_preprocess_command(
+      source,
+      self.path("kimicc_preprocessed", ".i"),
+      compat,
+    ),
+  )
+  self.preprocess_with(
+    "clang preprocess",
+    self.config.clang_preprocess_command(
+      source,
+      self.path("clang_preprocessed", ".i"),
+      compat,
+    ),
+  )
+}
+
+///|
+async fn CaseContext::capture_command(
+  self : CaseContext,
+  stage : String,
+  command : String,
+  timeout : Int,
+  tag_suffix : String,
+) -> CommandResult {
+  self.log(stage)
+  run_command_capture(
+    self.config.timed_command(command, timeout),
+    "\{self.tag}_csmith_\{tag_suffix}",
+  )
+}
+
+///|
+async fn CaseContext::capture_binary(
+  self : CaseContext,
+  stage : String,
+  bin_path : String,
+  run_dir : String,
+  tag_suffix : String,
+) -> CommandResult {
+  run_command_checked(
+    "mkdir -p \{shell_quote(run_dir)}",
+    "prepare binary run dir",
+  )
+  self.capture_command(
+    stage,
+    shell_command_in_dir(run_dir, shell_quote(bin_path)),
+    RUN_TIMEOUT_SEC,
+    tag_suffix,
+  )
+}
+
+///|
+async fn CaseContext::record_failure(
+  self : CaseContext,
   stage : String,
   details : String,
 ) -> Unit {
   run_command_checked(
-    "mkdir -p \{shell_quote(record_dir)}",
+    "mkdir -p \{shell_quote(self.record_dir)}",
     "prepare csmith failure record",
   )
-  let kimicc_command = self.kimicc_command.unwrap_or("auto")
-  write_text_file("\{record_dir}/source.c", @fs.read_file(source_path).text())
+  let kimicc_command = self.config.kimicc_command.unwrap_or("auto")
   write_text_file(
-    "\{record_dir}/preprocessed.i",
-    @fs.read_file(preprocessed_path).text(),
+    "\{self.record_dir}/source.c",
+    @fs.read_file(self.path("source", ".c")).text(),
   )
-  write_text_file("\{record_dir}/compat.h", compat_header_source())
+  write_text_file(
+    "\{self.record_dir}/kimicc_preprocessed.i",
+    @fs.read_file(self.path("kimicc_preprocessed", ".i")).text(),
+  )
+  write_text_file(
+    "\{self.record_dir}/clang_preprocessed.i",
+    @fs.read_file(self.path("clang_preprocessed", ".i")).text(),
+  )
+  write_text_file("\{self.record_dir}/compat.h", compat_header_source())
   let manifest =
-    $|tag=\{tag}
-    $|seed=\{seed}
+    $|tag=\{self.tag}
+    $|seed=\{self.seed}
     $|stage=\{stage}
     $|csmith-flags=\{flags()}
     $|compile-timeout-seconds=\{COMPILE_TIMEOUT_SEC}
     $|run-timeout-seconds=\{RUN_TIMEOUT_SEC}
-    $|preprocess-flags=-w -E -P -DCSMITH_MINIMAL -I \{self.include_description()} -include compat.h
-    $|csmith-command=\{self.csmith_command}
-    $|clang-command=\{self.clang_command}
-    $|timeout-command=\{self.timeout_command}
+    $|kimicc-preprocess-command=kimicc -E -DCSMITH_MINIMAL -I \{self.config.include_description()} -include compat.h
+    $|clang-preprocess-command=clang -w -E -P -DCSMITH_MINIMAL -I \{self.config.include_description()} -include compat.h
+    $|csmith-command=\{self.config.csmith_command}
+    $|clang-command=\{self.config.clang_command}
+    $|timeout-command=\{self.config.timeout_command}
     $|kimicc-command=\{kimicc_command}
-    $|record-root=\{self.record_root}
-    $|bug-dir=\{self.bug_dir}
+    $|record-root=\{self.config.record_root}
+    $|bug-dir=\{self.config.bug_dir}
     $|
     $|\{details}
-  write_text_file("\{record_dir}/manifest.txt", manifest)
+  write_text_file("\{self.record_dir}/manifest.txt", manifest)
 }
 
 ///|
-async fn Config::record_abnormal_case(
-  self : Config,
-  record_dir : String,
-  seed : Int,
-  tag : String,
-  source_path : String,
-  preprocessed_path : String,
+async fn CaseContext::record_abnormal(
+  self : CaseContext,
   stage : String,
   stage_slug : String,
   details : String,
 ) -> String {
-  let bug_path = self.save_bug_case(seed, tag, preprocessed_path, stage_slug)
-  self.record_failure(
-    record_dir,
-    seed,
-    tag,
-    source_path,
-    preprocessed_path,
-    stage,
-    "\{details}\nbug-case=\{bug_path}\n",
+  run_command_checked(
+    "mkdir -p \{shell_quote(self.config.bug_dir)}",
+    "prepare csmith bug case dir",
   )
-  "\{stage} seed=\{seed} bug=\{bug_path} record=\{record_dir}"
-}
-
-///|
-fn failure_message(
-  record_dir : String,
-  seed : Int,
-  tag : String,
-  stage : String,
-) -> String {
-  "csmith differential failure at \{stage} for \{tag} seed=\{seed}; recorded at \{record_dir}"
+  let bug_path = path_join(
+    self.config.bug_dir,
+    "csmith_seed_\{self.seed}_\{stage_slug}.c",
+  )
+  write_text_file(
+    bug_path,
+    @fs.read_file(self.path("kimicc_preprocessed", ".i")).text(),
+  )
+  self.log("saved \{bug_path}")
+  self.record_failure(stage, "\{details}\nbug-case=\{bug_path}\n")
+  "\{stage} seed=\{self.seed} bug=\{bug_path} record=\{self.record_dir}"
 }
 
 ///|
@@ -362,234 +492,106 @@ fn output_checksum(output : String) -> String {
 }
 
 ///|
+fn runtime_mismatch_report(
+  kimicc : CommandResult,
+  clang : CommandResult,
+) -> (String, String, String, String) {
+  let kimicc_checksum = output_checksum(kimicc.output)
+  let clang_checksum = output_checksum(clang.output)
+  let stage = "runtime mismatch clang-checksum=\{clang_checksum} kimicc-checksum=\{kimicc_checksum}"
+  let details =
+    $|kimicc code=\{kimicc.code}
+    $|kimicc checksum=\{kimicc_checksum}
+    $|kimicc output:
+    $|\{kimicc.output}
+    $|clang code=\{clang.code}
+    $|clang checksum=\{clang_checksum}
+    $|clang output:
+    $|\{clang.output}
+  (stage, details, clang_checksum, kimicc_checksum)
+}
+
+///|
 async fn Config::run_case(self : Config, seed : Int, tag : String) -> String? {
-  let source_path = temp_file_path(
-    "\{tag}_csmith_source",
-    seed.to_string(),
-    ".c",
-  )
-  let preprocessed_path = temp_file_path(
-    "\{tag}_csmith_preprocessed",
-    seed.to_string(),
-    ".i",
-  )
-  let compat_path = temp_file_path(
-    "\{tag}_csmith_compat",
-    seed.to_string(),
-    ".h",
-  )
-  let kimicc_asm_path = temp_file_path(
-    "\{tag}_csmith_kimicc",
-    seed.to_string(),
-    ".s",
-  )
-  let kimicc_bin_path = temp_file_path(
-    "\{tag}_csmith_kimicc",
-    seed.to_string(),
-    "",
-  )
-  let clang_bin_path = temp_file_path(
-    "\{tag}_csmith_clang",
-    seed.to_string(),
-    "",
-  )
-  let record_dir = self.record_dir(tag, seed)
-  log(tag, seed, "start")
-  log(tag, seed, "generate")
-  write_text_file(compat_path, compat_header_source())
-  run_command_checked(
-    self.timed_command(
-      self.generate_command(seed, source_path),
-      COMPILE_TIMEOUT_SEC,
-    ),
-    "generate csmith \{tag}",
-  )
-  log(tag, seed, "preprocess")
-  run_command_checked(
-    self.timed_command(
-      self.preprocess_command(source_path, preprocessed_path, compat_path),
-      COMPILE_TIMEOUT_SEC,
-    ),
-    "preprocess csmith \{tag}",
-  )
-  log(tag, seed, "clang compile")
-  let clang_compile_command = "\{shell_quote(self.clang_command)} -w -o \{shell_quote(clang_bin_path)} \{shell_quote(preprocessed_path)}"
-  let clang_compile = run_command_capture(
-    self.timed_command(clang_compile_command, COMPILE_TIMEOUT_SEC),
-    "\{tag}_csmith_clang_compile",
+  let case = self.case_context(seed, tag)
+  let clang_bin = case.path("clang", "")
+  let clang_preprocessed = case.path("clang_preprocessed", ".i")
+  let kimicc_bin = case.path("kimicc", "")
+  let kimicc_preprocessed = case.path("kimicc_preprocessed", ".i")
+  case.log("start")
+  case.generate()
+  case.preprocess()
+  let clang_compile = case.capture_command(
+    "clang compile",
+    "\{shell_quote(self.clang_command)} -w -o \{shell_quote(clang_bin)} \{shell_quote(clang_preprocessed)}",
+    COMPILE_TIMEOUT_SEC,
+    "clang_compile",
   )
   if clang_compile.code != 0 {
-    let stage = if timed_out(clang_compile.code) {
-      "clang compile timeout"
-    } else {
-      "clang compile"
-    }
-    self.record_failure(
-      record_dir,
-      seed,
-      tag,
-      source_path,
-      preprocessed_path,
-      stage,
-      "exit code=\{clang_compile.code}\n\{clang_compile.output}",
-    )
-    log(tag, seed, "skip \{failure_message(record_dir, seed, tag, stage)}")
+    let stage = clang_compile.stage("clang compile", "clang compile timeout")
+    case.record_failure(stage, clang_compile.details())
+    case.log("skip \{stage} record=\{case.record_dir}")
     return None
   }
-  log(tag, seed, "clang run")
-  let clang_run = run_command_capture(
-    self.timed_command(shell_quote(clang_bin_path), RUN_TIMEOUT_SEC),
-    "\{tag}_csmith_clang_run",
+  let clang_run = case.capture_binary(
+    "clang run",
+    clang_bin,
+    case.path("clang_run", ".d"),
+    "clang_run",
   )
   if timed_out(clang_run.code) {
     let stage = "clang run timeout discarded"
-    self.record_failure(
-      record_dir,
-      seed,
-      tag,
-      source_path,
-      preprocessed_path,
+    case.record_failure(
       stage,
-      "discarded=true\nreason=clang run timeout\nexit code=\{clang_run.code}\n\{clang_run.output}",
+      "discarded=true\nreason=clang run timeout\n\{clang_run.details()}",
     )
-    write_text_file("\{record_dir}/clang.out", clang_run.output)
-    log(tag, seed, "discard clang-run-timeout record=\{record_dir}")
+    write_text_file("\{case.record_dir}/clang.out", clang_run.output)
+    case.log("discard clang-run-timeout record=\{case.record_dir}")
     return None
   }
-  log(tag, seed, "kimicc compile")
-  let kimicc_compile = run_command_capture(
-    self.timed_command(
-      self.kimicc_compile_command(preprocessed_path),
-      COMPILE_TIMEOUT_SEC,
-    ),
-    "\{tag}_csmith_kimicc_compile",
+  let kimicc_compile = case.capture_command(
+    "kimicc compile",
+    self.kimicc_compile_command(kimicc_preprocessed, kimicc_bin),
+    COMPILE_TIMEOUT_SEC,
+    "kimicc_compile",
   )
   if kimicc_compile.code != 0 {
-    let stage = if timed_out(kimicc_compile.code) {
-      "kimicc compile timeout"
-    } else {
-      "kimicc compile"
-    }
-    self.record_failure(
-      record_dir,
-      seed,
-      tag,
-      source_path,
-      preprocessed_path,
-      stage,
-      "exit code=\{kimicc_compile.code}\n\{kimicc_compile.output}",
+    let stage = kimicc_compile.stage("kimicc compile", "kimicc compile timeout")
+    let stage_slug = kimicc_compile.stage(
+      "kimicc_compile", "kimicc_compile_timeout",
     )
-    let stage_slug = if timed_out(kimicc_compile.code) {
-      "kimicc_compile_timeout"
-    } else {
-      "kimicc_compile"
-    }
     return Some(
-      self.record_abnormal_case(
-        record_dir,
-        seed,
-        tag,
-        source_path,
-        preprocessed_path,
-        stage,
-        stage_slug,
-        "exit code=\{kimicc_compile.code}\n\{kimicc_compile.output}",
-      ),
+      case.record_abnormal(stage, stage_slug, kimicc_compile.details()),
     )
   }
-  write_text_file(kimicc_asm_path, kimicc_compile.output)
-  log(tag, seed, "kimicc link")
-  let kimicc_link_command = "\{shell_quote(self.clang_command)} -w -o \{shell_quote(kimicc_bin_path)} \{shell_quote(kimicc_asm_path)}"
-  let kimicc_link = run_command_capture(
-    self.timed_command(kimicc_link_command, COMPILE_TIMEOUT_SEC),
-    "\{tag}_csmith_kimicc_link",
-  )
-  if kimicc_link.code != 0 {
-    self.record_failure(
-      record_dir,
-      seed,
-      tag,
-      source_path,
-      preprocessed_path,
-      "kimicc link",
-      "exit code=\{kimicc_link.code}\n\{kimicc_link.output}",
-    )
-    write_text_file("\{record_dir}/kimicc.s", kimicc_compile.output)
-    return Some(
-      self.record_abnormal_case(
-        record_dir,
-        seed,
-        tag,
-        source_path,
-        preprocessed_path,
-        "kimicc link",
-        "kimicc_link",
-        "exit code=\{kimicc_link.code}\n\{kimicc_link.output}",
-      ),
-    )
-  }
-  log(tag, seed, "kimicc run")
-  let kimicc_run = run_command_capture(
-    self.timed_command(shell_quote(kimicc_bin_path), RUN_TIMEOUT_SEC),
-    "\{tag}_csmith_kimicc_run",
+  let kimicc_run = case.capture_binary(
+    "kimicc run",
+    kimicc_bin,
+    case.path("kimicc_run", ".d"),
+    "kimicc_run",
   )
   if timed_out(kimicc_run.code) {
-    self.record_failure(
-      record_dir,
-      seed,
-      tag,
-      source_path,
-      preprocessed_path,
+    let failure = case.record_abnormal(
       "kimicc run timeout",
-      "exit code=\{kimicc_run.code}\n\{kimicc_run.output}",
+      "kimicc_run_timeout",
+      kimicc_run.details(),
     )
-    write_text_file("\{record_dir}/kimicc.s", kimicc_compile.output)
-    write_text_file("\{record_dir}/kimicc.out", kimicc_run.output)
-    return Some(
-      self.record_abnormal_case(
-        record_dir,
-        seed,
-        tag,
-        source_path,
-        preprocessed_path,
-        "kimicc run timeout",
-        "kimicc_run_timeout",
-        "exit code=\{kimicc_run.code}\n\{kimicc_run.output}",
-      ),
-    )
+    write_text_file("\{case.record_dir}/kimicc.out", kimicc_run.output)
+    return Some(failure)
   }
   if kimicc_run.code != clang_run.code || kimicc_run.output != clang_run.output {
-    let kimicc_checksum = output_checksum(kimicc_run.output)
-    let clang_checksum = output_checksum(clang_run.output)
-    let stage = "runtime mismatch clang-checksum=\{clang_checksum} kimicc-checksum=\{kimicc_checksum}"
-    log(
-      tag,
-      seed,
+    let (stage, details, clang_checksum, kimicc_checksum) = runtime_mismatch_report(
+      kimicc_run, clang_run,
+    )
+    case.log(
       "mismatch clang-checksum=\{clang_checksum} kimicc-checksum=\{kimicc_checksum}",
     )
-    let mismatch_details =
-      $|kimicc code=\{kimicc_run.code}
-      $|kimicc checksum=\{kimicc_checksum}
-      $|kimicc output:
-      $|\{kimicc_run.output}
-      $|clang code=\{clang_run.code}
-      $|clang checksum=\{clang_checksum}
-      $|clang output:
-      $|\{clang_run.output}
-    self.record_failure(
-      record_dir, seed, tag, source_path, preprocessed_path, stage, mismatch_details,
-    )
-    write_text_file("\{record_dir}/kimicc.s", kimicc_compile.output)
-    write_text_file("\{record_dir}/clang.out", clang_run.output)
-    write_text_file("\{record_dir}/kimicc.out", kimicc_run.output)
-    return Some(
-      self.record_abnormal_case(
-        record_dir, seed, tag, source_path, preprocessed_path, stage, "runtime_mismatch",
-        mismatch_details,
-      ),
-    )
+    let failure = case.record_abnormal(stage, "runtime_mismatch", details)
+    write_text_file("\{case.record_dir}/clang.out", clang_run.output)
+    write_text_file("\{case.record_dir}/kimicc.out", kimicc_run.output)
+    return Some(failure)
   }
-  log(tag, seed, "ok")
+  case.log("ok")
   None
 }
 

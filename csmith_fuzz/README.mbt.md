@@ -2,8 +2,8 @@
 
 This package drives Csmith-generated C programs through kimicc and clang, then
 compares the runtime result. The generated programs are reduced to a profile
-that kimicc can compile today, and every case is preprocessed before kimicc sees
-it because kimicc does not have a C preprocessor.
+that kimicc can compile today. Every case is preprocessed independently by
+kimicc and clang before each compiler sees its own input.
 
 ## Prerequisites
 
@@ -16,8 +16,7 @@ brew install csmith coreutils
 The required commands are:
 
 - `csmith`, used to generate random C programs.
-- `clang`, used both as the C preprocessor/reference compiler and as the
-  assembler/linker for kimicc output.
+- `clang`, used as the reference preprocessor and compiler.
 - `timeout` or `gtimeout`, used to cap compile/run time for every case.
 - `moon`, used when `KIMICC_CSMITH_KIMICC` is not set.
 
@@ -33,20 +32,25 @@ export KIMICC_CSMITH_INCLUDE_ROOT=/opt/homebrew/opt/csmith/include/csmith-2.3.0
 Each fuzz case follows this automatic pipeline:
 
 1. Generate C with Csmith using a deterministic seed.
-2. Preprocess the generated source with clang:
+2. Preprocess the generated source with kimicc:
 
    ```sh
-   clang -w -E -P -DCSMITH_MINIMAL -I "$KIMICC_CSMITH_INCLUDE_ROOT" -include compat.h input.c -o input.i
+   kimicc -E -DCSMITH_MINIMAL -I "$KIMICC_CSMITH_INCLUDE_ROOT" -include compat.h input.c -o kimicc.i
    ```
 
-3. Compile and run `input.i` with clang first.
-4. If the clang binary times out, discard the case. This means the reference
+3. Preprocess the generated source separately with clang:
+
+   ```sh
+   clang -w -E -P -DCSMITH_MINIMAL -I "$KIMICC_CSMITH_INCLUDE_ROOT" -include compat.h input.c -o clang.i
+   ```
+
+4. Compile and run `clang.i` with clang first.
+5. If the clang binary times out, discard the case. This means the reference
    program is not useful for differential testing, so it is recorded but not
-   saved as a kimicc bug (CSmith does not promised to generate terminating programs)
-5. Compile `input.i` with kimicc to assembly.
-6. Link kimicc's assembly with clang.
+   saved as a kimicc bug (CSmith does not promise to generate terminating programs)
+6. Compile `kimicc.i` with kimicc directly to an executable.
 7. Run the kimicc binary and compare exit code plus stdout against clang.
-8. On a difference, save the preprocessed program under `test/bugs/` and write
+8. On a difference, save the kimicc-preprocessed program under `test/bugs/` and write
    the full record under the record root.
 
 Runtime mismatch logs include the seed and both Csmith checksums, for example:
@@ -87,7 +91,7 @@ KIMICC_CSMITH_KIMICC="$PWD/_build/native/debug/build/cmd/main/main.exe" \
 ```
 
 The process exits with code `0` if no kimicc abnormal case is found. It exits
-with code `1` after saving any mismatch, kimicc timeout, or kimicc compile/link
+with code `1` after saving any mismatch, kimicc timeout, or kimicc compile
 failure.
 
 ## Outputs
@@ -114,13 +118,14 @@ $TMPDIR/kimicc_csmith_records
 ```
 
 Each record directory contains the original generated source, the preprocessed
-input, `compat.h`, `manifest.txt`, and any relevant stdout or assembly files
-such as `clang.out`, `kimicc.out`, and `kimicc.s`.
+inputs from both preprocessors, `compat.h`, `manifest.txt`, and relevant stdout
+files such as `clang.out` and `kimicc.out`.
 
 ## Environment Variables
 
 - `KIMICC_CSMITH`: Csmith command. Default: `csmith`.
-- `KIMICC_CSMITH_CLANG`: clang command. Default: `clang`.
+- `KIMICC_CSMITH_CLANG`: clang command for reference preprocess/compile/run. Default:
+  `clang`.
 - `KIMICC_CSMITH_TIMEOUT`: timeout command. Default: auto-detect `timeout`,
   then `gtimeout`.
 - `KIMICC_CSMITH_KIMICC`: kimicc command. For faster runs, set this to the
@@ -141,11 +146,11 @@ moon build --target native
 
 case_c=test/bugs/csmith_seed_209_runtime_mismatch.c
 
-_build/native/debug/build/cmd/main/main.exe "$case_c" > /tmp/kimicc_bug.s
-clang -w -o /tmp/kimicc_bug /tmp/kimicc_bug.s
+_build/native/debug/build/cmd/main/main.exe --preprocessed "$case_c" -o /tmp/kimicc_bug
 /tmp/kimicc_bug
 
-clang -w -o /tmp/clang_bug "$case_c"
+record_dir=$TMPDIR/kimicc_csmith_records/csmith_fuzz_0_209
+clang -w -o /tmp/clang_bug "$record_dir/clang_preprocessed.i"
 /tmp/clang_bug
 ```
 
