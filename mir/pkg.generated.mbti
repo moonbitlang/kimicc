@@ -1,0 +1,69 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/kimicc/mir"
+
+import {
+  "bobzhang/kimicc/parser",
+  "bobzhang/kimicc/target",
+}
+
+// Values
+pub fn interpret_i64(@parser.Program, @target.Target, String, Array[Int64]) -> Result[Int64, String]
+
+pub fn lower(@parser.Program, @target.Target) -> Program
+
+// Errors
+
+// Types and methods
+pub(all) struct AggregateLayout {
+  fields : Array[FieldLayout]
+  size : Int
+  align : Int
+  is_union : Bool
+  is_packed : Bool
+} derive(Eq)
+
+pub(all) struct FieldLayout {
+  name : String
+  ty : @parser.Type
+  offset : Int
+  size : Int
+  bit_offset : Int
+  bit_width : Int?
+} derive(Eq)
+
+pub(all) struct FuncSig {
+  ret : @parser.Type
+  params : Array[@parser.Type]
+  variadic : Bool
+  defined : Bool
+  weak : Bool
+} derive(Eq)
+
+pub(all) struct Program {
+  target : @target.Target
+  source : @parser.Program
+  funcs : Map[String, FuncSig]
+  globals : Map[String, @parser.GlobalDecl]
+  structs : Map[String, @parser.StructDecl]
+  layouts : Map[String, AggregateLayout]
+}
+pub fn Program::expr_type(Self, @parser.Expr, Scope) -> @parser.Type
+pub fn Program::field_layout(Self, @parser.Type, String) -> FieldLayout?
+pub fn Program::fold_const(Self, @parser.Expr, Scope) -> Int64?
+pub fn Program::fold_float_const(Self, @parser.Expr, Scope) -> Double?
+pub fn Program::global_expr_type(Self, @parser.Expr) -> @parser.Type
+pub fn Program::interpret_i64(Self, String, Array[Int64]) -> Result[Int64, String]
+pub fn Program::offset_of_path(Self, @parser.Type, Array[@parser.OffsetDesignator]) -> Int?
+pub fn Program::type_align(Self, @parser.Type) -> Int
+pub fn Program::type_size(Self, @parser.Type) -> Int
+
+pub(all) struct Scope {
+  locals : Map[String, @parser.Type]
+  current_func : String
+} derive(Eq)
+pub fn Scope::empty() -> Self
+
+// Type aliases
+
+// Traits
+

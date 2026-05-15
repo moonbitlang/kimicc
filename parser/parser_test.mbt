@@ -22,6 +22,18 @@ test "parse function with params" {
 }
 
 ///|
+test "parse attributed typedef before prototype" {
+  let source =
+    #|__attribute__((__swift_name__("WorkGroup"))) typedef struct os_workgroup_s *os_workgroup_t;
+    #|int os_workgroup_copy_port(os_workgroup_t wg);
+  let prog = @parser.parse(source)
+  match prog.decls {
+    [{ name: "os_workgroup_copy_port", params: [{ name: "wg", .. }], .. }] => ()
+    _ => fail("Expected attributed typedef to be visible in prototype")
+  }
+}
+
+///|
 test "parse variable declaration" {
   let source = "int main() { int x = 10; return x; }"
   let prog = @parser.parse(source)
@@ -35,6 +47,219 @@ test "parse variable declaration" {
       }
     }
     _ => fail("Expected compound body")
+  }
+}
+
+///|
+test "parse function pointer parameter types" {
+  let source =
+    #|int main() {
+    #|  int (*fp)(float, double) = 0;
+    #|  int (*vp)(int, ...) = 0;
+    #|  return 0;
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [
+          VarDecl(fp_ty, "fp", Some(Number(0))),
+          VarDecl(vp_ty, "vp", Some(Number(0))),
+          Return(Some(Number(0))),
+        ]
+      )
+    ) => {
+      inspect(fp_ty, content="FuncPtr(SInt, [Float, Double], false)")
+      inspect(vp_ty, content="FuncPtr(SInt, [SInt], true)")
+    }
+    _ => fail("Expected typed function pointer locals")
+  }
+}
+
+///|
+test "parse unsupported float16 external declaration as placeholder type" {
+  let source = "extern _Float16 __fabsf16(_Float16);"
+  let prog = @parser.parse(source)
+  match prog.decls[0] {
+    { ret: Float16, name: "__fabsf16", params: [{ ty: Float16, .. }], .. } => ()
+    _ => fail("Expected _Float16 placeholder function declaration")
+  }
+}
+
+///|
+test "parse unsupported float128 external declaration as placeholder type" {
+  let source = "extern __float128 fabsq(__float128);"
+  let prog = @parser.parse(source)
+  match prog.decls[0] {
+    { ret: Float128, name: "fabsq", params: [{ ty: Float128, .. }], .. } => ()
+    _ => fail("Expected __float128 placeholder function declaration")
+  }
+}
+
+///|
+test "parse standard extended float spellings used by glibc math" {
+  let source = "extern _Float32 f32(_Float64, _Float32x, _Float64x);"
+  let prog = @parser.parse(source)
+  match prog.decls[0] {
+    {
+      ret: Float,
+      name: "f32",
+      params: [{ ty: Double, .. }, { ty: Double, .. }, { ty: LongDouble, .. }],
+      ..,
+    } => ()
+    _ => fail("Expected extended float aliases")
+  }
+}
+
+///|
+test "parse extended float spellings in sizeof and alignof type names" {
+  let linux = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => fail("linux-amd64 target should parse")
+  }
+  let source =
+    #|int main(void) {
+    #|  int f16_size[sizeof(_Float16)];
+    #|  int f32_size[sizeof(_Float32)];
+    #|  int f64_size[sizeof(_Float64)];
+    #|  int f32x_size[sizeof(_Float32x)];
+    #|  int f64x_size[sizeof(_Float64x)];
+    #|  int f16_align[__alignof__(_Float16)];
+    #|  int f32_align[__alignof__(_Float32)];
+    #|  int f64_align[__alignof__(_Float64)];
+    #|  int f32x_align[__alignof__(_Float32x)];
+    #|  int f64x_align[__alignof__(_Float64x)];
+    #|  return 0;
+    #|}
+  let prog = @parser.parse_for_target(source, linux)
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [
+          VarDecl(Array(SInt, 2), "f16_size", None),
+          VarDecl(Array(SInt, 4), "f32_size", None),
+          VarDecl(Array(SInt, 8), "f64_size", None),
+          VarDecl(Array(SInt, 8), "f32x_size", None),
+          VarDecl(Array(SInt, 16), "f64x_size", None),
+          VarDecl(Array(SInt, 2), "f16_align", None),
+          VarDecl(Array(SInt, 4), "f32_align", None),
+          VarDecl(Array(SInt, 8), "f64_align", None),
+          VarDecl(Array(SInt, 8), "f32x_align", None),
+          VarDecl(Array(SInt, 16), "f64x_align", None),
+          Return(Some(Number(0))),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected extended float type-name layout constants")
+  }
+}
+
+///|
+test "parse unsupported float128 layout constants for linux" {
+  let linux = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => fail("linux-amd64 target should parse")
+  }
+  let source =
+    #|int main(void) {
+    #|  int q_size[sizeof(__float128)];
+    #|  int q_align[__alignof__(_Float128)];
+    #|  return 0;
+    #|}
+  let prog = @parser.parse_for_target(source, linux)
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [
+          VarDecl(Array(SInt, 16), "q_size", None),
+          VarDecl(Array(SInt, 16), "q_align", None),
+          Return(Some(Number(0))),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected float128 placeholder layout constants")
+  }
+}
+
+///|
+test "parse GNU mode attributes for linux integer typedef layout" {
+  let linux = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => fail("linux-amd64 target should parse")
+  }
+  let source =
+    #|typedef int register_t __attribute__((__mode__(__word__)));
+    #|typedef unsigned int fpu_control_t __attribute__((mode(__HI__)));
+    #|typedef int spec_small_t __attribute__((mode(HI)));
+    #|int main(void) {
+    #|  int reg_size[sizeof(register_t)];
+    #|  int fpu_size[sizeof(fpu_control_t)];
+    #|  int spec_size[sizeof(spec_small_t)];
+    #|  return 0;
+    #|}
+  let prog = @parser.parse_for_target(source, linux)
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [
+          VarDecl(Array(SInt, 8), "reg_size", None),
+          VarDecl(Array(SInt, 2), "fpu_size", None),
+          VarDecl(Array(SInt, 2), "spec_size", None),
+          Return(Some(Number(0))),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected GNU mode integer typedef layout constants")
+  }
+}
+
+///|
+test "parse long double external declaration as distinct type" {
+  let source = "extern long double fabsl(long double);"
+  let prog = @parser.parse(source)
+  match prog.decls[0] {
+    { ret: LongDouble, name: "fabsl", params: [{ ty: LongDouble, .. }], .. } =>
+      ()
+    _ => fail("Expected long double function declaration")
+  }
+}
+
+///|
+test "parse long double layout constants for selected target" {
+  let linux = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => fail("linux-amd64 target should parse")
+  }
+  let source = "int main(void) { int slots[sizeof(long double)]; return 0; }"
+  let darwin_prog = @parser.parse(source)
+  let linux_prog = @parser.parse_for_target(source, linux)
+  match darwin_prog.decls[0].body {
+    Some(
+      Compound(
+        [VarDecl(Array(SInt, 8), "slots", None), Return(Some(Number(0)))]
+      )
+    ) => ()
+    _ => fail("Expected Darwin long double size in array bound")
+  }
+  match linux_prog.decls[0].body {
+    Some(
+      Compound(
+        [VarDecl(Array(SInt, 16), "slots", None), Return(Some(Number(0)))]
+      )
+    ) => ()
+    _ => fail("Expected Linux long double size in array bound")
+  }
+}
+
+///|
+test "parse block-scope builtin va list declaration" {
+  let source = "int main() { __builtin_va_list ap; return 0; }"
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(
+      Compound([VarDecl(Pointer(SChar), "ap", None), Return(Some(Number(0)))])
+    ) => ()
+    _ => fail("Expected __builtin_va_list declaration")
   }
 }
 
@@ -240,6 +465,25 @@ test "parse switch" {
 }
 
 ///|
+test "parse fallthrough attribute statement as no-op" {
+  let source =
+    #|int main() {
+    #|  switch (0) {
+    #|    case 0:
+    #|      __attribute__((fallthrough));
+    #|    case 1:
+    #|      return 42;
+    #|  }
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(Compound([Switch(_, Compound(_), cases)])) =>
+      inspect(cases.length(), content="2")
+    _ => fail("Expected fallthrough attribute statement to parse in switch")
+  }
+}
+
+///|
 test "parse cast" {
   let source = "int main() { return (char)256; }"
   let prog = @parser.parse(source)
@@ -302,6 +546,17 @@ test "parse enum with values" {
   match decl.body {
     Some(Compound([Return(Some(Binary("+", Number(11), Number(20))))])) => ()
     _ => fail("Expected B=11 and C=20")
+  }
+}
+
+///|
+test "parse enum trailing comma" {
+  let source = "enum Top { TopA, TopB, }; typedef enum { LocalA = 4, LocalB, } Local; int main() { return TopB + LocalB; }"
+  let prog = @parser.parse(source)
+  let decl = prog.decls[0]
+  match decl.body {
+    Some(Compound([Return(Some(Binary("+", Number(1), Number(5))))])) => ()
+    _ => fail("Expected trailing-comma enum constants")
   }
 }
 
@@ -437,6 +692,86 @@ test "parse sizeof type" {
 }
 
 ///|
+test "parse alignof type and expression" {
+  let source =
+    #|struct S { char c; int x; };
+    #|int main() {
+    #|  long y;
+    #|  int a[2];
+    #|  return _Alignof(int) + alignof(struct S) + __alignof__(y) + __alignof__(a);
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [
+          VarDecl(SLong, "y", None),
+          VarDecl(Array(SInt, 2), "a", None),
+          Return(
+            Some(
+              Binary(
+                "+",
+                Binary(
+                  "+",
+                  Binary("+", Alignof(SInt), Alignof(Struct("S"))),
+                  AlignofExpr(Var("y"))
+                ),
+                AlignofExpr(Var("a"))
+              )
+            )
+          ),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected alignof operators to parse")
+  }
+}
+
+///|
+test "parse GNU alignof unparenthesized expression" {
+  let source =
+    #|int main() {
+    #|  long y;
+    #|  return __alignof__ y;
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(
+      Compound([VarDecl(SLong, "y", None), Return(Some(AlignofExpr(Var("y"))))])
+    ) => ()
+    _ => fail("Expected GNU alignof expression")
+  }
+}
+
+///|
+test "parse builtin offsetof member designators" {
+  let source =
+    #|struct Inner { int x; };
+    #|struct Outer { char tag; struct Inner items[3]; };
+    #|int main() {
+    #|  return __builtin_offsetof(struct Outer, items[2].x);
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [
+          Return(
+            Some(
+              OffsetOf(
+                Struct("Outer"),
+                [OffsetField("items"), OffsetIndex(2L), OffsetField("x")]
+              )
+            )
+          ),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected offsetof member-designator path")
+  }
+}
+
+///|
 test "parse struct definition and member access" {
   let source =
     #|struct Point { int x; int y; };
@@ -460,6 +795,174 @@ test "parse struct definition and member access" {
       }
     }
     _ => fail("Expected compound body")
+  }
+}
+
+///|
+test "top-level GNU extension typedef is recorded" {
+  let source =
+    #|__extension__ typedef unsigned char uint8_t;
+    #|__extension__ typedef unsigned long uintptr_t;
+    #|struct HeaderPair { uint8_t tag; uintptr_t value; };
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  match prog.structs[0].fields {
+    [{ ty: UChar, name: "tag", .. }, { ty: ULong, name: "value", .. }] => ()
+    _ => fail("Expected typedef names from top-level __extension__ typedefs")
+  }
+}
+
+///|
+test "parse packed aggregate attributes" {
+  let source =
+    #|struct __attribute__((packed)) PackedA { char c; int x; };
+    #|struct PackedB { char c; int x; } __attribute__((__packed__));
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  inspect(prog.structs.length(), content="2")
+  inspect(prog.structs[0].is_packed, content="true")
+  inspect(prog.structs[1].is_packed, content="true")
+}
+
+///|
+test "parse GNU aligned attributes" {
+  let source =
+    #|int __attribute__((aligned(32))) global_spec;
+    #|int global_post __attribute__((__aligned__(64)));
+    #|struct AlignedAttr {
+    #|  char c;
+    #|  int x __attribute__((aligned(16)));
+    #|  char y;
+    #|};
+    #|typedef int aligned_int __attribute__((aligned(16)));
+    #|aligned_int typed_global;
+    #|int main(void) {
+    #|  int local __attribute__((aligned(32)));
+    #|  return 0;
+    #|}
+  let prog = @parser.parse(source)
+  match prog.globals {
+    [
+      { ty: Aligned(SInt, 32), name: "global_spec", .. },
+      { ty: Aligned(SInt, 64), name: "global_post", .. },
+      { ty: Aligned(SInt, 16), name: "typed_global", .. },
+    ] => ()
+    _ => fail("Expected GNU aligned globals and typedef")
+  }
+  match prog.structs[0].fields {
+    [
+      { ty: SChar, name: "c", .. },
+      { ty: Aligned(SInt, 16), name: "x", .. },
+      { ty: SChar, name: "y", .. },
+    ] => ()
+    _ => fail("Expected GNU aligned struct field")
+  }
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [VarDecl(Aligned(SInt, 32), "local", None), Return(Some(Number(0)))]
+      )
+    ) => ()
+    _ => fail("Expected GNU aligned local variable")
+  }
+}
+
+///|
+test "parse GNU weak attributes" {
+  let source =
+    #|__attribute__((weak)) int weak_fn(void) { return 1; }
+    #|int weak_global __attribute__((__weak__)) = 2;
+    #|int strong_fn(void) { return weak_fn() + weak_global; }
+  let prog = @parser.parse(source)
+  match prog.decls {
+    [
+      { name: "weak_fn", is_weak: true, .. },
+      { name: "strong_fn", is_weak: false, .. },
+    ] => ()
+    _ => fail("Expected weak function attribute to be recorded")
+  }
+  match prog.globals {
+    [{ name: "weak_global", is_weak: true, .. }] => ()
+    _ => fail("Expected weak global attribute to be recorded")
+  }
+}
+
+///|
+test "parse GNU visibility attributes" {
+  let source =
+    #|__attribute__((visibility("hidden"))) int hidden_fn(void) { return 1; }
+    #|int protected_global __attribute__((visibility("protected"))) = 2;
+    #|extern int internal_global __attribute__((__visibility__("internal")));
+    #|int main(void) { return hidden_fn() + protected_global; }
+  let prog = @parser.parse(source)
+  match prog.decls {
+    [
+      { name: "hidden_fn", visibility: Some("hidden"), .. },
+      { name: "main", visibility: None, .. },
+    ] => ()
+    _ => fail("Expected function visibility attribute to be recorded")
+  }
+  match prog.globals {
+    [
+      { name: "protected_global", visibility: Some("protected"), .. },
+      { name: "internal_global", visibility: Some("internal"), .. },
+    ] => ()
+    _ => fail("Expected global visibility attributes to be recorded")
+  }
+}
+
+///|
+test "parse GNU alias attributes" {
+  let source =
+    #|int alias_target(void) { return 1; }
+    #|extern int alias_fn(void) __attribute__((alias("alias_target")));
+    #|int alias_value_target = 2;
+    #|extern int alias_value __attribute__((__alias__("alias_value_target")));
+  let prog = @parser.parse(source)
+  match prog.decls {
+    [
+      { name: "alias_target", symbol_alias: None, .. },
+      { name: "alias_fn", symbol_alias: Some("alias_target"), .. },
+    ] => ()
+    _ => fail("Expected function alias attribute to be recorded")
+  }
+  match prog.globals {
+    [
+      { name: "alias_value_target", symbol_alias: None, .. },
+      { name: "alias_value", symbol_alias: Some("alias_value_target"), .. },
+    ] => ()
+    _ => fail("Expected global alias attribute to be recorded")
+  }
+}
+
+///|
+test "parse GNU section attributes" {
+  let source =
+    #|__attribute__((section(".text.kimicc"))) int section_fn(void) { return 1; }
+    #|int section_global __attribute__((__section__(".data.kimicc"))) = 2;
+  let prog = @parser.parse(source)
+  match prog.decls {
+    [{ name: "section_fn", section: Some(".text.kimicc"), .. }] => ()
+    _ => fail("Expected function section attribute to be recorded")
+  }
+  match prog.globals {
+    [{ name: "section_global", section: Some(".data.kimicc"), .. }] => ()
+    _ => fail("Expected global section attribute to be recorded")
+  }
+}
+
+///|
+test "parse GNU constructor and destructor attributes" {
+  let source =
+    #|__attribute__((constructor)) void init_fn(void) {}
+    #|__attribute__((destructor)) void fini_fn(void) {}
+  let prog = @parser.parse(source)
+  match prog.decls {
+    [
+      { name: "init_fn", is_constructor: true, is_destructor: false, .. },
+      { name: "fini_fn", is_constructor: false, is_destructor: true, .. },
+    ] => ()
+    _ => fail("Expected constructor and destructor attributes to be recorded")
   }
 }
 
@@ -772,6 +1275,34 @@ test "parse global array initializer inferred size" {
 }
 
 ///|
+test "parse mixed nested initializer designators" {
+  let source =
+    #|struct Pair { int a; int b; };
+    #|struct Wrap { struct Pair pairs[2]; };
+    #|struct Wrap w = { .pairs[1].b = 5, .pairs[0].a = 37 };
+    #|int main() { return 0; }
+  let prog = @parser.parse(source)
+  inspect(prog.globals.length(), content="1")
+  match prog.globals[0].init {
+    Some(
+      Array(
+        [
+          DesignatedField(
+            "pairs",
+            DesignatedIndex(1, DesignatedField("b", Number(5)))
+          ),
+          DesignatedField(
+            "pairs",
+            DesignatedIndex(0, DesignatedField("a", Number(37)))
+          ),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected mixed field/index designator path")
+  }
+}
+
+///|
 test "parse multidimensional array declarator keeps outer dimension first" {
   let source = "unsigned short table[2][4];\nint main() { return 0; }"
   let prog = @parser.parse(source)
@@ -843,6 +1374,27 @@ test "parse static assertions at declaration scopes" {
 }
 
 ///|
+test "parse static assertions compare unsigned constant values" {
+  let source =
+    #|_Static_assert(18446744073709551615UL > 9223372036854775807L, "uint64 max");
+    #|_Static_assert((unsigned long)-1 > 0, "unsigned long max");
+    #|_Static_assert((unsigned int)-1 == 4294967295U, "unsigned int max");
+    #|_Static_assert((int)4294967295U == -1, "signed cast");
+    #|_Static_assert((unsigned int)-1 == -1, "usual equality conversion");
+    #|_Static_assert((unsigned int)-1 + 1U == 0, "unsigned wrap");
+    #|_Static_assert((unsigned int)-1 >> 31 == 1, "unsigned shift");
+    #|_Static_assert((long)-1 < (unsigned int)1, "lp64 signed compare");
+    #|_Static_assert(+1 == 1, "unary plus");
+    #|int table[+2];
+    #|int main(void) {
+    #|  return 0;
+    #|}
+  let prog = @parser.parse(source)
+  inspect(prog.globals.length(), content="1")
+  inspect(prog.decls.length(), content="1")
+}
+
+///|
 test "parse builtin 128-bit declarations in block scope" {
   let source =
     #|int main(void) {
@@ -911,6 +1463,48 @@ test "parse struct compound literal assignment" {
 }
 
 ///|
+test "parse mixed compound literal initializer designators" {
+  let source =
+    #|typedef struct Pair { int a; int b; } Pair;
+    #|typedef struct Wrap { Pair pairs[2]; } Wrap;
+    #|int main(void) {
+    #|  Wrap w = (Wrap){ .pairs[1].b = 5, .pairs[0].a = 37 };
+    #|  return 0;
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [
+          VarDecl(
+            _,
+            "w",
+            Some(
+              CompoundLiteral(
+                Struct(_),
+                [
+                  DesignatedField(
+                    "pairs",
+                    DesignatedIndex(1, DesignatedField("b", Number(5)))
+                  ),
+                  DesignatedField(
+                    "pairs",
+                    DesignatedIndex(0, DesignatedField("a", Number(37)))
+                  ),
+                ],
+                _
+              )
+            )
+          ),
+          _,
+        ]
+      )
+    ) => ()
+    _ => fail("Expected mixed compound literal designator path")
+  }
+}
+
+///|
 test "check ast for array init locals" {
   let source =
     #|int main() {
@@ -967,4 +1561,212 @@ test "parse non-variadic function declaration" {
   let decl = prog.decls[0]
   inspect(decl.variadic, content="false")
   inspect(decl.params.length(), content="1")
+}
+
+///|
+test "parse function parameter array with GNU restrict size" {
+  let source = "int regexec(unsigned long n, int pmatch[__restrict n]);"
+  let prog = @parser.parse(source)
+  inspect(prog.decls.length(), content="1")
+  let decl = prog.decls[0]
+  inspect(decl.name, content="regexec")
+  inspect(decl.params.length(), content="2")
+  inspect(decl.params[1].ty, content="Pointer(SInt)")
+}
+
+///|
+test "parse generic selection chooses matching association" {
+  let source =
+    #|int main(void) {
+    #|  return _Generic(1.0, int: 1, double: 2, default: 3);
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(Compound([Return(Some(Number(2)))])) => ()
+    _ => fail("Expected generic selection to fold to selected expression")
+  }
+}
+
+///|
+test "parse builtin choose expr and types compatible fold constants" {
+  let source =
+    #|int main(void) {
+    #|  return __builtin_choose_expr(__builtin_types_compatible_p(int, signed int), 7, missing()) +
+    #|         __builtin_choose_expr(__builtin_types_compatible_p(int, unsigned int), missing(), 5);
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(Compound([Return(Some(Binary("+", Number(7), Number(5))))])) => ()
+    _ => fail("Expected builtin compile-time selection to fold constants")
+  }
+}
+
+///|
+test "parse object size builtin constants in static asserts" {
+  let source =
+    #|struct S { int x; char buf[9]; };
+    #|struct S global_s;
+    #|int global_x;
+    #|char global_buf[16];
+    #|_Static_assert(__builtin_object_size("abc", 0) == 4, "literal object size");
+    #|_Static_assert(__builtin_dynamic_object_size((const char *)"a\0bc", 2) == 5, "embedded nul object size");
+    #|_Static_assert(__builtin_object_size((void *)0, 0) == (unsigned long)-1, "unknown max object size");
+    #|_Static_assert(__builtin_dynamic_object_size((void *)0, 2) == 0, "unknown min object size");
+    #|_Static_assert(__builtin_object_size(&global_x, 0) == sizeof(global_x), "global object size");
+    #|_Static_assert(__builtin_dynamic_object_size((void *)global_buf, 2) == sizeof(global_buf), "global array size");
+    #|_Static_assert(__builtin_object_size(&global_buf[3], 0) == sizeof(global_buf) - 3, "global array element remaining size");
+    #|_Static_assert(__builtin_object_size(&global_buf[3], 1) == sizeof(global_buf) - 3, "global array element subobject size");
+    #|_Static_assert(__builtin_object_size(global_buf + 3, 0) == sizeof(global_buf) - 3, "global array pointer remaining size");
+    #|_Static_assert(__builtin_object_size(3 + global_buf, 1) == sizeof(global_buf) - 3, "global commuted pointer remaining size");
+    #|_Static_assert(__builtin_object_size(&global_s.buf, 0) == sizeof(global_s) - __builtin_offsetof(struct S, buf), "global member whole object size");
+    #|_Static_assert(__builtin_object_size(&global_s.buf, 1) == sizeof(global_s.buf), "global member subobject size");
+    #|_Static_assert(__builtin_dynamic_object_size(global_s.buf, 2) == sizeof(global_s) - __builtin_offsetof(struct S, buf), "global member array whole size");
+    #|_Static_assert(__builtin_dynamic_object_size(global_s.buf, 3) == sizeof(global_s.buf), "global member array subobject size");
+    #|_Static_assert(__builtin_dynamic_object_size(&global_s.buf[4], 2) == sizeof(global_s) - __builtin_offsetof(struct S, buf) - 4, "global member element whole remaining size");
+    #|_Static_assert(__builtin_dynamic_object_size(&global_s.buf[4], 3) == sizeof(global_s.buf) - 4, "global member element subobject remaining size");
+    #|_Static_assert(__builtin_constant_p(1 + 2) == 1, "constant expression");
+    #|_Static_assert(__builtin_constant_p(global_x) == 0, "runtime object is not constant");
+    #|_Static_assert(__builtin_abs(-7) == 7, "abs constant");
+    #|_Static_assert(__builtin_align_up(33, 16) == 48, "align up constant");
+    #|_Static_assert(__builtin_popcount(0xf0f0u) == 8, "popcount constant");
+    #|_Static_assert(__builtin_bswap32(0x01020304u) == 0x04030201u, "bswap constant");
+    #|_Static_assert(__builtin_rotateleft32(0x12345678u, 8) == 0x34567812u, "rotate constant");
+    #|int main(void) {
+    #|  int local_x;
+    #|  char local_buf[16];
+    #|  struct S local_s;
+    #|  _Static_assert(__builtin_object_size(&local_x, 0) == sizeof(local_x), "local object size");
+    #|  _Static_assert(__builtin_dynamic_object_size((void *)local_buf, 2) == sizeof(local_buf), "local array size");
+    #|  _Static_assert(__builtin_object_size(&local_buf[3], 0) == sizeof(local_buf) - 3, "local array element remaining size");
+    #|  _Static_assert(__builtin_object_size(local_buf + 3, 1) == sizeof(local_buf) - 3, "local array pointer remaining size");
+    #|  _Static_assert(__builtin_object_size(&local_s.buf, 0) == sizeof(local_s) - __builtin_offsetof(struct S, buf), "local member whole object size");
+    #|  _Static_assert(__builtin_dynamic_object_size(local_s.buf, 2) == sizeof(local_s) - __builtin_offsetof(struct S, buf), "local member array whole size");
+    #|  _Static_assert(__builtin_dynamic_object_size(local_s.buf, 3) == sizeof(local_s.buf), "local member array subobject size");
+    #|  _Static_assert(__builtin_object_size(&local_s.buf[4], 1) == sizeof(local_s.buf) - 4, "local member element subobject size");
+    #|  return 0;
+    #|}
+  ignore(@parser.parse(source))
+}
+
+///|
+test "parse GNU typeof type specifiers" {
+  let source =
+    #|int main(void) {
+    #|  int x = 0;
+    #|  __typeof__(x) y = 7;
+    #|  typeof(unsigned long) z = 5;
+    #|  return y + (int)z;
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [
+          VarDecl(SInt, "x", Some(Number(0))),
+          VarDecl(SInt, "y", Some(Number(7))),
+          VarDecl(ULong, "z", Some(Number(5))),
+          Return(Some(Binary("+", Var("y"), Cast(SInt, Var("z"))))),
+        ]
+      )
+    ) => ()
+    _ =>
+      fail("Expected typeof specifiers to resolve expression and type operands")
+  }
+}
+
+///|
+test "parse GNU typeof comma expression uses rhs type" {
+  let source =
+    #|int main(void) {
+    #|  unsigned long *p;
+    #|  __typeof__((void)0, *p) y = 5;
+    #|  return (int)y;
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [
+          VarDecl(Pointer(ULong), "p", None),
+          VarDecl(ULong, "y", Some(Number(5))),
+          Return(Some(Cast(SInt, Var("y")))),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected typeof comma expression to use right operand type")
+  }
+}
+
+///|
+test "parse GNU auto type local declarations" {
+  let source =
+    #|int main(void) {
+    #|  unsigned long x = 40;
+    #|  __auto_type y = x;
+    #|  int *p;
+    #|  __auto_type q = p;
+    #|  return (int)y;
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [
+          VarDecl(ULong, "x", Some(Number(40))),
+          VarDecl(ULong, "y", Some(Var("x"))),
+          VarDecl(Pointer(SInt), "p", None),
+          VarDecl(Pointer(SInt), "q", Some(Var("p"))),
+          Return(Some(Cast(SInt, Var("y")))),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected __auto_type locals to infer initializer type")
+  }
+}
+
+///|
+test "parse builtin classify type folds covered categories" {
+  let source =
+    #|struct S { int x; };
+    #|union U { int x; double y; };
+    #|int main(void) {
+    #|  int x = 0;
+    #|  double d = 0.0;
+    #|  int a[2];
+    #|  struct S s;
+    #|  union U u;
+    #|  return __builtin_classify_type(x++) +
+    #|         __builtin_classify_type(d) +
+    #|         __builtin_classify_type(a) +
+    #|         __builtin_classify_type(s) +
+    #|         __builtin_classify_type(u);
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(
+      Compound(
+        [
+          VarDecl(SInt, "x", Some(Number(0))),
+          VarDecl(Double, "d", Some(FloatLiteral(0.0))),
+          VarDecl(Array(SInt, 2), "a", None),
+          VarDecl(Struct("S"), "s", None),
+          VarDecl(Union("U"), "u", None),
+          Return(
+            Some(
+              Binary(
+                "+",
+                Binary(
+                  "+",
+                  Binary("+", Binary("+", Number(1), Number(8)), Number(5)),
+                  Number(12)
+                ),
+                Number(13)
+              )
+            )
+          ),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected __builtin_classify_type to fold covered categories")
+  }
 }

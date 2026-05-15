@@ -65,6 +65,100 @@ async test "direct macho object supports max unsigned data initializers" {
 }
 
 ///|
+async test "direct macho object supports global bit-field initializers" {
+  let source =
+    #|struct Bits { unsigned a : 3; signed b : 4; unsigned c : 5; };
+    #|union UBits { unsigned a : 3; signed b : 4; };
+    #|struct Bits bits = { .a = 5, .b = -3, .c = 17 };
+    #|union UBits ubits = { .b = -3 };
+    #|int main(void) {
+    #|  if (bits.a != 5) return 1;
+    #|  if (bits.b != -3) return 2;
+    #|  if (bits.c != 17) return 3;
+    #|  if (ubits.b != -3) return 4;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_direct_object_async(
+    source, "macho_global_bitfield_init",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports global aggregate initializers" {
+  let source =
+    #|struct Inner { char c; int x; };
+    #|struct Outer { char tag; struct Inner inner; int tail; };
+    #|struct Refs { int *first; int *tail; int (*fn)(int); };
+    #|struct Node { int value; struct Node *next; };
+    #|union Bytes { int i; char c[4]; };
+    #|int add1(int x) { return x + 1; }
+    #|int arr[5] = { 1, [3] = 4 };
+    #|struct Outer outer = { .tail = 9, .inner = { .x = 7, .c = 2 }, .tag = 1 };
+    #|int *ptr = arr + 3;
+    #|int (*fp)(int) = add1;
+    #|int *ptrs[3] = { arr, arr + 2, &arr[4] };
+    #|struct Refs refs = { .tail = arr + 4, .fn = add1, .first = &arr[1] };
+    #|int *member = &outer.inner.x;
+    #|int *member_next = &outer.inner.x + 1;
+    #|struct Node node2 = { 2, 0 };
+    #|struct Node node1 = { .next = &node2, .value = 1 };
+    #|struct Node *nodes[2] = { &node1, &node2 };
+    #|union Bytes bytes = { .c = { 65, 66, 0, 0 } };
+    #|char str[6] = "hey";
+    #|int main(void) {
+    #|  if (arr[0] != 1 || arr[3] != 4 || arr[4] != 0) return 1;
+    #|  if (outer.tag != 1 || outer.inner.c != 2 || outer.inner.x != 7 || outer.tail != 9) return 2;
+    #|  if (ptr != &arr[3] || *ptr != 4) return 3;
+    #|  if (fp(41) != 42) return 4;
+    #|  if (ptrs[0] != &arr[0] || ptrs[1] != &arr[2] || ptrs[2] != &arr[4]) return 5;
+    #|  if (refs.first != &arr[1] || refs.tail != &arr[4] || refs.fn(41) != 42) return 6;
+    #|  if (member != &outer.inner.x || *member != 7 || member_next != &outer.tail) return 7;
+    #|  if (node1.value != 1 || node1.next != &node2 || node2.value != 2 || node2.next != 0) return 8;
+    #|  if (nodes[0] != &node1 || nodes[1] != &node2) return 9;
+    #|  if (bytes.c[0] != 65 || bytes.c[1] != 66 || bytes.c[2] != 0 || bytes.c[3] != 0) return 10;
+    #|  if (str[0] != 104 || str[1] != 101 || str[2] != 121 || str[3] != 0 || str[5] != 0) return 11;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_direct_object_async(
+    source, "macho_global_aggregate_init",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports nested global designators" {
+  let source =
+    #|typedef union Box {
+    #|  double d;
+    #|  long l;
+    #|} Box;
+    #|typedef struct Value {
+    #|  Box box;
+    #|  int tag;
+    #|  int arr[3];
+    #|} Value;
+    #|struct Pair {
+    #|  int a;
+    #|  int b;
+    #|};
+    #|Value value = { .box.d = 1.5, .tag = 7, .arr[2] = 35 };
+    #|struct Pair pairs[2] = { [1].b = 5, [0].a = 37 };
+    #|int main(void) {
+    #|  if (value.box.d != 1.5) return 1;
+    #|  if (value.tag != 7) return 2;
+    #|  if (value.arr[0] != 0 || value.arr[1] != 0 || value.arr[2] != 35) return 3;
+    #|  if (pairs[0].a != 37 || pairs[0].b != 0) return 4;
+    #|  if (pairs[1].a != 0 || pairs[1].b != 5) return 5;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_direct_object_async(
+    source, "macho_nested_global_designators",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object emits bss as zerofill with later const data" {
   let source = "int data = 1; int bss; int main(void) { char *s = \"A\"; bss = 40; return data + bss + s[0] - 64; }"
   let obj_path = compile_source_to_direct_object_path(
@@ -342,6 +436,8 @@ async test "direct macho object supports bit count and byte swap builtins" {
     #|  if (__builtin_rotateright32(0x12345678u, 8) != 0x78123456u) return 8;
     #|  if (__builtin_rotateleft64(0x0123456789abcdefull, 16) != 0x456789abcdef0123ull) return 9;
     #|  if (__builtin_rotateright64(0x0123456789abcdefull, 16) != 0xcdef0123456789abull) return 10;
+    #|  if (__builtin_rotateleft(0x12345678u, 8) != 0x34567812u) return 11;
+    #|  if ((__builtin_rotateright(0x0123456789abcdefull, 16) & 255) != 0xab) return 12;
     #|  __builtin_prefetch((void*)0, 0, 3);
     #|  return 42;
     #|}
@@ -526,6 +622,31 @@ async test "direct macho object supports floating absolute value" {
 }
 
 ///|
+async test "direct macho object supports floating copysign" {
+  let source =
+    #|int main(void) {
+    #|  return (int)__builtin_copysign(20.0, -1.0) +
+    #|    (int)__builtin_copysignf(5.0f, -1.0f) +
+    #|    (int)__builtin_copysignl(9.0L, 1.0L) + 58;
+    #|}
+  let exit_code = run_source_direct_object_async(source, "macho_copysign")
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports floating square root" {
+  let source =
+    #|int main(void) {
+    #|  double d = __builtin_sqrt(144.0);
+    #|  float f = __builtin_sqrtf(361.0f);
+    #|  long double l = __builtin_sqrtl(121.0L);
+    #|  return (int)d + (int)f + (int)l;
+    #|}
+  let exit_code = run_source_direct_object_async(source, "macho_fsqrt")
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object supports floating register offset memory" {
   let source =
     #|int main(void) {
@@ -612,6 +733,23 @@ async test "direct macho object supports negative offset loads" {
 }
 
 ///|
+async test "direct macho object supports return address builtin" {
+  let source =
+    #|int main(void) {
+    #|  void *ra = __builtin_return_address(0);
+    #|  if (ra == 0) return 1;
+    #|  if (__builtin_return_address(1) != 0) return 2;
+    #|  if (__builtin_extract_return_addr(ra) != ra) return 3;
+    #|  if (__builtin_frob_return_addr(ra) != ra) return 4;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_direct_object_async(
+    source, "macho_return_address_builtin",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object supports zero-argument internal call" {
   let source = "int answer(void) { return 42; } int main(void) { return answer(); }"
   let exit_code = run_source_direct_object_async(source, "macho_internal_call0")
@@ -630,6 +768,31 @@ async test "direct macho object supports function pointer call" {
   let source = "int add(int x) { return x + 3; } int main(void) { int (*fp)(int) = add; return fp(39); }"
   let exit_code = run_source_direct_object_async(
     source, "macho_function_pointer_call",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "direct macho object supports ternary conversions and fp callee" {
+  let source =
+    #|double add_one(double x) { return x + 1.0; }
+    #|double sub_one(double x) { return x - 1.0; }
+    #|double choose_double(int flag) { return flag ? 1 : 2.5; }
+    #|int choose_int(int flag) { return flag ? 1.5 : 2; }
+    #|double call_selected(int flag, double x) {
+    #|  return (flag ? add_one : sub_one)(x);
+    #|}
+    #|int main(void) {
+    #|  if (choose_double(1) != 1.0) return 1;
+    #|  if (choose_double(0) != 2.5) return 2;
+    #|  if (choose_int(1) != 1) return 3;
+    #|  if (choose_int(0) != 2) return 4;
+    #|  if (call_selected(1, 41.0) != 42.0) return 5;
+    #|  if (call_selected(0, 43.0) != 42.0) return 6;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_direct_object_async(
+    source, "macho_ternary_conversions_fp_callee",
   )
   inspect(exit_code, content="42")
 }

@@ -2274,8 +2274,13 @@ async test "e2e builtin frame address bzero and darwin fd helpers lower" {
     #|
     #|int main(void) {
     #|  struct fd_set fds;
+    #|  void *ra = __builtin_return_address(0);
     #|  if (__builtin_frame_address(0) == 0) return 1;
     #|  if (__builtin_frame_address(1) != 0) return 2;
+    #|  if (ra == 0) return 6;
+    #|  if (__builtin_return_address(1) != 0) return 7;
+    #|  if (__builtin_extract_return_addr(ra) != ra) return 8;
+    #|  if (__builtin_frob_return_addr(ra) != ra) return 9;
     #|  __builtin_bzero(&fds, sizeof(fds));
     #|  __darwin_fd_set(9, &fds);
     #|  if (!__darwin_fd_isset(9, &fds)) return 3;
@@ -2306,6 +2311,25 @@ async test "e2e statement attribute before local declaration" {
     #|int main(void) {
     #|  __attribute__((unused)) _Bool ok = 1;
     #|  return ok ? 42 : 1;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e fallthrough attribute statement is a no-op" {
+  let source =
+    #|int main(void) {
+    #|  int x = 0;
+    #|  switch (x) {
+    #|  case 0:
+    #|    x = x + 1;
+    #|    __attribute__((fallthrough));
+    #|  case 1:
+    #|    return x == 1 ? 42 : 2;
+    #|  default:
+    #|    return 3;
+    #|  }
     #|}
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")
@@ -2664,6 +2688,51 @@ async test "e2e function pointer double return is read from fp register" {
 }
 
 ///|
+async test "e2e ternary conversions preserve scalar and function pointer types" {
+  let source =
+    #|double add_one(double x) { return x + 1.0; }
+    #|double sub_one(double x) { return x - 1.0; }
+    #|
+    #|double choose_double(int flag) {
+    #|  return flag ? 1 : 2.5;
+    #|}
+    #|
+    #|int choose_int(int flag) {
+    #|  return flag ? 1.5 : 2;
+    #|}
+    #|
+    #|unsigned long choose_ulong(int flag) {
+    #|  return flag ? -1 : 2UL;
+    #|}
+    #|
+    #|int choose_ptr(int flag) {
+    #|  int value = 41;
+    #|  int *p = flag ? 0 : &value;
+    #|  return p ? *p : 0;
+    #|}
+    #|
+    #|double call_selected(int flag, double x) {
+    #|  return (flag ? add_one : sub_one)(x);
+    #|}
+    #|
+    #|int main(void) {
+    #|  if (choose_double(1) != 1.0) return 1;
+    #|  if (choose_double(0) != 2.5) return 2;
+    #|  if (choose_int(1) != 1) return 3;
+    #|  if (choose_int(0) != 2) return 4;
+    #|  if (choose_ulong(1) != (unsigned long)-1) return 5;
+    #|  if (choose_ulong(0) != 2UL) return 6;
+    #|  if (choose_ptr(1) != 0) return 7;
+    #|  if (choose_ptr(0) != 41) return 8;
+    #|  if (call_selected(1, 41.0) != 42.0) return 9;
+    #|  if (call_selected(0, 43.0) != 42.0) return 10;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e member access reads field from struct call result" {
   let source =
     #|typedef struct Obj Obj;
@@ -2802,6 +2871,19 @@ async test "e2e local floating builtins produce infinities and nan" {
 }
 
 ///|
+async test "e2e floating square root builtins lower" {
+  let source =
+    #|int main(void) {
+    #|  double d = __builtin_sqrt(144.0);
+    #|  float f = __builtin_sqrtf(361.0f);
+    #|  long double l = __builtin_sqrtl(121.0L);
+    #|  return (int)d + (int)f + (int)l;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e nested designator advances following struct initializer" {
   let source =
     #|typedef union ValueUnion {
@@ -2851,6 +2933,34 @@ async test "e2e local nested aggregate initializer preserves struct field" {
     #|  if (l.bytes != 5) return 1;
     #|  if (l.extent.row != 0) return 2;
     #|  if (l.extent.column != 5) return 3;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e local mixed initializer designators" {
+  let source =
+    #|typedef struct Pair {
+    #|  int a;
+    #|  int b;
+    #|} Pair;
+    #|
+    #|typedef struct Wrap {
+    #|  Pair pairs[2];
+    #|  int arr[3];
+    #|} Wrap;
+    #|
+    #|int main(void) {
+    #|  Wrap local = { .pairs[1].b = 5, .pairs[0].a = 37, .arr[2] = 35 };
+    #|  Wrap literal = (Wrap){ .pairs[0].b = 2, .arr[1] = 4 };
+    #|  if (local.pairs[0].a != 37 || local.pairs[0].b != 0) return 1;
+    #|  if (local.pairs[1].a != 0 || local.pairs[1].b != 5) return 2;
+    #|  if (local.arr[0] != 0 || local.arr[1] != 0 || local.arr[2] != 35) return 3;
+    #|  if (literal.pairs[0].a != 0 || literal.pairs[0].b != 2) return 4;
+    #|  if (literal.pairs[1].a != 0 || literal.pairs[1].b != 0) return 5;
+    #|  if (literal.arr[0] != 0 || literal.arr[1] != 4 || literal.arr[2] != 0) return 6;
     #|  return 42;
     #|}
   let exit_code = run_source_async(source)

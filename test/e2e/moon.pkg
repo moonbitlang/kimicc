@@ -4,6 +4,8 @@ import {
 
 import {
   "bobzhang/kimicc/codegen",
+  "bobzhang/kimicc/mir",
+  "bobzhang/kimicc/target",
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/async",

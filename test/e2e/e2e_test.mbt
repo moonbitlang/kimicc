@@ -93,6 +93,130 @@ async test "run arrays fixture" {
 }
 
 ///|
+async test "e2e c11 generic selection chooses compatible type" {
+  let source =
+    #|int main(void) {
+    #|  int x = 0;
+    #|  int arr[3];
+    #|  double d = 0.0;
+    #|  int score = 0;
+    #|  score = score + _Generic(x, int: 10, default: 100);
+    #|  score = score + _Generic(d, double: 20, default: 100);
+    #|  score = score + _Generic("x", char *: 12, char[2]: 100, default: 100);
+    #|  score = score + _Generic(arr, int *: 0, int[3]: 100, default: 100);
+    #|  score = score + _Generic(x++, int: 0, default: 100);
+    #|  return score + x;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e builtin compile-time selection skips unchosen calls" {
+  let source =
+    #|int main(void) {
+    #|  return __builtin_choose_expr(__builtin_types_compatible_p(int, signed int), 40, missing()) +
+    #|         __builtin_choose_expr(__builtin_types_compatible_p(int, unsigned int), missing(), 2);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e integer overflow builtins lower and store results" {
+  let source =
+    #|int main(void) {
+    #|  int i = 0;
+    #|  unsigned int u = 0;
+    #|  long long l = 0;
+    #|  unsigned long long ul = 0;
+    #|  if (__builtin_add_overflow(1, 2, &i)) return 1;
+    #|  if (i != 3) return 2;
+    #|  if (!__builtin_sub_overflow(0u, 1u, &u)) return 3;
+    #|  if (u != 0xffffffffu) return 4;
+    #|  if (!__builtin_mul_overflow(2000000000, 2, &i)) return 5;
+    #|  if (i != -294967296) return 6;
+    #|  if (!__builtin_mul_overflow(0xffffffffu, 2u, &u)) return 7;
+    #|  if (u != 0xfffffffeu) return 8;
+    #|  if (__builtin_add_overflow(l, 1LL, &l)) return 9;
+    #|  if (l != 1LL) return 10;
+    #|  if (!__builtin_ssubll_overflow(-9223372036854775807LL - 1LL, 1LL, &l)) return 11;
+    #|  if (l != 9223372036854775807LL) return 12;
+    #|  if (!__builtin_uaddll_overflow(0xffffffffffffffffULL, 1ULL, &ul)) return 13;
+    #|  if (ul != 0ULL) return 14;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e GNU typeof specifier infers without evaluating operand" {
+  let source =
+    #|int main(void) {
+    #|  int x = 0;
+    #|  __typeof__(x++) y = 40;
+    #|  typeof(unsigned long) z = 2;
+    #|  return x + y + (int)z;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e generic selection uses comma expression result type" {
+  let source =
+    #|int main(void) {
+    #|  unsigned long x = 0;
+    #|  return _Generic((0, x), unsigned long: 42, default: 1);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e GNU auto type locals infer scalar and pointer types" {
+  let source =
+    #|int main(void) {
+    #|  unsigned long x = 40;
+    #|  __auto_type y = x;
+    #|  int bonus = 2;
+    #|  __auto_type p = &bonus;
+    #|  int total = 0;
+    #|  for (__auto_type i = 0; i < *p; i++) total = total + 1;
+    #|  return (int)y + total;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e builtin classify type folds without evaluating operand" {
+  let source =
+    #|struct S { int x; };
+    #|union U { int x; double y; };
+    #|int main(void) {
+    #|  int x = 0;
+    #|  double d = 0.0;
+    #|  int a[2];
+    #|  struct S s;
+    #|  union U u;
+    #|  if (__builtin_classify_type(x++) != 1) return 1;
+    #|  if (x != 0) return 2;
+    #|  if (__builtin_classify_type((_Bool)0) != 4) return 3;
+    #|  if (__builtin_classify_type(d) != 8) return 4;
+    #|  if (__builtin_classify_type(&x) != 5) return 5;
+    #|  if (__builtin_classify_type(a) != 5) return 6;
+    #|  if (__builtin_classify_type("x") != 5) return 7;
+    #|  if (__builtin_classify_type(s) != 12) return 8;
+    #|  if (__builtin_classify_type(u) != 13) return 9;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "run logic fixture" {
   let source =
     #|int main() {
@@ -414,6 +538,32 @@ async test "__attribute without trailing underscores" {
 }
 
 ///|
+async test "common GNU no-op attributes parse and run" {
+  let source =
+    #|__attribute__((format(printf, 1, 2)))
+    #|int attr_printf_like(const char *fmt, ...) { return fmt[0]; }
+    #|
+    #|__attribute__((malloc, alloc_size(1), alloc_align(2)))
+    #|void *attr_alloc_like(unsigned long n, unsigned long align);
+    #|
+    #|__attribute__((returns_nonnull, nonnull(1)))
+    #|char *attr_identity(char *p) { return p; }
+    #|
+    #|__attribute__((always_inline, hot))
+    #|static inline int attr_inline(int x) { return x + 1; }
+    #|
+    #|__attribute__((noinline, warn_unused_result, cold, no_sanitize_thread))
+    #|int attr_helper(void) { return attr_printf_like("*"); }
+    #|
+    #|int main(void) {
+    #|  char buf[1];
+    #|  return attr_helper() + attr_inline(attr_identity(buf) == buf ? -1 : 0);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "fortified libc builtins lower to unchecked calls" {
   let source =
     #|typedef unsigned long size_t;
@@ -489,6 +639,42 @@ async test "sizeof string literal includes nul terminator" {
     #|}
   let exit_code = run_source_async(source)
   inspect(exit_code, content="0")
+}
+
+///|
+async test "alignof type and expression operators fold to alignment" {
+  let source =
+    #|struct S { char c; int x; };
+    #|union U { char c; double d; };
+    #|int main() {
+    #|  long y;
+    #|  int a[2];
+    #|  if (_Alignof(int) != 4) return 1;
+    #|  if (alignof(struct S) != 4) return 2;
+    #|  if (__alignof__(union U) != 8) return 3;
+    #|  if (__alignof__(y) != 8) return 4;
+    #|  if (__alignof__(a) != 4) return 5;
+    #|  if (__alignof__ y != 8) return 6;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "offsetof nested and array member designators fold to offsets" {
+  let source =
+    #|struct Inner { char c; int x; };
+    #|struct Outer { char tag; struct Inner items[3]; int tail; };
+    #|int main() {
+    #|  if (__builtin_offsetof(struct Outer, items) != 4) return 1;
+    #|  if (__builtin_offsetof(struct Outer, items[1]) != 12) return 2;
+    #|  if (__builtin_offsetof(struct Outer, items[2].x) != 24) return 3;
+    #|  if (__builtin_offsetof(struct Outer, tail) != 28) return 4;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
 }
 
 ///|
@@ -1733,6 +1919,106 @@ async test "global scalar initializer" {
 }
 
 ///|
+async test "global bit-field initializers" {
+  let source =
+    #|struct Bits { unsigned a : 3; signed b : 4; unsigned c : 5; };
+    #|union UBits { unsigned a : 3; signed b : 4; };
+    #|struct Bits bits = { .a = 5, .b = -3, .c = 17 };
+    #|union UBits ubits = { .b = -3 };
+    #|int main(void) {
+    #|  if (bits.a != 5) return 1;
+    #|  if (bits.b != -3) return 2;
+    #|  if (bits.c != 17) return 3;
+    #|  if (ubits.b != -3) return 4;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "global aggregate initializers" {
+  let source =
+    #|struct Inner { char c; int x; };
+    #|struct Outer { char tag; struct Inner inner; int tail; };
+    #|struct Refs { int *first; int *tail; int (*fn)(int); };
+    #|struct Node { int value; struct Node *next; };
+    #|union Bytes { int i; char c[4]; };
+    #|int add1(int x) { return x + 1; }
+    #|int arr[5] = { 1, [3] = 4 };
+    #|struct Outer outer = { .tail = 9, .inner = { .x = 7, .c = 2 }, .tag = 1 };
+    #|char buf[16];
+    #|int *ptr = arr + 3;
+    #|char *byte_ptr = (char *)arr + 3;
+    #|int *cast_ptr = (int *)((char *)arr + 5);
+    #|char *byte_subscript_ptr = &((char *)arr)[7];
+    #|int *cast_subscript_ptr = &((int *)((char *)arr + 6))[1];
+    #|int *addr = &arr[4];
+    #|int *cast_member = &((struct Inner *)buf)->x;
+    #|int (*fp)(int) = add1;
+    #|int *ptrs[3] = { arr, arr + 2, &arr[4] };
+    #|struct Refs refs = { .tail = arr + 4, .fn = add1, .first = &arr[1] };
+    #|int *member = &outer.inner.x;
+    #|int *member_next = &outer.inner.x + 1;
+    #|struct Node node2 = { 2, 0 };
+    #|struct Node node1 = { .next = &node2, .value = 1 };
+    #|struct Node *nodes[2] = { &node1, &node2 };
+    #|union Bytes bytes = { .c = { 65, 66, 0, 0 } };
+    #|char str[6] = "hey";
+    #|int main(void) {
+    #|  if (arr[0] != 1 || arr[3] != 4 || arr[4] != 0) return 1;
+    #|  if (outer.tag != 1 || outer.inner.c != 2 || outer.inner.x != 7 || outer.tail != 9) return 2;
+    #|  if (ptr != &arr[3] || *ptr != 4 || addr != &arr[4]) return 3;
+    #|  if (byte_ptr - (char *)arr != 3) return 4;
+    #|  if ((char *)cast_ptr - (char *)arr != 5) return 5;
+    #|  if (byte_subscript_ptr - (char *)arr != 7) return 6;
+    #|  if ((char *)cast_subscript_ptr - (char *)arr != 10) return 7;
+    #|  if ((char *)cast_member - (char *)buf != 4) return 8;
+    #|  if (fp(41) != 42) return 9;
+    #|  if (ptrs[0] != &arr[0] || ptrs[1] != &arr[2] || ptrs[2] != &arr[4]) return 10;
+    #|  if (refs.first != &arr[1] || refs.tail != &arr[4] || refs.fn(41) != 42) return 11;
+    #|  if (member != &outer.inner.x || *member != 7 || member_next != &outer.tail) return 12;
+    #|  if (node1.value != 1 || node1.next != &node2 || node2.value != 2 || node2.next != 0) return 13;
+    #|  if (nodes[0] != &node1 || nodes[1] != &node2) return 14;
+    #|  if (bytes.c[0] != 65 || bytes.c[1] != 66 || bytes.c[2] != 0 || bytes.c[3] != 0) return 15;
+    #|  if (str[0] != 104 || str[1] != 101 || str[2] != 121 || str[3] != 0 || str[5] != 0) return 16;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "global nested designator initializers" {
+  let source =
+    #|typedef union Box {
+    #|  double d;
+    #|  long l;
+    #|} Box;
+    #|typedef struct Value {
+    #|  Box box;
+    #|  int tag;
+    #|  int arr[3];
+    #|} Value;
+    #|struct Pair {
+    #|  int a;
+    #|  int b;
+    #|};
+    #|Value value = { .box.d = 1.5, .tag = 7, .arr[2] = 35 };
+    #|struct Pair pairs[2] = { [1].b = 5, [0].a = 37 };
+    #|int main(void) {
+    #|  if (value.box.d != 1.5) return 1;
+    #|  if (value.tag != 7) return 2;
+    #|  if (value.arr[0] != 0 || value.arr[1] != 0 || value.arr[2] != 35) return 3;
+    #|  if (pairs[0].a != 37 || pairs[0].b != 0) return 4;
+    #|  if (pairs[1].a != 0 || pairs[1].b != 5) return 5;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "global string pointer initializer" {
   let source =
     #|char *msg = "hi";
@@ -2144,22 +2430,33 @@ async test "__builtin_constant_p" {
   let source =
     #|int main() {
     #|  int x = 42;
-    #|  return __builtin_constant_p(x);
+    #|  if (__builtin_constant_p(x)) return 1;
+    #|  if (!__builtin_constant_p(1 + 2)) return 2;
+    #|  if (!__builtin_constant_p(__builtin_bswap32(0x01020304u))) return 3;
+    #|  return 0;
     #|}
   let exit_code = run_source_async(source)
   inspect(exit_code, content="0")
 }
 
 ///|
-async test "__builtin_object_size" {
+async test "__builtin_object_size stubs" {
   let source =
     #|int main() {
     #|  int x;
-    #|  return (int)__builtin_object_size(&x, 0);
+    #|  char buf[16];
+    #|  if (__builtin_object_size(&x, 0) != sizeof(x)) return 1;
+    #|  if (__builtin_dynamic_object_size((void *)&x, 0) != sizeof(x)) return 2;
+    #|  if (__builtin_object_size(&x, 2) != sizeof(x)) return 3;
+    #|  if (__builtin_dynamic_object_size(&x, 2) != sizeof(x)) return 4;
+    #|  if (__builtin_object_size("abc", 0) != 4) return 5;
+    #|  if (__builtin_dynamic_object_size("a\0bc", 2) != 5) return 6;
+    #|  if (__builtin_object_size(buf, 0) != 16) return 7;
+    #|  if (__builtin_dynamic_object_size((void *)buf, 2) != 16) return 8;
+    #|  return 42;
     #|}
   let exit_code = run_source_async(source)
-  // __builtin_object_size returns -1 (SIZE_MAX) as stub; exit code is 255
-  inspect(exit_code, content="255")
+  inspect(exit_code, content="42")
 }
 
 ///|

@@ -47,7 +47,11 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
       }
       let frame_size = (self.stack_size + 15) / 16 * 16
       if !decl.is_static && !decl.is_inline {
-        self.emit("\t.globl\t_" + decl.name)
+        if decl.is_weak {
+          self.emit("\t.weak_definition\t_" + decl.name)
+        } else {
+          self.emit("\t.globl\t_" + decl.name)
+        }
       }
       self.emit("\t.p2align\t2")
       self.emit("_" + decl.name + ":")
@@ -83,7 +87,7 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
             }
             fp_idx += 1
           }
-          Double => {
+          Double | LongDouble => {
             if fp_idx < 8 {
               let reg = "d" + fp_idx.to_string()
               self.emit_store_local(reg, offset, frame_size)
@@ -197,7 +201,7 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
       // Default return
       match decl.ret {
         Float => self.emit("\tfmov\ts0, wzr")
-        Double => self.emit("\tfmov\td0, xzr")
+        Double | LongDouble => self.emit("\tfmov\td0, xzr")
         SInt128 | UInt128 => {
           self.emit("\tmov\tx0, #0")
           self.emit("\tmov\tx1, #0")
@@ -349,6 +353,7 @@ fn Codegen::collect_expr_locals(self : Codegen, expr : @parser.Expr) -> Unit {
     | Deref(e)
     | AddrOf(e)
     | SizeofExpr(e)
+    | AlignofExpr(e)
     | Cast(_, e)
     | PrefixInc(e)
     | PrefixDec(e)
@@ -356,7 +361,7 @@ fn Codegen::collect_expr_locals(self : Codegen, expr : @parser.Expr) -> Unit {
     | PostfixDec(e)
     | DesignatedField(_, e) => self.collect_expr_locals(e)
     Call(func, args) => {
-      let ret_ty = self.call_return_type(func, 0)
+      let ret_ty = self.call_return_type(func, args, 0)
       if self.is_indirect_aggregate(ret_ty) {
         let size = self.type_size(ret_ty)
         if size > self.sret_scratch_size {

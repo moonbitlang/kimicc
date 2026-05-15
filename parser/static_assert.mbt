@@ -16,18 +16,30 @@ fn Parser::parse_static_assert_decl(self : Parser) -> Unit {
   self.advance()
   self.expect(LParen)
   let expr = self.parse_assign()
-  match self.fold_const(expr) {
-    Some(0L) => abort("static assertion failed")
-    _ => ()
+  let failed = match self.fold_const(expr) {
+    Some(0L) => true
+    _ => false
   }
+  let mut message = ""
   if self.token == Comma {
     self.advance()
     // C requires a string-literal message. Accept adjacent literals and keep
     // parsing tolerant for preprocessed system headers.
     while self.token is String(_) {
+      match self.token {
+        String(s) => if message == "" { message = s }
+        _ => ()
+      }
       self.advance()
     }
   }
   self.expect(RParen)
   self.expect(Semicolon)
+  if failed {
+    if message == "" {
+      abort("static assertion failed")
+    } else {
+      abort("static assertion failed: " + message)
+    }
+  }
 }

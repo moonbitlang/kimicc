@@ -6,6 +6,7 @@
 /// details and use `generate` as the stable entry point.
 pub struct Codegen {
   output : StringBuilder
+  mut mir : @mir.Program?
   mut label_counter : Int
   mut local_offsets : Map[String, Int]
   mut var_types : Map[String, @parser.Type]
@@ -109,6 +110,57 @@ fn should_replace_global_decl(
 }
 
 ///|
+fn merge_global_visibility(
+  primary : @parser.GlobalDecl,
+  other : @parser.GlobalDecl,
+) -> String? {
+  match primary.visibility {
+    Some(_) => primary.visibility
+    None => other.visibility
+  }
+}
+
+///|
+fn merge_global_alias(
+  primary : @parser.GlobalDecl,
+  other : @parser.GlobalDecl,
+) -> String? {
+  match primary.symbol_alias {
+    Some(_) => primary.symbol_alias
+    None => other.symbol_alias
+  }
+}
+
+///|
+fn merge_global_section(
+  primary : @parser.GlobalDecl,
+  other : @parser.GlobalDecl,
+) -> String? {
+  match primary.section {
+    Some(_) => primary.section
+    None => other.section
+  }
+}
+
+///|
+fn with_merged_global_attrs(
+  primary : @parser.GlobalDecl,
+  other : @parser.GlobalDecl,
+) -> @parser.GlobalDecl {
+  {
+    ty: primary.ty,
+    name: primary.name,
+    init: primary.init,
+    is_static: primary.is_static,
+    is_extern: primary.is_extern,
+    is_weak: primary.is_weak || other.is_weak,
+    visibility: merge_global_visibility(primary, other),
+    symbol_alias: merge_global_alias(primary, other),
+    section: merge_global_section(primary, other),
+  }
+}
+
+///|
 fn merge_global_decls(
   globals : Array[@parser.GlobalDecl],
 ) -> Array[@parser.GlobalDecl] {
@@ -123,7 +175,9 @@ fn merge_global_decls(
     if found < 0 {
       merged.push(g)
     } else if should_replace_global_decl(merged[found], g) {
-      merged[found] = g
+      merged[found] = with_merged_global_attrs(g, merged[found])
+    } else {
+      merged[found] = with_merged_global_attrs(merged[found], g)
     }
   }
   merged
@@ -157,6 +211,7 @@ fn collect_static_inline_expr(
     | FloatLiteral(_)
     | String(_)
     | Sizeof(_)
+    | Alignof(_)
     | LabelAddr(_)
     | OffsetOf(_, _) => ()
     Binary(_, left, right)
@@ -169,6 +224,7 @@ fn collect_static_inline_expr(
     Unary(_, inner)
     | Deref(inner)
     | SizeofExpr(inner)
+    | AlignofExpr(inner)
     | Cast(_, inner)
     | PrefixInc(inner)
     | PrefixDec(inner)
@@ -271,10 +327,22 @@ fn Codegen::global_expr_type(
   self : Codegen,
   expr : @parser.Expr,
 ) -> @parser.Type {
+  match self.mir {
+    Some(mir) => return mir.global_expr_type(expr)
+    None => ()
+  }
   match expr {
+    Number(value) => number_literal_type(value)
+    FloatLiteral(_) => Double
     Var(name) =>
       if self.globals.contains(name) {
         self.globals[name].ty
+      } else if self.func_rets.contains(name) {
+        FuncPtr(
+          self.func_rets[name],
+          self.func_param_types.get_or_default(name, []),
+          self.func_variadic.get_or_default(name, false),
+        )
       } else {
         Pointer(Void)
       }
@@ -285,219 +353,624 @@ fn Codegen::global_expr_type(
     DesignatedRange(_, _, e) => self.global_expr_type(e)
     Cast(ty, _) => ty
     AddrOf(e) => Pointer(self.global_expr_type(e))
+    Deref(e) =>
+      match peel_aligned_type(self.global_expr_type(e)) {
+        Pointer(elem) | Array(elem, _) => elem
+        _ => SInt
+      }
     ArrayAccess(base, _) =>
       match peel_aligned_type(self.global_expr_type(base)) {
         Array(elem, _) | Pointer(elem) => elem
         _ => SInt
       }
-    MemberAccess(obj, field) =>
-      match peel_aligned_type(self.global_expr_type(obj)) {
-        Struct(name) | Union(name) =>
-          match self.find_field_layout(name, field) {
-            Some((_, ty, _, _, _, _)) => ty
-            None => SInt
-          }
-        Pointer(Struct(name)) | Pointer(Union(name)) =>
-          match self.find_field_layout(name, field) {
-            Some((_, ty, _, _, _, _)) => ty
-            None => SInt
-          }
-        _ => SInt
+    MemberAccess(obj, field) => {
+      let obj_ty = self.global_expr_type(obj)
+      match self.find_field_layout_for_type(obj_ty, field) {
+        Some((_, ty, _, _, _, _)) => ty
+        None => SInt
       }
+    }
     _ => SInt
   }
 }
 
 ///|
-fn Codegen::fold_const(self : Codegen, expr : @parser.Expr) -> Int64? {
+priv struct DarwinConstIntValue {
+  bits : Int64
+  ty : @parser.Type
+}
+
+///|
+fn darwin_const_core_type(ty : @parser.Type) -> @parser.Type {
+  match ty {
+    Atomic(inner) | Aligned(inner, _) => darwin_const_core_type(inner)
+    _ => ty
+  }
+}
+
+///|
+fn darwin_const_int(bits : Int64, ty : @parser.Type) -> DarwinConstIntValue {
+  { bits, ty: darwin_const_core_type(ty) }
+}
+
+///|
+fn darwin_const_bool(value : Bool) -> DarwinConstIntValue {
+  { bits: if value { 1L } else { 0L }, ty: SInt }
+}
+
+///|
+fn darwin_const_type_is_unsigned(ty : @parser.Type) -> Bool {
+  match darwin_const_core_type(ty) {
+    Bool | UChar | UShort | UInt | ULong | ULongLong | UInt128 => true
+    _ => false
+  }
+}
+
+///|
+fn darwin_const_type_int_width(ty : @parser.Type) -> Int? {
+  match darwin_const_core_type(ty) {
+    Bool => Some(1)
+    SChar | UChar => Some(8)
+    SShort | UShort => Some(16)
+    SInt | UInt => Some(32)
+    SLong | ULong | SLongLong | ULongLong | Pointer(_) | FuncPtr(_, _, _) =>
+      Some(64)
+    SInt128 | UInt128 => Some(128)
+    _ => None
+  }
+}
+
+///|
+fn darwin_const_type_is_integer(ty : @parser.Type) -> Bool {
+  match darwin_const_core_type(ty) {
+    Bool
+    | SChar
+    | UChar
+    | SShort
+    | UShort
+    | SInt
+    | UInt
+    | SLong
+    | ULong
+    | SLongLong
+    | ULongLong
+    | SInt128
+    | UInt128 => true
+    _ => false
+  }
+}
+
+///|
+fn darwin_const_integer_promote(ty : @parser.Type) -> @parser.Type {
+  match darwin_const_core_type(ty) {
+    Bool | SChar | UChar | SShort | UShort => SInt
+    other => other
+  }
+}
+
+///|
+fn darwin_const_unsigned_type_for_rank(rank : Int) -> @parser.Type {
+  if rank >= 6 {
+    UInt128
+  } else if rank == 5 {
+    ULongLong
+  } else if rank == 4 {
+    ULong
+  } else {
+    UInt
+  }
+}
+
+///|
+fn darwin_const_signed_type_for_rank(rank : Int) -> @parser.Type {
+  if rank >= 6 {
+    SInt128
+  } else if rank == 5 {
+    SLongLong
+  } else if rank == 4 {
+    SLong
+  } else {
+    SInt
+  }
+}
+
+///|
+fn darwin_const_integer_common_type(
+  lhs_ty : @parser.Type,
+  rhs_ty : @parser.Type,
+) -> @parser.Type {
+  let lhs_ty = darwin_const_integer_promote(lhs_ty)
+  let rhs_ty = darwin_const_integer_promote(rhs_ty)
+  if lhs_ty == rhs_ty {
+    return lhs_ty
+  }
+  if !darwin_const_type_is_integer(lhs_ty) ||
+    !darwin_const_type_is_integer(rhs_ty) {
+    return lhs_ty
+  }
+  let lhs_unsigned = darwin_const_type_is_unsigned(lhs_ty)
+  let rhs_unsigned = darwin_const_type_is_unsigned(rhs_ty)
+  let lhs_rank = integer_rank(lhs_ty)
+  let rhs_rank = integer_rank(rhs_ty)
+  if lhs_unsigned == rhs_unsigned {
+    let rank = if lhs_rank > rhs_rank { lhs_rank } else { rhs_rank }
+    if lhs_unsigned {
+      darwin_const_unsigned_type_for_rank(rank)
+    } else {
+      darwin_const_signed_type_for_rank(rank)
+    }
+  } else {
+    let unsigned_ty = if lhs_unsigned { lhs_ty } else { rhs_ty }
+    let signed_ty = if lhs_unsigned { rhs_ty } else { lhs_ty }
+    let unsigned_rank = integer_rank(unsigned_ty)
+    let signed_rank = integer_rank(signed_ty)
+    let unsigned_width = darwin_const_type_int_width(unsigned_ty).unwrap_or(0)
+    let signed_width = darwin_const_type_int_width(signed_ty).unwrap_or(0)
+    if unsigned_rank >= signed_rank {
+      unsigned_ty
+    } else if signed_width > unsigned_width {
+      signed_ty
+    } else {
+      darwin_const_unsigned_type_for_rank(signed_rank)
+    }
+  }
+}
+
+///|
+fn darwin_const_cast_int(
+  value : DarwinConstIntValue,
+  ty : @parser.Type,
+) -> DarwinConstIntValue {
+  let core_ty = darwin_const_core_type(ty)
+  let unsigned = darwin_const_type_is_unsigned(core_ty)
+  match darwin_const_type_int_width(core_ty) {
+    None => darwin_const_int(value.bits, core_ty)
+    Some(1) => darwin_const_int(if value.bits == 0L { 0L } else { 1L }, core_ty)
+    Some(width) =>
+      if width >= 64 {
+        darwin_const_int(value.bits, core_ty)
+      } else {
+        let mask = (1L << width) - 1L
+        let bits = value.bits & mask
+        if unsigned {
+          darwin_const_int(bits, core_ty)
+        } else {
+          let sign = 1L << (width - 1)
+          if (bits & sign) != 0L {
+            darwin_const_int(bits | mask.lnot(), core_ty)
+          } else {
+            darwin_const_int(bits, core_ty)
+          }
+        }
+      }
+  }
+}
+
+///|
+fn darwin_const_apply_binary_type(
+  left : DarwinConstIntValue,
+  right : DarwinConstIntValue,
+) -> (DarwinConstIntValue, DarwinConstIntValue, @parser.Type) {
+  let ty = darwin_const_integer_common_type(left.ty, right.ty)
+  (darwin_const_cast_int(left, ty), darwin_const_cast_int(right, ty), ty)
+}
+
+///|
+fn darwin_const_binary_arith(
+  op : String,
+  left : DarwinConstIntValue,
+  right : DarwinConstIntValue,
+) -> DarwinConstIntValue? {
+  let (x, y, ty) = darwin_const_apply_binary_type(left, right)
+  let bits = match op {
+    "+" => x.bits + y.bits
+    "-" => x.bits - y.bits
+    "*" => x.bits * y.bits
+    "|" => x.bits | y.bits
+    "&" => x.bits & y.bits
+    "^" => x.bits ^ y.bits
+    _ => return None
+  }
+  Some(darwin_const_cast_int(darwin_const_int(bits, ty), ty))
+}
+
+///|
+fn darwin_const_equal_compare(
+  left : DarwinConstIntValue,
+  right : DarwinConstIntValue,
+) -> Bool {
+  let (x, y, _) = darwin_const_apply_binary_type(left, right)
+  x.bits == y.bits
+}
+
+///|
+fn darwin_const_rel_compare(
+  op : String,
+  left : DarwinConstIntValue,
+  right : DarwinConstIntValue,
+) -> Bool {
+  let (left, right, ty) = darwin_const_apply_binary_type(left, right)
+  if darwin_const_type_is_unsigned(ty) {
+    let x = left.bits.reinterpret_as_uint64()
+    let y = right.bits.reinterpret_as_uint64()
+    match op {
+      "<" => x < y
+      ">" => x > y
+      "<=" => x <= y
+      ">=" => x >= y
+      _ => false
+    }
+  } else {
+    match op {
+      "<" => left.bits < right.bits
+      ">" => left.bits > right.bits
+      "<=" => left.bits <= right.bits
+      ">=" => left.bits >= right.bits
+      _ => false
+    }
+  }
+}
+
+///|
+fn darwin_const_divide(
+  op : String,
+  left : DarwinConstIntValue,
+  right : DarwinConstIntValue,
+) -> DarwinConstIntValue? {
+  let (left, right, ty) = darwin_const_apply_binary_type(left, right)
+  if right.bits == 0L {
+    return None
+  }
+  if darwin_const_type_is_unsigned(ty) {
+    let x = left.bits.reinterpret_as_uint64()
+    let y = right.bits.reinterpret_as_uint64()
+    let result = if op == "/" { x / y } else { x % y }
+    Some(
+      darwin_const_cast_int(
+        darwin_const_int(result.reinterpret_as_int64(), ty),
+        ty,
+      ),
+    )
+  } else {
+    let result = if op == "/" {
+      left.bits / right.bits
+    } else {
+      left.bits % right.bits
+    }
+    Some(darwin_const_cast_int(darwin_const_int(result, ty), ty))
+  }
+}
+
+///|
+fn darwin_const_shift(
+  op : String,
+  left : DarwinConstIntValue,
+  right : DarwinConstIntValue,
+) -> DarwinConstIntValue? {
+  let lhs_ty = darwin_const_integer_promote(left.ty)
+  let x = darwin_const_cast_int(left, lhs_ty)
+  let y = darwin_const_cast_int(right, darwin_const_integer_promote(right.ty))
+  let shift = y.bits.to_int()
+  if op == "<<" {
+    Some(
+      darwin_const_cast_int(darwin_const_int(x.bits << shift, lhs_ty), lhs_ty),
+    )
+  } else if darwin_const_type_is_unsigned(lhs_ty) {
+    Some(
+      darwin_const_cast_int(
+        darwin_const_int(
+          (x.bits.reinterpret_as_uint64() >> shift).reinterpret_as_int64(),
+          lhs_ty,
+        ),
+        lhs_ty,
+      ),
+    )
+  } else {
+    Some(
+      darwin_const_cast_int(darwin_const_int(x.bits >> shift, lhs_ty), lhs_ty),
+    )
+  }
+}
+
+///|
+fn Codegen::fold_const_int(
+  self : Codegen,
+  expr : @parser.Expr,
+) -> DarwinConstIntValue? {
   match expr {
-    Number(n) => Some(n)
+    Number(n) => {
+      let ty = number_literal_type(n)
+      Some(darwin_const_cast_int(darwin_const_int(n, ty), ty))
+    }
     Binary("+", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x + y)
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => darwin_const_binary_arith("+", x, y)
         _ => None
       }
     Binary("-", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x - y)
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => darwin_const_binary_arith("-", x, y)
         _ => None
       }
     Binary("*", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x * y)
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => darwin_const_binary_arith("*", x, y)
         _ => None
       }
     Binary("/", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(_), Some(0L)) => None
-        (Some(x), Some(y)) => Some(x / y)
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => darwin_const_divide("/", x, y)
         _ => None
       }
     Binary("%", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(_), Some(0L)) => None
-        (Some(x), Some(y)) => Some(x % y)
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => darwin_const_divide("%", x, y)
         _ => None
       }
     Binary("|", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x | y)
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => darwin_const_binary_arith("|", x, y)
         _ => None
       }
     Binary("&", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x & y)
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => darwin_const_binary_arith("&", x, y)
         _ => None
       }
     Binary("^", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x ^ y)
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => darwin_const_binary_arith("^", x, y)
         _ => None
       }
     Binary("<<", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x << y.to_int())
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => darwin_const_shift("<<", x, y)
         _ => None
       }
     Binary(">>", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(x >> y.to_int())
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) => darwin_const_shift(">>", x, y)
         _ => None
       }
     Binary("==", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x == y { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) =>
+          Some(darwin_const_bool(darwin_const_equal_compare(x, y)))
         _ => None
       }
     Binary("!=", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x != y { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) =>
+          Some(darwin_const_bool(!darwin_const_equal_compare(x, y)))
         _ => None
       }
     Binary("<", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x < y { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) =>
+          Some(darwin_const_bool(darwin_const_rel_compare("<", x, y)))
         _ => None
       }
     Binary(">", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x > y { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) =>
+          Some(darwin_const_bool(darwin_const_rel_compare(">", x, y)))
         _ => None
       }
     Binary("<=", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x <= y { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) =>
+          Some(darwin_const_bool(darwin_const_rel_compare("<=", x, y)))
         _ => None
       }
     Binary(">=", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x >= y { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) =>
+          Some(darwin_const_bool(darwin_const_rel_compare(">=", x, y)))
         _ => None
       }
     Binary("&&", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x != 0L && y != 0L { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) =>
+          Some(darwin_const_bool(x.bits != 0L && y.bits != 0L))
         _ => None
       }
     Binary("||", a, b) =>
-      match (self.fold_const(a), self.fold_const(b)) {
-        (Some(x), Some(y)) => Some(if x != 0L || y != 0L { 1L } else { 0L })
+      match (self.fold_const_int(a), self.fold_const_int(b)) {
+        (Some(x), Some(y)) =>
+          Some(darwin_const_bool(x.bits != 0L || y.bits != 0L))
         _ => None
       }
     Ternary(cond, a, b) =>
-      match self.fold_const(cond) {
-        Some(0L) => self.fold_const(b)
-        Some(_) => self.fold_const(a)
+      match self.fold_const_int(cond) {
+        Some({ bits: 0L, .. }) => self.fold_const_int(b)
+        Some(_) => self.fold_const_int(a)
         None => None
       }
     Unary("-", e) =>
-      match self.fold_const(e) {
-        Some(x) => Some(-x)
-        _ => None
+      match self.fold_const_int(e) {
+        Some(value) => {
+          let ty = darwin_const_integer_promote(value.ty)
+          Some(darwin_const_cast_int(darwin_const_int(-value.bits, ty), ty))
+        }
+        None => None
+      }
+    Unary("+", e) =>
+      match self.fold_const_int(e) {
+        Some(value) => {
+          let ty = darwin_const_integer_promote(value.ty)
+          Some(darwin_const_cast_int(value, ty))
+        }
+        None => None
       }
     Unary("~", e) =>
-      match self.fold_const(e) {
-        Some(x) => Some(x.lnot())
-        _ => None
+      match self.fold_const_int(e) {
+        Some(value) => {
+          let ty = darwin_const_integer_promote(value.ty)
+          Some(
+            darwin_const_cast_int(darwin_const_int(value.bits.lnot(), ty), ty),
+          )
+        }
+        None => None
       }
     Unary("!", e) =>
-      match self.fold_const(e) {
-        Some(0L) => Some(1L)
-        Some(_) => Some(0L)
-        _ => None
+      match self.fold_const_int(e) {
+        Some(value) => Some(darwin_const_bool(value.bits == 0L))
+        None => None
       }
-    Cast(_, e) => self.fold_const(e)
-    DesignatedField(_, e) => self.fold_const(e)
-    DesignatedIndex(_, e) => self.fold_const(e)
-    DesignatedRange(_, _, e) => self.fold_const(e)
-    Sizeof(ty) => Some(self.type_size(ty).to_int64())
-    SizeofExpr(e) => Some(self.type_size(self.global_expr_type(e)).to_int64())
-    OffsetOf(ty, field) =>
-      match ty {
-        Struct(name) | Union(name) =>
-          match self.find_field_layout(name, field) {
-            Some((_, _, offset, _, _, _)) => Some(offset.to_int64())
-            None => None
-          }
-        _ => None
+    Cast(ty, e) =>
+      if ty.is_floating() {
+        None
+      } else if self.type_of(e, 0).is_floating() {
+        match self.fold_float_const(e) {
+          Some(value) =>
+            Some(
+              darwin_const_cast_int(
+                darwin_const_int(value.to_int().to_int64(), ty),
+                ty,
+              ),
+            )
+          None => None
+        }
+      } else {
+        match darwin_const_type_int_width(ty) {
+          Some(_) =>
+            match self.fold_const_int(e) {
+              Some(value) => Some(darwin_const_cast_int(value, ty))
+              None => None
+            }
+          None => None
+        }
+      }
+    DesignatedField(_, e) => self.fold_const_int(e)
+    DesignatedIndex(_, e) => self.fold_const_int(e)
+    DesignatedRange(_, _, e) => self.fold_const_int(e)
+    Sizeof(ty) => Some(darwin_const_int(self.type_size(ty).to_int64(), ULong))
+    SizeofExpr(e) =>
+      Some(
+        darwin_const_int(
+          self.type_size(self.global_expr_type(e)).to_int64(),
+          ULong,
+        ),
+      )
+    Alignof(ty) => Some(darwin_const_int(self.type_align(ty).to_int64(), ULong))
+    AlignofExpr(e) =>
+      Some(
+        darwin_const_int(
+          self.type_align(self.global_expr_type(e)).to_int64(),
+          ULong,
+        ),
+      )
+    OffsetOf(ty, path) =>
+      match self.offset_of_path(ty, path) {
+        Some(offset) => Some(darwin_const_int(offset.to_int64(), ULong))
+        None => None
       }
     _ => None
   }
 }
 
 ///|
+fn Codegen::fold_const(self : Codegen, expr : @parser.Expr) -> Int64? {
+  match self.mir {
+    Some(mir) =>
+      match
+        mir.fold_const(expr, {
+          locals: self.var_types,
+          current_func: self.func_name,
+        }) {
+        Some(value) => return Some(value)
+        None => ()
+      }
+    None => ()
+  }
+  match self.fold_const_int(expr) {
+    Some(value) => Some(value.bits)
+    None => None
+  }
+}
+
+///|
 fn Codegen::fold_float_const(self : Codegen, expr : @parser.Expr) -> Double? {
-  match expr {
-    FloatLiteral(v) => Some(v)
-    Number(n) => Some(n.to_double())
-    Binary("+", a, b) =>
-      match (self.fold_float_const(a), self.fold_float_const(b)) {
-        (Some(x), Some(y)) => Some(x + y)
-        _ => None
+  match self.mir {
+    Some(mir) =>
+      match
+        mir.fold_float_const(expr, {
+          locals: self.var_types,
+          current_func: self.func_name,
+        }) {
+        Some(value) => return Some(value)
+        None => ()
       }
-    Binary("-", a, b) =>
-      match (self.fold_float_const(a), self.fold_float_const(b)) {
-        (Some(x), Some(y)) => Some(x - y)
-        _ => None
-      }
-    Binary("*", a, b) =>
-      match (self.fold_float_const(a), self.fold_float_const(b)) {
-        (Some(x), Some(y)) => Some(x * y)
-        _ => None
-      }
-    Binary("/", a, b) =>
-      match (self.fold_float_const(a), self.fold_float_const(b)) {
-        (Some(x), Some(y)) => Some(x / y)
-        _ => None
-      }
-    Unary("-", e) =>
-      match self.fold_float_const(e) {
-        Some(x) => Some(-x)
-        None => None
-      }
-    Unary("+", e) => self.fold_float_const(e)
-    Ternary(cond, a, b) =>
-      match self.fold_const(cond) {
-        Some(0L) => self.fold_float_const(b)
-        Some(_) => self.fold_float_const(a)
-        None => None
-      }
-    Cast(_, e) => self.fold_float_const(e)
-    DesignatedField(_, e) => self.fold_float_const(e)
-    DesignatedIndex(_, e) => self.fold_float_const(e)
-    DesignatedRange(_, _, e) => self.fold_float_const(e)
-    Call(Var(name), _) =>
-      match name {
-        "__builtin_nan" | "__builtin_nanf" | "__builtin_nanl" => Some(0.0 / 0.0)
-        "__builtin_huge_val"
-        | "__builtin_huge_valf"
-        | "__builtin_huge_vall"
-        | "__builtin_inf"
-        | "__builtin_inff"
-        | "__builtin_infl" => Some(1.0 / 0.0)
-        _ => None
-      }
-    _ => None
+    None => ()
+  }
+  let expr_ty = self.type_of(expr, 0)
+  if !expr_ty.is_floating() {
+    match expr {
+      Cast(_, e) if self.type_of(e, 0).is_floating() =>
+        match self.fold_float_const(e) {
+          Some(v) => Some(v.to_int().to_double())
+          None => None
+        }
+      _ =>
+        match self.fold_const(expr) {
+          Some(n) => Some(n.to_double())
+          _ => None
+        }
+    }
+  } else {
+    match expr {
+      FloatLiteral(v) => Some(v)
+      Number(n) => Some(n.to_double())
+      Binary("+", a, b) =>
+        match (self.fold_float_const(a), self.fold_float_const(b)) {
+          (Some(x), Some(y)) => Some(x + y)
+          _ => None
+        }
+      Binary("-", a, b) =>
+        match (self.fold_float_const(a), self.fold_float_const(b)) {
+          (Some(x), Some(y)) => Some(x - y)
+          _ => None
+        }
+      Binary("*", a, b) =>
+        match (self.fold_float_const(a), self.fold_float_const(b)) {
+          (Some(x), Some(y)) => Some(x * y)
+          _ => None
+        }
+      Binary("/", a, b) =>
+        match (self.fold_float_const(a), self.fold_float_const(b)) {
+          (Some(x), Some(y)) => Some(x / y)
+          _ => None
+        }
+      Unary("-", e) =>
+        match self.fold_float_const(e) {
+          Some(x) => Some(-x)
+          None => None
+        }
+      Unary("+", e) => self.fold_float_const(e)
+      Ternary(cond, a, b) =>
+        match self.fold_const(cond) {
+          Some(0L) => self.fold_float_const(b)
+          Some(_) => self.fold_float_const(a)
+          None => None
+        }
+      Cast(_, e) => self.fold_float_const(e)
+      DesignatedField(_, e) => self.fold_float_const(e)
+      DesignatedIndex(_, e) => self.fold_float_const(e)
+      DesignatedRange(_, _, e) => self.fold_float_const(e)
+      Call(Var(name), _) =>
+        match name {
+          "__builtin_nan" | "__builtin_nanf" | "__builtin_nanl" =>
+            Some(0.0 / 0.0)
+          "__builtin_huge_val"
+          | "__builtin_huge_valf"
+          | "__builtin_huge_vall"
+          | "__builtin_inf"
+          | "__builtin_inff"
+          | "__builtin_infl" => Some(1.0 / 0.0)
+          _ => None
+        }
+      _ => None
+    }
   }
 }
 
@@ -514,17 +987,37 @@ fn Codegen::emit_global_float(
 }
 
 ///|
+fn Codegen::designator_matches_type(
+  self : Codegen,
+  ty : @parser.Type,
+  expr : @parser.Expr,
+) -> Bool {
+  match (peel_aligned_type(ty), expr) {
+    (Struct(_), DesignatedField(field, _))
+    | (Union(_), DesignatedField(field, _)) =>
+      self.find_field_layout_for_type(ty, field) is Some(_)
+    (Array(_, _), DesignatedIndex(_, _))
+    | (Array(_, _), DesignatedRange(_, _, _)) => true
+    _ => false
+  }
+}
+
+///|
 fn Codegen::global_lvalue_reloc(
   self : Codegen,
   expr : @parser.Expr,
 ) -> (String, Int)? {
   match expr {
     Var(name) => Some(("_" + name, 0))
+    Cast(_, e) => self.global_lvalue_reloc(e)
+    Deref(e) => self.global_address_reloc_parts(e)
     ArrayAccess(base, index) =>
-      match self.global_lvalue_reloc(base) {
-        Some((label, base_offset)) => {
+      match
+        (self.global_lvalue_reloc(base), self.global_address_reloc_parts(base)) {
+        (Some(parts), _) | (None, Some(parts)) => {
+          let (label, base_offset) = parts
           let elem_size = match peel_aligned_type(self.global_expr_type(base)) {
-            Array(elem, _) | Pointer(elem) => self.type_size(elem)
+            Array(elem, _) | Pointer(elem) => self.pointer_element_size(elem)
             _ => 1
           }
           match self.fold_const(index) {
@@ -532,24 +1025,61 @@ fn Codegen::global_lvalue_reloc(
             None => None
           }
         }
-        None => None
+        _ => None
       }
     MemberAccess(obj, field) =>
       match self.global_lvalue_reloc(obj) {
-        Some((label, base_offset)) =>
-          match peel_aligned_type(self.global_expr_type(obj)) {
-            Struct(name)
-            | Union(name)
-            | Pointer(Struct(name))
-            | Pointer(Union(name)) =>
-              match self.find_field_layout(name, field) {
-                Some((_, _, field_offset, _, _, _)) =>
-                  Some((label, base_offset + field_offset))
-                None => None
-              }
+        Some((label, base_offset)) => {
+          let obj_ty = self.global_expr_type(obj)
+          match self.find_field_layout_for_type(obj_ty, field) {
+            Some((_, _, field_offset, _, _, _)) =>
+              Some((label, base_offset + field_offset))
+            None => None
+          }
+        }
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
+fn Codegen::global_address_reloc_parts(
+  self : Codegen,
+  expr : @parser.Expr,
+) -> (String, Int)? {
+  match expr {
+    Cast(_, e) => self.global_address_reloc_parts(e)
+    AddrOf(e) => self.global_lvalue_reloc(e)
+    LabelAddr(name) => Some((self.label_ref(name), 0))
+    Var(name) => Some(("_" + name, 0))
+    Binary("+", base, offset_expr) =>
+      match
+        (self.global_address_reloc_parts(base), self.fold_const(offset_expr)) {
+        (Some((label, base_offset)), Some(offset)) =>
+          Some((label, base_offset + self.global_offset_bytes(base, offset)))
+        _ =>
+          match
+            (
+              self.global_address_reloc_parts(offset_expr),
+              self.fold_const(base),
+            ) {
+            (Some((label, base_offset)), Some(offset)) =>
+              Some(
+                (
+                  label,
+                  base_offset + self.global_offset_bytes(offset_expr, offset),
+                ),
+              )
             _ => None
           }
-        None => None
+      }
+    Binary("-", base, offset_expr) =>
+      match
+        (self.global_address_reloc_parts(base), self.fold_const(offset_expr)) {
+        (Some((label, base_offset)), Some(offset)) =>
+          Some((label, base_offset - self.global_offset_bytes(base, offset)))
+        _ => None
       }
     _ => None
   }
@@ -560,34 +1090,30 @@ fn Codegen::global_address_reloc(
   self : Codegen,
   expr : @parser.Expr,
 ) -> String? {
-  match expr {
-    Cast(_, e) => self.global_address_reloc(e)
-    AddrOf(e) =>
-      match self.global_lvalue_reloc(e) {
-        Some((label, offset)) => Some(reloc_with_offset(label, offset))
-        None => None
-      }
-    LabelAddr(name) => Some(self.label_ref(name))
-    Var(name) => Some("_" + name)
-    Binary("+", base, offset_expr) =>
-      match (self.global_address_reloc(base), self.fold_const(offset_expr)) {
-        (Some(label), Some(offset)) =>
-          Some(reloc_with_offset(label, offset.to_int()))
-        _ =>
-          match
-            (self.global_address_reloc(offset_expr), self.fold_const(base)) {
-            (Some(label), Some(offset)) =>
-              Some(reloc_with_offset(label, offset.to_int()))
-            _ => None
-          }
-      }
-    Binary("-", base, offset_expr) =>
-      match (self.global_address_reloc(base), self.fold_const(offset_expr)) {
-        (Some(label), Some(offset)) =>
-          Some(reloc_with_offset(label, -offset.to_int()))
-        _ => None
-      }
-    _ => None
+  match self.global_address_reloc_parts(expr) {
+    Some((label, offset)) => Some(reloc_with_offset(label, offset))
+    None => None
+  }
+}
+
+///|
+fn Codegen::pointer_element_size(self : Codegen, elem_ty : @parser.Type) -> Int {
+  match peel_aligned_type(elem_ty) {
+    Void => 1
+    _ => self.type_size(elem_ty)
+  }
+}
+
+///|
+fn Codegen::global_offset_bytes(
+  self : Codegen,
+  base : @parser.Expr,
+  offset : Int64,
+) -> Int {
+  match peel_aligned_type(self.global_expr_type(base)) {
+    Pointer(elem) | Array(elem, _) =>
+      offset.to_int() * self.pointer_element_size(elem)
+    _ => offset.to_int()
   }
 }
 
@@ -596,6 +1122,7 @@ fn Codegen::global_address_reloc(
 pub fn Codegen::new() -> Codegen {
   {
     output: StringBuilder::new(),
+    mir: None,
     label_counter: 0,
     local_offsets: {},
     var_types: {},
@@ -623,6 +1150,13 @@ pub fn Codegen::new() -> Codegen {
 }
 
 ///|
+fn Codegen::new_with_mir(mir : @mir.Program) -> Codegen {
+  let codegen = Codegen::new()
+  codegen.mir = Some(mir)
+  codegen
+}
+
+///|
 fn Codegen::emit_global_scalar(
   self : Codegen,
   ty : @parser.Type,
@@ -647,7 +1181,7 @@ fn Codegen::emit_global_scalar(
     _ => ()
   }
   match ty {
-    Float | Double =>
+    Float | Double | LongDouble =>
       match self.fold_float_const(expr) {
         Some(v) => {
           self.emit_global_float(ty, v)
@@ -655,6 +1189,26 @@ fn Codegen::emit_global_scalar(
         }
         None => ()
       }
+    _ => ()
+  }
+  if ty.is_integer() && self.type_of(expr, 0).is_floating() {
+    match self.fold_float_const(expr) {
+      Some(v) => {
+        self.emit_global_scalar(ty, Number(v.to_int().to_int64()))
+        return
+      }
+      None => ()
+    }
+  }
+  match expr {
+    DesignatedField(_, e) | DesignatedIndex(_, e) | DesignatedRange(_, _, e) => {
+      if is_aggregate_type(ty) && self.designator_matches_type(ty, expr) {
+        self.emit_global_array(ty, [expr])
+      } else {
+        self.emit_global_scalar(ty, e)
+      }
+      return
+    }
     _ => ()
   }
   // Try constant-fold the expression first
@@ -668,7 +1222,16 @@ fn Codegen::emit_global_scalar(
         Bool | SChar | UChar => self.emit("\t.byte\t" + n.to_string())
         SShort | UShort => self.emit("\t.short\t" + n.to_string())
         SInt | UInt => self.emit("\t.long\t" + n.to_string())
-        Float | Double => self.emit_global_float(ty, n.to_double())
+        SInt128 => {
+          self.emit("\t.quad\t" + n.to_string())
+          let high = if n < 0L { "-1" } else { "0" }
+          self.emit("\t.quad\t" + high)
+        }
+        UInt128 => {
+          self.emit("\t.quad\t" + n.to_string())
+          self.emit("\t.quad\t0")
+        }
+        Float | Double | LongDouble => self.emit_global_float(ty, n.to_double())
         Struct(_) | Union(_) | Array(_, _) => {
           // Zero-initialize aggregate type
           let size = self.type_size(ty)
@@ -676,7 +1239,12 @@ fn Codegen::emit_global_scalar(
         }
         _ => self.emit("\t.quad\t" + n.to_string())
       }
-    FloatLiteral(v) => self.emit_global_float(ty, v)
+    FloatLiteral(v) =>
+      if ty.is_floating() {
+        self.emit_global_float(ty, v)
+      } else {
+        self.emit_global_scalar(ty, Number(v.to_int().to_int64()))
+      }
     String(s) =>
       match ty {
         Array(SChar, n) | Array(UChar, n) => {
@@ -696,9 +1264,6 @@ fn Codegen::emit_global_scalar(
       // Function pointer or address of global in initializer
       self.emit("\t.quad\t_" + name)
     Cast(_, e) => self.emit_global_scalar(ty, e)
-    DesignatedField(_, e) => self.emit_global_scalar(ty, e)
-    DesignatedIndex(_, e) => self.emit_global_scalar(ty, e)
-    DesignatedRange(_, _, e) => self.emit_global_scalar(ty, e)
     CompoundLiteral(_, exprs, _) => self.emit_global_array(ty, exprs)
     Array(nested) =>
       // Nested brace initializer: emit as array/struct
@@ -712,17 +1277,39 @@ fn Codegen::emit_global_scalar(
 }
 
 ///|
-fn find_designated_initializer(
-  exprs : Array[@parser.Expr],
-  field_name : String,
-) -> @parser.Expr? {
-  for expr in exprs {
-    match expr {
-      DesignatedField(name, _) if name == field_name => return Some(expr)
-      _ => ()
-    }
+fn global_initializer_value(expr : @parser.Expr) -> @parser.Expr {
+  match expr {
+    DesignatedField(_, e) | DesignatedIndex(_, e) | DesignatedRange(_, _, e) =>
+      e
+    _ => expr
   }
-  None
+}
+
+///|
+fn Codegen::emit_global_int_by_size(
+  self : Codegen,
+  size : Int,
+  value : Int64,
+) -> Unit {
+  match size {
+    1 => self.emit("\t.byte\t" + value.to_string())
+    2 => self.emit("\t.short\t" + value.to_string())
+    4 => self.emit("\t.long\t" + value.to_string())
+    _ => self.emit("\t.quad\t" + value.to_string())
+  }
+}
+
+///|
+fn Codegen::global_bitfield_bits(
+  self : Codegen,
+  init_expr : @parser.Expr,
+  bit_width : Int,
+  bit_offset : Int,
+) -> Int64 {
+  match self.fold_const(global_initializer_value(init_expr)) {
+    Some(value) => (value & bitfield_mask(bit_width)) << bit_offset
+    None => 0L
+  }
 }
 
 ///|
@@ -780,33 +1367,66 @@ fn Codegen::emit_global_array(
       } else {
         []
       }
-      let mut emitted = 0
+      let field_inits : Array[@parser.Expr?] = Array::make(
+        layout.length(),
+        None,
+      )
       let mut positional = 0
-      for field in layout {
-        let field_name = field.0
+      for init_expr in exprs {
+        match init_expr {
+          DesignatedField(field_name, _) =>
+            for i = 0; i < layout.length(); i = i + 1 {
+              if layout[i].0 == field_name {
+                field_inits[i] = Some(init_expr)
+                positional = i + 1
+                break
+              }
+            }
+          _ =>
+            if positional < layout.length() {
+              field_inits[positional] = Some(init_expr)
+              positional += 1
+            }
+        }
+      }
+      let mut emitted = 0
+      let mut i = 0
+      while i < layout.length() {
+        let field = layout[i]
         let field_ty = field.1
         let field_offset = field.2
         let field_size = field.3
         let bit_width = field.5
-        let init_expr = match find_designated_initializer(exprs, field_name) {
-          Some(expr) => Some(expr)
-          None => {
-            while positional < exprs.length() &&
-                  exprs[positional] is DesignatedField(_, _) {
-              positional = positional + 1
+        if bit_width > 0 {
+          let container_offset = field_offset
+          let container_size = field_size
+          let mut container_value = 0L
+          let mut j = i
+          while j < layout.length() &&
+                layout[j].2 == container_offset &&
+                layout[j].3 == container_size &&
+                layout[j].5 > 0 {
+            let width = layout[j].5
+            let offset = layout[j].4
+            match field_inits[j] {
+              Some(init_expr) =>
+                container_value = container_value |
+                  self.global_bitfield_bits(init_expr, width, offset)
+              None => ()
             }
-            if positional < exprs.length() {
-              let expr = exprs[positional]
-              positional = positional + 1
-              Some(expr)
-            } else {
-              None
-            }
+            j += 1
           }
-        }
-        match init_expr {
-          Some(expr) =>
-            if bit_width == 0 {
+          if container_offset >= emitted {
+            if container_offset > emitted {
+              self.emit("\t.space\t" + (container_offset - emitted).to_string())
+            }
+            self.emit_global_int_by_size(container_size, container_value)
+            emitted = container_offset + container_size
+          }
+          i = j
+        } else {
+          match field_inits[i] {
+            Some(expr) => {
               // Emit padding to reach the correct field offset
               if field_offset > emitted {
                 self.emit("\t.space\t" + (field_offset - emitted).to_string())
@@ -814,7 +1434,9 @@ fn Codegen::emit_global_array(
               self.emit_global_scalar(field_ty, expr)
               emitted = field_offset + field_size
             }
-          None => ()
+            None => ()
+          }
+          i += 1
         }
       }
       // Pad remaining space with zeros
@@ -834,12 +1456,21 @@ fn Codegen::emit_global_array(
         let init_expr = exprs[0]
         let field = match init_expr {
           DesignatedField(field_name, _) =>
-            self.find_field_layout(name, field_name)
+            self.find_field_layout_for_type(ty, field_name)
           _ => if layout.length() > 0 { Some(layout[0]) } else { None }
         }
         match field {
-          Some((_, field_ty, field_offset, field_size, _, bit_width)) =>
-            if bit_width == 0 {
+          Some((_, field_ty, field_offset, field_size, bit_offset, bit_width)) =>
+            if bit_width > 0 {
+              if field_offset > 0 {
+                self.emit("\t.space\t" + field_offset.to_string())
+              }
+              self.emit_global_int_by_size(
+                field_size,
+                self.global_bitfield_bits(init_expr, bit_width, bit_offset),
+              )
+              emitted = field_offset + field_size
+            } else {
               if field_offset > 0 {
                 self.emit("\t.space\t" + field_offset.to_string())
               }
@@ -886,6 +1517,9 @@ fn Codegen::emit_global_p2align(self : Codegen, ty : @parser.Type) -> Unit {
 /// The input must come from `bobzhang/kimicc/parser`. The returned string is
 /// assembly text intended for the macOS assembler and linker.
 pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
+  if self.mir is None {
+    self.mir = Some(@mir.lower(prog, @target.Target::default()))
+  }
   self.output.write_string(
     "\t.section\t__TEXT,__text,regular,pure_instructions\n",
   )
@@ -945,7 +1579,11 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
         has_data = true
       }
       if !g.is_static {
-        self.emit("	.globl	_" + g.name)
+        if g.is_weak {
+          self.emit("	.weak_definition	_" + g.name)
+        } else {
+          self.emit("	.globl	_" + g.name)
+        }
       }
       self.emit_global_p2align(g.ty)
       self.emit("_" + g.name + ":")
@@ -980,7 +1618,11 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
       }
       let size = self.type_size(g.ty)
       if !g.is_static {
-        self.emit("	.globl	_" + g.name)
+        if g.is_weak {
+          self.emit("	.weak_definition	_" + g.name)
+        } else {
+          self.emit("	.globl	_" + g.name)
+        }
       }
       self.emit_global_p2align(g.ty)
       self.emit("_" + g.name + ":")
@@ -996,6 +1638,23 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
     }
   }
   self.output.to_string()
+}
+
+///|
+/// Generates assembly for `prog` using the requested target backend.
+///
+/// `DarwinArm64` preserves the existing macOS ARM64 assembly output.
+/// `LinuxAmd64` emits GNU assembler syntax for the System V x86-64 ABI.
+pub fn generate_assembly_for_target(
+  prog : @parser.Program,
+  target : @target.Target,
+) -> String {
+  match target {
+    DarwinArm64 =>
+      Codegen::new_with_mir(@mir.lower(prog, target)).generate(prog)
+    LinuxAmd64 =>
+      X64Codegen::new_with_mir(@mir.lower(prog, target)).generate(prog)
+  }
 }
 
 ///|

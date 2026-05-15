@@ -329,31 +329,7 @@ fn Parser::parse_unary(self : Parser) -> Expr {
         let saved_pos = self.lexer.pos
         let saved_token = self.token
         self.advance() // past (
-        // Try to parse as type
-        let is_type = match self.token {
-          Int
-          | Void
-          | Char
-          | Struct
-          | Union
-          | Signed
-          | Unsigned
-          | Short
-          | Long
-          | Float
-          | Double
-          | Bool
-          | Enum
-          | Const
-          | Restrict
-          | Volatile => true
-          Ident("_Atomic") => true
-          Ident("_Alignas") => true
-          Ident("alignas") => true
-          Ident(name) => self.typedefs.contains(name)
-          _ => false
-        }
-        if is_type {
+        if self.is_type_name_start() {
           let ty = self.parse_type_name()
           if self.token == RParen {
             self.advance()
@@ -380,38 +356,7 @@ fn Parser::parse_unary(self : Parser) -> Expr {
       let saved_pos = self.lexer.pos
       let saved_token = self.token
       self.advance() // past (
-      // Try to parse as type
-      let is_cast = match self.token {
-        Int
-        | Void
-        | Char
-        | Struct
-        | Union
-        | Signed
-        | Unsigned
-        | Short
-        | Long
-        | Float
-        | Double
-        | Bool
-        | Enum
-        | Const
-        | Restrict
-        | Volatile
-        | Static
-        | Extern
-        | Inline => true
-        Ident("_Float16") => true
-        Ident("__int128") => true
-        Ident("__int128_t") => true
-        Ident("__uint128_t") => true
-        Ident("_Atomic") => true
-        Ident("_Alignas") => true
-        Ident("alignas") => true
-        Ident(name) => self.typedefs.contains(name)
-        _ => false
-      }
-      if is_cast {
+      if self.is_type_name_start() {
         let ty = self.parse_type_name()
         if self.token == RParen {
           self.advance() // past )
@@ -440,8 +385,49 @@ fn Parser::parse_unary(self : Parser) -> Expr {
         self.apply_postfix(expr)
       }
     }
+    Ident(name) =>
+      if is_alignof_operator(name) {
+        self.parse_alignof_operator(name)
+      } else {
+        self.parse_postfix()
+      }
     _ => self.parse_postfix()
   }
+}
+
+///|
+fn is_alignof_operator(name : String) -> Bool {
+  match name {
+    "_Alignof" | "alignof" | "__alignof" | "__alignof__" => true
+    _ => false
+  }
+}
+
+///|
+fn Parser::parse_alignof_operator(self : Parser, name : String) -> Expr {
+  self.advance()
+  if self.token != LParen {
+    match name {
+      "__alignof" | "__alignof__" | "_Alignof" =>
+        return AlignofExpr(self.parse_unary())
+      _ => abort("expected '(' after alignof")
+    }
+  }
+  self.expect(LParen)
+  let saved_pos = self.lexer.pos
+  let saved_token = self.token
+  if self.is_type_name_start() {
+    let ty = self.parse_type_name()
+    if self.token == RParen {
+      self.advance()
+      return Alignof(ty)
+    }
+    self.lexer.pos = saved_pos
+    self.token = saved_token
+  }
+  let expr = self.parse_assign()
+  self.expect(RParen)
+  AlignofExpr(expr)
 }
 
 ///|
@@ -519,6 +505,129 @@ fn Parser::parse_postfix(self : Parser) -> Expr {
 }
 
 ///|
+fn generic_strip_type(ty : Type) -> Type {
+  match ty {
+    Aligned(inner, _) => generic_strip_type(inner)
+    _ => ty
+  }
+}
+
+///|
+fn generic_control_type(ty : Type) -> Type {
+  match generic_strip_type(ty) {
+    Array(elem, _) => Pointer(elem)
+    other => other
+  }
+}
+
+///|
+fn generic_types_compatible(control_ty : Type, assoc_ty : Type) -> Bool {
+  generic_strip_type(control_ty) == generic_strip_type(assoc_ty)
+}
+
+///|
+fn Parser::parse_generic_selection(self : Parser) -> Expr {
+  self.expect(LParen)
+  let control = self.parse_assign()
+  let control_ty = generic_control_type(self.const_expr_type(control))
+  let mut selected : Expr? = None
+  let mut default_expr : Expr? = None
+  while self.token == Comma {
+    self.advance()
+    match self.token {
+      Default => {
+        self.advance()
+        self.expect(Colon)
+        let expr = self.parse_assign()
+        default_expr = Some(expr)
+      }
+      _ => {
+        let assoc_ty = self.parse_type_name()
+        self.expect(Colon)
+        let expr = self.parse_assign()
+        if selected is None && generic_types_compatible(control_ty, assoc_ty) {
+          selected = Some(expr)
+        }
+      }
+    }
+  }
+  self.expect(RParen)
+  match selected {
+    Some(expr) => expr
+    None =>
+      match default_expr {
+        Some(expr) => expr
+        None => abort("_Generic selection has no matching association")
+      }
+  }
+}
+
+///|
+fn Parser::parse_builtin_choose_expr(self : Parser) -> Expr {
+  self.expect(LParen)
+  let cond = self.parse_assign()
+  self.expect(Comma)
+  let then_expr = self.parse_assign()
+  self.expect(Comma)
+  let else_expr = self.parse_assign()
+  self.expect(RParen)
+  match self.fold_const(cond) {
+    Some(n) => if n != 0 { then_expr } else { else_expr }
+    None => abort("__builtin_choose_expr condition must be constant")
+  }
+}
+
+///|
+fn Parser::parse_builtin_types_compatible_p(self : Parser) -> Expr {
+  self.expect(LParen)
+  let lhs_ty = self.parse_type_name()
+  self.expect(Comma)
+  let rhs_ty = self.parse_type_name()
+  self.expect(RParen)
+  if generic_types_compatible(lhs_ty, rhs_ty) {
+    Number(1)
+  } else {
+    Number(0)
+  }
+}
+
+///|
+fn classify_type_code(ty : Type) -> Int64 {
+  match generic_strip_type(ty) {
+    Atomic(inner) => classify_type_code(inner)
+    Void => 0
+    Bool => 4
+    Float | Double | LongDouble => 8
+    Float16 => abort("_Float16 classification is not supported")
+    Float128 => abort("__float128 classification is not supported")
+    Pointer(_) | Array(_, _) | FuncPtr(_, _, _) => 5
+    Struct(_) => 12
+    Union(_) => 13
+    SChar
+    | UChar
+    | SShort
+    | UShort
+    | SInt
+    | UInt
+    | SLong
+    | ULong
+    | SLongLong
+    | ULongLong
+    | SInt128
+    | UInt128 => 1
+    Aligned(inner, _) => classify_type_code(inner)
+  }
+}
+
+///|
+fn Parser::parse_builtin_classify_type(self : Parser) -> Expr {
+  self.expect(LParen)
+  let expr = self.parse_assign()
+  self.expect(RParen)
+  Number(classify_type_code(self.const_expr_type(expr)))
+}
+
+///|
 fn Parser::parse_primary(self : Parser) -> Expr {
   match self.token {
     Number(n) => {
@@ -541,41 +650,42 @@ fn Parser::parse_primary(self : Parser) -> Expr {
         name
       }
       if self.token == LParen {
-        self.advance()
-        if name == "__builtin_va_arg" {
-          // Parse __builtin_va_arg(ap, type)
-          let ap_expr = self.parse_assign()
-          self.expect(Comma)
-          let ty = self.parse_type_name()
-          self.expect(RParen)
-          VaArg(ap_expr, ty)
-        } else if name == "__builtin_offsetof" {
-          // Parse __builtin_offsetof(type, field)
-          let ty = self.parse_type_name()
-          self.expect(Comma)
-          let field_name = match self.token {
-            Ident(n) => {
-              self.advance()
-              n
-            }
-            _ => {
-              self.advance()
-              ""
-            }
-          }
-          self.expect(RParen)
-          OffsetOf(ty, field_name)
+        if name == "_Generic" {
+          self.parse_generic_selection()
+        } else if name == "__builtin_choose_expr" {
+          self.parse_builtin_choose_expr()
+        } else if name == "__builtin_types_compatible_p" {
+          self.parse_builtin_types_compatible_p()
+        } else if name == "__builtin_classify_type" {
+          self.parse_builtin_classify_type()
         } else {
-          let args = []
-          if self.token != RParen {
-            args.push(self.parse_assign())
-            while self.token == Comma {
-              self.advance()
+          self.advance()
+          if name == "__builtin_va_arg" {
+            // Parse __builtin_va_arg(ap, type)
+            let ap_expr = self.parse_assign()
+            self.expect(Comma)
+            let ty = self.parse_type_name()
+            self.expect(RParen)
+            VaArg(ap_expr, ty)
+          } else if name == "__builtin_offsetof" {
+            // Parse __builtin_offsetof(type, member-designator)
+            let ty = self.parse_type_name()
+            self.expect(Comma)
+            let path = self.parse_offset_designators()
+            self.expect(RParen)
+            OffsetOf(ty, path)
+          } else {
+            let args = []
+            if self.token != RParen {
               args.push(self.parse_assign())
+              while self.token == Comma {
+                self.advance()
+                args.push(self.parse_assign())
+              }
             }
+            self.expect(RParen)
+            Call(Var(resolved_name), args)
           }
-          self.expect(RParen)
-          Call(Var(resolved_name), args)
         }
       } else if name == "__func__" || name == "__FUNCTION__" {
         if self.current_func_name != "" {
@@ -609,4 +719,41 @@ fn Parser::parse_primary(self : Parser) -> Expr {
     }
     _ => abort("Unexpected token in primary: " + self.token.to_string())
   }
+}
+
+///|
+fn Parser::parse_offset_designators(self : Parser) -> Array[OffsetDesignator] {
+  let path = []
+  match self.token {
+    Ident(name) => {
+      path.push(OffsetField(name))
+      self.advance()
+    }
+    _ => abort("expected field name in __builtin_offsetof")
+  }
+  while true {
+    match self.token {
+      Dot => {
+        self.advance()
+        match self.token {
+          Ident(name) => {
+            path.push(OffsetField(name))
+            self.advance()
+          }
+          _ => abort("expected field name after . in __builtin_offsetof")
+        }
+      }
+      LBracket => {
+        self.advance()
+        let index = self.parse_expr()
+        self.expect(RBracket)
+        match self.fold_const(index) {
+          Some(value) => path.push(OffsetIndex(value))
+          None => abort("array index in __builtin_offsetof must be constant")
+        }
+      }
+      _ => return path
+    }
+  }
+  path
 }

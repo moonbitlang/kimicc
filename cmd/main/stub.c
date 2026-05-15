@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <moonbit.h>
 
 MOONBIT_FFI_EXPORT
@@ -17,6 +18,43 @@ moonbit_bytes_t moonbit_read_file(moonbit_bytes_t path) {
 }
 
 MOONBIT_FFI_EXPORT
+moonbit_bytes_t moonbit_read_stdin(void) {
+  size_t len = 0;
+  size_t cap = 4096;
+  char *buf = (char *)malloc(cap);
+  if (!buf) return moonbit_make_bytes(0, 0);
+
+  for (;;) {
+    if (len == cap) {
+      size_t next_cap = cap * 2;
+      char *next = (char *)realloc(buf, next_cap);
+      if (!next) {
+        free(buf);
+        return moonbit_make_bytes(0, 0);
+      }
+      buf = next;
+      cap = next_cap;
+    }
+    size_t n = fread(buf + len, 1, cap - len, stdin);
+    len += n;
+    if (n == 0) break;
+  }
+
+  moonbit_bytes_t bytes = moonbit_make_bytes(len, 0);
+  if (len > 0) memcpy(bytes, buf, len);
+  free(buf);
+  return bytes;
+}
+
+MOONBIT_FFI_EXPORT
+int moonbit_file_exists(moonbit_bytes_t path) {
+  FILE *f = fopen((const char *)path, "r");
+  if (!f) return 0;
+  fclose(f);
+  return 1;
+}
+
+MOONBIT_FFI_EXPORT
 int moonbit_write_file(moonbit_bytes_t path, moonbit_bytes_t content) {
   FILE *f = fopen((const char *)path, "wb");
   if (!f) return -1;
@@ -24,4 +62,30 @@ int moonbit_write_file(moonbit_bytes_t path, moonbit_bytes_t content) {
   size_t written = fwrite(content, 1, len, f);
   fclose(f);
   return written == len ? 0 : -1;
+}
+
+MOONBIT_FFI_EXPORT
+int moonbit_system(moonbit_bytes_t cmd) {
+  int status = system((const char *)cmd);
+  if (status == -1) return -1;
+  if (WIFEXITED(status)) return WEXITSTATUS(status);
+  if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+  return status;
+}
+
+MOONBIT_FFI_EXPORT
+void moonbit_write_stderr(moonbit_bytes_t message) {
+  size_t len = Moonbit_array_length(message);
+  fwrite(message, 1, len, stderr);
+}
+
+MOONBIT_FFI_EXPORT
+void moonbit_write_stdout(moonbit_bytes_t message) {
+  size_t len = Moonbit_array_length(message);
+  fwrite(message, 1, len, stdout);
+}
+
+MOONBIT_FFI_EXPORT
+void moonbit_exit(int code) {
+  exit(code);
 }
