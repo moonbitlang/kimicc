@@ -226,14 +226,14 @@ emission path. Supported MIR-body function emission also uses `Program.decls`
 for function binding metadata. Both backend global-symbol lookup maps are
 seeded from merged `Program.global_decls`, so type and extern/alias questions
 during expression codegen no longer require parser global declaration records.
-Global initializer
-emission itself still uses the parser fallback path while MIR data initializers
-are being expanded. Both backends also seed their aggregate layout tables from
-MIR `Program.layouts` during normal generation, while keeping parser aggregate
-declarations available for legacy fallback paths. Both backends can now emit
-the lowered MIR subset for simple scalar integer, string, symbol-address,
-symbol-plus-offset, and scalar array global initializers; unsupported initializer
-forms still fall back to the parser initializer path.
+Global initializer emission still keeps the parser fallback path while MIR data
+initializers are being expanded. Both backends also seed their aggregate layout
+tables from MIR `Program.layouts` during normal generation, while keeping parser
+aggregate declarations available for legacy fallback paths. Both backends can
+now emit the lowered MIR subset for simple scalar integer, string,
+symbol-address, symbol-plus-offset, scalar array, and dense aggregate global
+initializers; unsupported initializer forms still fall back to the parser
+initializer path.
 Both backends' global object binding, data, and BSS emission now iterate merged
 `Program.global_decls`; parser global declarations are only consulted when MIR
 marks an initializer shape unsupported.

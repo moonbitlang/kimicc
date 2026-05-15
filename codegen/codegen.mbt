@@ -1404,9 +1404,46 @@ fn Codegen::mir_global_init_supported(
               }
               true
             }
+            Struct(name) | Union(name) => {
+              let layout = match self.mir_aggregate_layout(name) {
+                Some(layout) => layout
+                None => return false
+              }
+              if layout.is_union {
+                if values.length() > 1 {
+                  return false
+                }
+              } else if values.length() > layout.fields.length() {
+                return false
+              }
+              for i = 0; i < values.length(); i = i + 1 {
+                if i >= layout.fields.length() {
+                  return false
+                }
+                let field = layout.fields[i]
+                if field.bit_width is Some(_) {
+                  return false
+                }
+                if !self.mir_global_init_supported(field.ty, values[i]) {
+                  return false
+                }
+              }
+              true
+            }
             _ => false
           }
       }
+  }
+}
+
+///|
+fn Codegen::mir_aggregate_layout(
+  self : Codegen,
+  name : String,
+) -> @mir.AggregateLayout? {
+  match self.mir_module {
+    Some(mir) => mir.layouts.get(name)
+    None => None
   }
 }
 
@@ -1503,10 +1540,47 @@ fn Codegen::emit_mir_global_init(
             emitted += 1
           }
         }
+        Struct(name) | Union(name) =>
+          self.emit_mir_global_aggregate(name, values)
         _ => self.emit("\t.space\t" + self.type_size(ty).to_string())
       }
     MirGlobalInitUnsupported =>
       self.emit("\t.space\t" + self.type_size(ty).to_string())
+  }
+}
+
+///|
+fn Codegen::emit_mir_global_aggregate(
+  self : Codegen,
+  name : String,
+  values : Array[@mir.MirGlobalInit],
+) -> Unit {
+  let layout = match self.mir_aggregate_layout(name) {
+    Some(layout) => layout
+    None => {
+      self.emit("\t.space\t8")
+      return
+    }
+  }
+  let mut emitted = 0
+  let count = if layout.is_union && values.length() > 0 {
+    1
+  } else {
+    values.length()
+  }
+  for i = 0; i < count; i = i + 1 {
+    let field = layout.fields[i]
+    if field.offset > emitted {
+      self.emit("\t.space\t" + (field.offset - emitted).to_string())
+    }
+    self.emit_mir_global_init(field.ty, values[i])
+    emitted = field.offset + field.size
+    if layout.is_union {
+      break
+    }
+  }
+  if layout.size > emitted {
+    self.emit("\t.space\t" + (layout.size - emitted).to_string())
   }
 }
 
