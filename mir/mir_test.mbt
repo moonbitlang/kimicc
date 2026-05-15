@@ -293,6 +293,25 @@ test "mir body interpreter executes simple goto" {
 }
 
 ///|
+test "mir body interpreter executes scalar updates" {
+  let source =
+    #|int main(void) {
+    #|  int total = 0;
+    #|  int i = 0;
+    #|loop:
+    #|  i++;
+    #|  if (i == 2) goto skip;
+    #|  total += i;
+    #|skip:
+    #|  if (i < 5) goto loop;
+    #|  return total;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 13L)
+}
+
+///|
 test "mir body lowering refuses unsupported parser constructs" {
   let source =
     #|int main(void) {

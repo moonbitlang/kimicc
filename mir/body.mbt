@@ -139,6 +139,35 @@ fn BodyLowerContext::lookup_local(
 }
 
 ///|
+fn lower_mir_local_update(
+  name : String,
+  op : String,
+  rhs : MirValue,
+  ty : @parser.Type,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  match ctx.lookup_local(name) {
+    Some(binding) =>
+      if binding.ty.is_integer() {
+        Some(MirAssignLocal(binding, MirBinary(op, MirLocal(binding), rhs, ty)))
+      } else {
+        None
+      }
+    None => None
+  }
+}
+
+///|
+fn lower_mir_local_step(
+  name : String,
+  op : String,
+  ty : @parser.Type,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  lower_mir_local_update(name, op, MirConst(1L, SInt), ty, ctx)
+}
+
+///|
 fn mir_stmts_have_direct_label(stmts : Array[MirStmt], name : String) -> Bool {
   for stmt in stmts {
     match stmt {
@@ -197,6 +226,13 @@ fn Program::lower_mir_expr(
         (Some(binding), Some(value)) => Some(MirAssignLocal(binding, value))
         _ => None
       }
+    CompoundAssign(op, Var(name), rhs) =>
+      match self.lower_mir_expr(rhs, ctx) {
+        Some(value) => lower_mir_local_update(name, op, value, ty, ctx)
+        None => None
+      }
+    PrefixInc(Var(name)) => lower_mir_local_step(name, "+", ty, ctx)
+    PrefixDec(Var(name)) => lower_mir_local_step(name, "-", ty, ctx)
     Ternary(cond, then_, else_) =>
       match
         (
@@ -226,6 +262,21 @@ fn Program::lower_mir_expr(
 }
 
 ///|
+fn Program::lower_mir_ignored_expr(
+  self : Program,
+  expr : @parser.Expr,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  let scope = ctx.scope()
+  let ty = self.expr_type(expr, scope)
+  match expr {
+    PostfixInc(Var(name)) => lower_mir_local_step(name, "+", ty, ctx)
+    PostfixDec(Var(name)) => lower_mir_local_step(name, "-", ty, ctx)
+    _ => self.lower_mir_expr(expr, ctx)
+  }
+}
+
+///|
 fn Program::lower_mir_stmt(
   self : Program,
   stmt : @parser.Stmt,
@@ -233,7 +284,7 @@ fn Program::lower_mir_stmt(
 ) -> Array[MirStmt]? {
   match stmt {
     ExprStmt(expr) =>
-      match self.lower_mir_expr(expr, ctx) {
+      match self.lower_mir_ignored_expr(expr, ctx) {
         Some(value) => Some([MirExprStmt(value)])
         None => None
       }
@@ -289,7 +340,7 @@ fn Program::lower_mir_stmt(
       }
       let inc_value = match inc {
         Some(expr) =>
-          match self.lower_mir_expr(expr, ctx) {
+          match self.lower_mir_ignored_expr(expr, ctx) {
             Some(value) => Some(value)
             None => {
               ctx.pop_scope()

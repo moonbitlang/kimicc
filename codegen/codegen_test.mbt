@@ -109,8 +109,10 @@ test "generate darwin arm64 MIR body goto control" {
   let source =
     #|int main(void) {
     #|  int x = 1;
+    #|  x++;
+    #|  x += 2;
     #|  goto done;
-    #|  x = 2;
+    #|  x = 0;
     #|done:
     #|  return x;
     #|}
@@ -459,8 +461,10 @@ test "generate linux amd64 MIR body goto control" {
   let source =
     #|int main(void) {
     #|  int x = 1;
+    #|  x++;
+    #|  x += 2;
     #|  goto done;
-    #|  x = 2;
+    #|  x = 0;
     #|done:
     #|  return x;
     #|}
