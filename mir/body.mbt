@@ -374,6 +374,100 @@ fn mir_body_scalar_initializer_expr(expr : @parser.Expr) -> @parser.Expr {
 }
 
 ///|
+fn Program::lower_mir_local_struct_init(
+  self : Program,
+  binding : MirLocal,
+  init : @parser.Expr,
+  ctx : BodyLowerContext,
+) -> Array[MirStmt]? {
+  let struct_name = match self.core_type(binding.ty) {
+    Struct(name) => name
+    _ => return None
+  }
+  let items : Array[@parser.Expr] = match init {
+    Number(value) => if value == 0L { [] } else { return None }
+    Array(values) | CompoundLiteral(_, values, _) => values
+    _ => return None
+  }
+  let decl = match self.aggregates.get(struct_name) {
+    Some(decl) => decl
+    None => return None
+  }
+  if decl.is_union {
+    return None
+  }
+  for field in decl.fields {
+    if field.bit_width is Some(_) || !mir_body_scalar_type(field.ty) {
+      return None
+    }
+    if self.field_layout(binding.ty, field.name) is None {
+      return None
+    }
+  }
+  let stores : Array[MirStmt] = []
+  for field in decl.fields {
+    match self.field_layout(binding.ty, field.name) {
+      Some(layout) => {
+        let addr = mir_body_offset_addr_value(
+          MirAddrLocal(binding),
+          layout.offset,
+          layout.ty,
+        )
+        stores.push(
+          MirExprStmt(MirStore(addr, MirConst(0L, layout.ty), layout.ty)),
+        )
+      }
+      None => return None
+    }
+  }
+  let mut next_index = 0
+  for item in items {
+    let (field_index, value_expr) = match item {
+      DesignatedField(name, value) => {
+        let mut found = -1
+        for i in 0..<decl.fields.length() {
+          if decl.fields[i].name == name {
+            found = i
+          }
+        }
+        if found < 0 {
+          return None
+        }
+        next_index = found + 1
+        (found, value)
+      }
+      DesignatedIndex(_, _) | DesignatedRange(_, _, _) => return None
+      _ => {
+        if next_index >= decl.fields.length() {
+          return None
+        }
+        let index = next_index
+        next_index += 1
+        (index, item)
+      }
+    }
+    let field = decl.fields[field_index]
+    let value = match
+      self.lower_mir_expr(mir_body_scalar_initializer_expr(value_expr), ctx) {
+      Some(value) => value
+      None => return None
+    }
+    match self.field_layout(binding.ty, field.name) {
+      Some(layout) => {
+        let addr = mir_body_offset_addr_value(
+          MirAddrLocal(binding),
+          layout.offset,
+          layout.ty,
+        )
+        stores.push(MirExprStmt(MirStore(addr, value, layout.ty)))
+      }
+      None => return None
+    }
+  }
+  Some(stores)
+}
+
+///|
 fn Program::lower_mir_identity_builtin(
   self : Program,
   args : Array[@parser.Expr],
@@ -975,7 +1069,7 @@ fn Program::lower_mir_stmt(
     Goto(name) => Some([MirGoto(name)])
     Break => Some([MirBreak])
     Continue => Some([MirContinue])
-    Compound(stmts) | StmtList(stmts) => {
+    Compound(stmts) => {
       ctx.push_scope()
       let values : Array[MirStmt] = []
       for nested in stmts {
@@ -993,7 +1087,37 @@ fn Program::lower_mir_stmt(
       ctx.pop_scope()
       Some(values)
     }
+    StmtList(stmts) => {
+      let values : Array[MirStmt] = []
+      for nested in stmts {
+        match self.lower_mir_stmt(nested, ctx) {
+          Some(lowered) =>
+            for value in lowered {
+              values.push(value)
+            }
+          None => return None
+        }
+      }
+      Some(values)
+    }
     VarDecl(ty, name, init) => {
+      match init {
+        Some(expr) =>
+          if self.core_type(ty) is Struct(_) {
+            let binding = ctx.declare_local(name, ty)
+            match self.lower_mir_local_struct_init(binding, expr, ctx) {
+              Some(stores) => {
+                let stmts : Array[MirStmt] = [MirDeclare(binding, None)]
+                for store in stores {
+                  stmts.push(store)
+                }
+                return Some(stmts)
+              }
+              None => return None
+            }
+          }
+        None => ()
+      }
       let init_value = match init {
         Some(expr) =>
           match self.lower_mir_expr(expr, ctx) {

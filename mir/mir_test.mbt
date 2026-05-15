@@ -899,6 +899,20 @@ test "mir body interpreter handles scalar aggregate fields" {
 }
 
 ///|
+test "mir body interpreter handles local struct initializers" {
+  let source =
+    #|struct S { int x; unsigned char y; int z; };
+    #|int main(void) {
+    #|  int side = 1;
+    #|  struct S s = { side += 2, 250 + 10 };
+    #|  return s.x + s.y + s.z + side;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 10L)
+}
+
+///|
 test "mir body lowering handles nested aggregate fields" {
   let source =
     #|struct Inner { int z; };

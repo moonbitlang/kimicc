@@ -46,7 +46,8 @@ integer-scalar subset.
   assignment, local postfix updates, scalar globals and initialized global arrays, scalar memory
   prefix/postfix updates, scalar compound literals, scalar `*&` / `&*`
   cancellation, simple scalar local pointer loads/stores, scalar local arrays,
-  string literal byte loads, scalar aggregate fields including nested member access, foldable
+  string literal byte loads, simple local struct initializers, scalar aggregate
+  fields including nested member access, foldable
   `__builtin_constant_p`, literal `__builtin_strlen`, identity builtins such as
   `__builtin_expect` and `__builtin_assume_aligned` including their modeled
   hint-operand side effects,
@@ -63,7 +64,8 @@ integer-scalar subset.
   assignment, local postfix updates, scalar globals and initialized global arrays, scalar memory
   prefix/postfix updates, scalar compound literals, scalar `*&` / `&*`
   cancellation, simple scalar local pointer loads/stores, scalar local arrays,
-  string literal byte loads, scalar aggregate fields including nested member access, foldable
+  string literal byte loads, simple local struct initializers, scalar aggregate
+  fields including nested member access, foldable
   `__builtin_constant_p`, literal `__builtin_strlen`, identity builtins such as
   `__builtin_expect` and `__builtin_assume_aligned` including their modeled
   hint-operand side effects,
