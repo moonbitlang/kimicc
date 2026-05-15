@@ -9069,7 +9069,7 @@ fn X64Codegen::emit_fp_literals(self : X64Codegen) -> Unit {
 fn X64Codegen::emit_lifecycle_array(
   self : X64Codegen,
   section : String,
-  decls : Array[@parser.FuncDecl],
+  decls : Array[@mir.MirFuncDecl],
 ) -> Unit {
   let mut emitted = false
   for decl in decls {
@@ -9078,7 +9078,7 @@ fn X64Codegen::emit_lifecycle_array(
     } else {
       decl.is_destructor
     }
-    if should_emit && decl.body is Some(_) {
+    if should_emit && decl.has_body {
       if !emitted {
         let kind = if section == ".init_array" {
           "init_array"
@@ -9091,6 +9091,33 @@ fn X64Codegen::emit_lifecycle_array(
       }
       self.emit("\t.quad\t" + decl.name)
     }
+  }
+}
+
+///|
+fn X64Codegen::emit_mir_function_decl_directives(
+  self : X64Codegen,
+  decl : @mir.MirFuncDecl,
+) -> Unit {
+  match decl.symbol_alias {
+    Some(target) =>
+      self.emit_symbol_alias(
+        decl.name,
+        target,
+        decl.is_static,
+        decl.is_weak,
+        decl.visibility,
+        Some("@function"),
+      )
+    None =>
+      if !decl.has_body &&
+        self.func_weak.get_or_default(decl.name, false) &&
+        !decl.is_static {
+        self.emit("\t.weak\t" + decl.name)
+      }
+  }
+  if decl.symbol_alias is None && !decl.has_body {
+    self.emit_symbol_visibility(decl.name, decl.is_static, decl.visibility)
   }
 }
 
@@ -9115,34 +9142,24 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
   for g in globals {
     self.globals[g.name] = g
   }
-  for decl in prog.decls {
-    match decl.symbol_alias {
-      Some(target) =>
-        self.emit_symbol_alias(
-          decl.name,
-          target,
-          decl.is_static,
-          decl.is_weak,
-          decl.visibility,
-          Some("@function"),
-        )
-      None =>
-        if decl.body is None &&
-          self.func_weak.get_or_default(decl.name, false) &&
-          !decl.is_static {
-          self.emit("\t.weak\t" + decl.name)
-        }
-    }
-    if decl.symbol_alias is None && decl.body is None {
-      self.emit_symbol_visibility(decl.name, decl.is_static, decl.visibility)
-    }
+  match self.mir {
+    Some(mir) =>
+      for decl in mir.decls {
+        self.emit_mir_function_decl_directives(decl)
+      }
+    None => ()
   }
   for decl in prog.decls {
     self.emit_function(decl)
   }
   self.emit_globals(globals)
-  self.emit_lifecycle_array(".init_array", prog.decls)
-  self.emit_lifecycle_array(".fini_array", prog.decls)
+  match self.mir {
+    Some(mir) => {
+      self.emit_lifecycle_array(".init_array", mir.decls)
+      self.emit_lifecycle_array(".fini_array", mir.decls)
+    }
+    None => ()
+  }
   self.emit_strings()
   self.emit_fp_literals()
   self.emit("\t.section\t.note.GNU-stack,\"\",@progbits")

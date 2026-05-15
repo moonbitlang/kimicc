@@ -206,7 +206,10 @@ the entire backend is parser-independent; global/data declaration emission is
 still being migrated into MIR-owned records.
 Both assembly backends also seed their function return/parameter metadata from
 `Program.decls`, rather than rebuilding those facts from parser function
-declarations.
+declarations. The linux/amd64 backend also emits function alias, weak
+declaration, visibility, constructor, and destructor lifecycle directives from
+`Program.decls`, leaving parser function declarations out of that metadata-only
+emission path.
 
 ## Why This Layer Is Useful
 
