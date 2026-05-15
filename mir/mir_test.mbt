@@ -657,6 +657,22 @@ test "mir body interpreter handles local array initializers" {
 }
 
 ///|
+test "mir body interpreter handles fixed local string array initializers" {
+  let source =
+    #|int main(void) {
+    #|  char s[5] = "abc";
+    #|  char exact[3] = "xyz";
+    #|  if (s[0] != 'a' || s[1] != 'b' || s[2] != 'c') return 1;
+    #|  if (s[3] != 0 || s[4] != 0) return 2;
+    #|  if (exact[0] != 'x' || exact[1] != 'y' || exact[2] != 'z') return 3;
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body interpreter handles scalar memory prefix updates" {
   let source =
     #|struct S { int x; };

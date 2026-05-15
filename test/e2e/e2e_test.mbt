@@ -1379,6 +1379,21 @@ async test "char array initializer" {
 }
 
 ///|
+async test "fixed local string array initializer" {
+  let source =
+    #|int main(void) {
+    #|  char s[5] = "abc";
+    #|  char exact[3] = "xyz";
+    #|  if (s[0] != 'a' || s[1] != 'b' || s[2] != 'c') return 1;
+    #|  if (s[3] != 0 || s[4] != 0) return 2;
+    #|  if (exact[0] != 'x' || exact[1] != 'y' || exact[2] != 'z') return 3;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "pointer arithmetic with array initializer" {
   let source =
     #|int main() {

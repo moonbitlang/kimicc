@@ -383,6 +383,15 @@ fn mir_body_scalar_initializer_expr(expr : @parser.Expr) -> @parser.Expr {
 }
 
 ///|
+fn mir_body_char_array_elem_type(ty : @parser.Type) -> Bool {
+  match ty {
+    SChar | UChar => true
+    Atomic(inner) | Aligned(inner, _) => mir_body_char_array_elem_type(inner)
+    _ => false
+  }
+}
+
+///|
 fn Program::lower_mir_local_array_init(
   self : Program,
   binding : MirLocal,
@@ -396,9 +405,13 @@ fn Program::lower_mir_local_array_init(
   if !mir_body_scalar_type(elem_ty) {
     return None
   }
+  if init is String(_) && !mir_body_char_array_elem_type(elem_ty) {
+    return None
+  }
   let items : Array[@parser.Expr] = match init {
     Number(value) => if value == 0L { [] } else { return None }
     Array(values) | CompoundLiteral(_, values, _) => values
+    String(_) => []
     _ => return None
   }
   let stores : Array[MirStmt] = []
@@ -409,6 +422,29 @@ fn Program::lower_mir_local_array_init(
       elem_ty,
     )
     stores.push(MirExprStmt(MirStore(addr, MirConst(0L, elem_ty), elem_ty)))
+  }
+  match init {
+    String(value) => {
+      let limit = if value.length() < len { value.length() } else { len }
+      for i in 0..<limit {
+        let addr = MirElemAddr(
+          MirAddrLocal(binding),
+          MirConst(i.to_int64(), SInt),
+          elem_ty,
+        )
+        stores.push(
+          MirExprStmt(
+            MirStore(
+              addr,
+              MirConst(value[i].to_int().to_int64(), elem_ty),
+              elem_ty,
+            ),
+          ),
+        )
+      }
+      return Some(stores)
+    }
+    _ => ()
   }
   let mut next_index = 0
   for item in items {
