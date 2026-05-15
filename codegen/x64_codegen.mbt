@@ -8920,11 +8920,15 @@ fn X64Codegen::mir_global_init_supported(
                   return false
                 }
                 let field = layout.fields[index]
-                if field.bit_width is Some(_) {
-                  return false
-                }
-                if !self.mir_global_init_supported(field.ty, value) {
-                  return false
+                match field.bit_width {
+                  Some(width) =>
+                    if width <= 0 || !(value is MirGlobalScalarInt(_)) {
+                      return false
+                    }
+                  None =>
+                    if !self.mir_global_init_supported(field.ty, value) {
+                      return false
+                    }
                 }
               }
               true
@@ -8961,11 +8965,15 @@ fn X64Codegen::mir_global_init_supported(
                   return false
                 }
                 let field = layout.fields[i]
-                if field.bit_width is Some(_) {
-                  return false
-                }
-                if !self.mir_global_init_supported(field.ty, values[i]) {
-                  return false
+                match field.bit_width {
+                  Some(width) =>
+                    if width <= 0 || !(values[i] is MirGlobalScalarInt(_)) {
+                      return false
+                    }
+                  None =>
+                    if !self.mir_global_init_supported(field.ty, values[i]) {
+                      return false
+                    }
                 }
               }
               true
@@ -9129,26 +9137,21 @@ fn X64Codegen::emit_mir_global_aggregate(
       return
     }
   }
-  let mut emitted = 0
+  let slots : Array[@mir.MirGlobalInit?] = Array::make(
+    layout.fields.length(),
+    None,
+  )
   let count = if layout.is_union && values.length() > 0 {
     1
   } else {
     values.length()
   }
   for i = 0; i < count; i = i + 1 {
-    let field = layout.fields[i]
-    if field.offset > emitted {
-      self.emit("\t.zero\t" + (field.offset - emitted).to_string())
-    }
-    self.emit_mir_global_init(field.ty, values[i])
-    emitted = field.offset + field.size
-    if layout.is_union {
-      break
+    if i < slots.length() {
+      slots[i] = Some(values[i])
     }
   }
-  if layout.size > emitted {
-    self.emit("\t.zero\t" + (layout.size - emitted).to_string())
-  }
+  self.emit_mir_global_aggregate_slots(layout, slots)
 }
 
 ///|
@@ -9178,6 +9181,63 @@ fn X64Codegen::emit_mir_global_sparse_aggregate(
       }
     }
   }
+  self.emit_mir_global_aggregate_slots(layout, slots)
+}
+
+///|
+fn X64Codegen::mir_global_bitfield_bits(
+  self : X64Codegen,
+  init : @mir.MirGlobalInit?,
+  bit_width : Int,
+  bit_offset : Int,
+) -> Int64 {
+  let _ = self
+  match init {
+    Some(MirGlobalScalarInt(value)) =>
+      (value & bitfield_mask(bit_width)) << bit_offset
+    _ => 0L
+  }
+}
+
+///|
+fn X64Codegen::emit_mir_global_bitfield_container(
+  self : X64Codegen,
+  layout : @mir.AggregateLayout,
+  slots : Array[@mir.MirGlobalInit?],
+  start : Int,
+) -> (Int, Int) {
+  let field = layout.fields[start]
+  let container_offset = field.offset
+  let container_size = field.size
+  let mut container_value = 0L
+  let mut index = start
+  while index < layout.fields.length() &&
+        layout.fields[index].offset == container_offset &&
+        layout.fields[index].size == container_size &&
+        layout.fields[index].bit_width is Some(_) {
+    let bitfield = layout.fields[index]
+    match bitfield.bit_width {
+      Some(width) =>
+        container_value = container_value |
+          self.mir_global_bitfield_bits(
+            slots[index],
+            width,
+            bitfield.bit_offset,
+          )
+      None => ()
+    }
+    index += 1
+  }
+  self.emit_global_int_by_size(container_size, container_value)
+  (index, container_offset + container_size)
+}
+
+///|
+fn X64Codegen::emit_mir_global_aggregate_slots(
+  self : X64Codegen,
+  layout : @mir.AggregateLayout,
+  slots : Array[@mir.MirGlobalInit?],
+) -> Unit {
   let mut emitted = 0
   if layout.is_union {
     for i = 0; i < layout.fields.length(); i = i + 1 {
@@ -9187,24 +9247,48 @@ fn X64Codegen::emit_mir_global_sparse_aggregate(
           if field.offset > emitted {
             self.emit("\t.zero\t" + (field.offset - emitted).to_string())
           }
-          self.emit_mir_global_init(field.ty, value)
-          emitted = field.offset + field.size
+          match field.bit_width {
+            Some(_) => {
+              let (_, next_emitted) = self.emit_mir_global_bitfield_container(
+                layout, slots, i,
+              )
+              emitted = next_emitted
+            }
+            None => {
+              self.emit_mir_global_init(field.ty, value)
+              emitted = field.offset + field.size
+            }
+          }
           break
         }
         None => ()
       }
     }
   } else {
-    for i = 0; i < layout.fields.length(); i = i + 1 {
+    let mut i = 0
+    while i < layout.fields.length() {
       let field = layout.fields[i]
       if field.offset > emitted {
         self.emit("\t.zero\t" + (field.offset - emitted).to_string())
       }
-      match slots[i] {
-        Some(value) => self.emit_mir_global_init(field.ty, value)
-        None => self.emit("\t.zero\t" + field.size.to_string())
+      match field.bit_width {
+        Some(_) => {
+          let (next_i, next_emitted) = self.emit_mir_global_bitfield_container(
+            layout, slots, i,
+          )
+          i = next_i
+          emitted = next_emitted
+          continue
+        }
+        None => {
+          match slots[i] {
+            Some(value) => self.emit_mir_global_init(field.ty, value)
+            None => self.emit("\t.zero\t" + field.size.to_string())
+          }
+          emitted = field.offset + field.size
+        }
       }
-      emitted = field.offset + field.size
+      i += 1
     }
   }
   if layout.size > emitted {

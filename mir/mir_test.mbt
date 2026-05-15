@@ -311,6 +311,33 @@ test "mir owns floating global initializer metadata" {
 }
 
 ///|
+test "mir owns bitfield global initializer metadata" {
+  let source =
+    #|struct Bits { unsigned a : 3; signed b : 4; unsigned c : 5; };
+    #|union UBits { unsigned a : 3; signed b : 4; };
+    #|struct Bits bits = { .a = 5, .b = -3, .c = 17 };
+    #|union UBits ubits = { .b = -3 };
+    #|int main(void) { return 0; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match mir.globals["bits"].init {
+    Some(
+      MirGlobalAggregateSparse(
+        [
+          (0, MirGlobalScalarInt(5)),
+          (1, MirGlobalScalarInt(-3)),
+          (2, MirGlobalScalarInt(17)),
+        ]
+      )
+    ) => ()
+    _ => abort("expected MIR bitfield aggregate initializer")
+  }
+  match mir.globals["ubits"].init {
+    Some(MirGlobalAggregateSparse([(1, MirGlobalScalarInt(-3))])) => ()
+    _ => abort("expected MIR bitfield union initializer")
+  }
+}
+
+///|
 test "mir recursively lowers nested global initializer designators" {
   let source =
     #|struct Row { int cells[4]; };

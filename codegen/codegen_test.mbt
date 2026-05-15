@@ -411,6 +411,28 @@ test "generate linux amd64 strict MIR nested aggregate designator initializer" {
 }
 
 ///|
+test "generate linux amd64 strict MIR global bit-field initializers" {
+  let source =
+    #|struct GBits { unsigned a : 3; signed b : 4; unsigned c : 5; };
+    #|union GUBits { unsigned a : 3; signed b : 4; };
+    #|struct GBits gbits = { .a = 5, .b = -3, .c = 17 };
+    #|union GUBits gubits = { .b = -3 };
+    #|int main(void) { return 0; }
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("gbits:\n\t.long\t2285"), content="true")
+      inspect(assembly.contains("gubits:\n\t.long\t13"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate linux amd64 strict MIR global scalar initializer uses MIR metadata" {
   let source = "int g = 0; int main(void) { return 42; }"
   let target = match @target.Target::parse("linux-amd64") {
@@ -545,8 +567,7 @@ test "parser AST codegen fallback is explicit" {
 ///|
 test "strict MIR assembly rejects parser global initializer fallback" {
   let source =
-    #|struct S { int a:3; int b; };
-    #|struct S g = { .a = 3 };
+    #|int g[1] = { [2] = 9 };
     #|int main(void) { return 0; }
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   match @codegen.generate_assembly_from_mir_strict(mir) {
@@ -1173,6 +1194,24 @@ test "generate darwin arm64 global bit-field initializers" {
   let assembly = codegen.generate(prog)
   inspect(assembly.contains("_dbits:\n\t.long\t2285"), content="true")
   inspect(assembly.contains("_dubits:\n\t.long\t13"), content="true")
+}
+
+///|
+test "generate darwin arm64 strict MIR global bit-field initializers" {
+  let source =
+    #|struct DBits { unsigned a : 3; signed b : 4; unsigned c : 5; };
+    #|union DUBits { unsigned a : 3; signed b : 4; };
+    #|struct DBits dbits = { .a = 5, .b = -3, .c = 17 };
+    #|union DUBits dubits = { .b = -3 };
+    #|int main(void) { return 0; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_dbits:\n\t.long\t2285"), content="true")
+      inspect(assembly.contains("_dubits:\n\t.long\t13"), content="true")
+    }
+    Err(err) => abort(err)
+  }
 }
 
 ///|
