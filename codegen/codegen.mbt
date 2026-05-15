@@ -1586,6 +1586,10 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
     Some(mir) => self.register_mir_global_decls(mir)
     None => ()
   }
+  let mir_func_decls : Array[@mir.MirFuncDecl] = match self.mir {
+    Some(mir) => mir.decls
+    None => []
+  }
   let func_label_maps : Map[String, Map[String, String]] = {}
   for decl in prog.decls {
     if decl.is_inline && !needed_inline.contains(decl.name) {
@@ -1613,7 +1617,7 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
       self.emit("_" + g.name + ":")
       let saved_func_name = self.func_name
       let saved_emitted_labels = self.emitted_labels
-      match static_global_owner_name(g.name, prog.decls) {
+      match static_global_owner_name(g.name, mir_func_decls) {
         Some(owner) => {
           self.func_name = owner
           match func_label_maps.get(owner) {
@@ -1732,7 +1736,7 @@ fn mir_body_codegen_strict_error(mir : @mir.Program) -> String? {
 ///|
 fn static_global_owner_name(
   name : String,
-  decls : Array[@parser.FuncDecl],
+  decls : Array[@mir.MirFuncDecl],
 ) -> String? {
   let mut owner : String? = None
   let mut owner_prefix_len = 0
