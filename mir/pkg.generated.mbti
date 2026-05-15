@@ -94,6 +94,7 @@ pub(all) struct MirGlobalDecl {
 pub(all) enum MirGlobalInit {
   MirGlobalScalarInt(Int64)
   MirGlobalString(String)
+  MirGlobalSymbol(String)
   MirGlobalArray(Array[MirGlobalInit])
   MirGlobalInitUnsupported
 } derive(Eq)

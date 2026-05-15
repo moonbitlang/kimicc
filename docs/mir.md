@@ -216,9 +216,9 @@ emission itself still uses the parser fallback path while MIR data initializers
 are being expanded. Both backends also seed their aggregate layout tables from
 MIR `Program.layouts` during normal generation, while keeping parser aggregate
 declarations available for legacy fallback paths. Both backends can now emit
-the lowered MIR subset for simple scalar integer, string, and scalar array
-global initializers; unsupported initializer forms still fall back to the parser
-initializer path.
+the lowered MIR subset for simple scalar integer, string, symbol-address, and
+scalar array global initializers; unsupported initializer forms still fall back
+to the parser initializer path.
 
 ## Why This Layer Is Useful
 

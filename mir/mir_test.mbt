@@ -184,8 +184,8 @@ test "mir owns simple global initializer metadata" {
     _ => abort("expected folded MIR global initializer")
   }
   match mir.global_decls[4].init {
-    Some(MirGlobalInitUnsupported) => ()
-    _ => abort("expected unsupported address MIR global initializer")
+    Some(MirGlobalSymbol("scalar")) => ()
+    _ => abort("expected symbol address MIR global initializer")
   }
   match mir.global_decls[5].init {
     Some(MirGlobalArray([MirGlobalInitUnsupported])) => ()

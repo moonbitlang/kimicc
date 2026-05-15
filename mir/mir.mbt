@@ -69,6 +69,7 @@ pub(all) struct MirGlobalDecl {
 pub(all) enum MirGlobalInit {
   MirGlobalScalarInt(Int64)
   MirGlobalString(String)
+  MirGlobalSymbol(String)
   MirGlobalArray(Array[MirGlobalInit])
   MirGlobalInitUnsupported
 } derive(Eq)
@@ -319,6 +320,8 @@ fn Program::lower_mir_global_scalar_init(
   match expr {
     Number(n) => MirGlobalScalarInt(n)
     String(s) => MirGlobalString(s)
+    Var(name) => MirGlobalSymbol(name)
+    AddrOf(Var(name)) => MirGlobalSymbol(name)
     DesignatedField(_, _) | DesignatedIndex(_, _) | DesignatedRange(_, _, _) =>
       MirGlobalInitUnsupported
     _ =>

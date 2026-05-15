@@ -1351,6 +1351,18 @@ fn Codegen::mir_global_string_supported(
 }
 
 ///|
+fn Codegen::mir_global_symbol_supported(
+  self : Codegen,
+  ty : @parser.Type,
+) -> Bool {
+  match ty {
+    Aligned(inner, _) => self.mir_global_symbol_supported(inner)
+    Pointer(_) | FuncPtr(_, _, _) => true
+    _ => false
+  }
+}
+
+///|
 fn Codegen::mir_global_init_supported(
   self : Codegen,
   ty : @parser.Type,
@@ -1363,6 +1375,7 @@ fn Codegen::mir_global_init_supported(
         MirGlobalInitUnsupported => false
         MirGlobalScalarInt(_) => self.mir_global_scalar_int_supported(ty)
         MirGlobalString(_) => self.mir_global_string_supported(ty)
+        MirGlobalSymbol(_) => self.mir_global_symbol_supported(ty)
         MirGlobalArray(values) =>
           match ty {
             Array(elem_ty, n) => {
@@ -1458,6 +1471,7 @@ fn Codegen::emit_mir_global_init(
   match init {
     MirGlobalScalarInt(value) => self.emit_mir_global_scalar_int(ty, value)
     MirGlobalString(value) => self.emit_mir_global_string(ty, value)
+    MirGlobalSymbol(name) => self.emit("\t.quad\t_" + name)
     MirGlobalArray(values) =>
       match ty {
         Array(elem_ty, n) => {

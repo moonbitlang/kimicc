@@ -47,6 +47,28 @@ test "generate darwin arm64 global scalar initializer uses MIR metadata" {
 }
 
 ///|
+test "generate darwin arm64 global symbol initializer uses MIR metadata" {
+  let source = "int g; int *p = 0; int main(void) { return p == &g; }"
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  let p = mir.global_decls[1]
+  mir.global_decls[1] = {
+    ty: p.ty,
+    name: p.name,
+    init: Some(@mir.MirGlobalInit::MirGlobalSymbol("g")),
+    has_init: p.has_init,
+    is_static: p.is_static,
+    is_extern: p.is_extern,
+    is_weak: p.is_weak,
+    visibility: p.visibility,
+    symbol_alias: p.symbol_alias,
+    section: p.section,
+  }
+  let assembly = @codegen.generate_assembly_from_mir(mir)
+  inspect(assembly.contains("_p:\n\t.quad\t_g"), content="true")
+  inspect(assembly.contains("_p:\n\t.quad\t0"), content="false")
+}
+
+///|
 test "generate linux amd64 assembly from MIR strict" {
   let source = "int main(void) { int x = 40; return x + 2; }"
   let target = match @target.Target::parse("linux-amd64") {
@@ -1229,6 +1251,32 @@ test "generate linux amd64 global scalar initializer uses MIR metadata" {
   let assembly = @codegen.generate_assembly_from_mir(mir)
   inspect(assembly.contains("g:\n\t.long\t7"), content="true")
   inspect(assembly.contains("g:\n\t.long\t0"), content="false")
+}
+
+///|
+test "generate linux amd64 global symbol initializer uses MIR metadata" {
+  let source = "int g; int *p = 0; int main(void) { return p == &g; }"
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  let p = mir.global_decls[1]
+  mir.global_decls[1] = {
+    ty: p.ty,
+    name: p.name,
+    init: Some(@mir.MirGlobalInit::MirGlobalSymbol("g")),
+    has_init: p.has_init,
+    is_static: p.is_static,
+    is_extern: p.is_extern,
+    is_weak: p.is_weak,
+    visibility: p.visibility,
+    symbol_alias: p.symbol_alias,
+    section: p.section,
+  }
+  let assembly = @codegen.generate_assembly_from_mir(mir)
+  inspect(assembly.contains("p:\n\t.quad\tg"), content="true")
+  inspect(assembly.contains("p:\n\t.quad\t0"), content="false")
 }
 
 ///|
