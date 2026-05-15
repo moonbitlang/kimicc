@@ -21,6 +21,7 @@ pub(all) enum MirValue {
   MirLocal(MirLocal)
   MirAddrLocal(MirLocal)
   MirElemAddr(MirValue, MirValue, @parser.Type)
+  MirOffsetAddr(MirValue, Int, @parser.Type)
   MirLoad(MirValue, @parser.Type)
   MirUnary(String, MirValue, @parser.Type)
   MirBinary(String, MirValue, MirValue, @parser.Type)
@@ -68,6 +69,7 @@ pub fn MirValue::ty(self : MirValue) -> @parser.Type {
     MirLocal(binding) => binding.ty
     MirAddrLocal(binding) => Pointer(binding.ty)
     MirElemAddr(_, _, elem_ty) => Pointer(elem_ty)
+    MirOffsetAddr(_, _, ty) => Pointer(ty)
     MirLoad(_, ty) => ty
     MirUnary(_, _, ty) => ty
     MirBinary(_, _, _, ty) => ty
@@ -289,6 +291,34 @@ fn Program::lower_mir_array_elem_addr(
 }
 
 ///|
+fn Program::lower_mir_member_addr(
+  self : Program,
+  obj : @parser.Expr,
+  field : String,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  match obj {
+    Var(name) =>
+      match ctx.lookup_local(name) {
+        Some(binding) =>
+          match self.field_layout(binding.ty, field) {
+            Some(layout) =>
+              if layout.bit_width is None && mir_body_scalar_type(layout.ty) {
+                Some(
+                  MirOffsetAddr(MirAddrLocal(binding), layout.offset, layout.ty),
+                )
+              } else {
+                None
+              }
+            None => None
+          }
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
 fn mir_stmts_have_direct_label(stmts : Array[MirStmt], name : String) -> Bool {
   for stmt in stmts {
     match stmt {
@@ -350,6 +380,8 @@ fn Program::lower_mir_expr(
         self.expr_type(ArrayAccess(base, index), scope),
         ctx,
       )
+    AddrOf(MemberAccess(obj, field)) =>
+      self.lower_mir_member_addr(obj, field, ctx)
     Deref(Var(name)) =>
       match (ctx.lookup_local(name), self.lower_mir_expr(Var(name), ctx)) {
         (Some(_), Some(value)) =>
@@ -362,6 +394,11 @@ fn Program::lower_mir_expr(
       }
     ArrayAccess(base, index) =>
       match self.lower_mir_array_elem_addr(base, index, ty, ctx) {
+        Some(addr) => Some(MirLoad(addr, ty))
+        None => None
+      }
+    MemberAccess(obj, field) =>
+      match self.lower_mir_member_addr(obj, field, ctx) {
         Some(addr) => Some(MirLoad(addr, ty))
         None => None
       }
@@ -407,6 +444,11 @@ fn Program::lower_mir_expr(
             Some(addr) => Some(MirStore(addr, value, lhs_ty))
             None => None
           }
+        (MemberAccess(obj, field), Some(value)) =>
+          match self.lower_mir_member_addr(obj, field, ctx) {
+            Some(addr) => Some(MirStore(addr, value, lhs_ty))
+            None => None
+          }
         _ => None
       }
     }
@@ -443,6 +485,18 @@ fn Program::lower_mir_expr(
           }
         (ArrayAccess(base, index), Some(value)) =>
           match self.lower_mir_array_elem_addr(base, index, lhs_ty, ctx) {
+            Some(addr) =>
+              Some(
+                MirStore(
+                  addr,
+                  MirBinary(op, MirLoad(addr, lhs_ty), value, ty),
+                  lhs_ty,
+                ),
+              )
+            None => None
+          }
+        (MemberAccess(obj, field), Some(value)) =>
+          match self.lower_mir_member_addr(obj, field, ctx) {
             Some(addr) =>
               Some(
                 MirStore(

@@ -61,6 +61,11 @@ fn mir_body_elem_addr(base : Int64, index : Int64) -> Int64 {
 }
 
 ///|
+fn mir_body_offset_addr(base : Int64, offset : Int) -> Int64 {
+  base - 50000L - offset.to_int64()
+}
+
+///|
 fn BodyFrame::binding_for_addr(self : BodyFrame, addr : Int64) -> MirLocal? {
   for binding in self.bindings.values() {
     if mir_body_local_addr(binding) == addr {
@@ -68,6 +73,27 @@ fn BodyFrame::binding_for_addr(self : BodyFrame, addr : Int64) -> MirLocal? {
     }
   }
   None
+}
+
+///|
+fn BodyInterpreter::aggregate_addr(
+  self : BodyInterpreter,
+  frame : BodyFrame,
+  addr : Int64,
+) -> Bool {
+  for binding in frame.bindings.values() {
+    match self.program.core_type(binding.ty) {
+      Struct(_) | Union(_) => {
+        let base = mir_body_offset_addr(mir_body_local_addr(binding), 0)
+        let size = self.program.type_size(binding.ty).to_int64()
+        if addr <= base && addr > base - size {
+          return true
+        }
+      }
+      _ => ()
+    }
+  }
+  false
 }
 
 ///|
@@ -187,9 +213,17 @@ fn BodyInterpreter::eval_value(
         self.eval_value(frame, base),
         self.eval_value(frame, index),
       )
+    MirOffsetAddr(base, offset, _) =>
+      mir_body_offset_addr(self.eval_value(frame, base), offset)
     MirLoad(ptr, ty) => {
       let addr = self.eval_value(frame, ptr)
       if frame.array_elem_addr(addr) {
+        let value = match frame.memory.get(addr) {
+          Some(value) => value
+          None => 0L
+        }
+        self.program.runtime_cast_int(value, ty)
+      } else if self.aggregate_addr(frame, addr) {
         let value = match frame.memory.get(addr) {
           Some(value) => value
           None => 0L
@@ -285,6 +319,13 @@ fn BodyInterpreter::eval_value(
     MirStore(ptr, rhs, ty) => {
       let addr = self.eval_value(frame, ptr)
       if frame.array_elem_addr(addr) {
+        let assigned = self.program.runtime_cast_int(
+          self.eval_value(frame, rhs),
+          ty,
+        )
+        frame.memory[addr] = assigned
+        assigned
+      } else if self.aggregate_addr(frame, addr) {
         let assigned = self.program.runtime_cast_int(
           self.eval_value(frame, rhs),
           ty,

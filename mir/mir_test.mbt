@@ -368,12 +368,25 @@ test "mir body interpreter handles scalar local arrays" {
 }
 
 ///|
-test "mir body lowering refuses unsupported parser constructs" {
+test "mir body interpreter handles scalar aggregate fields" {
   let source =
-    #|struct S { int x; };
+    #|struct S { int x; unsigned char y; };
     #|int main(void) {
     #|  struct S s;
-    #|  return s.x;
+    #|  s.x = 4;
+    #|  s.y = 250 + 10;
+    #|  return s.x + s.y;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 8L)
+}
+
+///|
+test "mir body lowering refuses unsupported parser constructs" {
+  let source =
+    #|int main(void) {
+    #|  goto *0;
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   inspect(mir.bodies.contains("main"), content="false")
