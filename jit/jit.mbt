@@ -41,6 +41,21 @@ pub fn compile(source : String) -> Module? {
 }
 
 ///|
+/// Preprocesses C source, then compiles it to native memory.
+///
+/// `compile` remains the preprocessed-source API. Use this function when the
+/// source may contain macros, conditionals, or includes.
+pub fn compile_c(
+  source : String,
+  options : @preprocessor.PreprocessOptions,
+) -> Result[Module?, @preprocessor.PreprocessError] {
+  match @preprocessor.preprocess(source, options) {
+    Ok(preprocessed) => Ok(compile(preprocessed))
+    Err(err) => Err(err)
+  }
+}
+
+///|
 /// Looks up a compiled symbol by C or Darwin spelling.
 ///
 /// For example, both `"answer"` and `"_answer"` are accepted. The result is a

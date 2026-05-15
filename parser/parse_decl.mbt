@@ -1,19 +1,42 @@
 ///|
 fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
-  self.skip_attributes()
+  let leading_attrs = self.skip_attributes_info()
+  let mut leading_weak = leading_attrs.is_weak
+  let mut leading_visibility = leading_attrs.visibility
+  let mut leading_alias = leading_attrs.symbol_alias
+  let mut leading_section = leading_attrs.section
+  let mut leading_constructor = leading_attrs.is_constructor
+  let mut leading_destructor = leading_attrs.is_destructor
   let mut leading_inline = false
   while self.token == Inline {
     leading_inline = true
     self.advance()
-    self.skip_attributes()
+    let inline_attrs = self.skip_attributes_info()
+    leading_weak = leading_weak || inline_attrs.is_weak
+    leading_visibility = merge_visibility(
+      leading_visibility,
+      inline_attrs.visibility,
+    )
+    leading_alias = merge_alias(leading_alias, inline_attrs.symbol_alias)
+    leading_section = merge_section(leading_section, inline_attrs.section)
+    leading_constructor = leading_constructor || inline_attrs.is_constructor
+    leading_destructor = leading_destructor || inline_attrs.is_destructor
     self.skip_qualifiers()
   }
   let spec = self.parse_decl_specifiers()
   if leading_inline {
     spec.is_inline = true
   }
+  if leading_weak {
+    spec.is_weak = true
+  }
+  spec.visibility = merge_visibility(spec.visibility, leading_visibility)
+  spec.symbol_alias = merge_alias(spec.symbol_alias, leading_alias)
+  spec.section = merge_section(spec.section, leading_section)
+  spec.is_constructor = spec.is_constructor || leading_constructor
+  spec.is_destructor = spec.is_destructor || leading_destructor
   let decl = self.parse_declarator(spec.base_type)
-  self.skip_attributes()
+  let post_decl_attrs = self.skip_attributes_info()
   // If no name and no function suffix, skip to semicolon
   if decl.name == "" && decl.func_params is None {
     while self.token != Semicolon && self.token != EOF {
@@ -29,6 +52,12 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       variadic: false,
       is_static: false,
       is_inline: false,
+      is_weak: false,
+      visibility: None,
+      symbol_alias: None,
+      section: None,
+      is_constructor: false,
+      is_destructor: false,
       body: None,
     }
   }
@@ -48,6 +77,12 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
         variadic: false,
         is_static: false,
         is_inline: false,
+        is_weak: false,
+        visibility: None,
+        symbol_alias: None,
+        section: None,
+        is_constructor: false,
+        is_destructor: false,
         body: None,
       }
     }
@@ -104,6 +139,12 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       variadic,
       is_static: spec.is_static,
       is_inline: spec.is_inline,
+      is_weak: spec.is_weak || post_decl_attrs.is_weak,
+      visibility: merge_visibility(spec.visibility, post_decl_attrs.visibility),
+      symbol_alias: merge_alias(spec.symbol_alias, post_decl_attrs.symbol_alias),
+      section: merge_section(spec.section, post_decl_attrs.section),
+      is_constructor: spec.is_constructor || post_decl_attrs.is_constructor,
+      is_destructor: spec.is_destructor || post_decl_attrs.is_destructor,
       body,
     }
   }
@@ -112,7 +153,7 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
     self.token == Assign ||
     self.token == Comma ||
     self.token == LBracket {
-    self.parse_global_var_tail(spec, decl)
+    self.parse_global_var_tail(spec, decl, post_decl_attrs)
     return {
       ret: Void,
       name: "",
@@ -120,6 +161,12 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
       variadic: false,
       is_static: false,
       is_inline: false,
+      is_weak: false,
+      visibility: None,
+      symbol_alias: None,
+      section: None,
+      is_constructor: false,
+      is_destructor: false,
       body: None,
     }
   }
@@ -137,6 +184,12 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
     variadic: false,
     is_static: false,
     is_inline: false,
+    is_weak: false,
+    visibility: None,
+    symbol_alias: None,
+    section: None,
+    is_constructor: false,
+    is_destructor: false,
     body: None,
   }
 }
@@ -162,8 +215,12 @@ fn Parser::parse_global_var_tail(
   self : Parser,
   spec : DeclSpec,
   decl : DeclaratorResult,
+  post_decl_attrs : AttributeInfo,
 ) -> Unit {
-  let mut ty = apply_decl_align(resolve_var_type(decl), spec.align)
+  let mut ty = self.apply_decl_attrs(
+    apply_decl_align(resolve_var_type(decl), spec.align),
+    post_decl_attrs,
+  )
   let name = decl.name
   let mut init : GlobalInit? = None
   self.skip_attributes()
@@ -200,6 +257,10 @@ fn Parser::parse_global_var_tail(
     init,
     is_static: spec.is_static,
     is_extern: spec.is_extern,
+    is_weak: spec.is_weak || post_decl_attrs.is_weak,
+    visibility: merge_visibility(spec.visibility, post_decl_attrs.visibility),
+    symbol_alias: merge_alias(spec.symbol_alias, post_decl_attrs.symbol_alias),
+    section: merge_section(spec.section, post_decl_attrs.section),
   })
   self.remember_value_type(name, ty)
   self.skip_attributes()
@@ -207,10 +268,10 @@ fn Parser::parse_global_var_tail(
   while self.token == Comma {
     self.advance()
     let extra_decl = self.parse_declarator(spec.base_type)
-    self.skip_attributes()
-    let mut extra_ty = apply_decl_align(
-      resolve_var_type(extra_decl),
-      spec.align,
+    let extra_post_decl_attrs = self.skip_attributes_info()
+    let mut extra_ty = self.apply_decl_attrs(
+      apply_decl_align(resolve_var_type(extra_decl), spec.align),
+      extra_post_decl_attrs,
     )
     let mut extra_init : GlobalInit? = None
     if self.token == Assign {
@@ -245,6 +306,16 @@ fn Parser::parse_global_var_tail(
       init: extra_init,
       is_static: spec.is_static,
       is_extern: spec.is_extern,
+      is_weak: spec.is_weak || extra_post_decl_attrs.is_weak,
+      visibility: merge_visibility(
+        spec.visibility,
+        extra_post_decl_attrs.visibility,
+      ),
+      symbol_alias: merge_alias(
+        spec.symbol_alias,
+        extra_post_decl_attrs.symbol_alias,
+      ),
+      section: merge_section(spec.section, extra_post_decl_attrs.section),
     })
     self.remember_value_type(extra_decl.name, extra_ty)
     self.skip_attributes()
@@ -261,9 +332,12 @@ fn Parser::parse_param(self : Parser) -> Param {
   }
   let spec = self.parse_decl_specifiers()
   let decl = self.parse_declarator(spec.base_type)
-  self.skip_attributes()
+  let post_decl_attrs = self.skip_attributes_info()
   {
-    ty: apply_decl_align(decl.ty, spec.align),
+    ty: self.apply_decl_attrs(
+      apply_decl_align(decl.ty, spec.align),
+      post_decl_attrs,
+    ),
     name: decl.name,
     bit_width: None,
   }

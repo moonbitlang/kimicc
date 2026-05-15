@@ -1,0 +1,9 @@
+import {
+  "bobzhang/kimicc/target",
+  "bobzhang/kimicc/parser",
+  "moonbitlang/core/encoding/utf8",
+}
+
+options(
+  "native-stub": [ "stub.c" ],
+)

@@ -1,0 +1,61 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/kimicc/preprocessor"
+
+import {
+  "bobzhang/kimicc/parser",
+  "bobzhang/kimicc/target",
+}
+
+// Values
+pub fn dump_macros(String, PreprocessOptions) -> Result[String, PreprocessError]
+
+pub fn dump_macros_with_dependencies(String, PreprocessOptions) -> Result[PreprocessResult, PreprocessError]
+
+pub fn parse(String, PreprocessOptions) -> Result[@parser.Program, PreprocessError]
+
+pub fn preprocess(String, PreprocessOptions) -> Result[String, PreprocessError]
+
+pub fn preprocess_with_dependencies(String, PreprocessOptions) -> Result[PreprocessResult, PreprocessError]
+
+// Errors
+
+// Types and methods
+pub(all) struct PreprocessDependency {
+  path : String
+  system : Bool
+} derive(Eq)
+
+pub(all) enum PreprocessError {
+  Message(String)
+} derive(Eq)
+pub fn PreprocessError::to_string(Self) -> String
+
+pub(all) struct PreprocessOptions {
+  filename : String
+  target : @target.Target
+  include_paths : Array[String]
+  system_include_paths : Array[String]
+  file_prefix_maps : Array[PreprocessPrefixMap]
+  defines : Map[String, String]
+  undefines : Array[String]
+  undef_predefined : Bool
+  allow_missing_includes : Bool
+  emit_line_markers : Bool
+} derive(Eq)
+pub fn PreprocessOptions::new(String) -> Self
+
+pub(all) struct PreprocessPrefixMap {
+  from_prefix : String
+  to_prefix : String
+} derive(Eq)
+
+pub(all) struct PreprocessResult {
+  text : String
+  dependencies : Array[String]
+  dependency_records : Array[PreprocessDependency]
+} derive(Eq)
+
+// Type aliases
+
+// Traits
+

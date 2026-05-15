@@ -4,7 +4,15 @@ priv struct DeclSpec {
   mut is_static : Bool
   mut is_extern : Bool
   mut is_inline : Bool
+  mut is_auto_type : Bool
   mut align : Int?
+  mut mode : String?
+  mut is_weak : Bool
+  mut visibility : String?
+  mut symbol_alias : String?
+  mut section : String?
+  mut is_constructor : Bool
+  mut is_destructor : Bool
 }
 
 ///|
@@ -30,14 +38,33 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     is_static: false,
     is_extern: false,
     is_inline: false,
+    is_auto_type: false,
     align: None,
+    mode: None,
+    is_weak: false,
+    visibility: None,
+    symbol_alias: None,
+    section: None,
+    is_constructor: false,
+    is_destructor: false,
   }
-  self.skip_attributes()
+  let leading_attrs = self.skip_attributes_info()
+  spec.align = merge_align(spec.align, leading_attrs.align)
+  spec.mode = merge_mode(spec.mode, leading_attrs.mode)
+  spec.is_weak = spec.is_weak || leading_attrs.is_weak
+  spec.visibility = merge_visibility(spec.visibility, leading_attrs.visibility)
+  spec.symbol_alias = merge_alias(spec.symbol_alias, leading_attrs.symbol_alias)
+  spec.section = merge_section(spec.section, leading_attrs.section)
+  spec.is_constructor = spec.is_constructor || leading_attrs.is_constructor
+  spec.is_destructor = spec.is_destructor || leading_attrs.is_destructor
   let mut has_void = false
   let mut has_char = false
   let mut has_short = false
   let mut long_count = 0
   let mut has_float = false
+  let mut has_float16 = false
+  let mut has_float128 = false
+  let mut has_float64x = false
   let mut has_double = false
   let mut has_int128 = false
   let mut has_unsigned = false
@@ -48,6 +75,8 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
   let mut enum_result = Type::SInt
   let mut has_typedef_name = false
   let mut typedef_type = Type::SInt
+  let mut has_typeof = false
+  let mut typeof_type = Type::SInt
   let mut has_atomic_type = false
   let mut atomic_type = Type::SInt
   let mut has_atomic_qualifier = false
@@ -55,7 +84,15 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
   let mut saw_typedef_name = false
   let mut has_va_list = false
   while true {
-    self.skip_attributes()
+    let attrs = self.skip_attributes_info()
+    spec.align = merge_align(spec.align, attrs.align)
+    spec.mode = merge_mode(spec.mode, attrs.mode)
+    spec.is_weak = spec.is_weak || attrs.is_weak
+    spec.visibility = merge_visibility(spec.visibility, attrs.visibility)
+    spec.symbol_alias = merge_alias(spec.symbol_alias, attrs.symbol_alias)
+    spec.section = merge_section(spec.section, attrs.section)
+    spec.is_constructor = spec.is_constructor || attrs.is_constructor
+    spec.is_destructor = spec.is_destructor || attrs.is_destructor
     let mut consumed = false
     // Storage class specifiers
     if !consumed {
@@ -236,6 +273,18 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
             self.advance()
             saw_primitive = true
             consumed = true
+          } else if name == "__typeof" ||
+            name == "__typeof__" ||
+            name == "typeof" {
+            typeof_type = self.parse_typeof_specifier()
+            has_typeof = true
+            saw_primitive = true
+            consumed = true
+          } else if name == "__auto_type" {
+            spec.is_auto_type = true
+            self.advance()
+            saw_primitive = true
+            consumed = true
           } else if name == "__uint128_t" {
             has_int128 = true
             has_unsigned = true
@@ -248,9 +297,36 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
             saw_primitive = true
             consumed = true
           } else if name == "_Float16" {
+            has_float16 = true
             self.advance()
             saw_primitive = true
             consumed = true
+          } else if name == "__float128" || name == "_Float128" {
+            has_float128 = true
+            self.advance()
+            saw_primitive = true
+            consumed = true
+          } else if name == "_Float32" {
+            has_float = true
+            self.advance()
+            saw_primitive = true
+            consumed = true
+          } else if name == "_Float64" || name == "_Float32x" {
+            has_double = true
+            self.advance()
+            saw_primitive = true
+            consumed = true
+          } else if name == "_Float64x" {
+            has_float64x = true
+            self.advance()
+            saw_primitive = true
+            consumed = true
+          } else if is_unsupported_extended_float_type(name) {
+            abort(name + " types are not supported")
+          } else if name == "_BitInt" {
+            abort("_BitInt types are not supported")
+          } else if name == "_Complex" || name == "__complex__" {
+            abort("_Complex types are not supported")
           } else if !saw_primitive &&
             !saw_typedef_name &&
             self.typedefs.contains(name) {
@@ -273,6 +349,8 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     spec.base_type = struct_result
   } else if has_enum {
     spec.base_type = enum_result
+  } else if has_typeof {
+    spec.base_type = typeof_type
   } else if has_typedef_name {
     spec.base_type = typedef_type
   } else if has_va_list {
@@ -281,8 +359,18 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
     spec.base_type = Void
   } else if has_bool {
     spec.base_type = Bool
+  } else if has_float16 {
+    spec.base_type = Float16
+  } else if has_float128 {
+    spec.base_type = Float128
+  } else if has_float64x {
+    spec.base_type = LongDouble
   } else if has_float {
     spec.base_type = Float
+  } else if has_double && long_count == 1 {
+    spec.base_type = LongDouble
+  } else if has_double && long_count > 1 {
+    abort("invalid long double specifier")
   } else if has_double {
     spec.base_type = Double
   } else if has_int128 {
@@ -323,21 +411,50 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
   if has_atomic_qualifier {
     spec.base_type = Atomic(spec.base_type)
   }
+  spec.base_type = self.apply_decl_mode(spec.base_type, spec.mode)
   spec
+}
+
+///|
+fn is_unsupported_extended_float_type(name : String) -> Bool {
+  match name {
+    "_Decimal32" | "_Decimal64" | "_Decimal128" | "__bf16" | "__ibm128" => true
+    _ => false
+  }
+}
+
+///|
+fn is_extended_float_type_name(name : String) -> Bool {
+  match name {
+    "_Float32"
+    | "_Float64"
+    | "_Float32x"
+    | "_Float64x"
+    | "_Decimal32"
+    | "_Decimal64"
+    | "_Decimal128"
+    | "__bf16"
+    | "__ibm128" => true
+    _ => false
+  }
 }
 
 ///|
 fn Parser::parse_struct_type_specifier(self : Parser) -> Type {
   self.expect(Struct)
-  self.skip_attributes()
+  let leading_packed = self.skip_attributes_packed()
   match self.token {
     Ident(n) => {
       self.advance()
+      let after_name_packed = self.skip_attributes_packed()
       if self.token == LBrace {
         self.expect(LBrace)
         let fields = self.parse_struct_body()
         self.expect(RBrace)
-        let decl = { name: n, fields, is_union: false }
+        let is_packed = leading_packed ||
+          after_name_packed ||
+          self.skip_attributes_packed()
+        let decl = { name: n, fields, is_union: false, is_packed }
         self.anonymous_structs.push(decl)
         self.struct_decls[n] = decl
         Struct(n)
@@ -349,9 +466,10 @@ fn Parser::parse_struct_type_specifier(self : Parser) -> Type {
       self.expect(LBrace)
       let fields = self.parse_struct_body()
       self.expect(RBrace)
+      let is_packed = leading_packed || self.skip_attributes_packed()
       let name = "__anon_struct_" + self.anon_counter.to_string()
       self.anon_counter += 1
-      let decl = { name, fields, is_union: false }
+      let decl = { name, fields, is_union: false, is_packed }
       self.anonymous_structs.push(decl)
       self.struct_decls[name] = decl
       Struct(name)
@@ -363,15 +481,19 @@ fn Parser::parse_struct_type_specifier(self : Parser) -> Type {
 ///|
 fn Parser::parse_union_type_specifier(self : Parser) -> Type {
   self.expect(Union)
-  self.skip_attributes()
+  let leading_packed = self.skip_attributes_packed()
   match self.token {
     Ident(n) => {
       self.advance()
+      let after_name_packed = self.skip_attributes_packed()
       if self.token == LBrace {
         self.expect(LBrace)
         let fields = self.parse_struct_body()
         self.expect(RBrace)
-        let decl = { name: n, fields, is_union: true }
+        let is_packed = leading_packed ||
+          after_name_packed ||
+          self.skip_attributes_packed()
+        let decl = { name: n, fields, is_union: true, is_packed }
         self.anonymous_structs.push(decl)
         self.struct_decls[n] = decl
         Union(n)
@@ -383,9 +505,10 @@ fn Parser::parse_union_type_specifier(self : Parser) -> Type {
       self.expect(LBrace)
       let fields = self.parse_struct_body()
       self.expect(RBrace)
+      let is_packed = leading_packed || self.skip_attributes_packed()
       let name = "__anon_union_" + self.anon_counter.to_string()
       self.anon_counter += 1
-      let decl = { name, fields, is_union: true }
+      let decl = { name, fields, is_union: true, is_packed }
       self.anonymous_structs.push(decl)
       self.struct_decls[name] = decl
       Union(name)
@@ -435,6 +558,9 @@ fn Parser::parse_enum_type_specifier(self : Parser) -> Type {
           next_value = value + 1
           if self.token == Comma {
             self.advance()
+            if self.token == RBrace {
+              break
+            }
           }
         }
         _ => abort("Expected enum constant name")
@@ -460,7 +586,11 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] {
     self.skip_qualifiers()
     let spec = self.parse_decl_specifiers()
     let decl = self.parse_declarator(spec.base_type)
-    let field_ty = apply_decl_align(decl.ty, spec.align)
+    let post_decl_attrs = self.skip_attributes_info()
+    let field_ty = self.apply_decl_attrs(
+      apply_decl_align(decl.ty, spec.align),
+      post_decl_attrs,
+    )
     let bit_width = if self.token == Colon {
       self.advance()
       match self.fold_const(self.parse_assign()) {
@@ -476,7 +606,11 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] {
       self.skip_attributes()
       self.skip_qualifiers()
       let extra = self.parse_declarator(spec.base_type)
-      let extra_ty = apply_decl_align(extra.ty, spec.align)
+      let extra_post_decl_attrs = self.skip_attributes_info()
+      let extra_ty = self.apply_decl_attrs(
+        apply_decl_align(extra.ty, spec.align),
+        extra_post_decl_attrs,
+      )
       let extra_bit_width = if self.token == Colon {
         self.advance()
         match self.fold_const(self.parse_assign()) {
@@ -535,46 +669,62 @@ fn function_param_info(params : Array[Param]) -> (Int, Bool) {
 }
 
 ///|
+fn normalized_function_param_types(
+  params : Array[Param],
+) -> (Array[Type], Bool) {
+  let (named_count, variadic) = function_param_info(params)
+  let types : Array[Type] = []
+  for i in 0..<named_count {
+    match params[i].ty {
+      Void => ()
+      Array(elem, _) => types.push(Pointer(elem))
+      _ => types.push(params[i].ty)
+    }
+  }
+  (types, variadic)
+}
+
+///|
 fn make_function_pointer_type(
   ty : Type,
   push_mode : Bool,
   ptr_depth : Int,
-  named_count : Int,
+  param_types : Array[Type],
   variadic : Bool,
 ) -> Type {
   if push_mode {
-    return push_function_pointer_inside(ty, ptr_depth, named_count, variadic)
+    return push_function_pointer_inside(ty, ptr_depth, param_types, variadic)
   }
-  FuncPtr(ty, named_count, variadic)
+  FuncPtr(ty, param_types, variadic)
 }
 
 ///|
 fn push_function_pointer_inside(
   ty : Type,
   ptr_depth : Int,
-  named_count : Int,
+  param_types : Array[Type],
   variadic : Bool,
 ) -> Type {
   match ty {
     Array(inner, size) =>
       Array(
-        push_function_pointer_inside(inner, ptr_depth, named_count, variadic),
+        push_function_pointer_inside(inner, ptr_depth, param_types, variadic),
         size,
       )
     Pointer(ret) =>
       if ptr_depth <= 1 {
-        FuncPtr(ret, named_count, variadic)
+        FuncPtr(ret, param_types, variadic)
       } else {
         Pointer(
           push_function_pointer_inside(
             ret,
             ptr_depth - 1,
-            named_count,
+            param_types,
             variadic,
           ),
         )
       }
-    _ => FuncPtr(ty, named_count, variadic)
+    _ => FuncPtr(ty, param_types, variadic)
   }
 }
 
@@ -693,6 +843,50 @@ fn DeclaratorResult::set_func_info(
 }
 
 ///|
+fn Parser::is_array_parameter_qualifier(self : Parser) -> Bool {
+  match self.token {
+    Const | Restrict | Static | Volatile => true
+    Ident(name) =>
+      name == "__const" ||
+      name == "__const__" ||
+      name == "__restrict" ||
+      name == "__restrict__" ||
+      name == "__restrict_arr" ||
+      name == "__volatile" ||
+      name == "__volatile__"
+    _ => false
+  }
+}
+
+///|
+fn Parser::skip_array_parameter_qualifiers(self : Parser) -> Unit {
+  while self.is_array_parameter_qualifier() {
+    self.advance()
+  }
+}
+
+///|
+fn Parser::parse_array_declarator_size(self : Parser) -> Int {
+  self.advance()
+  self.skip_array_parameter_qualifiers()
+  let size = if self.token == RBracket {
+    0
+  } else if self.token == Star {
+    self.advance()
+    0
+  } else {
+    let size_expr = self.parse_assign()
+    match self.fold_const(size_expr) {
+      Some(n) => n.to_int()
+      None => 0
+    }
+  }
+  self.skip_array_parameter_qualifiers()
+  self.expect(RBracket)
+  size
+}
+
+///|
 fn Parser::parse_declarator_suffixes(
   self : Parser,
   base_ty : Type,
@@ -707,28 +901,7 @@ fn Parser::parse_declarator_suffixes(
   let mut is_func_decl = false
   while true {
     match self.token {
-      LBracket => {
-        self.advance()
-        // Skip C99 array parameter qualifiers: static, const, restrict, volatile
-        while self.token == Static ||
-              self.token == Const ||
-              self.token == Restrict ||
-              self.token == Volatile {
-          self.advance()
-        }
-        let size = if self.token == RBracket {
-          self.advance()
-          0
-        } else {
-          let size_expr = self.parse_assign()
-          self.expect(RBracket)
-          match self.fold_const(size_expr) {
-            Some(n) => n.to_int()
-            None => 0
-          }
-        }
-        pending_arrays.push(size)
-      }
+      LBracket => pending_arrays.push(self.parse_array_declarator_size())
       LParen => {
         ty = apply_pending_array_suffixes(ty, pending_arrays, push_mode)
         pending_arrays = []
@@ -742,11 +915,11 @@ fn Parser::parse_declarator_suffixes(
           }
         }
         self.expect(RParen)
-        let (named_count, variadic) = function_param_info(params)
+        let (param_types, variadic) = normalized_function_param_types(params)
         func_ret_ty = Some(ty)
         func_params = Some(params)
         ty = make_function_pointer_type(
-          ty, push_mode, ptr_depth, named_count, variadic,
+          ty, push_mode, ptr_depth, param_types, variadic,
         )
         if !push_mode {
           is_func_decl = true
@@ -770,28 +943,7 @@ fn Parser::parse_abstract_declarator_suffixes(
   let mut pending_arrays : Array[Int] = []
   while true {
     match self.token {
-      LBracket => {
-        self.advance()
-        // Skip C99 array parameter qualifiers: static, const, restrict, volatile
-        while self.token == Static ||
-              self.token == Const ||
-              self.token == Restrict ||
-              self.token == Volatile {
-          self.advance()
-        }
-        let size = if self.token == RBracket {
-          self.advance()
-          0
-        } else {
-          let size_expr = self.parse_assign()
-          self.expect(RBracket)
-          match self.fold_const(size_expr) {
-            Some(n) => n.to_int()
-            None => 0
-          }
-        }
-        pending_arrays.push(size)
-      }
+      LBracket => pending_arrays.push(self.parse_array_declarator_size())
       LParen => {
         result = apply_pending_array_suffixes(result, pending_arrays, push_mode)
         pending_arrays = []
@@ -805,9 +957,9 @@ fn Parser::parse_abstract_declarator_suffixes(
           }
         }
         self.expect(RParen)
-        let (named_count, variadic) = function_param_info(params)
+        let (param_types, variadic) = normalized_function_param_types(params)
         result = make_function_pointer_type(
-          result, push_mode, ptr_depth, named_count, variadic,
+          result, push_mode, ptr_depth, param_types, variadic,
         )
       }
       _ => break

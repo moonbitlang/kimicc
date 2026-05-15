@@ -1,0 +1,158 @@
+# MIR Architecture
+
+`kimicc` currently uses MIR as a target-sensitive semantic layer, not as a full
+instruction-level machine IR. The parser AST remains the main representation
+that both assembly backends walk.
+
+## Current Shape
+
+- `mir/` lowers a parsed C translation unit into reusable semantic facts:
+  function signatures, selected global declarations, aggregate declarations,
+  target-specific sizes/alignments, field layouts, expression types, and integer
+  and floating constant folds.
+- `Program::interpret_i64` is an integer-only interpreter intended for
+  compile-test oracles. It supports scalar functions, locals, globals, calls,
+  casts, arithmetic, conditionals, loops, scalar switches, simple gotos, selected
+  scalar builtin calls including direct-lvalue integer overflow helpers for
+  non-128-bit result types, scalar compound literals, and scalar `*&` / `&*`
+  cancellation that does
+  not require modeling general memory. It also models narrow string-literal facts
+  that are useful in compile tests: literal pointer non-nullness, literal byte
+  access through transparent casts, constant/runtime pointer offsets, and
+  pointer locals/globals initialized from string literals, global/local
+  character arrays initialized from byte/string literals, element addresses
+  inside those modeled byte objects, `sizeof`/`__alignof__` on string literals,
+  literal `__builtin_strlen` through transparent casts, and literal-only string
+  comparison/search builtins such as `__builtin_strcmp`,
+  `__builtin_strncmp`, `__builtin_memcmp`, `__builtin_strchr`,
+  `__builtin_strrchr`, `__builtin_strstr`, and `__builtin_memchr`. The pointer
+  returning literal search builtins model returned offsets inside the synthetic
+  literal pointer, but not general memory. Modeled C string lengths stop at the
+  first embedded NUL byte, while `sizeof` still uses the full literal object.
+  MIR and the parser also carry builtin return-type facts used by unevaluated
+  expressions such as `sizeof`, including selected string/memory aliases and
+  floating-point builtins, floating classification helpers, selected atomic
+  helpers, scalar bit/count/rotation/alignment helpers, overflow helpers, void
+  control/varargs helpers, and pointer-valued helpers such as
+  `__builtin_alloca`. Runtime `__builtin_alloca` calls are modeled for argument
+  side effects and distinct synthetic non-null pointer values; the allocated
+  memory is not modeled.
+  Floating comparison and classification builtins such as
+  `__builtin_isgreater`, `__builtin_isunordered`, `__builtin_isnan`, and
+  `__builtin_signbit` are modeled for operands covered by MIR floating
+  constant folding, returning only their integer predicate result.
+  Runtime `__builtin_va_start`, `__builtin_va_copy`, and `__builtin_va_end` are
+  no-ops for scalar tests that do not inspect `va_list` contents.
+  Runtime `__builtin_expect`, `__builtin_expect_with_probability`, and
+  `__builtin_assume_aligned` return the value operand while preserving modeled
+  side effects in ignored hint operands.
+  Runtime `__builtin_prefetch` evaluates its address argument for side effects
+  but does not model cache behavior; `__builtin_assume` remains a no-op and does
+  not evaluate its predicate. Runtime `__builtin_constant_p` returns `1` for
+  expressions covered by MIR integer constant folding and `0` otherwise, without
+  evaluating the operand. The covered compile-time scalar builtin folds include
+  absolute value, alignment predicates/helpers, bit counts, byte swaps, parity,
+  first/leading/trailing set-bit queries, rotations, and `__builtin_flt_rounds`.
+  MIR also folds the covered floating constant subset used by global
+  initializers and compile-test predicates: floating literals,
+  integer-to-floating and floating-to-integer cast paths, arithmetic, ternaries
+  selected by integer constants, modeled NaN/infinity builtins, and foldable
+  `__builtin_fabs`, `__builtin_copysign`, and `__builtin_sqrt` calls.
+  Runtime `__builtin_object_size` and `__builtin_dynamic_object_size` model
+  string-literal object sizes, direct named objects (`&x`), direct named arrays
+  (`buf`), and direct aggregate member subobjects such as `&s.buf` or `s.buf`.
+  Modes 0/2 report bytes remaining in the complete object, while modes 1/3
+  report bytes remaining in the nearest modeled subobject. Constant
+  array-element addresses and pointer offsets such as `&buf[3]` and `buf + 3`
+  subtract target element bytes from those facts. Other objects use the C
+  builtin unknown-size fallbacks (`-1` for modes 0/1, `0` for modes 2/3).
+  `memcpy`/`memmove`/`memset` and their checked aliases model only the returned
+  destination pointer; memory contents are not modeled.
+  `mempcpy` and its checked alias model the returned `dest + n` pointer, with no
+  memory-content modeling.
+  `strcpy`/`strcat`/`strncpy`/`strncat` and checked destination-return aliases
+  are modeled the same way.
+  `stpcpy` and `stpncpy`, plus checked aliases, model returned end pointers for
+  string-literal sources; destination contents are not modeled.
+  Runtime `__builtin___strlcpy_chk` evaluates its arguments and models only the
+  return value when the source is a string literal. Runtime
+  `__builtin___strlcat_chk` is modeled only for zero destination size and a
+  string-literal source, where the destination contents are not inspected.
+  Runtime `__builtin___snprintf_chk` is modeled only for return length, with no
+  output-content modeling, and a literal format string with `%c`,
+  literal-string `%s`, decimal `%d`/`%i`,
+  nonnegative `%u`/`%o`/`%x`/`%X`, optional integer length modifiers
+  `l`/`ll`/`z`/`t`/`j`, simple numeric field widths with `0`/`-` flags,
+  `+`/space sign flags for decimal `%d`/`%i`, `#` alternate form for
+  nonnegative `%o`/`%x`/`%X`, simple numeric precision for literal-string
+  `%s`, decimal `%d`/`%i`, and nonnegative `%u`/`%o`/`%x`/`%X`, or escaped
+  `%%`.
+  Runtime `__builtin___sprintf_chk` is modeled only for a literal format string
+  with `%c`, literal-string `%s`, decimal `%d`/`%i`, nonnegative
+  `%u`/`%o`/`%x`/`%X`, optional integer length modifiers `l`/`ll`/`z`/`t`/`j`,
+  simple numeric field widths with `0`/`-` flags, `+`/space sign flags for
+  decimal `%d`/`%i`, `#` alternate form for nonnegative `%o`/`%x`/`%X`, or
+  simple numeric precision for literal-string `%s`, decimal `%d`/`%i`, and
+  nonnegative `%u`/`%o`/`%x`/`%X`, or escaped `%%`; output contents are not
+  modeled.
+  Runtime `__builtin___printf_chk` is modeled with the same literal-format
+  return-value restriction; output is not modeled.
+  Runtime `__builtin_bzero` evaluates its arguments but does not model memory
+  contents.
+  Frame/return-address builtins are modeled only for nullness: depth 0 returns a
+  synthetic non-null pointer, and nonzero depths return null. Tests should
+  compare those values only against null or pass them through identity helpers,
+  not inspect the synthetic address itself. Aggregate globals are retained as
+  type-only declarations so compile tests can query object-size facts, but
+  runtime aggregate reads still return `Err`. Unsupported local initializer
+  values are not stored, but their side effects are evaluated before later reads
+  of those locals return `Err`. The interpreter deliberately returns `Err` for
+  general memory, aggregate values, indirect calls, floating point, computed
+  goto, varargs, and other behavior that is not modeled yet.
+- `test/e2e/mir_oracle_test.mbt` compares selected scalar compiled binaries
+  against the MIR interpreter.
+- `codegen/semantic_facts_wbtest.mbt` checks that Darwin ARM64 and linux/amd64
+  backend-local facts agree with MIR for representative scalar, aggregate,
+  packed, union, bit-field, offsetof, expression type, global-expression type,
+  builtin-return type, and integer and floating constant-folding cases. It also
+  pins attached-backend semantic queries and scalar builtin constant-folding
+  delegation to MIR without relying on pre-populated backend layout tables.
+
+## Backend Sharing
+
+Darwin ARM64 receives a lowered MIR program through `generate_assembly_for_target`,
+and direct `Codegen::generate` construction attaches a darwin/arm64 MIR program
+if one is not already present. It delegates size, alignment, field-layout,
+offsetof path, expression type, global-expression type, and covered
+integer/floating constant-folding queries to MIR when that lowered program is
+present. Runtime `__builtin_object_size` and `__builtin_dynamic_object_size`
+lowering also use the MIR object-size fact when available. Its older local
+semantic paths remain in place for whitebox consistency tests and as fallbacks.
+
+Linux/amd64 receives a lowered MIR program through `generate_assembly_for_target`,
+and direct private `X64Codegen::generate` construction attaches a linux/amd64 MIR
+program if one is not already present. The private `X64Codegen` delegates size,
+alignment, field-layout, offsetof path, expression type, global-expression type,
+and covered integer/floating constant-folding queries to MIR when that lowered
+program is present. Runtime `__builtin_object_size` and
+`__builtin_dynamic_object_size` lowering also use the MIR object-size fact when
+available. Its older local semantic paths remain in place for whitebox
+consistency tests and as fallbacks for direct private construction in tests.
+
+## Why This Layer Is Useful
+
+The two backends had started duplicating C semantic facts: scalar ABI layout,
+aggregate layout, expression typing, and constant folding. Those facts are not
+really target instruction selection. Keeping them in MIR makes backend behavior
+easier to compare and gives compile tests a non-assembler oracle for scalar
+program behavior.
+
+## Remaining Migration Path
+
+1. Expand MIR facts only when a backend or test needs them.
+2. Grow the MIR interpreter as a compile-test oracle before relying on it for
+   broader conformance claims.
+3. Move more backend semantic queries to MIR behind tests that compare old and
+   new behavior.
+4. Only after semantic sharing is stable, consider a real machine-level IR with
+   explicit virtual registers, blocks, target lowering, and allocation.

@@ -1,0 +1,23 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/kimicc/target"
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) enum Target {
+  DarwinArm64
+  LinuxAmd64
+} derive(Eq)
+pub fn Target::default() -> Self
+pub fn Target::name(Self) -> String
+pub fn Target::object_format(Self) -> String
+pub fn Target::parse(String) -> Self?
+pub fn Target::symbol_prefix(Self) -> String
+pub fn Target::triple(Self) -> String
+
+// Type aliases
+
+// Traits
+

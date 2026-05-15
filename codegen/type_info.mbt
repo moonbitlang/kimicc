@@ -1,15 +1,22 @@
 ///|
 fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
+  match self.mir {
+    Some(mir) => return mir.type_size(ty)
+    None => ()
+  }
   match ty {
     Void => 0
     Bool | SChar | UChar => 1
     SShort | UShort => 2
     SInt | UInt | Float => 4
+    Float16 => abort("_Float16 size is not supported")
+    Float128 => abort("__float128 size is not supported")
     SLong
     | ULong
     | SLongLong
     | ULongLong
     | Double
+    | LongDouble
     | Pointer(_)
     | FuncPtr(_, _, _) => 8
     SInt128 | UInt128 => 16
@@ -28,14 +35,18 @@ fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
       let fields = self.struct_layouts[name]
       let mut max_end = 0
       let mut max_align = 1
+      let is_packed = self.struct_decls.contains(name) &&
+        self.struct_decls[name].is_packed
       for field in fields {
         let end = field.2 + field.3
         if end > max_end {
           max_end = end
         }
-        let fa = self.type_align(field.1)
-        if fa > max_align {
-          max_align = fa
+        if !is_packed {
+          let fa = self.type_align(field.1)
+          if fa > max_align {
+            max_align = fa
+          }
         }
       }
       // Round up to struct alignment (trailing padding)
@@ -53,29 +64,45 @@ fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
       }
       let fields = self.struct_layouts[name]
       let mut max_size = 0
+      let mut max_align = 1
+      let is_packed = self.struct_decls.contains(name) &&
+        self.struct_decls[name].is_packed
       for field in fields {
         let fs = self.type_size(field.1)
         if fs > max_size {
           max_size = fs
         }
+        if !is_packed {
+          let fa = self.type_align(field.1)
+          if fa > max_align {
+            max_align = fa
+          }
+        }
       }
-      max_size
+      max_size + (max_align - max_size % max_align) % max_align
     }
   }
 }
 
 ///|
 fn Codegen::type_align(self : Codegen, ty : @parser.Type) -> Int {
+  match self.mir {
+    Some(mir) => return mir.type_align(ty)
+    None => ()
+  }
   match ty {
     Void => 1
     Bool | SChar | UChar => 1
     SShort | UShort => 2
     SInt | UInt | Float => 4
+    Float16 => abort("_Float16 alignment is not supported")
+    Float128 => abort("__float128 alignment is not supported")
     SLong
     | ULong
     | SLongLong
     | ULongLong
     | Double
+    | LongDouble
     | Pointer(_)
     | FuncPtr(_, _, _) => 8
     SInt128 | UInt128 => 16
@@ -90,6 +117,9 @@ fn Codegen::type_align(self : Codegen, ty : @parser.Type) -> Int {
       }
     }
     Struct(name) => {
+      if self.struct_decls.contains(name) && self.struct_decls[name].is_packed {
+        return 1
+      }
       if !self.struct_layouts.contains(name) {
         if self.struct_decls.contains(name) {
           self.compute_struct_layout(self.struct_decls[name])
@@ -108,6 +138,9 @@ fn Codegen::type_align(self : Codegen, ty : @parser.Type) -> Int {
       max_align
     }
     Union(name) => {
+      if self.struct_decls.contains(name) && self.struct_decls[name].is_packed {
+        return 1
+      }
       if !self.struct_layouts.contains(name) {
         if self.struct_decls.contains(name) {
           self.compute_struct_layout(self.struct_decls[name])
@@ -184,7 +217,7 @@ fn Codegen::compute_struct_layout(
   for field in decl.fields {
     // Anonymous struct/union member: flatten its fields into parent
     if field.name == "" && is_anon_type(field.ty) {
-      let align = self.type_align(field.ty)
+      let align = if decl.is_packed { 1 } else { self.type_align(field.ty) }
       let padding = (align - offset % align) % align
       offset += padding
       for f in self.flatten_anon_fields(field.ty, offset) {
@@ -199,7 +232,7 @@ fn Codegen::compute_struct_layout(
       None => {
         // Normal field: align to natural boundary, reset bit packing
         let size = self.type_size(field.ty)
-        let align = self.type_align(field.ty)
+        let align = if decl.is_packed { 1 } else { self.type_align(field.ty) }
         let padding = (align - offset % align) % align
         offset += padding
         layout.push((field.name, field.ty, offset, size, 0, 0))
@@ -209,7 +242,11 @@ fn Codegen::compute_struct_layout(
       }
       Some(w) => {
         let container_size = self.type_size(field.ty)
-        let container_align = self.type_align(field.ty)
+        let container_align = if decl.is_packed {
+          1
+        } else {
+          self.type_align(field.ty)
+        }
         let container_bits = container_size * 8
         if w == 0 {
           // Zero-width bit-field: force alignment to next container boundary
@@ -290,11 +327,59 @@ fn Codegen::compute_union_layout(
 }
 
 ///|
+fn darwin_field_layout_tuple(
+  layout : @mir.FieldLayout,
+) -> (String, @parser.Type, Int, Int, Int, Int) {
+  let bit_width = match layout.bit_width {
+    Some(width) => width
+    None => 0
+  }
+  (
+    layout.name,
+    layout.ty,
+    layout.offset,
+    layout.size,
+    layout.bit_offset,
+    bit_width,
+  )
+}
+
+///|
+fn darwin_field_receiver_type(ty : @parser.Type) -> @parser.Type? {
+  match peel_aligned_type(ty) {
+    Struct(name) => Some(Struct(name))
+    Union(name) => Some(Union(name))
+    Pointer(inner) =>
+      match peel_aligned_type(inner) {
+        Struct(name) => Some(Struct(name))
+        Union(name) => Some(Union(name))
+        _ => None
+      }
+    _ => None
+  }
+}
+
+///|
 fn Codegen::find_field_layout(
   self : Codegen,
   struct_name : String,
   field : String,
 ) -> (String, @parser.Type, Int, Int, Int, Int)? {
+  match self.mir {
+    Some(mir) => {
+      let ty = if self.struct_decls.contains(struct_name) &&
+        self.struct_decls[struct_name].is_union {
+        @parser.Type::Union(struct_name)
+      } else {
+        @parser.Type::Struct(struct_name)
+      }
+      match mir.field_layout(ty, field) {
+        Some(layout) => return Some(darwin_field_layout_tuple(layout))
+        None => return None
+      }
+    }
+    None => ()
+  }
   if !self.struct_layouts.contains(struct_name) {
     return None
   }
@@ -304,4 +389,71 @@ fn Codegen::find_field_layout(
     }
   }
   None
+}
+
+///|
+fn Codegen::find_field_layout_for_type(
+  self : Codegen,
+  ty : @parser.Type,
+  field : String,
+) -> (String, @parser.Type, Int, Int, Int, Int)? {
+  let lookup_ty = match darwin_field_receiver_type(ty) {
+    Some(lookup_ty) => lookup_ty
+    None => return None
+  }
+  match self.mir {
+    Some(mir) =>
+      match mir.field_layout(lookup_ty, field) {
+        Some(layout) => return Some(darwin_field_layout_tuple(layout))
+        None => return None
+      }
+    None => ()
+  }
+  match lookup_ty {
+    Struct(name) | Union(name) => self.find_field_layout(name, field)
+    _ => None
+  }
+}
+
+///|
+fn Codegen::offset_of_path(
+  self : Codegen,
+  ty : @parser.Type,
+  path : Array[@parser.OffsetDesignator],
+) -> Int? {
+  match self.mir {
+    Some(mir) => return mir.offset_of_path(ty, path)
+    None => ()
+  }
+  let mut current_ty = ty
+  let mut offset = 0
+  for designator in path {
+    match designator {
+      OffsetField(field) =>
+        match self.find_field_layout_for_type(current_ty, field) {
+          Some((_, field_ty, field_offset, _, _, _)) => {
+            offset += field_offset
+            current_ty = field_ty
+          }
+          None => return None
+        }
+      OffsetIndex(index) =>
+        match offset_array_element_type(current_ty) {
+          Some(elem) => {
+            offset += index.to_int() * self.type_size(elem)
+            current_ty = elem
+          }
+          None => return None
+        }
+    }
+  }
+  Some(offset)
+}
+
+///|
+fn offset_array_element_type(ty : @parser.Type) -> @parser.Type? {
+  match peel_aligned_type(ty) {
+    Array(elem, _) => Some(elem)
+    _ => None
+  }
 }

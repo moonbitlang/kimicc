@@ -1,4 +1,90 @@
 ///|
+priv enum InitDesignator {
+  InitField(String)
+  InitIndex(Int64)
+  InitRange(Int64, Int64)
+}
+
+///|
+fn Parser::parse_initializer_designator_path(
+  self : Parser,
+) -> Array[InitDesignator] {
+  let path = []
+  while self.token == Dot || self.token == LBracket {
+    match self.token {
+      Dot => {
+        self.advance()
+        match self.token {
+          Ident(name) => {
+            path.push(InitField(name))
+            self.advance()
+          }
+          _ => abort("Expected field name in designated initializer")
+        }
+      }
+      LBracket => {
+        self.advance()
+        let start = match self.fold_const(self.parse_assign()) {
+          Some(n) => n
+          None => 0L
+        }
+        let end = if self.token == Ellipsis {
+          self.advance()
+          match self.fold_const(self.parse_assign()) {
+            Some(n) => n
+            None => start
+          }
+        } else {
+          start
+        }
+        self.expect(RBracket)
+        if start == end {
+          path.push(InitIndex(start))
+        } else {
+          path.push(InitRange(start, end))
+        }
+      }
+      _ => ()
+    }
+  }
+  path
+}
+
+///|
+fn Parser::parse_initializer_value(
+  self : Parser,
+  compound_literal : Bool,
+) -> Expr {
+  if self.token == LBrace {
+    if compound_literal {
+      Expr::Array(self.parse_compound_literal_init_exprs())
+    } else {
+      Expr::Array(self.parse_brace_init_exprs())
+    }
+  } else {
+    self.parse_assign()
+  }
+}
+
+///|
+fn Parser::parse_designated_initializer(
+  self : Parser,
+  compound_literal : Bool,
+) -> Expr {
+  let path = self.parse_initializer_designator_path()
+  self.expect(Assign)
+  let mut value = self.parse_initializer_value(compound_literal)
+  for i = path.length() - 1; i >= 0; i = i - 1 {
+    match path[i] {
+      InitField(name) => value = DesignatedField(name, value)
+      InitIndex(index) => value = DesignatedIndex(index, value)
+      InitRange(first, last) => value = DesignatedRange(first, last, value)
+    }
+  }
+  value
+}
+
+///|
 /// Parse expressions inside a brace initializer: { expr1, expr2, ... }
 fn Parser::parse_brace_init_exprs(self : Parser) -> Array[Expr] {
   let exprs = []
@@ -8,64 +94,8 @@ fn Parser::parse_brace_init_exprs(self : Parser) -> Array[Expr] {
       // Recursively parse nested brace initializer and wrap as Expr::Array
       let nested = self.parse_brace_init_exprs()
       exprs.push(Expr::Array(nested))
-    } else if self.token == Dot {
-      self.advance()
-      let fields = []
-      let field = match self.token {
-        Ident(name) => {
-          self.advance()
-          name
-        }
-        _ => abort("Expected field name in designated initializer")
-      }
-      fields.push(field)
-      while self.token == Dot {
-        self.advance()
-        match self.token {
-          Ident(name) => {
-            self.advance()
-            fields.push(name)
-          }
-          _ => abort("Expected field name in designated initializer")
-        }
-      }
-      self.expect(Assign)
-      let mut value = if self.token == LBrace {
-        Expr::Array(self.parse_brace_init_exprs())
-      } else {
-        self.parse_assign()
-      }
-      for i = fields.length() - 1; i >= 0; i = i - 1 {
-        value = DesignatedField(fields[i], value)
-      }
-      exprs.push(value)
-    } else if self.token == LBracket {
-      self.advance()
-      let start = match self.fold_const(self.parse_assign()) {
-        Some(n) => n
-        None => 0L
-      }
-      let end = if self.token == Ellipsis {
-        self.advance()
-        match self.fold_const(self.parse_assign()) {
-          Some(n) => n
-          None => start
-        }
-      } else {
-        start
-      }
-      self.expect(RBracket)
-      self.expect(Assign)
-      let value = if self.token == LBrace {
-        Expr::Array(self.parse_brace_init_exprs())
-      } else {
-        self.parse_assign()
-      }
-      if start == end {
-        exprs.push(DesignatedIndex(start, value))
-      } else {
-        exprs.push(DesignatedRange(start, end, value))
-      }
+    } else if self.token == Dot || self.token == LBracket {
+      exprs.push(self.parse_designated_initializer(false))
     } else {
       exprs.push(self.parse_assign())
     }
@@ -85,64 +115,8 @@ fn Parser::parse_compound_literal_init_exprs(self : Parser) -> Array[Expr] {
     if self.token == LBrace {
       let nested = self.parse_compound_literal_init_exprs()
       exprs.push(Expr::Array(nested))
-    } else if self.token == Dot {
-      self.advance()
-      let fields = []
-      let field = match self.token {
-        Ident(name) => {
-          self.advance()
-          name
-        }
-        _ => abort("Expected field name in designated initializer")
-      }
-      fields.push(field)
-      while self.token == Dot {
-        self.advance()
-        match self.token {
-          Ident(name) => {
-            self.advance()
-            fields.push(name)
-          }
-          _ => abort("Expected field name in designated initializer")
-        }
-      }
-      self.expect(Assign)
-      let mut value = if self.token == LBrace {
-        Expr::Array(self.parse_compound_literal_init_exprs())
-      } else {
-        self.parse_assign()
-      }
-      for i = fields.length() - 1; i >= 0; i = i - 1 {
-        value = DesignatedField(fields[i], value)
-      }
-      exprs.push(value)
-    } else if self.token == LBracket {
-      self.advance()
-      let start = match self.fold_const(self.parse_assign()) {
-        Some(n) => n
-        None => 0L
-      }
-      let end = if self.token == Ellipsis {
-        self.advance()
-        match self.fold_const(self.parse_assign()) {
-          Some(n) => n
-          None => start
-        }
-      } else {
-        start
-      }
-      self.expect(RBracket)
-      self.expect(Assign)
-      let value = if self.token == LBrace {
-        Expr::Array(self.parse_compound_literal_init_exprs())
-      } else {
-        self.parse_assign()
-      }
-      if start == end {
-        exprs.push(DesignatedIndex(start, value))
-      } else {
-        exprs.push(DesignatedRange(start, end, value))
-      }
+    } else if self.token == Dot || self.token == LBracket {
+      exprs.push(self.parse_designated_initializer(true))
     } else {
       exprs.push(self.parse_assign())
     }
@@ -352,6 +326,17 @@ fn Parser::is_stmt_decl_start(self : Parser) -> Bool {
       name == "__int128_t" ||
       name == "__uint128_t" ||
       name == "_Float16" ||
+      name == "__float128" ||
+      name == "_Float128" ||
+      is_extended_float_type_name(name) ||
+      name == "_BitInt" ||
+      name == "_Complex" ||
+      name == "__complex__" ||
+      name == "__builtin_va_list" ||
+      name == "__typeof" ||
+      name == "__typeof__" ||
+      name == "typeof" ||
+      name == "__auto_type" ||
       self.typedefs.contains(name)
     _ => false
   }
@@ -394,46 +379,12 @@ fn Parser::parse_for_stmt(self : Parser) -> Stmt {
   let init = if self.token == Semicolon {
     self.advance()
     None
-  } else if self.token == Int ||
-    self.token == Void ||
-    self.token == Char ||
-    self.token == Struct ||
-    self.token == Union ||
-    self.token == Signed ||
-    self.token == Unsigned ||
-    self.token == Short ||
-    self.token == Long ||
-    self.token == Float ||
-    self.token == Double ||
-    self.token == Bool ||
-    self.token == Enum ||
-    self.token == Const ||
-    self.token == Restrict ||
-    self.token == Volatile ||
-    self.token == Extern ||
-    self.token == Static ||
-    self.token == Inline {
+  } else if self.is_stmt_decl_start() {
     Some(self.parse_var_decl_stmt())
   } else {
-    let is_typedef = match self.token {
-      Ident(name) =>
-        name == "_Atomic" ||
-        name == "_Alignas" ||
-        name == "alignas" ||
-        name == "__int128" ||
-        name == "__int128_t" ||
-        name == "__uint128_t" ||
-        name == "_Float16" ||
-        self.typedefs.contains(name)
-      _ => false
-    }
-    if is_typedef {
-      Some(self.parse_var_decl_stmt())
-    } else {
-      let expr = self.parse_expr()
-      self.expect(Semicolon)
-      Some(ExprStmt(expr))
-    }
+    let expr = self.parse_expr()
+    self.expect(Semicolon)
+    Some(ExprStmt(expr))
   }
   // Parse condition
   let cond = if self.token == Semicolon {
@@ -767,17 +718,30 @@ fn Parser::push_struct_init_assignments(
         )
       (Struct(_) | Union(_), DesignatedField(_, _)) =>
         self.push_struct_init_assignments(stmts, field_target, field.ty, [value])
+      (Array(_, _), Array(elem_exprs)) =>
+        self.push_array_init_assignments_at(
+          stmts,
+          field_target,
+          field.ty,
+          elem_exprs,
+        )
+      (Array(_, _), DesignatedIndex(_, _))
+      | (Array(_, _), DesignatedRange(_, _, _)) =>
+        self.push_array_init_assignments_at(stmts, field_target, field.ty, [
+          value,
+        ])
       (Struct(_) | Union(_), Number(0)) => ()
+      (Array(_, _), Number(0)) => ()
       _ => stmts.push(ExprStmt(Assign(field_target, value)))
     }
   }
 }
 
 ///|
-fn Parser::push_array_init_assignments(
+fn Parser::push_array_init_assignments_at(
   self : Parser,
   stmts : Array[Stmt],
-  name : String,
+  target : Expr,
   ty : Type,
   init_exprs : Array[Expr],
 ) -> Unit {
@@ -808,15 +772,34 @@ fn Parser::push_array_init_assignments(
       }
     }
     for i = start; i <= end; i = i + 1 {
-      let elem = Expr::ArrayAccess(Var(name), Number(i.to_int64()))
+      let elem = Expr::ArrayAccess(target, Number(i.to_int64()))
       match (elem_ty, value) {
         (Struct(_) | Union(_), Array(field_exprs)) =>
           self.push_struct_init_assignments(stmts, elem, elem_ty, field_exprs)
+        (Struct(_) | Union(_), DesignatedField(_, _)) =>
+          self.push_struct_init_assignments(stmts, elem, elem_ty, [value])
+        (Array(_, _), Array(elem_exprs)) =>
+          self.push_array_init_assignments_at(stmts, elem, elem_ty, elem_exprs)
+        (Array(_, _), DesignatedIndex(_, _))
+        | (Array(_, _), DesignatedRange(_, _, _)) =>
+          self.push_array_init_assignments_at(stmts, elem, elem_ty, [value])
         (Struct(_) | Union(_), Number(0)) => ()
+        (Array(_, _), Number(0)) => ()
         _ => stmts.push(ExprStmt(Assign(elem, value)))
       }
     }
   }
+}
+
+///|
+fn Parser::push_array_init_assignments(
+  self : Parser,
+  stmts : Array[Stmt],
+  name : String,
+  ty : Type,
+  init_exprs : Array[Expr],
+) -> Unit {
+  self.push_array_init_assignments_at(stmts, Var(name), ty, init_exprs)
 }
 
 ///|
@@ -830,7 +813,33 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
   let stmts = []
   // Parse first declarator
   let decl = self.parse_declarator(spec.base_type)
-  let decl_ty = apply_decl_align(resolve_var_type(decl), spec.align)
+  let post_decl_attrs = self.skip_attributes_info()
+  let decl_ty = self.apply_decl_attrs(
+    apply_decl_align(resolve_var_type(decl), spec.align),
+    post_decl_attrs,
+  )
+  let decl_is_weak = spec.is_weak || post_decl_attrs.is_weak
+  let decl_visibility = merge_visibility(
+    spec.visibility,
+    post_decl_attrs.visibility,
+  )
+  let decl_alias = merge_alias(spec.symbol_alias, post_decl_attrs.symbol_alias)
+  let decl_section = merge_section(spec.section, post_decl_attrs.section)
+  if spec.is_auto_type {
+    if spec.is_static ||
+      spec.is_extern ||
+      decl.name == "" ||
+      decl.ptr_depth != 0 {
+      abort("__auto_type requires one initialized local identifier")
+    }
+    self.expect(Assign)
+    let expr = self.parse_assign()
+    let inferred_ty = auto_decl_type(self.const_expr_type(expr))
+    let ty = self.apply_decl_attrs(inferred_ty, post_decl_attrs)
+    self.expect(Semicolon)
+    self.remember_value_type(decl.name, ty)
+    return VarDecl(ty, decl.name, Some(expr))
+  }
   // Local function prototype inside a function body: int foo(void);
   if decl.is_func_decl && self.token == Semicolon {
     self.expect(Semicolon)
@@ -853,6 +862,10 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
         init,
         is_static: true,
         is_extern: false,
+        is_weak: false,
+        visibility: None,
+        symbol_alias: None,
+        section: None,
       })
     } else {
       self.globals.push({
@@ -861,6 +874,10 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
         init: None,
         is_static: false,
         is_extern: true,
+        is_weak: decl_is_weak,
+        visibility: decl_visibility,
+        symbol_alias: decl_alias,
+        section: decl_section,
       })
     }
     self.remember_value_type(mangled, final_ty)
@@ -869,9 +886,23 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
     while self.token == Comma {
       self.advance()
       let extra_decl = self.parse_declarator(spec.base_type)
-      let extra_decl_ty = apply_decl_align(
-        resolve_var_type(extra_decl),
-        spec.align,
+      let extra_post_decl_attrs = self.skip_attributes_info()
+      let extra_decl_ty = self.apply_decl_attrs(
+        apply_decl_align(resolve_var_type(extra_decl), spec.align),
+        extra_post_decl_attrs,
+      )
+      let extra_decl_is_weak = spec.is_weak || extra_post_decl_attrs.is_weak
+      let extra_decl_visibility = merge_visibility(
+        spec.visibility,
+        extra_post_decl_attrs.visibility,
+      )
+      let extra_decl_alias = merge_alias(
+        spec.symbol_alias,
+        extra_post_decl_attrs.symbol_alias,
+      )
+      let extra_decl_section = merge_section(
+        spec.section,
+        extra_post_decl_attrs.section,
       )
       let extra_mangled = if spec.is_static {
         self.register_static_local(extra_decl.name)
@@ -887,6 +918,10 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
           init: extra_init,
           is_static: true,
           is_extern: false,
+          is_weak: false,
+          visibility: None,
+          symbol_alias: None,
+          section: None,
         })
       } else {
         self.globals.push({
@@ -895,6 +930,10 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
           init: None,
           is_static: false,
           is_extern: true,
+          is_weak: extra_decl_is_weak,
+          visibility: extra_decl_visibility,
+          symbol_alias: extra_decl_alias,
+          section: extra_decl_section,
         })
       }
       self.remember_value_type(extra_mangled, extra_ty)
@@ -980,9 +1019,10 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
   while self.token == Comma {
     self.advance()
     let extra_decl = self.parse_declarator(spec.base_type)
-    let extra_decl_ty = apply_decl_align(
-      resolve_var_type(extra_decl),
-      spec.align,
+    let extra_post_decl_attrs = self.skip_attributes_info()
+    let extra_decl_ty = self.apply_decl_attrs(
+      apply_decl_align(resolve_var_type(extra_decl), spec.align),
+      extra_post_decl_attrs,
     )
     let mut remembered_extra_ty = extra_decl_ty
     if self.token == Assign {
@@ -1058,6 +1098,15 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
     stmts[0]
   } else {
     StmtList(stmts)
+  }
+}
+
+///|
+fn auto_decl_type(ty : Type) -> Type {
+  match ty {
+    Array(elem, _) => Pointer(elem)
+    Aligned(inner, _) => auto_decl_type(inner)
+    other => other
   }
 }
 

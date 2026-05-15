@@ -83,7 +83,7 @@ fn Codegen::gen_stmt(
           self.emit_scalar_conversion_to(ret_ty)
           match ret_ty {
             Float => self.emit("\tfmov\ts0, w9")
-            Double => self.emit("\tfmov\td0, x9")
+            Double | LongDouble => self.emit("\tfmov\td0, x9")
             SInt128 | UInt128 => {
               self.emit("\tmov\tx0, x9")
               self.emit("\tmov\tx1, x10")

@@ -10,6 +10,9 @@ jobs:
   test:
     runs-on: macos-latest
     timeout-minutes: 60
+    env:
+      TINYCC_REF: fad812360ba836b4ca6f52236d867476ff671633
+      QUICKJS_REF: d7ae12ae71dfd6ab2997527d295014a8996fa0f9
     steps:
       - uses: actions/checkout@v5
 
@@ -26,6 +29,9 @@ jobs:
       - name: Update dependencies
         run: moon update
 
+      - name: Check shell scripts
+        run: bash -n scripts/fetch-external-parser-fixtures.sh scripts/linux-amd64-smoke.sh scripts/build-linux-amd64-smoke-image.sh scripts/native-ci-test.sh
+
       - name: Check formatting
         run: |
           moon fmt
@@ -35,25 +41,30 @@ jobs:
           fi
 
       - name: moon check
-        run: moon check
+        run: moon check --target native
+
+      - name: Check generated interfaces
+        run: |
+          moon info --target native
+          if ! git diff --exit-code; then
+            echo "::error::moon info --target native produced interface changes - run 'moon info --target native' locally and commit the result"
+            exit 1
+          fi
 
       - name: Fetch external e2e fixtures
-        run: |
-          set -euo pipefail
-          # tinycc preprocessed (used by test "parse tinycc stripped").
-          # configure + a partial build are required so that generated headers
-          # like tccdefs_.h exist before we preprocess tcc.c.
-          git clone --depth=1 https://repo.or.cz/tinycc.git /tmp/tinycc-src
-          (cd /tmp/tinycc-src && ./configure --cc=clang && make tccdefs_.h)
-          clang -E -P -I/tmp/tinycc-src /tmp/tinycc-src/tcc.c > /tmp/tinycc_stripped.c
-
-          # quickjs preprocessed (used by test "parse quickjs preprocessed").
-          git clone --depth=1 https://github.com/bellard/quickjs.git /tmp/quickjs-src
-          clang -E -P -I/tmp/quickjs-src \
-            -DCONFIG_VERSION='"ci-snapshot"' \
-            /tmp/quickjs-src/quickjs.c > /tmp/quickjs_preprocessed.c
-
-          wc -l /tmp/tinycc_stripped.c /tmp/quickjs_preprocessed.c
+        run: scripts/fetch-external-parser-fixtures.sh
 
       - name: moon test
-        run: moon test
+        run: scripts/native-ci-test.sh
+
+  linux-amd64-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build Linux amd64 smoke image
+        run: scripts/build-linux-amd64-smoke-image.sh
+
+      - name: Linux amd64 smoke
+        run: KIMICC_LINUX_AMD64_SMOKE_FORCE_DOCKER=1 scripts/linux-amd64-smoke.sh

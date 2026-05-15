@@ -1,0 +1,1495 @@
+///|
+async test "e2e MIR oracle checks scalar calls and arithmetic" {
+  let source =
+    #|int mul(int a, int b) {
+    #|  return a * b;
+    #|}
+    #|int main(void) {
+    #|  int x = 6;
+    #|  int y = 7;
+    #|  return mul(x, y);
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks scalar control flow" {
+  let source =
+    #|int main(void) {
+    #|  int sum = 0;
+    #|  for (int i = 0; i < 10; i++) {
+    #|    if (i == 3) continue;
+    #|    if (i == 8) break;
+    #|    sum += i;
+    #|  }
+    #|  while (sum < 30) {
+    #|    sum++;
+    #|  }
+    #|  return sum + (sum == 30 ? 12 : 0);
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks scalar globals and casts" {
+  let source =
+    #|int g = 35;
+    #|int bump(int x) {
+    #|  g += x;
+    #|  return g;
+    #|}
+    #|int main(void) {
+    #|  unsigned char c = 255 + 1;
+    #|  int v = bump(5);
+    #|  return v + sizeof(long double) - 6 + c;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks scalar address dereference cancellation" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  *&x += 5;
+    #|  return *&x;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks integer overflow builtins" {
+  let source =
+    #|int main(void) {
+    #|  int i = 0;
+    #|  unsigned u = 0;
+    #|  long long l = 0;
+    #|  unsigned long long ul = 0;
+    #|  int total = 0;
+    #|  total += __builtin_add_overflow(1, 2, &i);
+    #|  if (i != 3) return 10;
+    #|  total += __builtin_add_overflow(2147483647, 1, &i);
+    #|  if (i >= 0) return 20;
+    #|  total += __builtin_sub_overflow(0u, 1u, &u);
+    #|  if (u != 4294967295u) return 30;
+    #|  total += __builtin_mul_overflow(50000, 50000, &i);
+    #|  total += __builtin_add_overflow(l, 1LL, &l);
+    #|  if (l != 1LL) return 40;
+    #|  total += __builtin_ssubll_overflow(-9223372036854775807LL - 1LL, 1LL, &l);
+    #|  if (l != 9223372036854775807LL) return 50;
+    #|  total += __builtin_uaddll_overflow(0xffffffffffffffffULL, 1ULL, &ul);
+    #|  if (ul != 0ULL) return 60;
+    #|  total += __builtin_smulll_overflow(3037000500LL, 3037000500LL, &l);
+    #|  if (l != -9223372036709301616LL) return 70;
+    #|  total += __builtin_umulll_overflow(0xffffffffffffffffULL, 2ULL, &ul);
+    #|  if (ul != 0xfffffffffffffffeULL) return 80;
+    #|  return total;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks scalar compound literals" {
+  let source =
+    #|int main(void) {
+    #|  int a = (int){40};
+    #|  unsigned char b = (unsigned char){255 + 1};
+    #|  long long c = (long long){-9223372036854775807LL - 1LL};
+    #|  unsigned long long d = (unsigned long long){0xffffffffffffffffULL};
+    #|  return a + b + (c < 0 ? 2 : 0) + (d == 0xffffffffffffffffULL ? 0 : 100);
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks ignored unsupported local initializer side effects" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  int a[2];
+    #|  double d = (a[side += 1] = side += 2);
+    #|  double e = side += 4;
+    #|  return side + 35;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks scalar switch fallthrough" {
+  let source =
+    #|int main(void) {
+    #|  int total = 0;
+    #|  for (int i = 0; i < 5; i++) {
+    #|    switch (i) {
+    #|    case 0:
+    #|      total += 3;
+    #|      break;
+    #|    case 1:
+    #|    case 2:
+    #|      total += 5;
+    #|      break;
+    #|    case 4:
+    #|      total += 7;
+    #|    default:
+    #|      total += 11;
+    #|    }
+    #|  }
+    #|  return total;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks scalar goto" {
+  let source =
+    #|int main(void) {
+    #|  int total = 0;
+    #|  int i = 0;
+    #|loop:
+    #|  i++;
+    #|  if (i == 2) goto skip;
+    #|  total += i;
+    #|skip:
+    #|  if (i < 5) goto loop;
+    #|  return total;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks scalar builtin calls" {
+  let source =
+    #|struct S { int x; char buf[9]; };
+    #|char global_buf[16];
+    #|struct S global_s;
+    #|int value(void) {
+    #|  return 9;
+    #|}
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int y = 0;
+    #|  char buf[16];
+    #|  struct S local_s;
+    #|  int total = 0;
+    #|  total += __builtin_expect(x, 1 / y);
+    #|  total += __builtin_expect_with_probability(x, 1 / y, 0.9);
+    #|  total += __builtin_unpredictable(x);
+    #|  total += __builtin_constant_p(1 / y);
+    #|  total += __builtin_constant_p(1 + 2);
+    #|  total += __builtin_flt_rounds();
+    #|  if (__builtin_object_size(0, 0) + 1 != 0) return 50;
+    #|  if (__builtin_object_size(0, 2) != 0) return 55;
+    #|  if (__builtin_dynamic_object_size(0, 0) + 1 != 0) return 60;
+    #|  if (__builtin_dynamic_object_size(0, 2) != 0) return 65;
+    #|  if (__builtin_object_size("abc", 0) != 4) return 66;
+    #|  if (__builtin_dynamic_object_size("a\0bc", 2) != 5) return 67;
+    #|  if (__builtin_object_size(&x, 0) != sizeof(x)) return 68;
+    #|  if (__builtin_dynamic_object_size((void *)&x, 2) != sizeof(x)) return 69;
+    #|  if (__builtin_object_size(buf, 0) != 16) return 71;
+    #|  if (__builtin_dynamic_object_size((void *)buf, 2) != 16) return 72;
+    #|  if (__builtin_object_size(&local_s.buf, 0) != sizeof(local_s) - __builtin_offsetof(struct S, buf)) return 73;
+    #|  if (__builtin_dynamic_object_size(local_s.buf, 2) != sizeof(local_s) - __builtin_offsetof(struct S, buf)) return 74;
+    #|  if (__builtin_dynamic_object_size(local_s.buf, 3) != sizeof(local_s.buf)) return 78;
+    #|  if (__builtin_object_size(global_buf, 0) != sizeof(global_buf)) return 75;
+    #|  if (__builtin_object_size(&global_s.buf, 0) != sizeof(global_s) - __builtin_offsetof(struct S, buf)) return 76;
+    #|  if (__builtin_dynamic_object_size(global_s.buf, 2) != sizeof(global_s) - __builtin_offsetof(struct S, buf)) return 77;
+    #|  if (__builtin_object_size(&buf[3], 0) != 13) return 151;
+    #|  if (__builtin_object_size(&buf[3], 1) != 13) return 152;
+    #|  if (__builtin_object_size(buf + 3, 0) != 13) return 153;
+    #|  if (__builtin_dynamic_object_size(&global_s.buf[4], 2) != sizeof(global_s) - __builtin_offsetof(struct S, buf) - 4) return 154;
+    #|  if (__builtin_dynamic_object_size(&global_s.buf[4], 3) != sizeof(global_s.buf) - 4) return 155;
+    #|  total += __builtin_assume(1);
+    #|  total += __builtin_prefetch(0, 0, 0);
+    #|  if ((unsigned long)__builtin_assume_aligned((void*)32, 16) != 32ul) return 70;
+    #|  if ((unsigned long)__builtin_extract_return_addr((void*)77) != 77ul) return 80;
+    #|  if ((unsigned long)__builtin_frob_return_addr((void*)88) != 88ul) return 90;
+    #|  void *fa = __builtin_frame_address(0);
+    #|  void *ra = __builtin_return_address(0);
+    #|  if (fa == 0) return 100;
+    #|  if (ra == 0) return 110;
+    #|  if (__builtin_frame_address(1) != 0) return 120;
+    #|  if (__builtin_return_address(1) != 0) return 130;
+    #|  if (__builtin_extract_return_addr(ra) != ra) return 140;
+    #|  if (__builtin_frob_return_addr(ra) != ra) return 150;
+    #|  return total + value();
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks prefetch address side effects" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  __builtin_prefetch((void *)(long)(side += 1), 0, 0);
+    #|  __builtin_assume(side += 10);
+    #|  return side;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks ignored hint operand side effects" {
+  let source =
+    #|int g = 0;
+    #|int bump(void) {
+    #|  g += 1;
+    #|  return 0;
+    #|}
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int y = 0;
+    #|  int side = 0;
+    #|  int total = 0;
+    #|  total += __builtin_expect(x, (side += 1, 1 / y));
+    #|  total += __builtin_expect_with_probability(x, bump(), 0.9);
+    #|  if ((unsigned long)__builtin_assume_aligned((void*)32, 16, (side += 2, 1 / y)) != 32ul) return 1;
+    #|  return total + side + g + 30;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks parser folded compile-time builtins" {
+  let source =
+    #|struct Item { char tag; int x; };
+    #|struct Outer { char head; struct Item items[3]; char tail; };
+    #|struct S { int x; };
+    #|union U { int x; double y; };
+    #|_Static_assert(__builtin_object_size("abc", 0) == 4, "literal object size");
+    #|_Static_assert(__builtin_dynamic_object_size("a\0bc", 2) == 5, "embedded nul object size");
+    #|_Static_assert(__builtin_object_size((void *)0, 0) == (unsigned long)-1, "unknown max object size");
+    #|_Static_assert(__builtin_dynamic_object_size((void *)0, 2) == 0, "unknown min object size");
+    #|_Static_assert(__builtin_popcount(0xf0f0u) == 8, "popcount constant");
+    #|_Static_assert(__builtin_bswap32(0x01020304u) == 0x04030201u, "bswap constant");
+    #|_Static_assert(__builtin_rotateleft32(0x12345678u, 8) == 0x34567812u, "rotate constant");
+    #|int main(void) {
+    #|  int x = 0;
+    #|  double d;
+    #|  int a[2];
+    #|  struct S s;
+    #|  union U u;
+    #|  int total = 0;
+    #|  total += __builtin_choose_expr(__builtin_types_compatible_p(int, signed int), 7, missing());
+    #|  total += __builtin_choose_expr(__builtin_types_compatible_p(int, unsigned int), missing(), 5);
+    #|  total += __builtin_classify_type(x);
+    #|  total += __builtin_classify_type(d);
+    #|  total += __builtin_classify_type(a);
+    #|  total += __builtin_classify_type(s);
+    #|  total += __builtin_classify_type(u);
+    #|  if (__builtin_offsetof(struct Outer, items[2].x) != 24) return 50;
+    #|  if (__builtin_offsetof(struct Outer, tail) != 28) return 60;
+    #|  return total;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks string literal scalar facts" {
+  let source =
+    #|int main(void) {
+    #|  if (sizeof("abc") != 4) return 1;
+    #|  if (__alignof__("abc") != 1) return 2;
+    #|  if (!"abc") return 3;
+    #|  if (*"abc" != 'a') return 4;
+    #|  if ("abc"[1] != 'b') return 5;
+    #|  if ("abc"[3] != 0) return 6;
+    #|  if (__func__[0] != 'm') return 7;
+    #|  if (__builtin_strlen("hello") != 5) return 8;
+    #|  if (*((char *)"abc") != 'a') return 9;
+    #|  if (((char *)"abc")[2] != 'c') return 10;
+    #|  if (((unsigned char *)"abc")[3] != 0) return 11;
+    #|  if (__builtin_strlen((const char *)"hello") != 5) return 12;
+    #|  if (*("abcd" + 1) != 'b') return 13;
+    #|  if ((1 + "abcd")[2] != 'd') return 14;
+    #|  int side = 0;
+    #|  if (*((const char *)"abcd" + (side += 2)) != 'c') return 15;
+    #|  if (side != 2) return 16;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks string literal pointer locals" {
+  let source =
+    #|int main(void) {
+    #|  char *s = (char *)"abc";
+    #|  char *tail = s + 1;
+    #|  char *u = (char *)"abba";
+    #|  char *hay = (char *)"abcde";
+    #|  char *needle = (char *)"cd";
+    #|  if (*s != 'a') return 1;
+    #|  if (tail[1] != 'c') return 2;
+    #|  if (__builtin_strlen(s) != 3) return 3;
+    #|  if (__builtin_strlen(tail) != 2) return 4;
+    #|  if (__builtin_strcmp(s, "abc") != 0) return 5;
+    #|  if (__builtin_strncmp(tail, "bc", 2) != 0) return 6;
+    #|  if (__builtin_memcmp(tail, "bc", 2) != 0) return 7;
+    #|  if (__builtin_strchr(s, 'b') != s + 1) return 8;
+    #|  if (__builtin_strchr(tail, 'a') != 0) return 9;
+    #|  if (__builtin_strchr(s, 0) != s + 3) return 10;
+    #|  if (__builtin_strrchr(u, 'b') != u + 2) return 11;
+    #|  if (__builtin_strrchr(u + 1, 'a') != u + 3) return 12;
+    #|  if (__builtin_memchr(s, 'b', 2) != s + 1) return 13;
+    #|  if (__builtin_memchr(s, 0, 4) != s + 3) return 14;
+    #|  if (__builtin_strstr(hay + 1, needle) != hay + 2) return 15;
+    #|  if (__builtin_strstr(hay, needle + 1) != hay + 3) return 16;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks global string pointer initializers" {
+  let source =
+    #|char *g = "abc";
+    #|int main(void) {
+    #|  if (g[0] != 'a') return 1;
+    #|  if (__builtin_strlen(g) != 3) return 2;
+    #|  if (__builtin_strchr(g, 'c') != g + 2) return 3;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks global string array initializers" {
+  let source =
+    #|char g[] = "abc";
+    #|int main(void) {
+    #|  if (g[0] != 'a') return 1;
+    #|  if (g[3] != 0) return 2;
+    #|  if (__builtin_strlen(g) != 3) return 3;
+    #|  if (__builtin_strcmp(g, "abc") != 0) return 4;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks local string array initializers" {
+  let source =
+    #|int main(void) {
+    #|  char s[] = "abc";
+    #|  char *tail = s + 1;
+    #|  if (s[0] != 'a') return 1;
+    #|  if (s[3] != 0) return 2;
+    #|  if (__builtin_strlen(s) != 3) return 3;
+    #|  s[1] = 'z';
+    #|  if (__builtin_strcmp(s, "azc") != 0) return 4;
+    #|  *tail = 'b';
+    #|  if (__builtin_strcmp(s, "abc") != 0) return 5;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks string array element addresses" {
+  let source =
+    #|int main(void) {
+    #|  char s[] = "wxyz";
+    #|  char *p = &s[2];
+    #|  if (*p != 'y') return 1;
+    #|  *p = 'q';
+    #|  if (__builtin_strcmp(s, "wxqz") != 0) return 2;
+    #|  if (__builtin_strchr(s, 'z') != &s[3]) return 3;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks embedded nul string literal lengths" {
+  let source =
+    #|int main(void) {
+    #|  if (sizeof("a\0bc") != 5) return 1;
+    #|  if (__builtin_strlen("a\0bc") != 1) return 2;
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"%s", "a\0bc") != 1) return 3;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks string builtin return sizes" {
+  let source =
+    #|_Static_assert(sizeof(__builtin_strlen("abc")) == 8, "strlen size");
+    #|_Static_assert(sizeof(__builtin_memchr("abc", 'a', 3)) == 8, "memchr pointer");
+    #|_Static_assert(sizeof(__builtin_strchr("abc", 'a')) == 8, "strchr pointer");
+    #|_Static_assert(sizeof(__builtin_strcmp("a", "b")) == 4, "strcmp int");
+    #|_Static_assert(sizeof(__builtin_strncmp("a", "b", 1)) == 4, "strncmp int");
+    #|_Static_assert(sizeof(__builtin_memcmp("a", "b", 1)) == 4, "memcmp int");
+    #|int main(void) {
+    #|  return sizeof(__builtin_strlen("abc")) +
+    #|    sizeof(__builtin_memchr("abc", 'a', 3)) +
+    #|    sizeof(__builtin_strchr("abc", 'a')) +
+    #|    sizeof(__builtin_strcmp("a", "b")) +
+    #|    sizeof(__builtin_strncmp("a", "b", 1)) +
+    #|    sizeof(__builtin_memcmp("a", "b", 1));
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks string alias builtin return sizes" {
+  let source =
+    #|char *dst;
+    #|char *src;
+    #|_Static_assert(sizeof(__builtin_mempcpy(dst, src, 1)) == sizeof(void *), "mempcpy");
+    #|_Static_assert(sizeof(__builtin___mempcpy_chk(dst, src, 1, 16)) == sizeof(void *), "mempcpy chk");
+    #|_Static_assert(sizeof(__builtin_strcat(dst, src)) == sizeof(char *), "strcat");
+    #|_Static_assert(sizeof(__builtin_stpcpy(dst, src)) == sizeof(char *), "stpcpy");
+    #|_Static_assert(sizeof(__builtin___stpcpy_chk(dst, src, 16)) == sizeof(char *), "stpcpy chk");
+    #|_Static_assert(sizeof(__builtin_strncpy(dst, src, 1)) == sizeof(char *), "strncpy");
+    #|_Static_assert(sizeof(__builtin_stpncpy(dst, src, 1)) == sizeof(char *), "stpncpy");
+    #|_Static_assert(sizeof(__builtin___stpncpy_chk(dst, src, 1, 16)) == sizeof(char *), "stpncpy chk");
+    #|_Static_assert(sizeof(__builtin_strncat(dst, src, 1)) == sizeof(char *), "strncat");
+    #|int main(void) {
+    #|  return sizeof(__builtin_mempcpy(dst, src, 1)) +
+    #|    sizeof(__builtin___mempcpy_chk(dst, src, 1, 16)) +
+    #|    sizeof(__builtin_strcat(dst, src)) +
+    #|    sizeof(__builtin_stpcpy(dst, src)) +
+    #|    sizeof(__builtin___stpcpy_chk(dst, src, 16)) +
+    #|    sizeof(__builtin_strncpy(dst, src, 1)) +
+    #|    sizeof(__builtin_stpncpy(dst, src, 1)) +
+    #|    sizeof(__builtin___stpncpy_chk(dst, src, 1, 16)) +
+    #|    sizeof(__builtin_strncat(dst, src, 1));
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks floating builtin return sizes" {
+  let source =
+    #|_Static_assert(sizeof(__builtin_fabsf(-1.0f)) == sizeof(float), "fabsf");
+    #|_Static_assert(sizeof(__builtin_fabs(-1.0)) == sizeof(double), "fabs");
+    #|_Static_assert(sizeof(__builtin_fabsl(-1.0L)) == sizeof(long double), "fabsl");
+    #|_Static_assert(sizeof(__builtin_copysignf(1.0f, -1.0f)) == sizeof(float), "copysignf");
+    #|_Static_assert(sizeof(__builtin_copysign(1.0, -1.0)) == sizeof(double), "copysign");
+    #|_Static_assert(sizeof(__builtin_copysignl(1.0L, -1.0L)) == sizeof(long double), "copysignl");
+    #|_Static_assert(sizeof(__builtin_sqrtf(4.0f)) == sizeof(float), "sqrtf");
+    #|_Static_assert(sizeof(__builtin_sqrt(4.0)) == sizeof(double), "sqrt");
+    #|_Static_assert(sizeof(__builtin_sqrtl(4.0L)) == sizeof(long double), "sqrtl");
+    #|_Static_assert(sizeof(__builtin_nanf("")) == sizeof(float), "nanf");
+    #|_Static_assert(sizeof(__builtin_nan("")) == sizeof(double), "nan");
+    #|_Static_assert(sizeof(__builtin_nanl("")) == sizeof(long double), "nanl");
+    #|_Static_assert(sizeof(__builtin_huge_valf()) == sizeof(float), "huge_valf");
+    #|_Static_assert(sizeof(__builtin_huge_val()) == sizeof(double), "huge_val");
+    #|_Static_assert(sizeof(__builtin_huge_vall()) == sizeof(long double), "huge_vall");
+    #|_Static_assert(sizeof(__builtin_inff()) == sizeof(float), "inff");
+    #|_Static_assert(sizeof(__builtin_inf()) == sizeof(double), "inf");
+    #|_Static_assert(sizeof(__builtin_infl()) == sizeof(long double), "infl");
+    #|int main(void) {
+    #|  return sizeof(__builtin_fabsf(-1.0f)) +
+    #|    sizeof(__builtin_fabs(-1.0)) +
+    #|    sizeof(__builtin_fabsl(-1.0L)) +
+    #|    sizeof(__builtin_copysignf(1.0f, -1.0f)) +
+    #|    sizeof(__builtin_copysign(1.0, -1.0)) +
+    #|    sizeof(__builtin_copysignl(1.0L, -1.0L)) +
+    #|    sizeof(__builtin_sqrtf(4.0f)) +
+    #|    sizeof(__builtin_sqrt(4.0)) +
+    #|    sizeof(__builtin_sqrtl(4.0L)) +
+    #|    sizeof(__builtin_nanf("")) +
+    #|    sizeof(__builtin_nan("")) +
+    #|    sizeof(__builtin_nanl("")) +
+    #|    sizeof(__builtin_huge_valf()) +
+    #|    sizeof(__builtin_huge_val()) +
+    #|    sizeof(__builtin_huge_vall()) +
+    #|    sizeof(__builtin_inff()) +
+    #|    sizeof(__builtin_inf()) +
+    #|    sizeof(__builtin_infl());
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks floating classification return sizes" {
+  let source =
+    #|_Static_assert(sizeof(__builtin_isgreater(2.0, 1.0)) == sizeof(int), "isgreater");
+    #|_Static_assert(sizeof(__builtin_isgreaterequal(2.0, 2.0)) == sizeof(int), "isgreaterequal");
+    #|_Static_assert(sizeof(__builtin_isless(1.0, 2.0)) == sizeof(int), "isless");
+    #|_Static_assert(sizeof(__builtin_islessequal(2.0, 2.0)) == sizeof(int), "islessequal");
+    #|_Static_assert(sizeof(__builtin_islessgreater(1.0, 2.0)) == sizeof(int), "islessgreater");
+    #|_Static_assert(sizeof(__builtin_isunordered(__builtin_nan(""), 1.0)) == sizeof(int), "isunordered");
+    #|_Static_assert(sizeof(__builtin_isnan(__builtin_nan(""))) == sizeof(int), "isnan");
+    #|_Static_assert(sizeof(__builtin_isnanf(__builtin_nanf(""))) == sizeof(int), "isnanf");
+    #|_Static_assert(sizeof(__builtin_isnanl(__builtin_nanl(""))) == sizeof(int), "isnanl");
+    #|_Static_assert(sizeof(__builtin_isinf(__builtin_inf())) == sizeof(int), "isinf");
+    #|_Static_assert(sizeof(__builtin_isinff(__builtin_inff())) == sizeof(int), "isinff");
+    #|_Static_assert(sizeof(__builtin_isinfl(__builtin_infl())) == sizeof(int), "isinfl");
+    #|_Static_assert(sizeof(__builtin_isfinite(1.0)) == sizeof(int), "isfinite");
+    #|_Static_assert(sizeof(__builtin_isfinitef(1.0f)) == sizeof(int), "isfinitef");
+    #|_Static_assert(sizeof(__builtin_isfinitel(1.0L)) == sizeof(int), "isfinitel");
+    #|_Static_assert(sizeof(__builtin_isnormal(1.0)) == sizeof(int), "isnormal");
+    #|_Static_assert(sizeof(__builtin_isnormalf(1.0f)) == sizeof(int), "isnormalf");
+    #|_Static_assert(sizeof(__builtin_isnormall(1.0L)) == sizeof(int), "isnormall");
+    #|_Static_assert(sizeof(__builtin_signbit(-1.0)) == sizeof(int), "signbit");
+    #|_Static_assert(sizeof(__builtin_signbitf(-1.0f)) == sizeof(int), "signbitf");
+    #|_Static_assert(sizeof(__builtin_signbitl(-1.0L)) == sizeof(int), "signbitl");
+    #|int main(void) {
+    #|  return sizeof(__builtin_isgreater(2.0, 1.0)) +
+    #|    sizeof(__builtin_isgreaterequal(2.0, 2.0)) +
+    #|    sizeof(__builtin_isless(1.0, 2.0)) +
+    #|    sizeof(__builtin_islessequal(2.0, 2.0)) +
+    #|    sizeof(__builtin_islessgreater(1.0, 2.0)) +
+    #|    sizeof(__builtin_isunordered(__builtin_nan(""), 1.0)) +
+    #|    sizeof(__builtin_isnan(__builtin_nan(""))) +
+    #|    sizeof(__builtin_isnanf(__builtin_nanf(""))) +
+    #|    sizeof(__builtin_isnanl(__builtin_nanl(""))) +
+    #|    sizeof(__builtin_isinf(__builtin_inf())) +
+    #|    sizeof(__builtin_isinff(__builtin_inff())) +
+    #|    sizeof(__builtin_isinfl(__builtin_infl())) +
+    #|    sizeof(__builtin_isfinite(1.0)) +
+    #|    sizeof(__builtin_isfinitef(1.0f)) +
+    #|    sizeof(__builtin_isfinitel(1.0L)) +
+    #|    sizeof(__builtin_isnormal(1.0)) +
+    #|    sizeof(__builtin_isnormalf(1.0f)) +
+    #|    sizeof(__builtin_isnormall(1.0L)) +
+    #|    sizeof(__builtin_signbit(-1.0)) +
+    #|    sizeof(__builtin_signbitf(-1.0f)) +
+    #|    sizeof(__builtin_signbitl(-1.0L));
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks alloca return size and nullness" {
+  let source =
+    #|_Static_assert(sizeof(__builtin_alloca(16)) == sizeof(void *), "alloca pointer");
+    #|int main(void) {
+    #|  int n = 16;
+    #|  void *p = __builtin_alloca(n += 1);
+    #|  if (n != 17) return 1;
+    #|  if (p == 0) return 2;
+    #|  char *a = __builtin_alloca(n += 2);
+    #|  char *b = __builtin_alloca(n += 3);
+    #|  if (n != 22) return 3;
+    #|  if (a == 0 || b == 0) return 4;
+    #|  if (a == b || a == p || b == p) return 5;
+    #|  return sizeof(__builtin_alloca(16)) + 34;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks fortified builtin return sizes" {
+  let source =
+    #|_Static_assert(sizeof(__builtin___memcpy_chk(0, 0, 0, 0)) == sizeof(void *), "memcpy chk");
+    #|_Static_assert(sizeof(__builtin___memset_chk(0, 0, 0, 0)) == sizeof(void *), "memset chk");
+    #|_Static_assert(sizeof(__builtin___memmove_chk(0, 0, 0, 0)) == sizeof(void *), "memmove chk");
+    #|_Static_assert(sizeof(__builtin___strcpy_chk(0, 0, 0)) == sizeof(char *), "strcpy chk");
+    #|_Static_assert(sizeof(__builtin___strcat_chk(0, 0, 0)) == sizeof(char *), "strcat chk");
+    #|_Static_assert(sizeof(__builtin___strncpy_chk(0, 0, 0, 0)) == sizeof(char *), "strncpy chk");
+    #|_Static_assert(sizeof(__builtin___strncat_chk(0, 0, 0, 0)) == sizeof(char *), "strncat chk");
+    #|_Static_assert(sizeof(__builtin___strlcpy_chk(0, 0, 0, 0)) == sizeof(unsigned long), "strlcpy chk");
+    #|_Static_assert(sizeof(__builtin___strlcat_chk(0, 0, 0, 0)) == sizeof(unsigned long), "strlcat chk");
+    #|_Static_assert(sizeof(__builtin___snprintf_chk(0, 0, 0, 0, 0)) == sizeof(int), "snprintf chk");
+    #|_Static_assert(sizeof(__builtin___vsnprintf_chk(0, 0, 0, 0, 0, 0)) == sizeof(int), "vsnprintf chk");
+    #|_Static_assert(sizeof(__builtin___sprintf_chk(0, 0, 0, 0)) == sizeof(int), "sprintf chk");
+    #|_Static_assert(sizeof(__builtin___vsprintf_chk(0, 0, 0, 0, 0)) == sizeof(int), "vsprintf chk");
+    #|_Static_assert(sizeof(__builtin___printf_chk(0, 0)) == sizeof(int), "printf chk");
+    #|_Static_assert(sizeof(__builtin___fprintf_chk(0, 0, 0)) == sizeof(int), "fprintf chk");
+    #|_Static_assert(sizeof(__builtin___vfprintf_chk(0, 0, 0, 0)) == sizeof(int), "vfprintf chk");
+    #|int main(void) {
+    #|  return sizeof(__builtin___memcpy_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___memset_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___memmove_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___strcpy_chk(0, 0, 0)) +
+    #|    sizeof(__builtin___strcat_chk(0, 0, 0)) +
+    #|    sizeof(__builtin___strncpy_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___strncat_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___strlcpy_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___strlcat_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___snprintf_chk(0, 0, 0, 0, 0)) +
+    #|    sizeof(__builtin___vsnprintf_chk(0, 0, 0, 0, 0, 0)) +
+    #|    sizeof(__builtin___sprintf_chk(0, 0, 0, 0)) +
+    #|    sizeof(__builtin___vsprintf_chk(0, 0, 0, 0, 0)) +
+    #|    sizeof(__builtin___printf_chk(0, 0)) +
+    #|    sizeof(__builtin___fprintf_chk(0, 0, 0)) +
+    #|    sizeof(__builtin___vfprintf_chk(0, 0, 0, 0));
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks atomic builtin return sizes" {
+  let source =
+    #|int atomic_int_value;
+    #|long atomic_long_value;
+    #|_Atomic int c11_atomic_int_value;
+    #|int expected_atomic_value;
+    #|_Static_assert(sizeof(__atomic_load_n(&atomic_int_value, 0)) == sizeof(int), "atomic load int");
+    #|_Static_assert(sizeof(__atomic_load_n(&atomic_long_value, 0)) == sizeof(long), "atomic load long");
+    #|_Static_assert(sizeof(__c11_atomic_load(&c11_atomic_int_value, 0)) == sizeof(int), "c11 load");
+    #|_Static_assert(sizeof(__atomic_add_fetch(&atomic_int_value, 1, 0)) == sizeof(int), "atomic add fetch");
+    #|_Static_assert(sizeof(__atomic_sub_fetch(&atomic_int_value, 1, 0)) == sizeof(int), "atomic sub fetch");
+    #|_Static_assert(sizeof(__c11_atomic_fetch_add(&c11_atomic_int_value, 1, 0)) == sizeof(int), "c11 fetch add");
+    #|_Static_assert(sizeof(__c11_atomic_fetch_sub(&c11_atomic_int_value, 1, 0)) == sizeof(int), "c11 fetch sub");
+    #|_Static_assert(sizeof(__c11_atomic_fetch_and(&c11_atomic_int_value, 1, 0)) == sizeof(int), "c11 fetch and");
+    #|_Static_assert(sizeof(__c11_atomic_fetch_or(&c11_atomic_int_value, 1, 0)) == sizeof(int), "c11 fetch or");
+    #|_Static_assert(sizeof(__c11_atomic_fetch_xor(&c11_atomic_int_value, 1, 0)) == sizeof(int), "c11 fetch xor");
+    #|_Static_assert(sizeof(__c11_atomic_exchange(&c11_atomic_int_value, 1, 0)) == sizeof(int), "c11 exchange");
+    #|_Static_assert(sizeof(__c11_atomic_compare_exchange_strong(&c11_atomic_int_value, &expected_atomic_value, 1, 0, 0)) == sizeof(_Bool), "c11 compare exchange strong");
+    #|_Static_assert(sizeof(__c11_atomic_compare_exchange_weak(&c11_atomic_int_value, &expected_atomic_value, 1, 0, 0)) == sizeof(_Bool), "c11 compare exchange weak");
+    #|_Static_assert(sizeof(__atomic_store_n(&atomic_int_value, 1, 0)) == 0, "atomic store void");
+    #|_Static_assert(sizeof(__c11_atomic_store(&c11_atomic_int_value, 1, 0)) == 0, "c11 store void");
+    #|_Static_assert(sizeof(__sync_synchronize()) == 0, "sync synchronize void");
+    #|int main(void) {
+    #|  return sizeof(__atomic_load_n(&atomic_int_value, 0)) +
+    #|    sizeof(__atomic_load_n(&atomic_long_value, 0)) +
+    #|    sizeof(__c11_atomic_load(&c11_atomic_int_value, 0)) +
+    #|    sizeof(__atomic_add_fetch(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_sub_fetch(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_fetch_add(&c11_atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_fetch_sub(&c11_atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_fetch_and(&c11_atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_fetch_or(&c11_atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_fetch_xor(&c11_atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_exchange(&c11_atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_compare_exchange_strong(&c11_atomic_int_value, &expected_atomic_value, 1, 0, 0)) +
+    #|    sizeof(__c11_atomic_compare_exchange_weak(&c11_atomic_int_value, &expected_atomic_value, 1, 0, 0)) +
+    #|    sizeof(__atomic_store_n(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__c11_atomic_store(&c11_atomic_int_value, 1, 0)) +
+    #|    sizeof(__sync_synchronize());
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks extended atomic builtin return sizes" {
+  let source =
+    #|int atomic_int_value;
+    #|int expected_atomic_value;
+    #|int desired_atomic_value;
+    #|_Static_assert(sizeof(__atomic_and_fetch(&atomic_int_value, 1, 0)) +
+    #|  sizeof(__atomic_or_fetch(&atomic_int_value, 1, 0)) +
+    #|  sizeof(__atomic_xor_fetch(&atomic_int_value, 1, 0)) +
+    #|  sizeof(__atomic_nand_fetch(&atomic_int_value, 1, 0)) +
+    #|  sizeof(__atomic_fetch_add(&atomic_int_value, 1, 0)) +
+    #|  sizeof(__atomic_fetch_sub(&atomic_int_value, 1, 0)) +
+    #|  sizeof(__atomic_fetch_and(&atomic_int_value, 1, 0)) +
+    #|  sizeof(__atomic_fetch_or(&atomic_int_value, 1, 0)) +
+    #|  sizeof(__atomic_fetch_xor(&atomic_int_value, 1, 0)) +
+    #|  sizeof(__atomic_fetch_nand(&atomic_int_value, 1, 0)) +
+    #|  sizeof(__atomic_exchange_n(&atomic_int_value, 1, 0)) +
+    #|  sizeof(__sync_val_compare_and_swap(&atomic_int_value, 0, 1)) +
+    #|  sizeof(__sync_fetch_and_add(&atomic_int_value, 1)) +
+    #|  sizeof(__sync_fetch_and_sub(&atomic_int_value, 1)) +
+    #|  sizeof(__sync_fetch_and_and(&atomic_int_value, 1)) +
+    #|  sizeof(__sync_fetch_and_or(&atomic_int_value, 1)) +
+    #|  sizeof(__sync_fetch_and_xor(&atomic_int_value, 1)) +
+    #|  sizeof(__sync_fetch_and_nand(&atomic_int_value, 1)) +
+    #|  sizeof(__sync_fetch_and_max(&atomic_int_value, 1)) +
+    #|  sizeof(__sync_fetch_and_min(&atomic_int_value, 1)) +
+    #|  sizeof(__sync_fetch_and_umax(&atomic_int_value, 1)) +
+    #|  sizeof(__sync_fetch_and_umin(&atomic_int_value, 1)) +
+    #|  sizeof(__sync_add_and_fetch(&atomic_int_value, 1)) +
+    #|  sizeof(__sync_sub_and_fetch(&atomic_int_value, 1)) +
+    #|  sizeof(__sync_and_and_fetch(&atomic_int_value, 1)) +
+    #|  sizeof(__sync_or_and_fetch(&atomic_int_value, 1)) +
+    #|  sizeof(__sync_xor_and_fetch(&atomic_int_value, 1)) +
+    #|  sizeof(__sync_nand_and_fetch(&atomic_int_value, 1)) +
+    #|  sizeof(__sync_swap(&atomic_int_value, 1)) +
+    #|  sizeof(__sync_lock_test_and_set(&atomic_int_value, 1)) == 120, "extended atomic value sizes");
+    #|_Static_assert(sizeof(__atomic_test_and_set(&atomic_int_value, 0)) +
+    #|  sizeof(__atomic_compare_exchange(&atomic_int_value, &expected_atomic_value, &desired_atomic_value, 0, 0, 0)) +
+    #|  sizeof(__atomic_compare_exchange_n(&atomic_int_value, &expected_atomic_value, desired_atomic_value, 0, 0, 0)) +
+    #|  sizeof(__sync_bool_compare_and_swap(&atomic_int_value, 0, 1)) +
+    #|  sizeof(__atomic_always_lock_free(4, 0)) +
+    #|  sizeof(__atomic_is_lock_free(4, 0)) +
+    #|  sizeof(__c11_atomic_is_lock_free(4)) == 7, "extended atomic bool sizes");
+    #|_Static_assert(sizeof(__atomic_clear(&atomic_int_value, 0)) +
+    #|  sizeof(__atomic_exchange(&atomic_int_value, &desired_atomic_value, &expected_atomic_value, 0)) +
+    #|  sizeof(__atomic_load(&atomic_int_value, &expected_atomic_value, 0)) +
+    #|  sizeof(__atomic_store(&atomic_int_value, &desired_atomic_value, 0)) +
+    #|  sizeof(__atomic_thread_fence(0)) +
+    #|  sizeof(__atomic_signal_fence(0)) +
+    #|  sizeof(__c11_atomic_thread_fence(0)) +
+    #|  sizeof(__c11_atomic_signal_fence(0)) +
+    #|  sizeof(__sync_lock_release(&atomic_int_value)) == 0, "extended atomic void sizes");
+    #|int main(void) {
+    #|  return sizeof(__atomic_and_fetch(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_or_fetch(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_xor_fetch(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_nand_fetch(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_fetch_add(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_fetch_sub(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_fetch_and(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_fetch_or(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_fetch_xor(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_fetch_nand(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__atomic_exchange_n(&atomic_int_value, 1, 0)) +
+    #|    sizeof(__sync_val_compare_and_swap(&atomic_int_value, 0, 1)) +
+    #|    sizeof(__sync_fetch_and_add(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_fetch_and_sub(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_fetch_and_and(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_fetch_and_or(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_fetch_and_xor(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_fetch_and_nand(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_fetch_and_max(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_fetch_and_min(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_fetch_and_umax(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_fetch_and_umin(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_add_and_fetch(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_sub_and_fetch(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_and_and_fetch(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_or_and_fetch(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_xor_and_fetch(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_nand_and_fetch(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_swap(&atomic_int_value, 1)) +
+    #|    sizeof(__sync_lock_test_and_set(&atomic_int_value, 1)) +
+    #|    sizeof(__atomic_test_and_set(&atomic_int_value, 0)) +
+    #|    sizeof(__atomic_compare_exchange(&atomic_int_value, &expected_atomic_value, &desired_atomic_value, 0, 0, 0)) +
+    #|    sizeof(__atomic_compare_exchange_n(&atomic_int_value, &expected_atomic_value, desired_atomic_value, 0, 0, 0)) +
+    #|    sizeof(__sync_bool_compare_and_swap(&atomic_int_value, 0, 1)) +
+    #|    sizeof(__atomic_always_lock_free(4, 0)) +
+    #|    sizeof(__atomic_is_lock_free(4, 0)) +
+    #|    sizeof(__c11_atomic_is_lock_free(4)) +
+    #|    sizeof(__atomic_clear(&atomic_int_value, 0)) +
+    #|    sizeof(__atomic_exchange(&atomic_int_value, &desired_atomic_value, &expected_atomic_value, 0)) +
+    #|    sizeof(__atomic_load(&atomic_int_value, &expected_atomic_value, 0)) +
+    #|    sizeof(__atomic_store(&atomic_int_value, &desired_atomic_value, 0)) +
+    #|    sizeof(__atomic_thread_fence(0)) +
+    #|    sizeof(__atomic_signal_fence(0)) +
+    #|    sizeof(__c11_atomic_thread_fence(0)) +
+    #|    sizeof(__c11_atomic_signal_fence(0)) +
+    #|    sizeof(__sync_lock_release(&atomic_int_value));
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks scalar builtin return sizes" {
+  let source =
+    #|_Static_assert(sizeof(__builtin_clz(8)) == sizeof(int), "clz");
+    #|_Static_assert(sizeof(__builtin_clzl(8ul)) == sizeof(int), "clzl");
+    #|_Static_assert(sizeof(__builtin_clzll(8ull)) == sizeof(int), "clzll");
+    #|_Static_assert(sizeof(__builtin_ctz(40)) == sizeof(int), "ctz");
+    #|_Static_assert(sizeof(__builtin_ctzl(48ul)) == sizeof(int), "ctzl");
+    #|_Static_assert(sizeof(__builtin_ctzll(48ull)) == sizeof(int), "ctzll");
+    #|_Static_assert(sizeof(__builtin_ffs(8u)) == sizeof(int), "ffs");
+    #|_Static_assert(sizeof(__builtin_ffsl(16ul)) == sizeof(int), "ffsl");
+    #|_Static_assert(sizeof(__builtin_ffsll(32ull)) == sizeof(int), "ffsll");
+    #|_Static_assert(sizeof(__builtin_popcount(0xf0f0u)) == sizeof(int), "popcount");
+    #|_Static_assert(sizeof(__builtin_popcountl(0xf0f0ul)) == sizeof(int), "popcountl");
+    #|_Static_assert(sizeof(__builtin_popcountll(0xf0f0ull)) == sizeof(int), "popcountll");
+    #|_Static_assert(sizeof(__builtin_parity(0xf0f1u)) == sizeof(int), "parity");
+    #|_Static_assert(sizeof(__builtin_parityl(0xf0f1ul)) == sizeof(int), "parityl");
+    #|_Static_assert(sizeof(__builtin_parityll(0xf0f1ull)) == sizeof(int), "parityll");
+    #|_Static_assert(sizeof(__builtin_bswap16(0x0102)) == sizeof(unsigned short), "bswap16");
+    #|_Static_assert(sizeof(__builtin_bswap32(0x01020304u)) == sizeof(unsigned int), "bswap32");
+    #|_Static_assert(sizeof(__builtin_bswap64(0x0102030405060708ull)) == sizeof(unsigned long long), "bswap64");
+    #|_Static_assert(sizeof(__builtin_bswap((unsigned short)0x0102)) == sizeof(unsigned short), "generic bswap short");
+    #|_Static_assert(sizeof(__builtin_bswap((unsigned int)0x01020304)) == sizeof(unsigned int), "generic bswap int");
+    #|_Static_assert(sizeof(__builtin_bswap((unsigned long long)0x0102030405060708)) == sizeof(unsigned long long), "generic bswap long long");
+    #|_Static_assert(sizeof(__builtin_abs(-7)) == sizeof(int), "abs");
+    #|_Static_assert(sizeof(__builtin_labs(-123456789L)) == sizeof(long), "labs");
+    #|_Static_assert(sizeof(__builtin_llabs(-123456789LL)) == sizeof(long long), "llabs");
+    #|_Static_assert(sizeof(__builtin_is_aligned(32, 16)) == sizeof(_Bool), "is aligned");
+    #|_Static_assert(sizeof(__builtin_align_up(33, 16)) == sizeof(int), "align up int");
+    #|_Static_assert(sizeof(__builtin_align_down((long)47, 16)) == sizeof(long), "align down long");
+    #|_Static_assert(sizeof(__builtin_align_up((unsigned long long)0x1234567890, 256)) == sizeof(unsigned long long), "align up long long");
+    #|_Static_assert(sizeof(__builtin_rotateleft32(0x12345678u, 8)) == sizeof(unsigned int), "rotateleft32");
+    #|_Static_assert(sizeof(__builtin_rotateright32(0x12345678u, 8)) == sizeof(unsigned int), "rotateright32");
+    #|_Static_assert(sizeof(__builtin_rotateleft64(0x0123456789abcdefull, 16)) == sizeof(unsigned long long), "rotateleft64");
+    #|_Static_assert(sizeof(__builtin_rotateright64(0x0123456789abcdefull, 16)) == sizeof(unsigned long long), "rotateright64");
+    #|_Static_assert(sizeof(__builtin_rotateleft((unsigned int)0x12345678, 8)) == sizeof(unsigned int), "generic rotateleft");
+    #|_Static_assert(sizeof(__builtin_rotateright((unsigned long long)0x0123456789abcdef, 16)) == sizeof(unsigned long long), "generic rotateright");
+    #|_Static_assert(sizeof(__builtin_expect((long)0x1234567890, 0L)) == sizeof(long), "expect");
+    #|_Static_assert(sizeof(__builtin_expect_with_probability((long long)0x1234567890, 0LL, 0.5)) == sizeof(long long), "expect probability");
+    #|_Static_assert(sizeof(__builtin_unpredictable((unsigned long long)0x1234567890)) == sizeof(unsigned long long), "unpredictable");
+    #|_Static_assert(sizeof(__builtin_assume_aligned((char *)0, 16)) == sizeof(char *), "assume aligned");
+    #|_Static_assert(sizeof(__builtin_constant_p(1)) == sizeof(int), "constant p");
+    #|int main(void) {
+    #|  return sizeof(__builtin_clz(8)) +
+    #|    sizeof(__builtin_clzl(8ul)) +
+    #|    sizeof(__builtin_clzll(8ull)) +
+    #|    sizeof(__builtin_ctz(40)) +
+    #|    sizeof(__builtin_ctzl(48ul)) +
+    #|    sizeof(__builtin_ctzll(48ull)) +
+    #|    sizeof(__builtin_ffs(8u)) +
+    #|    sizeof(__builtin_ffsl(16ul)) +
+    #|    sizeof(__builtin_ffsll(32ull)) +
+    #|    sizeof(__builtin_popcount(0xf0f0u)) +
+    #|    sizeof(__builtin_popcountl(0xf0f0ul)) +
+    #|    sizeof(__builtin_popcountll(0xf0f0ull)) +
+    #|    sizeof(__builtin_parity(0xf0f1u)) +
+    #|    sizeof(__builtin_parityl(0xf0f1ul)) +
+    #|    sizeof(__builtin_parityll(0xf0f1ull)) +
+    #|    sizeof(__builtin_bswap16(0x0102)) +
+    #|    sizeof(__builtin_bswap32(0x01020304u)) +
+    #|    sizeof(__builtin_bswap64(0x0102030405060708ull)) +
+    #|    sizeof(__builtin_bswap((unsigned short)0x0102)) +
+    #|    sizeof(__builtin_bswap((unsigned int)0x01020304)) +
+    #|    sizeof(__builtin_bswap((unsigned long long)0x0102030405060708)) +
+    #|    sizeof(__builtin_abs(-7)) +
+    #|    sizeof(__builtin_labs(-123456789L)) +
+    #|    sizeof(__builtin_llabs(-123456789LL)) +
+    #|    sizeof(__builtin_is_aligned(32, 16)) +
+    #|    sizeof(__builtin_align_up(33, 16)) +
+    #|    sizeof(__builtin_align_down((long)47, 16)) +
+    #|    sizeof(__builtin_align_up((unsigned long long)0x1234567890, 256)) +
+    #|    sizeof(__builtin_rotateleft32(0x12345678u, 8)) +
+    #|    sizeof(__builtin_rotateright32(0x12345678u, 8)) +
+    #|    sizeof(__builtin_rotateleft64(0x0123456789abcdefull, 16)) +
+    #|    sizeof(__builtin_rotateright64(0x0123456789abcdefull, 16)) +
+    #|    sizeof(__builtin_rotateleft((unsigned int)0x12345678, 8)) +
+    #|    sizeof(__builtin_rotateright((unsigned long long)0x0123456789abcdef, 16)) +
+    #|    sizeof(__builtin_expect((long)0x1234567890, 0L)) +
+    #|    sizeof(__builtin_expect_with_probability((long long)0x1234567890, 0LL, 0.5)) +
+    #|    sizeof(__builtin_unpredictable((unsigned long long)0x1234567890)) +
+    #|    sizeof(__builtin_assume_aligned((char *)0, 16)) +
+    #|    sizeof(__builtin_constant_p(1));
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks overflow builtin return sizes" {
+  let source =
+    #|_Static_assert(sizeof(__builtin_add_overflow(1, 2, 0)) == sizeof(_Bool), "add overflow");
+    #|_Static_assert(sizeof(__builtin_sub_overflow(1, 2, 0)) == sizeof(_Bool), "sub overflow");
+    #|_Static_assert(sizeof(__builtin_mul_overflow(1, 2, 0)) == sizeof(_Bool), "mul overflow");
+    #|_Static_assert(sizeof(__builtin_sadd_overflow(1, 2, 0)) == sizeof(_Bool), "sadd overflow");
+    #|_Static_assert(sizeof(__builtin_saddl_overflow(1, 2, 0)) == sizeof(_Bool), "saddl overflow");
+    #|_Static_assert(sizeof(__builtin_saddll_overflow(1, 2, 0)) == sizeof(_Bool), "saddll overflow");
+    #|_Static_assert(sizeof(__builtin_uadd_overflow(1, 2, 0)) == sizeof(_Bool), "uadd overflow");
+    #|_Static_assert(sizeof(__builtin_uaddl_overflow(1, 2, 0)) == sizeof(_Bool), "uaddl overflow");
+    #|_Static_assert(sizeof(__builtin_uaddll_overflow(1, 2, 0)) == sizeof(_Bool), "uaddll overflow");
+    #|_Static_assert(sizeof(__builtin_ssub_overflow(1, 2, 0)) == sizeof(_Bool), "ssub overflow");
+    #|_Static_assert(sizeof(__builtin_ssubl_overflow(1, 2, 0)) == sizeof(_Bool), "ssubl overflow");
+    #|_Static_assert(sizeof(__builtin_ssubll_overflow(1, 2, 0)) == sizeof(_Bool), "ssubll overflow");
+    #|_Static_assert(sizeof(__builtin_usub_overflow(1, 2, 0)) == sizeof(_Bool), "usub overflow");
+    #|_Static_assert(sizeof(__builtin_usubl_overflow(1, 2, 0)) == sizeof(_Bool), "usubl overflow");
+    #|_Static_assert(sizeof(__builtin_usubll_overflow(1, 2, 0)) == sizeof(_Bool), "usubll overflow");
+    #|_Static_assert(sizeof(__builtin_smul_overflow(1, 2, 0)) == sizeof(_Bool), "smul overflow");
+    #|_Static_assert(sizeof(__builtin_smull_overflow(1, 2, 0)) == sizeof(_Bool), "smull overflow");
+    #|_Static_assert(sizeof(__builtin_smulll_overflow(1, 2, 0)) == sizeof(_Bool), "smulll overflow");
+    #|_Static_assert(sizeof(__builtin_umul_overflow(1, 2, 0)) == sizeof(_Bool), "umul overflow");
+    #|_Static_assert(sizeof(__builtin_umull_overflow(1, 2, 0)) == sizeof(_Bool), "umull overflow");
+    #|_Static_assert(sizeof(__builtin_umulll_overflow(1, 2, 0)) == sizeof(_Bool), "umulll overflow");
+    #|int main(void) {
+    #|  return sizeof(__builtin_add_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_sub_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_mul_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_sadd_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_saddl_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_saddll_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_uadd_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_uaddl_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_uaddll_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_ssub_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_ssubl_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_ssubll_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_usub_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_usubl_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_usubll_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_smul_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_smull_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_smulll_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_umul_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_umull_overflow(1, 2, 0)) +
+    #|    sizeof(__builtin_umulll_overflow(1, 2, 0));
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks void builtin return sizes" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|void *ptr;
+    #|_Static_assert(sizeof(__builtin_unreachable()) == 0, "unreachable");
+    #|_Static_assert(sizeof(__builtin_trap()) == 0, "trap");
+    #|_Static_assert(sizeof(__builtin_assume(1)) == 0, "assume");
+    #|_Static_assert(sizeof(__builtin_prefetch(ptr)) == 0, "prefetch");
+    #|_Static_assert(sizeof(__builtin_bzero(ptr, 0)) == 0, "bzero");
+    #|int variadic(int last, ...) {
+    #|  va_list ap;
+    #|  _Static_assert(sizeof(__builtin_va_start(ap, last)) == 0, "va start");
+    #|  _Static_assert(sizeof(__builtin_va_copy(ap, ap)) == 0, "va copy");
+    #|  _Static_assert(sizeof(__builtin_va_end(ap)) == 0, "va end");
+    #|  return sizeof(__builtin_va_start(ap, last)) +
+    #|    sizeof(__builtin_va_copy(ap, ap)) +
+    #|    sizeof(__builtin_va_end(ap));
+    #|}
+    #|int main(void) {
+    #|  return sizeof(__builtin_unreachable()) +
+    #|    sizeof(__builtin_trap()) +
+    #|    sizeof(__builtin_assume(1)) +
+    #|    sizeof(__builtin_prefetch(ptr)) +
+    #|    sizeof(__builtin_bzero(ptr, 0)) +
+    #|    variadic(0, 1);
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks unobserved varargs setup builtins" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|int variadic(int last, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, last);
+    #|  __builtin_va_copy(ap, ap);
+    #|  __builtin_va_end(ap);
+    #|  return last + 1;
+    #|}
+    #|int main(void) {
+    #|  return variadic(41, 1, 2);
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks memory builtin return pointers" {
+  let source =
+    #|int main(void) {
+    #|  char *dst = __builtin_alloca(8);
+    #|  char *src = __builtin_alloca(8);
+    #|  if (__builtin_memcpy(dst, src, 0) != dst) return 1;
+    #|  if (__builtin_memmove(dst, src, 0) != dst) return 2;
+    #|  if (__builtin_memset(dst, 0, 0) != dst) return 3;
+    #|  if (__builtin___memcpy_chk(dst, src, 0, 8) != dst) return 4;
+    #|  if (__builtin___memmove_chk(dst, src, 0, 8) != dst) return 5;
+    #|  if (__builtin___memset_chk(dst, 0, 0, 8) != dst) return 6;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks string destination return pointers" {
+  let source =
+    #|int main(void) {
+    #|  char *dst = __builtin_alloca(16);
+    #|  __builtin_memset(dst, 0, 16);
+    #|  if (__builtin_strcpy(dst, "") != dst) return 1;
+    #|  if (__builtin___strcpy_chk(dst, "", 16) != dst) return 2;
+    #|  if (__builtin___strcat_chk(dst, "", 16) != dst) return 3;
+    #|  if (__builtin___strncpy_chk(dst, "", 0, 16) != dst) return 4;
+    #|  if (__builtin___strncat_chk(dst, "", 0, 16) != dst) return 5;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks checked strlcpy literal length" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(8);
+    #|  if (__builtin___strlcpy_chk(dst, (const char *)"abcdef", n += 4, 8) != 6) return 1;
+    #|  if (n != 4) return 2;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks zero-size checked strlcat literal length" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(1);
+    #|  if (__builtin___strlcat_chk(dst, (const char *)"abc", ((n += 1), 0), 1) != 3) return 1;
+    #|  if (n != 1) return 2;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks zero-size checked snprintf literal length" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  if (__builtin___snprintf_chk((char *)0, ((n += 1), 0), 0, 0, (const char *)"ready") != 5) return 1;
+    #|  if (n != 1) return 2;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks checked snprintf nonzero buffer length" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(4);
+    #|  if (__builtin___snprintf_chk(dst, ((n += 1), 4), 0, 4, (const char *)"abcdef") != 6) return 1;
+    #|  if (__builtin___snprintf_chk(dst, 4, 0, 4, (const char *)"n=%05d", n += 6) != 7) return 2;
+    #|  if (n != 7) return 3;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks checked sprintf literal length" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(16);
+    #|  if (__builtin___sprintf_chk(((n += 1), dst), 0, 16, (const char *)"ready") != 5) return 1;
+    #|  if (n != 1) return 2;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks escaped percent checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  char *dst = __builtin_alloca(16);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"%%ok%%") != 4) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 16, (const char *)"done%%") != 5) return 2;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks checked printf literal length" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  if (__builtin___printf_chk(1, (const char *)"ok%%", n += 1) != 3) return 1;
+    #|  if (n != 1) return 2;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks decimal checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(16);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"n=%d", n += 7) != 3) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 16, (const char *)"neg=%i%%", -12) != 8) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"sum=%d", n) != 5) return 3;
+    #|  if (n != 7) return 4;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks length-modified checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  long n = 0;
+    #|  char *dst = __builtin_alloca(32);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"l=%ld", n += 1234L) != 6) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 32, (const char *)"%lld%%", -5000LL) != 6) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"z=%zu", 9UL) != 3) return 3;
+    #|  if (__builtin___printf_chk(1, (const char *)"x=%llx", 0x1000LL) != 6) return 4;
+    #|  if (n != 1234L) return 5;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks width checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(32);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"n=%05d", n += 7) != 7) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 32, (const char *)"%-4s%%", (const char *)"hi") != 5) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"c=%3c", 'A') != 5) return 3;
+    #|  if (__builtin___printf_chk(1, (const char *)"x=%4x", 0xabc) != 6) return 4;
+    #|  if (n != 7) return 5;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks signed flag checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(32);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"%+d", n += 7) != 2) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 32, (const char *)"% d%%", 12) != 4) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"x=%+05d", 9) != 7) return 3;
+    #|  if (__builtin___printf_chk(1, (const char *)"n=% d", -5) != 4) return 4;
+    #|  if (n != 7) return 5;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks alternate checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  unsigned int n = 0;
+    #|  char *dst = __builtin_alloca(32);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"o=%#o", n += 8) != 5) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 32, (const char *)"%#x%%", 0x2au) != 5) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"X=%#X", 0xABu) != 6) return 3;
+    #|  if (__builtin___printf_chk(1, (const char *)"z=%#x", 0u) != 3) return 4;
+    #|  if (n != 8) return 5;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks char checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(16);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"c=%c", n += 65) != 3) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 16, (const char *)"%c%%", 'Z') != 2) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"z=%c", 0) != 3) return 3;
+    #|  if (n != 65) return 4;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks string checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  char *dst = __builtin_alloca(16);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"s=%s", (const char *)"ok") != 4) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 16, (const char *)"%s%%", (const char *)"abc") != 4) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"z=%s", (const char *)"") != 2) return 3;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks precision string checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  char *dst = __builtin_alloca(16);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"s=%.3s", (const char *)"abcdef") != 5) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 16, (const char *)"%5.2s%%", (const char *)"abcd") != 6) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"z=%.0s", (const char *)"hide") != 2) return 3;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks decimal precision checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  unsigned int n = 0;
+    #|  char *dst = __builtin_alloca(32);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"n=%.3u", n += 7) != 5) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 32, (const char *)"%+.4d%%", 12) != 6) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"z=%.0u", 0u) != 2) return 3;
+    #|  if (__builtin___printf_chk(1, (const char *)"w=%04.3d", 7) != 6) return 4;
+    #|  if (n != 7) return 5;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks signed decimal precision checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(32);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"n=%.4d", n -= 12) != 7) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 32, (const char *)"%+.3d%%", -8) != 5) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"w=%7.3i", -5) != 9) return 3;
+    #|  if (n != -12) return 4;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks radix precision checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  unsigned int n = 0;
+    #|  char *dst = __builtin_alloca(32);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"x=%.4x", n += 0x2a) != 6) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 32, (const char *)"%#.4x%%", 0x2au) != 7) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"o=%#.4o", 8u) != 6) return 3;
+    #|  if (__builtin___printf_chk(1, (const char *)"q=%#.2o", 8u) != 5) return 4;
+    #|  if (__builtin___printf_chk(1, (const char *)"z=%.0x", 0u) != 2) return 5;
+    #|  if (__builtin___printf_chk(1, (const char *)"r=%#.0o", 0u) != 3) return 6;
+    #|  if (n != 0x2a) return 7;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks unsigned checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  unsigned int n = 0;
+    #|  char *dst = __builtin_alloca(16);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"u=%u", n += 42) != 4) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 16, (const char *)"%u%%", 100u) != 4) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"n=%u", n) != 4) return 3;
+    #|  if (n != 42) return 4;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks hex checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  unsigned int n = 0;
+    #|  char *dst = __builtin_alloca(16);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"x=%x", n += 255) != 4) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 16, (const char *)"%x%%", 4095u) != 4) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"z=%x", 0u) != 3) return 3;
+    #|  if (n != 255) return 4;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks uppercase hex checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  unsigned int n = 0;
+    #|  char *dst = __builtin_alloca(16);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"X=%X", n += 0xABCD) != 6) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 16, (const char *)"%X%%", 0x10u) != 3) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"z=%X", 0u) != 3) return 3;
+    #|  if (n != 0xABCD) return 4;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks octal checked printf lengths" {
+  let source =
+    #|int main(void) {
+    #|  unsigned int n = 0;
+    #|  char *dst = __builtin_alloca(16);
+    #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"o=%o", n += 64) != 5) return 1;
+    #|  if (__builtin___sprintf_chk(dst, 0, 16, (const char *)"%o%%", 511u) != 4) return 2;
+    #|  if (__builtin___printf_chk(1, (const char *)"z=%o", 0u) != 3) return 3;
+    #|  if (n != 64) return 4;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks bzero argument evaluation" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(1);
+    #|  __builtin_bzero(dst, n += 1);
+    #|  if (n != 1) return 1;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks floating comparison builtins" {
+  let source =
+    #|int main(void) {
+    #|  if (!__builtin_isgreater(2.0, 1.0)) return 1;
+    #|  if (!__builtin_isgreaterequal(2.0, 2.0)) return 2;
+    #|  if (!__builtin_isless(1.0, 2.0)) return 3;
+    #|  if (!__builtin_islessequal(2.0, 2.0)) return 4;
+    #|  if (!__builtin_islessgreater(1.0, 2.0)) return 5;
+    #|  if (__builtin_islessgreater(2.0, 2.0)) return 6;
+    #|  if (!__builtin_isunordered(__builtin_nan(""), 1.0)) return 7;
+    #|  if (__builtin_isgreater(__builtin_nan(""), 1.0)) return 8;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks floating classification builtins" {
+  let source =
+    #|int main(void) {
+    #|  if (!__builtin_isnan(__builtin_nan(""))) return 1;
+    #|  if (__builtin_isnan(1.0)) return 2;
+    #|  if (!__builtin_isnanf(__builtin_nanf(""))) return 3;
+    #|  if (!__builtin_isnanl(__builtin_nanl(""))) return 4;
+    #|  if (!__builtin_isinf(__builtin_inf())) return 5;
+    #|  if (!__builtin_isinf(-__builtin_inf())) return 6;
+    #|  if (__builtin_isinf(1.0)) return 7;
+    #|  if (!__builtin_isinff(__builtin_inff())) return 8;
+    #|  if (!__builtin_isinfl(__builtin_infl())) return 9;
+    #|  if (!__builtin_isfinite(1.0)) return 10;
+    #|  if (__builtin_isfinite(__builtin_inf())) return 11;
+    #|  if (!__builtin_isfinitef(1.0f)) return 12;
+    #|  if (!__builtin_isfinitel(1.0L)) return 13;
+    #|  if (!__builtin_isnormal(1.0)) return 14;
+    #|  if (__builtin_isnormal(0.0)) return 15;
+    #|  if (__builtin_isnormal(__builtin_inf())) return 16;
+    #|  if (!__builtin_isnormalf(1.0f)) return 17;
+    #|  if (!__builtin_isnormall(1.0L)) return 18;
+    #|  if (!__builtin_signbit(-1.0)) return 19;
+    #|  if (!__builtin_signbit(-0.0)) return 20;
+    #|  if (__builtin_signbit(1.0)) return 21;
+    #|  if (!__builtin_signbitf(-0.0f)) return 22;
+    #|  if (!__builtin_signbitl(-1.0L)) return 23;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks folded floating builtin casts" {
+  let source =
+    #|int main(void) {
+    #|  if ((int)__builtin_fabs(-4.5) != 4) return 1;
+    #|  if ((int)__builtin_fabsf(-3.5f) != 3) return 2;
+    #|  if ((int)__builtin_fabsl(-2.5L) != 2) return 3;
+    #|  if ((int)__builtin_copysign(3.0, -1.0) != -3) return 4;
+    #|  if ((int)__builtin_copysign(-3.0, 1.0) != 3) return 5;
+    #|  if ((int)__builtin_copysignf(2.0f, -1.0f) != -2) return 6;
+    #|  if (!__builtin_signbit(__builtin_copysign(0.0, -1.0))) return 7;
+    #|  if ((int)__builtin_sqrt(81.0) != 9) return 8;
+    #|  if ((int)__builtin_sqrtf(25.0f) != 5) return 9;
+    #|  if ((int)__builtin_sqrtl(16.0L) != 4) return 10;
+    #|  if (!__builtin_isnan(__builtin_sqrt(-1.0))) return 11;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks literal string comparison builtins" {
+  let source =
+    #|int main(void) {
+    #|  if (__builtin_strcmp("abc", "abc") != 0) return 1;
+    #|  if (__builtin_strcmp("abc", "abd") >= 0) return 2;
+    #|  if (__builtin_strcmp((const char *)"abd", "abc") <= 0) return 3;
+    #|  if (__builtin_strncmp("abc", "abd", 2) != 0) return 4;
+    #|  if (__builtin_strncmp("abc", "abd", 3) >= 0) return 5;
+    #|  if (__builtin_strncmp("abc", "abd", 0) != 0) return 6;
+    #|  if (__builtin_memcmp("abc", "abd", 2) != 0) return 7;
+    #|  if (__builtin_memcmp("abc", "abd", 3) >= 0) return 8;
+    #|  if (__builtin_memcmp("abd", "abc", 3) <= 0) return 9;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks literal string search nullness" {
+  let source =
+    #|int main(void) {
+    #|  if (__builtin_strchr("abc", 'b') == 0) return 1;
+    #|  if (__builtin_strchr("abc", 'x') != 0) return 2;
+    #|  if (__builtin_strchr("abc", 0) == 0) return 3;
+    #|  if (__builtin_strrchr("abba", 'b') == 0) return 4;
+    #|  if (__builtin_memchr("abc", 'b', 2) == 0) return 5;
+    #|  if (__builtin_memchr("abc", 'c', 2) != 0) return 6;
+    #|  if (__builtin_strstr("abcde", "cd") == 0) return 7;
+    #|  if (__builtin_strstr("abcde", "ce") != 0) return 8;
+    #|  if (__builtin_strstr("abc", "") == 0) return 9;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks scalar bit builtins" {
+  let source =
+    #|int main(void) {
+    #|  if (__builtin_clz(8) != 28) return 1;
+    #|  if (__builtin_clzll(8ull) != 60) return 2;
+    #|  if (__builtin_ctz(40) != 3) return 3;
+    #|  if (__builtin_ctzll(48ull) != 4) return 4;
+    #|  if ((__builtin_bswap16(0x0102) & 0xffff) != 0x0201) return 5;
+    #|  if (__builtin_bswap32(0x01020304u) != 0x04030201u) return 6;
+    #|  if ((__builtin_bswap64(0x0102030405060708ull) & 255) != 1) return 7;
+    #|  if (__builtin_clzl(8ul) != 60) return 8;
+    #|  if (__builtin_ctzl(48ul) != 4) return 9;
+    #|  if ((__builtin_bswap((unsigned short)0x0102) & 0xffff) != 0x0201) return 10;
+    #|  if (__builtin_bswap(0x01020304u) != 0x04030201u) return 11;
+    #|  if ((__builtin_bswap(0x0102030405060708ull) & 255) != 1) return 12;
+    #|  return 0;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks scalar population builtins" {
+  let source =
+    #|int main(void) {
+    #|  if (__builtin_ffs(0u) != 0) return 1;
+    #|  if (__builtin_ffs(8u) != 4) return 2;
+    #|  if (__builtin_ffsl(16ul) != 5) return 3;
+    #|  if (__builtin_ffsll(32ull) != 6) return 4;
+    #|  if (__builtin_popcount(0xf0f0u) != 8) return 5;
+    #|  if (__builtin_popcountl(0x0f0f0f0f0f0f0f0ful) != 32) return 6;
+    #|  if (__builtin_popcountll(0x0f0f0f0f0f0f0f0full) != 32) return 7;
+    #|  if (__builtin_parity(0xf0f1u) != 1) return 8;
+    #|  if (__builtin_parityl(0x0f0f0f0f0f0f0f0ful) != 0) return 9;
+    #|  if (__builtin_parityll(0x0f0f0f0f0f0f0f0eull) != 1) return 10;
+    #|  return 0;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks scalar abs builtins" {
+  let source =
+    #|int main(void) {
+    #|  if (__builtin_abs(-7) != 7) return 1;
+    #|  if (__builtin_abs(5) != 5) return 2;
+    #|  if (__builtin_labs(-1234567890123L) != 1234567890123L) return 3;
+    #|  if (__builtin_llabs(-900000000000000000LL) != 900000000000000000LL) return 4;
+    #|  return 0;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks scalar alignment builtins" {
+  let source =
+    #|int main(void) {
+    #|  if (!__builtin_is_aligned(32, 16)) return 1;
+    #|  if (__builtin_is_aligned(34, 16)) return 2;
+    #|  if (__builtin_align_up(33, 16) != 48) return 3;
+    #|  if (__builtin_align_down(47, 16) != 32) return 4;
+    #|  if (__builtin_align_up(0x1234567890ull, 256) != 0x1234567900ull) return 5;
+    #|  return 0;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks scalar rotate builtins" {
+  let source =
+    #|int main(void) {
+    #|  if ((__builtin_rotateleft32(0x12345678u, 8) & 255) != 0x12) return 1;
+    #|  if ((__builtin_rotateright32(0x12345678u, 8) & 255) != 0x56) return 2;
+    #|  if ((__builtin_rotateleft64(0x0123456789abcdefull, 16) & 255) != 0x23) return 3;
+    #|  if ((__builtin_rotateright64(0x0123456789abcdefull, 16) & 255) != 0xab) return 4;
+    #|  if (__builtin_rotateleft(0x12345678u, 8) != 0x34567812u) return 5;
+    #|  if ((__builtin_rotateright(0x0123456789abcdefull, 16) & 255) != 0xab) return 6;
+    #|  return 0;
+    #|}
+  run_source_against_mir_oracle(source)
+}

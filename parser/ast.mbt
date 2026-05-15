@@ -19,15 +19,30 @@ pub(all) enum Type {
   SInt128
   UInt128
   Float
+  Float16
+  Float128
   Double
+  LongDouble
   Struct(String)
   Union(String)
-  FuncPtr(Type, Int, Bool)
+  FuncPtr(Type, Array[Type], Bool)
   Pointer(Type)
   Array(Type, Int)
   Atomic(Type)
   Aligned(Type, Int)
 } derive(Eq)
+
+///|
+fn type_array_to_string(types : Array[Type]) -> String {
+  let mut result = "["
+  for i in 0..<types.length() {
+    if i > 0 {
+      result = result + ", "
+    }
+    result = result + types[i].to_string()
+  }
+  result + "]"
+}
 
 ///|
 pub impl Show for Type with to_string(self) {
@@ -47,14 +62,17 @@ pub impl Show for Type with to_string(self) {
     SInt128 => "SInt128"
     UInt128 => "UInt128"
     Float => "Float"
+    Float16 => "Float16"
+    Float128 => "Float128"
     Double => "Double"
+    LongDouble => "LongDouble"
     Struct(name) => "Struct(" + name + ")"
     Union(name) => "Union(" + name + ")"
-    FuncPtr(ret, count, variadic) =>
+    FuncPtr(ret, params, variadic) =>
       "FuncPtr(" +
       ret.to_string() +
       ", " +
-      count.to_string() +
+      type_array_to_string(params) +
       ", " +
       variadic.to_string() +
       ")"
@@ -103,10 +121,11 @@ pub fn Type::is_signed(self : Type) -> Bool {
 }
 
 ///|
-/// Returns true for `float` and `double`.
+/// Returns true for supported floating arithmetic types under the default
+/// Darwin ARM64 layout assumptions.
 pub fn Type::is_floating(self : Type) -> Bool {
   match self {
-    Float | Double => true
+    Float | Double | LongDouble => true
     Aligned(ty, _) => ty.is_floating()
     _ => false
   }
@@ -140,11 +159,14 @@ pub fn Type::size(self : Type) -> Int {
     Bool | SChar | UChar => 1
     SShort | UShort => 2
     SInt | UInt | Float => 4
+    Float16 => abort("_Float16 size is not supported")
+    Float128 => abort("__float128 size is not supported")
     SLong
     | ULong
     | SLongLong
     | ULongLong
     | Double
+    | LongDouble
     | Pointer(_)
     | FuncPtr(_, _, _) => 8
     SInt128 | UInt128 => 16
@@ -171,11 +193,14 @@ pub fn Type::align(self : Type) -> Int {
     Bool | SChar | UChar => 1
     SShort | UShort => 2
     SInt | UInt | Float => 4
+    Float16 => abort("_Float16 alignment is not supported")
+    Float128 => abort("__float128 alignment is not supported")
     SLong
     | ULong
     | SLongLong
     | ULongLong
     | Double
+    | LongDouble
     | Pointer(_)
     | FuncPtr(_, _, _) => 8
     SInt128 | UInt128 => 16
@@ -217,6 +242,8 @@ pub(all) enum Expr {
   ArrayAccess(Expr, Expr)
   Sizeof(Type)
   SizeofExpr(Expr)
+  Alignof(Type)
+  AlignofExpr(Expr)
   Cast(Type, Expr)
   PrefixInc(Expr)
   PrefixDec(Expr)
@@ -225,12 +252,18 @@ pub(all) enum Expr {
   Ternary(Expr, Expr, Expr)
   LabelAddr(String)
   VaArg(Expr, Type)
-  OffsetOf(Type, String)
+  OffsetOf(Type, Array[OffsetDesignator])
   Array(Array[Expr])
   CompoundLiteral(Type, Array[Expr], Int)
   DesignatedField(String, Expr)
   DesignatedIndex(Int64, Expr)
   DesignatedRange(Int64, Int64, Expr)
+} derive(Eq)
+
+///|
+pub(all) enum OffsetDesignator {
+  OffsetField(String)
+  OffsetIndex(Int64)
 } derive(Eq)
 
 ///|
@@ -271,10 +304,12 @@ pub(all) struct Param {
 /// Struct or union declaration.
 ///
 /// `is_union` distinguishes `union` declarations from `struct` declarations.
+/// `is_packed` records GNU `packed` layout attributes on the aggregate.
 pub(all) struct StructDecl {
   name : String
   fields : Array[Param]
   is_union : Bool
+  is_packed : Bool
 } derive(Eq)
 
 ///|
@@ -288,6 +323,12 @@ pub(all) struct FuncDecl {
   variadic : Bool
   is_static : Bool
   is_inline : Bool
+  is_weak : Bool
+  visibility : String?
+  symbol_alias : String?
+  section : String?
+  is_constructor : Bool
+  is_destructor : Bool
   body : Stmt?
 } derive(Eq)
 
@@ -311,6 +352,10 @@ pub(all) struct GlobalDecl {
   init : GlobalInit?
   is_static : Bool
   is_extern : Bool
+  is_weak : Bool
+  visibility : String?
+  symbol_alias : String?
+  section : String?
 } derive(Eq)
 
 ///|

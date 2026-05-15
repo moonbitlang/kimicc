@@ -2,10 +2,14 @@
 package "bobzhang/kimicc/codegen"
 
 import {
+  "bobzhang/kimicc/mir",
   "bobzhang/kimicc/parser",
+  "bobzhang/kimicc/target",
 }
 
 // Values
+pub fn generate_assembly_for_target(@parser.Program, @target.Target) -> String
+
 pub fn generate_jit_image(@parser.Program) -> JitImage
 
 pub fn generate_macho_object(@parser.Program) -> Bytes
@@ -15,6 +19,7 @@ pub fn generate_macho_object(@parser.Program) -> Bytes
 // Types and methods
 pub struct Codegen {
   output : StringBuilder
+  mut mir : @mir.Program?
   mut label_counter : Int
   mut local_offsets : Map[String, Int]
   mut var_types : Map[String, @parser.Type]
