@@ -972,6 +972,20 @@ test "mir body lowering cancels address of aggregate member objects" {
 }
 
 ///|
+test "mir body lowering cancels casted address of aggregate member objects" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { struct Inner inner; };
+    #|int main(void) {
+    #|  struct S s = { { 42 } };
+    #|  return ((struct Inner *)&s.inner)->z;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body lowering keeps side effecting ignored builtin operands" {
   let source =
     #|int main(void) {

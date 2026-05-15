@@ -895,6 +895,7 @@ fn Program::lower_mir_object_addr(
     }
     Deref(AddrOf(CompoundLiteral(lit_ty, items, id))) =>
       self.lower_mir_expr(AddrOf(CompoundLiteral(lit_ty, items, id)), ctx)
+    Deref(Cast(_, AddrOf(inner))) => self.lower_mir_object_addr(inner, ctx)
     Deref(AddrOf(inner)) => self.lower_mir_object_addr(inner, ctx)
     _ => None
   }
