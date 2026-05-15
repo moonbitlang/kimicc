@@ -25,6 +25,31 @@ test "generate darwin arm64 assembly from MIR strict" {
 }
 
 ///|
+test "generate darwin arm64 MIR body uses MIR function metadata" {
+  let source = "int main(void) { return 42; }"
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  let decl = mir.decls[0]
+  mir.decls[0] = {
+    ret: decl.ret,
+    name: decl.name,
+    params: decl.params,
+    variadic: decl.variadic,
+    is_static: decl.is_static,
+    is_inline: decl.is_inline,
+    is_weak: true,
+    visibility: decl.visibility,
+    symbol_alias: decl.symbol_alias,
+    section: decl.section,
+    is_constructor: decl.is_constructor,
+    is_destructor: decl.is_destructor,
+    has_body: decl.has_body,
+  }
+  let assembly = @codegen.generate_assembly_from_mir(mir)
+  inspect(assembly.contains("\t.weak_definition\t_main"), content="true")
+  inspect(assembly.contains("\t.globl\t_main"), content="false")
+}
+
+///|
 test "generate darwin arm64 global scalar initializer uses MIR metadata" {
   let source = "int g = 0; int main(void) { return g; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
@@ -108,6 +133,35 @@ test "generate linux amd64 assembly from MIR strict" {
     }
     Err(err) => abort(err)
   }
+}
+
+///|
+test "generate linux amd64 MIR body uses MIR function metadata" {
+  let source = "int main(void) { return 42; }"
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  let decl = mir.decls[0]
+  mir.decls[0] = {
+    ret: decl.ret,
+    name: decl.name,
+    params: decl.params,
+    variadic: decl.variadic,
+    is_static: decl.is_static,
+    is_inline: decl.is_inline,
+    is_weak: true,
+    visibility: decl.visibility,
+    symbol_alias: decl.symbol_alias,
+    section: decl.section,
+    is_constructor: decl.is_constructor,
+    is_destructor: decl.is_destructor,
+    has_body: decl.has_body,
+  }
+  let assembly = @codegen.generate_assembly_from_mir(mir)
+  inspect(assembly.contains("\t.weak\tmain"), content="true")
+  inspect(assembly.contains("\t.globl\tmain"), content="false")
 }
 
 ///|

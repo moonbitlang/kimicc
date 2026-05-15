@@ -797,10 +797,15 @@ fn Codegen::try_gen_mir_func(self : Codegen, decl : @parser.FuncDecl) -> Bool {
     Some(mir) =>
       if mir.bodies.contains(decl.name) {
         let body = mir.bodies[decl.name]
-        if !mir_body_codegen_func_supported(body, decl.variadic, 8, mir) {
+        let mir_decl = match
+          mir.decls.iter().find_first(fn(d) { d.name == decl.name }) {
+          Some(d) => d
+          None => return false
+        }
+        if !mir_body_codegen_func_supported(body, mir_decl.variadic, 8, mir) {
           return false
         }
-        self.gen_mir_func(decl, body)
+        self.gen_mir_func(mir_decl, body)
         true
       } else {
         false
@@ -812,7 +817,7 @@ fn Codegen::try_gen_mir_func(self : Codegen, decl : @parser.FuncDecl) -> Bool {
 ///|
 fn Codegen::gen_mir_func(
   self : Codegen,
-  decl : @parser.FuncDecl,
+  decl : @mir.MirFuncDecl,
   body : @mir.MirFuncBody,
 ) -> Unit {
   self.local_offsets = {}
@@ -822,7 +827,7 @@ fn Codegen::gen_mir_func(
   self.defined_labels = {}
   self.fp_literals = []
   self.func_name = decl.name
-  self.func_params = decl.params
+  self.func_params = []
   self.sret_dest_offset = -1
   self.sret_scratch_offset = -1
   self.sret_scratch_size = 0
@@ -1391,10 +1396,15 @@ fn X64Codegen::try_gen_mir_func(
     Some(mir) =>
       if mir.bodies.contains(decl.name) {
         let body = mir.bodies[decl.name]
-        if !mir_body_codegen_func_supported(body, decl.variadic, 6, mir) {
+        let mir_decl = match
+          mir.decls.iter().find_first(fn(d) { d.name == decl.name }) {
+          Some(d) => d
+          None => return false
+        }
+        if !mir_body_codegen_func_supported(body, mir_decl.variadic, 6, mir) {
           return false
         }
-        self.gen_mir_func(decl, body)
+        self.gen_mir_func(mir_decl, body)
         true
       } else {
         false
@@ -1406,7 +1416,7 @@ fn X64Codegen::try_gen_mir_func(
 ///|
 fn X64Codegen::gen_mir_func(
   self : X64Codegen,
-  decl : @parser.FuncDecl,
+  decl : @mir.MirFuncDecl,
   body : @mir.MirFuncBody,
 ) -> Unit {
   self.local_offsets = {}
