@@ -11,6 +11,57 @@ test "generate simple function" {
 }
 
 ///|
+test "generate darwin arm64 assembly from MIR strict" {
+  let source = "int main(void) { int x = 40; return x + 2; }"
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_strict(mir) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tadd\tx9, x9, x10"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 assembly from MIR strict" {
+  let source = "int main(void) { int x = 40; return x + 2; }"
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse(source), target)
+  match @codegen.generate_assembly_from_mir_strict(mir) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tadd\trax, r10"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "strict MIR assembly rejects parser body fallback" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct Outer { struct Inner inner; };
+    #|int main(void) {
+    #|  struct Outer s;
+    #|  s.inner.z = 3;
+    #|  return s.inner.z;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="false")
+  match @codegen.generate_assembly_from_mir_strict(mir) {
+    Ok(_) => abort("expected strict MIR codegen rejection")
+    Err(err) =>
+      inspect(err.contains("missing MIR body for main"), content="true")
+  }
+}
+
+///|
 test "generate darwin arm64 MIR body direct call" {
   let source =
     #|int add(int a, int b) { return a + b; }

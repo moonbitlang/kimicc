@@ -10,6 +10,10 @@ import {
 // Values
 pub fn generate_assembly_for_target(@parser.Program, @target.Target) -> String
 
+pub fn generate_assembly_from_mir(@mir.Program) -> String
+
+pub fn generate_assembly_from_mir_strict(@mir.Program) -> Result[String, String]
+
 pub fn generate_jit_image(@parser.Program) -> JitImage
 
 pub fn generate_macho_object(@parser.Program) -> Bytes

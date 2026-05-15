@@ -1649,12 +1649,84 @@ pub fn generate_assembly_for_target(
   prog : @parser.Program,
   target : @target.Target,
 ) -> String {
-  match target {
-    DarwinArm64 =>
-      Codegen::new_with_mir(@mir.lower(prog, target)).generate(prog)
-    LinuxAmd64 =>
-      X64Codegen::new_with_mir(@mir.lower(prog, target)).generate(prog)
+  generate_assembly_from_mir(@mir.lower(prog, target))
+}
+
+///|
+/// Generates assembly from an already lowered MIR program.
+///
+/// This is the intended backend-facing entry point. The parser-based public
+/// entry point is now only a frontend wrapper that lowers to MIR first.
+pub fn generate_assembly_from_mir(mir : @mir.Program) -> String {
+  match mir.target {
+    DarwinArm64 => Codegen::new_with_mir(mir).generate(mir.source)
+    LinuxAmd64 => X64Codegen::new_with_mir(mir).generate(mir.source)
   }
+}
+
+///|
+/// Generates assembly from MIR only when every emitted function body can use the
+/// MIR-body backend path.
+///
+/// This strict gate is deliberately narrower than full parser independence: it
+/// prevents parser statement/expression fallback for function bodies while
+/// globals and metadata continue to migrate into MIR-owned declarations.
+pub fn generate_assembly_from_mir_strict(
+  mir : @mir.Program,
+) -> Result[String, String] {
+  match mir_body_codegen_strict_error(mir) {
+    Some(err) => Err(err)
+    None => Ok(generate_assembly_from_mir(mir))
+  }
+}
+
+///|
+fn mir_body_codegen_strict_error(mir : @mir.Program) -> String? {
+  let emitted = mir_emitted_func_decls(mir.source)
+  let int_arg_limit = match mir.target {
+    DarwinArm64 => 8
+    LinuxAmd64 => 6
+  }
+  for decl in emitted {
+    if decl.body is Some(_) {
+      if !mir.bodies.contains(decl.name) {
+        return Some("missing MIR body for " + decl.name)
+      }
+      let body = mir.bodies[decl.name]
+      if !mir_body_codegen_func_supported(body, decl, int_arg_limit, mir) {
+        return Some("unsupported MIR body codegen for " + decl.name)
+      }
+    }
+  }
+  None
+}
+
+///|
+fn mir_emitted_func_decls(prog : @parser.Program) -> Array[@parser.FuncDecl] {
+  let inline_decls : Map[String, @parser.FuncDecl] = {}
+  for decl in prog.decls {
+    if decl.is_inline {
+      inline_decls[decl.name] = decl
+    }
+  }
+  let needed_inline : Map[String, Bool] = {}
+  for decl in prog.decls {
+    if !decl.is_inline {
+      match decl.body {
+        Some(body) =>
+          collect_static_inline_stmt(body, inline_decls, needed_inline)
+        None => ()
+      }
+    }
+  }
+  let emitted : Array[@parser.FuncDecl] = []
+  for decl in prog.decls {
+    if decl.is_inline && !needed_inline.contains(decl.name) {
+      continue
+    }
+    emitted.push(decl)
+  }
+  emitted
 }
 
 ///|
