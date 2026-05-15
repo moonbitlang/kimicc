@@ -11,6 +11,21 @@ test "generate simple function" {
 }
 
 ///|
+test "generate darwin arm64 MIR body direct call" {
+  let source =
+    #|int add(int a, int b) { return a + b; }
+    #|int main(void) { return add(20, 22); }
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+  inspect(assembly.contains("\tbl\t_add"), content="true")
+}
+
+///|
 test "generate darwin arm64 global unary plus initializer" {
   let source =
     #|int gplus = +1;
@@ -229,6 +244,24 @@ test "generate linux amd64 simple function" {
   inspect(assembly.contains("kimicc: mir-body"), content="true")
   inspect(assembly.contains("\tmov\trax, 42"), content="true")
   inspect(assembly.contains("_main:"), content="false")
+}
+
+///|
+test "generate linux amd64 MIR body direct call" {
+  let source =
+    #|int add(int a, int b) { return a + b; }
+    #|int main(void) { return add(20, 22); }
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+  inspect(assembly.contains("\tcall\tadd"), content="true")
 }
 
 ///|

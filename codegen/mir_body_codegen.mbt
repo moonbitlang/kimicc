@@ -26,7 +26,11 @@ fn mir_body_codegen_scalar_type(ty : @parser.Type) -> Bool {
 }
 
 ///|
-fn mir_body_codegen_value_supported(value : @mir.MirValue) -> Bool {
+fn mir_body_codegen_value_supported(
+  value : @mir.MirValue,
+  int_arg_limit : Int,
+  mir : @mir.Program,
+) -> Bool {
   if !mir_body_codegen_scalar_type(value.ty()) {
     return false
   }
@@ -35,61 +39,84 @@ fn mir_body_codegen_value_supported(value : @mir.MirValue) -> Bool {
     MirLocal(binding) => mir_body_codegen_scalar_type(binding.ty)
     MirUnary(_, inner, ty) =>
       mir_body_codegen_scalar_type(ty) &&
-      mir_body_codegen_value_supported(inner)
+      mir_body_codegen_value_supported(inner, int_arg_limit, mir)
     MirBinary(_, lhs, rhs, ty) =>
       mir_body_codegen_scalar_type(ty) &&
-      mir_body_codegen_value_supported(lhs) &&
-      mir_body_codegen_value_supported(rhs)
+      mir_body_codegen_value_supported(lhs, int_arg_limit, mir) &&
+      mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
     MirCast(ty, inner) =>
       mir_body_codegen_scalar_type(ty) &&
-      mir_body_codegen_value_supported(inner)
+      mir_body_codegen_value_supported(inner, int_arg_limit, mir)
     MirAssignLocal(binding, rhs) =>
       mir_body_codegen_scalar_type(binding.ty) &&
-      mir_body_codegen_value_supported(rhs)
+      mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
     MirTernary(cond, then_, else_, ty) =>
       mir_body_codegen_scalar_type(ty) &&
-      mir_body_codegen_value_supported(cond) &&
-      mir_body_codegen_value_supported(then_) &&
-      mir_body_codegen_value_supported(else_)
-    // Keep the first production migration slice call-free. Calls need ABI
-    // argument staging and stack-alignment coverage for both backends.
-    MirCall(_, _, _) => false
+      mir_body_codegen_value_supported(cond, int_arg_limit, mir) &&
+      mir_body_codegen_value_supported(then_, int_arg_limit, mir) &&
+      mir_body_codegen_value_supported(else_, int_arg_limit, mir)
+    MirCall(name, args, ty) => {
+      if !mir.bodies.contains(name) {
+        return false
+      }
+      if args.length() > int_arg_limit || !mir_body_codegen_scalar_type(ty) {
+        return false
+      }
+      for arg in args {
+        if !mir_body_codegen_value_supported(arg, int_arg_limit, mir) {
+          return false
+        }
+      }
+      true
+    }
   }
 }
 
 ///|
-fn mir_body_codegen_stmt_supported(stmt : @mir.MirStmt) -> Bool {
+fn mir_body_codegen_stmt_supported(
+  stmt : @mir.MirStmt,
+  int_arg_limit : Int,
+  mir : @mir.Program,
+) -> Bool {
   match stmt {
     MirDeclare(binding, init) => {
       if !mir_body_codegen_scalar_type(binding.ty) {
         return false
       }
       match init {
-        Some(value) => mir_body_codegen_value_supported(value)
+        Some(value) =>
+          mir_body_codegen_value_supported(value, int_arg_limit, mir)
         None => true
       }
     }
-    MirExprStmt(value) => mir_body_codegen_value_supported(value)
+    MirExprStmt(value) =>
+      mir_body_codegen_value_supported(value, int_arg_limit, mir)
     MirReturn(value) =>
       match value {
-        Some(value) => mir_body_codegen_value_supported(value)
+        Some(value) =>
+          mir_body_codegen_value_supported(value, int_arg_limit, mir)
         None => true
       }
     MirIf(cond, then_, else_) =>
-      mir_body_codegen_value_supported(cond) &&
-      mir_body_codegen_stmts_supported(then_) &&
-      mir_body_codegen_stmts_supported(else_)
+      mir_body_codegen_value_supported(cond, int_arg_limit, mir) &&
+      mir_body_codegen_stmts_supported(then_, int_arg_limit, mir) &&
+      mir_body_codegen_stmts_supported(else_, int_arg_limit, mir)
     MirWhile(cond, body) =>
-      mir_body_codegen_value_supported(cond) &&
-      mir_body_codegen_stmts_supported(body)
-    MirBlock(stmts) => mir_body_codegen_stmts_supported(stmts)
+      mir_body_codegen_value_supported(cond, int_arg_limit, mir) &&
+      mir_body_codegen_stmts_supported(body, int_arg_limit, mir)
+    MirBlock(stmts) =>
+      mir_body_codegen_stmts_supported(stmts, int_arg_limit, mir)
   }
 }
 
 ///|
-fn mir_body_codegen_stmts_supported(stmts : Array[@mir.MirStmt]) -> Bool {
+fn mir_body_codegen_stmts_supported(
+  stmts : Array[@mir.MirStmt],
+  int_arg_limit : Int,
+  mir : @mir.Program,
+) -> Bool {
   for stmt in stmts {
-    if !mir_body_codegen_stmt_supported(stmt) {
+    if !mir_body_codegen_stmt_supported(stmt, int_arg_limit, mir) {
       return false
     }
   }
@@ -101,6 +128,7 @@ fn mir_body_codegen_func_supported(
   body : @mir.MirFuncBody,
   decl : @parser.FuncDecl,
   int_arg_limit : Int,
+  mir : @mir.Program,
 ) -> Bool {
   if decl.variadic || body.params.length() > int_arg_limit {
     return false
@@ -113,7 +141,7 @@ fn mir_body_codegen_func_supported(
       return false
     }
   }
-  mir_body_codegen_stmts_supported(body.body)
+  mir_body_codegen_stmts_supported(body.body, int_arg_limit, mir)
 }
 
 ///|
@@ -233,8 +261,39 @@ fn Codegen::gen_mir_value(
       self.emit_scalar_conversion_to(ty)
       self.emit(end_label + ":")
     }
-    MirCall(_, _, _) => abort("unsupported MIR body call")
+    MirCall(name, args, ty) => {
+      for i in 0..<args.length() {
+        let arg = args[i]
+        self.gen_mir_value(arg, offsets, frame_size)
+        let expected = self.mir_call_arg_type(name, i, arg.ty())
+        self.emit_numeric_conversion(arg.ty(), expected)
+        self.emit_scalar_conversion_to(expected)
+        self.emit("\tstr\tx9, [sp, #-16]!")
+      }
+      for i = args.length() - 1; i >= 0; i = i - 1 {
+        self.emit("\tldr\tx" + i.to_string() + ", [sp], #16")
+      }
+      self.emit("\tbl\t_" + name)
+      self.emit("\tmov\tx9, x0")
+      self.emit_scalar_conversion_to(ty)
+    }
   }
+}
+
+///|
+fn Codegen::mir_call_arg_type(
+  self : Codegen,
+  name : String,
+  index : Int,
+  actual : @parser.Type,
+) -> @parser.Type {
+  if self.func_param_types.contains(name) {
+    let params = self.func_param_types[name]
+    if index < params.length() {
+      return params[index]
+    }
+  }
+  actual
 }
 
 ///|
@@ -412,7 +471,7 @@ fn Codegen::try_gen_mir_func(self : Codegen, decl : @parser.FuncDecl) -> Bool {
     Some(mir) =>
       if mir.bodies.contains(decl.name) {
         let body = mir.bodies[decl.name]
-        if !mir_body_codegen_func_supported(body, decl, 8) {
+        if !mir_body_codegen_func_supported(body, decl, 8, mir) {
           return false
         }
         self.gen_mir_func(decl, body)
@@ -486,6 +545,18 @@ fn X64Codegen::emit_load_mir_int(self : X64Codegen, value : Int64) -> Unit {
 }
 
 ///|
+fn X64Codegen::emit_mir_push_rax(self : X64Codegen) -> Unit {
+  self.emit("\tsub\trsp, 16")
+  self.emit("\tmov\tQWORD PTR [rsp], rax")
+}
+
+///|
+fn X64Codegen::emit_mir_pop_rax(self : X64Codegen) -> Unit {
+  self.emit("\tmov\trax, QWORD PTR [rsp]")
+  self.emit("\tadd\trsp, 16")
+}
+
+///|
 fn X64Codegen::mir_body_offsets(
   self : X64Codegen,
   body : @mir.MirFuncBody,
@@ -554,8 +625,38 @@ fn X64Codegen::gen_mir_value(
       self.emit_int_conversion_to(ty)
       self.emit(end_label + ":")
     }
-    MirCall(_, _, _) => abort("unsupported MIR body call")
+    MirCall(name, args, ty) => {
+      for i in 0..<args.length() {
+        let arg = args[i]
+        self.gen_mir_value(arg, offsets)
+        self.emit_int_conversion_to(self.mir_call_arg_type(name, i, arg.ty()))
+        self.emit_mir_push_rax()
+      }
+      let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
+      for i = args.length() - 1; i >= 0; i = i - 1 {
+        self.emit("\tmov\t" + arg_regs[i] + ", QWORD PTR [rsp]")
+        self.emit("\tadd\trsp, 16")
+      }
+      self.emit("\tcall\t" + name)
+      self.emit_int_conversion_to(ty)
+    }
   }
+}
+
+///|
+fn X64Codegen::mir_call_arg_type(
+  self : X64Codegen,
+  name : String,
+  index : Int,
+  actual : @parser.Type,
+) -> @parser.Type {
+  if self.func_param_types.contains(name) {
+    let params = self.func_param_types[name]
+    if index < params.length() {
+      return params[index]
+    }
+  }
+  actual
 }
 
 ///|
@@ -612,11 +713,11 @@ fn X64Codegen::gen_mir_binary(
   let right_ty = mir_body_binary_right_type(op, lhs.ty(), rhs.ty())
   self.gen_mir_value(lhs, offsets)
   self.emit_int_conversion_to(left_ty)
-  self.emit_push_rax()
+  self.emit_mir_push_rax()
   self.gen_mir_value(rhs, offsets)
   self.emit_int_conversion_to(right_ty)
   self.emit("\tmov\tr10, rax")
-  self.emit_pop_rax()
+  self.emit_mir_pop_rax()
   match op {
     "+" => self.emit("\tadd\trax, r10")
     "-" => self.emit("\tsub\trax, r10")
@@ -746,7 +847,7 @@ fn X64Codegen::try_gen_mir_func(
     Some(mir) =>
       if mir.bodies.contains(decl.name) {
         let body = mir.bodies[decl.name]
-        if !mir_body_codegen_func_supported(body, decl, 6) {
+        if !mir_body_codegen_func_supported(body, decl, 6, mir) {
           return false
         }
         self.gen_mir_func(decl, body)
