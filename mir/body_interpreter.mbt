@@ -18,6 +18,7 @@ priv struct BodyFrame {
 priv struct BodyInterpreter {
   program : Program
   globals : Map[String, Int64]
+  global_memory : Map[Int64, Int64]
   global_addrs : Map[String, Int64]
   mut error : String?
   mut steps : Int
@@ -25,11 +26,26 @@ priv struct BodyInterpreter {
 }
 
 ///|
+fn mir_body_array_len(ty : @parser.Type) -> Int? {
+  match ty {
+    Array(_, len) => Some(len)
+    Aligned(inner, _) => mir_body_array_len(inner)
+    _ => None
+  }
+}
+
+///|
 fn BodyInterpreter::new(program : Program) -> BodyInterpreter {
   let globals : Map[String, Int64] = {}
+  let global_memory : Map[Int64, Int64] = {}
   let global_addrs : Map[String, Int64] = {}
   let mut next_global = 0
   for decl in program.globals.values() {
+    if mir_body_scalar_type(decl.ty) || mir_body_array_local_type(decl.ty) {
+      let base = 1000000000L + next_global.to_int64() * 100000L
+      global_addrs[decl.name] = base
+      next_global += 1
+    }
     if mir_body_scalar_type(decl.ty) {
       let value = match decl.init {
         Some(Scalar(expr)) =>
@@ -40,11 +56,17 @@ fn BodyInterpreter::new(program : Program) -> BodyInterpreter {
         _ => 0L
       }
       globals[decl.name] = program.runtime_cast_int(value, decl.ty)
-      global_addrs[decl.name] = 1000000000L + next_global.to_int64() * 100000L
-      next_global += 1
     }
   }
-  { program, globals, global_addrs, error: None, steps: 0, call_depth: 0 }
+  {
+    program,
+    globals,
+    global_memory,
+    global_addrs,
+    error: None,
+    steps: 0,
+    call_depth: 0,
+  }
 }
 
 ///|
@@ -96,6 +118,29 @@ fn BodyInterpreter::global_for_addr(
     }
   }
   None
+}
+
+///|
+fn BodyInterpreter::global_array_elem_addr(
+  self : BodyInterpreter,
+  addr : Int64,
+) -> Bool {
+  for name in self.global_addrs.keys() {
+    match self.program.globals.get(name) {
+      Some(decl) =>
+        match mir_body_array_len(decl.ty) {
+          Some(len) => {
+            let base = self.global_addrs[name]
+            if addr <= base && addr > base - len.to_int64() {
+              return true
+            }
+          }
+          None => ()
+        }
+      None => ()
+    }
+  }
+  false
 }
 
 ///|
@@ -264,6 +309,12 @@ fn BodyInterpreter::eval_value(
           None => 0L
         }
         self.program.runtime_cast_int(value, ty)
+      } else if self.global_array_elem_addr(addr) {
+        let value = match self.global_memory.get(addr) {
+          Some(value) => value
+          None => 0L
+        }
+        self.program.runtime_cast_int(value, ty)
       } else if self.aggregate_addr(frame, addr) {
         let value = match frame.memory.get(addr) {
           Some(value) => value
@@ -376,6 +427,13 @@ fn BodyInterpreter::eval_value(
         )
         frame.memory[addr] = assigned
         assigned
+      } else if self.global_array_elem_addr(addr) {
+        let assigned = self.program.runtime_cast_int(
+          self.eval_value(frame, rhs),
+          ty,
+        )
+        self.global_memory[addr] = assigned
+        assigned
       } else if self.aggregate_addr(frame, addr) {
         let assigned = self.program.runtime_cast_int(
           self.eval_value(frame, rhs),
@@ -429,8 +487,14 @@ fn BodyInterpreter::eval_value(
     MirPreUpdateMemory(ptr, op, rhs, ty) => {
       let addr = self.eval_value(frame, ptr)
       let old = if frame.array_elem_addr(addr) ||
+        self.global_array_elem_addr(addr) ||
         self.aggregate_addr(frame, addr) {
-        match frame.memory.get(addr) {
+        let memory = if self.global_array_elem_addr(addr) {
+          self.global_memory
+        } else {
+          frame.memory
+        }
+        match memory.get(addr) {
           Some(value) => self.program.runtime_cast_int(value, ty)
           None => 0L
         }
@@ -464,7 +528,9 @@ fn BodyInterpreter::eval_value(
         self.eval_binary_values(op, old, ty, right, rhs.ty()),
         ty,
       )
-      if frame.array_elem_addr(addr) || self.aggregate_addr(frame, addr) {
+      if self.global_array_elem_addr(addr) {
+        self.global_memory[addr] = updated
+      } else if frame.array_elem_addr(addr) || self.aggregate_addr(frame, addr) {
         frame.memory[addr] = updated
       } else {
         match frame.binding_for_addr(addr) {
@@ -481,8 +547,14 @@ fn BodyInterpreter::eval_value(
     MirPostUpdateMemory(ptr, op, rhs, ty) => {
       let addr = self.eval_value(frame, ptr)
       let old = if frame.array_elem_addr(addr) ||
+        self.global_array_elem_addr(addr) ||
         self.aggregate_addr(frame, addr) {
-        match frame.memory.get(addr) {
+        let memory = if self.global_array_elem_addr(addr) {
+          self.global_memory
+        } else {
+          frame.memory
+        }
+        match memory.get(addr) {
           Some(value) => self.program.runtime_cast_int(value, ty)
           None => 0L
         }
@@ -516,7 +588,9 @@ fn BodyInterpreter::eval_value(
         self.eval_binary_values(op, old, ty, right, rhs.ty()),
         ty,
       )
-      if frame.array_elem_addr(addr) || self.aggregate_addr(frame, addr) {
+      if self.global_array_elem_addr(addr) {
+        self.global_memory[addr] = updated
+      } else if frame.array_elem_addr(addr) || self.aggregate_addr(frame, addr) {
         frame.memory[addr] = updated
       } else {
         match frame.binding_for_addr(addr) {

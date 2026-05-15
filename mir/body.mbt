@@ -445,7 +445,13 @@ fn Program::lower_mir_array_base_addr(
           } else {
             self.lower_mir_expr(base, ctx)
           }
-        None => self.lower_mir_expr(base, ctx)
+        None =>
+          if self.globals.contains(name) &&
+            mir_body_array_local_type(self.globals[name].ty) {
+            Some(MirAddrGlobal(name, self.globals[name].ty))
+          } else {
+            self.lower_mir_expr(base, ctx)
+          }
       }
     _ => self.lower_mir_expr(base, ctx)
   }

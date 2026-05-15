@@ -124,6 +124,21 @@ async test "e2e MIR body no-op builtins" {
 }
 
 ///|
+async test "e2e MIR body scalar global arrays" {
+  let source =
+    #|int a[3];
+    #|int main(void) {
+    #|  a[0] = 4;
+    #|  a[1] = a[0] + 5;
+    #|  int *p = &a[1];
+    #|  p[1] = 7;
+    #|  return a[0] + a[1] + a[2];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="20")
+}
+
+///|
 async test "e2e MIR body scalar memory postfix updates" {
   let source =
     #|struct S { int x; };
