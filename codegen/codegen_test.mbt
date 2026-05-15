@@ -136,6 +136,36 @@ test "generate linux amd64 assembly from MIR strict" {
 }
 
 ///|
+test "generate linux amd64 strict MIR global scalar initializer uses MIR metadata" {
+  let source = "int g = 0; int main(void) { return 42; }"
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  let g = mir.global_decls[0]
+  mir.global_decls[0] = {
+    ty: g.ty,
+    name: g.name,
+    init: Some(@mir.MirGlobalInit::MirGlobalScalarInt(11L)),
+    has_init: g.has_init,
+    is_static: g.is_static,
+    is_extern: g.is_extern,
+    is_weak: g.is_weak,
+    visibility: g.visibility,
+    symbol_alias: g.symbol_alias,
+    section: g.section,
+  }
+  match @codegen.generate_assembly_from_mir_strict(mir) {
+    Ok(assembly) => {
+      inspect(assembly.contains("g:\n\t.long\t11"), content="true")
+      inspect(assembly.contains("g:\n\t.long\t0"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate linux amd64 MIR body uses MIR function metadata" {
   let source = "int main(void) { return 42; }"
   let target = match @target.Target::parse("linux-amd64") {

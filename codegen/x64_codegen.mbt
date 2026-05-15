@@ -9152,6 +9152,54 @@ fn X64Codegen::emit_globals(
   globals : Array[@mir.MirGlobalDecl],
   parser_fallbacks : Map[String, @parser.GlobalDecl],
 ) -> Unit {
+  self.emit_global_decl_directives(globals)
+  for g in globals {
+    if g.has_init && g.symbol_alias is None {
+      self.emit_global_data_section(g.section)
+      self.emit_symbol_binding(g.name, g.is_static, g.is_weak, g.visibility)
+      self.emit("\t.align\t" + self.type_align(g.ty).to_string())
+      self.emit(g.name + ":")
+      if !self.try_emit_mir_global_init(g) {
+        match parser_fallbacks.get(g.name) {
+          Some(parser_global) =>
+            match parser_global.init {
+              Some(Scalar(expr)) => self.emit_global_scalar(g.ty, expr)
+              Some(Array(exprs)) => self.emit_global_array(g.ty, exprs)
+              None => ()
+            }
+          None => self.emit("\t.zero\t" + self.type_size(g.ty).to_string())
+        }
+      }
+    }
+  }
+  self.emit_global_bss_definitions(globals)
+}
+
+///|
+fn X64Codegen::emit_mir_globals(
+  self : X64Codegen,
+  globals : Array[@mir.MirGlobalDecl],
+) -> Unit {
+  self.emit_global_decl_directives(globals)
+  for g in globals {
+    if g.has_init && g.symbol_alias is None {
+      self.emit_global_data_section(g.section)
+      self.emit_symbol_binding(g.name, g.is_static, g.is_weak, g.visibility)
+      self.emit("\t.align\t" + self.type_align(g.ty).to_string())
+      self.emit(g.name + ":")
+      if !self.try_emit_mir_global_init(g) {
+        self.emit("\t.zero\t" + self.type_size(g.ty).to_string())
+      }
+    }
+  }
+  self.emit_global_bss_definitions(globals)
+}
+
+///|
+fn X64Codegen::emit_global_decl_directives(
+  self : X64Codegen,
+  globals : Array[@mir.MirGlobalDecl],
+) -> Unit {
   for g in globals {
     match g.symbol_alias {
       Some(target) =>
@@ -9173,25 +9221,13 @@ fn X64Codegen::emit_globals(
       }
     }
   }
-  for g in globals {
-    if g.has_init && g.symbol_alias is None {
-      self.emit_global_data_section(g.section)
-      self.emit_symbol_binding(g.name, g.is_static, g.is_weak, g.visibility)
-      self.emit("\t.align\t" + self.type_align(g.ty).to_string())
-      self.emit(g.name + ":")
-      if !self.try_emit_mir_global_init(g) {
-        match parser_fallbacks.get(g.name) {
-          Some(parser_global) =>
-            match parser_global.init {
-              Some(Scalar(expr)) => self.emit_global_scalar(g.ty, expr)
-              Some(Array(exprs)) => self.emit_global_array(g.ty, exprs)
-              None => ()
-            }
-          None => self.emit("\t.zero\t" + self.type_size(g.ty).to_string())
-        }
-      }
-    }
-  }
+}
+
+///|
+fn X64Codegen::emit_global_bss_definitions(
+  self : X64Codegen,
+  globals : Array[@mir.MirGlobalDecl],
+) -> Unit {
   for g in globals {
     if !g.has_init && !g.is_extern && g.symbol_alias is None {
       self.emit_global_bss_section(g.section)
@@ -9470,8 +9506,7 @@ fn X64Codegen::generate_mir_only(
       }
     }
   }
-  let parser_fallbacks : Map[String, @parser.GlobalDecl] = {}
-  self.emit_globals(@mir.merge_global_decls(mir.global_decls), parser_fallbacks)
+  self.emit_mir_globals(@mir.merge_global_decls(mir.global_decls))
   self.emit_lifecycle_array(".init_array", mir.decls)
   self.emit_lifecycle_array(".fini_array", mir.decls)
   self.emit_strings()
