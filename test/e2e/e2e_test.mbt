@@ -661,6 +661,18 @@ async test "address of scalar compound literal" {
 }
 
 ///|
+async test "casted scalar address load store" {
+  let source =
+    #|int main(void) {
+    #|  int x = 0;
+    #|  *(int *)(void *)&x = 42;
+    #|  return *(int *)(void *)&x;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "address of aggregate compound literal" {
   let source =
     #|struct Pair { int x; int y; };

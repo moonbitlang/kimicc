@@ -642,6 +642,19 @@ test "mir body interpreter evaluates scalar address dereference cancellation" {
 }
 
 ///|
+test "mir body interpreter handles casted scalar address loads and stores" {
+  let source =
+    #|int main(void) {
+    #|  int x = 0;
+    #|  *(int *)(void *)&x = 42;
+    #|  return *(int *)(void *)&x;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body interpreter handles scalar local pointers" {
   let source =
     #|int main(void) {

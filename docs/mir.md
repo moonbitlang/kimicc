@@ -46,8 +46,9 @@ integer-scalar subset.
   assignment, local postfix updates, scalar globals and initialized global arrays, scalar memory
   prefix/postfix updates, scalar and aggregate compound literals including
   address-taking through transparent casts,
-  scalar `*&` / `&*` cancellation, address-of aggregate member cancellation
-  including transparent casts, simple scalar local pointer loads/stores,
+  scalar `*&` / `&*` cancellation, transparent casted scalar address
+  loads/stores, address-of aggregate member cancellation including transparent
+  casts, simple scalar local pointer loads/stores,
   simple non-variadic indirect calls and function addresses, scalar local arrays,
   string literal byte loads, simple local array initializers, local aggregate
   initializers with nested zero-fill, fixed-size string array initialization, scalar
@@ -68,8 +69,9 @@ integer-scalar subset.
   assignment, local postfix updates, scalar globals and initialized global arrays, scalar memory
   prefix/postfix updates, scalar and aggregate compound literals including
   address-taking through transparent casts,
-  scalar `*&` / `&*` cancellation, address-of aggregate member cancellation
-  including transparent casts, simple scalar local pointer loads/stores,
+  scalar `*&` / `&*` cancellation, transparent casted scalar address
+  loads/stores, address-of aggregate member cancellation including transparent
+  casts, simple scalar local pointer loads/stores,
   simple non-variadic indirect calls and function addresses, scalar local arrays,
   string literal byte loads, simple local array initializers, local aggregate
   initializers with nested zero-fill, fixed-size string array initialization, scalar

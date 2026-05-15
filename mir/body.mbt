@@ -715,6 +715,7 @@ fn Program::lower_mir_scalar_lvalue_addr(
         None
       }
     Deref(Var(name)) => self.lower_mir_expr(Var(name), ctx)
+    Deref(ptr) => self.lower_mir_known_object_ptr_expr(ptr, ctx)
     ArrayAccess(base, index) =>
       self.lower_mir_array_elem_addr(base, index, lhs_ty, ctx)
     MemberAccess(obj, field) => self.lower_mir_member_addr(obj, field, ctx)
@@ -1070,6 +1071,16 @@ fn Program::lower_mir_expr(
             None
           }
         _ => None
+      }
+    Deref(ptr) =>
+      match self.lower_mir_known_object_ptr_expr(ptr, ctx) {
+        Some(addr) =>
+          if mir_body_scalar_type(ty) {
+            Some(MirLoad(addr, ty))
+          } else {
+            None
+          }
+        None => None
       }
     ArrayAccess(base, index) =>
       match self.lower_mir_array_elem_addr(base, index, ty, ctx) {
