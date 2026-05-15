@@ -73,49 +73,65 @@ fn Parser::parse_program(self : Parser) -> Program {
   while self.token != EOF {
     while self.token == Ident("__extension__") {
       self.advance()
-      self.skip_attributes()
     }
-    if self.is_static_assert_token() {
-      self.parse_static_assert_decl()
-    } else if self.token == Struct || self.token == Union {
-      // Peek ahead to distinguish struct/union definition from function declaration
-      let saved_pos = self.lexer.pos
-      let saved_token = self.token
-      let is_union = self.token == Union
-      self.advance() // past struct/union
-      let leading_packed = self.skip_attributes_packed()
-      match self.token {
-        Ident(name) => {
-          self.advance()
-          let after_name_packed = self.skip_attributes_packed()
-          if self.token == LBrace {
-            // Struct/union definition
-            self.expect(LBrace)
-            let fields = self.parse_struct_body()
-            self.expect(RBrace)
-            let is_packed = leading_packed ||
-              after_name_packed ||
-              self.skip_attributes_packed()
-            let decl = { name, fields, is_union, is_packed }
-            structs.push(decl)
-            self.struct_decls[name] = decl
-            // Handle struct definition followed by variable declarations: struct Foo { ... } *ptr;
-            if self.token != Semicolon {
-              let aggregate_ty = if is_union {
-                Type::Union(name)
-              } else {
-                Type::Struct(name)
-              }
-              self.parse_struct_vars(aggregate_ty)
-            } else {
-              self.expect(Semicolon)
-            }
-          } else if self.token == Semicolon {
-            // Forward struct declaration: struct Foo;
+    let saved_top_pos = self.lexer.pos
+    let saved_top_token = self.token
+    let leading_attrs = self.skip_attributes_info()
+    if self.token == Typedef {
+      self.parse_typedef_with_attrs(leading_attrs)
+    } else {
+      self.lexer.pos = saved_top_pos
+      self.token = saved_top_token
+      if self.is_static_assert_token() {
+        self.parse_static_assert_decl()
+      } else if self.token == Struct || self.token == Union {
+        // Peek ahead to distinguish struct/union definition from function declaration
+        let saved_pos = self.lexer.pos
+        let saved_token = self.token
+        let is_union = self.token == Union
+        self.advance() // past struct/union
+        let leading_packed = self.skip_attributes_packed()
+        match self.token {
+          Ident(name) => {
             self.advance()
-            // Just ignore it
-          } else {
-            // Function declaration with struct/union return type
+            let after_name_packed = self.skip_attributes_packed()
+            if self.token == LBrace {
+              // Struct/union definition
+              self.expect(LBrace)
+              let fields = self.parse_struct_body()
+              self.expect(RBrace)
+              let is_packed = leading_packed ||
+                after_name_packed ||
+                self.skip_attributes_packed()
+              let decl = { name, fields, is_union, is_packed }
+              structs.push(decl)
+              self.struct_decls[name] = decl
+              // Handle struct definition followed by variable declarations: struct Foo { ... } *ptr;
+              if self.token != Semicolon {
+                let aggregate_ty = if is_union {
+                  Type::Union(name)
+                } else {
+                  Type::Struct(name)
+                }
+                self.parse_struct_vars(aggregate_ty)
+              } else {
+                self.expect(Semicolon)
+              }
+            } else if self.token == Semicolon {
+              // Forward struct declaration: struct Foo;
+              self.advance()
+              // Just ignore it
+            } else {
+              // Function declaration with struct/union return type
+              self.lexer.pos = saved_pos
+              self.token = saved_token
+              let decl = self.parse_func_decl()
+              if decl.name != "" {
+                decls.push(decl)
+              }
+            }
+          }
+          _ => {
             self.lexer.pos = saved_pos
             self.token = saved_token
             let decl = self.parse_func_decl()
@@ -124,25 +140,17 @@ fn Parser::parse_program(self : Parser) -> Program {
             }
           }
         }
-        _ => {
-          self.lexer.pos = saved_pos
-          self.token = saved_token
-          let decl = self.parse_func_decl()
-          if decl.name != "" {
-            decls.push(decl)
-          }
+      } else if self.token == Typedef {
+        self.parse_typedef()
+      } else if self.token == Enum {
+        self.parse_enum()
+      } else if self.token == Semicolon {
+        self.advance()
+      } else {
+        let decl = self.parse_func_decl()
+        if decl.name != "" {
+          decls.push(decl)
         }
-      }
-    } else if self.token == Typedef {
-      self.parse_typedef()
-    } else if self.token == Enum {
-      self.parse_enum()
-    } else if self.token == Semicolon {
-      self.advance()
-    } else {
-      let decl = self.parse_func_decl()
-      if decl.name != "" {
-        decls.push(decl)
       }
     }
   }
@@ -156,10 +164,20 @@ fn Parser::parse_program(self : Parser) -> Program {
 
 ///|
 fn Parser::parse_typedef(self : Parser) -> Unit {
+  self.parse_typedef_with_attrs(empty_attribute_info())
+}
+
+///|
+fn Parser::parse_typedef_with_attrs(
+  self : Parser,
+  leading_attrs : AttributeInfo,
+) -> Unit {
   self.expect(Typedef)
   self.skip_attributes()
   self.skip_qualifiers()
   let spec = self.parse_decl_specifiers()
+  spec.align = merge_align(spec.align, leading_attrs.align)
+  spec.mode = merge_mode(spec.mode, leading_attrs.mode)
   self.skip_attributes()
   // Parse first typedef declarator
   let decl = self.parse_declarator(spec.base_type)

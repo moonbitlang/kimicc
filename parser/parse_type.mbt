@@ -12,6 +12,21 @@ priv struct AttributeInfo {
 }
 
 ///|
+fn empty_attribute_info() -> AttributeInfo {
+  {
+    is_packed: false,
+    align: None,
+    mode: None,
+    is_weak: false,
+    visibility: None,
+    symbol_alias: None,
+    section: None,
+    is_constructor: false,
+    is_destructor: false,
+  }
+}
+
+///|
 fn merge_align(lhs : Int?, rhs : Int?) -> Int? {
   match (lhs, rhs) {
     (Some(a), Some(b)) => Some(if a > b { a } else { b })
@@ -86,17 +101,7 @@ fn Parser::skip_qualifiers(self : Parser) -> Unit {
 
 ///|
 fn Parser::skip_attributes_info(self : Parser) -> AttributeInfo {
-  let info : AttributeInfo = {
-    is_packed: false,
-    align: None,
-    mode: None,
-    is_weak: false,
-    visibility: None,
-    symbol_alias: None,
-    section: None,
-    is_constructor: false,
-    is_destructor: false,
-  }
+  let info = empty_attribute_info()
   while self.token == Ident("__attribute__") ||
         self.token == Ident("__attribute") ||
         self.token == Ident("__asm") ||

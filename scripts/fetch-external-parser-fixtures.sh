@@ -2,6 +2,7 @@
 set -euo pipefail
 
 tinycc_ref="${TINYCC_REF:-fad812360ba836b4ca6f52236d867476ff671633}"
+tinycc_fetch_ref="${TINYCC_FETCH_REF:-mob}"
 quickjs_ref="${QUICKJS_REF:-d7ae12ae71dfd6ab2997527d295014a8996fa0f9}"
 
 tinycc_dir="${TINYCC_SOURCE_DIR:-/tmp/tinycc-src}"
@@ -13,11 +14,21 @@ fetch_ref() {
   local url="$1"
   local ref="$2"
   local dir="$3"
+  local containing_ref="${4:-}"
   rm -rf "$dir"
   git init "$dir"
   git -C "$dir" remote add origin "$url"
-  git -C "$dir" fetch --depth=1 origin "$ref"
-  git -C "$dir" checkout --detach FETCH_HEAD
+  if git -C "$dir" fetch --depth=1 origin "$ref"; then
+    git -C "$dir" checkout --detach FETCH_HEAD
+  else
+    if [ -z "$containing_ref" ]; then
+      echo "failed to fetch $ref from $url" >&2
+      exit 1
+    fi
+    echo "direct fetch of $ref failed; fetching containing ref $containing_ref" >&2
+    git -C "$dir" fetch origin "$containing_ref"
+    git -C "$dir" checkout --detach "$ref"
+  fi
   test "$(git -C "$dir" rev-parse HEAD)" = "$ref"
 }
 
@@ -35,7 +46,7 @@ require_tool make
 # tinycc preprocessed (used by test "parse tinycc stripped").
 # configure + a partial build are required so that generated headers like
 # tccdefs_.h exist before we preprocess tcc.c.
-fetch_ref https://repo.or.cz/tinycc.git "$tinycc_ref" "$tinycc_dir"
+fetch_ref https://repo.or.cz/tinycc.git "$tinycc_ref" "$tinycc_dir" "$tinycc_fetch_ref"
 (cd "$tinycc_dir" && ./configure --cc=clang && make tccdefs_.h)
 clang -E -P -I"$tinycc_dir" "$tinycc_dir/tcc.c" > "$tinycc_output"
 

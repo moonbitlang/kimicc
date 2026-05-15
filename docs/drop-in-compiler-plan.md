@@ -66,7 +66,9 @@ Current CI fixture pins:
 Use `scripts/fetch-external-parser-fixtures.sh` to reproduce the CI parser
 fixtures locally. It writes `/tmp/tinycc_stripped.c` and
 `/tmp/quickjs_preprocessed.c` by default and accepts `TINYCC_REF` and
-`QUICKJS_REF` overrides when intentionally refreshing the pins.
+`QUICKJS_REF` overrides when intentionally refreshing the pins. The TinyCC
+fetch falls back through `TINYCC_FETCH_REF` (default `mob`) when the server
+does not advertise raw pinned SHA fetches.
 
 Native CI uses `scripts/native-ci-test.sh` for the MoonBit test pass. The
 script runs ordinary package tests together, then runs each `test/e2e/*_test.mbt`

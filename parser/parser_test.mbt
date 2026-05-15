@@ -22,6 +22,18 @@ test "parse function with params" {
 }
 
 ///|
+test "parse attributed typedef before prototype" {
+  let source =
+    #|__attribute__((__swift_name__("WorkGroup"))) typedef struct os_workgroup_s *os_workgroup_t;
+    #|int os_workgroup_copy_port(os_workgroup_t wg);
+  let prog = @parser.parse(source)
+  match prog.decls {
+    [{ name: "os_workgroup_copy_port", params: [{ name: "wg", .. }], .. }] => ()
+    _ => fail("Expected attributed typedef to be visible in prototype")
+  }
+}
+
+///|
 test "parse variable declaration" {
   let source = "int main() { int x = 10; return x; }"
   let prog = @parser.parse(source)
