@@ -206,19 +206,19 @@ available. Its older local semantic paths remain in place for whitebox
 consistency tests and as fallbacks for direct private construction in tests.
 
 `generate_assembly_from_mir` is the backend-facing assembly entry point for an
-already lowered MIR program. `generate_assembly_for_target` is now a frontend
-wrapper that parses/lower callers can keep using while codegen moves toward a
-MIR-only contract. `generate_assembly_from_mir_module_strict` is the parser-free
-backend contract: it accepts a `MirModule`, rejects modules that need unsupported
-MIR body or global-initializer coverage, and emits through MIR-only backend
-paths when the checks pass. `generate_assembly_from_mir_strict` is now a
-compatibility wrapper that projects `Program` to `MirModule` before using that
-parser-free contract. This strict gate does not yet mean every C source program
-can compile without fallback; it means successful strict codegen does not carry
-the parser AST into backend emission. Normal `generate_assembly_from_mir` still
-tries strict module emission first and only falls back to the transitional
-parser-source wrapper when strict coverage rejects a function body or global
-initializer.
+already lowered MIR program. It now uses the strict MIR-module path and treats
+unsupported MIR coverage as an error instead of silently consulting
+`Program.source`. `generate_assembly_for_target` is the frontend compatibility
+wrapper that lowers parser output and then calls
+`generate_assembly_from_mir_with_parser_fallback`, which keeps existing source
+compilation working while coverage continues to migrate. The parser-free backend
+contract itself is `generate_assembly_from_mir_module_strict`: it accepts a
+`MirModule`, rejects modules that need unsupported MIR body or global-initializer
+coverage, and emits through MIR-only backend paths when the checks pass.
+`generate_assembly_from_mir_strict` projects `Program` to `MirModule` before
+using that parser-free contract. This strict gate does not yet mean every C
+source program can compile without fallback; it means successful strict codegen
+does not carry the parser AST into backend emission.
 Both assembly backends also seed their function return/parameter metadata from
 `Program.decls`, rather than rebuilding those facts from parser function
 declarations. The linux/amd64 backend also emits function alias, weak

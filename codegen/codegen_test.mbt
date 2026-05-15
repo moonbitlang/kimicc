@@ -120,7 +120,7 @@ test "generate darwin arm64 global scalar initializer uses MIR metadata" {
 
 ///|
 test "generate darwin arm64 global symbol initializer uses MIR metadata" {
-  let source = "int g; int *p = 0; int main(void) { return p == &g; }"
+  let source = "int g; int *p = 0; int main(void) { return 0; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   let p = mir.global_decls[1]
   mir.global_decls[1] = {
@@ -142,7 +142,7 @@ test "generate darwin arm64 global symbol initializer uses MIR metadata" {
 
 ///|
 test "generate darwin arm64 global symbol offset initializer uses MIR metadata" {
-  let source = "int g[3]; int *p = 0; int main(void) { return p == g + 1; }"
+  let source = "int g[3]; int *p = 0; int main(void) { return 0; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   let p = mir.global_decls[1]
   mir.global_decls[1] = {
@@ -317,6 +317,20 @@ test "strict MIR assembly rejects parser body fallback" {
     Err(err) =>
       inspect(err.contains("missing MIR body for main"), content="true")
   }
+}
+
+///|
+test "parser AST codegen fallback is explicit" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int side = 0;
+    #|  return __builtin_expect(x, side += 1);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  let assembly = @codegen.generate_assembly_from_mir_with_parser_fallback(mir)
+  inspect(assembly.contains("kimicc: mir-body"), content="false")
+  inspect(assembly.contains("_main:"), content="true")
 }
 
 ///|
@@ -1490,7 +1504,7 @@ test "generate linux amd64 global scalar initializer uses MIR metadata" {
 
 ///|
 test "generate linux amd64 global symbol initializer uses MIR metadata" {
-  let source = "int g; int *p = 0; int main(void) { return p == &g; }"
+  let source = "int g; int *p = 0; int main(void) { return 0; }"
   let target = match @target.Target::parse("linux-amd64") {
     Some(target) => target
     None => abort("target parse failed")
@@ -1516,7 +1530,7 @@ test "generate linux amd64 global symbol initializer uses MIR metadata" {
 
 ///|
 test "generate linux amd64 global symbol offset initializer uses MIR metadata" {
-  let source = "int g[3]; int *p = 0; int main(void) { return p == g + 1; }"
+  let source = "int g[3]; int *p = 0; int main(void) { return 0; }"
   let target = match @target.Target::parse("linux-amd64") {
     Some(target) => target
     None => abort("target parse failed")

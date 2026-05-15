@@ -16,6 +16,8 @@ pub fn generate_assembly_from_mir_module_strict(@mir.MirModule) -> Result[String
 
 pub fn generate_assembly_from_mir_strict(@mir.Program) -> Result[String, String]
 
+pub fn generate_assembly_from_mir_with_parser_fallback(@mir.Program) -> String
+
 pub fn generate_jit_image(@parser.Program) -> JitImage
 
 pub fn generate_macho_object(@parser.Program) -> Bytes

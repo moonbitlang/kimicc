@@ -2076,15 +2076,28 @@ pub fn generate_assembly_for_target(
   prog : @parser.Program,
   target : @target.Target,
 ) -> String {
-  generate_assembly_from_mir(@mir.lower(prog, target))
+  generate_assembly_from_mir_with_parser_fallback(@mir.lower(prog, target))
 }
 
 ///|
 /// Generates assembly from an already lowered MIR program.
 ///
-/// This is the intended backend-facing entry point. The parser-based public
-/// entry point is now only a frontend wrapper that lowers to MIR first.
+/// This is the backend-facing entry point. It does not use the parser AST
+/// fallback stored on transitional MIR programs; unsupported MIR coverage is a
+/// hard error.
 pub fn generate_assembly_from_mir(mir : @mir.Program) -> String {
+  match generate_assembly_from_mir_strict(mir) {
+    Ok(assembly) => assembly
+    Err(err) => abort(err)
+  }
+}
+
+///|
+/// Generates assembly from MIR, falling back to parser AST codegen for source
+/// constructs that are not represented in MIR yet.
+pub fn generate_assembly_from_mir_with_parser_fallback(
+  mir : @mir.Program,
+) -> String {
   match generate_assembly_from_mir_strict(mir) {
     Ok(assembly) => return assembly
     Err(_) => ()
