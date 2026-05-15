@@ -256,9 +256,9 @@ fi
 grep -F 'error: no input file' "$driver_stderr_path" >/dev/null
 
 "$kimicc" -v >"$driver_query_path"
-grep -Fx 'kimicc 0.1.4' "$driver_query_path" >/dev/null
+grep -Fx 'kimicc 0.1.6' "$driver_query_path" >/dev/null
 "$kimicc" --version >"$driver_query_path"
-grep -Fx 'kimicc 0.1.4' "$driver_query_path" >/dev/null
+grep -Fx 'kimicc 0.1.6' "$driver_query_path" >/dev/null
 "$kimicc" -target linux-amd64 -dumpmachine >"$driver_query_path"
 grep -Fx 'x86_64-linux-gnu' "$driver_query_path" >/dev/null
 "$kimicc" --target linux/amd64 --print-target-triple >"$driver_query_path"

@@ -2726,7 +2726,7 @@ fn main {
     return
   }
   if opts.show_version {
-    println("kimicc 0.1.4")
+    println("kimicc 0.1.6")
     return
   }
   if opts.dump_machine || opts.print_target_triple {
@@ -2734,7 +2734,7 @@ fn main {
     return
   }
   if opts.dump_version {
-    println("0.1.4")
+    println("0.1.6")
     return
   }
   if opts.print_resource_dir {
@@ -2809,7 +2809,7 @@ fn main {
         }
         run_link(opts, output_path, None)
       } else if opts.verbose && opts.output == LinkExecutable {
-        println("kimicc 0.1.4")
+        println("kimicc 0.1.6")
       } else {
         fail("no input file")
       }
