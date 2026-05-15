@@ -203,6 +203,9 @@ migration: it returns an error when any source function definition would fall
 back to parser statement/expression codegen. This strict gate does not yet mean
 the entire backend is parser-independent; global/data declaration emission is
 still being migrated into MIR-owned records.
+Both assembly backends also seed their function return/parameter metadata from
+`Program.decls`, rather than rebuilding those facts from parser function
+declarations.
 
 ## Why This Layer Is Useful
 

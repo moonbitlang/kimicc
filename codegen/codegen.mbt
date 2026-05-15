@@ -1157,6 +1157,23 @@ fn Codegen::new_with_mir(mir : @mir.Program) -> Codegen {
 }
 
 ///|
+fn Codegen::register_mir_function_decls(
+  self : Codegen,
+  mir : @mir.Program,
+) -> Unit {
+  for decl in mir.decls {
+    self.func_rets[decl.name] = decl.ret
+    self.func_variadic[decl.name] = decl.variadic
+    self.func_param_counts[decl.name] = decl.params.length()
+    let param_types = []
+    for param in decl.params {
+      param_types.push(param.ty)
+    }
+    self.func_param_types[decl.name] = param_types
+  }
+}
+
+///|
 fn Codegen::emit_global_scalar(
   self : Codegen,
   ty : @parser.Type,
@@ -1533,16 +1550,12 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
     self.compute_struct_layout(sdecl)
   }
   // Precompute function return types, variadic flags, and param counts
+  match self.mir {
+    Some(mir) => self.register_mir_function_decls(mir)
+    None => ()
+  }
   let inline_decls : Map[String, @parser.FuncDecl] = {}
   for decl in prog.decls {
-    self.func_rets[decl.name] = decl.ret
-    self.func_variadic[decl.name] = decl.variadic
-    self.func_param_counts[decl.name] = decl.params.length()
-    let param_types = []
-    for param in decl.params {
-      param_types.push(param.ty)
-    }
-    self.func_param_types[decl.name] = param_types
     if decl.is_inline {
       inline_decls[decl.name] = decl
     }

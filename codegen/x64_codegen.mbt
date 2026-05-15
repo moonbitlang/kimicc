@@ -91,6 +91,33 @@ fn X64Codegen::new_with_mir(mir : @mir.Program) -> X64Codegen {
 }
 
 ///|
+fn X64Codegen::register_mir_function_decls(
+  self : X64Codegen,
+  mir : @mir.Program,
+) -> Unit {
+  for decl in mir.decls {
+    self.func_rets[decl.name] = decl.ret
+    self.func_variadic[decl.name] = decl.variadic
+    self.func_param_counts[decl.name] = decl.params.length()
+    if decl.has_body || decl.symbol_alias is Some(_) {
+      self.func_defined[decl.name] = true
+    } else if !self.func_defined.contains(decl.name) {
+      self.func_defined[decl.name] = false
+    }
+    if decl.is_weak {
+      self.func_weak[decl.name] = true
+    } else if !self.func_weak.contains(decl.name) {
+      self.func_weak[decl.name] = false
+    }
+    let param_types = []
+    for param in decl.params {
+      param_types.push(param.ty)
+    }
+    self.func_param_types[decl.name] = param_types
+  }
+}
+
+///|
 fn X64Codegen::emit(self : X64Codegen, text : String) -> Unit {
   self.output.write_string(text)
   self.output.write_char('\n')
@@ -9080,25 +9107,9 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
   for sdecl in prog.structs {
     self.compute_struct_layout(sdecl)
   }
-  for decl in prog.decls {
-    self.func_rets[decl.name] = decl.ret
-    self.func_variadic[decl.name] = decl.variadic
-    self.func_param_counts[decl.name] = decl.params.length()
-    if decl.body is Some(_) || decl.symbol_alias is Some(_) {
-      self.func_defined[decl.name] = true
-    } else if !self.func_defined.contains(decl.name) {
-      self.func_defined[decl.name] = false
-    }
-    if decl.is_weak {
-      self.func_weak[decl.name] = true
-    } else if !self.func_weak.contains(decl.name) {
-      self.func_weak[decl.name] = false
-    }
-    let param_types = []
-    for param in decl.params {
-      param_types.push(param.ty)
-    }
-    self.func_param_types[decl.name] = param_types
+  match self.mir {
+    Some(mir) => self.register_mir_function_decls(mir)
+    None => ()
   }
   let globals = merge_global_decls(prog.globals)
   for g in globals {
