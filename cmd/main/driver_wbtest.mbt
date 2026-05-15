@@ -1,4 +1,19 @@
 ///|
+fn assert_string_array_eq(
+  actual : Array[String],
+  expected : Array[String],
+) -> Unit {
+  if actual.length() != expected.length() {
+    abort("string array length mismatch")
+  }
+  for i in 0..<actual.length() {
+    if actual[i] != expected[i] {
+      abort("string array element mismatch")
+    }
+  }
+}
+
+///|
 test "driver parses compile-only flags" {
   let opts = match
     parse_driver_args([
@@ -57,8 +72,8 @@ test "driver applies imacros before forced includes" {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
-  assert_eq(opts.macro_includes, [macro_path])
-  assert_eq(opts.forced_includes, [include_path])
+  assert_string_array_eq(opts.macro_includes, [macro_path])
+  assert_string_array_eq(opts.forced_includes, [include_path])
   let result = preprocess_source_with_dependencies(
     "int body = IMACROS_VALUE;\n", "foo.c", opts,
   )
@@ -275,8 +290,8 @@ test "driver language flag classifies extensionless inputs" {
     Err(err) => abort(err)
   }
   assert_true(opts.input_path is Some("main"))
-  assert_eq(opts.extra_input_paths, ["helper"])
-  assert_eq(opts.linker_args, ["support.o"])
+  assert_string_array_eq(opts.extra_input_paths, ["helper"])
+  assert_string_array_eq(opts.linker_args, ["support.o"])
   assert_true(opts.input_language is None)
 }
 
@@ -288,7 +303,7 @@ test "driver language flag delegates extensionless assembler" {
     Err(err) => abort(err)
   }
   assert_true(opts.input_path is None)
-  assert_eq(opts.linker_args, ["start"])
+  assert_string_array_eq(opts.linker_args, ["start"])
   assert_true(treats_as_assembly_input(opts, "start"))
 }
 
@@ -302,7 +317,7 @@ test "driver forwards forced assembler language to clang" {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
-  assert_eq(assemble_args(opts, "start", "start.o"), [
+  assert_string_array_eq(assemble_args(opts, "start", "start.o"), [
     "clang", "-target", "x86_64-linux-gnu", "-x", "assembler-with-cpp", "-c", "start",
     "-o", "start.o",
   ])
@@ -380,7 +395,7 @@ test "driver parses configure query flags" {
   assert_eq(driver_sysroot(opts), "/opt/sysroot")
   assert_eq(driver_multiarch(opts), "x86_64-linux-gnu")
   assert_eq(driver_multi_os_directory(opts), "../lib")
-  assert_eq(clang_query_args(opts, "-print-file-name=crt1.o"), [
+  assert_string_array_eq(clang_query_args(opts, "-print-file-name=crt1.o"), [
     "clang", "-target", "x86_64-linux-gnu", "--sysroot=/opt/sysroot", "-print-file-name=crt1.o",
   ])
   let version_opts = match parse_driver_args(["kimicc", "-dumpversion"]) {
@@ -461,8 +476,8 @@ test "driver parses isystem after include path" {
   }
   assert_true(opts.input_path is Some("foo.c"))
   assert_eq(opts.extra_input_paths.length(), 0)
-  assert_eq(opts.system_include_paths, ["sys"])
-  assert_eq(opts.after_system_include_paths, ["after-sys"])
+  assert_string_array_eq(opts.system_include_paths, ["sys"])
+  assert_string_array_eq(opts.after_system_include_paths, ["after-sys"])
   let full_paths = full_system_include_paths(opts)
   assert_eq(full_paths[0], "sys")
   assert_eq(full_paths[full_paths.length() - 1], "after-sys")
@@ -473,7 +488,9 @@ test "driver parses isystem after include path" {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
-  assert_eq(attached_opts.after_system_include_paths, ["after-attached"])
+  assert_string_array_eq(attached_opts.after_system_include_paths, [
+    "after-attached",
+  ])
   let idir_opts = match
     parse_driver_args([
       "kimicc", "-fsyntax-only", "-idirafter", "after-std", "foo.c",
@@ -481,7 +498,7 @@ test "driver parses isystem after include path" {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
-  assert_eq(idir_opts.after_system_include_paths, ["after-std"])
+  assert_string_array_eq(idir_opts.after_system_include_paths, ["after-std"])
   let xpreprocessor_opts = match
     parse_driver_args([
       "kimicc", "-fsyntax-only", "-Xpreprocessor", "-isystem-after", "-Xpreprocessor",
@@ -490,8 +507,10 @@ test "driver parses isystem after include path" {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
-  assert_eq(xpreprocessor_opts.include_paths, ["quote-x"])
-  assert_eq(xpreprocessor_opts.after_system_include_paths, ["after-x"])
+  assert_string_array_eq(xpreprocessor_opts.include_paths, ["quote-x"])
+  assert_string_array_eq(xpreprocessor_opts.after_system_include_paths, [
+    "after-x",
+  ])
 }
 
 ///|
@@ -520,8 +539,8 @@ test "driver applies include prefix options" {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
-  assert_eq(opts.include_paths, ["/tools/include"])
-  assert_eq(opts.system_include_paths, ["/tools/system"])
+  assert_string_array_eq(opts.include_paths, ["/tools/include"])
+  assert_string_array_eq(opts.system_include_paths, ["/tools/system"])
   let attached_opts = match
     parse_driver_args([
       "kimicc", "-fsyntax-only", "-iprefix/opt/", "-iwithprefixbeforeheaders", "-iwithprefixsys",
@@ -530,8 +549,8 @@ test "driver applies include prefix options" {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
-  assert_eq(attached_opts.include_paths, ["/opt/headers"])
-  assert_eq(attached_opts.system_include_paths, ["/opt/sys"])
+  assert_string_array_eq(attached_opts.include_paths, ["/opt/headers"])
+  assert_string_array_eq(attached_opts.system_include_paths, ["/opt/sys"])
 }
 
 ///|
@@ -548,7 +567,7 @@ test "driver forwards linux sysroot to includes and clang" {
   let paths = full_system_include_paths(opts)
   assert_eq(paths[0], "/opt/sysroot/usr/include/x86_64-linux-gnu")
   assert_eq(paths[1], "/opt/sysroot/usr/include")
-  assert_eq(link_args(opts, "out", Some("foo.s")), [
+  assert_string_array_eq(link_args(opts, "out", Some("foo.s")), [
     "clang", "-o", "out", "-target", "x86_64-linux-gnu", "--sysroot=/opt/sysroot",
     "foo.s",
   ])
@@ -576,7 +595,7 @@ test "driver uses resource dir for preprocessing and clang" {
   }
   let paths = full_system_include_paths(opts)
   assert_eq(paths[0], "/clang/lib/include")
-  assert_eq(link_args(opts, "out", Some("foo.s")), [
+  assert_string_array_eq(link_args(opts, "out", Some("foo.s")), [
     "clang", "-o", "out", "-resource-dir", "/clang/lib", "foo.s",
   ])
 }
@@ -591,16 +610,16 @@ test "driver forwards gcc toolchain discovery options to clang" {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
-  assert_eq(opts.toolchain_args, [
+  assert_string_array_eq(opts.toolchain_args, [
     "--gcc-toolchain=/opt/gcc", "--gcc-install-dir=/opt/gcc/lib/gcc/x86_64-linux-gnu/13",
     "-B", "/opt/gcc/bin", "-B/opt/alt-gcc/bin",
   ])
-  assert_eq(link_args(opts, "out", Some("foo.s")), [
+  assert_string_array_eq(link_args(opts, "out", Some("foo.s")), [
     "clang", "-o", "out", "-target", "x86_64-linux-gnu", "--gcc-toolchain=/opt/gcc",
     "--gcc-install-dir=/opt/gcc/lib/gcc/x86_64-linux-gnu/13", "-B", "/opt/gcc/bin",
     "-B/opt/alt-gcc/bin", "foo.s",
   ])
-  assert_eq(clang_query_args(opts, "-print-file-name=crt1.o"), [
+  assert_string_array_eq(clang_query_args(opts, "-print-file-name=crt1.o"), [
     "clang", "-target", "x86_64-linux-gnu", "--gcc-toolchain=/opt/gcc", "--gcc-install-dir=/opt/gcc/lib/gcc/x86_64-linux-gnu/13",
     "-B", "/opt/gcc/bin", "-B/opt/alt-gcc/bin", "-print-file-name=crt1.o",
   ])
@@ -660,8 +679,8 @@ test "driver treats assembly compile input as delegated input" {
   }
   assert_true(opts.output == EmitObject)
   assert_true(opts.input_path is None)
-  assert_eq(opts.linker_args, ["start.s"])
-  assert_eq(opts.assembly_input_paths, ["start.s"])
+  assert_string_array_eq(opts.linker_args, ["start.s"])
+  assert_string_array_eq(opts.assembly_input_paths, ["start.s"])
   assert_eq(assembly_output_path(opts, "start.s"), "start.o")
 }
 
@@ -676,8 +695,8 @@ test "driver separates assembly compile inputs from linker flags" {
   }
   assert_true(opts.output == EmitObject)
   assert_true(opts.input_path is None)
-  assert_eq(opts.assembly_input_paths, ["start.s"])
-  assert_eq(opts.linker_args, ["-pthread", "start.s", "-l", "m"])
+  assert_string_array_eq(opts.assembly_input_paths, ["start.s"])
+  assert_string_array_eq(opts.linker_args, ["-pthread", "start.s", "-l", "m"])
 }
 
 ///|
@@ -689,7 +708,7 @@ test "driver preserves assembler options for clang steps" {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
-  assert_eq(opts.toolchain_args, [
+  assert_string_array_eq(opts.toolchain_args, [
     "-Wa,-fatal-warnings", "-Xassembler", "--noexecstack",
   ])
 }
@@ -709,7 +728,7 @@ test "driver accepts multiple C sources in link mode" {
   assert_eq(opts.extra_input_paths[0], "helper.c")
   assert_eq(opts.linker_args.length(), 1)
   assert_eq(opts.linker_args[0], "support.o")
-  assert_eq(
+  assert_string_array_eq(
     link_args_with_inputs(opts, "tool", ["/tmp/main.s", "/tmp/helper.s"]),
     ["clang", "-o", "tool", "/tmp/main.s", "/tmp/helper.s", "support.o"],
   )
@@ -727,7 +746,7 @@ test "driver emits one dependency sidecar for multi-source links" {
   assert_true(opts.output == LinkExecutable)
   assert_true(opts.emit_dependencies)
   assert_true(opts.input_path is Some("main.c"))
-  assert_eq(opts.extra_input_paths, ["helper.c"])
+  assert_string_array_eq(opts.extra_input_paths, ["helper.c"])
   assert_eq(dependency_output_path(opts, "main.c", "tool"), "tool.d")
   assert_eq(
     dependency_rule_content(opts, "main.c", "tool", [
@@ -755,7 +774,7 @@ test "driver preserves common linker flags" {
     Err(err) => abort(err)
   }
   assert_true(opts.input_path is None)
-  assert_eq(opts.linker_args, [
+  assert_string_array_eq(opts.linker_args, [
     "foo.o", "-static", "-pie", "-nostdlib", "-u", "entry", "-z", "now", "-l", "m",
     "-L", "/extra", "-L", "/more", "-rpath", "/runtime/lib", "-e", "entry_point",
     "-install_name", "@rpath/libfoo.dylib", "-compatibility_version", "1.0", "-current_version",
@@ -775,7 +794,7 @@ test "driver preserves long linker flag spellings" {
     Err(err) => abort(err)
   }
   assert_true(opts.input_path is None)
-  assert_eq(opts.linker_args, [
+  assert_string_array_eq(opts.linker_args, [
     "foo.o", "--shared", "--rdynamic", "--static", "--static-pie", "--no-pie", "--nostdlib",
     "--nodefaultlibs", "--nostartfiles", "--rtlib=compiler-rt", "--stdlib=libc++",
     "--unwindlib=libunwind", "-unwindlib=libgcc",
@@ -789,7 +808,7 @@ test "driver pthread seeds reentrant define and linker flag" {
     Err(err) => abort(err)
   }
   assert_eq(opts.defines["_REENTRANT"], "1")
-  assert_eq(opts.linker_args, ["-pthread"])
+  assert_string_array_eq(opts.linker_args, ["-pthread"])
   let result = preprocess_source_with_dependencies(
     "#ifdef _REENTRANT\nint threaded = _REENTRANT;\n#else\nint threaded = 0;\n#endif\n",
     "foo.c", opts,
@@ -1110,7 +1129,7 @@ test "driver splits response file content" {
     Ok(args) => args
     Err(err) => abort(err)
   }
-  assert_eq(args, [
+  assert_string_array_eq(args, [
     "-I", "include dir", "-DNAME=two words", "main file.c", "", "plain\\arg",
   ])
 }
@@ -1147,7 +1166,7 @@ test "driver preserves darwin loader paths while expanding response files" {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
-  assert_eq(opts.linker_args, [
+  assert_string_array_eq(opts.linker_args, [
     "foo.o", "-install_name", "@rpath/libfoo.dylib", "-Xlinker", "@loader_path/lib",
   ])
 }
@@ -1160,7 +1179,7 @@ test "driver accepts multiple C sources in compile-only modes" {
   }
   assert_true(opts.output == EmitObject)
   assert_true(opts.input_path is Some("main.c"))
-  assert_eq(opts.extra_input_paths, ["helper.c"])
+  assert_string_array_eq(opts.extra_input_paths, ["helper.c"])
   assert_eq(default_output_path(opts, "main.c"), "main.o")
   assert_eq(default_output_path(opts, "helper.c"), "helper.o")
 
@@ -1171,7 +1190,7 @@ test "driver accepts multiple C sources in compile-only modes" {
   }
   assert_true(asm_opts.output == EmitAssembly)
   assert_true(asm_opts.input_path is Some("main.c"))
-  assert_eq(asm_opts.extra_input_paths, ["helper.c"])
+  assert_string_array_eq(asm_opts.extra_input_paths, ["helper.c"])
   assert_eq(default_output_path(asm_opts, "main.c"), "main.s")
   assert_eq(default_output_path(asm_opts, "helper.c"), "helper.s")
 }
@@ -1184,7 +1203,7 @@ test "driver accepts multiple assembly sources in object mode" {
   }
   assert_true(opts.output == EmitObject)
   assert_true(opts.input_path is None)
-  assert_eq(opts.assembly_input_paths, ["one.s", "two.s"])
+  assert_string_array_eq(opts.assembly_input_paths, ["one.s", "two.s"])
   assert_eq(assembly_output_path(opts, "one.s"), "one.o")
   assert_eq(assembly_output_path(opts, "two.s"), "two.o")
 }
@@ -1198,7 +1217,7 @@ test "driver accepts mixed C and assembly sources in object mode" {
   assert_true(opts.output == EmitObject)
   assert_true(opts.input_path is Some("main.c"))
   assert_eq(opts.extra_input_paths.length(), 0)
-  assert_eq(opts.assembly_input_paths, ["start.s"])
+  assert_string_array_eq(opts.assembly_input_paths, ["start.s"])
   assert_eq(default_output_path(opts, "main.c"), "main.o")
   assert_eq(assembly_output_path(opts, "start.s"), "start.o")
   let early_mode_opts = match
@@ -1207,7 +1226,7 @@ test "driver accepts mixed C and assembly sources in object mode" {
     Err(err) => abort(err)
   }
   assert_true(early_mode_opts.input_path is Some("main.c"))
-  assert_eq(early_mode_opts.assembly_input_paths, ["start.s"])
+  assert_string_array_eq(early_mode_opts.assembly_input_paths, ["start.s"])
 }
 
 ///|
@@ -1464,7 +1483,7 @@ test "driver parses preprocessor dependency options" {
   assert_true(opts.emit_dependencies)
   assert_true(opts.dump_macros)
   assert_true(opts.undef_predefined)
-  assert_eq(opts.macro_includes, ["macros.h"])
+  assert_string_array_eq(opts.macro_includes, ["macros.h"])
   assert_true(!opts.dependency_include_system)
   assert_true(opts.dependency_phony_targets)
   assert_true(opts.dependency_output_path is Some("build/foo.d"))
@@ -1490,10 +1509,12 @@ test "driver parses Wp include options" {
   assert_true(opts.emit_dependencies)
   assert_true(!opts.dependency_include_system)
   assert_true(opts.dependency_output_path is None)
-  assert_eq(opts.include_paths, ["include", "quote"])
-  assert_eq(opts.system_include_paths, ["sys"])
-  assert_eq(opts.after_system_include_paths, ["after-sys", "late-sys"])
-  assert_eq(opts.forced_includes, ["config.h"])
+  assert_string_array_eq(opts.include_paths, ["include", "quote"])
+  assert_string_array_eq(opts.system_include_paths, ["sys"])
+  assert_string_array_eq(opts.after_system_include_paths, [
+    "after-sys", "late-sys",
+  ])
+  assert_string_array_eq(opts.forced_includes, ["config.h"])
 }
 
 ///|
@@ -1518,9 +1539,9 @@ test "driver parses Xpreprocessor macro and include options" {
   assert_eq(opts.defines["VALUE"], "19")
   assert_true(opts.dump_macros)
   assert_true(opts.undef_predefined)
-  assert_eq(opts.include_paths, ["include-x", "quote-x"])
-  assert_eq(opts.macro_includes, [macro_header])
-  assert_eq(opts.undefines, ["OLD"])
+  assert_string_array_eq(opts.include_paths, ["include-x", "quote-x"])
+  assert_string_array_eq(opts.macro_includes, [macro_header])
+  assert_string_array_eq(opts.undefines, ["OLD"])
   let result = preprocess_source_with_dependencies(
     "int body = VALUE + XPRE_IMACROS;\n", "foo.c", opts,
   )
