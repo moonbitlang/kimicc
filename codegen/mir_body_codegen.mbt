@@ -115,6 +115,9 @@ fn mir_body_codegen_stmt_supported(
       inc_supported &&
       mir_body_codegen_stmts_supported(body, int_arg_limit, mir)
     }
+    MirDoWhile(cond, body) =>
+      mir_body_codegen_value_supported(cond, int_arg_limit, mir) &&
+      mir_body_codegen_stmts_supported(body, int_arg_limit, mir)
     MirBreak => true
     MirContinue => true
     MirBlock(stmts) =>
@@ -487,6 +490,23 @@ fn Codegen::gen_mir_stmt(
         None => ()
       }
       self.emit("\tb\t" + start_label)
+      self.emit(end_label + ":")
+      self.break_label = old_break
+      self.continue_label = old_continue
+    }
+    MirDoWhile(cond, body) => {
+      let start_label = self.new_label()
+      let continue_label = self.new_label()
+      let end_label = self.new_label()
+      let old_break = self.break_label
+      let old_continue = self.continue_label
+      self.break_label = Some(end_label)
+      self.continue_label = Some(continue_label)
+      self.emit(start_label + ":")
+      self.gen_mir_stmts(body, offsets, frame_size)
+      self.emit(continue_label + ":")
+      self.gen_mir_value(cond, offsets, frame_size)
+      self.emit("\tcbnz\tx9, " + start_label)
       self.emit(end_label + ":")
       self.break_label = old_break
       self.continue_label = old_continue
@@ -903,6 +923,24 @@ fn X64Codegen::gen_mir_stmt(
         None => ()
       }
       self.emit("\tjmp\t" + start_label)
+      self.emit(end_label + ":")
+      self.break_label = old_break
+      self.continue_label = old_continue
+    }
+    MirDoWhile(cond, body) => {
+      let start_label = self.new_label()
+      let continue_label = self.new_label()
+      let end_label = self.new_label()
+      let old_break = self.break_label
+      let old_continue = self.continue_label
+      self.break_label = Some(end_label)
+      self.continue_label = Some(continue_label)
+      self.emit(start_label + ":")
+      self.gen_mir_stmts(body, offsets)
+      self.emit(continue_label + ":")
+      self.gen_mir_value(cond, offsets)
+      self.emit("\tcmp\trax, 0")
+      self.emit("\tjne\t" + start_label)
       self.emit(end_label + ":")
       self.break_label = old_break
       self.continue_label = old_continue

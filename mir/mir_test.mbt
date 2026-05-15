@@ -228,6 +228,25 @@ test "mir body interpreter executes for break and continue" {
 }
 
 ///|
+test "mir body interpreter executes do while break and continue" {
+  let source =
+    #|int main(void) {
+    #|  int i = 0;
+    #|  int sum = 0;
+    #|  do {
+    #|    i = i + 1;
+    #|    if (i == 2) continue;
+    #|    if (i == 6) break;
+    #|    sum = sum + i;
+    #|  } while (i < 8);
+    #|  return sum;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 13L)
+}
+
+///|
 test "mir body lowering refuses unsupported parser constructs" {
   let source =
     #|int main(void) {

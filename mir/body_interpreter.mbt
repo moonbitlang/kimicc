@@ -284,6 +284,19 @@ fn BodyInterpreter::exec_stmt(
       }
       BodyNormal
     }
+    MirDoWhile(cond, body) => {
+      let mut keep_running = true
+      while keep_running && !self.failed() {
+        match self.exec_stmts(frame, body) {
+          BodyNormal => ()
+          BodyReturned(value) => return BodyReturned(value)
+          BodyBroke => return BodyNormal
+          BodyContinued => ()
+        }
+        keep_running = self.eval_value(frame, cond) != 0L
+      }
+      BodyNormal
+    }
     MirBreak => BodyBroke
     MirContinue => BodyContinued
     MirBlock(stmts) => self.exec_stmts(frame, stmts)

@@ -36,6 +36,7 @@ pub(all) enum MirStmt {
   MirIf(MirValue, Array[MirStmt], Array[MirStmt])
   MirWhile(MirValue, Array[MirStmt])
   MirFor(Array[MirStmt], MirValue, MirValue?, Array[MirStmt])
+  MirDoWhile(MirValue, Array[MirStmt])
   MirBreak
   MirContinue
   MirBlock(Array[MirStmt])
@@ -280,6 +281,12 @@ fn Program::lower_mir_stmt(
       ctx.pop_scope()
       Some([MirFor(init_values, cond_value, inc_value, body_values)])
     }
+    DoWhile(cond, body) =>
+      match (self.lower_mir_expr(cond, ctx), self.lower_mir_stmt(body, ctx)) {
+        (Some(cond_value), Some(body_values)) =>
+          Some([MirDoWhile(cond_value, body_values)])
+        _ => None
+      }
     Break => Some([MirBreak])
     Continue => Some([MirContinue])
     Compound(stmts) | StmtList(stmts) => {
