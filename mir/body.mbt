@@ -862,6 +862,21 @@ fn mir_body_offset_addr_value(
 }
 
 ///|
+fn Program::lower_mir_known_object_ptr_expr(
+  self : Program,
+  expr : @parser.Expr,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  match expr {
+    AddrOf(CompoundLiteral(lit_ty, items, id)) =>
+      self.lower_mir_expr(AddrOf(CompoundLiteral(lit_ty, items, id)), ctx)
+    AddrOf(inner) => self.lower_mir_object_addr(inner, ctx)
+    Cast(_, inner) => self.lower_mir_known_object_ptr_expr(inner, ctx)
+    _ => None
+  }
+}
+
+///|
 fn Program::lower_mir_object_addr(
   self : Program,
   expr : @parser.Expr,
@@ -893,12 +908,7 @@ fn Program::lower_mir_object_addr(
         None => None
       }
     }
-    Deref(AddrOf(CompoundLiteral(lit_ty, items, id))) =>
-      self.lower_mir_expr(AddrOf(CompoundLiteral(lit_ty, items, id)), ctx)
-    Deref(Cast(_, AddrOf(CompoundLiteral(lit_ty, items, id)))) =>
-      self.lower_mir_expr(AddrOf(CompoundLiteral(lit_ty, items, id)), ctx)
-    Deref(Cast(_, AddrOf(inner))) => self.lower_mir_object_addr(inner, ctx)
-    Deref(AddrOf(inner)) => self.lower_mir_object_addr(inner, ctx)
+    Deref(ptr) => self.lower_mir_known_object_ptr_expr(ptr, ctx)
     _ => None
   }
 }

@@ -711,6 +711,21 @@ async test "casted address of aggregate member object" {
 }
 
 ///|
+async test "nested casted known aggregate addresses" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { struct Inner inner; };
+    #|struct Pair { int x; int y; };
+    #|int main(void) {
+    #|  struct S s = { { 20 } };
+    #|  return ((struct Inner *)(void *)&s.inner)->z +
+    #|    ((struct Pair *)(void *)&(struct Pair){ 1, 22 })->y;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "__int128 and _Atomic types" {
   let source =
     #|typedef unsigned __int128 uint128_t;
