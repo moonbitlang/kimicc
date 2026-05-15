@@ -837,6 +837,18 @@ test "mir body interpreter handles sparse initialized scalar global arrays" {
 }
 
 ///|
+test "mir body interpreter handles string literal byte loads" {
+  let source =
+    #|int main(void) {
+    #|  char *s = "abc";
+    #|  return s[1] + "xy"[0] + "z"[1];
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 218L)
+}
+
+///|
 test "mir body lowering keeps side effecting ignored builtin operands" {
   let source =
     #|int main(void) {

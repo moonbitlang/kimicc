@@ -58,6 +58,16 @@ async test "e2e MIR oracle checks scalar address dereference cancellation" {
 }
 
 ///|
+async test "e2e MIR oracle checks string literal byte loads" {
+  let source =
+    #|int main(void) {
+    #|  char *s = "abc";
+    #|  return s[1] + "xy"[0] + "z"[1];
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks integer overflow builtins" {
   let source =
     #|int main(void) {

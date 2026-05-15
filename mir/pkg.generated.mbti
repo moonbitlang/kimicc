@@ -154,6 +154,7 @@ pub(all) enum MirValue {
   MirLocal(MirLocal)
   MirAddrLocal(MirLocal)
   MirAddrGlobal(String, @parser.Type)
+  MirStringAddr(String)
   MirElemAddr(MirValue, MirValue, @parser.Type)
   MirOffsetAddr(MirValue, Int, @parser.Type)
   MirLoad(MirValue, @parser.Type)

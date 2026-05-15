@@ -45,8 +45,8 @@ integer-scalar subset.
   directly labeled scalar `switch`, simple labels/goto, local compound
   assignment, local postfix updates, scalar globals and initialized global arrays, scalar memory
   prefix/postfix updates, scalar `*&` / `&*` cancellation, simple scalar local
-  pointer loads/stores, scalar local arrays, scalar aggregate fields including
-  nested member access, foldable
+  pointer loads/stores, scalar local arrays, string literal byte loads, scalar
+  aggregate fields including nested member access, foldable
   `__builtin_constant_p`, identity builtins such as `__builtin_expect` and
   `__builtin_assume_aligned` including their modeled hint-operand side effects,
   and return-address transforms, no-op `__builtin_assume`, runtime `__builtin_prefetch` address
@@ -61,8 +61,8 @@ integer-scalar subset.
   externs, directly labeled scalar `switch`, simple labels/goto, local compound
   assignment, local postfix updates, scalar globals and initialized global arrays, scalar memory
   prefix/postfix updates, scalar `*&` / `&*` cancellation, simple scalar local
-  pointer loads/stores, scalar local arrays, scalar aggregate fields including
-  nested member access, foldable
+  pointer loads/stores, scalar local arrays, string literal byte loads, scalar
+  aggregate fields including nested member access, foldable
   `__builtin_constant_p`, identity builtins such as `__builtin_expect` and
   `__builtin_assume_aligned` including their modeled hint-operand side effects,
   and return-address transforms, no-op `__builtin_assume`, runtime `__builtin_prefetch` address

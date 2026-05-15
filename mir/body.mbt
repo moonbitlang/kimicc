@@ -21,6 +21,7 @@ pub(all) enum MirValue {
   MirLocal(MirLocal)
   MirAddrLocal(MirLocal)
   MirAddrGlobal(String, @parser.Type)
+  MirStringAddr(String)
   MirElemAddr(MirValue, MirValue, @parser.Type)
   MirOffsetAddr(MirValue, Int, @parser.Type)
   MirLoad(MirValue, @parser.Type)
@@ -72,6 +73,7 @@ pub fn MirValue::ty(self : MirValue) -> @parser.Type {
     MirLocal(binding) => binding.ty
     MirAddrLocal(binding) => Pointer(binding.ty)
     MirAddrGlobal(_, ty) => Pointer(ty)
+    MirStringAddr(_) => Pointer(SChar)
     MirElemAddr(_, _, elem_ty) => Pointer(elem_ty)
     MirOffsetAddr(_, _, ty) => Pointer(ty)
     MirLoad(_, ty) => ty
@@ -617,6 +619,7 @@ fn Program::lower_mir_expr(
   let ty = self.expr_type(expr, scope)
   match expr {
     Number(value) => Some(MirConst(value, ty))
+    String(value) => Some(MirStringAddr(value))
     Var(name) =>
       match ctx.lookup_local(name) {
         Some(binding) => Some(MirLocal(binding))

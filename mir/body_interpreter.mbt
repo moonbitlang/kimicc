@@ -20,6 +20,8 @@ priv struct BodyInterpreter {
   globals : Map[String, Int64]
   global_memory : Map[Int64, Int64]
   global_addrs : Map[String, Int64]
+  string_memory : Map[Int64, Int64]
+  string_addrs : Map[String, Int64]
   mut error : String?
   mut steps : Int
   mut call_depth : Int
@@ -133,6 +135,8 @@ fn BodyInterpreter::new(program : Program) -> BodyInterpreter {
     globals,
     global_memory,
     global_addrs,
+    string_memory: {},
+    string_addrs: {},
     error: None,
     steps: 0,
     call_depth: 0,
@@ -175,6 +179,40 @@ fn mir_body_elem_addr(base : Int64, index : Int64) -> Int64 {
 ///|
 fn mir_body_offset_addr(base : Int64, offset : Int) -> Int64 {
   base - 50000L - offset.to_int64()
+}
+
+///|
+fn BodyInterpreter::string_literal_base(
+  self : BodyInterpreter,
+  value : String,
+) -> Int64 {
+  match self.string_addrs.get(value) {
+    Some(base) => base
+    None => {
+      let base = 2000000000L + self.string_addrs.length().to_int64() * 100000L
+      self.string_addrs[value] = base
+      for i in 0..<value.length() {
+        self.string_memory[base - i.to_int64()] = value[i].to_int().to_int64()
+      }
+      self.string_memory[base - value.length().to_int64()] = 0L
+      base
+    }
+  }
+}
+
+///|
+fn BodyInterpreter::string_array_elem_addr(
+  self : BodyInterpreter,
+  addr : Int64,
+) -> Bool {
+  for value in self.string_addrs.keys() {
+    let base = self.string_addrs[value]
+    let len = value.length() + 1
+    if addr <= base && addr > base - len.to_int64() {
+      return true
+    }
+  }
+  false
 }
 
 ///|
@@ -374,6 +412,7 @@ fn BodyInterpreter::eval_value(
           0L
         }
       }
+    MirStringAddr(value) => self.string_literal_base(value)
     MirElemAddr(base, index, _) =>
       mir_body_elem_addr(
         self.eval_value(frame, base),
@@ -391,6 +430,12 @@ fn BodyInterpreter::eval_value(
         self.program.runtime_cast_int(value, ty)
       } else if self.global_array_elem_addr(addr) {
         let value = match self.global_memory.get(addr) {
+          Some(value) => value
+          None => 0L
+        }
+        self.program.runtime_cast_int(value, ty)
+      } else if self.string_array_elem_addr(addr) {
+        let value = match self.string_memory.get(addr) {
           Some(value) => value
           None => 0L
         }

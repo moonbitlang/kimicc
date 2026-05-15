@@ -49,6 +49,7 @@ fn mir_body_codegen_value_supported(
     MirLocal(binding) => mir_body_codegen_scalar_type(binding.ty)
     MirAddrLocal(binding) => mir_body_codegen_local_type(binding.ty)
     MirAddrGlobal(_, ty) => mir_body_codegen_local_type(ty)
+    MirStringAddr(_) => true
     MirElemAddr(base, index, elem_ty) =>
       mir_body_codegen_scalar_type(elem_ty) &&
       mir_body_codegen_value_supported(base, int_arg_limit, mir) &&
@@ -330,6 +331,13 @@ fn Codegen::gen_mir_value(
     MirAddrGlobal(name, _) => {
       self.emit("\tadrp\tx9, _" + name + "@GOTPAGE")
       self.emit("\tldr\tx9, [x9, _" + name + "@GOTPAGEOFF]")
+    }
+    MirStringAddr(value) => {
+      let idx = self.strings.length()
+      self.strings.push(value)
+      let label = "_str" + idx.to_string()
+      self.emit("\tadrp\tx9, " + label + "@PAGE")
+      self.emit("\tadd\tx9, x9, " + label + "@PAGEOFF")
     }
     MirElemAddr(base, index, elem_ty) => {
       self.gen_mir_value(base, offsets, frame_size)
@@ -926,6 +934,11 @@ fn X64Codegen::gen_mir_value(
     }
     MirAddrLocal(binding) => self.emit_local_addr(offsets[binding.id])
     MirAddrGlobal(name, _) => self.emit_symbol_addr(name)
+    MirStringAddr(value) => {
+      let id = self.strings.length()
+      self.strings.push(value)
+      self.emit("\tlea\trax, [rip + .Lstr" + id.to_string() + "]")
+    }
     MirElemAddr(base, index, elem_ty) => {
       self.gen_mir_value(base, offsets)
       self.emit_mir_push_rax()
