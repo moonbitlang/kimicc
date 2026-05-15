@@ -265,6 +265,27 @@ fn Program::lower_mir_post_step(
 }
 
 ///|
+fn mir_body_reusable_addr_operand(expr : @parser.Expr) -> Bool {
+  match expr {
+    Number(_) | Var(_) => true
+    Cast(_, inner) => mir_body_reusable_addr_operand(inner)
+    _ => false
+  }
+}
+
+///|
+fn mir_body_reusable_scalar_lvalue(expr : @parser.Expr) -> Bool {
+  match expr {
+    Deref(Var(_)) => true
+    ArrayAccess(base, index) =>
+      mir_body_reusable_addr_operand(base) &&
+      mir_body_reusable_addr_operand(index)
+    MemberAccess(Var(_), _) => true
+    _ => false
+  }
+}
+
+///|
 fn Program::lower_mir_scalar_lvalue_addr(
   self : Program,
   expr : @parser.Expr,
@@ -280,6 +301,38 @@ fn Program::lower_mir_scalar_lvalue_addr(
       self.lower_mir_array_elem_addr(base, index, lhs_ty, ctx)
     MemberAccess(obj, field) => self.lower_mir_member_addr(obj, field, ctx)
     _ => None
+  }
+}
+
+///|
+fn Program::lower_mir_compound_memory_update(
+  self : Program,
+  lhs : @parser.Expr,
+  op : String,
+  value : MirValue,
+  lhs_ty : @parser.Type,
+  result_ty : @parser.Type,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  if !lhs_ty.is_integer() {
+    return None
+  }
+  match self.lower_mir_scalar_lvalue_addr(lhs, lhs_ty, ctx) {
+    Some(addr) =>
+      if op == "+" || op == "-" {
+        Some(MirPreUpdateMemory(addr, op, value, lhs_ty))
+      } else if mir_body_reusable_scalar_lvalue(lhs) {
+        Some(
+          MirStore(
+            addr,
+            MirBinary(op, MirLoad(addr, lhs_ty), value, result_ty),
+            lhs_ty,
+          ),
+        )
+      } else {
+        None
+      }
+    None => None
   }
 }
 
@@ -524,47 +577,9 @@ fn Program::lower_mir_expr(
           }
         _ => ()
       }
-      match (lhs, self.lower_mir_expr(rhs, ctx)) {
-        (Deref(Var(name)), Some(value)) =>
-          match self.lower_mir_expr(Var(name), ctx) {
-            Some(addr) =>
-              if mir_body_scalar_type(lhs_ty) {
-                Some(
-                  MirStore(
-                    addr,
-                    MirBinary(op, MirLoad(addr, lhs_ty), value, ty),
-                    lhs_ty,
-                  ),
-                )
-              } else {
-                None
-              }
-            None => None
-          }
-        (ArrayAccess(base, index), Some(value)) =>
-          match self.lower_mir_array_elem_addr(base, index, lhs_ty, ctx) {
-            Some(addr) =>
-              Some(
-                MirStore(
-                  addr,
-                  MirBinary(op, MirLoad(addr, lhs_ty), value, ty),
-                  lhs_ty,
-                ),
-              )
-            None => None
-          }
-        (MemberAccess(obj, field), Some(value)) =>
-          match self.lower_mir_member_addr(obj, field, ctx) {
-            Some(addr) =>
-              Some(
-                MirStore(
-                  addr,
-                  MirBinary(op, MirLoad(addr, lhs_ty), value, ty),
-                  lhs_ty,
-                ),
-              )
-            None => None
-          }
+      match self.lower_mir_expr(rhs, ctx) {
+        Some(value) =>
+          self.lower_mir_compound_memory_update(lhs, op, value, lhs_ty, ty, ctx)
         _ => None
       }
     }

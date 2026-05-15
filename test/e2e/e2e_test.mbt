@@ -128,6 +128,20 @@ async test "e2e MIR body side effecting memory prefix update" {
 }
 
 ///|
+async test "e2e MIR body side effecting memory compound update" {
+  let source =
+    #|int main(void) {
+    #|  int a[2];
+    #|  int i = 0;
+    #|  a[0] = 4;
+    #|  int got = (a[i++] += 3);
+    #|  return got * 10 + a[0] + i;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="78")
+}
+
+///|
 async test "e2e c11 generic selection chooses compatible type" {
   let source =
     #|int main(void) {

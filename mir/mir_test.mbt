@@ -404,6 +404,35 @@ test "mir body interpreter handles side effecting scalar memory prefix updates" 
 }
 
 ///|
+test "mir body interpreter handles side effecting scalar memory compound updates" {
+  let source =
+    #|int main(void) {
+    #|  int a[2];
+    #|  int i = 0;
+    #|  a[0] = 4;
+    #|  int got = (a[i++] += 3);
+    #|  return got * 10 + a[0] + i;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 78L)
+}
+
+///|
+test "mir body lowering keeps side effecting non-additive compound update unsupported" {
+  let source =
+    #|int main(void) {
+    #|  int a[2];
+    #|  int i = 0;
+    #|  a[0] = 4;
+    #|  a[i++] *= 3;
+    #|  return a[0] + i;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="false")
+}
+
+///|
 test "mir body interpreter handles scalar memory postfix updates" {
   let source =
     #|struct S { int x; };
