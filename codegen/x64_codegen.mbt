@@ -7534,6 +7534,9 @@ fn X64Codegen::emit_function(
   match decl.body {
     None => return
     Some(body) => {
+      if self.try_gen_mir_func(decl) {
+        return
+      }
       x64_reject_unsupported_scalar(decl.ret)
       for param in decl.params {
         x64_reject_unsupported_scalar(param.ty)

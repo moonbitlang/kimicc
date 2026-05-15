@@ -5,6 +5,7 @@ test "generate simple function" {
   let codegen = @codegen.Codegen::new()
   let assembly = codegen.generate(prog)
   inspect(assembly.contains("_main:"), content="true")
+  inspect(assembly.contains("kimicc: mir-body"), content="true")
   inspect(assembly.contains("\tmov\tx9, #42"), content="true")
   inspect(assembly.contains("\tret"), content="true")
 }
@@ -225,6 +226,7 @@ test "generate linux amd64 simple function" {
   let assembly = @codegen.generate_assembly_for_target(prog, target)
   inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
   inspect(assembly.contains("\t.globl\tmain"), content="true")
+  inspect(assembly.contains("kimicc: mir-body"), content="true")
   inspect(assembly.contains("\tmov\trax, 42"), content="true")
   inspect(assembly.contains("_main:"), content="false")
 }

@@ -2199,7 +2199,7 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
   let mut current_section = -1
   for raw in assembly.split("\n") {
     let line = raw.trim().to_owned()
-    if line == "" {
+    if line == "" || line.has_prefix("//") || line.has_prefix("#") {
       continue
     } else if line.has_prefix(".section") {
       current_section = parse_section_index(sections, line)

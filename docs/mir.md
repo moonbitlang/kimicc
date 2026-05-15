@@ -2,9 +2,10 @@
 
 `kimicc` currently uses MIR as a target-sensitive semantic layer plus an
 emerging function-body layer, not as a full instruction-level machine IR. The
-parser AST remains the main representation that both assembly backends walk,
-but MIR can now own supported scalar function bodies independently of parser
-statements.
+parser AST remains the main fallback representation that both assembly backends
+walk, but MIR can now own supported scalar function bodies independently of
+parser statements and both backends can consume those bodies for a narrow
+integer-scalar subset.
 
 ## Current Shape
 
@@ -21,6 +22,11 @@ statements.
   currently covers integer locals, assignments, direct calls, returns, casts,
   unary/binary scalar operators, conditionals, `while`, and ternaries. Missing
   bodies return `Err` instead of falling back to parser AST execution.
+- `codegen/mir_body_codegen.mbt` is the first production backend consumer of
+  `MirFuncBody`. It emits Darwin ARM64 and linux/amd64 assembly for call-free
+  integer-scalar MIR bodies with local variables, assignments, branches, loops,
+  ternaries, casts, and arithmetic/logical operators. Unsupported MIR bodies
+  still fall back to the existing parser-AST codegen path.
 - `Program::interpret_i64` is an integer-only interpreter intended for
   compile-test oracles. It supports scalar functions, locals, globals, calls,
   casts, arithmetic, conditionals, loops, scalar switches, simple gotos, selected
@@ -133,7 +139,9 @@ statements.
 
 Darwin ARM64 receives a lowered MIR program through `generate_assembly_for_target`,
 and direct `Codegen::generate` construction attaches a darwin/arm64 MIR program
-if one is not already present. It delegates size, alignment, field-layout,
+if one is not already present. For supported call-free integer-scalar functions,
+it emits from `MirFuncBody`; other function bodies still fall back to parser AST
+statement walking. It delegates size, alignment, field-layout,
 offsetof path, expression type, global-expression type, and covered
 integer/floating constant-folding queries to MIR when that lowered program is
 present. Runtime `__builtin_object_size` and `__builtin_dynamic_object_size`
@@ -142,7 +150,9 @@ semantic paths remain in place for whitebox consistency tests and as fallbacks.
 
 Linux/amd64 receives a lowered MIR program through `generate_assembly_for_target`,
 and direct private `X64Codegen::generate` construction attaches a linux/amd64 MIR
-program if one is not already present. The private `X64Codegen` delegates size,
+program if one is not already present. For supported call-free integer-scalar
+functions, it emits from `MirFuncBody`; other function bodies still fall back to
+parser AST statement walking. The private `X64Codegen` delegates size,
 alignment, field-layout, offsetof path, expression type, global-expression type,
 and covered integer/floating constant-folding queries to MIR when that lowered
 program is present. Runtime `__builtin_object_size` and
@@ -166,11 +176,12 @@ program behavior.
 2. Keep `Program::interpret_body_i64` as the first consumer for each new body
    feature so unsupported behavior fails explicitly before codegen depends on
    it.
-3. Add backend tests that compare parser-AST codegen with MIR-body codegen for
-   the supported subset, then move one backend path at a time to consume
-   `MirFuncBody`.
-4. Once both backends consume MIR bodies for ordinary scalar functions, remove
+3. Extend MIR-body codegen from call-free functions to direct calls, including
+   ABI argument staging and stack-alignment tests for both backends.
+4. Add backend differential tests that compare parser-AST codegen with MIR-body
+   codegen as the supported subset expands.
+5. Once both backends consume MIR bodies for ordinary scalar functions, remove
    duplicated backend statement walking for that subset and leave parser AST use
    in front-end-only lowering code.
-5. Only after semantic/body sharing is stable, consider a real machine-level IR
+6. Only after semantic/body sharing is stable, consider a real machine-level IR
    with explicit virtual registers, blocks, target lowering, and allocation.
