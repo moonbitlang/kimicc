@@ -312,6 +312,19 @@ test "mir body interpreter executes scalar updates" {
 }
 
 ///|
+test "mir body interpreter preserves postfix update value" {
+  let source =
+    #|int main(void) {
+    #|  int i = 4;
+    #|  int old = i++;
+    #|  return old * 10 + i;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 45L)
+}
+
+///|
 test "mir body interpreter evaluates scalar address dereference cancellation" {
   let source =
     #|int main(void) {

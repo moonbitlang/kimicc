@@ -22,7 +22,7 @@ integer-scalar subset.
   currently covers integer locals, assignments, direct calls, returns, casts,
   unary/binary scalar operators, conditionals, `while`, `for`, `do while`,
   directly labeled scalar `switch`, simple labels/goto, local compound
-  assignment, ignored local postfix updates, scalar `*&` / `&*` cancellation,
+  assignment, local postfix updates, scalar `*&` / `&*` cancellation,
   `break`/`continue`, and ternaries. Missing bodies return `Err` instead of
   falling back to parser AST execution.
 - `codegen/mir_body_codegen.mbt` is the first production backend consumer of
@@ -31,7 +31,7 @@ integer-scalar subset.
   `while`/`for`/`do while` loops, `break`/`continue`, ternaries, casts, direct
   calls to other MIR-bodied functions or declared non-variadic integer-scalar
   externs, directly labeled scalar `switch`, simple labels/goto, local compound
-  assignment, ignored local postfix updates, scalar `*&` / `&*` cancellation,
+  assignment, local postfix updates, scalar `*&` / `&*` cancellation,
   and arithmetic/logical operators. Unsupported MIR bodies still fall back to
   the existing parser-AST codegen path.
 - `Program::interpret_i64` is an integer-only interpreter intended for

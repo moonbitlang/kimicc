@@ -24,6 +24,7 @@ pub(all) enum MirValue {
   MirCast(@parser.Type, MirValue)
   MirCall(String, Array[MirValue], @parser.Type)
   MirAssignLocal(MirLocal, MirValue)
+  MirPostUpdateLocal(MirLocal, String, MirValue, @parser.Type)
   MirTernary(MirValue, MirValue, MirValue, @parser.Type)
 } derive(Eq)
 
@@ -66,6 +67,7 @@ pub fn MirValue::ty(self : MirValue) -> @parser.Type {
     MirCast(ty, _) => ty
     MirCall(_, _, ty) => ty
     MirAssignLocal(binding, _) => binding.ty
+    MirPostUpdateLocal(_, _, _, ty) => ty
     MirTernary(_, _, _, ty) => ty
   }
 }
@@ -180,6 +182,33 @@ fn lower_mir_local_step(
 }
 
 ///|
+fn lower_mir_post_update(
+  binding : MirLocal,
+  op : String,
+  rhs : MirValue,
+  ty : @parser.Type,
+) -> MirValue? {
+  if binding.ty.is_integer() {
+    Some(MirPostUpdateLocal(binding, op, rhs, ty))
+  } else {
+    None
+  }
+}
+
+///|
+fn lower_mir_post_step(
+  expr : @parser.Expr,
+  op : String,
+  ty : @parser.Type,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  match lower_mir_cancelled_local_lvalue(expr, ctx) {
+    Some(binding) => lower_mir_post_update(binding, op, MirConst(1L, SInt), ty)
+    None => None
+  }
+}
+
+///|
 fn mir_stmts_have_direct_label(stmts : Array[MirStmt], name : String) -> Bool {
   for stmt in stmts {
     match stmt {
@@ -260,6 +289,8 @@ fn Program::lower_mir_expr(
       }
     PrefixInc(Var(name)) => lower_mir_local_step(name, "+", ty, ctx)
     PrefixDec(Var(name)) => lower_mir_local_step(name, "-", ty, ctx)
+    PostfixInc(target) => lower_mir_post_step(target, "+", ty, ctx)
+    PostfixDec(target) => lower_mir_post_step(target, "-", ty, ctx)
     Ternary(cond, then_, else_) =>
       match
         (
@@ -294,13 +325,7 @@ fn Program::lower_mir_ignored_expr(
   expr : @parser.Expr,
   ctx : BodyLowerContext,
 ) -> MirValue? {
-  let scope = ctx.scope()
-  let ty = self.expr_type(expr, scope)
-  match expr {
-    PostfixInc(Var(name)) => lower_mir_local_step(name, "+", ty, ctx)
-    PostfixDec(Var(name)) => lower_mir_local_step(name, "-", ty, ctx)
-    _ => self.lower_mir_expr(expr, ctx)
-  }
+  self.lower_mir_expr(expr, ctx)
 }
 
 ///|

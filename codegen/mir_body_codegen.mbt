@@ -50,6 +50,10 @@ fn mir_body_codegen_value_supported(
     MirAssignLocal(binding, rhs) =>
       mir_body_codegen_scalar_type(binding.ty) &&
       mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
+    MirPostUpdateLocal(binding, _, rhs, ty) =>
+      mir_body_codegen_scalar_type(binding.ty) &&
+      mir_body_codegen_scalar_type(ty) &&
+      mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
     MirTernary(cond, then_, else_, ty) =>
       mir_body_codegen_scalar_type(ty) &&
       mir_body_codegen_value_supported(cond, int_arg_limit, mir) &&
@@ -302,6 +306,22 @@ fn Codegen::gen_mir_value(
       self.gen_mir_value(rhs, offsets, frame_size)
       self.emit_scalar_conversion_to(binding.ty)
       self.emit_store_local("x9", offsets[binding.id], frame_size)
+    }
+    MirPostUpdateLocal(binding, op, rhs, ty) => {
+      self.gen_mir_value(MirLocal(binding), offsets, frame_size)
+      self.emit("\tstr\tx9, [sp, #-16]!")
+      self.gen_mir_binary(
+        op,
+        MirLocal(binding),
+        rhs,
+        binding.ty,
+        offsets,
+        frame_size,
+      )
+      self.emit_scalar_conversion_to(binding.ty)
+      self.emit_store_local("x9", offsets[binding.id], frame_size)
+      self.emit("\tldr\tx9, [sp], #16")
+      self.emit_scalar_conversion_to(ty)
     }
     MirTernary(cond, then_, else_, ty) => {
       let else_label = self.new_label()
@@ -777,6 +797,15 @@ fn X64Codegen::gen_mir_value(
       self.gen_mir_value(rhs, offsets)
       self.emit_int_conversion_to(binding.ty)
       self.emit_store_local_from_rax(offsets[binding.id], binding.ty)
+    }
+    MirPostUpdateLocal(binding, op, rhs, ty) => {
+      self.gen_mir_value(MirLocal(binding), offsets)
+      self.emit_mir_push_rax()
+      self.gen_mir_binary(op, MirLocal(binding), rhs, binding.ty, offsets)
+      self.emit_int_conversion_to(binding.ty)
+      self.emit_store_local_from_rax(offsets[binding.id], binding.ty)
+      self.emit_mir_pop_rax()
+      self.emit_int_conversion_to(ty)
     }
     MirTernary(cond, then_, else_, ty) => {
       let else_label = self.new_label()

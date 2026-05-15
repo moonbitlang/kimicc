@@ -204,6 +204,21 @@ fn BodyInterpreter::eval_value(
       frame.locals[binding.id] = assigned
       assigned
     }
+    MirPostUpdateLocal(binding, op, rhs, ty) => {
+      let old = if frame.locals.contains(binding.id) {
+        self.program.runtime_cast_int(frame.locals[binding.id], binding.ty)
+      } else {
+        self.fail("unknown MIR body local value: " + binding.name)
+        0L
+      }
+      let right = self.eval_value(frame, rhs)
+      let updated = self.program.runtime_cast_int(
+        self.eval_binary_values(op, old, binding.ty, right, rhs.ty()),
+        binding.ty,
+      )
+      frame.locals[binding.id] = updated
+      self.program.runtime_cast_int(old, ty)
+    }
     MirTernary(cond, then_, else_, ty) => {
       let selected = if self.eval_value(frame, cond) != 0L {
         self.eval_value(frame, then_)
