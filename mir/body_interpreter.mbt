@@ -4,6 +4,7 @@ priv enum BodyFlow {
   BodyReturned(Int64)
   BodyBroke
   BodyContinued
+  BodyJump(String)
 }
 
 ///|
@@ -282,6 +283,35 @@ fn BodyInterpreter::exec_switch(
 }
 
 ///|
+fn BodyInterpreter::exec_stmts_from_label(
+  self : BodyInterpreter,
+  frame : BodyFrame,
+  stmts : Array[MirStmt],
+  target : String,
+) -> BodyFlow {
+  let mut active = false
+  for stmt in stmts {
+    if !active {
+      match stmt {
+        MirLabel(name) if name == target => active = true
+        _ => continue
+      }
+    }
+    match self.exec_stmt(frame, stmt) {
+      BodyNormal => ()
+      flow => return flow
+    }
+    if self.failed() {
+      return BodyNormal
+    }
+  }
+  if !active {
+    self.fail("unknown MIR body label: " + target)
+  }
+  BodyNormal
+}
+
+///|
 fn BodyInterpreter::exec_stmt(
   self : BodyInterpreter,
   frame : BodyFrame,
@@ -326,6 +356,7 @@ fn BodyInterpreter::exec_stmt(
           BodyReturned(value) => return BodyReturned(value)
           BodyBroke => return BodyNormal
           BodyContinued => ()
+          BodyJump(name) => return BodyJump(name)
         }
       }
       BodyNormal
@@ -336,6 +367,7 @@ fn BodyInterpreter::exec_stmt(
         BodyReturned(value) => return BodyReturned(value)
         BodyBroke => return BodyNormal
         BodyContinued => ()
+        BodyJump(name) => return BodyJump(name)
       }
       while self.eval_value(frame, cond) != 0L && !self.failed() {
         match self.exec_stmts(frame, body) {
@@ -343,6 +375,7 @@ fn BodyInterpreter::exec_stmt(
           BodyReturned(value) => return BodyReturned(value)
           BodyBroke => return BodyNormal
           BodyContinued => ()
+          BodyJump(name) => return BodyJump(name)
         }
         match inc {
           Some(value) => ignore(self.eval_value(frame, value))
@@ -359,6 +392,7 @@ fn BodyInterpreter::exec_stmt(
           BodyReturned(value) => return BodyReturned(value)
           BodyBroke => return BodyNormal
           BodyContinued => ()
+          BodyJump(name) => return BodyJump(name)
         }
         keep_running = self.eval_value(frame, cond) != 0L
       }
@@ -367,6 +401,7 @@ fn BodyInterpreter::exec_stmt(
     MirSwitch(control, cases, body) =>
       self.exec_switch(frame, control, cases, body)
     MirLabel(_) => BodyNormal
+    MirGoto(name) => BodyJump(name)
     MirBreak => BodyBroke
     MirContinue => BodyContinued
     MirBlock(stmts) => self.exec_stmts(frame, stmts)
@@ -385,6 +420,7 @@ fn BodyInterpreter::exec_stmts(
       BodyReturned(value) => return BodyReturned(value)
       BodyBroke => return BodyBroke
       BodyContinued => return BodyContinued
+      BodyJump(name) => return BodyJump(name)
     }
     if self.failed() {
       return BodyNormal
@@ -422,6 +458,29 @@ fn BodyInterpreter::call_func(
     frame.locals[param.id] = self.program.runtime_cast_int(args[i], param.ty)
   }
   let result = match self.exec_stmts(frame, body.body) {
+    BodyJump(name) => {
+      let mut flow = self.exec_stmts_from_label(frame, body.body, name)
+      while flow is BodyJump(_) && !self.failed() {
+        match flow {
+          BodyJump(next) =>
+            flow = self.exec_stmts_from_label(frame, body.body, next)
+          _ => ()
+        }
+      }
+      match flow {
+        BodyReturned(value) => self.program.runtime_cast_int(value, body.ret)
+        BodyNormal => 0L
+        BodyBroke => {
+          self.fail("break escaped MIR body function")
+          0L
+        }
+        BodyContinued => {
+          self.fail("continue escaped MIR body function")
+          0L
+        }
+        BodyJump(_) => 0L
+      }
+    }
     BodyReturned(value) => self.program.runtime_cast_int(value, body.ret)
     BodyNormal => 0L
     BodyBroke => {

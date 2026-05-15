@@ -21,16 +21,17 @@ integer-scalar subset.
 - `Program::interpret_body_i64` executes those lowered MIR bodies directly. It
   currently covers integer locals, assignments, direct calls, returns, casts,
   unary/binary scalar operators, conditionals, `while`, `for`, `do while`,
-  directly labeled scalar `switch`, `break`/`continue`, and ternaries. Missing
-  bodies return `Err` instead of falling back to parser AST execution.
+  directly labeled scalar `switch`, simple labels/goto, `break`/`continue`, and
+  ternaries. Missing bodies return `Err` instead of falling back to parser AST
+  execution.
 - `codegen/mir_body_codegen.mbt` is the first production backend consumer of
   `MirFuncBody`. It emits Darwin ARM64 and linux/amd64 assembly for
   integer-scalar MIR bodies with local variables, assignments, branches,
   `while`/`for`/`do while` loops, `break`/`continue`, ternaries, casts, direct
   calls to other MIR-bodied functions or declared non-variadic integer-scalar
-  externs, directly labeled scalar `switch`, and arithmetic/logical operators.
-  Unsupported MIR bodies still fall back to the existing parser-AST codegen
-  path.
+  externs, directly labeled scalar `switch`, simple labels/goto, and
+  arithmetic/logical operators. Unsupported MIR bodies still fall back to the
+  existing parser-AST codegen path.
 - `Program::interpret_i64` is an integer-only interpreter intended for
   compile-test oracles. It supports scalar functions, locals, globals, calls,
   casts, arithmetic, conditionals, loops, scalar switches, simple gotos, selected
@@ -145,9 +146,9 @@ Darwin ARM64 receives a lowered MIR program through `generate_assembly_for_targe
 and direct `Codegen::generate` construction attaches a darwin/arm64 MIR program
 if one is not already present. For supported integer-scalar functions, including
 direct calls to other MIR-bodied functions and declared non-variadic
-integer-scalar externs and directly labeled scalar `switch`, it emits from
-`MirFuncBody`; other function bodies still fall back to parser AST statement
-walking. It delegates size, alignment, field-layout,
+integer-scalar externs, directly labeled scalar `switch`, and simple
+labels/goto, it emits from `MirFuncBody`; other function bodies still fall back
+to parser AST statement walking. It delegates size, alignment, field-layout,
 offsetof path, expression type, global-expression type, and covered
 integer/floating constant-folding queries to MIR when that lowered program is
 present. Runtime `__builtin_object_size` and `__builtin_dynamic_object_size`
@@ -158,9 +159,9 @@ Linux/amd64 receives a lowered MIR program through `generate_assembly_for_target
 and direct private `X64Codegen::generate` construction attaches a linux/amd64 MIR
 program if one is not already present. For supported integer-scalar functions,
 including direct calls to other MIR-bodied functions and declared non-variadic
-integer-scalar externs and directly labeled scalar `switch`, it emits from
-`MirFuncBody`; other function bodies still fall back to parser AST statement
-walking. The private `X64Codegen` delegates size,
+integer-scalar externs, directly labeled scalar `switch`, and simple
+labels/goto, it emits from `MirFuncBody`; other function bodies still fall back
+to parser AST statement walking. The private `X64Codegen` delegates size,
 alignment, field-layout, offsetof path, expression type, global-expression type,
 and covered integer/floating constant-folding queries to MIR when that lowered
 program is present. Runtime `__builtin_object_size` and
@@ -179,7 +180,7 @@ program behavior.
 ## Remaining Migration Path
 
 1. Expand MIR body lowering statement by statement, starting with addressable
-   locals, simple aggregate/member access, and general labels/goto.
+   locals, simple aggregate/member access, and computed goto.
 2. Keep `Program::interpret_body_i64` as the first consumer for each new body
    feature so unsupported behavior fails explicitly before codegen depends on
    it.

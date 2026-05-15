@@ -156,6 +156,7 @@ fn mir_body_codegen_stmt_supported(
       mir_body_codegen_value_supported(control, int_arg_limit, mir) &&
       mir_body_codegen_stmts_supported(body, int_arg_limit, mir)
     MirLabel(_) => true
+    MirGoto(_) => true
     MirBreak => true
     MirContinue => true
     MirBlock(stmts) =>
@@ -602,6 +603,7 @@ fn Codegen::gen_mir_stmt(
       self.emit(label + ":")
       self.defined_labels[name] = true
     }
+    MirGoto(name) => self.emit("\tb\t" + self.label_ref(name))
     MirBreak =>
       match self.break_label {
         Some(label) => self.emit("\tb\t" + label)
@@ -1072,6 +1074,7 @@ fn X64Codegen::gen_mir_stmt(
       self.defined_labels[name] = true
       self.emit(label + ":")
     }
+    MirGoto(name) => self.emit("\tjmp\t" + self.label_ref(name))
     MirBreak =>
       match self.break_label {
         Some(label) => self.emit("\tjmp\t" + label)

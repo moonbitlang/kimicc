@@ -105,6 +105,26 @@ test "generate darwin arm64 MIR body switch control" {
 }
 
 ///|
+test "generate darwin arm64 MIR body goto control" {
+  let source =
+    #|int main(void) {
+    #|  int x = 1;
+    #|  goto done;
+    #|  x = 2;
+    #|done:
+    #|  return x;
+    #|}
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+  inspect(assembly.contains("\tb\t_main_label_done"), content="true")
+}
+
+///|
 test "generate darwin arm64 global unary plus initializer" {
   let source =
     #|int gplus = +1;
@@ -432,6 +452,29 @@ test "generate linux amd64 MIR body switch control" {
     content="true",
   )
   inspect(assembly.contains("\tje\t.L"), content="true")
+}
+
+///|
+test "generate linux amd64 MIR body goto control" {
+  let source =
+    #|int main(void) {
+    #|  int x = 1;
+    #|  goto done;
+    #|  x = 2;
+    #|done:
+    #|  return x;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+  inspect(assembly.contains("\tjmp\t.Lmain_label_done"), content="true")
 }
 
 ///|

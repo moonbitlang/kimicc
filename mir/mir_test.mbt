@@ -274,12 +274,30 @@ test "mir body interpreter executes switch fallthrough" {
 }
 
 ///|
+test "mir body interpreter executes simple goto" {
+  let source =
+    #|int main(void) {
+    #|  int total = 0;
+    #|  int i = 0;
+    #|loop:
+    #|  i = i + 1;
+    #|  if (i == 2) goto skip;
+    #|  total = total + i;
+    #|skip:
+    #|  if (i < 5) goto loop;
+    #|  return total;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 13L)
+}
+
+///|
 test "mir body lowering refuses unsupported parser constructs" {
   let source =
     #|int main(void) {
-    #|  goto done;
-    #|done:
-    #|  return 0;
+    #|  int a[1];
+    #|  return a[0];
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   inspect(mir.bodies.contains("main"), content="false")

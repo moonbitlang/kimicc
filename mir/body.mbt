@@ -39,6 +39,7 @@ pub(all) enum MirStmt {
   MirDoWhile(MirValue, Array[MirStmt])
   MirSwitch(MirValue, Array[(Int64?, String)], Array[MirStmt])
   MirLabel(String)
+  MirGoto(String)
   MirBreak
   MirContinue
   MirBlock(Array[MirStmt])
@@ -334,6 +335,7 @@ fn Program::lower_mir_stmt(
         }
         None => None
       }
+    Goto(name) => Some([MirGoto(name)])
     Break => Some([MirBreak])
     Continue => Some([MirContinue])
     Compound(stmts) | StmtList(stmts) => {
