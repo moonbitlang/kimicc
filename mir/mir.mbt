@@ -160,6 +160,14 @@ pub(all) struct MirModule {
 
 ///|
 pub fn Program::to_module(self : Program) -> MirModule {
+  for decl in self.aggregate_decls {
+    let ty = if decl.is_union {
+      @parser.Type::Union(decl.name)
+    } else {
+      @parser.Type::Struct(decl.name)
+    }
+    let _ = self.type_size(ty)
+  }
   {
     target: self.target,
     decls: self.decls,

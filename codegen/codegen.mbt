@@ -7,6 +7,7 @@
 pub struct Codegen {
   output : StringBuilder
   mut mir : @mir.Program?
+  mut mir_module : @mir.MirModule?
   mut label_counter : Int
   mut local_offsets : Map[String, Int]
   mut var_types : Map[String, @parser.Type]
@@ -1123,6 +1124,7 @@ pub fn Codegen::new() -> Codegen {
   {
     output: StringBuilder::new(),
     mir: None,
+    mir_module: None,
     label_counter: 0,
     local_offsets: {},
     var_types: {},
@@ -1153,6 +1155,14 @@ pub fn Codegen::new() -> Codegen {
 fn Codegen::new_with_mir(mir : @mir.Program) -> Codegen {
   let codegen = Codegen::new()
   codegen.mir = Some(mir)
+  codegen.mir_module = Some(mir.to_module())
+  codegen
+}
+
+///|
+fn Codegen::new_with_mir_module(mir : @mir.MirModule) -> Codegen {
+  let codegen = Codegen::new()
+  codegen.mir_module = Some(mir)
   codegen
 }
 
@@ -1766,11 +1776,15 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
     self.struct_decls[sdecl.name] = sdecl
   }
   // Then seed layouts in a second pass
-  let mir_module = match self.mir {
-    Some(mir) => Some(mir.to_module())
-    None => None
+  let mir_module = match self.mir_module {
+    Some(mir) => Some(mir)
+    None =>
+      match self.mir {
+        Some(mir) => Some(mir.to_module())
+        None => None
+      }
   }
-  match self.mir {
+  match mir_module {
     Some(mir) => self.register_mir_aggregate_layouts(mir)
     None =>
       for sdecl in prog.structs {
@@ -1808,12 +1822,12 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
     Some(mir) => self.register_mir_global_decls(mir)
     None => ()
   }
-  let mir_globals : Array[@mir.MirGlobalDecl] = match self.mir {
-    Some(mir) => @mir.merge_global_decls(mir.to_module().global_decls)
+  let mir_globals : Array[@mir.MirGlobalDecl] = match mir_module {
+    Some(mir) => @mir.merge_global_decls(mir.global_decls)
     None => []
   }
-  let mir_func_decls : Array[@mir.MirFuncDecl] = match self.mir {
-    Some(mir) => mir.to_module().decls
+  let mir_func_decls : Array[@mir.MirFuncDecl] = match mir_module {
+    Some(mir) => mir.decls
     None => []
   }
   let func_label_maps : Map[String, Map[String, String]] = {}
@@ -1901,13 +1915,15 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
 }
 
 ///|
-fn Codegen::generate_mir_only(self : Codegen, mir : @mir.Program) -> String {
-  let mir_module = mir.to_module()
+fn Codegen::generate_mir_only(
+  self : Codegen,
+  mir_module : @mir.MirModule,
+) -> String {
   self.output.write_string(
     "\t.section\t__TEXT,__text,regular,pure_instructions\n",
   )
   self.output.write_string("\t.build_version macos, 14, 0\n")
-  self.register_mir_aggregate_layouts(mir)
+  self.register_mir_aggregate_layouts(mir_module)
   self.register_mir_function_decls(mir_module)
   self.register_mir_global_decls(mir_module)
   for decl in mir_module.decls {
@@ -2015,9 +2031,12 @@ pub fn generate_assembly_from_mir_strict(
 
 ///|
 fn generate_assembly_from_mir_strict_unchecked(mir : @mir.Program) -> String {
+  let mir_module = mir.to_module()
   match mir.target {
-    DarwinArm64 => Codegen::new_with_mir(mir).generate_mir_only(mir)
-    LinuxAmd64 => X64Codegen::new_with_mir(mir).generate_mir_only(mir)
+    DarwinArm64 =>
+      Codegen::new_with_mir_module(mir_module).generate_mir_only(mir_module)
+    LinuxAmd64 =>
+      X64Codegen::new_with_mir_module(mir_module).generate_mir_only(mir_module)
   }
 }
 

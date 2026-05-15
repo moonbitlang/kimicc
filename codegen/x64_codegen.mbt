@@ -2,6 +2,7 @@
 priv struct X64Codegen {
   output : StringBuilder
   mut mir : @mir.Program?
+  mut mir_module : @mir.MirModule?
   mut label_counter : Int
   mut local_offsets : Map[String, Int]
   mut var_types : Map[String, @parser.Type]
@@ -46,6 +47,7 @@ fn X64Codegen::new() -> X64Codegen {
   {
     output: StringBuilder::new(),
     mir: None,
+    mir_module: None,
     label_counter: 0,
     local_offsets: {},
     var_types: {},
@@ -87,6 +89,14 @@ fn X64Codegen::new() -> X64Codegen {
 fn X64Codegen::new_with_mir(mir : @mir.Program) -> X64Codegen {
   let codegen = X64Codegen::new()
   codegen.mir = Some(mir)
+  codegen.mir_module = Some(mir.to_module())
+  codegen
+}
+
+///|
+fn X64Codegen::new_with_mir_module(mir : @mir.MirModule) -> X64Codegen {
+  let codegen = X64Codegen::new()
+  codegen.mir_module = Some(mir)
   codegen
 }
 
@@ -566,15 +576,9 @@ fn x64_field_layout_tuple(
 ///|
 fn X64Codegen::register_mir_aggregate_layouts(
   self : X64Codegen,
-  mir : @mir.Program,
+  mir : @mir.MirModule,
 ) -> Unit {
   for decl in mir.aggregate_decls {
-    let ty = if decl.is_union {
-      @parser.Type::Union(decl.name)
-    } else {
-      @parser.Type::Struct(decl.name)
-    }
-    let _ = mir.type_size(ty)
     match mir.layouts.get(decl.name) {
       Some(layout) => {
         let fields : Array[(String, @parser.Type, Int, Int, Int, Int)] = []
@@ -9434,14 +9438,18 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
   }
   self.emit("\t.intel_syntax noprefix")
   self.emit("\t.text")
-  let mir_module = match self.mir {
-    Some(mir) => Some(mir.to_module())
-    None => None
+  let mir_module = match self.mir_module {
+    Some(mir) => Some(mir)
+    None =>
+      match self.mir {
+        Some(mir) => Some(mir.to_module())
+        None => None
+      }
   }
   for sdecl in prog.structs {
     self.struct_decls[sdecl.name] = sdecl
   }
-  match self.mir {
+  match mir_module {
     Some(mir) => self.register_mir_aggregate_layouts(mir)
     None =>
       for sdecl in prog.structs {
@@ -9461,8 +9469,8 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
     Some(mir) => self.register_mir_global_decls(mir)
     None => ()
   }
-  let mir_globals : Array[@mir.MirGlobalDecl] = match self.mir {
-    Some(mir) => @mir.merge_global_decls(mir.to_module().global_decls)
+  let mir_globals : Array[@mir.MirGlobalDecl] = match mir_module {
+    Some(mir) => @mir.merge_global_decls(mir.global_decls)
     None => []
   }
   match mir_module {
@@ -9492,12 +9500,11 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
 ///|
 fn X64Codegen::generate_mir_only(
   self : X64Codegen,
-  mir : @mir.Program,
+  mir_module : @mir.MirModule,
 ) -> String {
-  let mir_module = mir.to_module()
   self.emit("\t.intel_syntax noprefix")
   self.emit("\t.text")
-  self.register_mir_aggregate_layouts(mir)
+  self.register_mir_aggregate_layouts(mir_module)
   self.register_mir_function_decls(mir_module)
   self.register_mir_global_decls(mir_module)
   for decl in mir_module.decls {

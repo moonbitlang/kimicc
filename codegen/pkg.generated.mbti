@@ -24,6 +24,7 @@ pub fn generate_macho_object(@parser.Program) -> Bytes
 pub struct Codegen {
   output : StringBuilder
   mut mir : @mir.Program?
+  mut mir_module : @mir.MirModule?
   mut label_counter : Int
   mut local_offsets : Map[String, Int]
   mut var_types : Map[String, @parser.Type]
