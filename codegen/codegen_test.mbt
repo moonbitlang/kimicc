@@ -197,6 +197,46 @@ test "generate darwin arm64 MIR body scalar local array" {
 }
 
 ///|
+test "generate darwin arm64 MIR body scalar memory prefix updates" {
+  let source =
+    #|struct S { int x; };
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int *p = &x;
+    #|  int a[2];
+    #|  struct S s;
+    #|  a[0] = 2;
+    #|  s.x = 7;
+    #|  ++*p;
+    #|  --a[0];
+    #|  ++s.x;
+    #|  return x + a[0] + s.x;
+    #|}
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+}
+
+///|
+test "generate darwin arm64 keeps side effecting prefix update address on fallback" {
+  let source =
+    #|int main(void) {
+    #|  int a[2];
+    #|  int i = 0;
+    #|  ++a[i++];
+    #|  return i;
+    #|}
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(assembly.contains("kimicc: mir-body"), content="false")
+}
+
+///|
 test "generate darwin arm64 MIR body folded builtin call" {
   let source =
     #|int main(void) {
@@ -684,6 +724,52 @@ test "generate linux amd64 MIR body scalar local array" {
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
   )
+}
+
+///|
+test "generate linux amd64 MIR body scalar memory prefix updates" {
+  let source =
+    #|struct S { int x; };
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int *p = &x;
+    #|  int a[2];
+    #|  struct S s;
+    #|  a[0] = 2;
+    #|  s.x = 7;
+    #|  ++*p;
+    #|  --a[0];
+    #|  ++s.x;
+    #|  return x + a[0] + s.x;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+}
+
+///|
+test "generate linux amd64 keeps side effecting prefix update address on fallback" {
+  let source =
+    #|int main(void) {
+    #|  int a[2];
+    #|  int i = 0;
+    #|  ++a[i++];
+    #|  return i;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(assembly.contains("kimicc: mir-body"), content="false")
 }
 
 ///|

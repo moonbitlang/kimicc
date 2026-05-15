@@ -250,6 +250,79 @@ fn lower_mir_post_step(
 }
 
 ///|
+fn mir_body_reusable_addr_operand(expr : @parser.Expr) -> Bool {
+  match expr {
+    Number(_) | Var(_) => true
+    Cast(_, inner) => mir_body_reusable_addr_operand(inner)
+    _ => false
+  }
+}
+
+///|
+fn mir_body_reusable_scalar_lvalue(expr : @parser.Expr) -> Bool {
+  match expr {
+    Deref(Var(_)) => true
+    ArrayAccess(base, index) =>
+      mir_body_reusable_addr_operand(base) &&
+      mir_body_reusable_addr_operand(index)
+    MemberAccess(Var(_), _) => true
+    _ => false
+  }
+}
+
+///|
+fn Program::lower_mir_scalar_lvalue_addr(
+  self : Program,
+  expr : @parser.Expr,
+  lhs_ty : @parser.Type,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  if !mir_body_scalar_type(lhs_ty) {
+    return None
+  }
+  match expr {
+    Deref(Var(name)) => self.lower_mir_expr(Var(name), ctx)
+    ArrayAccess(base, index) =>
+      self.lower_mir_array_elem_addr(base, index, lhs_ty, ctx)
+    MemberAccess(obj, field) => self.lower_mir_member_addr(obj, field, ctx)
+    _ => None
+  }
+}
+
+///|
+fn Program::lower_mir_prefix_step(
+  self : Program,
+  expr : @parser.Expr,
+  op : String,
+  ty : @parser.Type,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  match lower_mir_cancelled_local_lvalue(expr, ctx) {
+    Some(binding) => lower_mir_local_step(binding.name, op, ty, ctx)
+    None => {
+      let lhs_ty = self.expr_type(expr, ctx.scope())
+      if !lhs_ty.is_integer() {
+        return None
+      }
+      if !mir_body_reusable_scalar_lvalue(expr) {
+        return None
+      }
+      match self.lower_mir_scalar_lvalue_addr(expr, lhs_ty, ctx) {
+        Some(addr) =>
+          Some(
+            MirStore(
+              addr,
+              MirBinary(op, MirLoad(addr, lhs_ty), MirConst(1L, SInt), ty),
+              lhs_ty,
+            ),
+          )
+        None => None
+      }
+    }
+  }
+}
+
+///|
 fn Program::lower_mir_array_base_addr(
   self : Program,
   base : @parser.Expr,
@@ -510,8 +583,8 @@ fn Program::lower_mir_expr(
         _ => None
       }
     }
-    PrefixInc(Var(name)) => lower_mir_local_step(name, "+", ty, ctx)
-    PrefixDec(Var(name)) => lower_mir_local_step(name, "-", ty, ctx)
+    PrefixInc(target) => self.lower_mir_prefix_step(target, "+", ty, ctx)
+    PrefixDec(target) => self.lower_mir_prefix_step(target, "-", ty, ctx)
     PostfixInc(target) => lower_mir_post_step(target, "+", ty, ctx)
     PostfixDec(target) => lower_mir_post_step(target, "-", ty, ctx)
     Ternary(cond, then_, else_) =>

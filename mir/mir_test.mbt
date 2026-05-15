@@ -368,6 +368,40 @@ test "mir body interpreter handles scalar local arrays" {
 }
 
 ///|
+test "mir body interpreter handles scalar memory prefix updates" {
+  let source =
+    #|struct S { int x; };
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int *p = &x;
+    #|  int a[2];
+    #|  struct S s;
+    #|  a[0] = 2;
+    #|  s.x = 7;
+    #|  ++*p;
+    #|  --a[0];
+    #|  ++s.x;
+    #|  return x + a[0] + s.x;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 14L)
+}
+
+///|
+test "mir body lowering keeps side effecting prefix update addresses unsupported" {
+  let source =
+    #|int main(void) {
+    #|  int a[2];
+    #|  int i = 0;
+    #|  ++a[i++];
+    #|  return i;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="false")
+}
+
+///|
 test "mir body lowering folds scalar builtin calls" {
   let source =
     #|int main(void) {

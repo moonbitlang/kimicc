@@ -22,9 +22,9 @@ integer-scalar subset.
   currently covers integer locals, assignments, direct calls, returns, casts,
   unary/binary scalar operators, conditionals, `while`, `for`, `do while`,
   directly labeled scalar `switch`, simple labels/goto, local compound
-  assignment, local postfix updates, scalar `*&` / `&*` cancellation,
-  simple scalar local pointer loads/stores, scalar local arrays, direct scalar
-  aggregate fields, foldable `__builtin_constant_p`, identity
+  assignment, local postfix updates, scalar memory prefix updates, scalar `*&` /
+  `&*` cancellation, simple scalar local pointer loads/stores, scalar local
+  arrays, direct scalar aggregate fields, foldable `__builtin_constant_p`, identity
   `__builtin_unpredictable`, `break`/`continue`, and ternaries. Missing bodies
   return `Err` instead of falling back to parser AST execution.
 - `codegen/mir_body_codegen.mbt` is the first production backend consumer of
@@ -33,9 +33,9 @@ integer-scalar subset.
   `while`/`for`/`do while` loops, `break`/`continue`, ternaries, casts, direct
   calls to other MIR-bodied functions or declared non-variadic integer-scalar
   externs, directly labeled scalar `switch`, simple labels/goto, local compound
-  assignment, local postfix updates, scalar `*&` / `&*` cancellation,
-  simple scalar local pointer loads/stores, scalar local arrays, direct scalar
-  aggregate fields, foldable `__builtin_constant_p`, identity
+  assignment, local postfix updates, scalar memory prefix updates, scalar `*&` /
+  `&*` cancellation, simple scalar local pointer loads/stores, scalar local
+  arrays, direct scalar aggregate fields, foldable `__builtin_constant_p`, identity
   `__builtin_unpredictable`, and arithmetic/logical operators. Unsupported MIR
   bodies still fall back to the existing parser-AST codegen path.
 - `Program::interpret_i64` is an integer-only interpreter intended for
