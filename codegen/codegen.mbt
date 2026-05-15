@@ -2080,6 +2080,16 @@ pub fn generate_assembly_for_target(
 }
 
 ///|
+/// Lowers a parsed C translation unit to `MirModule` and generates assembly
+/// only when MIR coverage is sufficient for parser-free backend emission.
+pub fn generate_assembly_for_target_strict(
+  prog : @parser.Program,
+  target : @target.Target,
+) -> Result[String, String] {
+  generate_assembly_from_mir_module_strict(@mir.lower_to_module(prog, target))
+}
+
+///|
 /// Generates assembly from an already lowered MIR program.
 ///
 /// This is the backend-facing entry point. It does not use the parser AST

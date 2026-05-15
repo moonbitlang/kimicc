@@ -25,6 +25,24 @@ test "generate darwin arm64 assembly from MIR strict" {
 }
 
 ///|
+test "generate darwin arm64 assembly for target strict" {
+  let source = "int main(void) { int x = 40; return x + 2; }"
+  let prog = @parser.parse(source)
+  match
+    @codegen.generate_assembly_for_target_strict(
+      prog,
+      @target.Target::default(),
+    ) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tadd\tx9, x9, x10"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 assembly from parser-free MIR module strict" {
   let source = "int main(void) { int x = 40; return x + 2; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
@@ -324,6 +342,26 @@ test "strict MIR assembly rejects parser body fallback" {
   inspect(mir.bodies.contains("main"), content="false")
   match @codegen.generate_assembly_from_mir_strict(mir) {
     Ok(_) => abort("expected strict MIR codegen rejection")
+    Err(err) =>
+      inspect(err.contains("missing MIR body for main"), content="true")
+  }
+}
+
+///|
+test "strict target assembly rejects parser body fallback" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int side = 0;
+    #|  return __builtin_expect(x, side += 1);
+    #|}
+  let prog = @parser.parse(source)
+  match
+    @codegen.generate_assembly_for_target_strict(
+      prog,
+      @target.Target::default(),
+    ) {
+    Ok(_) => abort("expected strict target codegen rejection")
     Err(err) =>
       inspect(err.contains("missing MIR body for main"), content="true")
   }
