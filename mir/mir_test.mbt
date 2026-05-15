@@ -338,6 +338,20 @@ test "mir body interpreter evaluates scalar address dereference cancellation" {
 }
 
 ///|
+test "mir body interpreter handles scalar local pointers" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int *p = &x;
+    #|  *p += 5;
+    #|  return x + *p;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 18L)
+}
+
+///|
 test "mir body lowering refuses unsupported parser constructs" {
   let source =
     #|int main(void) {

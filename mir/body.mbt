@@ -19,11 +19,14 @@ pub(all) struct MirLocal {
 pub(all) enum MirValue {
   MirConst(Int64, @parser.Type)
   MirLocal(MirLocal)
+  MirAddrLocal(MirLocal)
+  MirLoad(MirValue, @parser.Type)
   MirUnary(String, MirValue, @parser.Type)
   MirBinary(String, MirValue, MirValue, @parser.Type)
   MirCast(@parser.Type, MirValue)
   MirCall(String, Array[MirValue], @parser.Type)
   MirAssignLocal(MirLocal, MirValue)
+  MirStore(MirValue, MirValue, @parser.Type)
   MirPostUpdateLocal(MirLocal, String, MirValue, @parser.Type)
   MirTernary(MirValue, MirValue, MirValue, @parser.Type)
 } derive(Eq)
@@ -62,11 +65,14 @@ pub fn MirValue::ty(self : MirValue) -> @parser.Type {
   match self {
     MirConst(_, ty) => ty
     MirLocal(binding) => binding.ty
+    MirAddrLocal(binding) => Pointer(binding.ty)
+    MirLoad(_, ty) => ty
     MirUnary(_, _, ty) => ty
     MirBinary(_, _, _, ty) => ty
     MirCast(ty, _) => ty
     MirCall(_, _, ty) => ty
     MirAssignLocal(binding, _) => binding.ty
+    MirStore(_, _, ty) => ty
     MirPostUpdateLocal(_, _, _, ty) => ty
     MirTernary(_, _, _, ty) => ty
   }
@@ -149,6 +155,28 @@ fn lower_mir_cancelled_local_lvalue(
     Var(name) => ctx.lookup_local(name)
     Deref(AddrOf(Var(name))) => ctx.lookup_local(name)
     _ => None
+  }
+}
+
+///|
+fn mir_body_scalar_type(ty : @parser.Type) -> Bool {
+  match ty {
+    Void => true
+    Bool
+    | SChar
+    | UChar
+    | SShort
+    | UShort
+    | SInt
+    | UInt
+    | SLong
+    | ULong
+    | SLongLong
+    | ULongLong
+    | Pointer(_)
+    | FuncPtr(_, _, _) => true
+    Atomic(inner) | Aligned(inner, _) => mir_body_scalar_type(inner)
+    _ => false
   }
 }
 
@@ -247,12 +275,32 @@ fn Program::lower_mir_expr(
         Some(binding) => Some(MirLocal(binding))
         None => None
       }
+    AddrOf(Var(name)) =>
+      match ctx.lookup_local(name) {
+        Some(binding) =>
+          if mir_body_scalar_type(binding.ty) {
+            Some(MirAddrLocal(binding))
+          } else {
+            None
+          }
+        None => None
+      }
     Deref(AddrOf(Var(name))) =>
       match ctx.lookup_local(name) {
         Some(binding) => Some(MirLocal(binding))
         None => None
       }
     AddrOf(Deref(inner)) => self.lower_mir_expr(inner, ctx)
+    Deref(Var(name)) =>
+      match (ctx.lookup_local(name), self.lower_mir_expr(Var(name), ctx)) {
+        (Some(_), Some(value)) =>
+          if mir_body_scalar_type(ty) {
+            Some(MirLoad(value, ty))
+          } else {
+            None
+          }
+        _ => None
+      }
     Binary(op, lhs, rhs) =>
       match (self.lower_mir_expr(lhs, ctx), self.lower_mir_expr(rhs, ctx)) {
         (Some(left), Some(right)) => Some(MirBinary(op, left, right, ty))
@@ -268,25 +316,65 @@ fn Program::lower_mir_expr(
         Some(value) => Some(MirCast(cast_ty, value))
         None => None
       }
-    Assign(lhs, rhs) =>
-      match
-        (
-          lower_mir_cancelled_local_lvalue(lhs, ctx),
-          self.lower_mir_expr(rhs, ctx),
-        ) {
-        (Some(binding), Some(value)) => Some(MirAssignLocal(binding, value))
-        _ => None
-      }
-    CompoundAssign(op, lhs, rhs) =>
+    Assign(lhs, rhs) => {
+      let lhs_ty = self.expr_type(lhs, scope)
       match
         (
           lower_mir_cancelled_local_lvalue(lhs, ctx),
           self.lower_mir_expr(rhs, ctx),
         ) {
         (Some(binding), Some(value)) =>
-          lower_mir_local_update(binding.name, op, value, ty, ctx)
+          return Some(MirAssignLocal(binding, value))
+        _ => ()
+      }
+      match (lhs, self.lower_mir_expr(rhs, ctx)) {
+        (Deref(Var(name)), Some(value)) =>
+          match self.lower_mir_expr(Var(name), ctx) {
+            Some(addr) =>
+              if mir_body_scalar_type(lhs_ty) {
+                Some(MirStore(addr, value, lhs_ty))
+              } else {
+                None
+              }
+            None => None
+          }
         _ => None
       }
+    }
+    CompoundAssign(op, lhs, rhs) => {
+      let lhs_ty = self.expr_type(lhs, scope)
+      match
+        (
+          lower_mir_cancelled_local_lvalue(lhs, ctx),
+          self.lower_mir_expr(rhs, ctx),
+        ) {
+        (Some(binding), Some(value)) =>
+          match lower_mir_local_update(binding.name, op, value, ty, ctx) {
+            Some(value) => return Some(value)
+            None => return None
+          }
+        _ => ()
+      }
+      match (lhs, self.lower_mir_expr(rhs, ctx)) {
+        (Deref(Var(name)), Some(value)) =>
+          match self.lower_mir_expr(Var(name), ctx) {
+            Some(addr) =>
+              if mir_body_scalar_type(lhs_ty) {
+                Some(
+                  MirStore(
+                    addr,
+                    MirBinary(op, MirLoad(addr, lhs_ty), value, ty),
+                    lhs_ty,
+                  ),
+                )
+              } else {
+                None
+              }
+            None => None
+          }
+        _ => None
+      }
+    }
     PrefixInc(Var(name)) => lower_mir_local_step(name, "+", ty, ctx)
     PrefixDec(Var(name)) => lower_mir_local_step(name, "-", ty, ctx)
     PostfixInc(target) => lower_mir_post_step(target, "+", ty, ctx)

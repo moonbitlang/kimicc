@@ -37,6 +37,10 @@ fn mir_body_codegen_value_supported(
   match value {
     MirConst(_, ty) => mir_body_codegen_scalar_type(ty)
     MirLocal(binding) => mir_body_codegen_scalar_type(binding.ty)
+    MirAddrLocal(binding) => mir_body_codegen_scalar_type(binding.ty)
+    MirLoad(ptr, ty) =>
+      mir_body_codegen_scalar_type(ty) &&
+      mir_body_codegen_value_supported(ptr, int_arg_limit, mir)
     MirUnary(_, inner, ty) =>
       mir_body_codegen_scalar_type(ty) &&
       mir_body_codegen_value_supported(inner, int_arg_limit, mir)
@@ -49,6 +53,10 @@ fn mir_body_codegen_value_supported(
       mir_body_codegen_value_supported(inner, int_arg_limit, mir)
     MirAssignLocal(binding, rhs) =>
       mir_body_codegen_scalar_type(binding.ty) &&
+      mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
+    MirStore(ptr, rhs, ty) =>
+      mir_body_codegen_scalar_type(ty) &&
+      mir_body_codegen_value_supported(ptr, int_arg_limit, mir) &&
       mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
     MirPostUpdateLocal(binding, _, rhs, ty) =>
       mir_body_codegen_scalar_type(binding.ty) &&
@@ -282,6 +290,12 @@ fn Codegen::gen_mir_value(
       self.emit_local_addr(offsets[binding.id], frame_size)
       self.emit_load_typed("x9", "x9", binding.ty)
     }
+    MirAddrLocal(binding) =>
+      self.emit_local_addr(offsets[binding.id], frame_size)
+    MirLoad(ptr, ty) => {
+      self.gen_mir_value(ptr, offsets, frame_size)
+      self.emit_load_typed("x9", "x9", ty)
+    }
     MirUnary(op, inner, ty) => {
       self.gen_mir_value(inner, offsets, frame_size)
       match op {
@@ -306,6 +320,14 @@ fn Codegen::gen_mir_value(
       self.gen_mir_value(rhs, offsets, frame_size)
       self.emit_scalar_conversion_to(binding.ty)
       self.emit_store_local("x9", offsets[binding.id], frame_size)
+    }
+    MirStore(ptr, rhs, ty) => {
+      self.gen_mir_value(ptr, offsets, frame_size)
+      self.emit("\tstr\tx9, [sp, #-16]!")
+      self.gen_mir_value(rhs, offsets, frame_size)
+      self.emit_scalar_conversion_to(ty)
+      self.emit("\tldr\tx10, [sp], #16")
+      self.emit_store_typed("x9", "x10", ty)
     }
     MirPostUpdateLocal(binding, op, rhs, ty) => {
       self.gen_mir_value(MirLocal(binding), offsets, frame_size)
@@ -773,6 +795,11 @@ fn X64Codegen::gen_mir_value(
       self.emit_local_addr(offsets[binding.id])
       self.emit_load_indirect(binding.ty)
     }
+    MirAddrLocal(binding) => self.emit_local_addr(offsets[binding.id])
+    MirLoad(ptr, ty) => {
+      self.gen_mir_value(ptr, offsets)
+      self.emit_load_indirect(ty)
+    }
     MirUnary(op, inner, ty) => {
       self.gen_mir_value(inner, offsets)
       match op {
@@ -797,6 +824,15 @@ fn X64Codegen::gen_mir_value(
       self.gen_mir_value(rhs, offsets)
       self.emit_int_conversion_to(binding.ty)
       self.emit_store_local_from_rax(offsets[binding.id], binding.ty)
+    }
+    MirStore(ptr, rhs, ty) => {
+      self.gen_mir_value(ptr, offsets)
+      self.emit_mir_push_rax()
+      self.gen_mir_value(rhs, offsets)
+      self.emit_int_conversion_to(ty)
+      self.emit("\tmov\tr10, QWORD PTR [rsp]")
+      self.emit("\tadd\trsp, 16")
+      self.emit_store_indirect(ty)
     }
     MirPostUpdateLocal(binding, op, rhs, ty) => {
       self.gen_mir_value(MirLocal(binding), offsets)
