@@ -1499,19 +1499,15 @@ fn Codegen::emit_mir_global_init(
 ///|
 fn Codegen::try_emit_mir_global_init(
   self : Codegen,
-  g : @parser.GlobalDecl,
+  g : @mir.MirGlobalDecl,
 ) -> Bool {
-  match self.globals.get(g.name) {
-    Some(global) =>
-      match global.init {
-        Some(init) =>
-          if self.mir_global_init_supported(global.ty, init) {
-            self.emit_mir_global_init(global.ty, init)
-            true
-          } else {
-            false
-          }
-        None => false
+  match g.init {
+    Some(init) =>
+      if self.mir_global_init_supported(g.ty, init) {
+        self.emit_mir_global_init(g.ty, init)
+        true
+      } else {
+        false
       }
     None => false
   }
@@ -1798,11 +1794,19 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
       }
     }
   }
-  let globals = merge_global_decls(prog.globals)
+  let parser_globals = merge_global_decls(prog.globals)
+  let parser_global_fallbacks : Map[String, @parser.GlobalDecl] = {}
+  for g in parser_globals {
+    parser_global_fallbacks[g.name] = g
+  }
   // Record global variables
   match self.mir {
     Some(mir) => self.register_mir_global_decls(mir)
     None => ()
+  }
+  let mir_globals : Array[@mir.MirGlobalDecl] = match self.mir {
+    Some(mir) => @mir.merge_global_decls(mir.global_decls)
+    None => []
   }
   let mir_func_decls : Array[@mir.MirFuncDecl] = match self.mir {
     Some(mir) => mir.decls
@@ -1818,8 +1822,8 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   }
   // Emit initialized global variables
   let mut has_data = false
-  for g in globals {
-    if g.init is Some(_) {
+  for g in mir_globals {
+    if g.has_init {
       if !has_data {
         self.emit("	.section	__DATA,__data")
         has_data = true
@@ -1846,10 +1850,14 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
         None => ()
       }
       if !self.try_emit_mir_global_init(g) {
-        match g.init {
-          Some(Scalar(expr)) => self.emit_global_scalar(g.ty, expr)
-          Some(Array(exprs)) => self.emit_global_array(g.ty, exprs)
-          None => ()
+        match parser_global_fallbacks.get(g.name) {
+          Some(parser_global) =>
+            match parser_global.init {
+              Some(Scalar(expr)) => self.emit_global_scalar(g.ty, expr)
+              Some(Array(exprs)) => self.emit_global_array(g.ty, exprs)
+              None => ()
+            }
+          None => self.emit("\t.space\t" + self.type_size(g.ty).to_string())
         }
       }
       self.func_name = saved_func_name
@@ -1858,8 +1866,8 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   }
   // Emit uninitialized global variables
   let mut has_bss = false
-  for g in globals {
-    if g.init is None && !g.is_extern {
+  for g in mir_globals {
+    if !g.has_init && !g.is_extern {
       if !has_bss {
         self.emit("	.section	__DATA,__bss")
         has_bss = true

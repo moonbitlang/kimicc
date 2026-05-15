@@ -219,7 +219,7 @@ declarations available for legacy fallback paths. Both backends can now emit
 the lowered MIR subset for simple scalar integer, string, symbol-address,
 symbol-plus-offset, and scalar array global initializers; unsupported initializer
 forms still fall back to the parser initializer path.
-Linux/amd64 global object binding, data, and BSS emission now iterates merged
+Both backends' global object binding, data, and BSS emission now iterate merged
 `Program.global_decls`; parser global declarations are only consulted when MIR
 marks an initializer shape unsupported.
 

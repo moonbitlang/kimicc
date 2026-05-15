@@ -36,12 +36,14 @@ test "generate darwin arm64 global scalar initializer uses MIR metadata" {
     has_init: g.has_init,
     is_static: g.is_static,
     is_extern: g.is_extern,
-    is_weak: g.is_weak,
+    is_weak: true,
     visibility: g.visibility,
     symbol_alias: g.symbol_alias,
     section: g.section,
   }
   let assembly = @codegen.generate_assembly_from_mir(mir)
+  inspect(assembly.contains("\t.weak_definition\t_g"), content="true")
+  inspect(assembly.contains("\t.globl\t_g"), content="false")
   inspect(assembly.contains("_g:\n\t.long\t7"), content="true")
   inspect(assembly.contains("_g:\n\t.long\t0"), content="false")
 }
