@@ -468,6 +468,19 @@ test "mir body interpreter executes calls branches and loops" {
 }
 
 ///|
+test "mir body interpreter executes indirect function pointer calls" {
+  let source =
+    #|int bump(int x) { return x + 1; }
+    #|int main(void) {
+    #|  int (*fp)(int) = bump;
+    #|  return fp(20) + (*fp)(20);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body lowering uses scoped stable local ids" {
   let source =
     #|int main(void) {

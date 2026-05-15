@@ -20,6 +20,8 @@ priv struct BodyInterpreter {
   globals : Map[String, Int64]
   global_memory : Map[Int64, Int64]
   global_addrs : Map[String, Int64]
+  func_addrs : Map[String, Int64]
+  func_names : Map[Int64, String]
   string_memory : Map[Int64, Int64]
   string_addrs : Map[String, Int64]
   mut error : String?
@@ -90,6 +92,14 @@ fn BodyInterpreter::new(program : Program) -> BodyInterpreter {
   let globals : Map[String, Int64] = {}
   let global_memory : Map[Int64, Int64] = {}
   let global_addrs : Map[String, Int64] = {}
+  let func_addrs : Map[String, Int64] = {}
+  let func_names : Map[Int64, String] = {}
+  for i in 0..<program.decls.length() {
+    let name = program.decls[i].name
+    let addr = 3000000000L + i.to_int64() * 100000L
+    func_addrs[name] = addr
+    func_names[addr] = name
+  }
   let mut next_global = 0
   for decl in program.globals.values() {
     if program.mir_body_addressable_global_type(decl.ty) {
@@ -135,6 +145,8 @@ fn BodyInterpreter::new(program : Program) -> BodyInterpreter {
     globals,
     global_memory,
     global_addrs,
+    func_addrs,
+    func_names,
     string_memory: {},
     string_addrs: {},
     error: None,
@@ -448,6 +460,14 @@ fn BodyInterpreter::eval_value(
           0L
         }
       }
+    MirFuncAddr(name, _) =>
+      match self.func_addrs.get(name) {
+        Some(addr) => addr
+        None => {
+          self.fail("unknown MIR body function address: " + name)
+          0L
+        }
+      }
     MirStringAddr(value) => self.string_literal_base(value)
     MirElemAddr(base, index, _) =>
       mir_body_elem_addr(
@@ -565,6 +585,21 @@ fn BodyInterpreter::eval_value(
     MirCast(ty, inner) =>
       self.program.runtime_cast_int(self.eval_value(frame, inner), ty)
     MirCall(name, args, ty) => {
+      let values : Array[Int64] = []
+      for arg in args {
+        values.push(self.eval_value(frame, arg))
+      }
+      self.program.runtime_cast_int(self.call_func(name, values), ty)
+    }
+    MirIndirectCall(callee, args, ty) => {
+      let addr = self.eval_value(frame, callee)
+      let name = match self.func_names.get(addr) {
+        Some(name) => name
+        None => {
+          self.fail("unknown MIR body indirect call target")
+          return 0L
+        }
+      }
       let values : Array[Int64] = []
       for arg in args {
         values.push(self.eval_value(frame, arg))

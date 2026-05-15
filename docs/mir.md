@@ -45,7 +45,8 @@ integer-scalar subset.
   directly labeled scalar `switch`, simple labels/goto, local compound
   assignment, local postfix updates, scalar globals and initialized global arrays, scalar memory
   prefix/postfix updates, scalar compound literals including address-taking,
-  scalar `*&` / `&*` cancellation, simple scalar local pointer loads/stores, scalar local arrays,
+  scalar `*&` / `&*` cancellation, simple scalar local pointer loads/stores,
+  simple non-variadic indirect calls, scalar local arrays,
   string literal byte loads, simple local array/struct initializers including
   fixed-size string array initialization, scalar
   aggregate fields including nested member access, foldable
@@ -64,7 +65,8 @@ integer-scalar subset.
   externs, directly labeled scalar `switch`, simple labels/goto, local compound
   assignment, local postfix updates, scalar globals and initialized global arrays, scalar memory
   prefix/postfix updates, scalar compound literals including address-taking,
-  scalar `*&` / `&*` cancellation, simple scalar local pointer loads/stores, scalar local arrays,
+  scalar `*&` / `&*` cancellation, simple scalar local pointer loads/stores,
+  simple non-variadic indirect calls, scalar local arrays,
   string literal byte loads, simple local array/struct initializers including
   fixed-size string array initialization, scalar
   aggregate fields including nested member access, foldable

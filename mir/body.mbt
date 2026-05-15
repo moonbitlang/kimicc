@@ -21,6 +21,7 @@ pub(all) enum MirValue {
   MirLocal(MirLocal)
   MirAddrLocal(MirLocal)
   MirAddrGlobal(String, @parser.Type)
+  MirFuncAddr(String, @parser.Type)
   MirStringAddr(String)
   MirElemAddr(MirValue, MirValue, @parser.Type)
   MirOffsetAddr(MirValue, Int, @parser.Type)
@@ -29,6 +30,7 @@ pub(all) enum MirValue {
   MirBinary(String, MirValue, MirValue, @parser.Type)
   MirCast(@parser.Type, MirValue)
   MirCall(String, Array[MirValue], @parser.Type)
+  MirIndirectCall(MirValue, Array[MirValue], @parser.Type)
   MirAssignLocal(MirLocal, MirValue)
   MirStore(MirValue, MirValue, @parser.Type)
   MirPostUpdateLocal(MirLocal, String, MirValue, @parser.Type)
@@ -73,6 +75,7 @@ pub fn MirValue::ty(self : MirValue) -> @parser.Type {
     MirLocal(binding) => binding.ty
     MirAddrLocal(binding) => Pointer(binding.ty)
     MirAddrGlobal(_, ty) => Pointer(ty)
+    MirFuncAddr(_, ty) => ty
     MirStringAddr(_) => Pointer(SChar)
     MirElemAddr(_, _, elem_ty) => Pointer(elem_ty)
     MirOffsetAddr(_, _, ty) => Pointer(ty)
@@ -81,6 +84,7 @@ pub fn MirValue::ty(self : MirValue) -> @parser.Type {
     MirBinary(_, _, _, ty) => ty
     MirCast(ty, _) => ty
     MirCall(_, _, ty) => ty
+    MirIndirectCall(_, _, ty) => ty
     MirAssignLocal(binding, _) => binding.ty
     MirStore(_, _, ty) => ty
     MirPostUpdateLocal(_, _, _, ty) => ty
@@ -817,6 +821,40 @@ fn Program::lower_mir_object_addr(
 }
 
 ///|
+fn Program::lower_mir_indirect_call(
+  self : Program,
+  callee : @parser.Expr,
+  args : Array[@parser.Expr],
+  ty : @parser.Type,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  let normalized_callee = match callee {
+    Deref(inner) =>
+      match self.core_type(self.expr_type(inner, ctx.scope())) {
+        FuncPtr(_, _, _) => inner
+        _ => callee
+      }
+    _ => callee
+  }
+  let callee_value = match self.lower_mir_expr(normalized_callee, ctx) {
+    Some(value) => value
+    None => return None
+  }
+  match self.core_type(callee_value.ty()) {
+    FuncPtr(_, _, _) => ()
+    _ => return None
+  }
+  let values : Array[MirValue] = []
+  for arg in args {
+    match self.lower_mir_expr(arg, ctx) {
+      Some(value) => values.push(value)
+      None => return None
+    }
+  }
+  Some(MirIndirectCall(callee_value, values, ty))
+}
+
+///|
 fn mir_stmts_have_direct_label(stmts : Array[MirStmt], name : String) -> Bool {
   for stmt in stmts {
     match stmt {
@@ -857,6 +895,8 @@ fn Program::lower_mir_expr(
         None =>
           if self.globals.contains(name) && mir_body_scalar_type(ty) {
             Some(MirLoad(MirAddrGlobal(name, ty), ty))
+          } else if self.funcs.contains(name) {
+            Some(MirFuncAddr(name, ty))
           } else {
             None
           }
@@ -1064,8 +1104,13 @@ fn Program::lower_mir_expr(
           None => return None
         }
       }
-      Some(MirCall(name, values, ty))
+      if ctx.lookup_local(name) is None && self.funcs.contains(name) {
+        Some(MirCall(name, values, ty))
+      } else {
+        self.lower_mir_indirect_call(Var(name), args, ty, ctx)
+      }
     }
+    Call(callee, args) => self.lower_mir_indirect_call(callee, args, ty, ctx)
     _ =>
       match self.fold_const(expr, scope) {
         Some(value) => Some(MirConst(value, ty))

@@ -1394,6 +1394,18 @@ async test "fixed local string array initializer" {
 }
 
 ///|
+async test "indirect function pointer call" {
+  let source =
+    #|int bump(int x) { return x + 1; }
+    #|int main(void) {
+    #|  int (*fp)(int) = bump;
+    #|  return fp(20) + (*fp)(20);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "pointer arithmetic with array initializer" {
   let source =
     #|int main() {

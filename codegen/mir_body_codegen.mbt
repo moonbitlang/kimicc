@@ -49,6 +49,8 @@ fn mir_body_codegen_value_supported(
     MirLocal(binding) => mir_body_codegen_scalar_type(binding.ty)
     MirAddrLocal(binding) => mir_body_codegen_local_type(binding.ty)
     MirAddrGlobal(_, ty) => mir_body_codegen_local_type(ty)
+    MirFuncAddr(name, ty) =>
+      mir.funcs.contains(name) && mir_body_codegen_scalar_type(ty)
     MirStringAddr(_) => true
     MirElemAddr(base, index, elem_ty) =>
       mir_body_codegen_scalar_type(elem_ty) &&
@@ -105,6 +107,23 @@ fn mir_body_codegen_value_supported(
       }
       true
     }
+    MirIndirectCall(callee, args, ty) => {
+      if !mir_body_codegen_value_supported(callee, int_arg_limit, mir) ||
+        !mir_body_codegen_indirect_call_supported(
+          callee.ty(),
+          args,
+          ty,
+          int_arg_limit,
+        ) {
+        return false
+      }
+      for arg in args {
+        if !mir_body_codegen_value_supported(arg, int_arg_limit, mir) {
+          return false
+        }
+      }
+      true
+    }
   }
 }
 
@@ -143,6 +162,52 @@ fn mir_body_codegen_call_supported(
     }
   }
   true
+}
+
+///|
+fn mir_body_codegen_indirect_call_supported(
+  callee_ty : @parser.Type,
+  args : Array[@mir.MirValue],
+  ret : @parser.Type,
+  int_arg_limit : Int,
+) -> Bool {
+  if args.length() > int_arg_limit || !mir_body_codegen_scalar_type(ret) {
+    return false
+  }
+  match peel_aligned_type(callee_ty) {
+    FuncPtr(sig_ret, params, variadic) => {
+      if variadic ||
+        params.length() != args.length() ||
+        !mir_body_codegen_scalar_type(sig_ret) ||
+        !mir_body_codegen_scalar_type(ret) {
+        return false
+      }
+      for param in params {
+        if !mir_body_codegen_scalar_type(param) {
+          return false
+        }
+      }
+      true
+    }
+    _ => false
+  }
+}
+
+///|
+fn mir_indirect_call_arg_type(
+  callee_ty : @parser.Type,
+  index : Int,
+  actual : @parser.Type,
+) -> @parser.Type {
+  match peel_aligned_type(callee_ty) {
+    FuncPtr(_, params, _) =>
+      if index >= 0 && index < params.length() {
+        params[index]
+      } else {
+        actual
+      }
+    _ => actual
+  }
 }
 
 ///|
@@ -363,6 +428,10 @@ fn Codegen::gen_mir_value(
       self.emit("\tadrp\tx9, _" + name + "@GOTPAGE")
       self.emit("\tldr\tx9, [x9, _" + name + "@GOTPAGEOFF]")
     }
+    MirFuncAddr(name, _) => {
+      self.emit("\tadrp\tx9, _" + name + "@GOTPAGE")
+      self.emit("\tldr\tx9, [x9, _" + name + "@GOTPAGEOFF]")
+    }
     MirStringAddr(value) => {
       let idx = self.strings.length()
       self.strings.push(value)
@@ -529,6 +598,25 @@ fn Codegen::gen_mir_value(
         self.emit("\tldr\tx" + i.to_string() + ", [sp], #16")
       }
       self.emit("\tbl\t_" + name)
+      self.emit("\tmov\tx9, x0")
+      self.emit_mir_abi_int_return_conversion(ty)
+    }
+    MirIndirectCall(callee, args, ty) => {
+      self.gen_mir_value(callee, offsets, frame_size)
+      self.emit("\tstr\tx9, [sp, #-16]!")
+      for i in 0..<args.length() {
+        let arg = args[i]
+        self.gen_mir_value(arg, offsets, frame_size)
+        let expected = mir_indirect_call_arg_type(callee.ty(), i, arg.ty())
+        self.emit_numeric_conversion(arg.ty(), expected)
+        self.emit_scalar_conversion_to(expected)
+        self.emit("\tstr\tx9, [sp, #-16]!")
+      }
+      for i = args.length() - 1; i >= 0; i = i - 1 {
+        self.emit("\tldr\tx" + i.to_string() + ", [sp], #16")
+      }
+      self.emit("\tldr\tx15, [sp], #16")
+      self.emit("\tblr\tx15")
       self.emit("\tmov\tx9, x0")
       self.emit_mir_abi_int_return_conversion(ty)
     }
@@ -1017,6 +1105,7 @@ fn X64Codegen::gen_mir_value(
     }
     MirAddrLocal(binding) => self.emit_local_addr(offsets[binding.id])
     MirAddrGlobal(name, _) => self.emit_symbol_addr(name)
+    MirFuncAddr(name, _) => self.emit_symbol_addr(name)
     MirStringAddr(value) => {
       let id = self.strings.length()
       self.strings.push(value)
@@ -1193,6 +1282,27 @@ fn X64Codegen::gen_mir_value(
         self.emit("\tadd\trsp, 16")
       }
       self.emit("\tcall\t" + name)
+      self.emit_abi_int_return_conversion(ty)
+    }
+    MirIndirectCall(callee, args, ty) => {
+      self.gen_mir_value(callee, offsets)
+      self.emit_mir_push_rax()
+      for i in 0..<args.length() {
+        let arg = args[i]
+        self.gen_mir_value(arg, offsets)
+        self.emit_int_conversion_to(
+          mir_indirect_call_arg_type(callee.ty(), i, arg.ty()),
+        )
+        self.emit_mir_push_rax()
+      }
+      let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
+      for i = args.length() - 1; i >= 0; i = i - 1 {
+        self.emit("\tmov\t" + arg_regs[i] + ", QWORD PTR [rsp]")
+        self.emit("\tadd\trsp, 16")
+      }
+      self.emit("\tmov\tr10, QWORD PTR [rsp]")
+      self.emit("\tadd\trsp, 16")
+      self.emit("\tcall\tr10")
       self.emit_abi_int_return_conversion(ty)
     }
   }
