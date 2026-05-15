@@ -673,6 +673,18 @@ async test "address of aggregate compound literal" {
 }
 
 ///|
+async test "casted address of aggregate compound literal" {
+  let source =
+    #|struct Pair { int x; int y; };
+    #|int main(void) {
+    #|  return ((struct Pair *)&(struct Pair){ 20, 22 })->x +
+    #|    ((struct Pair *)&(struct Pair){ 20, 22 })->y;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "address of aggregate member object" {
   let source =
     #|struct Inner { int z; };

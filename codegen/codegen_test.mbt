@@ -124,6 +124,24 @@ test "generate darwin arm64 strict MIR address of aggregate compound literal" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR casted address of aggregate compound literal" {
+  let source =
+    #|struct Pair { int x; int y; };
+    #|int main(void) {
+    #|  return ((struct Pair *)&(struct Pair){ 20, 22 })->x +
+    #|    ((struct Pair *)&(struct Pair){ 20, 22 })->y;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR address of aggregate member object" {
   let source =
     #|struct Inner { int z; };
@@ -608,6 +626,28 @@ test "generate linux amd64 strict MIR address of aggregate compound literal" {
     #|int main(void) {
     #|  return (&(struct Pair){ 20, 22 })->x +
     #|    (&(struct Pair){ 20, 22 })->y;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR casted address of aggregate compound literal" {
+  let source =
+    #|struct Pair { int x; int y; };
+    #|int main(void) {
+    #|  return ((struct Pair *)&(struct Pair){ 20, 22 })->x +
+    #|    ((struct Pair *)&(struct Pair){ 20, 22 })->y;
     #|}
   let target = match @target.Target::parse("linux-amd64") {
     Some(target) => target

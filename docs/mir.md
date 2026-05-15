@@ -45,7 +45,7 @@ integer-scalar subset.
   directly labeled scalar `switch`, simple labels/goto, local compound
   assignment, local postfix updates, scalar globals and initialized global arrays, scalar memory
   prefix/postfix updates, scalar and aggregate compound literals including
-  address-taking,
+  address-taking through transparent casts,
   scalar `*&` / `&*` cancellation, address-of aggregate member cancellation
   including transparent casts, simple scalar local pointer loads/stores,
   simple non-variadic indirect calls and function addresses, scalar local arrays,
@@ -67,7 +67,7 @@ integer-scalar subset.
   externs, directly labeled scalar `switch`, simple labels/goto, local compound
   assignment, local postfix updates, scalar globals and initialized global arrays, scalar memory
   prefix/postfix updates, scalar and aggregate compound literals including
-  address-taking,
+  address-taking through transparent casts,
   scalar `*&` / `&*` cancellation, address-of aggregate member cancellation
   including transparent casts, simple scalar local pointer loads/stores,
   simple non-variadic indirect calls and function addresses, scalar local arrays,
