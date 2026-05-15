@@ -1048,6 +1048,16 @@ test "mir interpreter executes integer control flow and globals" {
 }
 
 ///|
+test "mir interpreters use merged global initializer after extern declaration" {
+  let source =
+    #|extern int g;
+    #|int g = 7;
+    #|int main(void) { return g; }
+  expect_interp(source, 7L)
+  expect_body_interp(source, 7L)
+}
+
+///|
 test "mir interpreter evaluates scalar address dereference cancellation" {
   let source =
     #|int main(void) {

@@ -44,6 +44,22 @@ fn mir_body_array_info(ty : @parser.Type) -> (@parser.Type, Int)? {
 }
 
 ///|
+fn mir_body_global_scalar_init(init : MirGlobalInit?) -> Int64? {
+  match init {
+    Some(MirGlobalScalarInt(bits)) => Some(bits)
+    _ => None
+  }
+}
+
+///|
+fn mir_body_global_array_init(init : MirGlobalInit?) -> Array[MirGlobalInit]? {
+  match init {
+    Some(MirGlobalArray(items)) => Some(items)
+    _ => None
+  }
+}
+
+///|
 fn BodyInterpreter::new(program : Program) -> BodyInterpreter {
   let globals : Map[String, Int64] = {}
   let global_memory : Map[Int64, Int64] = {}
@@ -56,25 +72,22 @@ fn BodyInterpreter::new(program : Program) -> BodyInterpreter {
       next_global += 1
     }
     if mir_body_scalar_type(decl.ty) {
-      let value = match decl.init {
-        Some(Scalar(expr)) =>
-          match program.fold_const(expr, Scope::empty()) {
-            Some(bits) => bits
-            None => 0L
-          }
-        _ => 0L
+      let value = match mir_body_global_scalar_init(decl.init) {
+        Some(bits) => bits
+        None => 0L
       }
       globals[decl.name] = program.runtime_cast_int(value, decl.ty)
     } else {
-      match (mir_body_array_info(decl.ty), decl.init) {
-        (Some((elem_ty, len)), Some(Array(items))) => {
+      match
+        (mir_body_array_info(decl.ty), mir_body_global_array_init(decl.init)) {
+        (Some((elem_ty, len)), Some(items)) => {
           if !global_addrs.contains(decl.name) || !mir_body_scalar_type(elem_ty) {
             continue
           }
           let base = global_addrs[decl.name]
           let limit = if items.length() < len { items.length() } else { len }
           for i in 0..<limit {
-            match program.fold_const(items[i], Scope::empty()) {
+            match mir_body_global_scalar_init(Some(items[i])) {
               Some(bits) =>
                 global_memory[base - i.to_int64()] = program.runtime_cast_int(
                   bits, elem_ty,

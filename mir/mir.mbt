@@ -134,7 +134,7 @@ pub(all) struct Program {
   global_decls : Array[MirGlobalDecl]
   aggregate_decls : Array[MirAggregateDecl]
   funcs : Map[String, FuncSig]
-  globals : Map[String, @parser.GlobalDecl]
+  globals : Map[String, MirGlobalDecl]
   aggregates : Map[String, MirAggregateDecl]
   layouts : Map[String, AggregateLayout]
   bodies : Map[String, MirFuncBody]
@@ -143,29 +143,6 @@ pub(all) struct Program {
 ///|
 pub fn Scope::empty() -> Scope {
   { locals: {}, current_func: "" }
-}
-
-///|
-fn global_has_init(g : @parser.GlobalDecl) -> Bool {
-  g.init is Some(_)
-}
-
-///|
-fn should_replace_global_decl(
-  old : @parser.GlobalDecl,
-  next : @parser.GlobalDecl,
-) -> Bool {
-  if next.is_extern && !global_has_init(next) {
-    false
-  } else if !global_has_init(old) && global_has_init(next) {
-    true
-  } else if old.is_extern && !next.is_extern {
-    true
-  } else if global_has_init(old) && !global_has_init(next) {
-    false
-  } else {
-    global_has_init(next)
-  }
 }
 
 ///|
@@ -277,6 +254,22 @@ fn MirGlobalDecl::with_init(
     visibility: self.visibility,
     symbol_alias: self.symbol_alias,
     section: self.section,
+  }
+}
+
+///|
+fn MirGlobalDecl::from_parser(g : @parser.GlobalDecl) -> MirGlobalDecl {
+  {
+    ty: g.ty,
+    name: g.name,
+    init: None,
+    has_init: g.init is Some(_),
+    is_static: g.is_static,
+    is_extern: g.is_extern,
+    is_weak: g.is_weak,
+    visibility: g.visibility,
+    symbol_alias: g.symbol_alias,
+    section: g.section,
   }
 }
 
@@ -492,25 +485,21 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
       has_body: decl.body is Some(_),
     })
   }
-  let globals : Map[String, @parser.GlobalDecl] = {}
+  let globals : Map[String, MirGlobalDecl] = {}
   let global_decls : Array[MirGlobalDecl] = []
   for g in source.globals {
+    let mir_global = MirGlobalDecl::from_parser(g)
     if !globals.contains(g.name) ||
-      should_replace_global_decl(globals[g.name], g) {
-      globals[g.name] = g
+      should_replace_mir_global_decl(globals[g.name], mir_global) {
+      if globals.contains(g.name) {
+        globals[g.name] = mir_global.with_merged_attrs(globals[g.name])
+      } else {
+        globals[g.name] = mir_global
+      }
+    } else {
+      globals[g.name] = globals[g.name].with_merged_attrs(mir_global)
     }
-    global_decls.push({
-      ty: g.ty,
-      name: g.name,
-      init: None,
-      has_init: g.init is Some(_),
-      is_static: g.is_static,
-      is_extern: g.is_extern,
-      is_weak: g.is_weak,
-      visibility: g.visibility,
-      symbol_alias: g.symbol_alias,
-      section: g.section,
-    })
+    global_decls.push(mir_global)
   }
   let aggregates : Map[String, MirAggregateDecl] = {}
   let aggregate_decls : Array[MirAggregateDecl] = []
@@ -545,6 +534,9 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
     program.global_decls[i] = program.global_decls[i].with_init(
       program.lower_mir_global_init(g.init),
     )
+  }
+  for g in merge_global_decls(program.global_decls) {
+    program.globals[g.name] = g
   }
   for decl in source.decls {
     match program.lower_mir_func_body(decl) {

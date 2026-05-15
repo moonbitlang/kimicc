@@ -22,7 +22,9 @@ integer-scalar subset.
   attributes, and whether an initializer existed. Initializer payload lowering
   has started for simple and constant-folded integer, string, and brace-list
   forms; unsupported initializer expressions are marked explicitly while data
-  lowering migrates.
+  lowering migrates. The merged `Program.globals` lookup map also stores
+  `MirGlobalDecl` records, so MIR type queries do not retain parser global
+  declaration nodes.
 - `Program.aggregate_decls` stores MIR-owned struct/union declaration metadata.
   Target-specific placement remains in `Program.layouts`, so source declaration
   facts and computed ABI/layout facts stay separated. MIR layout computation now
