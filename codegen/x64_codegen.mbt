@@ -4821,9 +4821,13 @@ fn X64Codegen::global_expr_type(
   self : X64Codegen,
   expr : @parser.Expr,
 ) -> @parser.Type {
-  match self.mir {
+  match self.mir_module {
     Some(mir) => return mir.global_expr_type(expr)
-    None => ()
+    None =>
+      match self.mir {
+        Some(mir) => return mir.global_expr_type(expr)
+        None => ()
+      }
   }
   match expr {
     Number(value) => number_literal_type(value)

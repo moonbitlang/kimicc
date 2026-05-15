@@ -118,6 +118,7 @@ pub(all) struct MirModule {
   bodies : Map[String, MirFuncBody]
 }
 pub fn MirModule::field_layout(Self, @parser.Type, String) -> FieldLayout?
+pub fn MirModule::global_expr_type(Self, @parser.Expr) -> @parser.Type
 pub fn MirModule::offset_of_path(Self, @parser.Type, Array[@parser.OffsetDesignator]) -> Int?
 pub fn MirModule::type_align(Self, @parser.Type) -> Int
 pub fn MirModule::type_size(Self, @parser.Type) -> Int

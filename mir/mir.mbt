@@ -1235,6 +1235,17 @@ fn MirModule::offset_array_element(
 }
 
 ///|
+fn MirModule::pointer_element(
+  self : MirModule,
+  ty : @parser.Type,
+) -> @parser.Type? {
+  match self.core_type(ty) {
+    Pointer(elem) | Array(elem, _) => Some(elem)
+    _ => None
+  }
+}
+
+///|
 fn MirModule::aggregate_layout_by_name(
   self : MirModule,
   name : String,
@@ -1381,6 +1392,48 @@ pub fn MirModule::offset_of_path(
     }
   }
   Some(offset)
+}
+
+///|
+pub fn MirModule::global_expr_type(
+  self : MirModule,
+  expr : @parser.Expr,
+) -> @parser.Type {
+  match expr {
+    Number(value) => number_literal_type(value)
+    FloatLiteral(_) => Double
+    Var(name) =>
+      if self.globals.contains(name) {
+        self.globals[name].ty
+      } else if self.funcs.contains(name) {
+        let sig = self.funcs[name]
+        FuncPtr(sig.ret, sig.params, sig.variadic)
+      } else {
+        Pointer(Void)
+      }
+    String(value) => Array(SChar, value.length() + 1)
+    CompoundLiteral(ty, _, _) => ty
+    DesignatedField(_, e) | DesignatedIndex(_, e) | DesignatedRange(_, _, e) =>
+      self.global_expr_type(e)
+    Cast(ty, _) => ty
+    AddrOf(e) => Pointer(self.global_expr_type(e))
+    Deref(e) =>
+      match self.core_type(self.global_expr_type(e)) {
+        Pointer(elem) | Array(elem, _) => elem
+        _ => SInt
+      }
+    ArrayAccess(base, _) =>
+      match self.pointer_element(self.global_expr_type(base)) {
+        Some(elem) => elem
+        None => SInt
+      }
+    MemberAccess(obj, field) =>
+      match self.field_layout(self.global_expr_type(obj), field) {
+        Some(layout) => layout.ty
+        None => SInt
+      }
+    _ => SInt
+  }
 }
 
 ///|

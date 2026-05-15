@@ -109,6 +109,7 @@ test "mir module projection carries parser-free semantic facts" {
   let source =
     #|struct Pair { int a; int b; };
     #|int g = 3;
+    #|struct Pair gp;
     #|int main(void) { return g; }
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   let mir_module = mir.to_module()
@@ -130,6 +131,14 @@ test "mir module projection carries parser-free semantic facts" {
     Some(offset) => inspect(offset, content="4")
     None => abort("missing Pair.b offset")
   }
+  inspect(
+    mir_module.global_expr_type(MemberAccess(Var("gp"), "b")),
+    content="SInt",
+  )
+  inspect(
+    mir_module.global_expr_type(AddrOf(MemberAccess(Var("gp"), "b"))),
+    content="Pointer(SInt)",
+  )
   inspect(mir_module.bodies.contains("main").to_string(), content="true")
 }
 
