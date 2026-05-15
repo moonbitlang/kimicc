@@ -137,6 +137,33 @@ test "mir owns global declaration metadata" {
 }
 
 ///|
+test "mir owns simple global initializer metadata" {
+  let source =
+    #|int scalar = 7;
+    #|char *text = "ok";
+    #|int arr[2] = {1, 2};
+    #|int expr = 1 + 2;
+    #|int main(void) { return scalar; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match mir.global_decls[0].init {
+    Some(MirGlobalScalarInt(7)) => ()
+    _ => abort("expected scalar integer MIR global initializer")
+  }
+  match mir.global_decls[1].init {
+    Some(MirGlobalString("ok")) => ()
+    _ => abort("expected string MIR global initializer")
+  }
+  match mir.global_decls[2].init {
+    Some(MirGlobalArray([MirGlobalScalarInt(1), MirGlobalScalarInt(2)])) => ()
+    _ => abort("expected array MIR global initializer")
+  }
+  match mir.global_decls[3].init {
+    Some(MirGlobalInitUnsupported) => ()
+    _ => abort("expected unsupported MIR global initializer")
+  }
+}
+
+///|
 test "mir owns aggregate declaration metadata" {
   let source =
     #|struct __attribute__((packed)) S { char c; int bits:5; };

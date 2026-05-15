@@ -79,6 +79,7 @@ pub(all) struct MirFuncDecl {
 pub(all) struct MirGlobalDecl {
   ty : @parser.Type
   name : String
+  init : MirGlobalInit?
   has_init : Bool
   is_static : Bool
   is_extern : Bool
@@ -86,6 +87,13 @@ pub(all) struct MirGlobalDecl {
   visibility : String?
   symbol_alias : String?
   section : String?
+} derive(Eq)
+
+pub(all) enum MirGlobalInit {
+  MirGlobalScalarInt(Int64)
+  MirGlobalString(String)
+  MirGlobalArray(Array[MirGlobalInit])
+  MirGlobalInitUnsupported
 } derive(Eq)
 
 pub(all) struct MirLocal {

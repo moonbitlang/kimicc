@@ -43,12 +43,14 @@ pub(all) struct MirFuncDecl {
 ///|
 /// Global declaration metadata owned by MIR.
 ///
-/// Initializer payloads are still represented by parser global initializers
-/// during the transition; `has_init` lets backend-facing checks reason about
-/// declaration/definition state without reading parser declaration nodes.
+/// Simple initializer payloads are represented by `init`; unsupported
+/// initializer syntax is marked explicitly during the data-layer transition.
+/// `has_init` lets backend-facing checks reason about declaration/definition
+/// state without reading parser declaration nodes.
 pub(all) struct MirGlobalDecl {
   ty : @parser.Type
   name : String
+  init : MirGlobalInit?
   has_init : Bool
   is_static : Bool
   is_extern : Bool
@@ -56,6 +58,19 @@ pub(all) struct MirGlobalDecl {
   visibility : String?
   symbol_alias : String?
   section : String?
+} derive(Eq)
+
+///|
+/// MIR-owned global initializer subset.
+///
+/// `MirGlobalInitUnsupported` marks initializer syntax that still exists only
+/// as parser expressions. This lets later phases distinguish missing
+/// initializers from present-but-not-lowered initializers.
+pub(all) enum MirGlobalInit {
+  MirGlobalScalarInt(Int64)
+  MirGlobalString(String)
+  MirGlobalArray(Array[MirGlobalInit])
+  MirGlobalInitUnsupported
 } derive(Eq)
 
 ///|
@@ -152,6 +167,45 @@ fn should_replace_global_decl(
 }
 
 ///|
+fn lower_mir_global_init(init : @parser.GlobalInit?) -> MirGlobalInit? {
+  match init {
+    None => None
+    Some(Scalar(expr)) => Some(lower_mir_global_scalar_init(expr))
+    Some(Array(exprs)) => {
+      if exprs.length() == 1 {
+        match exprs[0] {
+          String(s) => return Some(MirGlobalString(s))
+          _ => ()
+        }
+      }
+      let values : Array[MirGlobalInit] = []
+      for expr in exprs {
+        match expr {
+          Array(nested) => {
+            let nested_values : Array[MirGlobalInit] = []
+            for nested_expr in nested {
+              nested_values.push(lower_mir_global_scalar_init(nested_expr))
+            }
+            values.push(MirGlobalArray(nested_values))
+          }
+          _ => values.push(lower_mir_global_scalar_init(expr))
+        }
+      }
+      Some(MirGlobalArray(values))
+    }
+  }
+}
+
+///|
+fn lower_mir_global_scalar_init(expr : @parser.Expr) -> MirGlobalInit {
+  match expr {
+    Number(n) => MirGlobalScalarInt(n)
+    String(s) => MirGlobalString(s)
+    _ => MirGlobalInitUnsupported
+  }
+}
+
+///|
 pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
   let funcs : Map[String, FuncSig] = {}
   let decls : Array[MirFuncDecl] = []
@@ -195,6 +249,7 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
     global_decls.push({
       ty: g.ty,
       name: g.name,
+      init: lower_mir_global_init(g.init),
       has_init: g.init is Some(_),
       is_static: g.is_static,
       is_extern: g.is_extern,
