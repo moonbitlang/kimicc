@@ -56,6 +56,23 @@ fn expect_interp(source : String, expected : Int64) -> Unit {
 }
 
 ///|
+fn expect_body_interp(source : String, expected : Int64) -> Unit {
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match mir.interpret_body_i64("main", []) {
+    Ok(value) =>
+      if value != expected {
+        abort(
+          "unexpected MIR body interpreter result: expected " +
+          expected.to_string() +
+          ", got " +
+          value.to_string(),
+        )
+      }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "mir records target-specific scalar layout" {
   let source = "int main(void) { return 0; }"
   let darwin = @mir.lower(@parser.parse(source), @target.Target::default())
@@ -135,6 +152,80 @@ test "mir computes expression and global expression types" {
     mir.expr_type(Var("callee"), scope),
     content="FuncPtr(Double, [SInt], true)",
   )
+}
+
+///|
+test "mir lowers scalar function bodies into MIR-owned statements" {
+  let source =
+    #|int main(void) {
+    #|  int x = 6;
+    #|  int y = 7;
+    #|  return x * y;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  let body = mir.bodies["main"]
+  inspect(body.locals.length(), content="2")
+  match mir.interpret_body_i64("main", []) {
+    Ok(value) => inspect(value, content="42")
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "mir body interpreter executes calls branches and loops" {
+  let source =
+    #|int add_if_odd(int acc, int x) {
+    #|  if (x % 2) {
+    #|    return acc + x;
+    #|  }
+    #|  return acc;
+    #|}
+    #|int main(void) {
+    #|  int i = 0;
+    #|  int sum = 0;
+    #|  while (i < 10) {
+    #|    sum = add_if_odd(sum, i);
+    #|    i = i + 1;
+    #|  }
+    #|  return sum;
+    #|}
+  expect_body_interp(source, 25L)
+}
+
+///|
+test "mir body lowering uses scoped stable local ids" {
+  let source =
+    #|int main(void) {
+    #|  int x = 1;
+    #|  {
+    #|    int x = 40;
+    #|    x = x + 2;
+    #|  }
+    #|  return x;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  let body = mir.bodies["main"]
+  inspect(body.locals.length(), content="2")
+  expect_body_interp(source, 1L)
+}
+
+///|
+test "mir body lowering refuses unsupported parser constructs" {
+  let source =
+    #|int main(void) {
+    #|  int sum = 0;
+    #|  for (int i = 0; i < 4; i = i + 1) {
+    #|    sum = sum + i;
+    #|  }
+    #|  return sum;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="false")
+  match mir.interpret_body_i64("main", []) {
+    Ok(_) => abort("expected missing MIR body")
+    Err(err) => inspect(err.contains("no MIR body"), content="true")
+  }
 }
 
 ///|

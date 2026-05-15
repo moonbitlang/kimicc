@@ -1,8 +1,10 @@
 # MIR Architecture
 
-`kimicc` currently uses MIR as a target-sensitive semantic layer, not as a full
-instruction-level machine IR. The parser AST remains the main representation
-that both assembly backends walk.
+`kimicc` currently uses MIR as a target-sensitive semantic layer plus an
+emerging function-body layer, not as a full instruction-level machine IR. The
+parser AST remains the main representation that both assembly backends walk,
+but MIR can now own supported scalar function bodies independently of parser
+statements.
 
 ## Current Shape
 
@@ -10,6 +12,15 @@ that both assembly backends walk.
   function signatures, selected global declarations, aggregate declarations,
   target-specific sizes/alignments, field layouts, expression types, and integer
   and floating constant folds.
+- `Program.bodies` stores MIR-owned function bodies for the supported scalar
+  subset. Body lowering assigns stable `MirLocal` IDs, records typed value and
+  statement nodes, and deliberately omits functions that still need unsupported
+  parser constructs. This gives later codegen a concrete layer to target without
+  depending on parser statement/expression nodes.
+- `Program::interpret_body_i64` executes those lowered MIR bodies directly. It
+  currently covers integer locals, assignments, direct calls, returns, casts,
+  unary/binary scalar operators, conditionals, `while`, and ternaries. Missing
+  bodies return `Err` instead of falling back to parser AST execution.
 - `Program::interpret_i64` is an integer-only interpreter intended for
   compile-test oracles. It supports scalar functions, locals, globals, calls,
   casts, arithmetic, conditionals, loops, scalar switches, simple gotos, selected
@@ -149,10 +160,17 @@ program behavior.
 
 ## Remaining Migration Path
 
-1. Expand MIR facts only when a backend or test needs them.
-2. Grow the MIR interpreter as a compile-test oracle before relying on it for
-   broader conformance claims.
-3. Move more backend semantic queries to MIR behind tests that compare old and
-   new behavior.
-4. Only after semantic sharing is stable, consider a real machine-level IR with
-   explicit virtual registers, blocks, target lowering, and allocation.
+1. Expand MIR body lowering statement by statement, starting with `for`,
+   `break`/`continue`, `switch`, addressable locals, and simple aggregate/member
+   access.
+2. Keep `Program::interpret_body_i64` as the first consumer for each new body
+   feature so unsupported behavior fails explicitly before codegen depends on
+   it.
+3. Add backend tests that compare parser-AST codegen with MIR-body codegen for
+   the supported subset, then move one backend path at a time to consume
+   `MirFuncBody`.
+4. Once both backends consume MIR bodies for ordinary scalar functions, remove
+   duplicated backend statement walking for that subset and leave parser AST use
+   in front-end-only lowering code.
+5. Only after semantic/body sharing is stable, consider a real machine-level IR
+   with explicit virtual registers, blocks, target lowering, and allocation.

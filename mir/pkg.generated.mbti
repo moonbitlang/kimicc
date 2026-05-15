@@ -39,6 +39,41 @@ pub(all) struct FuncSig {
   weak : Bool
 } derive(Eq)
 
+pub(all) struct MirFuncBody {
+  name : String
+  ret : @parser.Type
+  params : Array[MirLocal]
+  locals : Array[MirLocal]
+  body : Array[MirStmt]
+} derive(Eq)
+
+pub(all) struct MirLocal {
+  id : Int
+  name : String
+  ty : @parser.Type
+} derive(Eq)
+
+pub(all) enum MirStmt {
+  MirDeclare(MirLocal, MirValue?)
+  MirExprStmt(MirValue)
+  MirReturn(MirValue?)
+  MirIf(MirValue, Array[MirStmt], Array[MirStmt])
+  MirWhile(MirValue, Array[MirStmt])
+  MirBlock(Array[MirStmt])
+} derive(Eq)
+
+pub(all) enum MirValue {
+  MirConst(Int64, @parser.Type)
+  MirLocal(MirLocal)
+  MirUnary(String, MirValue, @parser.Type)
+  MirBinary(String, MirValue, MirValue, @parser.Type)
+  MirCast(@parser.Type, MirValue)
+  MirCall(String, Array[MirValue], @parser.Type)
+  MirAssignLocal(MirLocal, MirValue)
+  MirTernary(MirValue, MirValue, MirValue, @parser.Type)
+} derive(Eq)
+pub fn MirValue::ty(Self) -> @parser.Type
+
 pub(all) struct Program {
   target : @target.Target
   source : @parser.Program
@@ -46,12 +81,14 @@ pub(all) struct Program {
   globals : Map[String, @parser.GlobalDecl]
   structs : Map[String, @parser.StructDecl]
   layouts : Map[String, AggregateLayout]
+  bodies : Map[String, MirFuncBody]
 }
 pub fn Program::expr_type(Self, @parser.Expr, Scope) -> @parser.Type
 pub fn Program::field_layout(Self, @parser.Type, String) -> FieldLayout?
 pub fn Program::fold_const(Self, @parser.Expr, Scope) -> Int64?
 pub fn Program::fold_float_const(Self, @parser.Expr, Scope) -> Double?
 pub fn Program::global_expr_type(Self, @parser.Expr) -> @parser.Type
+pub fn Program::interpret_body_i64(Self, String, Array[Int64]) -> Result[Int64, String]
 pub fn Program::interpret_i64(Self, String, Array[Int64]) -> Result[Int64, String]
 pub fn Program::offset_of_path(Self, @parser.Type, Array[@parser.OffsetDesignator]) -> Int?
 pub fn Program::type_align(Self, @parser.Type) -> Int

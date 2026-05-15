@@ -47,6 +47,7 @@ pub(all) struct Program {
   globals : Map[String, @parser.GlobalDecl]
   structs : Map[String, @parser.StructDecl]
   layouts : Map[String, AggregateLayout]
+  bodies : Map[String, MirFuncBody]
 }
 
 ///|
@@ -104,7 +105,22 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
   for decl in source.structs {
     structs[decl.name] = decl
   }
-  { target, source, funcs, globals, structs, layouts: {} }
+  let program = {
+    target,
+    source,
+    funcs,
+    globals,
+    structs,
+    layouts: {},
+    bodies: {},
+  }
+  for decl in source.decls {
+    match program.lower_mir_func_body(decl) {
+      Some(body) => program.bodies[decl.name] = body
+      None => ()
+    }
+  }
+  program
 }
 
 ///|
