@@ -39,7 +39,7 @@ pub struct Codegen {
   strings : Array[String]
   mut break_label : String?
   mut continue_label : String?
-  globals : Map[String, @parser.GlobalDecl]
+  globals : Map[String, @mir.MirGlobalDecl]
   mut emitted_labels : Map[String, String]
   mut defined_labels : Map[String, Bool]
   mut fp_literals : Array[Double]

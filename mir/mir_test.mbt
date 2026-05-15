@@ -137,6 +137,26 @@ test "mir owns global declaration metadata" {
 }
 
 ///|
+test "mir merges global declaration metadata" {
+  let source =
+    #|extern int g __attribute__((weak));
+    #|int g = 3;
+    #|extern int g;
+    #|int main(void) { return g; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  let globals = @mir.merge_global_decls(mir.global_decls)
+  inspect(globals.length(), content="1")
+  inspect(globals[0].name, content="g")
+  inspect(globals[0].has_init, content="true")
+  inspect(globals[0].is_extern, content="false")
+  inspect(globals[0].is_weak, content="true")
+  match globals[0].init {
+    Some(MirGlobalScalarInt(3)) => ()
+    _ => abort("expected merged global initializer")
+  }
+}
+
+///|
 test "mir owns simple global initializer metadata" {
   let source =
     #|int scalar = 7;

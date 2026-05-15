@@ -167,6 +167,99 @@ fn should_replace_global_decl(
 }
 
 ///|
+fn should_replace_mir_global_decl(
+  old : MirGlobalDecl,
+  next : MirGlobalDecl,
+) -> Bool {
+  if next.is_extern && !next.has_init {
+    false
+  } else if !old.has_init && next.has_init {
+    true
+  } else if old.is_extern && !next.is_extern {
+    true
+  } else if old.has_init && !next.has_init {
+    false
+  } else {
+    next.has_init
+  }
+}
+
+///|
+fn merge_mir_global_visibility(
+  primary : MirGlobalDecl,
+  other : MirGlobalDecl,
+) -> String? {
+  match primary.visibility {
+    Some(_) => primary.visibility
+    None => other.visibility
+  }
+}
+
+///|
+fn merge_mir_global_alias(
+  primary : MirGlobalDecl,
+  other : MirGlobalDecl,
+) -> String? {
+  match primary.symbol_alias {
+    Some(_) => primary.symbol_alias
+    None => other.symbol_alias
+  }
+}
+
+///|
+fn merge_mir_global_section(
+  primary : MirGlobalDecl,
+  other : MirGlobalDecl,
+) -> String? {
+  match primary.section {
+    Some(_) => primary.section
+    None => other.section
+  }
+}
+
+///|
+fn MirGlobalDecl::with_merged_attrs(
+  self : MirGlobalDecl,
+  other : MirGlobalDecl,
+) -> MirGlobalDecl {
+  {
+    ty: self.ty,
+    name: self.name,
+    init: self.init,
+    has_init: self.has_init,
+    is_static: self.is_static,
+    is_extern: self.is_extern,
+    is_weak: self.is_weak || other.is_weak,
+    visibility: merge_mir_global_visibility(self, other),
+    symbol_alias: merge_mir_global_alias(self, other),
+    section: merge_mir_global_section(self, other),
+  }
+}
+
+///|
+pub fn merge_global_decls(
+  globals : Array[MirGlobalDecl],
+) -> Array[MirGlobalDecl] {
+  let merged : Array[MirGlobalDecl] = []
+  for g in globals {
+    let mut found = -1
+    for i = 0; i < merged.length(); i = i + 1 {
+      if merged[i].name == g.name {
+        found = i
+      }
+    }
+    if found < 0 {
+      merged.push(g)
+    } else if should_replace_mir_global_decl(merged[found], g) {
+      merged[found] = g.with_merged_attrs(merged[found])
+    } else {
+      merged[found] = merged[found].with_merged_attrs(g)
+    }
+  }
+  merged
+}
+
+///|
 fn MirGlobalDecl::with_init(
   self : MirGlobalDecl,
   init : MirGlobalInit?,

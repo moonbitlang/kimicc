@@ -33,6 +33,7 @@ fn expect_semantic_opt_int(
 ///|
 fn init_darwin_codegen_facts(prog : @parser.Program) -> Codegen {
   let codegen = Codegen::new()
+  let mir = @mir.lower(prog, @target.Target::default())
   for decl in prog.structs {
     codegen.struct_decls[decl.name] = decl
   }
@@ -49,7 +50,7 @@ fn init_darwin_codegen_facts(prog : @parser.Program) -> Codegen {
     }
     codegen.func_param_types[decl.name] = param_types
   }
-  for global in prog.globals {
+  for global in @mir.merge_global_decls(mir.global_decls) {
     codegen.globals[global.name] = global
   }
   codegen
@@ -58,6 +59,7 @@ fn init_darwin_codegen_facts(prog : @parser.Program) -> Codegen {
 ///|
 fn init_x64_codegen_facts(prog : @parser.Program) -> X64Codegen {
   let codegen = X64Codegen::new()
+  let mir = @mir.lower(prog, semantic_linux_target())
   for decl in prog.structs {
     codegen.struct_decls[decl.name] = decl
   }
@@ -73,7 +75,7 @@ fn init_x64_codegen_facts(prog : @parser.Program) -> X64Codegen {
     }
     codegen.func_param_types[decl.name] = param_types
   }
-  for global in prog.globals {
+  for global in @mir.merge_global_decls(mir.global_decls) {
     codegen.globals[global.name] = global
   }
   codegen

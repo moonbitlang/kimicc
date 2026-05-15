@@ -20,7 +20,7 @@ priv struct X64Codegen {
     Array[(String, @parser.Type, Int, Int, Int, Int)],
   ]
   struct_decls : Map[String, @parser.StructDecl]
-  globals : Map[String, @parser.GlobalDecl]
+  globals : Map[String, @mir.MirGlobalDecl]
   strings : Array[String]
   fp_literals : Array[Double]
   mut va_list_offsets : Map[String, Int]
@@ -114,6 +114,16 @@ fn X64Codegen::register_mir_function_decls(
       param_types.push(param.ty)
     }
     self.func_param_types[decl.name] = param_types
+  }
+}
+
+///|
+fn X64Codegen::register_mir_global_decls(
+  self : X64Codegen,
+  mir : @mir.Program,
+) -> Unit {
+  for global in @mir.merge_global_decls(mir.global_decls) {
+    self.globals[global.name] = global
   }
 }
 
@@ -9139,8 +9149,9 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
     None => ()
   }
   let globals = merge_global_decls(prog.globals)
-  for g in globals {
-    self.globals[g.name] = g
+  match self.mir {
+    Some(mir) => self.register_mir_global_decls(mir)
+    None => ()
   }
   match self.mir {
     Some(mir) =>

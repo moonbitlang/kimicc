@@ -25,7 +25,7 @@ pub struct Codegen {
   strings : Array[String]
   mut break_label : String?
   mut continue_label : String?
-  globals : Map[String, @parser.GlobalDecl]
+  globals : Map[String, @mir.MirGlobalDecl]
   mut emitted_labels : Map[String, String]
   mut defined_labels : Map[String, Bool]
   mut fp_literals : Array[Double]
@@ -1174,6 +1174,16 @@ fn Codegen::register_mir_function_decls(
 }
 
 ///|
+fn Codegen::register_mir_global_decls(
+  self : Codegen,
+  mir : @mir.Program,
+) -> Unit {
+  for global in @mir.merge_global_decls(mir.global_decls) {
+    self.globals[global.name] = global
+  }
+}
+
+///|
 fn Codegen::emit_global_scalar(
   self : Codegen,
   ty : @parser.Type,
@@ -1572,8 +1582,9 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   }
   let globals = merge_global_decls(prog.globals)
   // Record global variables
-  for g in globals {
-    self.globals[g.name] = g
+  match self.mir {
+    Some(mir) => self.register_mir_global_decls(mir)
+    None => ()
   }
   let func_label_maps : Map[String, Map[String, String]] = {}
   for decl in prog.decls {

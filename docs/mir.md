@@ -209,7 +209,11 @@ Both assembly backends also seed their function return/parameter metadata from
 declarations. The linux/amd64 backend also emits function alias, weak
 declaration, visibility, constructor, and destructor lifecycle directives from
 `Program.decls`, leaving parser function declarations out of that metadata-only
-emission path.
+emission path. Both backend global-symbol lookup maps are seeded from merged
+`Program.global_decls`, so type and extern/alias questions during expression
+codegen no longer require parser global declaration records. Global initializer
+emission itself still uses the parser fallback path while MIR data initializers
+are being expanded.
 
 ## Why This Layer Is Useful
 
