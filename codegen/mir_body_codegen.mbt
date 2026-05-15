@@ -793,12 +793,12 @@ fn Codegen::gen_mir_stmts(
 
 ///|
 fn Codegen::try_gen_mir_func(self : Codegen, decl : @parser.FuncDecl) -> Bool {
-  match self.mir {
-    Some(mir) =>
-      if mir.bodies.contains(decl.name) {
-        let body = mir.bodies[decl.name]
+  match self.mir_module {
+    Some(mir_module) =>
+      if mir_module.bodies.contains(decl.name) {
+        let body = mir_module.bodies[decl.name]
         let mir_decl = match
-          mir.decls.iter().find_first(fn(d) { d.name == decl.name }) {
+          mir_module.decls.iter().find_first(fn(d) { d.name == decl.name }) {
           Some(d) => d
           None => return false
         }
@@ -806,7 +806,7 @@ fn Codegen::try_gen_mir_func(self : Codegen, decl : @parser.FuncDecl) -> Bool {
             body,
             mir_decl.variadic,
             8,
-            mir.to_module(),
+            mir_module,
           ) {
           return false
         }
@@ -1397,12 +1397,12 @@ fn X64Codegen::try_gen_mir_func(
   self : X64Codegen,
   decl : @parser.FuncDecl,
 ) -> Bool {
-  match self.mir {
-    Some(mir) =>
-      if mir.bodies.contains(decl.name) {
-        let body = mir.bodies[decl.name]
+  match self.mir_module {
+    Some(mir_module) =>
+      if mir_module.bodies.contains(decl.name) {
+        let body = mir_module.bodies[decl.name]
         let mir_decl = match
-          mir.decls.iter().find_first(fn(d) { d.name == decl.name }) {
+          mir_module.decls.iter().find_first(fn(d) { d.name == decl.name }) {
           Some(d) => d
           None => return false
         }
@@ -1410,7 +1410,7 @@ fn X64Codegen::try_gen_mir_func(
             body,
             mir_decl.variadic,
             6,
-            mir.to_module(),
+            mir_module,
           ) {
           return false
         }

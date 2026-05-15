@@ -1780,7 +1780,11 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
     Some(mir) => Some(mir)
     None =>
       match self.mir {
-        Some(mir) => Some(mir.to_module())
+        Some(mir) => {
+          let mir_module = mir.to_module()
+          self.mir_module = Some(mir_module)
+          Some(mir_module)
+        }
         None => None
       }
   }
