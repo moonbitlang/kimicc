@@ -873,16 +873,14 @@ fn Codegen::gen_mir_stmts(
 }
 
 ///|
-fn Codegen::try_gen_mir_func(self : Codegen, decl : @parser.FuncDecl) -> Bool {
+fn Codegen::try_gen_mir_func_decl(
+  self : Codegen,
+  mir_decl : @mir.MirFuncDecl,
+) -> Bool {
   match self.mir_module {
     Some(mir_module) =>
-      if mir_module.bodies.contains(decl.name) {
-        let body = mir_module.bodies[decl.name]
-        let mir_decl = match
-          mir_module.decls.iter().find_first(fn(d) { d.name == decl.name }) {
-          Some(d) => d
-          None => return false
-        }
+      if mir_decl.has_body && mir_module.bodies.contains(mir_decl.name) {
+        let body = mir_module.bodies[mir_decl.name]
         if !mir_body_codegen_func_supported(
             body,
             mir_decl.variadic,
@@ -895,6 +893,18 @@ fn Codegen::try_gen_mir_func(self : Codegen, decl : @parser.FuncDecl) -> Bool {
         true
       } else {
         false
+      }
+    None => false
+  }
+}
+
+///|
+fn Codegen::try_gen_mir_func(self : Codegen, decl : @parser.FuncDecl) -> Bool {
+  match self.mir_module {
+    Some(mir_module) =>
+      match mir_module.decls.iter().find_first(fn(d) { d.name == decl.name }) {
+        Some(mir_decl) => self.try_gen_mir_func_decl(mir_decl)
+        None => false
       }
     None => false
   }
@@ -1526,13 +1536,23 @@ fn X64Codegen::try_gen_mir_func(
 ) -> Bool {
   match self.mir_module {
     Some(mir_module) =>
-      if mir_module.bodies.contains(decl.name) {
-        let body = mir_module.bodies[decl.name]
-        let mir_decl = match
-          mir_module.decls.iter().find_first(fn(d) { d.name == decl.name }) {
-          Some(d) => d
-          None => return false
-        }
+      match mir_module.decls.iter().find_first(fn(d) { d.name == decl.name }) {
+        Some(mir_decl) => self.try_gen_mir_func_decl(mir_decl)
+        None => false
+      }
+    None => false
+  }
+}
+
+///|
+fn X64Codegen::try_gen_mir_func_decl(
+  self : X64Codegen,
+  mir_decl : @mir.MirFuncDecl,
+) -> Bool {
+  match self.mir_module {
+    Some(mir_module) =>
+      if mir_decl.has_body && mir_module.bodies.contains(mir_decl.name) {
+        let body = mir_module.bodies[mir_decl.name]
         if !mir_body_codegen_func_supported(
             body,
             mir_decl.variadic,
