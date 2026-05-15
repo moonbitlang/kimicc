@@ -21,6 +21,9 @@ integer-scalar subset.
   metadata, including type, linkage-related attributes, visibility/section
   attributes, and whether an initializer existed. Initializer payload lowering
   is still a remaining data-layer migration.
+- `Program.aggregate_decls` stores MIR-owned struct/union declaration metadata.
+  Target-specific placement remains in `Program.layouts`, so source declaration
+  facts and computed ABI/layout facts stay separated.
 - `Program.bodies` stores MIR-owned function bodies for the supported scalar
   subset. Body lowering assigns stable `MirLocal` IDs, records typed value and
   statement nodes, and deliberately omits functions that still need unsupported

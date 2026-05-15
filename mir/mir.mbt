@@ -59,6 +59,26 @@ pub(all) struct MirGlobalDecl {
 } derive(Eq)
 
 ///|
+/// Aggregate field declaration metadata owned by MIR.
+pub(all) struct MirAggregateField {
+  name : String
+  ty : @parser.Type
+  bit_width : Int?
+} derive(Eq)
+
+///|
+/// Struct or union declaration metadata owned by MIR.
+///
+/// Target-specific byte/bit placement lives in `Program.layouts`; this keeps
+/// source declaration facts separate from computed layout facts.
+pub(all) struct MirAggregateDecl {
+  name : String
+  fields : Array[MirAggregateField]
+  is_union : Bool
+  is_packed : Bool
+} derive(Eq)
+
+///|
 /// Lexical expression-typing context used by MIR semantic queries.
 pub(all) struct Scope {
   locals : Map[String, @parser.Type]
@@ -95,6 +115,7 @@ pub(all) struct Program {
   source : @parser.Program
   decls : Array[MirFuncDecl]
   global_decls : Array[MirGlobalDecl]
+  aggregate_decls : Array[MirAggregateDecl]
   funcs : Map[String, FuncSig]
   globals : Map[String, @parser.GlobalDecl]
   structs : Map[String, @parser.StructDecl]
@@ -184,14 +205,26 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
     })
   }
   let structs : Map[String, @parser.StructDecl] = {}
+  let aggregate_decls : Array[MirAggregateDecl] = []
   for decl in source.structs {
     structs[decl.name] = decl
+    let fields : Array[MirAggregateField] = []
+    for field in decl.fields {
+      fields.push({ name: field.name, ty: field.ty, bit_width: field.bit_width })
+    }
+    aggregate_decls.push({
+      name: decl.name,
+      fields,
+      is_union: decl.is_union,
+      is_packed: decl.is_packed,
+    })
   }
   let program = {
     target,
     source,
     decls,
     global_decls,
+    aggregate_decls,
     funcs,
     globals,
     structs,

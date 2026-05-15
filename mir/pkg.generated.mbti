@@ -39,6 +39,19 @@ pub(all) struct FuncSig {
   weak : Bool
 } derive(Eq)
 
+pub(all) struct MirAggregateDecl {
+  name : String
+  fields : Array[MirAggregateField]
+  is_union : Bool
+  is_packed : Bool
+} derive(Eq)
+
+pub(all) struct MirAggregateField {
+  name : String
+  ty : @parser.Type
+  bit_width : Int?
+} derive(Eq)
+
 pub(all) struct MirFuncBody {
   name : String
   ret : @parser.Type
@@ -128,6 +141,7 @@ pub(all) struct Program {
   source : @parser.Program
   decls : Array[MirFuncDecl]
   global_decls : Array[MirGlobalDecl]
+  aggregate_decls : Array[MirAggregateDecl]
   funcs : Map[String, FuncSig]
   globals : Map[String, @parser.GlobalDecl]
   structs : Map[String, @parser.StructDecl]

@@ -137,6 +137,29 @@ test "mir owns global declaration metadata" {
 }
 
 ///|
+test "mir owns aggregate declaration metadata" {
+  let source =
+    #|struct __attribute__((packed)) S { char c; int bits:5; };
+    #|union U { int i; char c; };
+    #|int main(void) { return 0; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.aggregate_decls.length(), content="2")
+  inspect(mir.aggregate_decls[0].name, content="S")
+  inspect(mir.aggregate_decls[0].is_packed, content="true")
+  inspect(mir.aggregate_decls[0].is_union, content="false")
+  inspect(mir.aggregate_decls[0].fields[0].name, content="c")
+  inspect(mir.aggregate_decls[0].fields[0].ty, content="SChar")
+  inspect(mir.aggregate_decls[0].fields[1].name, content="bits")
+  match mir.aggregate_decls[0].fields[1].bit_width {
+    Some(5) => ()
+    _ => abort("unexpected bitfield width")
+  }
+  inspect(mir.aggregate_decls[1].name, content="U")
+  inspect(mir.aggregate_decls[1].is_union, content="true")
+  inspect(mir.aggregate_decls[1].fields.length(), content="2")
+}
+
+///|
 test "mir computes aggregate layout facts" {
   let source =
     #|struct S { char c; int i; short s; };
