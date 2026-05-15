@@ -1304,6 +1304,203 @@ fn Codegen::emit_global_scalar(
 }
 
 ///|
+fn Codegen::mir_global_scalar_int_supported(
+  self : Codegen,
+  ty : @parser.Type,
+) -> Bool {
+  match ty {
+    Aligned(inner, _) => self.mir_global_scalar_int_supported(inner)
+    _ =>
+      match ty {
+        Bool
+        | SChar
+        | UChar
+        | SShort
+        | UShort
+        | SInt
+        | UInt
+        | SLong
+        | ULong
+        | SLongLong
+        | ULongLong
+        | SInt128
+        | UInt128
+        | Float
+        | Double
+        | LongDouble
+        | Pointer(_)
+        | FuncPtr(_, _, _) => true
+        _ => false
+      }
+  }
+}
+
+///|
+fn Codegen::mir_global_string_supported(
+  self : Codegen,
+  ty : @parser.Type,
+) -> Bool {
+  match ty {
+    Aligned(inner, _) => self.mir_global_string_supported(inner)
+    _ =>
+      match ty {
+        Array(SChar, _) | Array(UChar, _) | Pointer(_) => true
+        _ => false
+      }
+  }
+}
+
+///|
+fn Codegen::mir_global_init_supported(
+  self : Codegen,
+  ty : @parser.Type,
+  init : @mir.MirGlobalInit,
+) -> Bool {
+  match ty {
+    Aligned(inner, _) => self.mir_global_init_supported(inner, init)
+    _ =>
+      match init {
+        MirGlobalInitUnsupported => false
+        MirGlobalScalarInt(_) => self.mir_global_scalar_int_supported(ty)
+        MirGlobalString(_) => self.mir_global_string_supported(ty)
+        MirGlobalArray(values) =>
+          match ty {
+            Array(elem_ty, n) => {
+              if values.length() > n {
+                return false
+              }
+              for value in values {
+                if !self.mir_global_init_supported(elem_ty, value) {
+                  return false
+                }
+              }
+              true
+            }
+            _ => false
+          }
+      }
+  }
+}
+
+///|
+fn Codegen::emit_mir_global_scalar_int(
+  self : Codegen,
+  ty : @parser.Type,
+  value : Int64,
+) -> Unit {
+  match ty {
+    Aligned(inner, _) => {
+      self.emit_mir_global_scalar_int(inner, value)
+      return
+    }
+    _ => ()
+  }
+  match ty {
+    Bool | SChar | UChar => self.emit("\t.byte\t" + value.to_string())
+    SShort | UShort => self.emit("\t.short\t" + value.to_string())
+    SInt | UInt => self.emit("\t.long\t" + value.to_string())
+    SInt128 => {
+      self.emit("\t.quad\t" + value.to_string())
+      let high = if value < 0L { "-1" } else { "0" }
+      self.emit("\t.quad\t" + high)
+    }
+    UInt128 => {
+      self.emit("\t.quad\t" + value.to_string())
+      self.emit("\t.quad\t0")
+    }
+    Float | Double | LongDouble => self.emit_global_float(ty, value.to_double())
+    _ => self.emit("\t.quad\t" + value.to_string())
+  }
+}
+
+///|
+fn Codegen::emit_mir_global_string(
+  self : Codegen,
+  ty : @parser.Type,
+  value : String,
+) -> Unit {
+  match ty {
+    Aligned(inner, _) => {
+      self.emit_mir_global_string(inner, value)
+      return
+    }
+    _ => ()
+  }
+  match ty {
+    Array(SChar, n) | Array(UChar, n) => {
+      self.emit("\t.asciz\t\"" + escape_string(value) + "\"")
+      let pad = n - value.length() - 1
+      if pad > 0 {
+        self.emit("\t.space\t" + pad.to_string())
+      }
+    }
+    _ => {
+      let idx = self.strings.length()
+      self.strings.push(value)
+      self.emit("\t.quad\t_str" + idx.to_string())
+    }
+  }
+}
+
+///|
+fn Codegen::emit_mir_global_init(
+  self : Codegen,
+  ty : @parser.Type,
+  init : @mir.MirGlobalInit,
+) -> Unit {
+  match ty {
+    Aligned(inner, _) => {
+      self.emit_mir_global_init(inner, init)
+      return
+    }
+    _ => ()
+  }
+  match init {
+    MirGlobalScalarInt(value) => self.emit_mir_global_scalar_int(ty, value)
+    MirGlobalString(value) => self.emit_mir_global_string(ty, value)
+    MirGlobalArray(values) =>
+      match ty {
+        Array(elem_ty, n) => {
+          let elem_size = self.type_size(elem_ty)
+          let mut emitted = 0
+          for value in values {
+            self.emit_mir_global_init(elem_ty, value)
+            emitted += 1
+          }
+          while emitted < n {
+            self.emit("\t.space\t" + elem_size.to_string())
+            emitted += 1
+          }
+        }
+        _ => self.emit("\t.space\t" + self.type_size(ty).to_string())
+      }
+    MirGlobalInitUnsupported =>
+      self.emit("\t.space\t" + self.type_size(ty).to_string())
+  }
+}
+
+///|
+fn Codegen::try_emit_mir_global_init(
+  self : Codegen,
+  g : @parser.GlobalDecl,
+) -> Bool {
+  match self.globals.get(g.name) {
+    Some(global) =>
+      match global.init {
+        Some(init) =>
+          if self.mir_global_init_supported(global.ty, init) {
+            self.emit_mir_global_init(global.ty, init)
+            true
+          } else {
+            false
+          }
+        None => false
+      }
+    None => false
+  }
+}
+
+///|
 fn global_initializer_value(expr : @parser.Expr) -> @parser.Expr {
   match expr {
     DesignatedField(_, e) | DesignatedIndex(_, e) | DesignatedRange(_, _, e) =>
@@ -1631,10 +1828,12 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
         }
         None => ()
       }
-      match g.init {
-        Some(Scalar(expr)) => self.emit_global_scalar(g.ty, expr)
-        Some(Array(exprs)) => self.emit_global_array(g.ty, exprs)
-        None => ()
+      if !self.try_emit_mir_global_init(g) {
+        match g.init {
+          Some(Scalar(expr)) => self.emit_global_scalar(g.ty, expr)
+          Some(Array(exprs)) => self.emit_global_array(g.ty, exprs)
+          None => ()
+        }
       }
       self.func_name = saved_func_name
       self.emitted_labels = saved_emitted_labels

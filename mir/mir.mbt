@@ -319,6 +319,8 @@ fn Program::lower_mir_global_scalar_init(
   match expr {
     Number(n) => MirGlobalScalarInt(n)
     String(s) => MirGlobalString(s)
+    DesignatedField(_, _) | DesignatedIndex(_, _) | DesignatedRange(_, _, _) =>
+      MirGlobalInitUnsupported
     _ =>
       match self.fold_const(expr, Scope::empty()) {
         Some(n) => MirGlobalScalarInt(n)

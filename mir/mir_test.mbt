@@ -164,6 +164,7 @@ test "mir owns simple global initializer metadata" {
     #|int arr[2] = {1, 2};
     #|int expr = 1 + 2;
     #|int *addr = &scalar;
+    #|int designated[3] = { [2] = 9 };
     #|int main(void) { return scalar; }
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   match mir.global_decls[0].init {
@@ -185,6 +186,10 @@ test "mir owns simple global initializer metadata" {
   match mir.global_decls[4].init {
     Some(MirGlobalInitUnsupported) => ()
     _ => abort("expected unsupported address MIR global initializer")
+  }
+  match mir.global_decls[5].init {
+    Some(MirGlobalArray([MirGlobalInitUnsupported])) => ()
+    _ => abort("expected unsupported designated MIR global initializer")
   }
 }
 
