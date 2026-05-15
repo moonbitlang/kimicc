@@ -345,6 +345,33 @@ test "generate darwin arm64 MIR body identity builtin calls" {
 }
 
 ///|
+test "generate darwin arm64 MIR body scalar globals" {
+  let source =
+    #|int g = 5;
+    #|int h;
+    #|int bump(void) {
+    #|  g += 3;
+    #|  h = g++;
+    #|  return h;
+    #|}
+    #|int main(void) {
+    #|  h = 2;
+    #|  return bump() + g + h;
+    #|}
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_bump:"),
+    content="true",
+  )
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+}
+
+///|
 test "generate darwin arm64 keeps side effecting identity builtin operands on fallback" {
   let source =
     #|int main(void) {
@@ -993,6 +1020,36 @@ test "generate linux amd64 MIR body identity builtin calls" {
     None => abort("target parse failed")
   }
   let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+}
+
+///|
+test "generate linux amd64 MIR body scalar globals" {
+  let source =
+    #|int g = 5;
+    #|int h;
+    #|int bump(void) {
+    #|  g += 3;
+    #|  h = g++;
+    #|  return h;
+    #|}
+    #|int main(void) {
+    #|  h = 2;
+    #|  return bump() + g + h;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tbump, @function"),
+    content="true",
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",

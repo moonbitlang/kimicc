@@ -20,6 +20,7 @@ pub(all) enum MirValue {
   MirConst(Int64, @parser.Type)
   MirLocal(MirLocal)
   MirAddrLocal(MirLocal)
+  MirAddrGlobal(String, @parser.Type)
   MirElemAddr(MirValue, MirValue, @parser.Type)
   MirOffsetAddr(MirValue, Int, @parser.Type)
   MirLoad(MirValue, @parser.Type)
@@ -70,6 +71,7 @@ pub fn MirValue::ty(self : MirValue) -> @parser.Type {
     MirConst(_, ty) => ty
     MirLocal(binding) => binding.ty
     MirAddrLocal(binding) => Pointer(binding.ty)
+    MirAddrGlobal(_, ty) => Pointer(ty)
     MirElemAddr(_, _, elem_ty) => Pointer(elem_ty)
     MirOffsetAddr(_, _, ty) => Pointer(ty)
     MirLoad(_, ty) => ty
@@ -356,6 +358,14 @@ fn Program::lower_mir_scalar_lvalue_addr(
     return None
   }
   match expr {
+    Var(name) =>
+      if ctx.lookup_local(name) is None &&
+        self.globals.contains(name) &&
+        mir_body_scalar_type(lhs_ty) {
+        Some(MirAddrGlobal(name, lhs_ty))
+      } else {
+        None
+      }
     Deref(Var(name)) => self.lower_mir_expr(Var(name), ctx)
     ArrayAccess(base, index) =>
       self.lower_mir_array_elem_addr(base, index, lhs_ty, ctx)
@@ -526,7 +536,12 @@ fn Program::lower_mir_expr(
     Var(name) =>
       match ctx.lookup_local(name) {
         Some(binding) => Some(MirLocal(binding))
-        None => None
+        None =>
+          if self.globals.contains(name) && mir_body_scalar_type(ty) {
+            Some(MirLoad(MirAddrGlobal(name, ty), ty))
+          } else {
+            None
+          }
       }
     AddrOf(Var(name)) =>
       match ctx.lookup_local(name) {
@@ -536,7 +551,13 @@ fn Program::lower_mir_expr(
           } else {
             None
           }
-        None => None
+        None =>
+          if self.globals.contains(name) &&
+            mir_body_scalar_type(self.globals[name].ty) {
+            Some(MirAddrGlobal(name, self.globals[name].ty))
+          } else {
+            None
+          }
       }
     Deref(AddrOf(Var(name))) =>
       match ctx.lookup_local(name) {
@@ -599,24 +620,9 @@ fn Program::lower_mir_expr(
           return Some(MirAssignLocal(binding, value))
         _ => ()
       }
-      match (lhs, self.lower_mir_expr(rhs, ctx)) {
-        (Deref(Var(name)), Some(value)) =>
-          match self.lower_mir_expr(Var(name), ctx) {
-            Some(addr) =>
-              if mir_body_scalar_type(lhs_ty) {
-                Some(MirStore(addr, value, lhs_ty))
-              } else {
-                None
-              }
-            None => None
-          }
-        (ArrayAccess(base, index), Some(value)) =>
-          match self.lower_mir_array_elem_addr(base, index, lhs_ty, ctx) {
-            Some(addr) => Some(MirStore(addr, value, lhs_ty))
-            None => None
-          }
-        (MemberAccess(obj, field), Some(value)) =>
-          match self.lower_mir_member_addr(obj, field, ctx) {
+      match self.lower_mir_expr(rhs, ctx) {
+        Some(value) =>
+          match self.lower_mir_scalar_lvalue_addr(lhs, lhs_ty, ctx) {
             Some(addr) => Some(MirStore(addr, value, lhs_ty))
             None => None
           }

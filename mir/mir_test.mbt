@@ -488,6 +488,26 @@ test "mir body lowering handles side effect free identity builtins" {
 }
 
 ///|
+test "mir body interpreter handles scalar globals" {
+  let source =
+    #|int g = 5;
+    #|int h;
+    #|int bump(void) {
+    #|  g += 3;
+    #|  h = g++;
+    #|  return h;
+    #|}
+    #|int main(void) {
+    #|  h = 2;
+    #|  return bump() + g + h;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("bump"), content="true")
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 25L)
+}
+
+///|
 test "mir body lowering keeps side effecting ignored builtin operands unsupported" {
   let source =
     #|int main(void) {

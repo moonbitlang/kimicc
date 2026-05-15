@@ -22,9 +22,9 @@ integer-scalar subset.
   currently covers integer locals, assignments, direct calls, returns, casts,
   unary/binary scalar operators, conditionals, `while`, `for`, `do while`,
   directly labeled scalar `switch`, simple labels/goto, local compound
-  assignment, local postfix updates, scalar memory prefix/postfix updates,
-  scalar `*&` / `&*` cancellation, simple scalar local pointer loads/stores,
-  scalar local arrays, direct scalar aggregate fields, foldable
+  assignment, local postfix updates, scalar globals, scalar memory
+  prefix/postfix updates, scalar `*&` / `&*` cancellation, simple scalar local
+  pointer loads/stores, scalar local arrays, direct scalar aggregate fields, foldable
   `__builtin_constant_p`, side-effect-free identity builtins such as
   `__builtin_expect`, `__builtin_assume_aligned`, and return-address
   transforms, identity `__builtin_unpredictable`, `break`/`continue`, and
@@ -36,9 +36,9 @@ integer-scalar subset.
   `while`/`for`/`do while` loops, `break`/`continue`, ternaries, casts, direct
   calls to other MIR-bodied functions or declared non-variadic integer-scalar
   externs, directly labeled scalar `switch`, simple labels/goto, local compound
-  assignment, local postfix updates, scalar memory prefix/postfix updates,
-  scalar `*&` / `&*` cancellation, simple scalar local pointer loads/stores,
-  scalar local arrays, direct scalar aggregate fields, foldable
+  assignment, local postfix updates, scalar globals, scalar memory
+  prefix/postfix updates, scalar `*&` / `&*` cancellation, simple scalar local
+  pointer loads/stores, scalar local arrays, direct scalar aggregate fields, foldable
   `__builtin_constant_p`, side-effect-free identity builtins such as
   `__builtin_expect`, `__builtin_assume_aligned`, and return-address
   transforms, identity `__builtin_unpredictable`, and arithmetic/logical

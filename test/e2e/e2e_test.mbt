@@ -93,6 +93,24 @@ async test "run arrays fixture" {
 }
 
 ///|
+async test "e2e MIR body scalar globals" {
+  let source =
+    #|int g = 5;
+    #|int h;
+    #|int bump(void) {
+    #|  g += 3;
+    #|  h = g++;
+    #|  return h;
+    #|}
+    #|int main(void) {
+    #|  h = 2;
+    #|  return bump() + g + h;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="25")
+}
+
+///|
 async test "e2e MIR body scalar memory postfix updates" {
   let source =
     #|struct S { int x; };

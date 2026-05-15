@@ -17,6 +17,8 @@ priv struct BodyFrame {
 ///|
 priv struct BodyInterpreter {
   program : Program
+  globals : Map[String, Int64]
+  global_addrs : Map[String, Int64]
   mut error : String?
   mut steps : Int
   mut call_depth : Int
@@ -24,7 +26,25 @@ priv struct BodyInterpreter {
 
 ///|
 fn BodyInterpreter::new(program : Program) -> BodyInterpreter {
-  { program, error: None, steps: 0, call_depth: 0 }
+  let globals : Map[String, Int64] = {}
+  let global_addrs : Map[String, Int64] = {}
+  let mut next_global = 0
+  for decl in program.globals.values() {
+    if mir_body_scalar_type(decl.ty) {
+      let value = match decl.init {
+        Some(Scalar(expr)) =>
+          match program.fold_const(expr, Scope::empty()) {
+            Some(bits) => bits
+            None => 0L
+          }
+        _ => 0L
+      }
+      globals[decl.name] = program.runtime_cast_int(value, decl.ty)
+      global_addrs[decl.name] = 1000000000L + next_global.to_int64() * 100000L
+      next_global += 1
+    }
+  }
+  { program, globals, global_addrs, error: None, steps: 0, call_depth: 0 }
 }
 
 ///|
@@ -63,6 +83,19 @@ fn mir_body_elem_addr(base : Int64, index : Int64) -> Int64 {
 ///|
 fn mir_body_offset_addr(base : Int64, offset : Int) -> Int64 {
   base - 50000L - offset.to_int64()
+}
+
+///|
+fn BodyInterpreter::global_for_addr(
+  self : BodyInterpreter,
+  addr : Int64,
+) -> String? {
+  for name in self.global_addrs.keys() {
+    if self.global_addrs[name] == addr {
+      return Some(name)
+    }
+  }
+  None
 }
 
 ///|
@@ -208,6 +241,14 @@ fn BodyInterpreter::eval_value(
         0L
       }
     MirAddrLocal(binding) => mir_body_local_addr(binding)
+    MirAddrGlobal(name, _) =>
+      match self.global_addrs.get(name) {
+        Some(addr) => addr
+        None => {
+          self.fail("unknown MIR body global address: " + name)
+          0L
+        }
+      }
     MirElemAddr(base, index, _) =>
       mir_body_elem_addr(
         self.eval_value(frame, base),
@@ -238,10 +279,20 @@ fn BodyInterpreter::eval_value(
               self.fail("unknown MIR body local value: " + binding.name)
               0L
             }
-          None => {
-            self.fail("unsupported MIR body load address")
-            0L
-          }
+          None =>
+            match self.global_for_addr(addr) {
+              Some(name) =>
+                if self.globals.contains(name) {
+                  self.program.runtime_cast_int(self.globals[name], ty)
+                } else {
+                  self.fail("unknown MIR body global value: " + name)
+                  0L
+                }
+              None => {
+                self.fail("unsupported MIR body load address")
+                0L
+              }
+            }
         }
       }
     }
@@ -342,10 +393,21 @@ fn BodyInterpreter::eval_value(
             frame.locals[binding.id] = assigned
             self.program.runtime_cast_int(assigned, ty)
           }
-          None => {
-            self.fail("unsupported MIR body store address")
-            0L
-          }
+          None =>
+            match self.global_for_addr(addr) {
+              Some(name) => {
+                let assigned = self.program.runtime_cast_int(
+                  self.eval_value(frame, rhs),
+                  ty,
+                )
+                self.globals[name] = assigned
+                assigned
+              }
+              None => {
+                self.fail("unsupported MIR body store address")
+                0L
+              }
+            }
         }
       }
     }
@@ -381,10 +443,20 @@ fn BodyInterpreter::eval_value(
               self.fail("unknown MIR body local value: " + binding.name)
               0L
             }
-          None => {
-            self.fail("unsupported MIR body pre-update address")
-            0L
-          }
+          None =>
+            match self.global_for_addr(addr) {
+              Some(name) =>
+                if self.globals.contains(name) {
+                  self.program.runtime_cast_int(self.globals[name], ty)
+                } else {
+                  self.fail("unknown MIR body global value: " + name)
+                  0L
+                }
+              None => {
+                self.fail("unsupported MIR body pre-update address")
+                0L
+              }
+            }
         }
       }
       let right = self.eval_value(frame, rhs)
@@ -397,7 +469,11 @@ fn BodyInterpreter::eval_value(
       } else {
         match frame.binding_for_addr(addr) {
           Some(binding) => frame.locals[binding.id] = updated
-          None => ()
+          None =>
+            match self.global_for_addr(addr) {
+              Some(name) => self.globals[name] = updated
+              None => ()
+            }
         }
       }
       updated
@@ -419,10 +495,20 @@ fn BodyInterpreter::eval_value(
               self.fail("unknown MIR body local value: " + binding.name)
               0L
             }
-          None => {
-            self.fail("unsupported MIR body post-update address")
-            0L
-          }
+          None =>
+            match self.global_for_addr(addr) {
+              Some(name) =>
+                if self.globals.contains(name) {
+                  self.program.runtime_cast_int(self.globals[name], ty)
+                } else {
+                  self.fail("unknown MIR body global value: " + name)
+                  0L
+                }
+              None => {
+                self.fail("unsupported MIR body post-update address")
+                0L
+              }
+            }
         }
       }
       let right = self.eval_value(frame, rhs)
@@ -435,7 +521,11 @@ fn BodyInterpreter::eval_value(
       } else {
         match frame.binding_for_addr(addr) {
           Some(binding) => frame.locals[binding.id] = updated
-          None => ()
+          None =>
+            match self.global_for_addr(addr) {
+              Some(name) => self.globals[name] = updated
+              None => ()
+            }
         }
       }
       self.program.runtime_cast_int(old, ty)
