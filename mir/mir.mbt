@@ -332,17 +332,7 @@ fn Program::lower_mir_global_init(
           _ => ()
         }
       }
-      if mir_global_array_uses_sparse(exprs) {
-        return Some(self.lower_mir_global_sparse_array_init(exprs))
-      }
-      if mir_global_aggregate_uses_sparse(exprs) {
-        return Some(self.lower_mir_global_sparse_aggregate_init(ty, exprs))
-      }
-      let values : Array[MirGlobalInit] = []
-      for expr in exprs {
-        values.push(self.lower_mir_global_array_value(expr))
-      }
-      Some(MirGlobalArray(values))
+      Some(self.lower_mir_global_array_init_for_type(ty, exprs))
     }
   }
 }
@@ -387,8 +377,80 @@ fn Program::lower_mir_global_array_value(
 }
 
 ///|
+fn Program::lower_mir_global_value_for_type(
+  self : Program,
+  ty : @parser.Type,
+  expr : @parser.Expr,
+) -> MirGlobalInit {
+  match expr {
+    Array(exprs) => self.lower_mir_global_array_init_for_type(ty, exprs)
+    DesignatedField(_, value)
+    | DesignatedIndex(_, value)
+    | DesignatedRange(_, _, value) =>
+      if self.mir_global_designator_matches_type(ty, expr) {
+        self.lower_mir_global_array_init_for_type(ty, [expr])
+      } else {
+        self.lower_mir_global_value_for_type(ty, value)
+      }
+    _ => self.lower_mir_global_scalar_init(expr)
+  }
+}
+
+///|
+fn Program::mir_global_designator_matches_type(
+  self : Program,
+  ty : @parser.Type,
+  expr : @parser.Expr,
+) -> Bool {
+  match (self.core_type(ty), expr) {
+    (Struct(_), DesignatedField(field, _))
+    | (Union(_), DesignatedField(field, _)) =>
+      self.field_layout(ty, field) is Some(_)
+    (Array(_, _), DesignatedIndex(_, _))
+    | (Array(_, _), DesignatedRange(_, _, _)) => true
+    _ => false
+  }
+}
+
+///|
+fn Program::lower_mir_global_array_init_for_type(
+  self : Program,
+  ty : @parser.Type,
+  exprs : Array[@parser.Expr],
+) -> MirGlobalInit {
+  match self.core_type(ty) {
+    Array(elem_ty, _) =>
+      if mir_global_array_uses_sparse(exprs) {
+        self.lower_mir_global_sparse_array_init(elem_ty, exprs)
+      } else {
+        let values : Array[MirGlobalInit] = []
+        for expr in exprs {
+          values.push(self.lower_mir_global_value_for_type(elem_ty, expr))
+        }
+        MirGlobalArray(values)
+      }
+    Struct(name) | Union(name) => {
+      let layout = self.aggregate_layout_by_name(name)
+      if mir_global_aggregate_uses_sparse(exprs) {
+        self.lower_mir_global_sparse_aggregate_init(layout, exprs)
+      } else {
+        self.lower_mir_global_dense_aggregate_init(layout, exprs)
+      }
+    }
+    _ => {
+      let values : Array[MirGlobalInit] = []
+      for expr in exprs {
+        values.push(self.lower_mir_global_array_value(expr))
+      }
+      MirGlobalArray(values)
+    }
+  }
+}
+
+///|
 fn Program::lower_mir_global_sparse_array_init(
   self : Program,
+  elem_ty : @parser.Type,
   exprs : Array[@parser.Expr],
 ) -> MirGlobalInit {
   let values : Array[(Int, MirGlobalInit)] = []
@@ -397,19 +459,23 @@ fn Program::lower_mir_global_sparse_array_init(
     match expr {
       DesignatedIndex(index, value) => {
         let idx = index.to_int()
-        values.push((idx, self.lower_mir_global_array_value(value)))
+        values.push((idx, self.lower_mir_global_value_for_type(elem_ty, value)))
         cursor = idx + 1
       }
       DesignatedRange(first, last, value) => {
         let start = first.to_int()
         let end = last.to_int()
         for idx = start; idx <= end; idx = idx + 1 {
-          values.push((idx, self.lower_mir_global_array_value(value)))
+          values.push(
+            (idx, self.lower_mir_global_value_for_type(elem_ty, value)),
+          )
         }
         cursor = end + 1
       }
       _ => {
-        values.push((cursor, self.lower_mir_global_array_value(expr)))
+        values.push(
+          (cursor, self.lower_mir_global_value_for_type(elem_ty, expr)),
+        )
         cursor += 1
       }
     }
@@ -430,25 +496,33 @@ fn aggregate_field_index(layout : AggregateLayout, field_name : String) -> Int {
 ///|
 fn Program::lower_mir_global_sparse_aggregate_init(
   self : Program,
-  ty : @parser.Type,
+  layout : AggregateLayout,
   exprs : Array[@parser.Expr],
 ) -> MirGlobalInit {
   let values : Array[(Int, MirGlobalInit)] = []
-  let layout = match self.core_type(ty) {
-    Struct(name) | Union(name) => self.aggregate_layout_by_name(name)
-    _ => return MirGlobalInitUnsupported
-  }
   if layout.is_union {
     if exprs.length() > 0 {
       match exprs[0] {
-        DesignatedField(field_name, value) =>
-          values.push(
-            (
-              aggregate_field_index(layout, field_name),
-              self.lower_mir_global_array_value(value),
-            ),
-          )
-        value => values.push((0, self.lower_mir_global_array_value(value)))
+        DesignatedField(field_name, value) => {
+          let index = aggregate_field_index(layout, field_name)
+          let init = if index >= 0 {
+            self.lower_mir_global_value_for_type(layout.fields[index].ty, value)
+          } else {
+            self.lower_mir_global_array_value(value)
+          }
+          values.push((index, init))
+        }
+        value =>
+          if layout.fields.length() > 0 {
+            values.push(
+              (
+                0,
+                self.lower_mir_global_value_for_type(layout.fields[0].ty, value),
+              ),
+            )
+          } else {
+            values.push((0, self.lower_mir_global_array_value(value)))
+          }
       }
     }
     return MirGlobalAggregateSparse(values)
@@ -460,16 +534,62 @@ fn Program::lower_mir_global_sparse_aggregate_init(
         let index = aggregate_field_index(layout, field_name)
         if index >= 0 {
           positional = index + 1
+          values.push(
+            (
+              index,
+              self.lower_mir_global_value_for_type(
+                layout.fields[index].ty,
+                value,
+              ),
+            ),
+          )
+        } else {
+          values.push((index, self.lower_mir_global_array_value(value)))
         }
-        values.push((index, self.lower_mir_global_array_value(value)))
       }
       value => {
-        values.push((positional, self.lower_mir_global_array_value(value)))
+        if positional < layout.fields.length() {
+          values.push(
+            (
+              positional,
+              self.lower_mir_global_value_for_type(
+                layout.fields[positional].ty,
+                value,
+              ),
+            ),
+          )
+        } else {
+          values.push((positional, self.lower_mir_global_array_value(value)))
+        }
         positional += 1
       }
     }
   }
   MirGlobalAggregateSparse(values)
+}
+
+///|
+fn Program::lower_mir_global_dense_aggregate_init(
+  self : Program,
+  layout : AggregateLayout,
+  exprs : Array[@parser.Expr],
+) -> MirGlobalInit {
+  let values : Array[MirGlobalInit] = []
+  let count = if layout.is_union && exprs.length() > 0 {
+    1
+  } else {
+    exprs.length()
+  }
+  for i = 0; i < count; i = i + 1 {
+    if i < layout.fields.length() {
+      values.push(
+        self.lower_mir_global_value_for_type(layout.fields[i].ty, exprs[i]),
+      )
+    } else {
+      values.push(self.lower_mir_global_array_value(exprs[i]))
+    }
+  }
+  MirGlobalArray(values)
 }
 
 ///|

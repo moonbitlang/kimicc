@@ -289,6 +289,39 @@ test "mir owns aggregate declaration metadata" {
 }
 
 ///|
+test "mir recursively lowers nested global initializer designators" {
+  let source =
+    #|struct Row { int cells[4]; };
+    #|struct Table { struct Row rows[2]; int tail; };
+    #|struct Table g = { .rows = { [1] = { .cells = { [2] = 9 } } }, .tail = 5 };
+    #|int main(void) { return 0; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match mir.globals["g"].init {
+    Some(
+      MirGlobalAggregateSparse(
+        [
+          (
+            0,
+            MirGlobalArraySparse(
+              [
+                (
+                  1,
+                  MirGlobalAggregateSparse(
+                    [(0, MirGlobalArraySparse([(2, MirGlobalScalarInt(9))]))]
+                  ),
+                ),
+              ]
+            ),
+          ),
+          (1, MirGlobalScalarInt(5)),
+        ]
+      )
+    ) => ()
+    _ => abort("expected nested sparse MIR global initializer")
+  }
+}
+
+///|
 test "mir computes aggregate layout facts" {
   let source =
     #|struct S { char c; int i; short s; };
