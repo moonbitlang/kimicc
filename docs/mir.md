@@ -17,6 +17,10 @@ integer-scalar subset.
   parameter facts, linkage-related attributes, aliases, lifecycle attributes,
   and whether a source body existed. Function body syntax is not stored there;
   supported bodies live in `Program.bodies`.
+- `Program.global_decls` stores source-order MIR-owned global declaration
+  metadata, including type, linkage-related attributes, visibility/section
+  attributes, and whether an initializer existed. Initializer payload lowering
+  is still a remaining data-layer migration.
 - `Program.bodies` stores MIR-owned function bodies for the supported scalar
   subset. Body lowering assigns stable `MirLocal` IDs, records typed value and
   statement nodes, and deliberately omits functions that still need unsupported

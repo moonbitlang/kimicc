@@ -41,6 +41,24 @@ pub(all) struct MirFuncDecl {
 } derive(Eq)
 
 ///|
+/// Global declaration metadata owned by MIR.
+///
+/// Initializer payloads are still represented by parser global initializers
+/// during the transition; `has_init` lets backend-facing checks reason about
+/// declaration/definition state without reading parser declaration nodes.
+pub(all) struct MirGlobalDecl {
+  ty : @parser.Type
+  name : String
+  has_init : Bool
+  is_static : Bool
+  is_extern : Bool
+  is_weak : Bool
+  visibility : String?
+  symbol_alias : String?
+  section : String?
+} derive(Eq)
+
+///|
 /// Lexical expression-typing context used by MIR semantic queries.
 pub(all) struct Scope {
   locals : Map[String, @parser.Type]
@@ -76,6 +94,7 @@ pub(all) struct Program {
   target : @target.Target
   source : @parser.Program
   decls : Array[MirFuncDecl]
+  global_decls : Array[MirGlobalDecl]
   funcs : Map[String, FuncSig]
   globals : Map[String, @parser.GlobalDecl]
   structs : Map[String, @parser.StructDecl]
@@ -146,11 +165,23 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
     })
   }
   let globals : Map[String, @parser.GlobalDecl] = {}
+  let global_decls : Array[MirGlobalDecl] = []
   for g in source.globals {
     if !globals.contains(g.name) ||
       should_replace_global_decl(globals[g.name], g) {
       globals[g.name] = g
     }
+    global_decls.push({
+      ty: g.ty,
+      name: g.name,
+      has_init: g.init is Some(_),
+      is_static: g.is_static,
+      is_extern: g.is_extern,
+      is_weak: g.is_weak,
+      visibility: g.visibility,
+      symbol_alias: g.symbol_alias,
+      section: g.section,
+    })
   }
   let structs : Map[String, @parser.StructDecl] = {}
   for decl in source.structs {
@@ -160,6 +191,7 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
     target,
     source,
     decls,
+    global_decls,
     funcs,
     globals,
     structs,

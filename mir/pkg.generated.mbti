@@ -63,6 +63,18 @@ pub(all) struct MirFuncDecl {
   has_body : Bool
 } derive(Eq)
 
+pub(all) struct MirGlobalDecl {
+  ty : @parser.Type
+  name : String
+  has_init : Bool
+  is_static : Bool
+  is_extern : Bool
+  is_weak : Bool
+  visibility : String?
+  symbol_alias : String?
+  section : String?
+} derive(Eq)
+
 pub(all) struct MirLocal {
   id : Int
   name : String
@@ -115,6 +127,7 @@ pub(all) struct Program {
   target : @target.Target
   source : @parser.Program
   decls : Array[MirFuncDecl]
+  global_decls : Array[MirGlobalDecl]
   funcs : Map[String, FuncSig]
   globals : Map[String, @parser.GlobalDecl]
   structs : Map[String, @parser.StructDecl]

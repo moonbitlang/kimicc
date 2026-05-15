@@ -117,6 +117,26 @@ test "mir owns function declaration metadata" {
 }
 
 ///|
+test "mir owns global declaration metadata" {
+  let source =
+    #|extern int extg;
+    #|static int sg = 7;
+    #|int arr[2];
+    #|int main(void) { return sg; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.global_decls.length(), content="3")
+  inspect(mir.global_decls[0].name, content="extg")
+  inspect(mir.global_decls[0].is_extern, content="true")
+  inspect(mir.global_decls[0].has_init, content="false")
+  inspect(mir.global_decls[1].name, content="sg")
+  inspect(mir.global_decls[1].is_static, content="true")
+  inspect(mir.global_decls[1].has_init, content="true")
+  inspect(mir.global_decls[2].name, content="arr")
+  inspect(mir.global_decls[2].ty, content="Array(SInt, 2)")
+  inspect(mir.global_decls[2].has_init, content="false")
+}
+
+///|
 test "mir computes aggregate layout facts" {
   let source =
     #|struct S { char c; int i; short s; };
