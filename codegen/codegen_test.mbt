@@ -323,6 +323,42 @@ test "generate darwin arm64 MIR body folded builtin call" {
 }
 
 ///|
+test "generate darwin arm64 MIR body identity builtin calls" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  void *p = (void *)32;
+    #|  void *ra = (void *)77;
+    #|  return __builtin_expect(x, 1) +
+    #|    __builtin_expect_with_probability(x, 0, 0.9) +
+    #|    ((unsigned long)__builtin_assume_aligned(p, 16) == 32ul) +
+    #|    ((unsigned long)__builtin_extract_return_addr(ra) == 77ul) +
+    #|    ((unsigned long)__builtin_frob_return_addr(ra) == 77ul);
+    #|}
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+}
+
+///|
+test "generate darwin arm64 keeps side effecting identity builtin operands on fallback" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int side = 0;
+    #|  return __builtin_expect(x, side += 1);
+    #|}
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(assembly.contains("kimicc: mir-body"), content="false")
+}
+
+///|
 test "generate darwin arm64 MIR body scalar aggregate field" {
   let source =
     #|struct S { int x; unsigned char y; };
@@ -936,6 +972,48 @@ test "generate linux amd64 MIR body folded builtin call" {
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
   )
+}
+
+///|
+test "generate linux amd64 MIR body identity builtin calls" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  void *p = (void *)32;
+    #|  void *ra = (void *)77;
+    #|  return __builtin_expect(x, 1) +
+    #|    __builtin_expect_with_probability(x, 0, 0.9) +
+    #|    ((unsigned long)__builtin_assume_aligned(p, 16) == 32ul) +
+    #|    ((unsigned long)__builtin_extract_return_addr(ra) == 77ul) +
+    #|    ((unsigned long)__builtin_frob_return_addr(ra) == 77ul);
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+}
+
+///|
+test "generate linux amd64 keeps side effecting identity builtin operands on fallback" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int side = 0;
+    #|  return __builtin_expect(x, side += 1);
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(assembly.contains("kimicc: mir-body"), content="false")
 }
 
 ///|

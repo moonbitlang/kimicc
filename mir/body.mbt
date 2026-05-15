@@ -294,6 +294,58 @@ fn mir_body_memory_update_op(op : String) -> Bool {
 }
 
 ///|
+fn mir_body_side_effect_free_expr(expr : @parser.Expr) -> Bool {
+  match expr {
+    Number(_)
+    | FloatLiteral(_)
+    | String(_)
+    | Var(_)
+    | Sizeof(_)
+    | Alignof(_)
+    | OffsetOf(_, _)
+    | LabelAddr(_) => true
+    SizeofExpr(_) | AlignofExpr(_) => true
+    Unary(_, inner) | Cast(_, inner) | Deref(inner) | AddrOf(inner) =>
+      mir_body_side_effect_free_expr(inner)
+    Binary(_, lhs, rhs) =>
+      mir_body_side_effect_free_expr(lhs) && mir_body_side_effect_free_expr(rhs)
+    MemberAccess(obj, _) => mir_body_side_effect_free_expr(obj)
+    ArrayAccess(base, index) =>
+      mir_body_side_effect_free_expr(base) &&
+      mir_body_side_effect_free_expr(index)
+    Ternary(cond, then_, else_) =>
+      mir_body_side_effect_free_expr(cond) &&
+      mir_body_side_effect_free_expr(then_) &&
+      mir_body_side_effect_free_expr(else_)
+    Array(items) | CompoundLiteral(_, items, _) => {
+      for item in items {
+        if !mir_body_side_effect_free_expr(item) {
+          return false
+        }
+      }
+      true
+    }
+    DesignatedField(_, value)
+    | DesignatedIndex(_, value)
+    | DesignatedRange(_, _, value) => mir_body_side_effect_free_expr(value)
+    _ => false
+  }
+}
+
+///|
+fn mir_body_args_side_effect_free_from(
+  args : Array[@parser.Expr],
+  start : Int,
+) -> Bool {
+  for i in start..<args.length() {
+    if !mir_body_side_effect_free_expr(args[i]) {
+      return false
+    }
+  }
+  true
+}
+
+///|
 fn Program::lower_mir_scalar_lvalue_addr(
   self : Program,
   expr : @parser.Expr,
@@ -608,6 +660,21 @@ fn Program::lower_mir_expr(
     Call(Var(name), args) => {
       if name == "__builtin_unpredictable" && args.length() == 1 {
         return self.lower_mir_expr(args[0], ctx)
+      }
+      if name == "__builtin_expect" ||
+        name == "__builtin_expect_with_probability" ||
+        name == "__builtin_assume_aligned" {
+        if args.length() >= 1 && mir_body_args_side_effect_free_from(args, 1) {
+          return self.lower_mir_expr(args[0], ctx)
+        }
+        return None
+      }
+      if name == "__builtin_extract_return_addr" ||
+        name == "__builtin_frob_return_addr" {
+        if args.length() == 1 {
+          return self.lower_mir_expr(args[0], ctx)
+        }
+        return None
       }
       if name == "__builtin_constant_p" {
         match self.fold_const(expr, scope) {

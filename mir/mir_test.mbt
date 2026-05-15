@@ -470,6 +470,36 @@ test "mir body lowering folds scalar builtin calls" {
 }
 
 ///|
+test "mir body lowering handles side effect free identity builtins" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  void *p = (void *)32;
+    #|  void *ra = (void *)77;
+    #|  return __builtin_expect(x, 1) +
+    #|    __builtin_expect_with_probability(x, 0, 0.9) +
+    #|    ((unsigned long)__builtin_assume_aligned(p, 16) == 32ul) +
+    #|    ((unsigned long)__builtin_extract_return_addr(ra) == 77ul) +
+    #|    ((unsigned long)__builtin_frob_return_addr(ra) == 77ul);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 11L)
+}
+
+///|
+test "mir body lowering keeps side effecting ignored builtin operands unsupported" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int side = 0;
+    #|  return __builtin_expect(x, side += 1);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="false")
+}
+
+///|
 test "mir body interpreter handles scalar aggregate fields" {
   let source =
     #|struct S { int x; unsigned char y; };
