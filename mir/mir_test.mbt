@@ -86,6 +86,14 @@ test "mir records target-specific scalar layout" {
   inspect(linux.type_align(LongDouble), content="16")
   inspect(linux.type_size(Float16), content="2")
   inspect(linux.type_align(Float16), content="2")
+  let darwin_module = darwin.to_module()
+  let linux_module = linux.to_module()
+  inspect(darwin_module.type_size(LongDouble), content="8")
+  inspect(darwin_module.type_align(LongDouble), content="8")
+  inspect(linux_module.type_size(LongDouble), content="16")
+  inspect(linux_module.type_align(LongDouble), content="16")
+  inspect(linux_module.type_size(Float16), content="2")
+  inspect(linux_module.type_align(Float16), content="2")
   let scope = @mir.Scope::empty()
   let long_double_builtin : @parser.Expr = Call(Var("__builtin_fabsl"), [
     FloatLiteral(1.0),
@@ -112,6 +120,16 @@ test "mir module projection carries parser-free semantic facts" {
     mir_module.aggregates["Pair"].fields.length().to_string(),
     content="2",
   )
+  inspect(mir_module.type_size(Struct("Pair")), content="8")
+  inspect(mir_module.type_align(Struct("Pair")), content="4")
+  match mir_module.field_layout(Struct("Pair"), "b") {
+    Some(layout) => inspect(layout.offset, content="4")
+    None => abort("missing Pair.b layout")
+  }
+  match mir_module.offset_of_path(Struct("Pair"), [OffsetField("b")]) {
+    Some(offset) => inspect(offset, content="4")
+    None => abort("missing Pair.b offset")
+  }
   inspect(mir_module.bodies.contains("main").to_string(), content="true")
 }
 

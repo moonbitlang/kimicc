@@ -334,9 +334,13 @@ fn x64_signed_i32_bits(value : Int64) -> Int64 {
 
 ///|
 fn X64Codegen::type_size(self : X64Codegen, ty : @parser.Type) -> Int {
-  match self.mir {
+  match self.mir_module {
     Some(mir) => return mir.type_size(ty)
-    None => ()
+    None =>
+      match self.mir {
+        Some(mir) => return mir.type_size(ty)
+        None => ()
+      }
   }
   match ty {
     Atomic(inner) | Aligned(inner, _) => self.type_size(inner)
@@ -405,9 +409,13 @@ fn X64Codegen::type_size(self : X64Codegen, ty : @parser.Type) -> Int {
 
 ///|
 fn X64Codegen::type_align(self : X64Codegen, ty : @parser.Type) -> Int {
-  match self.mir {
+  match self.mir_module {
     Some(mir) => return mir.type_align(ty)
-    None => ()
+    None =>
+      match self.mir {
+        Some(mir) => return mir.type_align(ty)
+        None => ()
+      }
   }
   match ty {
     Atomic(inner) => self.type_align(inner)
@@ -4445,7 +4453,7 @@ fn X64Codegen::field_layout(
     Some(lookup_ty) => lookup_ty
     None => return None
   }
-  match self.mir {
+  match self.mir_module {
     Some(mir) =>
       return match mir.field_layout(lookup_ty, field_name) {
         Some(field) =>
@@ -4464,7 +4472,28 @@ fn X64Codegen::field_layout(
           )
         None => None
       }
-    None => ()
+    None =>
+      match self.mir {
+        Some(mir) =>
+          return match mir.field_layout(lookup_ty, field_name) {
+            Some(field) =>
+              Some(
+                (
+                  field.name,
+                  field.ty,
+                  field.offset,
+                  field.size,
+                  field.bit_offset,
+                  match field.bit_width {
+                    Some(width) => width
+                    None => -1
+                  },
+                ),
+              )
+            None => None
+          }
+        None => ()
+      }
   }
   let struct_name = match lookup_ty {
     Struct(name) | Union(name) => name
@@ -4485,9 +4514,13 @@ fn X64Codegen::offset_of_path(
   ty : @parser.Type,
   path : Array[@parser.OffsetDesignator],
 ) -> Int? {
-  match self.mir {
+  match self.mir_module {
     Some(mir) => return mir.offset_of_path(ty, path)
-    None => ()
+    None =>
+      match self.mir {
+        Some(mir) => return mir.offset_of_path(ty, path)
+        None => ()
+      }
   }
   let mut current_ty = ty
   let mut offset = 0

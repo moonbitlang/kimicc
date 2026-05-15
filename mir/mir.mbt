@@ -1216,6 +1216,174 @@ pub fn Program::offset_of_path(
 }
 
 ///|
+fn MirModule::core_type(self : MirModule, ty : @parser.Type) -> @parser.Type {
+  match ty {
+    Atomic(inner) | Aligned(inner, _) => self.core_type(inner)
+    _ => ty
+  }
+}
+
+///|
+fn MirModule::offset_array_element(
+  self : MirModule,
+  ty : @parser.Type,
+) -> @parser.Type? {
+  match self.core_type(ty) {
+    Array(elem, _) => Some(elem)
+    _ => None
+  }
+}
+
+///|
+fn MirModule::aggregate_layout_by_name(
+  self : MirModule,
+  name : String,
+) -> AggregateLayout {
+  match self.layouts.get(name) {
+    Some(layout) => layout
+    None => { fields: [], size: 8, align: 8, is_union: false, is_packed: false }
+  }
+}
+
+///|
+pub fn MirModule::type_size(self : MirModule, ty : @parser.Type) -> Int {
+  match ty {
+    Atomic(inner) | Aligned(inner, _) => self.type_size(inner)
+    _ =>
+      match self.core_type(ty) {
+        Void => 0
+        Bool | SChar | UChar => 1
+        SShort | UShort => 2
+        Float16 =>
+          match self.target {
+            DarwinArm64 => abort("_Float16 size is not supported")
+            LinuxAmd64 => 2
+          }
+        SInt | UInt | Float => 4
+        Float128 =>
+          match self.target {
+            DarwinArm64 => abort("__float128 size is not supported")
+            LinuxAmd64 => 16
+          }
+        LongDouble =>
+          match self.target {
+            DarwinArm64 => 8
+            LinuxAmd64 => 16
+          }
+        SLong
+        | ULong
+        | SLongLong
+        | ULongLong
+        | Double
+        | Pointer(_)
+        | FuncPtr(_, _, _) => 8
+        SInt128 | UInt128 => 16
+        Array(elem, n) => self.type_size(elem) * n
+        Struct(name) | Union(name) => self.aggregate_layout_by_name(name).size
+        Atomic(_) | Aligned(_, _) => abort("unreachable wrapped type")
+      }
+  }
+}
+
+///|
+pub fn MirModule::type_align(self : MirModule, ty : @parser.Type) -> Int {
+  match ty {
+    Atomic(inner) => self.type_align(inner)
+    Aligned(inner, align) => {
+      let inner_align = self.type_align(inner)
+      if align > inner_align {
+        align
+      } else {
+        inner_align
+      }
+    }
+    _ =>
+      match self.core_type(ty) {
+        Void => 1
+        Bool | SChar | UChar => 1
+        SShort | UShort => 2
+        Float16 =>
+          match self.target {
+            DarwinArm64 => abort("_Float16 alignment is not supported")
+            LinuxAmd64 => 2
+          }
+        SInt | UInt | Float => 4
+        Float128 =>
+          match self.target {
+            DarwinArm64 => abort("__float128 alignment is not supported")
+            LinuxAmd64 => 16
+          }
+        LongDouble =>
+          match self.target {
+            DarwinArm64 => 8
+            LinuxAmd64 => 16
+          }
+        SLong
+        | ULong
+        | SLongLong
+        | ULongLong
+        | Double
+        | Pointer(_)
+        | FuncPtr(_, _, _) => 8
+        SInt128 | UInt128 => 16
+        Array(elem, _) => self.type_align(elem)
+        Struct(name) | Union(name) => self.aggregate_layout_by_name(name).align
+        Atomic(_) | Aligned(_, _) => abort("unreachable wrapped type")
+      }
+  }
+}
+
+///|
+pub fn MirModule::field_layout(
+  self : MirModule,
+  ty : @parser.Type,
+  field : String,
+) -> FieldLayout? {
+  let name = match self.core_type(ty) {
+    Struct(n) | Union(n) => n
+    _ => return None
+  }
+  let layout = self.aggregate_layout_by_name(name)
+  for item in layout.fields {
+    if item.name == field {
+      return Some(item)
+    }
+  }
+  None
+}
+
+///|
+pub fn MirModule::offset_of_path(
+  self : MirModule,
+  ty : @parser.Type,
+  path : Array[@parser.OffsetDesignator],
+) -> Int? {
+  let mut current_ty = ty
+  let mut offset = 0
+  for designator in path {
+    match designator {
+      OffsetField(field) =>
+        match self.field_layout(current_ty, field) {
+          Some(layout) => {
+            offset += layout.offset
+            current_ty = layout.ty
+          }
+          None => return None
+        }
+      OffsetIndex(index) =>
+        match self.offset_array_element(current_ty) {
+          Some(elem) => {
+            offset += index.to_int() * self.type_size(elem)
+            current_ty = elem
+          }
+          None => return None
+        }
+    }
+  }
+  Some(offset)
+}
+
+///|
 pub fn Program::global_expr_type(
   self : Program,
   expr : @parser.Expr,
