@@ -563,6 +563,18 @@ async test "nested local struct initializer" {
 }
 
 ///|
+async test "local union initializer" {
+  let source =
+    #|union U { int x; unsigned char c; };
+    #|int main(void) {
+    #|  union U u = { 42 };
+    #|  return u.x;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "comma separated typedef" {
   let source =
     #|typedef int foo_t, bar_t, *baz_t;

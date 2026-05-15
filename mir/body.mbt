@@ -492,13 +492,25 @@ fn Program::lower_mir_zero_init_stores(
   ty : @parser.Type,
 ) -> Array[MirStmt]? {
   match self.core_type(ty) {
-    Struct(name) => {
+    Struct(name) | Union(name) => {
       let decl = match self.aggregates.get(name) {
         Some(decl) => decl
         None => return None
       }
       if decl.is_union {
-        return None
+        if decl.fields.length() == 0 {
+          return Some([])
+        }
+        let field = decl.fields[0]
+        if field.bit_width is Some(_) {
+          return None
+        }
+        let layout = match self.field_layout(ty, field.name) {
+          Some(layout) => layout
+          None => return None
+        }
+        let addr = mir_body_offset_addr_value(base, layout.offset, layout.ty)
+        return self.lower_mir_zero_init_stores(addr, layout.ty)
       }
       let stores : Array[MirStmt] = []
       for field in decl.fields {
@@ -550,7 +562,7 @@ fn Program::lower_mir_local_struct_init(
   ctx : BodyLowerContext,
 ) -> Array[MirStmt]? {
   let struct_name = match self.core_type(binding.ty) {
-    Struct(name) => name
+    Struct(name) | Union(name) => name
     _ => return None
   }
   let items : Array[@parser.Expr] = match init {
@@ -561,9 +573,6 @@ fn Program::lower_mir_local_struct_init(
   let decl = match self.aggregates.get(struct_name) {
     Some(decl) => decl
     None => return None
-  }
-  if decl.is_union {
-    return None
   }
   for field in decl.fields {
     if field.bit_width is Some(_) {

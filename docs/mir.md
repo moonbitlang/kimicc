@@ -48,7 +48,7 @@ integer-scalar subset.
   address-taking,
   scalar `*&` / `&*` cancellation, simple scalar local pointer loads/stores,
   simple non-variadic indirect calls and function addresses, scalar local arrays,
-  string literal byte loads, simple local array initializers, local struct
+  string literal byte loads, simple local array initializers, local aggregate
   initializers with nested zero-fill, fixed-size string array initialization, scalar
   aggregate fields including nested member access, foldable
   `__builtin_constant_p`, literal `__builtin_strlen`, identity builtins such as
@@ -69,7 +69,7 @@ integer-scalar subset.
   address-taking,
   scalar `*&` / `&*` cancellation, simple scalar local pointer loads/stores,
   simple non-variadic indirect calls and function addresses, scalar local arrays,
-  string literal byte loads, simple local array initializers, local struct
+  string literal byte loads, simple local array initializers, local aggregate
   initializers with nested zero-fill, fixed-size string array initialization, scalar
   aggregate fields including nested member access, foldable
   `__builtin_constant_p`, literal `__builtin_strlen`, identity builtins such as

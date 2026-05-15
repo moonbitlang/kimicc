@@ -1014,6 +1014,19 @@ test "mir body interpreter handles nested local struct initializers" {
 }
 
 ///|
+test "mir body interpreter handles local union initializers" {
+  let source =
+    #|union U { int x; unsigned char c; };
+    #|int main(void) {
+    #|  union U u = { 42 };
+    #|  return u.x;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body lowering handles nested aggregate fields" {
   let source =
     #|struct Inner { int z; };
