@@ -95,6 +95,7 @@ pub(all) struct MirGlobalDecl {
 
 pub(all) enum MirGlobalInit {
   MirGlobalScalarInt(Int64)
+  MirGlobalScalarFloat(Double)
   MirGlobalString(String)
   MirGlobalSymbol(String)
   MirGlobalSymbolOffset(String, Int)

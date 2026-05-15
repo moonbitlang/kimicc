@@ -68,6 +68,7 @@ pub(all) struct MirGlobalDecl {
 /// initializers from present-but-not-lowered initializers.
 pub(all) enum MirGlobalInit {
   MirGlobalScalarInt(Int64)
+  MirGlobalScalarFloat(Double)
   MirGlobalString(String)
   MirGlobalSymbol(String)
   MirGlobalSymbolOffset(String, Int)
@@ -324,7 +325,8 @@ fn Program::lower_mir_global_init(
 ) -> MirGlobalInit? {
   match init {
     None => None
-    Some(Scalar(expr)) => Some(self.lower_mir_global_scalar_init(expr))
+    Some(Scalar(expr)) =>
+      Some(self.lower_mir_global_scalar_init_for_type(ty, expr))
     Some(Array(exprs)) => {
       if exprs.length() == 1 {
         match exprs[0] {
@@ -617,6 +619,27 @@ fn Program::lower_mir_global_scalar_init(
           }
       }
   }
+}
+
+///|
+fn Program::lower_mir_global_scalar_init_for_type(
+  self : Program,
+  ty : @parser.Type,
+  expr : @parser.Expr,
+) -> MirGlobalInit {
+  if ty.is_floating() {
+    match self.fold_float_const(expr, Scope::empty()) {
+      Some(value) => return MirGlobalScalarFloat(value)
+      None => ()
+    }
+  } else if ty.is_integer() &&
+    self.expr_type(expr, Scope::empty()).is_floating() {
+    match self.fold_float_const(expr, Scope::empty()) {
+      Some(value) => return MirGlobalScalarInt(value.to_int().to_int64())
+      None => ()
+    }
+  }
+  self.lower_mir_global_scalar_init(expr)
 }
 
 ///|

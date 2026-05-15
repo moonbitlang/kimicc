@@ -8881,6 +8881,11 @@ fn X64Codegen::mir_global_init_supported(
       match init {
         MirGlobalInitUnsupported => false
         MirGlobalScalarInt(_) => self.mir_global_scalar_int_supported(ty)
+        MirGlobalScalarFloat(_) =>
+          match x64_core_type(ty) {
+            Float | Double => true
+            _ => false
+          }
         MirGlobalString(_) => self.mir_global_string_supported(ty)
         MirGlobalSymbol(_) => self.mir_global_symbol_supported(ty)
         MirGlobalSymbolOffset(_, _) => self.mir_global_symbol_supported(ty)
@@ -9056,6 +9061,7 @@ fn X64Codegen::emit_mir_global_init(
   }
   match init {
     MirGlobalScalarInt(value) => self.emit_mir_global_scalar_int(ty, value)
+    MirGlobalScalarFloat(value) => self.emit_global_float(ty, value)
     MirGlobalString(value) => self.emit_mir_global_string(ty, value)
     MirGlobalSymbol(name) => self.emit("\t.quad\t" + name)
     MirGlobalSymbolOffset(name, offset) =>

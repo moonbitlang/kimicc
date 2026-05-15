@@ -289,6 +289,28 @@ test "mir owns aggregate declaration metadata" {
 }
 
 ///|
+test "mir owns floating global initializer metadata" {
+  let source =
+    #|double fp = 1.0 / 2.0;
+    #|float selected = 1 ? 3 / 2 : 9.0f;
+    #|int converted = (double)3 / 2;
+    #|int main(void) { return converted; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match mir.globals["fp"].init {
+    Some(MirGlobalScalarFloat(0.5)) => ()
+    _ => abort("expected MIR float global initializer")
+  }
+  match mir.globals["selected"].init {
+    Some(MirGlobalScalarFloat(1.0)) => ()
+    _ => abort("expected MIR selected float global initializer")
+  }
+  match mir.globals["converted"].init {
+    Some(MirGlobalScalarInt(1)) => ()
+    _ => abort("expected MIR converted float-to-int global initializer")
+  }
+}
+
+///|
 test "mir recursively lowers nested global initializer designators" {
   let source =
     #|struct Row { int cells[4]; };

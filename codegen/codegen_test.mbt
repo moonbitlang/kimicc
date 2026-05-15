@@ -147,6 +147,27 @@ test "generate darwin arm64 global scalar initializer uses MIR metadata" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR floating global initializers" {
+  let source =
+    #|double gfp_div = 1.0 / 2.0;
+    #|float gternary_int = 1 ? 3 / 2 : 9.0f;
+    #|int gfp_expr_to_int = (double)3 / 2;
+    #|int main(void) { return 0; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_gfp_div:\n\t.double\t0.5"), content="true")
+      inspect(assembly.contains("_gternary_int:\n\t.single\t1"), content="true")
+      inspect(
+        assembly.contains("_gfp_expr_to_int:\n\t.long\t1"),
+        content="true",
+      )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 global symbol initializer uses MIR metadata" {
   let source = "int g; int *p = 0; int main(void) { return 0; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
@@ -414,6 +435,28 @@ test "generate linux amd64 strict MIR global scalar initializer uses MIR metadat
     Ok(assembly) => {
       inspect(assembly.contains("g:\n\t.long\t11"), content="true")
       inspect(assembly.contains("g:\n\t.long\t0"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR floating global initializers" {
+  let source =
+    #|double gfp_div = 1.0 / 2.0;
+    #|float gternary_int = 1 ? 3 / 2 : 9.0f;
+    #|int gfp_expr_to_int = (double)3 / 2;
+    #|int main(void) { return 0; }
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("gfp_div:\n\t.double\t0.5"), content="true")
+      inspect(assembly.contains("gternary_int:\n\t.float\t1"), content="true")
+      inspect(assembly.contains("gfp_expr_to_int:\n\t.long\t1"), content="true")
     }
     Err(err) => abort(err)
   }
