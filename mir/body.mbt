@@ -932,6 +932,8 @@ fn Program::lower_mir_expr(
           if self.globals.contains(name) &&
             mir_body_scalar_type(self.globals[name].ty) {
             Some(MirAddrGlobal(name, self.globals[name].ty))
+          } else if self.funcs.contains(name) {
+            Some(MirFuncAddr(name, self.expr_type(Var(name), scope)))
           } else {
             None
           }

@@ -186,6 +186,28 @@ test "generate darwin arm64 strict MIR indirect function pointer call" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR returned function pointer call" {
+  let source =
+    #|int hash(const void *p, int n) { return n + 40; }
+    #|int (*pick(int key_class))(const void *, int) {
+    #|  return &hash;
+    #|}
+    #|int main(void) {
+    #|  int (*xHash)(const void *, int) = pick(1);
+    #|  return (*xHash)("hi", 2);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_pick:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tblr\tx15"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 MIR module uses module function metadata" {
   let source = "int main(void) { return 42; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
@@ -575,6 +597,32 @@ test "generate linux amd64 strict MIR indirect function pointer call" {
   match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
     Ok(assembly) => {
       inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\tr10"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR returned function pointer call" {
+  let source =
+    #|int hash(const void *p, int n) { return n + 40; }
+    #|int (*pick(int key_class))(const void *, int) {
+    #|  return &hash;
+    #|}
+    #|int main(void) {
+    #|  int (*xHash)(const void *, int) = pick(1);
+    #|  return (*xHash)("hi", 2);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.type\tpick, @function"), content="true")
       inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
       inspect(assembly.contains("\tcall\tr10"), content="true")
     }

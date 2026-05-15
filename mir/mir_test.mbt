@@ -481,6 +481,23 @@ test "mir body interpreter executes indirect function pointer calls" {
 }
 
 ///|
+test "mir body interpreter executes returned function pointer calls" {
+  let source =
+    #|int hash(const void *p, int n) { return n + 40; }
+    #|int (*pick(int key_class))(const void *, int) {
+    #|  return &hash;
+    #|}
+    #|int main(void) {
+    #|  int (*xHash)(const void *, int) = pick(1);
+    #|  return (*xHash)("hi", 2);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("pick"), content="true")
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body lowering uses scoped stable local ids" {
   let source =
     #|int main(void) {
