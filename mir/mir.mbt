@@ -9,6 +9,38 @@ pub(all) struct FuncSig {
 } derive(Eq)
 
 ///|
+/// Function parameter facts owned by MIR.
+///
+/// This mirrors the semantic parameter information needed by later phases
+/// without carrying parser declaration nodes.
+pub(all) struct MirParam {
+  name : String
+  ty : @parser.Type
+} derive(Eq)
+
+///|
+/// Function declaration or definition metadata owned by MIR.
+///
+/// `has_body` records whether the parser declaration had a body, but the body
+/// itself is represented separately in `Program.bodies` when the MIR body
+/// lowering supports it.
+pub(all) struct MirFuncDecl {
+  ret : @parser.Type
+  name : String
+  params : Array[MirParam]
+  variadic : Bool
+  is_static : Bool
+  is_inline : Bool
+  is_weak : Bool
+  visibility : String?
+  symbol_alias : String?
+  section : String?
+  is_constructor : Bool
+  is_destructor : Bool
+  has_body : Bool
+} derive(Eq)
+
+///|
 /// Lexical expression-typing context used by MIR semantic queries.
 pub(all) struct Scope {
   locals : Map[String, @parser.Type]
@@ -43,6 +75,7 @@ pub(all) struct AggregateLayout {
 pub(all) struct Program {
   target : @target.Target
   source : @parser.Program
+  decls : Array[MirFuncDecl]
   funcs : Map[String, FuncSig]
   globals : Map[String, @parser.GlobalDecl]
   structs : Map[String, @parser.StructDecl]
@@ -81,10 +114,13 @@ fn should_replace_global_decl(
 ///|
 pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
   let funcs : Map[String, FuncSig] = {}
+  let decls : Array[MirFuncDecl] = []
   for decl in source.decls {
     let param_types : Array[@parser.Type] = []
+    let params : Array[MirParam] = []
     for param in decl.params {
       param_types.push(param.ty)
+      params.push({ name: param.name, ty: param.ty })
     }
     funcs[decl.name] = {
       ret: decl.ret,
@@ -93,6 +129,21 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
       defined: decl.body is Some(_) || decl.symbol_alias is Some(_),
       weak: decl.is_weak,
     }
+    decls.push({
+      ret: decl.ret,
+      name: decl.name,
+      params,
+      variadic: decl.variadic,
+      is_static: decl.is_static,
+      is_inline: decl.is_inline,
+      is_weak: decl.is_weak,
+      visibility: decl.visibility,
+      symbol_alias: decl.symbol_alias,
+      section: decl.section,
+      is_constructor: decl.is_constructor,
+      is_destructor: decl.is_destructor,
+      has_body: decl.body is Some(_),
+    })
   }
   let globals : Map[String, @parser.GlobalDecl] = {}
   for g in source.globals {
@@ -108,6 +159,7 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
   let program = {
     target,
     source,
+    decls,
     funcs,
     globals,
     structs,

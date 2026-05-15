@@ -97,6 +97,26 @@ test "mir records target-specific scalar layout" {
 }
 
 ///|
+test "mir owns function declaration metadata" {
+  let source =
+    #|int ext(long x);
+    #|static inline int helper(int x) { return x; }
+    #|int main(void) { return helper(1); }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.decls.length(), content="3")
+  inspect(mir.decls[0].name, content="ext")
+  inspect(mir.decls[0].has_body, content="false")
+  inspect(mir.decls[0].params[0].name, content="x")
+  inspect(mir.decls[0].params[0].ty, content="SLong")
+  inspect(mir.decls[1].name, content="helper")
+  inspect(mir.decls[1].is_static, content="true")
+  inspect(mir.decls[1].is_inline, content="true")
+  inspect(mir.decls[1].has_body, content="true")
+  inspect(mir.decls[2].name, content="main")
+  inspect(mir.decls[2].has_body, content="true")
+}
+
+///|
 test "mir computes aggregate layout facts" {
   let source =
     #|struct S { char c; int i; short s; };

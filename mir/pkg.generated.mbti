@@ -47,8 +47,29 @@ pub(all) struct MirFuncBody {
   body : Array[MirStmt]
 } derive(Eq)
 
+pub(all) struct MirFuncDecl {
+  ret : @parser.Type
+  name : String
+  params : Array[MirParam]
+  variadic : Bool
+  is_static : Bool
+  is_inline : Bool
+  is_weak : Bool
+  visibility : String?
+  symbol_alias : String?
+  section : String?
+  is_constructor : Bool
+  is_destructor : Bool
+  has_body : Bool
+} derive(Eq)
+
 pub(all) struct MirLocal {
   id : Int
+  name : String
+  ty : @parser.Type
+} derive(Eq)
+
+pub(all) struct MirParam {
   name : String
   ty : @parser.Type
 } derive(Eq)
@@ -93,6 +114,7 @@ pub fn MirValue::ty(Self) -> @parser.Type
 pub(all) struct Program {
   target : @target.Target
   source : @parser.Program
+  decls : Array[MirFuncDecl]
   funcs : Map[String, FuncSig]
   globals : Map[String, @parser.GlobalDecl]
   structs : Map[String, @parser.StructDecl]

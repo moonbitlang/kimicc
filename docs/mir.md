@@ -13,6 +13,10 @@ integer-scalar subset.
   function signatures, selected global declarations, aggregate declarations,
   target-specific sizes/alignments, field layouts, expression types, and integer
   and floating constant folds.
+- `Program.decls` stores MIR-owned function declaration metadata, including
+  parameter facts, linkage-related attributes, aliases, lifecycle attributes,
+  and whether a source body existed. Function body syntax is not stored there;
+  supported bodies live in `Program.bodies`.
 - `Program.bodies` stores MIR-owned function bodies for the supported scalar
   subset. Body lowering assigns stable `MirLocal` IDs, records typed value and
   statement nodes, and deliberately omits functions that still need unsupported
@@ -187,10 +191,10 @@ consistency tests and as fallbacks for direct private construction in tests.
 already lowered MIR program. `generate_assembly_for_target` is now a frontend
 wrapper that parses/lower callers can keep using while codegen moves toward a
 MIR-only contract. `generate_assembly_from_mir_strict` adds a guardrail for this
-migration: it returns an error when any emitted function body would fall back to
-parser statement/expression codegen. This strict gate does not yet mean the
-entire backend is parser-independent; global/data declaration emission is still
-being migrated into MIR-owned records.
+migration: it returns an error when any source function definition would fall
+back to parser statement/expression codegen. This strict gate does not yet mean
+the entire backend is parser-independent; global/data declaration emission is
+still being migrated into MIR-owned records.
 
 ## Why This Layer Is Useful
 

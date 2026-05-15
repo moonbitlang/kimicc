@@ -223,11 +223,11 @@ fn mir_body_codegen_stmts_supported(
 ///|
 fn mir_body_codegen_func_supported(
   body : @mir.MirFuncBody,
-  decl : @parser.FuncDecl,
+  variadic : Bool,
   int_arg_limit : Int,
   mir : @mir.Program,
 ) -> Bool {
-  if decl.variadic || body.params.length() > int_arg_limit {
+  if variadic || body.params.length() > int_arg_limit {
     return false
   }
   if !mir_body_codegen_scalar_type(body.ret) {
@@ -797,7 +797,7 @@ fn Codegen::try_gen_mir_func(self : Codegen, decl : @parser.FuncDecl) -> Bool {
     Some(mir) =>
       if mir.bodies.contains(decl.name) {
         let body = mir.bodies[decl.name]
-        if !mir_body_codegen_func_supported(body, decl, 8, mir) {
+        if !mir_body_codegen_func_supported(body, decl.variadic, 8, mir) {
           return false
         }
         self.gen_mir_func(decl, body)
@@ -1391,7 +1391,7 @@ fn X64Codegen::try_gen_mir_func(
     Some(mir) =>
       if mir.bodies.contains(decl.name) {
         let body = mir.bodies[decl.name]
-        if !mir_body_codegen_func_supported(body, decl, 6, mir) {
+        if !mir_body_codegen_func_supported(body, decl.variadic, 6, mir) {
           return false
         }
         self.gen_mir_func(decl, body)
