@@ -257,6 +257,27 @@ test "generate darwin arm64 strict MIR nested local struct initializer" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR local struct copy initializer" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { int tag; struct Inner inner; int tail; };
+    #|int main(void) {
+    #|  struct S a = { .inner = { 22 }, .tag = 20 };
+    #|  struct S b = a;
+    #|  a.inner.z = 1;
+    #|  return b.tag + b.inner.z + b.tail;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR local union initializer" {
   let source =
     #|union U { int x; unsigned char c; };
@@ -826,6 +847,31 @@ test "generate linux amd64 strict MIR nested local struct initializer" {
     #|int main(void) {
     #|  struct Outer o = { .inner = { 22 }, .tag = 20 };
     #|  return o.tag + o.inner.z + o.tail;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR local struct copy initializer" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { int tag; struct Inner inner; int tail; };
+    #|int main(void) {
+    #|  struct S a = { .inner = { 22 }, .tag = 20 };
+    #|  struct S b = a;
+    #|  a.inner.z = 1;
+    #|  return b.tag + b.inner.z + b.tail;
     #|}
   let target = match @target.Target::parse("linux-amd64") {
     Some(target) => target

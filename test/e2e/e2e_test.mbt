@@ -563,6 +563,21 @@ async test "nested local struct initializer" {
 }
 
 ///|
+async test "local struct copy initializer" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { int tag; struct Inner inner; int tail; };
+    #|int main(void) {
+    #|  struct S a = { .inner = { 22 }, .tag = 20 };
+    #|  struct S b = a;
+    #|  a.inner.z = 1;
+    #|  return b.tag + b.inner.z + b.tail;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "local union initializer" {
   let source =
     #|union U { int x; unsigned char c; };

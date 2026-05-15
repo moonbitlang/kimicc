@@ -555,6 +555,107 @@ fn Program::lower_mir_zero_init_stores(
 }
 
 ///|
+fn mir_body_local_copy_source_addr(value : MirValue) -> Bool {
+  match value {
+    MirAddrGlobal(_, _) | MirFuncAddr(_, _) | MirStringAddr(_) => false
+    MirElemAddr(base, _, _) | MirOffsetAddr(base, _, _) =>
+      mir_body_local_copy_source_addr(base)
+    _ => true
+  }
+}
+
+///|
+fn Program::lower_mir_copy_init_stores(
+  self : Program,
+  dest_base : MirValue,
+  dest_ty : @parser.Type,
+  src_base : MirValue,
+  src_ty : @parser.Type,
+) -> Array[MirStmt]? {
+  match (self.core_type(dest_ty), self.core_type(src_ty)) {
+    (Struct(dest_name), Struct(src_name)) => {
+      if dest_name != src_name {
+        return None
+      }
+      let decl = match self.aggregates.get(dest_name) {
+        Some(decl) => decl
+        None => return None
+      }
+      if decl.is_union {
+        return None
+      }
+      let stores : Array[MirStmt] = []
+      for field in decl.fields {
+        if field.bit_width is Some(_) {
+          return None
+        }
+        let dest_layout = match self.field_layout(dest_ty, field.name) {
+          Some(layout) => layout
+          None => return None
+        }
+        let src_layout = match self.field_layout(src_ty, field.name) {
+          Some(layout) => layout
+          None => return None
+        }
+        let dest_addr = mir_body_offset_addr_value(
+          dest_base,
+          dest_layout.offset,
+          dest_layout.ty,
+        )
+        let src_addr = mir_body_offset_addr_value(
+          src_base,
+          src_layout.offset,
+          src_layout.ty,
+        )
+        let nested = match
+          self.lower_mir_copy_init_stores(
+            dest_addr,
+            dest_layout.ty,
+            src_addr,
+            src_layout.ty,
+          ) {
+          Some(stores) => stores
+          None => return None
+        }
+        for store in nested {
+          stores.push(store)
+        }
+      }
+      Some(stores)
+    }
+    (Array(dest_elem, dest_len), Array(src_elem, src_len)) =>
+      if dest_len == src_len &&
+        mir_body_scalar_type(dest_elem) &&
+        self.core_type(dest_elem) == self.core_type(src_elem) {
+        let stores : Array[MirStmt] = []
+        for i in 0..<dest_len {
+          let index = MirConst(i.to_int64(), SInt)
+          let dest_addr = MirElemAddr(dest_base, index, dest_elem)
+          let src_addr = MirElemAddr(src_base, index, src_elem)
+          stores.push(
+            MirExprStmt(
+              MirStore(dest_addr, MirLoad(src_addr, src_elem), dest_elem),
+            ),
+          )
+        }
+        Some(stores)
+      } else {
+        None
+      }
+    (dest_core, src_core) =>
+      if mir_body_scalar_type(dest_ty) &&
+        mir_body_scalar_type(src_ty) &&
+        dest_core == src_core {
+        Some([
+          MirExprStmt(MirStore(dest_base, MirLoad(src_base, src_ty), dest_ty)),
+        ])
+      } else {
+        None
+      }
+  }
+}
+
+///|
 fn Program::lower_mir_local_struct_init(
   self : Program,
   binding : MirLocal,
@@ -564,6 +665,24 @@ fn Program::lower_mir_local_struct_init(
   let struct_name = match self.core_type(binding.ty) {
     Struct(name) | Union(name) => name
     _ => return None
+  }
+  match init {
+    Number(_) | Array(_) | CompoundLiteral(_, _, _) => ()
+    _ => {
+      let src_addr = match self.lower_mir_object_addr(init, ctx) {
+        Some(addr) => addr
+        None => return None
+      }
+      if !mir_body_local_copy_source_addr(src_addr) {
+        return None
+      }
+      return self.lower_mir_copy_init_stores(
+        MirAddrLocal(binding),
+        binding.ty,
+        src_addr,
+        self.expr_type(init, ctx.scope()),
+      )
+    }
   }
   let items : Array[@parser.Expr] = match init {
     Number(value) => if value == 0L { [] } else { return None }

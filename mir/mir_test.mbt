@@ -1084,6 +1084,22 @@ test "mir body interpreter handles nested local struct initializers" {
 }
 
 ///|
+test "mir body interpreter handles local struct copy initializers" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { int tag; struct Inner inner; int tail; };
+    #|int main(void) {
+    #|  struct S a = { .inner = { 22 }, .tag = 20 };
+    #|  struct S b = a;
+    #|  a.inner.z = 1;
+    #|  return b.tag + b.inner.z + b.tail;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body interpreter handles local union initializers" {
   let source =
     #|union U { int x; unsigned char c; };
