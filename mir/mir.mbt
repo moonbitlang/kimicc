@@ -70,6 +70,7 @@ pub(all) enum MirGlobalInit {
   MirGlobalScalarInt(Int64)
   MirGlobalString(String)
   MirGlobalSymbol(String)
+  MirGlobalSymbolOffset(String, Int)
   MirGlobalArray(Array[MirGlobalInit])
   MirGlobalInitUnsupported
 } derive(Eq)
@@ -320,15 +321,140 @@ fn Program::lower_mir_global_scalar_init(
   match expr {
     Number(n) => MirGlobalScalarInt(n)
     String(s) => MirGlobalString(s)
-    Var(name) => MirGlobalSymbol(name)
-    AddrOf(Var(name)) => MirGlobalSymbol(name)
     DesignatedField(_, _) | DesignatedIndex(_, _) | DesignatedRange(_, _, _) =>
       MirGlobalInitUnsupported
     _ =>
-      match self.fold_const(expr, Scope::empty()) {
-        Some(n) => MirGlobalScalarInt(n)
-        None => MirGlobalInitUnsupported
+      match self.lower_mir_global_address_reloc_parts(expr) {
+        Some((name, offset)) =>
+          if offset == 0 {
+            MirGlobalSymbol(name)
+          } else {
+            MirGlobalSymbolOffset(name, offset)
+          }
+        None =>
+          match self.fold_const(expr, Scope::empty()) {
+            Some(n) => MirGlobalScalarInt(n)
+            None => MirGlobalInitUnsupported
+          }
       }
+  }
+}
+
+///|
+fn Program::global_init_pointer_element_size(
+  self : Program,
+  elem_ty : @parser.Type,
+) -> Int {
+  match self.core_type(elem_ty) {
+    Void => 1
+    _ => self.type_size(elem_ty)
+  }
+}
+
+///|
+fn Program::global_init_offset_bytes(
+  self : Program,
+  base : @parser.Expr,
+  offset : Int64,
+) -> Int {
+  match self.core_type(self.global_expr_type(base)) {
+    Pointer(elem) | Array(elem, _) =>
+      offset.to_int() * self.global_init_pointer_element_size(elem)
+    _ => offset.to_int()
+  }
+}
+
+///|
+fn Program::lower_mir_global_lvalue_reloc_parts(
+  self : Program,
+  expr : @parser.Expr,
+) -> (String, Int)? {
+  match expr {
+    Var(name) => Some((name, 0))
+    Cast(_, inner) => self.lower_mir_global_lvalue_reloc_parts(inner)
+    Deref(inner) => self.lower_mir_global_address_reloc_parts(inner)
+    ArrayAccess(base, index) =>
+      match
+        (
+          self.lower_mir_global_lvalue_reloc_parts(base),
+          self.lower_mir_global_address_reloc_parts(base),
+        ) {
+        (Some(parts), _) | (None, Some(parts)) => {
+          let (name, base_offset) = parts
+          let elem_size = match self.core_type(self.global_expr_type(base)) {
+            Array(elem, _) | Pointer(elem) =>
+              self.global_init_pointer_element_size(elem)
+            _ => 1
+          }
+          match self.fold_const(index, Scope::empty()) {
+            Some(i) => Some((name, base_offset + i.to_int() * elem_size))
+            None => None
+          }
+        }
+        _ => None
+      }
+    MemberAccess(obj, field) =>
+      match self.lower_mir_global_lvalue_reloc_parts(obj) {
+        Some((name, base_offset)) =>
+          match self.field_layout(self.global_expr_type(obj), field) {
+            Some(layout) => Some((name, base_offset + layout.offset))
+            None => None
+          }
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
+fn Program::lower_mir_global_address_reloc_parts(
+  self : Program,
+  expr : @parser.Expr,
+) -> (String, Int)? {
+  match expr {
+    Var(name) => Some((name, 0))
+    Cast(_, inner) => self.lower_mir_global_address_reloc_parts(inner)
+    AddrOf(inner) => self.lower_mir_global_lvalue_reloc_parts(inner)
+    Binary("+", base, offset_expr) =>
+      match
+        (
+          self.lower_mir_global_address_reloc_parts(base),
+          self.fold_const(offset_expr, Scope::empty()),
+        ) {
+        (Some((name, base_offset)), Some(offset)) =>
+          Some(
+            (name, base_offset + self.global_init_offset_bytes(base, offset)),
+          )
+        _ =>
+          match
+            (
+              self.lower_mir_global_address_reloc_parts(offset_expr),
+              self.fold_const(base, Scope::empty()),
+            ) {
+            (Some((name, base_offset)), Some(offset)) =>
+              Some(
+                (
+                  name,
+                  base_offset +
+                  self.global_init_offset_bytes(offset_expr, offset),
+                ),
+              )
+            _ => None
+          }
+      }
+    Binary("-", base, offset_expr) =>
+      match
+        (
+          self.lower_mir_global_address_reloc_parts(base),
+          self.fold_const(offset_expr, Scope::empty()),
+        ) {
+        (Some((name, base_offset)), Some(offset)) =>
+          Some(
+            (name, base_offset - self.global_init_offset_bytes(base, offset)),
+          )
+        _ => None
+      }
+    _ => None
   }
 }
 

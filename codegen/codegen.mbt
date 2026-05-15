@@ -1376,6 +1376,7 @@ fn Codegen::mir_global_init_supported(
         MirGlobalScalarInt(_) => self.mir_global_scalar_int_supported(ty)
         MirGlobalString(_) => self.mir_global_string_supported(ty)
         MirGlobalSymbol(_) => self.mir_global_symbol_supported(ty)
+        MirGlobalSymbolOffset(_, _) => self.mir_global_symbol_supported(ty)
         MirGlobalArray(values) =>
           match ty {
             Array(elem_ty, n) => {
@@ -1472,6 +1473,8 @@ fn Codegen::emit_mir_global_init(
     MirGlobalScalarInt(value) => self.emit_mir_global_scalar_int(ty, value)
     MirGlobalString(value) => self.emit_mir_global_string(ty, value)
     MirGlobalSymbol(name) => self.emit("\t.quad\t_" + name)
+    MirGlobalSymbolOffset(name, offset) =>
+      self.emit("\t.quad\t" + reloc_with_offset("_" + name, offset))
     MirGlobalArray(values) =>
       match ty {
         Array(elem_ty, n) => {
