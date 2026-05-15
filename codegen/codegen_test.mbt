@@ -25,6 +25,51 @@ test "generate darwin arm64 assembly from MIR strict" {
 }
 
 ///|
+test "generate darwin arm64 assembly from parser-free MIR module strict" {
+  let source = "int main(void) { int x = 40; return x + 2; }"
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  let mir_module = mir.to_module()
+  match @codegen.generate_assembly_from_mir_module_strict(mir_module) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tadd\tx9, x9, x10"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 MIR module uses module function metadata" {
+  let source = "int main(void) { return 42; }"
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  let mir_module = mir.to_module()
+  let decl = mir_module.decls[0]
+  mir_module.decls[0] = {
+    ret: decl.ret,
+    name: decl.name,
+    params: decl.params,
+    variadic: decl.variadic,
+    is_static: decl.is_static,
+    is_inline: decl.is_inline,
+    is_weak: true,
+    visibility: decl.visibility,
+    symbol_alias: decl.symbol_alias,
+    section: decl.section,
+    is_constructor: decl.is_constructor,
+    is_destructor: decl.is_destructor,
+    has_body: decl.has_body,
+  }
+  match @codegen.generate_assembly_from_mir_module_strict(mir_module) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.weak_definition\t_main"), content="true")
+      inspect(assembly.contains("\t.globl\t_main"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 MIR body uses MIR function metadata" {
   let source = "int main(void) { return 42; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
@@ -126,6 +171,25 @@ test "generate linux amd64 assembly from MIR strict" {
   }
   let mir = @mir.lower(@parser.parse(source), target)
   match @codegen.generate_assembly_from_mir_strict(mir) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tadd\trax, r10"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 assembly from parser-free MIR module strict" {
+  let source = "int main(void) { int x = 40; return x + 2; }"
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  let mir_module = mir.to_module()
+  match @codegen.generate_assembly_from_mir_module_strict(mir_module) {
     Ok(assembly) => {
       inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
       inspect(assembly.contains("\t# kimicc: mir-body"), content="true")

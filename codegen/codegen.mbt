@@ -2014,6 +2014,22 @@ pub fn generate_assembly_from_mir(mir : @mir.Program) -> String {
 }
 
 ///|
+/// Generates assembly from a parser-free MIR module when the current MIR-only
+/// backend coverage is sufficient.
+pub fn generate_assembly_from_mir_module_strict(
+  mir_module : @mir.MirModule,
+) -> Result[String, String] {
+  match mir_module_body_codegen_strict_error(mir_module) {
+    Some(err) => Err(err)
+    None =>
+      match mir_module_global_codegen_strict_error(mir_module) {
+        Some(err) => Err(err)
+        None => Ok(generate_assembly_from_mir_module_unchecked(mir_module))
+      }
+  }
+}
+
+///|
 /// Generates assembly from MIR only when every source function definition can
 /// use the MIR-body backend path.
 ///
@@ -2023,20 +2039,14 @@ pub fn generate_assembly_from_mir(mir : @mir.Program) -> String {
 pub fn generate_assembly_from_mir_strict(
   mir : @mir.Program,
 ) -> Result[String, String] {
-  match mir_body_codegen_strict_error(mir) {
-    Some(err) => Err(err)
-    None =>
-      match mir_global_codegen_strict_error(mir) {
-        Some(err) => Err(err)
-        None => Ok(generate_assembly_from_mir_strict_unchecked(mir))
-      }
-  }
+  generate_assembly_from_mir_module_strict(mir.to_module())
 }
 
 ///|
-fn generate_assembly_from_mir_strict_unchecked(mir : @mir.Program) -> String {
-  let mir_module = mir.to_module()
-  match mir.target {
+fn generate_assembly_from_mir_module_unchecked(
+  mir_module : @mir.MirModule,
+) -> String {
+  match mir_module.target {
     DarwinArm64 =>
       Codegen::new_with_mir_module(mir_module).generate_mir_only(mir_module)
     LinuxAmd64 =>
@@ -2045,11 +2055,13 @@ fn generate_assembly_from_mir_strict_unchecked(mir : @mir.Program) -> String {
 }
 
 ///|
-fn mir_global_codegen_strict_error(mir : @mir.Program) -> String? {
-  match mir.target {
+fn mir_module_global_codegen_strict_error(
+  mir_module : @mir.MirModule,
+) -> String? {
+  match mir_module.target {
     DarwinArm64 => {
-      let codegen = Codegen::new_with_mir(mir)
-      for g in @mir.merge_global_decls(mir.global_decls) {
+      let codegen = Codegen::new_with_mir_module(mir_module)
+      for g in @mir.merge_global_decls(mir_module.global_decls) {
         if g.has_init {
           match g.init {
             Some(init) =>
@@ -2062,8 +2074,8 @@ fn mir_global_codegen_strict_error(mir : @mir.Program) -> String? {
       }
     }
     LinuxAmd64 => {
-      let codegen = X64Codegen::new_with_mir(mir)
-      for g in @mir.merge_global_decls(mir.global_decls) {
+      let codegen = X64Codegen::new_with_mir_module(mir_module)
+      for g in @mir.merge_global_decls(mir_module.global_decls) {
         if g.has_init {
           match g.init {
             Some(init) =>
@@ -2080,18 +2092,17 @@ fn mir_global_codegen_strict_error(mir : @mir.Program) -> String? {
 }
 
 ///|
-fn mir_body_codegen_strict_error(mir : @mir.Program) -> String? {
-  let mir_module = mir.to_module()
-  let int_arg_limit = match mir.target {
+fn mir_module_body_codegen_strict_error(mir_module : @mir.MirModule) -> String? {
+  let int_arg_limit = match mir_module.target {
     DarwinArm64 => 8
     LinuxAmd64 => 6
   }
-  for decl in mir.decls {
+  for decl in mir_module.decls {
     if decl.has_body {
-      if !mir.bodies.contains(decl.name) {
+      if !mir_module.bodies.contains(decl.name) {
         return Some("missing MIR body for " + decl.name)
       }
-      let body = mir.bodies[decl.name]
+      let body = mir_module.bodies[decl.name]
       if !mir_body_codegen_func_supported(
           body,
           decl.variadic,

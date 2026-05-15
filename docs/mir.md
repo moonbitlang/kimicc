@@ -206,14 +206,17 @@ consistency tests and as fallbacks for direct private construction in tests.
 `generate_assembly_from_mir` is the backend-facing assembly entry point for an
 already lowered MIR program. `generate_assembly_for_target` is now a frontend
 wrapper that parses/lower callers can keep using while codegen moves toward a
-MIR-only contract. `generate_assembly_from_mir_strict` adds a guardrail for this
-migration: it returns an error when any source function definition would fall
-back to parser statement/expression codegen, or when any global initializer
-would require parser initializer fallback. This strict gate does not yet mean
-the entire backend is parser-independent; some legacy setup and fallback paths
-still depend on parser declarations while the MIR boundary is completed.
-When those checks pass, strict mode emits through MIR-only backend paths instead
-of the transitional parser-source wrapper.
+MIR-only contract. `generate_assembly_from_mir_module_strict` is the parser-free
+backend contract: it accepts a `MirModule`, rejects modules that need unsupported
+MIR body or global-initializer coverage, and emits through MIR-only backend
+paths when the checks pass. `generate_assembly_from_mir_strict` is now a
+compatibility wrapper that projects `Program` to `MirModule` before using that
+parser-free contract. This strict gate does not yet mean every C source program
+can compile without fallback; it means successful strict codegen does not carry
+the parser AST into backend emission. Normal `generate_assembly_from_mir` still
+tries strict module emission first and only falls back to the transitional
+parser-source wrapper when strict coverage rejects a function body or global
+initializer.
 Both assembly backends also seed their function return/parameter metadata from
 `Program.decls`, rather than rebuilding those facts from parser function
 declarations. The linux/amd64 backend also emits function alias, weak
@@ -223,11 +226,6 @@ emission path. Supported MIR-body function emission also uses `Program.decls`
 for function binding metadata. Both backend global-symbol lookup maps are
 seeded from merged `Program.global_decls`, so type and extern/alias questions
 during expression codegen no longer require parser global declaration records.
-`generate_assembly_from_mir` tries that strict `MirModule` path first and only
-falls back to the transitional parser-source wrapper when strict coverage
-rejects a function body or global initializer. Strict MIR codegen constructs
-backend state from `MirModule` after the strict checks pass, so that MIR-only
-path does not carry `Program.source` into backend emission.
 Global initializer
 emission itself still uses the parser fallback path while MIR data initializers
 are being expanded. Both backends also seed their aggregate layout tables from
