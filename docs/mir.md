@@ -16,7 +16,8 @@ integer-scalar subset.
 - `Program::to_module` projects those facts into `MirModule`, a parser-free
   backend-facing container for MIR declarations, layouts, globals, and lowered
   bodies. `Program` still carries parser source for transitional fallback
-  consumers.
+  consumers. `lower_to_module` is the direct parser-to-`MirModule` helper for
+  callers that do not need the transitional `Program` wrapper.
 - `Program.decls` stores MIR-owned function declaration metadata, including
   parameter facts, linkage-related attributes, aliases, lifecycle attributes,
   and whether a source body existed. Function body syntax is not stored there;

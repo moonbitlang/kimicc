@@ -589,6 +589,14 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
 }
 
 ///|
+pub fn lower_to_module(
+  source : @parser.Program,
+  target : @target.Target,
+) -> MirModule {
+  lower(source, target).to_module()
+}
+
+///|
 fn Program::core_type(self : Program, ty : @parser.Type) -> @parser.Type {
   match ty {
     Atomic(inner) | Aligned(inner, _) => self.core_type(inner)

@@ -11,6 +11,8 @@ pub fn interpret_i64(@parser.Program, @target.Target, String, Array[Int64]) -> R
 
 pub fn lower(@parser.Program, @target.Target) -> Program
 
+pub fn lower_to_module(@parser.Program, @target.Target) -> MirModule
+
 pub fn merge_global_decls(Array[MirGlobalDecl]) -> Array[MirGlobalDecl]
 
 // Errors

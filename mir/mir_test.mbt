@@ -113,7 +113,12 @@ test "mir module projection carries parser-free semantic facts" {
     #|int main(void) { return g; }
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   let mir_module = mir.to_module()
+  let direct_module = @mir.lower_to_module(
+    @parser.parse(source),
+    @target.Target::default(),
+  )
   inspect(mir_module.decls[0].name, content="main")
+  inspect(direct_module.decls[0].name, content="main")
   inspect(mir_module.global_decls[0].name, content="g")
   inspect(mir_module.globals["g"].has_init.to_string(), content="true")
   inspect(mir_module.aggregate_decls[0].name, content="Pair")
