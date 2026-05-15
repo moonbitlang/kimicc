@@ -79,6 +79,10 @@ fn mir_body_codegen_value_supported(
       mir_body_codegen_scalar_type(binding.ty) &&
       mir_body_codegen_scalar_type(ty) &&
       mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
+    MirPreUpdateMemory(ptr, _, rhs, ty) =>
+      mir_body_codegen_scalar_type(ty) &&
+      mir_body_codegen_value_supported(ptr, int_arg_limit, mir) &&
+      mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
     MirPostUpdateMemory(ptr, _, rhs, ty) =>
       mir_body_codegen_scalar_type(ty) &&
       mir_body_codegen_value_supported(ptr, int_arg_limit, mir) &&
@@ -388,6 +392,22 @@ fn Codegen::gen_mir_value(
       self.emit_scalar_conversion_to(binding.ty)
       self.emit_store_local("x9", offsets[binding.id], frame_size)
       self.emit("\tldr\tx9, [sp], #16")
+      self.emit_scalar_conversion_to(ty)
+    }
+    MirPreUpdateMemory(ptr, op, rhs, ty) => {
+      self.gen_mir_value(ptr, offsets, frame_size)
+      self.emit("\tstr\tx9, [sp, #-16]!")
+      self.emit_load_typed("x10", "x9", ty)
+      self.gen_mir_value(rhs, offsets, frame_size)
+      self.emit_scalar_conversion_to(rhs.ty())
+      match op {
+        "+" => self.emit("\tadd\tx11, x10, x9")
+        "-" => self.emit("\tsub\tx11, x10, x9")
+        _ => abort("unsupported MIR body memory pre-update operator")
+      }
+      self.emit("\tldr\tx12, [sp], #16")
+      self.emit_store_typed("x11", "x12", ty)
+      self.emit("\tmov\tx9, x11")
       self.emit_scalar_conversion_to(ty)
     }
     MirPostUpdateMemory(ptr, op, rhs, ty) => {
@@ -922,6 +942,26 @@ fn X64Codegen::gen_mir_value(
       self.emit_int_conversion_to(binding.ty)
       self.emit_store_local_from_rax(offsets[binding.id], binding.ty)
       self.emit_mir_pop_rax()
+      self.emit_int_conversion_to(ty)
+    }
+    MirPreUpdateMemory(ptr, op, rhs, ty) => {
+      self.gen_mir_value(ptr, offsets)
+      self.emit_mir_push_rax()
+      self.emit_load_indirect(ty)
+      self.emit_mir_push_rax()
+      self.gen_mir_value(rhs, offsets)
+      self.emit_int_conversion_to(rhs.ty())
+      self.emit("\tmov\tr10, rax")
+      self.emit_mir_pop_rax()
+      match op {
+        "+" => self.emit("\tadd\trax, r10")
+        "-" => self.emit("\tsub\trax, r10")
+        _ => abort("unsupported MIR body memory pre-update operator")
+      }
+      self.emit_int_conversion_to(ty)
+      self.emit("\tmov\tr10, QWORD PTR [rsp]")
+      self.emit("\tadd\trsp, 16")
+      self.emit_store_indirect(ty)
       self.emit_int_conversion_to(ty)
     }
     MirPostUpdateMemory(ptr, op, rhs, ty) => {

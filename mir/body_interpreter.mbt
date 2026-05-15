@@ -364,6 +364,44 @@ fn BodyInterpreter::eval_value(
       frame.locals[binding.id] = updated
       self.program.runtime_cast_int(old, ty)
     }
+    MirPreUpdateMemory(ptr, op, rhs, ty) => {
+      let addr = self.eval_value(frame, ptr)
+      let old = if frame.array_elem_addr(addr) ||
+        self.aggregate_addr(frame, addr) {
+        match frame.memory.get(addr) {
+          Some(value) => self.program.runtime_cast_int(value, ty)
+          None => 0L
+        }
+      } else {
+        match frame.binding_for_addr(addr) {
+          Some(binding) =>
+            if frame.locals.contains(binding.id) {
+              self.program.runtime_cast_int(frame.locals[binding.id], ty)
+            } else {
+              self.fail("unknown MIR body local value: " + binding.name)
+              0L
+            }
+          None => {
+            self.fail("unsupported MIR body pre-update address")
+            0L
+          }
+        }
+      }
+      let right = self.eval_value(frame, rhs)
+      let updated = self.program.runtime_cast_int(
+        self.eval_binary_values(op, old, ty, right, rhs.ty()),
+        ty,
+      )
+      if frame.array_elem_addr(addr) || self.aggregate_addr(frame, addr) {
+        frame.memory[addr] = updated
+      } else {
+        match frame.binding_for_addr(addr) {
+          Some(binding) => frame.locals[binding.id] = updated
+          None => ()
+        }
+      }
+      updated
+    }
     MirPostUpdateMemory(ptr, op, rhs, ty) => {
       let addr = self.eval_value(frame, ptr)
       let old = if frame.array_elem_addr(addr) ||

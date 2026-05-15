@@ -83,6 +83,7 @@ pub(all) enum MirValue {
   MirAssignLocal(MirLocal, MirValue)
   MirStore(MirValue, MirValue, @parser.Type)
   MirPostUpdateLocal(MirLocal, String, MirValue, @parser.Type)
+  MirPreUpdateMemory(MirValue, String, MirValue, @parser.Type)
   MirPostUpdateMemory(MirValue, String, MirValue, @parser.Type)
   MirTernary(MirValue, MirValue, MirValue, @parser.Type)
 } derive(Eq)

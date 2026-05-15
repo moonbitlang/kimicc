@@ -389,16 +389,18 @@ test "mir body interpreter handles scalar memory prefix updates" {
 }
 
 ///|
-test "mir body lowering keeps side effecting prefix update addresses unsupported" {
+test "mir body interpreter handles side effecting scalar memory prefix updates" {
   let source =
     #|int main(void) {
     #|  int a[2];
     #|  int i = 0;
-    #|  ++a[i++];
-    #|  return i;
+    #|  a[0] = 4;
+    #|  int got = ++a[i++];
+    #|  return got * 10 + a[0] + i;
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
-  inspect(mir.bodies.contains("main"), content="false")
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 56L)
 }
 
 ///|

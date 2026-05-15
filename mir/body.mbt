@@ -30,6 +30,7 @@ pub(all) enum MirValue {
   MirAssignLocal(MirLocal, MirValue)
   MirStore(MirValue, MirValue, @parser.Type)
   MirPostUpdateLocal(MirLocal, String, MirValue, @parser.Type)
+  MirPreUpdateMemory(MirValue, String, MirValue, @parser.Type)
   MirPostUpdateMemory(MirValue, String, MirValue, @parser.Type)
   MirTernary(MirValue, MirValue, MirValue, @parser.Type)
 } derive(Eq)
@@ -79,6 +80,7 @@ pub fn MirValue::ty(self : MirValue) -> @parser.Type {
     MirAssignLocal(binding, _) => binding.ty
     MirStore(_, _, ty) => ty
     MirPostUpdateLocal(_, _, _, ty) => ty
+    MirPreUpdateMemory(_, _, _, ty) => ty
     MirPostUpdateMemory(_, _, _, ty) => ty
     MirTernary(_, _, _, ty) => ty
   }
@@ -263,27 +265,6 @@ fn Program::lower_mir_post_step(
 }
 
 ///|
-fn mir_body_reusable_addr_operand(expr : @parser.Expr) -> Bool {
-  match expr {
-    Number(_) | Var(_) => true
-    Cast(_, inner) => mir_body_reusable_addr_operand(inner)
-    _ => false
-  }
-}
-
-///|
-fn mir_body_reusable_scalar_lvalue(expr : @parser.Expr) -> Bool {
-  match expr {
-    Deref(Var(_)) => true
-    ArrayAccess(base, index) =>
-      mir_body_reusable_addr_operand(base) &&
-      mir_body_reusable_addr_operand(index)
-    MemberAccess(Var(_), _) => true
-    _ => false
-  }
-}
-
-///|
 fn Program::lower_mir_scalar_lvalue_addr(
   self : Program,
   expr : @parser.Expr,
@@ -317,18 +298,9 @@ fn Program::lower_mir_prefix_step(
       if !lhs_ty.is_integer() {
         return None
       }
-      if !mir_body_reusable_scalar_lvalue(expr) {
-        return None
-      }
       match self.lower_mir_scalar_lvalue_addr(expr, lhs_ty, ctx) {
         Some(addr) =>
-          Some(
-            MirStore(
-              addr,
-              MirBinary(op, MirLoad(addr, lhs_ty), MirConst(1L, SInt), ty),
-              lhs_ty,
-            ),
-          )
+          Some(MirPreUpdateMemory(addr, op, MirConst(1L, SInt), lhs_ty))
         None => None
       }
     }
