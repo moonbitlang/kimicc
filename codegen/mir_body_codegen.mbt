@@ -39,7 +39,7 @@ fn mir_body_codegen_local_type(ty : @parser.Type) -> Bool {
 fn mir_body_codegen_value_supported(
   value : @mir.MirValue,
   int_arg_limit : Int,
-  mir : @mir.Program,
+  mir : @mir.MirModule,
 ) -> Bool {
   if !mir_body_codegen_scalar_type(value.ty()) {
     return false
@@ -113,7 +113,7 @@ fn mir_body_codegen_call_supported(
   args : Array[@mir.MirValue],
   ret : @parser.Type,
   int_arg_limit : Int,
-  mir : @mir.Program,
+  mir : @mir.MirModule,
 ) -> Bool {
   if name.has_prefix("__") ||
     args.length() > int_arg_limit ||
@@ -148,7 +148,7 @@ fn mir_body_codegen_call_supported(
 fn mir_body_codegen_stmt_supported(
   stmt : @mir.MirStmt,
   int_arg_limit : Int,
-  mir : @mir.Program,
+  mir : @mir.MirModule,
 ) -> Bool {
   match stmt {
     MirDeclare(binding, init) => {
@@ -210,7 +210,7 @@ fn mir_body_codegen_stmt_supported(
 fn mir_body_codegen_stmts_supported(
   stmts : Array[@mir.MirStmt],
   int_arg_limit : Int,
-  mir : @mir.Program,
+  mir : @mir.MirModule,
 ) -> Bool {
   for stmt in stmts {
     if !mir_body_codegen_stmt_supported(stmt, int_arg_limit, mir) {
@@ -225,7 +225,7 @@ fn mir_body_codegen_func_supported(
   body : @mir.MirFuncBody,
   variadic : Bool,
   int_arg_limit : Int,
-  mir : @mir.Program,
+  mir : @mir.MirModule,
 ) -> Bool {
   if variadic || body.params.length() > int_arg_limit {
     return false
@@ -802,7 +802,12 @@ fn Codegen::try_gen_mir_func(self : Codegen, decl : @parser.FuncDecl) -> Bool {
           Some(d) => d
           None => return false
         }
-        if !mir_body_codegen_func_supported(body, mir_decl.variadic, 8, mir) {
+        if !mir_body_codegen_func_supported(
+            body,
+            mir_decl.variadic,
+            8,
+            mir.to_module(),
+          ) {
           return false
         }
         self.gen_mir_func(mir_decl, body)
@@ -1401,7 +1406,12 @@ fn X64Codegen::try_gen_mir_func(
           Some(d) => d
           None => return false
         }
-        if !mir_body_codegen_func_supported(body, mir_decl.variadic, 6, mir) {
+        if !mir_body_codegen_func_supported(
+            body,
+            mir_decl.variadic,
+            6,
+            mir.to_module(),
+          ) {
           return false
         }
         self.gen_mir_func(mir_decl, body)

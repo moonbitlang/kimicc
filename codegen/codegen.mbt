@@ -2081,6 +2081,7 @@ fn mir_global_codegen_strict_error(mir : @mir.Program) -> String? {
 
 ///|
 fn mir_body_codegen_strict_error(mir : @mir.Program) -> String? {
+  let mir_module = mir.to_module()
   let int_arg_limit = match mir.target {
     DarwinArm64 => 8
     LinuxAmd64 => 6
@@ -2095,7 +2096,7 @@ fn mir_body_codegen_strict_error(mir : @mir.Program) -> String? {
           body,
           decl.variadic,
           int_arg_limit,
-          mir,
+          mir_module,
         ) {
         return Some("unsupported MIR body codegen for " + decl.name)
       }
