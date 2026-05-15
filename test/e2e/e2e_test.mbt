@@ -93,6 +93,27 @@ async test "run arrays fixture" {
 }
 
 ///|
+async test "e2e MIR body scalar memory postfix updates" {
+  let source =
+    #|struct S { int x; };
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int *p = &x;
+    #|  int a[2];
+    #|  int i = 0;
+    #|  struct S s;
+    #|  a[0] = 9;
+    #|  s.x = 7;
+    #|  int old_p = (*p)++;
+    #|  int old_a = a[i++]--;
+    #|  int old_s = s.x++;
+    #|  return old_p * 1000 + old_a * 100 + old_s * 10 + x + a[0] + s.x + i;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="128")
+}
+
+///|
 async test "e2e c11 generic selection chooses compatible type" {
   let source =
     #|int main(void) {

@@ -30,6 +30,7 @@ pub(all) enum MirValue {
   MirAssignLocal(MirLocal, MirValue)
   MirStore(MirValue, MirValue, @parser.Type)
   MirPostUpdateLocal(MirLocal, String, MirValue, @parser.Type)
+  MirPostUpdateMemory(MirValue, String, MirValue, @parser.Type)
   MirTernary(MirValue, MirValue, MirValue, @parser.Type)
 } derive(Eq)
 
@@ -78,6 +79,7 @@ pub fn MirValue::ty(self : MirValue) -> @parser.Type {
     MirAssignLocal(binding, _) => binding.ty
     MirStore(_, _, ty) => ty
     MirPostUpdateLocal(_, _, _, ty) => ty
+    MirPostUpdateMemory(_, _, _, ty) => ty
     MirTernary(_, _, _, ty) => ty
   }
 }
@@ -237,7 +239,8 @@ fn lower_mir_post_update(
 }
 
 ///|
-fn lower_mir_post_step(
+fn Program::lower_mir_post_step(
+  self : Program,
   expr : @parser.Expr,
   op : String,
   ty : @parser.Type,
@@ -245,7 +248,17 @@ fn lower_mir_post_step(
 ) -> MirValue? {
   match lower_mir_cancelled_local_lvalue(expr, ctx) {
     Some(binding) => lower_mir_post_update(binding, op, MirConst(1L, SInt), ty)
-    None => None
+    None => {
+      let lhs_ty = self.expr_type(expr, ctx.scope())
+      if !lhs_ty.is_integer() {
+        return None
+      }
+      match self.lower_mir_scalar_lvalue_addr(expr, lhs_ty, ctx) {
+        Some(addr) =>
+          Some(MirPostUpdateMemory(addr, op, MirConst(1L, SInt), lhs_ty))
+        None => None
+      }
+    }
   }
 }
 
@@ -585,8 +598,8 @@ fn Program::lower_mir_expr(
     }
     PrefixInc(target) => self.lower_mir_prefix_step(target, "+", ty, ctx)
     PrefixDec(target) => self.lower_mir_prefix_step(target, "-", ty, ctx)
-    PostfixInc(target) => lower_mir_post_step(target, "+", ty, ctx)
-    PostfixDec(target) => lower_mir_post_step(target, "-", ty, ctx)
+    PostfixInc(target) => self.lower_mir_post_step(target, "+", ty, ctx)
+    PostfixDec(target) => self.lower_mir_post_step(target, "-", ty, ctx)
     Ternary(cond, then_, else_) =>
       match
         (

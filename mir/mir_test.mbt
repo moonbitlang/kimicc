@@ -402,6 +402,28 @@ test "mir body lowering keeps side effecting prefix update addresses unsupported
 }
 
 ///|
+test "mir body interpreter handles scalar memory postfix updates" {
+  let source =
+    #|struct S { int x; };
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int *p = &x;
+    #|  int a[2];
+    #|  int i = 0;
+    #|  struct S s;
+    #|  a[0] = 9;
+    #|  s.x = 7;
+    #|  int old_p = (*p)++;
+    #|  int old_a = a[i++]--;
+    #|  int old_s = s.x++;
+    #|  return old_p * 1000 + old_a * 100 + old_s * 10 + x + a[0] + s.x + i;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 4992L)
+}
+
+///|
 test "mir body lowering folds scalar builtin calls" {
   let source =
     #|int main(void) {
