@@ -550,6 +550,19 @@ async test "local struct definition and typedef" {
 }
 
 ///|
+async test "nested local struct initializer" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct Outer { int tag; struct Inner inner; int tail; };
+    #|int main(void) {
+    #|  struct Outer o = { .inner = { 22 }, .tag = 20 };
+    #|  return o.tag + o.inner.z + o.tail;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "comma separated typedef" {
   let source =
     #|typedef int foo_t, bar_t, *baz_t;

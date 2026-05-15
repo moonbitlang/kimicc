@@ -125,6 +125,25 @@ test "generate darwin arm64 strict MIR local struct initializer" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR nested local struct initializer" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct Outer { int tag; struct Inner inner; int tail; };
+    #|int main(void) {
+    #|  struct Outer o = { .inner = { 22 }, .tag = 20 };
+    #|  return o.tag + o.inner.z + o.tail;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR local array initializer" {
   let source =
     #|int main(void) {
@@ -516,6 +535,29 @@ test "generate linux amd64 strict MIR local struct initializer" {
     #|  int side = 1;
     #|  struct S s = { side += 2, 250 + 10 };
     #|  return s.x + s.y + s.z + side;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR nested local struct initializer" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct Outer { int tag; struct Inner inner; int tail; };
+    #|int main(void) {
+    #|  struct Outer o = { .inner = { 22 }, .tag = 20 };
+    #|  return o.tag + o.inner.z + o.tail;
     #|}
   let target = match @target.Target::parse("linux-amd64") {
     Some(target) => target
