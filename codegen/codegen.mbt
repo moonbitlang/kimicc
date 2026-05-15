@@ -2003,6 +2003,10 @@ pub fn generate_assembly_for_target(
 /// This is the intended backend-facing entry point. The parser-based public
 /// entry point is now only a frontend wrapper that lowers to MIR first.
 pub fn generate_assembly_from_mir(mir : @mir.Program) -> String {
+  match generate_assembly_from_mir_strict(mir) {
+    Ok(assembly) => return assembly
+    Err(_) => ()
+  }
   match mir.target {
     DarwinArm64 => Codegen::new_with_mir(mir).generate(mir.source)
     LinuxAmd64 => X64Codegen::new_with_mir(mir).generate(mir.source)

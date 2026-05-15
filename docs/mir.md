@@ -223,9 +223,11 @@ emission path. Supported MIR-body function emission also uses `Program.decls`
 for function binding metadata. Both backend global-symbol lookup maps are
 seeded from merged `Program.global_decls`, so type and extern/alias questions
 during expression codegen no longer require parser global declaration records.
-Strict MIR codegen constructs backend state from `MirModule` after the strict
-checks pass, so that MIR-only path does not carry `Program.source` into backend
-emission.
+`generate_assembly_from_mir` tries that strict `MirModule` path first and only
+falls back to the transitional parser-source wrapper when strict coverage
+rejects a function body or global initializer. Strict MIR codegen constructs
+backend state from `MirModule` after the strict checks pass, so that MIR-only
+path does not carry `Program.source` into backend emission.
 Global initializer
 emission itself still uses the parser fallback path while MIR data initializers
 are being expanded. Both backends also seed their aggregate layout tables from
