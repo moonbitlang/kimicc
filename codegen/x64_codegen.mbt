@@ -9448,3 +9448,34 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
   self.emit("\t.section\t.note.GNU-stack,\"\",@progbits")
   self.output.to_string()
 }
+
+///|
+fn X64Codegen::generate_mir_only(
+  self : X64Codegen,
+  mir : @mir.Program,
+) -> String {
+  self.emit("\t.intel_syntax noprefix")
+  self.emit("\t.text")
+  self.register_mir_aggregate_layouts(mir)
+  self.register_mir_function_decls(mir)
+  self.register_mir_global_decls(mir)
+  for decl in mir.decls {
+    self.emit_mir_function_decl_directives(decl)
+  }
+  for decl in mir.decls {
+    if decl.has_body {
+      match mir.bodies.get(decl.name) {
+        Some(body) => self.gen_mir_func(decl, body)
+        None => ()
+      }
+    }
+  }
+  let parser_fallbacks : Map[String, @parser.GlobalDecl] = {}
+  self.emit_globals(@mir.merge_global_decls(mir.global_decls), parser_fallbacks)
+  self.emit_lifecycle_array(".init_array", mir.decls)
+  self.emit_lifecycle_array(".fini_array", mir.decls)
+  self.emit_strings()
+  self.emit_fp_literals()
+  self.emit("\t.section\t.note.GNU-stack,\"\",@progbits")
+  self.output.to_string()
+}

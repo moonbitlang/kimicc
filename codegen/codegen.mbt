@@ -1897,6 +1897,74 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
 }
 
 ///|
+fn Codegen::generate_mir_only(self : Codegen, mir : @mir.Program) -> String {
+  self.output.write_string(
+    "\t.section\t__TEXT,__text,regular,pure_instructions\n",
+  )
+  self.output.write_string("\t.build_version macos, 14, 0\n")
+  self.register_mir_aggregate_layouts(mir)
+  self.register_mir_function_decls(mir)
+  self.register_mir_global_decls(mir)
+  for decl in mir.decls {
+    if decl.has_body {
+      match mir.bodies.get(decl.name) {
+        Some(body) => self.gen_mir_func(decl, body)
+        None => ()
+      }
+    }
+  }
+  let mir_globals = @mir.merge_global_decls(mir.global_decls)
+  let mut has_data = false
+  for g in mir_globals {
+    if g.has_init {
+      if !has_data {
+        self.emit("	.section	__DATA,__data")
+        has_data = true
+      }
+      if !g.is_static {
+        if g.is_weak {
+          self.emit("	.weak_definition	_" + g.name)
+        } else {
+          self.emit("	.globl	_" + g.name)
+        }
+      }
+      self.emit_global_p2align(g.ty)
+      self.emit("_" + g.name + ":")
+      if !self.try_emit_mir_global_init(g) {
+        self.emit("\t.space\t" + self.type_size(g.ty).to_string())
+      }
+    }
+  }
+  let mut has_bss = false
+  for g in mir_globals {
+    if !g.has_init && !g.is_extern {
+      if !has_bss {
+        self.emit("	.section	__DATA,__bss")
+        has_bss = true
+      }
+      if !g.is_static {
+        if g.is_weak {
+          self.emit("	.weak_definition	_" + g.name)
+        } else {
+          self.emit("	.globl	_" + g.name)
+        }
+      }
+      self.emit_global_p2align(g.ty)
+      self.emit("_" + g.name + ":")
+      self.emit("	.space	" + self.type_size(g.ty).to_string())
+    }
+  }
+  if self.strings.length() > 0 {
+    self.emit("	.section	__TEXT,__const")
+    for i = 0; i < self.strings.length(); i = i + 1 {
+      self.emit("_str" + i.to_string() + ":")
+      self.emit("	.asciz	\"" + escape_string(self.strings[i]) + "\"")
+    }
+  }
+  self.output.to_string()
+}
+
+///|
 /// Generates assembly for `prog` using the requested target backend.
 ///
 /// `DarwinArm64` preserves the existing macOS ARM64 assembly output.
@@ -1935,8 +2003,16 @@ pub fn generate_assembly_from_mir_strict(
     None =>
       match mir_global_codegen_strict_error(mir) {
         Some(err) => Err(err)
-        None => Ok(generate_assembly_from_mir(mir))
+        None => Ok(generate_assembly_from_mir_strict_unchecked(mir))
       }
+  }
+}
+
+///|
+fn generate_assembly_from_mir_strict_unchecked(mir : @mir.Program) -> String {
+  match mir.target {
+    DarwinArm64 => Codegen::new_with_mir(mir).generate_mir_only(mir)
+    LinuxAmd64 => X64Codegen::new_with_mir(mir).generate_mir_only(mir)
   }
 }
 

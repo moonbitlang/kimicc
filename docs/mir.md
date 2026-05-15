@@ -205,6 +205,8 @@ back to parser statement/expression codegen, or when any global initializer
 would require parser initializer fallback. This strict gate does not yet mean
 the entire backend is parser-independent; some legacy setup and fallback paths
 still depend on parser declarations while the MIR boundary is completed.
+When those checks pass, strict mode emits through MIR-only backend paths instead
+of the transitional parser-source wrapper.
 Both assembly backends also seed their function return/parameter metadata from
 `Program.decls`, rather than rebuilding those facts from parser function
 declarations. The linux/amd64 backend also emits function alias, weak
