@@ -44,7 +44,8 @@ integer-scalar subset.
   directly labeled scalar `switch`, simple labels/goto, local compound
   assignment, local postfix updates, scalar globals and initialized global arrays, scalar memory
   prefix/postfix updates, scalar `*&` / `&*` cancellation, simple scalar local
-  pointer loads/stores, scalar local arrays, direct scalar aggregate fields, foldable
+  pointer loads/stores, scalar local arrays, scalar aggregate fields including
+  nested member access, foldable
   `__builtin_constant_p`, side-effect-free identity builtins such as
   `__builtin_expect`, `__builtin_assume_aligned`, and return-address
   transforms, no-op `__builtin_assume`, runtime `__builtin_prefetch` address
@@ -59,7 +60,8 @@ integer-scalar subset.
   externs, directly labeled scalar `switch`, simple labels/goto, local compound
   assignment, local postfix updates, scalar globals and initialized global arrays, scalar memory
   prefix/postfix updates, scalar `*&` / `&*` cancellation, simple scalar local
-  pointer loads/stores, scalar local arrays, direct scalar aggregate fields, foldable
+  pointer loads/stores, scalar local arrays, scalar aggregate fields including
+  nested member access, foldable
   `__builtin_constant_p`, side-effect-free identity builtins such as
   `__builtin_expect`, `__builtin_assume_aligned`, and return-address
   transforms, no-op `__builtin_assume`, runtime `__builtin_prefetch` address
@@ -249,8 +251,7 @@ program behavior.
 ## Remaining Migration Path
 
 1. Expand MIR body lowering statement by statement, starting with general memory
-   modeling, nested aggregate/member access, aggregate ABI values, and computed
-   goto.
+   modeling, aggregate ABI values, and computed goto.
 2. Keep `Program::interpret_body_i64` as the first consumer for each new body
    feature so unsupported behavior fails explicitly before codegen depends on
    it.

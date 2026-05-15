@@ -484,23 +484,67 @@ fn Program::lower_mir_member_addr(
   field : String,
   ctx : BodyLowerContext,
 ) -> MirValue? {
-  match obj {
+  let obj_ty = self.expr_type(obj, ctx.scope())
+  match self.field_layout(obj_ty, field) {
+    Some(layout) =>
+      if layout.bit_width is None && mir_body_scalar_type(layout.ty) {
+        match self.lower_mir_object_addr(obj, ctx) {
+          Some(base) =>
+            Some(mir_body_offset_addr_value(base, layout.offset, layout.ty))
+          None => None
+        }
+      } else {
+        None
+      }
+    None => None
+  }
+}
+
+///|
+fn mir_body_offset_addr_value(
+  base : MirValue,
+  offset : Int,
+  ty : @parser.Type,
+) -> MirValue {
+  match base {
+    MirOffsetAddr(inner, base_offset, _) =>
+      MirOffsetAddr(inner, base_offset + offset, ty)
+    _ => MirOffsetAddr(base, offset, ty)
+  }
+}
+
+///|
+fn Program::lower_mir_object_addr(
+  self : Program,
+  expr : @parser.Expr,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  match expr {
     Var(name) =>
       match ctx.lookup_local(name) {
-        Some(binding) =>
-          match self.field_layout(binding.ty, field) {
-            Some(layout) =>
-              if layout.bit_width is None && mir_body_scalar_type(layout.ty) {
-                Some(
-                  MirOffsetAddr(MirAddrLocal(binding), layout.offset, layout.ty),
-                )
-              } else {
-                None
-              }
+        Some(binding) => Some(MirAddrLocal(binding))
+        None =>
+          match self.globals.get(name) {
+            Some(global) => Some(MirAddrGlobal(name, global.ty))
             None => None
+          }
+      }
+    MemberAccess(obj, field) => {
+      let obj_ty = self.expr_type(obj, ctx.scope())
+      match self.field_layout(obj_ty, field) {
+        Some(layout) =>
+          if layout.bit_width is None {
+            match self.lower_mir_object_addr(obj, ctx) {
+              Some(base) =>
+                Some(mir_body_offset_addr_value(base, layout.offset, layout.ty))
+              None => None
+            }
+          } else {
+            None
           }
         None => None
       }
+    }
     _ => None
   }
 }

@@ -305,12 +305,10 @@ test "generate linux amd64 MIR body uses MIR function metadata" {
 ///|
 test "strict MIR assembly rejects parser body fallback" {
   let source =
-    #|struct Inner { int z; };
-    #|struct Outer { struct Inner inner; };
     #|int main(void) {
-    #|  struct Outer s;
-    #|  s.inner.z = 3;
-    #|  return s.inner.z;
+    #|  int x = 4;
+    #|  int side = 0;
+    #|  return __builtin_expect(x, side += 1);
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   inspect(mir.bodies.contains("main"), content="false")
@@ -787,7 +785,7 @@ test "generate darwin arm64 MIR body scalar aggregate field" {
 }
 
 ///|
-test "generate darwin arm64 keeps nested aggregate field on fallback" {
+test "generate darwin arm64 MIR body nested aggregate field" {
   let source =
     #|struct Inner { int z; };
     #|struct S { struct Inner inner; };
@@ -799,7 +797,10 @@ test "generate darwin arm64 keeps nested aggregate field on fallback" {
   let prog = @parser.parse(source)
   let codegen = @codegen.Codegen::new()
   let assembly = codegen.generate(prog)
-  inspect(assembly.contains("kimicc: mir-body"), content="false")
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
 }
 
 ///|
@@ -1622,7 +1623,7 @@ test "generate linux amd64 MIR body scalar aggregate field" {
 }
 
 ///|
-test "generate linux amd64 keeps nested aggregate field on fallback" {
+test "generate linux amd64 MIR body nested aggregate field" {
   let source =
     #|struct Inner { int z; };
     #|struct S { struct Inner inner; };
@@ -1637,7 +1638,10 @@ test "generate linux amd64 keeps nested aggregate field on fallback" {
     None => abort("target parse failed")
   }
   let assembly = @codegen.generate_assembly_for_target(prog, target)
-  inspect(assembly.contains("kimicc: mir-body"), content="false")
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
 }
 
 ///|

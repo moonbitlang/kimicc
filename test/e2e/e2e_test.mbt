@@ -831,6 +831,23 @@ async test "large struct field offset materializes address" {
 }
 
 ///|
+async test "nested struct field assignment" {
+  let source =
+    #|struct Inner { int z; char c; };
+    #|struct Outer { char tag; struct Inner inner; int tail; };
+    #|int main() {
+    #|  struct Outer s;
+    #|  s.tag = 1;
+    #|  s.inner.z = 37;
+    #|  s.inner.c = 5;
+    #|  s.tail = 11;
+    #|  return s.inner.z + s.inner.c;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "bit-field read" {
   let source =
     #|struct S { unsigned int a:3; unsigned int b:4; };

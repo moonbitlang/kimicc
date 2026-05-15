@@ -54,7 +54,7 @@ fn mir_body_codegen_value_supported(
       mir_body_codegen_value_supported(base, int_arg_limit, mir) &&
       mir_body_codegen_value_supported(index, int_arg_limit, mir)
     MirOffsetAddr(base, _, ty) =>
-      mir_body_codegen_scalar_type(ty) &&
+      mir_body_codegen_local_type(ty) &&
       mir_body_codegen_value_supported(base, int_arg_limit, mir)
     MirLoad(ptr, ty) =>
       mir_body_codegen_scalar_type(ty) &&

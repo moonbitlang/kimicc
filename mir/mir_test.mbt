@@ -749,7 +749,7 @@ test "mir body interpreter handles scalar aggregate fields" {
 }
 
 ///|
-test "mir body lowering keeps nested aggregate fields unsupported" {
+test "mir body lowering handles nested aggregate fields" {
   let source =
     #|struct Inner { int z; };
     #|struct S { struct Inner inner; };
@@ -759,7 +759,8 @@ test "mir body lowering keeps nested aggregate fields unsupported" {
     #|  return s.inner.z;
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
-  inspect(mir.bodies.contains("main"), content="false")
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 7L)
 }
 
 ///|
