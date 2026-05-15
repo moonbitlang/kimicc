@@ -22,7 +22,7 @@ integer-scalar subset.
   currently covers integer locals, assignments, direct calls, returns, casts,
   unary/binary scalar operators, conditionals, `while`, `for`, `do while`,
   directly labeled scalar `switch`, simple labels/goto, local compound
-  assignment, local postfix updates, scalar globals and global arrays, scalar memory
+  assignment, local postfix updates, scalar globals and initialized global arrays, scalar memory
   prefix/postfix updates, scalar `*&` / `&*` cancellation, simple scalar local
   pointer loads/stores, scalar local arrays, direct scalar aggregate fields, foldable
   `__builtin_constant_p`, side-effect-free identity builtins such as
@@ -37,7 +37,7 @@ integer-scalar subset.
   `while`/`for`/`do while` loops, `break`/`continue`, ternaries, casts, direct
   calls to other MIR-bodied functions or declared non-variadic integer-scalar
   externs, directly labeled scalar `switch`, simple labels/goto, local compound
-  assignment, local postfix updates, scalar globals and global arrays, scalar memory
+  assignment, local postfix updates, scalar globals and initialized global arrays, scalar memory
   prefix/postfix updates, scalar `*&` / `&*` cancellation, simple scalar local
   pointer loads/stores, scalar local arrays, direct scalar aggregate fields, foldable
   `__builtin_constant_p`, side-effect-free identity builtins such as

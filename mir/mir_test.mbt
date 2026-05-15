@@ -538,6 +538,19 @@ test "mir body interpreter handles scalar global arrays" {
 }
 
 ///|
+test "mir body interpreter handles initialized scalar global arrays" {
+  let source =
+    #|int a[3] = {1, 2, 3};
+    #|int main(void) {
+    #|  a[1] += 5;
+    #|  return a[0] + a[1] + a[2];
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 11L)
+}
+
+///|
 test "mir body lowering keeps side effecting ignored builtin operands unsupported" {
   let source =
     #|int main(void) {

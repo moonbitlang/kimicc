@@ -35,6 +35,15 @@ fn mir_body_array_len(ty : @parser.Type) -> Int? {
 }
 
 ///|
+fn mir_body_array_info(ty : @parser.Type) -> (@parser.Type, Int)? {
+  match ty {
+    Array(elem, len) => Some((elem, len))
+    Aligned(inner, _) => mir_body_array_info(inner)
+    _ => None
+  }
+}
+
+///|
 fn BodyInterpreter::new(program : Program) -> BodyInterpreter {
   let globals : Map[String, Int64] = {}
   let global_memory : Map[Int64, Int64] = {}
@@ -56,6 +65,26 @@ fn BodyInterpreter::new(program : Program) -> BodyInterpreter {
         _ => 0L
       }
       globals[decl.name] = program.runtime_cast_int(value, decl.ty)
+    } else {
+      match (mir_body_array_info(decl.ty), decl.init) {
+        (Some((elem_ty, len)), Some(Array(items))) => {
+          if !global_addrs.contains(decl.name) || !mir_body_scalar_type(elem_ty) {
+            continue
+          }
+          let base = global_addrs[decl.name]
+          let limit = if items.length() < len { items.length() } else { len }
+          for i in 0..<limit {
+            match program.fold_const(items[i], Scope::empty()) {
+              Some(bits) =>
+                global_memory[base - i.to_int64()] = program.runtime_cast_int(
+                  bits, elem_ty,
+                )
+              None => ()
+            }
+          }
+        }
+        _ => ()
+      }
     }
   }
   {

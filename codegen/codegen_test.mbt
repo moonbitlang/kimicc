@@ -410,6 +410,23 @@ test "generate darwin arm64 MIR body scalar global arrays" {
 }
 
 ///|
+test "generate darwin arm64 MIR body initialized scalar global arrays" {
+  let source =
+    #|int a[3] = {1, 2, 3};
+    #|int main(void) {
+    #|  a[1] += 5;
+    #|  return a[0] + a[1] + a[2];
+    #|}
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+}
+
+///|
 test "generate darwin arm64 keeps side effecting identity builtin operands on fallback" {
   let source =
     #|int main(void) {
@@ -1124,6 +1141,26 @@ test "generate linux amd64 MIR body scalar global arrays" {
     #|  a[1] = a[0] + 5;
     #|  int *p = &a[1];
     #|  p[1] = 7;
+    #|  return a[0] + a[1] + a[2];
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+}
+
+///|
+test "generate linux amd64 MIR body initialized scalar global arrays" {
+  let source =
+    #|int a[3] = {1, 2, 3};
+    #|int main(void) {
+    #|  a[1] += 5;
     #|  return a[0] + a[1] + a[2];
     #|}
   let prog = @parser.parse(source)
