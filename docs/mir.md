@@ -53,7 +53,7 @@ integer-scalar subset.
   string literal byte loads, simple local array initializers, local aggregate
   initializers with nested zero-fill and scalar-leaf struct copy, fixed-size
   string array initialization, scalar aggregate fields including nested member
-  access, foldable
+  access and scalar array field access, foldable
   `__builtin_constant_p`, literal `__builtin_strlen`, identity builtins such as
   `__builtin_expect` and `__builtin_assume_aligned` including their modeled
   hint-operand side effects,
@@ -77,7 +77,7 @@ integer-scalar subset.
   string literal byte loads, simple local array initializers, local aggregate
   initializers with nested zero-fill and scalar-leaf struct copy, fixed-size
   string array initialization, scalar aggregate fields including nested member
-  access, foldable
+  access and scalar array field access, foldable
   `__builtin_constant_p`, literal `__builtin_strlen`, identity builtins such as
   `__builtin_expect` and `__builtin_assume_aligned` including their modeled
   hint-operand side effects,

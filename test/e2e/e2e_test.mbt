@@ -578,6 +578,23 @@ async test "local struct copy initializer" {
 }
 
 ///|
+async test "scalar array fields in struct copies" {
+  let source =
+    #|struct S { int a[2]; int z; };
+    #|int main(void) {
+    #|  struct S s;
+    #|  s.a[0] = 20;
+    #|  s.a[1] = 21;
+    #|  s.z = 1;
+    #|  struct S b = s;
+    #|  s.a[0] = 0;
+    #|  return b.a[0] + b.a[1] + b.z;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "local union initializer" {
   let source =
     #|union U { int x; unsigned char c; };

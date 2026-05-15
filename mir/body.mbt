@@ -905,6 +905,12 @@ fn Program::lower_mir_array_base_addr(
   ctx : BodyLowerContext,
 ) -> MirValue? {
   match base {
+    MemberAccess(_, _) =>
+      if mir_body_array_local_type(self.expr_type(base, ctx.scope())) {
+        self.lower_mir_object_addr(base, ctx)
+      } else {
+        self.lower_mir_expr(base, ctx)
+      }
     Var(name) =>
       match ctx.lookup_local(name) {
         Some(binding) =>

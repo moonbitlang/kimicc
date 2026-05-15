@@ -278,6 +278,29 @@ test "generate darwin arm64 strict MIR local struct copy initializer" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR scalar array fields in struct copies" {
+  let source =
+    #|struct S { int a[2]; int z; };
+    #|int main(void) {
+    #|  struct S s;
+    #|  s.a[0] = 20;
+    #|  s.a[1] = 21;
+    #|  s.z = 1;
+    #|  struct S b = s;
+    #|  s.a[0] = 0;
+    #|  return b.a[0] + b.a[1] + b.z;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR local union initializer" {
   let source =
     #|union U { int x; unsigned char c; };
@@ -872,6 +895,33 @@ test "generate linux amd64 strict MIR local struct copy initializer" {
     #|  struct S b = a;
     #|  a.inner.z = 1;
     #|  return b.tag + b.inner.z + b.tail;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR scalar array fields in struct copies" {
+  let source =
+    #|struct S { int a[2]; int z; };
+    #|int main(void) {
+    #|  struct S s;
+    #|  s.a[0] = 20;
+    #|  s.a[1] = 21;
+    #|  s.z = 1;
+    #|  struct S b = s;
+    #|  s.a[0] = 0;
+    #|  return b.a[0] + b.a[1] + b.z;
     #|}
   let target = match @target.Target::parse("linux-amd64") {
     Some(target) => target
