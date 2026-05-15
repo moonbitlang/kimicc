@@ -741,11 +741,13 @@ test "mir body lowering folds scalar builtin calls" {
     #|    __builtin_flt_rounds() +
     #|    (__builtin_object_size("abc", 0) == 4) +
     #|    (__builtin_dynamic_object_size("a\0bc", 2) == 5) +
-    #|    (__builtin_object_size(&x, 0) == sizeof(x));
+    #|    (__builtin_object_size(&x, 0) == sizeof(x)) +
+    #|    (__builtin_strlen((char *)"hello") == 5) +
+    #|    (__builtin_strlen("a\0bc") == 1);
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   inspect(mir.bodies.contains("main"), content="true")
-  expect_body_interp(source, 20L)
+  expect_body_interp(source, 22L)
 }
 
 ///|

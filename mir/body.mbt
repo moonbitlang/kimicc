@@ -345,6 +345,25 @@ fn mir_body_side_effect_free_expr(expr : @parser.Expr) -> Bool {
 }
 
 ///|
+fn mir_body_literal_string_arg(expr : @parser.Expr) -> String? {
+  match expr {
+    String(value) => Some(value)
+    Cast(_, inner) => mir_body_literal_string_arg(inner)
+    _ => None
+  }
+}
+
+///|
+fn mir_body_c_string_len(value : String) -> Int64 {
+  for i in 0..<value.length() {
+    if value[i].to_int() == 0 {
+      return i.to_int64()
+    }
+  }
+  value.length().to_int64()
+}
+
+///|
 fn Program::lower_mir_identity_builtin(
   self : Program,
   args : Array[@parser.Expr],
@@ -765,6 +784,12 @@ fn Program::lower_mir_expr(
           Some(value) =>
             return Some(MirBinary(",", value, MirConst(0L, ty), ty))
           None => return None
+        }
+      }
+      if name == "__builtin_strlen" && args.length() == 1 {
+        match mir_body_literal_string_arg(args[0]) {
+          Some(value) => return Some(MirConst(mir_body_c_string_len(value), ty))
+          None => ()
         }
       }
       if name == "__builtin_expect" ||

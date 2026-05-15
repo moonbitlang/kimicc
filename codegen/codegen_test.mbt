@@ -887,7 +887,9 @@ test "generate darwin arm64 MIR body folded builtin call" {
     #|    __builtin_flt_rounds() +
     #|    (__builtin_object_size("abc", 0) == 4) +
     #|    (__builtin_dynamic_object_size("a\0bc", 2) == 5) +
-    #|    (__builtin_object_size(&x, 0) == sizeof(x));
+    #|    (__builtin_object_size(&x, 0) == sizeof(x)) +
+    #|    (__builtin_strlen((char *)"hello") == 5) +
+    #|    (__builtin_strlen("a\0bc") == 1);
     #|}
   let prog = @parser.parse(source)
   let codegen = @codegen.Codegen::new()
@@ -1660,7 +1662,9 @@ test "generate linux amd64 MIR body folded builtin call" {
     #|    __builtin_flt_rounds() +
     #|    (__builtin_object_size("abc", 0) == 4) +
     #|    (__builtin_dynamic_object_size("a\0bc", 2) == 5) +
-    #|    (__builtin_object_size(&x, 0) == sizeof(x));
+    #|    (__builtin_object_size(&x, 0) == sizeof(x)) +
+    #|    (__builtin_strlen((char *)"hello") == 5) +
+    #|    (__builtin_strlen("a\0bc") == 1);
     #|}
   let prog = @parser.parse(source)
   let target = match @target.Target::parse("linux-amd64") {

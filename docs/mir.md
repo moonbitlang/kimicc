@@ -47,8 +47,9 @@ integer-scalar subset.
   prefix/postfix updates, scalar `*&` / `&*` cancellation, simple scalar local
   pointer loads/stores, scalar local arrays, string literal byte loads, scalar
   aggregate fields including nested member access, foldable
-  `__builtin_constant_p`, identity builtins such as `__builtin_expect` and
-  `__builtin_assume_aligned` including their modeled hint-operand side effects,
+  `__builtin_constant_p`, literal `__builtin_strlen`, identity builtins such as
+  `__builtin_expect` and `__builtin_assume_aligned` including their modeled
+  hint-operand side effects,
   and return-address transforms, no-op `__builtin_assume`, runtime `__builtin_prefetch` address
   evaluation, identity `__builtin_unpredictable`, `break`/`continue`, and
   ternaries. Missing bodies return `Err` instead of falling back to parser AST
@@ -63,8 +64,9 @@ integer-scalar subset.
   prefix/postfix updates, scalar `*&` / `&*` cancellation, simple scalar local
   pointer loads/stores, scalar local arrays, string literal byte loads, scalar
   aggregate fields including nested member access, foldable
-  `__builtin_constant_p`, identity builtins such as `__builtin_expect` and
-  `__builtin_assume_aligned` including their modeled hint-operand side effects,
+  `__builtin_constant_p`, literal `__builtin_strlen`, identity builtins such as
+  `__builtin_expect` and `__builtin_assume_aligned` including their modeled
+  hint-operand side effects,
   and return-address transforms, no-op `__builtin_assume`, runtime `__builtin_prefetch` address
   evaluation, identity `__builtin_unpredictable`, and arithmetic/logical
   operators. Unsupported MIR bodies still fall back to the existing parser-AST
