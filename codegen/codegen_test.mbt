@@ -517,9 +517,7 @@ test "generate linux amd64 MIR body uses MIR function metadata" {
 test "strict MIR assembly rejects parser body fallback" {
   let source =
     #|int main(void) {
-    #|  int x = 4;
-    #|  int side = 0;
-    #|  return __builtin_expect(x, side += 1);
+    #|  goto *0;
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   inspect(mir.bodies.contains("main"), content="false")
@@ -534,9 +532,7 @@ test "strict MIR assembly rejects parser body fallback" {
 test "strict target assembly rejects parser body fallback" {
   let source =
     #|int main(void) {
-    #|  int x = 4;
-    #|  int side = 0;
-    #|  return __builtin_expect(x, side += 1);
+    #|  goto *0;
     #|}
   let prog = @parser.parse(source)
   match
@@ -554,9 +550,7 @@ test "strict target assembly rejects parser body fallback" {
 test "parser AST codegen fallback is explicit" {
   let source =
     #|int main(void) {
-    #|  int x = 4;
-    #|  int side = 0;
-    #|  return __builtin_expect(x, side += 1);
+    #|  goto *0;
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   let assembly = @codegen.generate_assembly_from_mir_with_parser_fallback(mir)
@@ -997,17 +991,17 @@ test "generate darwin arm64 MIR body initialized scalar global arrays" {
 }
 
 ///|
-test "generate darwin arm64 keeps side effecting identity builtin operands on fallback" {
+test "generate darwin arm64 keeps side effecting identity builtin operands in MIR" {
   let source =
     #|int main(void) {
     #|  int x = 4;
     #|  int side = 0;
-    #|  return __builtin_expect(x, side += 1);
+    #|  return __builtin_expect(x, side += 1) + side;
     #|}
   let prog = @parser.parse(source)
   let codegen = @codegen.Codegen::new()
   let assembly = codegen.generate(prog)
-  inspect(assembly.contains("kimicc: mir-body"), content="false")
+  inspect(assembly.contains("kimicc: mir-body"), content="true")
 }
 
 ///|
@@ -1847,12 +1841,12 @@ test "generate linux amd64 MIR body initialized scalar global arrays" {
 }
 
 ///|
-test "generate linux amd64 keeps side effecting identity builtin operands on fallback" {
+test "generate linux amd64 keeps side effecting identity builtin operands in MIR" {
   let source =
     #|int main(void) {
     #|  int x = 4;
     #|  int side = 0;
-    #|  return __builtin_expect(x, side += 1);
+    #|  return __builtin_expect(x, side += 1) + side;
     #|}
   let prog = @parser.parse(source)
   let target = match @target.Target::parse("linux-amd64") {
@@ -1860,7 +1854,7 @@ test "generate linux amd64 keeps side effecting identity builtin operands on fal
     None => abort("target parse failed")
   }
   let assembly = @codegen.generate_assembly_for_target(prog, target)
-  inspect(assembly.contains("kimicc: mir-body"), content="false")
+  inspect(assembly.contains("kimicc: mir-body"), content="true")
 }
 
 ///|
@@ -2311,7 +2305,7 @@ test "generate linux amd64 lowers scalar hint builtins" {
   inspect(assembly.contains("\tmov\trax, rbp"), content="true")
   inspect(assembly.contains("\tmov\trax, QWORD PTR [rbp + 8]"), content="true")
   inspect(assembly.contains("side_effect_prefetch:"), content="true")
-  inspect(assembly.contains("mov\tDWORD PTR [r10], eax"), content="true")
+  inspect(assembly.contains("mov\tDWORD PTR [rbp - 16], eax"), content="true")
   inspect(assembly.contains("call\thint_bump"), content="true")
   inspect(assembly.contains("call\t__builtin_expect"), content="false")
   inspect(

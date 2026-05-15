@@ -143,6 +143,14 @@ fn BodyLowerContext::declare_local(
 }
 
 ///|
+fn BodyLowerContext::declare_temp(
+  self : BodyLowerContext,
+  ty : @parser.Type,
+) -> MirLocal {
+  self.declare_local("$mir_tmp" + self.next_id.to_string(), ty)
+}
+
+///|
 fn BodyLowerContext::lookup_local(
   self : BodyLowerContext,
   name : String,
@@ -335,16 +343,42 @@ fn mir_body_side_effect_free_expr(expr : @parser.Expr) -> Bool {
 }
 
 ///|
-fn mir_body_args_side_effect_free_from(
+fn Program::lower_mir_identity_builtin(
+  self : Program,
   args : Array[@parser.Expr],
-  start : Int,
-) -> Bool {
-  for i in start..<args.length() {
-    if !mir_body_side_effect_free_expr(args[i]) {
-      return false
-    }
+  side_effect_arg : Int?,
+  ty : @parser.Type,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  if args.length() == 0 {
+    return Some(MirConst(0L, ty))
   }
-  true
+  let value = match self.lower_mir_expr(args[0], ctx) {
+    Some(value) => value
+    None => return None
+  }
+  let side_index = match side_effect_arg {
+    Some(index) => index
+    None => return Some(value)
+  }
+  if side_index < 0 ||
+    side_index >= args.length() ||
+    mir_body_side_effect_free_expr(args[side_index]) {
+    return Some(value)
+  }
+  let side = match self.lower_mir_expr(args[side_index], ctx) {
+    Some(value) => value
+    None => return None
+  }
+  let temp = ctx.declare_temp(value.ty())
+  Some(
+    MirBinary(
+      ",",
+      MirAssignLocal(temp, value),
+      MirBinary(",", side, MirLocal(temp), ty),
+      ty,
+    ),
+  )
 }
 
 ///|
@@ -731,12 +765,11 @@ fn Program::lower_mir_expr(
         }
       }
       if name == "__builtin_expect" ||
-        name == "__builtin_expect_with_probability" ||
-        name == "__builtin_assume_aligned" {
-        if args.length() >= 1 && mir_body_args_side_effect_free_from(args, 1) {
-          return self.lower_mir_expr(args[0], ctx)
-        }
-        return None
+        name == "__builtin_expect_with_probability" {
+        return self.lower_mir_identity_builtin(args, Some(1), ty, ctx)
+      }
+      if name == "__builtin_assume_aligned" {
+        return self.lower_mir_identity_builtin(args, Some(2), ty, ctx)
       }
       if name == "__builtin_extract_return_addr" ||
         name == "__builtin_frob_return_addr" {

@@ -837,15 +837,16 @@ test "mir body interpreter handles sparse initialized scalar global arrays" {
 }
 
 ///|
-test "mir body lowering keeps side effecting ignored builtin operands unsupported" {
+test "mir body lowering keeps side effecting ignored builtin operands" {
   let source =
     #|int main(void) {
     #|  int x = 4;
     #|  int side = 0;
-    #|  return __builtin_expect(x, side += 1);
+    #|  return __builtin_expect(x, side += 1) + side;
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
-  inspect(mir.bodies.contains("main"), content="false")
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 5L)
 }
 
 ///|
