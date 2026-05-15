@@ -184,7 +184,8 @@ program behavior.
 ## Remaining Migration Path
 
 1. Expand MIR body lowering statement by statement, starting with general memory
-   modeling, nested aggregate/member access, and computed goto.
+   modeling, nested aggregate/member access, aggregate ABI values, and computed
+   goto.
 2. Keep `Program::interpret_body_i64` as the first consumer for each new body
    feature so unsupported behavior fails explicitly before codegen depends on
    it.
