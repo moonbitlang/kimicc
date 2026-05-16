@@ -1240,7 +1240,9 @@ fn Program::lower_mir_expr(
           self.lower_mir_expr(rhs, ctx),
         ) {
         (Some(binding), Some(value)) =>
-          return Some(MirAssignLocal(binding, value))
+          if mir_body_scalar_type(binding.ty) {
+            return Some(MirAssignLocal(binding, value))
+          }
         _ => ()
       }
       match self.lower_mir_expr(rhs, ctx) {
@@ -1366,12 +1368,56 @@ fn Program::lower_mir_expr(
 }
 
 ///|
+fn Program::lower_mir_ignored_aggregate_assign(
+  self : Program,
+  lhs : @parser.Expr,
+  rhs : @parser.Expr,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  let lhs_ty = self.expr_type(lhs, ctx.scope())
+  match self.core_type(lhs_ty) {
+    Struct(_) => ()
+    _ => return None
+  }
+  let dest_addr = match self.lower_mir_object_addr(lhs, ctx) {
+    Some(addr) => addr
+    None => return None
+  }
+  let src_addr = match self.lower_mir_object_addr(rhs, ctx) {
+    Some(addr) => addr
+    None => return None
+  }
+  if !mir_body_local_copy_source_addr(dest_addr) ||
+    !mir_body_local_copy_source_addr(src_addr) {
+    return None
+  }
+  let stores = match
+    self.lower_mir_copy_init_stores(
+      dest_addr,
+      lhs_ty,
+      src_addr,
+      self.expr_type(rhs, ctx.scope()),
+    ) {
+    Some(stores) => stores
+    None => return None
+  }
+  mir_body_sequence_exprs(stores, MirConst(0L, SInt), SInt)
+}
+
+///|
 fn Program::lower_mir_ignored_expr(
   self : Program,
   expr : @parser.Expr,
   ctx : BodyLowerContext,
 ) -> MirValue? {
-  self.lower_mir_expr(expr, ctx)
+  match expr {
+    Assign(lhs, rhs) =>
+      match self.lower_mir_ignored_aggregate_assign(lhs, rhs, ctx) {
+        Some(value) => Some(value)
+        None => self.lower_mir_expr(expr, ctx)
+      }
+    _ => self.lower_mir_expr(expr, ctx)
+  }
 }
 
 ///|

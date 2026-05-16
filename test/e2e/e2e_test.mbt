@@ -578,6 +578,21 @@ async test "local struct copy initializer" {
 }
 
 ///|
+async test "ignored local struct assignment" {
+  let source =
+    #|struct S { int x; int y; };
+    #|int main(void) {
+    #|  struct S a = { 20, 22 };
+    #|  struct S b = { 1, 2 };
+    #|  b = a;
+    #|  a.x = 0;
+    #|  return b.x + b.y;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "scalar array fields in struct copies" {
   let source =
     #|struct S { int a[2]; int z; };

@@ -1100,6 +1100,22 @@ test "mir body interpreter handles local struct copy initializers" {
 }
 
 ///|
+test "mir body interpreter handles ignored local struct assignments" {
+  let source =
+    #|struct S { int x; int y; };
+    #|int main(void) {
+    #|  struct S a = { 20, 22 };
+    #|  struct S b = { 1, 2 };
+    #|  b = a;
+    #|  a.x = 0;
+    #|  return b.x + b.y;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body interpreter handles scalar array fields in struct copies" {
   let source =
     #|struct S { int a[2]; int z; };
