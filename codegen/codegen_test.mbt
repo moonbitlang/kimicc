@@ -299,6 +299,25 @@ test "generate darwin arm64 strict MIR ignored local struct assignment" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR ignored local struct compound literal assignment" {
+  let source =
+    #|struct S { int x; int y; int z; };
+    #|int main(void) {
+    #|  struct S b = { 19, 2, 3 };
+    #|  b = (struct S){ b.x + 1, 22 };
+    #|  return b.x + b.y + b.z;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR scalar array fields in struct copies" {
   let source =
     #|struct S { int a[2]; int z; };
@@ -941,6 +960,29 @@ test "generate linux amd64 strict MIR ignored local struct assignment" {
     #|  b = a;
     #|  a.x = 0;
     #|  return b.x + b.y;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR ignored local struct compound literal assignment" {
+  let source =
+    #|struct S { int x; int y; int z; };
+    #|int main(void) {
+    #|  struct S b = { 19, 2, 3 };
+    #|  b = (struct S){ b.x + 1, 22 };
+    #|  return b.x + b.y + b.z;
     #|}
   let target = match @target.Target::parse("linux-amd64") {
     Some(target) => target

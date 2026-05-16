@@ -1116,6 +1116,20 @@ test "mir body interpreter handles ignored local struct assignments" {
 }
 
 ///|
+test "mir body interpreter handles ignored local struct compound literal assignments" {
+  let source =
+    #|struct S { int x; int y; int z; };
+    #|int main(void) {
+    #|  struct S b = { 19, 2, 3 };
+    #|  b = (struct S){ b.x + 1, 22 };
+    #|  return b.x + b.y + b.z;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body interpreter handles scalar array fields in struct copies" {
   let source =
     #|struct S { int a[2]; int z; };

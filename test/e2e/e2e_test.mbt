@@ -593,6 +593,19 @@ async test "ignored local struct assignment" {
 }
 
 ///|
+async test "ignored local struct compound literal assignment" {
+  let source =
+    #|struct S { int x; int y; int z; };
+    #|int main(void) {
+    #|  struct S b = { 19, 2, 3 };
+    #|  b = (struct S){ b.x + 1, 22 };
+    #|  return b.x + b.y + b.z;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "scalar array fields in struct copies" {
   let source =
     #|struct S { int a[2]; int z; };

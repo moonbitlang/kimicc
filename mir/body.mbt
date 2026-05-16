@@ -656,13 +656,14 @@ fn Program::lower_mir_copy_init_stores(
 }
 
 ///|
-fn Program::lower_mir_local_struct_init(
+fn Program::lower_mir_struct_init_stores(
   self : Program,
-  binding : MirLocal,
+  base : MirValue,
+  ty : @parser.Type,
   init : @parser.Expr,
   ctx : BodyLowerContext,
 ) -> Array[MirStmt]? {
-  let struct_name = match self.core_type(binding.ty) {
+  let struct_name = match self.core_type(ty) {
     Struct(name) | Union(name) => name
     _ => return None
   }
@@ -677,8 +678,8 @@ fn Program::lower_mir_local_struct_init(
         return None
       }
       return self.lower_mir_copy_init_stores(
-        MirAddrLocal(binding),
-        binding.ty,
+        base,
+        ty,
         src_addr,
         self.expr_type(init, ctx.scope()),
       )
@@ -697,12 +698,11 @@ fn Program::lower_mir_local_struct_init(
     if field.bit_width is Some(_) {
       return None
     }
-    if self.field_layout(binding.ty, field.name) is None {
+    if self.field_layout(ty, field.name) is None {
       return None
     }
   }
-  let stores = match
-    self.lower_mir_zero_init_stores(MirAddrLocal(binding), binding.ty) {
+  let stores = match self.lower_mir_zero_init_stores(base, ty) {
     Some(stores) => stores
     None => return None
   }
@@ -744,19 +744,30 @@ fn Program::lower_mir_local_struct_init(
       Some(value) => value
       None => return None
     }
-    match self.field_layout(binding.ty, field.name) {
+    match self.field_layout(ty, field.name) {
       Some(layout) => {
-        let addr = mir_body_offset_addr_value(
-          MirAddrLocal(binding),
-          layout.offset,
-          layout.ty,
-        )
+        let addr = mir_body_offset_addr_value(base, layout.offset, layout.ty)
         stores.push(MirExprStmt(MirStore(addr, value, layout.ty)))
       }
       None => return None
     }
   }
   Some(stores)
+}
+
+///|
+fn Program::lower_mir_local_struct_init(
+  self : Program,
+  binding : MirLocal,
+  init : @parser.Expr,
+  ctx : BodyLowerContext,
+) -> Array[MirStmt]? {
+  self.lower_mir_struct_init_stores(
+    MirAddrLocal(binding),
+    binding.ty,
+    init,
+    ctx,
+  )
 }
 
 ///|
@@ -1383,12 +1394,43 @@ fn Program::lower_mir_ignored_aggregate_assign(
     Some(addr) => addr
     None => return None
   }
+  if !mir_body_local_copy_source_addr(dest_addr) {
+    return None
+  }
+  match rhs {
+    CompoundLiteral(_, _, _) => {
+      let rhs_ty = self.expr_type(rhs, ctx.scope())
+      if self.core_type(rhs_ty) != self.core_type(lhs_ty) {
+        return None
+      }
+      let temp = ctx.declare_temp(lhs_ty)
+      let stores = match
+        self.lower_mir_struct_init_stores(MirAddrLocal(temp), lhs_ty, rhs, ctx) {
+        Some(stores) => stores
+        None => return None
+      }
+      let copy_stores = match
+        self.lower_mir_copy_init_stores(
+          dest_addr,
+          lhs_ty,
+          MirAddrLocal(temp),
+          rhs_ty,
+        ) {
+        Some(stores) => stores
+        None => return None
+      }
+      for store in copy_stores {
+        stores.push(store)
+      }
+      return mir_body_sequence_exprs(stores, MirConst(0L, SInt), SInt)
+    }
+    _ => ()
+  }
   let src_addr = match self.lower_mir_object_addr(rhs, ctx) {
     Some(addr) => addr
     None => return None
   }
-  if !mir_body_local_copy_source_addr(dest_addr) ||
-    !mir_body_local_copy_source_addr(src_addr) {
+  if !mir_body_local_copy_source_addr(src_addr) {
     return None
   }
   let stores = match
