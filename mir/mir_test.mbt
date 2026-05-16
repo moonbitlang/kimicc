@@ -1130,6 +1130,26 @@ test "mir body interpreter handles ignored local struct compound literal assignm
 }
 
 ///|
+test "mir body interpreter handles nested aggregate compound literal assignments" {
+  let source =
+    #|struct Inner { int z; int q; };
+    #|struct S { int tag; struct Inner inner; int a[2]; int tail; };
+    #|int main(void) {
+    #|  struct S s = {0};
+    #|  s = (struct S){
+    #|    .tag = 1,
+    #|    .inner = { .z = 20, .q = 2 },
+    #|    .a = { [1] = 4, [0] = 3 },
+    #|    .tail = 12
+    #|  };
+    #|  return s.tag + s.inner.z + s.inner.q + s.a[0] + s.a[1] + s.tail;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body interpreter handles scalar array fields in struct copies" {
   let source =
     #|struct S { int a[2]; int z; };

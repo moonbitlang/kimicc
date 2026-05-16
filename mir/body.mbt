@@ -396,13 +396,14 @@ fn mir_body_char_array_elem_type(ty : @parser.Type) -> Bool {
 }
 
 ///|
-fn Program::lower_mir_local_array_init(
+fn Program::lower_mir_array_init_stores(
   self : Program,
-  binding : MirLocal,
+  base : MirValue,
+  ty : @parser.Type,
   init : @parser.Expr,
   ctx : BodyLowerContext,
 ) -> Array[MirStmt]? {
-  let (elem_ty, len) = match mir_body_array_local_info(binding.ty) {
+  let (elem_ty, len) = match mir_body_array_local_info(ty) {
     Some(info) => info
     None => return None
   }
@@ -420,22 +421,14 @@ fn Program::lower_mir_local_array_init(
   }
   let stores : Array[MirStmt] = []
   for i in 0..<len {
-    let addr = MirElemAddr(
-      MirAddrLocal(binding),
-      MirConst(i.to_int64(), SInt),
-      elem_ty,
-    )
+    let addr = MirElemAddr(base, MirConst(i.to_int64(), SInt), elem_ty)
     stores.push(MirExprStmt(MirStore(addr, MirConst(0L, elem_ty), elem_ty)))
   }
   match init {
     String(value) => {
       let limit = if value.length() < len { value.length() } else { len }
       for i in 0..<limit {
-        let addr = MirElemAddr(
-          MirAddrLocal(binding),
-          MirConst(i.to_int64(), SInt),
-          elem_ty,
-        )
+        let addr = MirElemAddr(base, MirConst(i.to_int64(), SInt), elem_ty)
         stores.push(
           MirExprStmt(
             MirStore(
@@ -475,14 +468,20 @@ fn Program::lower_mir_local_array_init(
       Some(value) => value
       None => return None
     }
-    let addr = MirElemAddr(
-      MirAddrLocal(binding),
-      MirConst(index.to_int64(), SInt),
-      elem_ty,
-    )
+    let addr = MirElemAddr(base, MirConst(index.to_int64(), SInt), elem_ty)
     stores.push(MirExprStmt(MirStore(addr, value, elem_ty)))
   }
   Some(stores)
+}
+
+///|
+fn Program::lower_mir_local_array_init(
+  self : Program,
+  binding : MirLocal,
+  init : @parser.Expr,
+  ctx : BodyLowerContext,
+) -> Array[MirStmt]? {
+  self.lower_mir_array_init_stores(MirAddrLocal(binding), binding.ty, init, ctx)
 }
 
 ///|
@@ -736,6 +735,47 @@ fn Program::lower_mir_struct_init_stores(
     if !mir_body_scalar_type(field.ty) {
       match value_expr {
         Number(0) => continue
+        Array(_)
+        | CompoundLiteral(_, _, _)
+        | DesignatedField(_, _)
+        | DesignatedIndex(_, _)
+        | DesignatedRange(_, _, _) => {
+          let layout = match self.field_layout(ty, field.name) {
+            Some(layout) => layout
+            None => return None
+          }
+          let addr = mir_body_offset_addr_value(base, layout.offset, layout.ty)
+          let nested_init = match value_expr {
+            DesignatedField(_, _)
+            | DesignatedIndex(_, _)
+            | DesignatedRange(_, _, _) => @parser.Expr::Array([value_expr])
+            _ => value_expr
+          }
+          let nested = match self.core_type(layout.ty) {
+            Struct(_) =>
+              self.lower_mir_struct_init_stores(
+                addr,
+                layout.ty,
+                nested_init,
+                ctx,
+              )
+            _ =>
+              self.lower_mir_array_init_stores(
+                addr,
+                layout.ty,
+                nested_init,
+                ctx,
+              )
+          }
+          match nested {
+            Some(nested_stores) =>
+              for store in nested_stores {
+                stores.push(store)
+              }
+            None => return None
+          }
+          continue
+        }
         _ => return None
       }
     }

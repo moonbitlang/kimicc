@@ -318,6 +318,31 @@ test "generate darwin arm64 strict MIR ignored local struct compound literal ass
 }
 
 ///|
+test "generate darwin arm64 strict MIR nested aggregate compound literal assignment" {
+  let source =
+    #|struct Inner { int z; int q; };
+    #|struct S { int tag; struct Inner inner; int a[2]; int tail; };
+    #|int main(void) {
+    #|  struct S s = {0};
+    #|  s = (struct S){
+    #|    .tag = 1,
+    #|    .inner = { .z = 20, .q = 2 },
+    #|    .a = { [1] = 4, [0] = 3 },
+    #|    .tail = 12
+    #|  };
+    #|  return s.tag + s.inner.z + s.inner.q + s.a[0] + s.a[1] + s.tail;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR scalar array fields in struct copies" {
   let source =
     #|struct S { int a[2]; int z; };
@@ -983,6 +1008,35 @@ test "generate linux amd64 strict MIR ignored local struct compound literal assi
     #|  struct S b = { 19, 2, 3 };
     #|  b = (struct S){ b.x + 1, 22 };
     #|  return b.x + b.y + b.z;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR nested aggregate compound literal assignment" {
+  let source =
+    #|struct Inner { int z; int q; };
+    #|struct S { int tag; struct Inner inner; int a[2]; int tail; };
+    #|int main(void) {
+    #|  struct S s = {0};
+    #|  s = (struct S){
+    #|    .tag = 1,
+    #|    .inner = { .z = 20, .q = 2 },
+    #|    .a = { [1] = 4, [0] = 3 },
+    #|    .tail = 12
+    #|  };
+    #|  return s.tag + s.inner.z + s.inner.q + s.a[0] + s.a[1] + s.tail;
     #|}
   let target = match @target.Target::parse("linux-amd64") {
     Some(target) => target

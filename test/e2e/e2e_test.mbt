@@ -606,6 +606,25 @@ async test "ignored local struct compound literal assignment" {
 }
 
 ///|
+async test "nested aggregate compound literal assignment" {
+  let source =
+    #|struct Inner { int z; int q; };
+    #|struct S { int tag; struct Inner inner; int a[2]; int tail; };
+    #|int main(void) {
+    #|  struct S s = {0};
+    #|  s = (struct S){
+    #|    .tag = 1,
+    #|    .inner = { .z = 20, .q = 2 },
+    #|    .a = { [1] = 4, [0] = 3 },
+    #|    .tail = 12
+    #|  };
+    #|  return s.tag + s.inner.z + s.inner.q + s.a[0] + s.a[1] + s.tail;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "scalar array fields in struct copies" {
   let source =
     #|struct S { int a[2]; int z; };
