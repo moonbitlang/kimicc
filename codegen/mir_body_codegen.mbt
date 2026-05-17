@@ -232,6 +232,36 @@ fn mir_body_codegen_return_address_call(
 }
 
 ///|
+fn mir_body_codegen_overflow_result_type(
+  args : Array[@mir.MirValue],
+) -> @parser.Type? {
+  if args.length() < 3 {
+    return None
+  }
+  match pointer_or_array_element_type(args[2].ty()) {
+    Some(ty) => Some(peel_aligned_type(ty))
+    None => None
+  }
+}
+
+///|
+fn mir_body_codegen_overflow_call(
+  name : String,
+  args : Array[@mir.MirValue],
+  ret : @parser.Type,
+) -> Bool {
+  if overflow_builtin_operator(name) is None ||
+    args.length() != 3 ||
+    !(peel_aligned_type(ret) is Bool) {
+    return false
+  }
+  match mir_body_codegen_overflow_result_type(args) {
+    Some(ty) => ty.is_integer() && !is_int128_type(ty)
+    None => false
+  }
+}
+
+///|
 fn mir_body_codegen_builtin_lib_call_arg_count(
   name : String,
   args : Array[@mir.MirValue],
@@ -356,7 +386,8 @@ fn mir_body_codegen_call_supported(
     mir_body_codegen_trap_call(name, args, ret) ||
     mir_body_codegen_alloca_call(name, args, ret) ||
     mir_body_codegen_frame_address_call(name, args, ret) ||
-    mir_body_codegen_return_address_call(name, args, ret) {
+    mir_body_codegen_return_address_call(name, args, ret) ||
+    mir_body_codegen_overflow_call(name, args, ret) {
     return true
   }
   if mir_body_codegen_builtin_lib_call_supported(name, args, ret, int_arg_limit) {
@@ -634,6 +665,48 @@ fn Codegen::mir_body_offsets(
 }
 
 ///|
+fn Codegen::emit_mir_overflow_arithmetic_builtin(
+  self : Codegen,
+  args : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+  frame_size : Int,
+  op : String,
+) -> Unit {
+  let result_ty = match mir_body_codegen_overflow_result_type(args) {
+    Some(ty) => ty
+    None => {
+      self.emit("\tmov\tx9, #0")
+      return
+    }
+  }
+  if !result_ty.is_integer() || is_int128_type(result_ty) {
+    abort(
+      "unsupported Darwin ARM64 MIR overflow builtin result type: " +
+      result_ty.to_string(),
+    )
+  }
+  self.gen_mir_value(args[2], offsets, frame_size)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.gen_mir_value(args[0], offsets, frame_size)
+  self.emit_numeric_conversion(args[0].ty(), result_ty)
+  self.emit_scalar_conversion_to(result_ty)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.gen_mir_value(args[1], offsets, frame_size)
+  self.emit_numeric_conversion(args[1].ty(), result_ty)
+  self.emit_scalar_conversion_to(result_ty)
+  self.emit("\tmov\tx10, x9")
+  self.emit("\tldr\tx9, [sp], #16")
+  if self.type_size(result_ty) < 8 {
+    self.emit_small_overflow_arithmetic(result_ty, op)
+  } else {
+    self.emit_i64_overflow_arithmetic(result_ty, op)
+  }
+  self.emit("\tldr\tx10, [sp], #16")
+  self.emit_store_typed("x9", "x10", result_ty)
+  self.emit("\tmov\tx9, x11")
+}
+
+///|
 fn Codegen::gen_mir_value(
   self : Codegen,
   value : @mir.MirValue,
@@ -863,6 +936,16 @@ fn Codegen::gen_mir_value(
           self.emit("\tmov\tx9, #0")
         }
         return
+      }
+      match overflow_builtin_operator(name) {
+        Some(op) =>
+          if mir_body_codegen_overflow_call(name, args, ty) {
+            self.emit_mir_overflow_arithmetic_builtin(
+              args, offsets, frame_size, op,
+            )
+            return
+          }
+        None => ()
       }
       let arg_count = mir_body_codegen_direct_call_arg_count(name, args)
       for i in 0..<arg_count {
@@ -1368,6 +1451,61 @@ fn X64Codegen::mir_body_offsets(
 }
 
 ///|
+fn X64Codegen::emit_mir_overflow_arithmetic_builtin(
+  self : X64Codegen,
+  args : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+  op : String,
+) -> Unit {
+  let result_ty = match mir_body_codegen_overflow_result_type(args) {
+    Some(ty) => ty
+    None => {
+      self.emit("\tmov\trax, 0")
+      return
+    }
+  }
+  if !result_ty.is_integer() || x64_is_int128_type(result_ty) {
+    abort(
+      "unsupported x86-64 MIR overflow builtin result type: " +
+      result_ty.to_string(),
+    )
+  }
+  let width = self.type_size(result_ty)
+  self.gen_mir_value(args[2], offsets)
+  self.emit_mir_push_rax()
+  self.gen_mir_value(args[0], offsets)
+  self.emit_int_conversion_to(result_ty)
+  self.emit_mir_push_rax()
+  self.gen_mir_value(args[1], offsets)
+  self.emit_int_conversion_to(result_ty)
+  self.emit("\tmov\tr10, rax")
+  self.emit_mir_pop_rax()
+  let rhs_reg = x64_atomic_r10_reg(width)
+  let lhs_reg = x64_sized_reg(width)
+  match op {
+    "+" => self.emit("\tadd\t" + lhs_reg + ", " + rhs_reg)
+    "-" => self.emit("\tsub\t" + lhs_reg + ", " + rhs_reg)
+    "*" =>
+      if is_unsigned_integer_type(result_ty) {
+        self.emit("\tmul\t" + rhs_reg)
+      } else {
+        self.emit("\timul\t" + rhs_reg)
+      }
+    _ => abort("unsupported x86-64 MIR overflow builtin operator: " + op)
+  }
+  let cc = if is_unsigned_integer_type(result_ty) && (op == "+" || op == "-") {
+    "setb"
+  } else {
+    "seto"
+  }
+  self.emit("\t" + cc + "\tr11b")
+  self.emit("\tmov\tr10, QWORD PTR [rsp]")
+  self.emit("\tadd\trsp, 16")
+  self.emit_store_indirect(result_ty)
+  self.emit("\tmovzx\teax, r11b")
+}
+
+///|
 fn X64Codegen::gen_mir_value(
   self : X64Codegen,
   value : @mir.MirValue,
@@ -1599,6 +1737,14 @@ fn X64Codegen::gen_mir_value(
           self.emit("\tmov\trax, 0")
         }
         return
+      }
+      match overflow_builtin_operator(name) {
+        Some(op) =>
+          if mir_body_codegen_overflow_call(name, args, ty) {
+            self.emit_mir_overflow_arithmetic_builtin(args, offsets, op)
+            return
+          }
+        None => ()
       }
       let arg_count = mir_body_codegen_direct_call_arg_count(name, args)
       for i in 0..<arg_count {

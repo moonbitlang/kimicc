@@ -346,6 +346,91 @@ fn BodyFrame::array_elem_addr(self : BodyFrame, addr : Int64) -> Bool {
 }
 
 ///|
+fn BodyInterpreter::write_address(
+  self : BodyInterpreter,
+  frame : BodyFrame,
+  addr : Int64,
+  value : Int64,
+  ty : @parser.Type,
+) -> Int64 {
+  if frame.array_elem_addr(addr) {
+    let assigned = self.program.runtime_cast_int(value, ty)
+    frame.memory[addr] = assigned
+    assigned
+  } else if self.global_array_elem_addr(addr) {
+    let assigned = self.program.runtime_cast_int(value, ty)
+    self.global_memory[addr] = assigned
+    assigned
+  } else if self.aggregate_addr(frame, addr) {
+    let assigned = self.program.runtime_cast_int(value, ty)
+    frame.memory[addr] = assigned
+    assigned
+  } else {
+    match frame.binding_for_addr(addr) {
+      Some(binding) => {
+        let assigned = self.program.runtime_cast_int(value, binding.ty)
+        frame.locals[binding.id] = assigned
+        self.program.runtime_cast_int(assigned, ty)
+      }
+      None =>
+        match self.global_for_addr(addr) {
+          Some(name) => {
+            let assigned = self.program.runtime_cast_int(value, ty)
+            self.globals[name] = assigned
+            assigned
+          }
+          None => {
+            self.fail("unsupported MIR body store address")
+            0L
+          }
+        }
+    }
+  }
+}
+
+///|
+fn BodyInterpreter::eval_overflow_builtin(
+  self : BodyInterpreter,
+  frame : BodyFrame,
+  op : String,
+  args : Array[MirValue],
+) -> Int64 {
+  if args.length() < 3 {
+    return 0L
+  }
+  let result_ty = match self.program.pointer_element(args[2].ty()) {
+    Some(ty) => ty
+    None => {
+      self.fail("unsupported MIR body overflow result type")
+      return 0L
+    }
+  }
+  let result_addr = self.eval_value(frame, args[2])
+  let left = self.program.runtime_cast_int(
+    self.eval_value(frame, args[0]),
+    result_ty,
+  )
+  let right = self.program.runtime_cast_int(
+    self.eval_value(frame, args[1]),
+    result_ty,
+  )
+  match self.program.overflow_arithmetic_result(result_ty, op, left, right) {
+    Some((result, overflow)) => {
+      ignore(self.write_address(frame, result_addr, result, result_ty))
+      if overflow {
+        1L
+      } else {
+        0L
+      }
+    }
+    None => {
+      self.fail("unsupported MIR body overflow result type")
+      0L
+    }
+  }
+}
+
+///|
 fn BodyInterpreter::eval_binary_values(
   self : BodyInterpreter,
   op : String,
@@ -645,6 +730,13 @@ fn BodyInterpreter::eval_value(
         let bump = (size + 15L) / 16L * 16L
         self.next_alloca += if bump > 0L { bump } else { 16L }
         return ptr
+      }
+      match overflow_builtin_op(name) {
+        Some(op) =>
+          if args.length() == 3 && self.program.core_type(ty) is Bool {
+            return self.eval_overflow_builtin(frame, op, args)
+          }
+        None => ()
       }
       if (
           name == "__builtin_memcpy" ||

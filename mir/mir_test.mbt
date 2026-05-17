@@ -1788,6 +1788,7 @@ test "mir interpreter evaluates integer overflow builtins" {
     #|  return total;
     #|}
   expect_interp(source, 7L)
+  expect_body_interp(source, 7L)
 }
 
 ///|
