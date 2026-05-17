@@ -780,6 +780,40 @@ test "generate darwin arm64 strict MIR string query builtin libcalls" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR string literal scalar facts" {
+  let source =
+    #|int main(void) {
+    #|  if (sizeof("abc") != 4) return 1;
+    #|  if (__alignof__("abc") != 1) return 2;
+    #|  if (!"abc") return 3;
+    #|  if (*"abc" != 'a') return 4;
+    #|  if ("abc"[1] != 'b') return 5;
+    #|  if ("abc"[3] != 0) return 6;
+    #|  if (__func__[0] != 'm') return 7;
+    #|  if (__builtin_strlen("hello") != 5) return 8;
+    #|  if (*((char *)"abc") != 'a') return 9;
+    #|  if (((char *)"abc")[2] != 'c') return 10;
+    #|  if (((unsigned char *)"abc")[3] != 0) return 11;
+    #|  if (__builtin_strlen((const char *)"hello") != 5) return 12;
+    #|  if (*("abcd" + 1) != 'b') return 13;
+    #|  if ((1 + "abcd")[2] != 'd') return 14;
+    #|  int side = 0;
+    #|  if (*((const char *)"abcd" + (side += 2)) != 'c') return 15;
+    #|  if (side != 2) return 16;
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tldrb\t"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR lowers overflow builtins" {
   let source =
     #|int main(void) {
@@ -2051,6 +2085,43 @@ test "generate linux amd64 strict MIR string query builtin libcalls" {
       inspect(assembly.contains("__builtin_strrchr"), content="false")
       inspect(assembly.contains("__builtin_memchr"), content="false")
       inspect(assembly.contains("__builtin_strstr"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR string literal scalar facts" {
+  let source =
+    #|int main(void) {
+    #|  if (sizeof("abc") != 4) return 1;
+    #|  if (__alignof__("abc") != 1) return 2;
+    #|  if (!"abc") return 3;
+    #|  if (*"abc" != 'a') return 4;
+    #|  if ("abc"[1] != 'b') return 5;
+    #|  if ("abc"[3] != 0) return 6;
+    #|  if (__func__[0] != 'm') return 7;
+    #|  if (__builtin_strlen("hello") != 5) return 8;
+    #|  if (*((char *)"abc") != 'a') return 9;
+    #|  if (((char *)"abc")[2] != 'c') return 10;
+    #|  if (((unsigned char *)"abc")[3] != 0) return 11;
+    #|  if (__builtin_strlen((const char *)"hello") != 5) return 12;
+    #|  if (*("abcd" + 1) != 'b') return 13;
+    #|  if ((1 + "abcd")[2] != 'd') return 14;
+    #|  int side = 0;
+    #|  if (*((const char *)"abcd" + (side += 2)) != 'c') return 15;
+    #|  if (side != 2) return 16;
+    #|  return 42;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("BYTE PTR"), content="true")
     }
     Err(err) => abort(err)
   }

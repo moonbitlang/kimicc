@@ -1126,10 +1126,31 @@ fn Program::lower_mir_known_object_ptr_expr(
   ctx : BodyLowerContext,
 ) -> MirValue? {
   match expr {
+    String(value) => Some(MirStringAddr(value))
     AddrOf(CompoundLiteral(lit_ty, items, id)) =>
       self.lower_mir_expr(AddrOf(CompoundLiteral(lit_ty, items, id)), ctx)
     AddrOf(inner) => self.lower_mir_object_addr(inner, ctx)
     Cast(_, inner) => self.lower_mir_known_object_ptr_expr(inner, ctx)
+    Binary(op, lhs, rhs) => {
+      let scope = ctx.scope()
+      let lhs_ty = self.expr_type(lhs, scope)
+      let rhs_ty = self.expr_type(rhs, scope)
+      let pointer_integer = match self.pointer_element(lhs_ty) {
+        Some(_) => (op == "+" || op == "-") && rhs_ty.is_integer()
+        None =>
+          op == "+" &&
+          lhs_ty.is_integer() &&
+          self.pointer_element(rhs_ty) is Some(_)
+      }
+      if !pointer_integer {
+        return None
+      }
+      match (self.lower_mir_expr(lhs, ctx), self.lower_mir_expr(rhs, ctx)) {
+        (Some(left), Some(right)) =>
+          Some(MirBinary(op, left, right, self.expr_type(expr, scope)))
+        _ => None
+      }
+    }
     _ => None
   }
 }
