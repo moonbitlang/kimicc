@@ -755,6 +755,37 @@ test "strict MIR still rejects unsupported local reads" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR varargs setup builtins" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|int variadic(int last, ...) {
+    #|  va_list ap;
+    #|  int n = sizeof(__builtin_va_start(ap, last)) +
+    #|    sizeof(__builtin_va_copy(ap, ap)) +
+    #|    sizeof(__builtin_va_end(ap));
+    #|  __builtin_va_start(ap, last);
+    #|  __builtin_va_copy(ap, ap);
+    #|  __builtin_va_end(ap);
+    #|  return last + n + 1;
+    #|}
+    #|int main(void) {
+    #|  return variadic(41, 1, 2);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_variadic:"), content="true")
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("__builtin_va_start"), content="false")
+      inspect(assembly.contains("__builtin_va_copy"), content="false")
+      inspect(assembly.contains("__builtin_va_end"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR bzero builtin libcall" {
   let source =
     #|int main(void) {
@@ -1901,6 +1932,41 @@ test "generate linux amd64 strict MIR ignored unsupported local initializer side
       inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
       inspect(assembly.contains("__mir_2_d"), content="false")
       inspect(assembly.contains("__mir_3_e"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR varargs setup builtins" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|int variadic(int last, ...) {
+    #|  va_list ap;
+    #|  int n = sizeof(__builtin_va_start(ap, last)) +
+    #|    sizeof(__builtin_va_copy(ap, ap)) +
+    #|    sizeof(__builtin_va_end(ap));
+    #|  __builtin_va_start(ap, last);
+    #|  __builtin_va_copy(ap, ap);
+    #|  __builtin_va_end(ap);
+    #|  return last + n + 1;
+    #|}
+    #|int main(void) {
+    #|  return variadic(41, 1, 2);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\t.type\tvariadic, @function"), content="true")
+      inspect(assembly.contains("\t.type\tmain, @function"), content="true")
+      inspect(assembly.contains("__builtin_va_start"), content="false")
+      inspect(assembly.contains("__builtin_va_copy"), content="false")
+      inspect(assembly.contains("__builtin_va_end"), content="false")
     }
     Err(err) => abort(err)
   }

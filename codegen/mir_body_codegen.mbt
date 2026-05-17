@@ -232,6 +232,23 @@ fn mir_body_codegen_return_address_call(
 }
 
 ///|
+fn mir_body_codegen_va_setup_call(
+  name : String,
+  args : Array[@mir.MirValue],
+  ret : @parser.Type,
+) -> Bool {
+  let arity = match name {
+    "__builtin_va_start" | "__builtin_va_copy" => Some(2)
+    "__builtin_va_end" => Some(1)
+    _ => None
+  }
+  match arity {
+    Some(count) => args.length() == count && peel_aligned_type(ret) is Void
+    None => false
+  }
+}
+
+///|
 fn mir_body_codegen_overflow_result_type(
   args : Array[@mir.MirValue],
 ) -> @parser.Type? {
@@ -387,6 +404,7 @@ fn mir_body_codegen_call_supported(
     mir_body_codegen_alloca_call(name, args, ret) ||
     mir_body_codegen_frame_address_call(name, args, ret) ||
     mir_body_codegen_return_address_call(name, args, ret) ||
+    mir_body_codegen_va_setup_call(name, args, ret) ||
     mir_body_codegen_overflow_call(name, args, ret) {
     return true
   }
@@ -555,7 +573,8 @@ fn mir_body_codegen_func_supported(
   int_arg_limit : Int,
   mir : @mir.MirModule,
 ) -> Bool {
-  if variadic || body.params.length() > int_arg_limit {
+  ignore(variadic)
+  if body.params.length() > int_arg_limit {
     return false
   }
   if !mir_body_codegen_scalar_type(body.ret) {
@@ -936,6 +955,9 @@ fn Codegen::gen_mir_value(
         } else {
           self.emit("\tmov\tx9, #0")
         }
+        return
+      } else if mir_body_codegen_va_setup_call(name, args, ty) {
+        self.emit("\tmov\tx9, #0")
         return
       }
       match overflow_builtin_operator(name) {
@@ -1746,6 +1768,9 @@ fn X64Codegen::gen_mir_value(
         } else {
           self.emit("\tmov\trax, 0")
         }
+        return
+      } else if mir_body_codegen_va_setup_call(name, args, ty) {
+        self.emit("\tmov\trax, 0")
         return
       }
       match overflow_builtin_operator(name) {

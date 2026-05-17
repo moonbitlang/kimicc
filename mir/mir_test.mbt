@@ -2326,6 +2326,7 @@ test "mir interpreter models void builtin return sizes" {
     #|    variadic(0, 1);
     #|}
   expect_interp(source, 0L)
+  expect_body_interp(source, 0L)
 }
 
 ///|
@@ -2430,6 +2431,7 @@ test "mir interpreter evaluates unobserved varargs setup builtins" {
     #|  return variadic(41, 1, 2);
     #|}
   expect_interp(source, 42L)
+  expect_body_interp(source, 42L)
 }
 
 ///|

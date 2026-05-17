@@ -95,9 +95,11 @@ integer-scalar subset.
   hint-operand side effects,
   no-argument `__sync_synchronize`, atomic thread/signal fence builtins,
   trap/unreachable builtins, frame/return-address builtins, integer overflow
-  builtins for non-128-bit result pointers, `__builtin_bzero` and selected
-  memory/string builtin libcalls including checked variants and checked
-  `strlcpy`/`strlcat`, and runtime `__builtin_alloca` stack allocation,
+  builtins for non-128-bit result pointers, trivial variadic bodies with
+  unobserved `__builtin_va_start`/`__builtin_va_copy`/`__builtin_va_end`,
+  `__builtin_bzero` and selected memory/string builtin libcalls including
+  checked variants and checked `strlcpy`/`strlcat`, and runtime
+  `__builtin_alloca` stack allocation,
   return-address transforms, no-op `__builtin_assume`, runtime
   `__builtin_prefetch` address evaluation, identity `__builtin_unpredictable`,
   and arithmetic/logical operators. Unsupported MIR bodies still fall back to

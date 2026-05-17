@@ -722,6 +722,16 @@ fn BodyInterpreter::eval_value(
         }
         return 0L
       }
+      if (
+          (
+            (name == "__builtin_va_start" || name == "__builtin_va_copy") &&
+            args.length() == 2
+          ) ||
+          (name == "__builtin_va_end" && args.length() == 1)
+        ) &&
+        self.program.core_type(ty) is Void {
+        return 0L
+      }
       if name == "__builtin_alloca" &&
         args.length() == 1 &&
         self.program.core_type(ty) is Pointer(_) {
@@ -1276,7 +1286,12 @@ fn BodyInterpreter::call_func(
     return 0L
   }
   let body = self.program.bodies[name]
-  if args.length() != body.params.length() {
+  let variadic = match self.program.funcs.get(name) {
+    Some(sig) => sig.variadic
+    None => false
+  }
+  if (!variadic && args.length() != body.params.length()) ||
+    (variadic && args.length() < body.params.length()) {
     self.fail("MIR body argument count mismatch for " + name)
     return 0L
   }
