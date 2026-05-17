@@ -685,6 +685,19 @@ test "mir body interpreter handles scalar local arrays" {
 }
 
 ///|
+test "mir body interpreter decays local arrays in call arguments" {
+  let source =
+    #|int main(void) {
+    #|  char dst[4];
+    #|  __builtin_bzero(dst, 4);
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body interpreter handles local array initializers" {
   let source =
     #|int main(void) {

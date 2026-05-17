@@ -49,9 +49,10 @@ integer-scalar subset.
   scalar `*&` / `&*` cancellation, transparent casted scalar address
   loads/stores, address-of aggregate member cancellation including transparent
   casts, simple scalar local pointer loads/stores,
-  simple non-variadic indirect calls and function addresses, scalar local arrays,
-  string literal byte loads, simple local array initializers, local aggregate
-  initializers with nested zero-fill, scalar-leaf struct copy initializers,
+  simple non-variadic indirect calls and function addresses, scalar local arrays
+  including array-to-pointer decay in call arguments, string literal byte loads,
+  simple local array initializers, local aggregate initializers with nested
+  zero-fill, scalar-leaf struct copy initializers,
   ignored assignments from local objects and compound literals including
   scalar-field unions and nested scalar aggregate fields, fixed-size string
   array initialization, scalar aggregate fields including nested member access
@@ -77,9 +78,10 @@ integer-scalar subset.
   scalar `*&` / `&*` cancellation, transparent casted scalar address
   loads/stores, address-of aggregate member cancellation including transparent
   casts, simple scalar local pointer loads/stores,
-  simple non-variadic indirect calls and function addresses, scalar local arrays,
-  string literal byte loads, simple local array initializers, local aggregate
-  initializers with nested zero-fill, scalar-leaf struct copy initializers,
+  simple non-variadic indirect calls and function addresses, scalar local arrays
+  including array-to-pointer decay in call arguments, string literal byte loads,
+  simple local array initializers, local aggregate initializers with nested
+  zero-fill, scalar-leaf struct copy initializers,
   ignored assignments from local objects and compound literals including
   scalar-field unions and nested scalar aggregate fields, fixed-size string
   array initialization, scalar aggregate fields including nested member access

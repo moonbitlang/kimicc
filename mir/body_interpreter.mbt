@@ -614,6 +614,14 @@ fn BodyInterpreter::eval_value(
         }
         return if level == 0L { 1L } else { 0L }
       }
+      if name == "__builtin_bzero" &&
+        args.length() == 2 &&
+        self.program.core_type(ty) is Void {
+        for arg in args {
+          ignore(self.eval_value(frame, arg))
+        }
+        return 0L
+      }
       let values : Array[Int64] = []
       for arg in args {
         values.push(self.eval_value(frame, arg))

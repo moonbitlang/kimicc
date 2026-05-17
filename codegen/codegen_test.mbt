@@ -582,7 +582,8 @@ test "strict MIR still rejects unsupported builtin direct calls" {
 test "generate darwin arm64 strict MIR bzero builtin libcall" {
   let source =
     #|int main(void) {
-    #|  __builtin_bzero((void *)0, 0);
+    #|  char dst[4];
+    #|  __builtin_bzero(dst, 4);
     #|  return 0;
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
@@ -1513,7 +1514,8 @@ test "generate linux amd64 strict MIR double underscore external scalar call" {
 test "generate linux amd64 strict MIR bzero builtin libcall" {
   let source =
     #|int main(void) {
-    #|  __builtin_bzero((void *)0, 0);
+    #|  char dst[4];
+    #|  __builtin_bzero(dst, 4);
     #|  return 0;
     #|}
   let target = match @target.Target::parse("linux-amd64") {

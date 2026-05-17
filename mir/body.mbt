@@ -905,7 +905,7 @@ fn Program::lower_mir_identity_builtin(
   if args.length() == 0 {
     return Some(MirConst(0L, ty))
   }
-  let value = match self.lower_mir_expr(args[0], ctx) {
+  let value = match self.lower_mir_call_arg(args[0], ctx) {
     Some(value) => value
     None => return None
   }
@@ -918,7 +918,7 @@ fn Program::lower_mir_identity_builtin(
     mir_body_side_effect_free_expr(args[side_index]) {
     return Some(value)
   }
-  let side = match self.lower_mir_expr(args[side_index], ctx) {
+  let side = match self.lower_mir_call_arg(args[side_index], ctx) {
     Some(value) => value
     None => return None
   }
@@ -1047,6 +1047,19 @@ fn Program::lower_mir_array_base_addr(
           }
       }
     _ => self.lower_mir_expr(base, ctx)
+  }
+}
+
+///|
+fn Program::lower_mir_call_arg(
+  self : Program,
+  arg : @parser.Expr,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  if mir_body_array_local_type(self.expr_type(arg, ctx.scope())) {
+    self.lower_mir_array_base_addr(arg, ctx)
+  } else {
+    self.lower_mir_expr(arg, ctx)
   }
 }
 
@@ -1184,7 +1197,7 @@ fn Program::lower_mir_indirect_call(
   }
   let values : Array[MirValue] = []
   for arg in args {
-    match self.lower_mir_expr(arg, ctx) {
+    match self.lower_mir_call_arg(arg, ctx) {
       Some(value) => values.push(value)
       None => return None
     }
@@ -1434,7 +1447,7 @@ fn Program::lower_mir_expr(
         if args.length() == 0 {
           return Some(MirConst(0L, ty))
         }
-        match self.lower_mir_expr(args[0], ctx) {
+        match self.lower_mir_call_arg(args[0], ctx) {
           Some(value) =>
             return Some(MirBinary(",", value, MirConst(0L, ty), ty))
           None => return None
@@ -1466,7 +1479,7 @@ fn Program::lower_mir_expr(
       }
       let values : Array[MirValue] = []
       for arg in args {
-        match self.lower_mir_expr(arg, ctx) {
+        match self.lower_mir_call_arg(arg, ctx) {
           Some(value) => values.push(value)
           None => return None
         }
