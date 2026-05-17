@@ -128,6 +128,14 @@ fn mir_body_codegen_value_supported(
 }
 
 ///|
+fn mir_body_codegen_builtin_call_name(name : String) -> Bool {
+  name.has_prefix("__builtin_") ||
+  name.has_prefix("__sync_") ||
+  name.has_prefix("__atomic_") ||
+  name.has_prefix("__c11_atomic_")
+}
+
+///|
 fn mir_body_codegen_call_supported(
   name : String,
   args : Array[@mir.MirValue],
@@ -135,7 +143,7 @@ fn mir_body_codegen_call_supported(
   int_arg_limit : Int,
   mir : @mir.MirModule,
 ) -> Bool {
-  if name.has_prefix("__") ||
+  if mir_body_codegen_builtin_call_name(name) ||
     args.length() > int_arg_limit ||
     !mir_body_codegen_scalar_type(ret) {
     return false
