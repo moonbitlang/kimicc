@@ -185,6 +185,17 @@ fn mir_body_codegen_return_pointer_type(ty : @parser.Type) -> Bool {
 }
 
 ///|
+fn mir_body_codegen_alloca_call(
+  name : String,
+  args : Array[@mir.MirValue],
+  ret : @parser.Type,
+) -> Bool {
+  name == "__builtin_alloca" &&
+  args.length() == 1 &&
+  mir_body_codegen_return_pointer_type(ret)
+}
+
+///|
 fn mir_body_codegen_const_builtin_level(args : Array[@mir.MirValue]) -> Int64? {
   if args.length() == 0 {
     return Some(0L)
@@ -302,6 +313,7 @@ fn mir_body_codegen_call_supported(
     mir_body_codegen_atomic_thread_fence_call(name, args, ret) ||
     mir_body_codegen_atomic_signal_fence_call(name, args, ret) ||
     mir_body_codegen_trap_call(name, args, ret) ||
+    mir_body_codegen_alloca_call(name, args, ret) ||
     mir_body_codegen_frame_address_call(name, args, ret) ||
     mir_body_codegen_return_address_call(name, args, ret) {
     return true
@@ -780,6 +792,13 @@ fn Codegen::gen_mir_value(
       } else if mir_body_codegen_trap_call(name, args, ty) {
         self.emit("\tbrk\t#0x1")
         self.emit("\tmov\tx9, #0")
+        return
+      } else if mir_body_codegen_alloca_call(name, args, ty) {
+        self.gen_mir_value(args[0], offsets, frame_size)
+        self.emit("\tadd\tx9, x9, #15")
+        self.emit("\tbic\tx9, x9, #0xF")
+        self.emit("\tsub\tsp, sp, x9")
+        self.emit("\tmov\tx9, sp")
         return
       } else if mir_body_codegen_frame_address_call(name, args, ty) {
         let level = match mir_body_codegen_const_builtin_level(args) {
@@ -1509,6 +1528,13 @@ fn X64Codegen::gen_mir_value(
       } else if mir_body_codegen_trap_call(name, args, ty) {
         self.emit("\tud2")
         self.emit("\tmov\trax, 0")
+        return
+      } else if mir_body_codegen_alloca_call(name, args, ty) {
+        self.gen_mir_value(args[0], offsets)
+        self.emit("\tadd\trax, 15")
+        self.emit("\tand\trax, -16")
+        self.emit("\tsub\trsp, rax")
+        self.emit("\tmov\trax, rsp")
         return
       } else if mir_body_codegen_frame_address_call(name, args, ty) {
         let level = match mir_body_codegen_const_builtin_level(args) {

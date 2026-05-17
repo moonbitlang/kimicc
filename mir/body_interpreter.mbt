@@ -27,6 +27,7 @@ priv struct BodyInterpreter {
   mut error : String?
   mut steps : Int
   mut call_depth : Int
+  mut next_alloca : Int64
 }
 
 ///|
@@ -152,6 +153,7 @@ fn BodyInterpreter::new(program : Program) -> BodyInterpreter {
     error: None,
     steps: 0,
     call_depth: 0,
+    next_alloca: 4000000000L,
   }
 }
 
@@ -621,6 +623,15 @@ fn BodyInterpreter::eval_value(
           ignore(self.eval_value(frame, arg))
         }
         return 0L
+      }
+      if name == "__builtin_alloca" &&
+        args.length() == 1 &&
+        self.program.core_type(ty) is Pointer(_) {
+        let size = self.eval_value(frame, args[0])
+        let ptr = self.next_alloca
+        let bump = (size + 15L) / 16L * 16L
+        self.next_alloca += if bump > 0L { bump } else { 16L }
+        return ptr
       }
       if (
           name == "__builtin_memcpy" ||

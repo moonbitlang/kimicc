@@ -889,6 +889,26 @@ test "mir body interpreter handles no-op builtins" {
 }
 
 ///|
+test "mir body interpreter handles alloca return size and nullness" {
+  let source =
+    #|int main(void) {
+    #|  int n = 16;
+    #|  void *p = __builtin_alloca(n += 1);
+    #|  if (n != 17) return 1;
+    #|  if (p == 0) return 2;
+    #|  char *a = __builtin_alloca(n += 2);
+    #|  char *b = __builtin_alloca(n += 3);
+    #|  if (n != 22) return 3;
+    #|  if (a == 0 || b == 0) return 4;
+    #|  if (a == b || a == p || b == p) return 5;
+    #|  return sizeof(__builtin_alloca(16)) + 34;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body interpreter handles scalar globals" {
   let source =
     #|int g = 5;

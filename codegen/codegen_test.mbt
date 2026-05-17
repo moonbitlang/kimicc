@@ -670,6 +670,28 @@ test "generate darwin arm64 strict MIR trap builtins" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR alloca builtin" {
+  let source =
+    #|int main(void) {
+    #|  int n = 13;
+    #|  char *p = __builtin_alloca(n += 1);
+    #|  if (n != 14) return 1;
+    #|  return p != 0;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tbic\tx9, x9, #0xF"), content="true")
+      inspect(assembly.contains("\tsub\tsp, sp, x9"), content="true")
+      inspect(assembly.contains("\tbl\t___builtin_alloca"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR sync synchronize builtin" {
   let source =
     #|int main(void) {
@@ -1648,6 +1670,31 @@ test "generate linux amd64 strict MIR trap builtins" {
         assembly.contains("\tcall\t__builtin_unreachable"),
         content="false",
       )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR alloca builtin" {
+  let source =
+    #|int main(void) {
+    #|  int n = 13;
+    #|  char *p = __builtin_alloca(n += 1);
+    #|  if (n != 14) return 1;
+    #|  return p != 0;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tand\trax, -16"), content="true")
+      inspect(assembly.contains("\tsub\trsp, rax"), content="true")
+      inspect(assembly.contains("\tcall\t__builtin_alloca"), content="false")
     }
     Err(err) => abort(err)
   }
