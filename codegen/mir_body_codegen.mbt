@@ -286,6 +286,12 @@ fn mir_body_codegen_builtin_lib_call_arg_count(
       } else {
         None
       }
+    "__builtin___strlcpy_chk" | "__builtin___strlcat_chk" =>
+      if args.length() == 4 && ret.is_integer() {
+        Some(3)
+      } else {
+        None
+      }
     _ => None
   }
 }
@@ -312,6 +318,8 @@ fn mir_body_codegen_direct_call_symbol(name : String) -> String {
     "__builtin_strcat" | "__builtin___strcat_chk" => "strcat"
     "__builtin_strncpy" | "__builtin___strncpy_chk" => "strncpy"
     "__builtin_strncat" | "__builtin___strncat_chk" => "strncat"
+    "__builtin___strlcpy_chk" => "strlcpy"
+    "__builtin___strlcat_chk" => "strlcat"
     _ => name
   }
 }
@@ -326,7 +334,9 @@ fn mir_body_codegen_direct_call_arg_count(
     | "__builtin___memmove_chk"
     | "__builtin___memset_chk"
     | "__builtin___strncpy_chk"
-    | "__builtin___strncat_chk" => 3
+    | "__builtin___strncat_chk"
+    | "__builtin___strlcpy_chk"
+    | "__builtin___strlcat_chk" => 3
     "__builtin___strcpy_chk" | "__builtin___strcat_chk" => 2
     _ => args.length()
   }

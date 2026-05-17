@@ -737,6 +737,23 @@ test "mir body interpreter handles string destination builtin returns" {
 }
 
 ///|
+test "mir body interpreter handles checked strl literal lengths" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(8);
+    #|  if (__builtin___strlcpy_chk(dst, (const char *)"abcdef", n += 4, 8) != 6) return 1;
+    #|  if (n != 4) return 2;
+    #|  if (__builtin___strlcat_chk(dst, (const char *)"abc", ((n += 1), 0), 8) != 3) return 3;
+    #|  if (n != 5) return 4;
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body interpreter handles local array initializers" {
   let source =
     #|int main(void) {

@@ -215,6 +215,19 @@ fn BodyInterpreter::string_literal_base(
 }
 
 ///|
+fn BodyInterpreter::string_literal_for_base(
+  self : BodyInterpreter,
+  addr : Int64,
+) -> String? {
+  for value in self.string_addrs.keys() {
+    if self.string_addrs[value] == addr {
+      return Some(value)
+    }
+  }
+  None
+}
+
+///|
 fn BodyInterpreter::string_array_elem_addr(
   self : BodyInterpreter,
   addr : Int64,
@@ -676,6 +689,42 @@ fn BodyInterpreter::eval_value(
           values.push(self.eval_value(frame, arg))
         }
         return values[0]
+      }
+      if name == "__builtin___strlcpy_chk" &&
+        args.length() == 4 &&
+        ty.is_integer() {
+        let values : Array[Int64] = []
+        for arg in args {
+          values.push(self.eval_value(frame, arg))
+        }
+        match self.string_literal_for_base(values[1]) {
+          Some(value) => return mir_body_c_string_len(value)
+          None => {
+            self.fail("unsupported MIR body strlcpy source argument")
+            return 0L
+          }
+        }
+      }
+      if name == "__builtin___strlcat_chk" &&
+        args.length() == 4 &&
+        ty.is_integer() {
+        let values : Array[Int64] = []
+        for arg in args {
+          values.push(self.eval_value(frame, arg))
+        }
+        match self.string_literal_for_base(values[1]) {
+          Some(value) =>
+            if values[2] == 0L {
+              return mir_body_c_string_len(value)
+            } else {
+              self.fail("unsupported MIR body strlcat destination length")
+              return 0L
+            }
+          None => {
+            self.fail("unsupported MIR body strlcat source argument")
+            return 0L
+          }
+        }
       }
       let values : Array[Int64] = []
       for arg in args {
