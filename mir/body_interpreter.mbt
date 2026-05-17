@@ -635,6 +635,19 @@ fn BodyInterpreter::eval_value(
         }
         return values[0]
       }
+      if (
+          name == "__builtin___memcpy_chk" ||
+          name == "__builtin___memmove_chk" ||
+          name == "__builtin___memset_chk"
+        ) &&
+        args.length() == 4 &&
+        self.program.core_type(ty) is Pointer(_) {
+        let values : Array[Int64] = []
+        for i in 0..<3 {
+          values.push(self.eval_value(frame, args[i]))
+        }
+        return values[0]
+      }
       let values : Array[Int64] = []
       for arg in args {
         values.push(self.eval_value(frame, arg))

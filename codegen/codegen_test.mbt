@@ -564,7 +564,7 @@ test "strict MIR rejects implicit external scalar call arguments" {
 test "strict MIR still rejects unsupported builtin direct calls" {
   let source =
     #|int main(void) {
-    #|  __builtin___memcpy_chk((void *)0, (void *)0, 0, 0);
+    #|  __builtin_mempcpy((void *)0, (void *)0, 0);
     #|  return 0;
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
@@ -587,6 +587,9 @@ test "generate darwin arm64 strict MIR memory builtin libcalls" {
     #|  __builtin_memcpy(dst, src, 4);
     #|  __builtin_memset(src, 0, 4);
     #|  __builtin_memmove(src, dst, 4);
+    #|  __builtin___memcpy_chk(dst, src, 4, 4);
+    #|  __builtin___memset_chk(src, 0, 4, 4);
+    #|  __builtin___memmove_chk(src, dst, 4, 4);
     #|  return 0;
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
@@ -600,6 +603,18 @@ test "generate darwin arm64 strict MIR memory builtin libcalls" {
       inspect(assembly.contains("\tbl\t___builtin_memcpy"), content="false")
       inspect(assembly.contains("\tbl\t___builtin_memset"), content="false")
       inspect(assembly.contains("\tbl\t___builtin_memmove"), content="false")
+      inspect(
+        assembly.contains("\tbl\t___builtin___memcpy_chk"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("\tbl\t___builtin___memset_chk"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("\tbl\t___builtin___memmove_chk"),
+        content="false",
+      )
     }
     Err(err) => abort(err)
   }
@@ -1546,6 +1561,9 @@ test "generate linux amd64 strict MIR memory builtin libcalls" {
     #|  __builtin_memcpy(dst, src, 4);
     #|  __builtin_memset(src, 0, 4);
     #|  __builtin_memmove(src, dst, 4);
+    #|  __builtin___memcpy_chk(dst, src, 4, 4);
+    #|  __builtin___memset_chk(src, 0, 4, 4);
+    #|  __builtin___memmove_chk(src, dst, 4, 4);
     #|  return 0;
     #|}
   let target = match @target.Target::parse("linux-amd64") {
@@ -1562,6 +1580,18 @@ test "generate linux amd64 strict MIR memory builtin libcalls" {
       inspect(assembly.contains("\tcall\t__builtin_memcpy"), content="false")
       inspect(assembly.contains("\tcall\t__builtin_memset"), content="false")
       inspect(assembly.contains("\tcall\t__builtin_memmove"), content="false")
+      inspect(
+        assembly.contains("\tcall\t__builtin___memcpy_chk"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("\tcall\t__builtin___memset_chk"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("\tcall\t__builtin___memmove_chk"),
+        content="false",
+      )
     }
     Err(err) => abort(err)
   }

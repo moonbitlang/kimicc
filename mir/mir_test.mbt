@@ -706,6 +706,9 @@ test "mir body interpreter handles memory builtin first-arg returns" {
     #|  if (__builtin_memcpy(dst, src, 0) != &dst[0]) return 1;
     #|  if (__builtin_memmove(dst, src, 0) != &dst[0]) return 2;
     #|  if (__builtin_memset(dst, 0, 0) != &dst[0]) return 3;
+    #|  if (__builtin___memcpy_chk(dst, src, 0, 8) != &dst[0]) return 4;
+    #|  if (__builtin___memmove_chk(dst, src, 0, 8) != &dst[0]) return 5;
+    #|  if (__builtin___memset_chk(dst, 0, 0, 8) != &dst[0]) return 6;
     #|  return 42;
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())

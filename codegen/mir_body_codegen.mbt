@@ -221,31 +221,72 @@ fn mir_body_codegen_return_address_call(
 }
 
 ///|
+fn mir_body_codegen_builtin_lib_call_arg_count(
+  name : String,
+  args : Array[@mir.MirValue],
+  ret : @parser.Type,
+  int_arg_limit : Int,
+) -> Int? {
+  if args.length() > int_arg_limit {
+    return None
+  }
+  match name {
+    "__builtin_bzero" =>
+      if args.length() == 2 && peel_aligned_type(ret) is Void {
+        Some(2)
+      } else {
+        None
+      }
+    "__builtin_memcpy" | "__builtin_memmove" | "__builtin_memset" =>
+      if args.length() == 3 && mir_body_codegen_return_pointer_type(ret) {
+        Some(3)
+      } else {
+        None
+      }
+    "__builtin___memcpy_chk"
+    | "__builtin___memmove_chk"
+    | "__builtin___memset_chk" =>
+      if args.length() == 4 && mir_body_codegen_return_pointer_type(ret) {
+        Some(3)
+      } else {
+        None
+      }
+    _ => None
+  }
+}
+
+///|
 fn mir_body_codegen_builtin_lib_call_supported(
   name : String,
   args : Array[@mir.MirValue],
   ret : @parser.Type,
   int_arg_limit : Int,
 ) -> Bool {
-  if args.length() > int_arg_limit {
-    return false
-  }
-  match name {
-    "__builtin_bzero" => args.length() == 2 && peel_aligned_type(ret) is Void
-    "__builtin_memcpy" | "__builtin_memmove" | "__builtin_memset" =>
-      args.length() == 3 && mir_body_codegen_return_pointer_type(ret)
-    _ => false
-  }
+  mir_body_codegen_builtin_lib_call_arg_count(name, args, ret, int_arg_limit)
+  is Some(_)
 }
 
 ///|
 fn mir_body_codegen_direct_call_symbol(name : String) -> String {
   match name {
     "__builtin_bzero" => "bzero"
-    "__builtin_memcpy" => "memcpy"
-    "__builtin_memmove" => "memmove"
-    "__builtin_memset" => "memset"
+    "__builtin_memcpy" | "__builtin___memcpy_chk" => "memcpy"
+    "__builtin_memmove" | "__builtin___memmove_chk" => "memmove"
+    "__builtin_memset" | "__builtin___memset_chk" => "memset"
     _ => name
+  }
+}
+
+///|
+fn mir_body_codegen_direct_call_arg_count(
+  name : String,
+  args : Array[@mir.MirValue],
+) -> Int {
+  match name {
+    "__builtin___memcpy_chk"
+    | "__builtin___memmove_chk"
+    | "__builtin___memset_chk" => 3
+    _ => args.length()
   }
 }
 
@@ -763,7 +804,8 @@ fn Codegen::gen_mir_value(
         }
         return
       }
-      for i in 0..<args.length() {
+      let arg_count = mir_body_codegen_direct_call_arg_count(name, args)
+      for i in 0..<arg_count {
         let arg = args[i]
         self.gen_mir_value(arg, offsets, frame_size)
         let expected = self.mir_call_arg_type(name, i, arg.ty())
@@ -771,7 +813,7 @@ fn Codegen::gen_mir_value(
         self.emit_scalar_conversion_to(expected)
         self.emit("\tstr\tx9, [sp, #-16]!")
       }
-      for i = args.length() - 1; i >= 0; i = i - 1 {
+      for i = arg_count - 1; i >= 0; i = i - 1 {
         self.emit("\tldr\tx" + i.to_string() + ", [sp], #16")
       }
       self.emit("\tbl\t_" + mir_body_codegen_direct_call_symbol(name))
@@ -1491,14 +1533,15 @@ fn X64Codegen::gen_mir_value(
         }
         return
       }
-      for i in 0..<args.length() {
+      let arg_count = mir_body_codegen_direct_call_arg_count(name, args)
+      for i in 0..<arg_count {
         let arg = args[i]
         self.gen_mir_value(arg, offsets)
         self.emit_int_conversion_to(self.mir_call_arg_type(name, i, arg.ty()))
         self.emit_mir_push_rax()
       }
       let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
-      for i = args.length() - 1; i >= 0; i = i - 1 {
+      for i = arg_count - 1; i >= 0; i = i - 1 {
         self.emit("\tmov\t" + arg_regs[i] + ", QWORD PTR [rsp]")
         self.emit("\tadd\trsp, 16")
       }
