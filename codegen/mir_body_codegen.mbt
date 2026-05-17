@@ -221,6 +221,27 @@ fn mir_body_codegen_return_address_call(
 }
 
 ///|
+fn mir_body_codegen_builtin_lib_call_supported(
+  name : String,
+  args : Array[@mir.MirValue],
+  ret : @parser.Type,
+  int_arg_limit : Int,
+) -> Bool {
+  name == "__builtin_bzero" &&
+  args.length() == 2 &&
+  args.length() <= int_arg_limit &&
+  peel_aligned_type(ret) is Void
+}
+
+///|
+fn mir_body_codegen_direct_call_symbol(name : String) -> String {
+  match name {
+    "__builtin_bzero" => "bzero"
+    _ => name
+  }
+}
+
+///|
 fn mir_body_codegen_call_supported(
   name : String,
   args : Array[@mir.MirValue],
@@ -234,6 +255,9 @@ fn mir_body_codegen_call_supported(
     mir_body_codegen_trap_call(name, args, ret) ||
     mir_body_codegen_frame_address_call(name, args, ret) ||
     mir_body_codegen_return_address_call(name, args, ret) {
+    return true
+  }
+  if mir_body_codegen_builtin_lib_call_supported(name, args, ret, int_arg_limit) {
     return true
   }
   if mir_body_codegen_builtin_call_name(name) ||
@@ -742,7 +766,7 @@ fn Codegen::gen_mir_value(
       for i = args.length() - 1; i >= 0; i = i - 1 {
         self.emit("\tldr\tx" + i.to_string() + ", [sp], #16")
       }
-      self.emit("\tbl\t_" + name)
+      self.emit("\tbl\t_" + mir_body_codegen_direct_call_symbol(name))
       self.emit("\tmov\tx9, x0")
       self.emit_mir_abi_int_return_conversion(ty)
     }
@@ -1470,7 +1494,7 @@ fn X64Codegen::gen_mir_value(
         self.emit("\tmov\t" + arg_regs[i] + ", QWORD PTR [rsp]")
         self.emit("\tadd\trsp, 16")
       }
-      self.emit("\tcall\t" + name)
+      self.emit("\tcall\t" + mir_body_codegen_direct_call_symbol(name))
       self.emit_abi_int_return_conversion(ty)
     }
     MirIndirectCall(callee, args, ty) => {
