@@ -3,6 +3,9 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
   match decl.body {
     None => return
     Some(body) => {
+      if self.try_gen_mir_func(decl) {
+        return
+      }
       self.local_offsets = {}
       self.var_types = {}
       self.stack_size = 0
@@ -227,7 +230,9 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
         for i = 0; i < self.fp_literals.length(); i = i + 1 {
           let label = "_fp_lit_" + self.func_name + "_" + i.to_string()
           self.emit(label + ":")
-          self.emit("\t.double\t" + self.fp_literals[i].to_string())
+          self.emit(
+            "\t.double\t" + codegen_float_asm_literal(self.fp_literals[i]),
+          )
         }
         self.emit("\t.section\t__TEXT,__text,regular,pure_instructions")
       }

@@ -11,6 +11,10 @@ pub fn interpret_i64(@parser.Program, @target.Target, String, Array[Int64]) -> R
 
 pub fn lower(@parser.Program, @target.Target) -> Program
 
+pub fn lower_to_module(@parser.Program, @target.Target) -> MirModule
+
+pub fn merge_global_decls(Array[MirGlobalDecl]) -> Array[MirGlobalDecl]
+
 // Errors
 
 // Types and methods
@@ -39,21 +43,157 @@ pub(all) struct FuncSig {
   weak : Bool
 } derive(Eq)
 
+pub(all) struct MirAggregateDecl {
+  name : String
+  fields : Array[MirAggregateField]
+  is_union : Bool
+  is_packed : Bool
+} derive(Eq)
+
+pub(all) struct MirAggregateField {
+  name : String
+  ty : @parser.Type
+  bit_width : Int?
+} derive(Eq)
+
+pub(all) struct MirFuncBody {
+  name : String
+  ret : @parser.Type
+  params : Array[MirLocal]
+  locals : Array[MirLocal]
+  body : Array[MirStmt]
+} derive(Eq)
+
+pub(all) struct MirFuncDecl {
+  ret : @parser.Type
+  name : String
+  params : Array[MirParam]
+  variadic : Bool
+  is_static : Bool
+  is_inline : Bool
+  is_weak : Bool
+  visibility : String?
+  symbol_alias : String?
+  section : String?
+  is_constructor : Bool
+  is_destructor : Bool
+  has_body : Bool
+} derive(Eq)
+
+pub(all) struct MirGlobalDecl {
+  ty : @parser.Type
+  name : String
+  init : MirGlobalInit?
+  has_init : Bool
+  is_static : Bool
+  is_extern : Bool
+  is_weak : Bool
+  visibility : String?
+  symbol_alias : String?
+  section : String?
+} derive(Eq)
+
+pub(all) enum MirGlobalInit {
+  MirGlobalScalarInt(Int64)
+  MirGlobalScalarFloat(Double)
+  MirGlobalString(String)
+  MirGlobalSymbol(String)
+  MirGlobalSymbolOffset(String, Int)
+  MirGlobalArray(Array[MirGlobalInit])
+  MirGlobalArraySparse(Array[(Int, MirGlobalInit)])
+  MirGlobalAggregateSparse(Array[(Int, MirGlobalInit)])
+  MirGlobalInitUnsupported
+} derive(Eq)
+
+pub(all) struct MirLocal {
+  id : Int
+  name : String
+  ty : @parser.Type
+} derive(Eq)
+
+pub(all) struct MirModule {
+  target : @target.Target
+  decls : Array[MirFuncDecl]
+  global_decls : Array[MirGlobalDecl]
+  aggregate_decls : Array[MirAggregateDecl]
+  funcs : Map[String, FuncSig]
+  globals : Map[String, MirGlobalDecl]
+  aggregates : Map[String, MirAggregateDecl]
+  layouts : Map[String, AggregateLayout]
+  bodies : Map[String, MirFuncBody]
+}
+pub fn MirModule::field_layout(Self, @parser.Type, String) -> FieldLayout?
+pub fn MirModule::global_expr_type(Self, @parser.Expr) -> @parser.Type
+pub fn MirModule::offset_of_path(Self, @parser.Type, Array[@parser.OffsetDesignator]) -> Int?
+pub fn MirModule::type_align(Self, @parser.Type) -> Int
+pub fn MirModule::type_size(Self, @parser.Type) -> Int
+
+pub(all) struct MirParam {
+  name : String
+  ty : @parser.Type
+} derive(Eq)
+
+pub(all) enum MirStmt {
+  MirDeclare(MirLocal, MirValue?)
+  MirExprStmt(MirValue)
+  MirReturn(MirValue?)
+  MirIf(MirValue, Array[MirStmt], Array[MirStmt])
+  MirWhile(MirValue, Array[MirStmt])
+  MirFor(Array[MirStmt], MirValue, MirValue?, Array[MirStmt])
+  MirDoWhile(MirValue, Array[MirStmt])
+  MirSwitch(MirValue, Array[(Int64?, String)], Array[MirStmt])
+  MirLabel(String)
+  MirGoto(String)
+  MirBreak
+  MirContinue
+  MirBlock(Array[MirStmt])
+} derive(Eq)
+
+pub(all) enum MirValue {
+  MirConst(Int64, @parser.Type)
+  MirLocal(MirLocal)
+  MirAddrLocal(MirLocal)
+  MirAddrGlobal(String, @parser.Type)
+  MirFuncAddr(String, @parser.Type)
+  MirStringAddr(String)
+  MirElemAddr(MirValue, MirValue, @parser.Type)
+  MirOffsetAddr(MirValue, Int, @parser.Type)
+  MirLoad(MirValue, @parser.Type)
+  MirUnary(String, MirValue, @parser.Type)
+  MirBinary(String, MirValue, MirValue, @parser.Type)
+  MirCast(@parser.Type, MirValue)
+  MirCall(String, Array[MirValue], @parser.Type)
+  MirIndirectCall(MirValue, Array[MirValue], @parser.Type)
+  MirAssignLocal(MirLocal, MirValue)
+  MirStore(MirValue, MirValue, @parser.Type)
+  MirPostUpdateLocal(MirLocal, String, MirValue, @parser.Type)
+  MirPreUpdateMemory(MirValue, String, MirValue, @parser.Type)
+  MirPostUpdateMemory(MirValue, String, MirValue, @parser.Type)
+  MirTernary(MirValue, MirValue, MirValue, @parser.Type)
+} derive(Eq)
+pub fn MirValue::ty(Self) -> @parser.Type
+
 pub(all) struct Program {
   target : @target.Target
   source : @parser.Program
+  decls : Array[MirFuncDecl]
+  global_decls : Array[MirGlobalDecl]
+  aggregate_decls : Array[MirAggregateDecl]
   funcs : Map[String, FuncSig]
-  globals : Map[String, @parser.GlobalDecl]
-  structs : Map[String, @parser.StructDecl]
+  globals : Map[String, MirGlobalDecl]
+  aggregates : Map[String, MirAggregateDecl]
   layouts : Map[String, AggregateLayout]
+  bodies : Map[String, MirFuncBody]
 }
 pub fn Program::expr_type(Self, @parser.Expr, Scope) -> @parser.Type
 pub fn Program::field_layout(Self, @parser.Type, String) -> FieldLayout?
 pub fn Program::fold_const(Self, @parser.Expr, Scope) -> Int64?
 pub fn Program::fold_float_const(Self, @parser.Expr, Scope) -> Double?
 pub fn Program::global_expr_type(Self, @parser.Expr) -> @parser.Type
+pub fn Program::interpret_body_i64(Self, String, Array[Int64]) -> Result[Int64, String]
 pub fn Program::interpret_i64(Self, String, Array[Int64]) -> Result[Int64, String]
 pub fn Program::offset_of_path(Self, @parser.Type, Array[@parser.OffsetDesignator]) -> Int?
+pub fn Program::to_module(Self) -> MirModule
 pub fn Program::type_align(Self, @parser.Type) -> Int
 pub fn Program::type_size(Self, @parser.Type) -> Int
 

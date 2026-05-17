@@ -56,6 +56,22 @@ async test "direct macho object supports float global initializer" {
 }
 
 ///|
+async test "direct macho object supports single precision arithmetic" {
+  let source =
+    #|float calc(float a, float b) {
+    #|  return ((a + b) * 3.0f - b) / 2.0f;
+    #|}
+    #|int main(void) {
+    #|  int value = (int)calc(1.0f, 2.0f);
+    #|  return value == 3 ? 42 : 1;
+    #|}
+  let exit_code = run_source_direct_object_async(
+    source, "macho_single_precision_arithmetic",
+  )
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "direct macho object supports max unsigned data initializers" {
   let source = "unsigned char c = 255; unsigned short s = 65535; unsigned int i = 4294967295U; int main(void) { return c == 255 && s == 65535 && i == 4294967295U ? 42 : 1; }"
   let exit_code = run_source_direct_object_async(

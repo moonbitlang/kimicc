@@ -56,6 +56,23 @@ fn expect_interp(source : String, expected : Int64) -> Unit {
 }
 
 ///|
+fn expect_body_interp(source : String, expected : Int64) -> Unit {
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match mir.interpret_body_i64("main", []) {
+    Ok(value) =>
+      if value != expected {
+        abort(
+          "unexpected MIR body interpreter result: expected " +
+          expected.to_string() +
+          ", got " +
+          value.to_string(),
+        )
+      }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "mir records target-specific scalar layout" {
   let source = "int main(void) { return 0; }"
   let darwin = @mir.lower(@parser.parse(source), @target.Target::default())
@@ -69,6 +86,14 @@ test "mir records target-specific scalar layout" {
   inspect(linux.type_align(LongDouble), content="16")
   inspect(linux.type_size(Float16), content="2")
   inspect(linux.type_align(Float16), content="2")
+  let darwin_module = darwin.to_module()
+  let linux_module = linux.to_module()
+  inspect(darwin_module.type_size(LongDouble), content="8")
+  inspect(darwin_module.type_align(LongDouble), content="8")
+  inspect(linux_module.type_size(LongDouble), content="16")
+  inspect(linux_module.type_align(LongDouble), content="16")
+  inspect(linux_module.type_size(Float16), content="2")
+  inspect(linux_module.type_align(Float16), content="2")
   let scope = @mir.Scope::empty()
   let long_double_builtin : @parser.Expr = Call(Var("__builtin_fabsl"), [
     FloatLiteral(1.0),
@@ -77,6 +102,272 @@ test "mir records target-specific scalar layout" {
   inspect(linux.expr_type(long_double_builtin, scope), content="LongDouble")
   expect_const(darwin, SizeofExpr(long_double_builtin), scope, 8L)
   expect_const(linux, SizeofExpr(long_double_builtin), scope, 16L)
+}
+
+///|
+test "mir module projection carries parser-free semantic facts" {
+  let source =
+    #|struct Pair { int a; int b; };
+    #|int g = 3;
+    #|struct Pair gp;
+    #|int main(void) { return g; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  let mir_module = mir.to_module()
+  let direct_module = @mir.lower_to_module(
+    @parser.parse(source),
+    @target.Target::default(),
+  )
+  inspect(mir_module.decls[0].name, content="main")
+  inspect(direct_module.decls[0].name, content="main")
+  inspect(mir_module.global_decls[0].name, content="g")
+  inspect(mir_module.globals["g"].has_init.to_string(), content="true")
+  inspect(mir_module.aggregate_decls[0].name, content="Pair")
+  inspect(
+    mir_module.aggregates["Pair"].fields.length().to_string(),
+    content="2",
+  )
+  inspect(mir_module.type_size(Struct("Pair")), content="8")
+  inspect(mir_module.type_align(Struct("Pair")), content="4")
+  match mir_module.field_layout(Struct("Pair"), "b") {
+    Some(layout) => inspect(layout.offset, content="4")
+    None => abort("missing Pair.b layout")
+  }
+  match mir_module.offset_of_path(Struct("Pair"), [OffsetField("b")]) {
+    Some(offset) => inspect(offset, content="4")
+    None => abort("missing Pair.b offset")
+  }
+  inspect(
+    mir_module.global_expr_type(MemberAccess(Var("gp"), "b")),
+    content="SInt",
+  )
+  inspect(
+    mir_module.global_expr_type(AddrOf(MemberAccess(Var("gp"), "b"))),
+    content="Pointer(SInt)",
+  )
+  inspect(mir_module.bodies.contains("main").to_string(), content="true")
+}
+
+///|
+test "mir owns function declaration metadata" {
+  let source =
+    #|int ext(long x);
+    #|static inline int helper(int x) { return x; }
+    #|int main(void) { return helper(1); }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.decls.length(), content="3")
+  inspect(mir.decls[0].name, content="ext")
+  inspect(mir.decls[0].has_body, content="false")
+  inspect(mir.decls[0].params[0].name, content="x")
+  inspect(mir.decls[0].params[0].ty, content="SLong")
+  inspect(mir.decls[1].name, content="helper")
+  inspect(mir.decls[1].is_static, content="true")
+  inspect(mir.decls[1].is_inline, content="true")
+  inspect(mir.decls[1].has_body, content="true")
+  inspect(mir.decls[2].name, content="main")
+  inspect(mir.decls[2].has_body, content="true")
+}
+
+///|
+test "mir owns global declaration metadata" {
+  let source =
+    #|extern int extg;
+    #|static int sg = 7;
+    #|int arr[2];
+    #|int main(void) { return sg; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.global_decls.length(), content="3")
+  inspect(mir.global_decls[0].name, content="extg")
+  inspect(mir.global_decls[0].is_extern, content="true")
+  inspect(mir.global_decls[0].has_init, content="false")
+  inspect(mir.global_decls[1].name, content="sg")
+  inspect(mir.global_decls[1].is_static, content="true")
+  inspect(mir.global_decls[1].has_init, content="true")
+  inspect(mir.global_decls[2].name, content="arr")
+  inspect(mir.global_decls[2].ty, content="Array(SInt, 2)")
+  inspect(mir.global_decls[2].has_init, content="false")
+}
+
+///|
+test "mir merges global declaration metadata" {
+  let source =
+    #|extern int g __attribute__((weak));
+    #|int g = 3;
+    #|extern int g;
+    #|int main(void) { return g; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  let globals = @mir.merge_global_decls(mir.global_decls)
+  inspect(globals.length(), content="1")
+  inspect(globals[0].name, content="g")
+  inspect(globals[0].has_init, content="true")
+  inspect(globals[0].is_extern, content="false")
+  inspect(globals[0].is_weak, content="true")
+  match globals[0].init {
+    Some(MirGlobalScalarInt(3)) => ()
+    _ => abort("expected merged global initializer")
+  }
+}
+
+///|
+test "mir owns simple global initializer metadata" {
+  let source =
+    #|int scalar = 7;
+    #|char *text = "ok";
+    #|int arr[2] = {1, 2};
+    #|int expr = 1 + 2;
+    #|int *addr = &scalar;
+    #|int *elem_addr = arr + 1;
+    #|int designated[3] = { [2] = 9 };
+    #|struct S { int a; int b; int c; };
+    #|struct S field_designated = { .c = 9, .a = 1 };
+    #|union U { int i; char c; };
+    #|union U union_designated = { .c = 7 };
+    #|int main(void) { return scalar; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match mir.global_decls[0].init {
+    Some(MirGlobalScalarInt(7)) => ()
+    _ => abort("expected scalar integer MIR global initializer")
+  }
+  match mir.global_decls[1].init {
+    Some(MirGlobalString("ok")) => ()
+    _ => abort("expected string MIR global initializer")
+  }
+  match mir.global_decls[2].init {
+    Some(MirGlobalArray([MirGlobalScalarInt(1), MirGlobalScalarInt(2)])) => ()
+    _ => abort("expected array MIR global initializer")
+  }
+  match mir.global_decls[3].init {
+    Some(MirGlobalScalarInt(3)) => ()
+    _ => abort("expected folded MIR global initializer")
+  }
+  match mir.global_decls[4].init {
+    Some(MirGlobalSymbol("scalar")) => ()
+    _ => abort("expected symbol address MIR global initializer")
+  }
+  match mir.global_decls[5].init {
+    Some(MirGlobalSymbolOffset("arr", 4)) => ()
+    _ => abort("expected symbol offset MIR global initializer")
+  }
+  match mir.global_decls[6].init {
+    Some(MirGlobalArraySparse([(2, MirGlobalScalarInt(9))])) => ()
+    _ => abort("expected sparse designated MIR global initializer")
+  }
+  match mir.global_decls[7].init {
+    Some(
+      MirGlobalAggregateSparse(
+        [(2, MirGlobalScalarInt(9)), (0, MirGlobalScalarInt(1))]
+      )
+    ) => ()
+    _ => abort("expected sparse aggregate field MIR global initializer")
+  }
+  match mir.global_decls[8].init {
+    Some(MirGlobalAggregateSparse([(1, MirGlobalScalarInt(7))])) => ()
+    _ => abort("expected sparse union field MIR global initializer")
+  }
+}
+
+///|
+test "mir owns aggregate declaration metadata" {
+  let source =
+    #|struct __attribute__((packed)) S { char c; int bits:5; };
+    #|union U { int i; char c; };
+    #|int main(void) { return 0; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.aggregate_decls.length(), content="2")
+  inspect(mir.aggregate_decls[0].name, content="S")
+  inspect(mir.aggregate_decls[0].is_packed, content="true")
+  inspect(mir.aggregate_decls[0].is_union, content="false")
+  inspect(mir.aggregate_decls[0].fields[0].name, content="c")
+  inspect(mir.aggregate_decls[0].fields[0].ty, content="SChar")
+  inspect(mir.aggregate_decls[0].fields[1].name, content="bits")
+  match mir.aggregate_decls[0].fields[1].bit_width {
+    Some(5) => ()
+    _ => abort("unexpected bitfield width")
+  }
+  inspect(mir.aggregate_decls[1].name, content="U")
+  inspect(mir.aggregate_decls[1].is_union, content="true")
+  inspect(mir.aggregate_decls[1].fields.length(), content="2")
+}
+
+///|
+test "mir owns floating global initializer metadata" {
+  let source =
+    #|double fp = 1.0 / 2.0;
+    #|float selected = 1 ? 3 / 2 : 9.0f;
+    #|int converted = (double)3 / 2;
+    #|int main(void) { return converted; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match mir.globals["fp"].init {
+    Some(MirGlobalScalarFloat(0.5)) => ()
+    _ => abort("expected MIR float global initializer")
+  }
+  match mir.globals["selected"].init {
+    Some(MirGlobalScalarFloat(1.0)) => ()
+    _ => abort("expected MIR selected float global initializer")
+  }
+  match mir.globals["converted"].init {
+    Some(MirGlobalScalarInt(1)) => ()
+    _ => abort("expected MIR converted float-to-int global initializer")
+  }
+}
+
+///|
+test "mir owns bitfield global initializer metadata" {
+  let source =
+    #|struct Bits { unsigned a : 3; signed b : 4; unsigned c : 5; };
+    #|union UBits { unsigned a : 3; signed b : 4; };
+    #|struct Bits bits = { .a = 5, .b = -3, .c = 17 };
+    #|union UBits ubits = { .b = -3 };
+    #|int main(void) { return 0; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match mir.globals["bits"].init {
+    Some(
+      MirGlobalAggregateSparse(
+        [
+          (0, MirGlobalScalarInt(5)),
+          (1, MirGlobalScalarInt(-3)),
+          (2, MirGlobalScalarInt(17)),
+        ]
+      )
+    ) => ()
+    _ => abort("expected MIR bitfield aggregate initializer")
+  }
+  match mir.globals["ubits"].init {
+    Some(MirGlobalAggregateSparse([(1, MirGlobalScalarInt(-3))])) => ()
+    _ => abort("expected MIR bitfield union initializer")
+  }
+}
+
+///|
+test "mir recursively lowers nested global initializer designators" {
+  let source =
+    #|struct Row { int cells[4]; };
+    #|struct Table { struct Row rows[2]; int tail; };
+    #|struct Table g = { .rows = { [1] = { .cells = { [2] = 9 } } }, .tail = 5 };
+    #|int main(void) { return 0; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match mir.globals["g"].init {
+    Some(
+      MirGlobalAggregateSparse(
+        [
+          (
+            0,
+            MirGlobalArraySparse(
+              [
+                (
+                  1,
+                  MirGlobalAggregateSparse(
+                    [(0, MirGlobalArraySparse([(2, MirGlobalScalarInt(9))]))]
+                  ),
+                ),
+              ]
+            ),
+          ),
+          (1, MirGlobalScalarInt(5)),
+        ]
+      )
+    ) => ()
+    _ => abort("expected nested sparse MIR global initializer")
+  }
 }
 
 ///|
@@ -135,6 +426,999 @@ test "mir computes expression and global expression types" {
     mir.expr_type(Var("callee"), scope),
     content="FuncPtr(Double, [SInt], true)",
   )
+}
+
+///|
+test "mir lowers scalar function bodies into MIR-owned statements" {
+  let source =
+    #|int main(void) {
+    #|  int x = 6;
+    #|  int y = 7;
+    #|  return x * y;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  let body = mir.bodies["main"]
+  inspect(body.locals.length(), content="2")
+  match mir.interpret_body_i64("main", []) {
+    Ok(value) => inspect(value, content="42")
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "mir body interpreter executes calls branches and loops" {
+  let source =
+    #|int add_if_odd(int acc, int x) {
+    #|  if (x % 2) {
+    #|    return acc + x;
+    #|  }
+    #|  return acc;
+    #|}
+    #|int main(void) {
+    #|  int i = 0;
+    #|  int sum = 0;
+    #|  while (i < 10) {
+    #|    sum = add_if_odd(sum, i);
+    #|    i = i + 1;
+    #|  }
+    #|  return sum;
+    #|}
+  expect_body_interp(source, 25L)
+}
+
+///|
+test "mir body interpreter executes indirect function pointer calls" {
+  let source =
+    #|int bump(int x) { return x + 1; }
+    #|int main(void) {
+    #|  int (*fp)(int) = bump;
+    #|  return fp(20) + (*fp)(20);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter executes returned function pointer calls" {
+  let source =
+    #|int hash(const void *p, int n) { return n + 40; }
+    #|int (*pick(int key_class))(const void *, int) {
+    #|  return &hash;
+    #|}
+    #|int main(void) {
+    #|  int (*xHash)(const void *, int) = pick(1);
+    #|  return (*xHash)("hi", 2);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("pick"), content="true")
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body lowering uses scoped stable local ids" {
+  let source =
+    #|int main(void) {
+    #|  int x = 1;
+    #|  {
+    #|    int x = 40;
+    #|    x = x + 2;
+    #|  }
+    #|  return x;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  let body = mir.bodies["main"]
+  inspect(body.locals.length(), content="2")
+  expect_body_interp(source, 1L)
+}
+
+///|
+test "mir body interpreter executes for break and continue" {
+  let source =
+    #|int main(void) {
+    #|  int sum = 0;
+    #|  for (int i = 0; i < 8; i = i + 1) {
+    #|    if (i == 2) continue;
+    #|    if (i == 6) break;
+    #|    sum = sum + i;
+    #|  }
+    #|  return sum;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 13L)
+}
+
+///|
+test "mir body interpreter executes do while break and continue" {
+  let source =
+    #|int main(void) {
+    #|  int i = 0;
+    #|  int sum = 0;
+    #|  do {
+    #|    i = i + 1;
+    #|    if (i == 2) continue;
+    #|    if (i == 6) break;
+    #|    sum = sum + i;
+    #|  } while (i < 8);
+    #|  return sum;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 13L)
+}
+
+///|
+test "mir body interpreter executes switch fallthrough" {
+  let source =
+    #|int main(void) {
+    #|  int total = 0;
+    #|  for (int i = 0; i < 5; i = i + 1) {
+    #|    switch (i) {
+    #|    case 0:
+    #|      total = total + 3;
+    #|      break;
+    #|    case 1:
+    #|    case 2:
+    #|      total = total + 5;
+    #|      break;
+    #|    case 4:
+    #|      total = total + 7;
+    #|    default:
+    #|      total = total + 11;
+    #|    }
+    #|  }
+    #|  return total;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter executes simple goto" {
+  let source =
+    #|int main(void) {
+    #|  int total = 0;
+    #|  int i = 0;
+    #|loop:
+    #|  i = i + 1;
+    #|  if (i == 2) goto skip;
+    #|  total = total + i;
+    #|skip:
+    #|  if (i < 5) goto loop;
+    #|  return total;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 13L)
+}
+
+///|
+test "mir body interpreter executes scalar updates" {
+  let source =
+    #|int main(void) {
+    #|  int total = 0;
+    #|  int i = 0;
+    #|loop:
+    #|  i++;
+    #|  if (i == 2) goto skip;
+    #|  total += i;
+    #|skip:
+    #|  if (i < 5) goto loop;
+    #|  return total;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 13L)
+}
+
+///|
+test "mir body interpreter preserves postfix update value" {
+  let source =
+    #|int main(void) {
+    #|  int i = 4;
+    #|  int old = i++;
+    #|  return old * 10 + i;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 45L)
+}
+
+///|
+test "mir body interpreter evaluates scalar address dereference cancellation" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  *&x += 5;
+    #|  return *&x;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 9L)
+}
+
+///|
+test "mir body interpreter handles casted scalar address loads and stores" {
+  let source =
+    #|int main(void) {
+    #|  int x = 0;
+    #|  *(int *)(void *)&x = 42;
+    #|  return *(int *)(void *)&x;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter handles scalar local pointers" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int *p = &x;
+    #|  *p += 5;
+    #|  return x + *p;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 18L)
+}
+
+///|
+test "mir body interpreter handles scalar local arrays" {
+  let source =
+    #|int main(void) {
+    #|  int a[3];
+    #|  a[0] = 4;
+    #|  a[1] = a[0] + 5;
+    #|  int *p = &a[1];
+    #|  p[1] = 7;
+    #|  return a[0] + a[1] + a[2];
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 20L)
+}
+
+///|
+test "mir body interpreter decays local arrays in call arguments" {
+  let source =
+    #|int main(void) {
+    #|  char dst[4];
+    #|  __builtin_bzero(dst, 4);
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter handles memory builtin first-arg returns" {
+  let source =
+    #|int main(void) {
+    #|  char src[4];
+    #|  char dst[4];
+    #|  if (__builtin_memcpy(dst, src, 0) != &dst[0]) return 1;
+    #|  if (__builtin_memmove(dst, src, 0) != &dst[0]) return 2;
+    #|  if (__builtin_memset(dst, 0, 0) != &dst[0]) return 3;
+    #|  if (__builtin___memcpy_chk(dst, src, 0, 8) != &dst[0]) return 4;
+    #|  if (__builtin___memmove_chk(dst, src, 0, 8) != &dst[0]) return 5;
+    #|  if (__builtin___memset_chk(dst, 0, 0, 8) != &dst[0]) return 6;
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter handles string destination builtin returns" {
+  let source =
+    #|int main(void) {
+    #|  char *dst = __builtin_alloca(4);
+    #|  if (__builtin_strcpy(dst, "") != dst) return 1;
+    #|  if (__builtin___strcpy_chk(dst, "", 4) != dst) return 2;
+    #|  if (__builtin_strcat(dst, "") != dst) return 3;
+    #|  if (__builtin___strcat_chk(dst, "", 4) != dst) return 4;
+    #|  if (__builtin_strncpy(dst, "", 0) != dst) return 5;
+    #|  if (__builtin___strncpy_chk(dst, "", 0, 4) != dst) return 6;
+    #|  if (__builtin_strncat(dst, "", 0) != dst) return 7;
+    #|  if (__builtin___strncat_chk(dst, "", 0, 4) != dst) return 8;
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter handles checked strl literal lengths" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(8);
+    #|  if (__builtin___strlcpy_chk(dst, (const char *)"abcdef", n += 4, 8) != 6) return 1;
+    #|  if (n != 4) return 2;
+    #|  if (__builtin___strlcat_chk(dst, (const char *)"abc", ((n += 1), 0), 8) != 3) return 3;
+    #|  if (n != 5) return 4;
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter handles local array initializers" {
+  let source =
+    #|int main(void) {
+    #|  int a[5] = { 10, 20, 30, 40, 50 };
+    #|  int *p = &a[4];
+    #|  int *q = &a[1];
+    #|  int *r = q + 1;
+    #|  return (p - q) + *r;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 33L)
+}
+
+///|
+test "mir body interpreter handles fixed local string array initializers" {
+  let source =
+    #|int main(void) {
+    #|  char s[5] = "abc";
+    #|  char exact[3] = "xyz";
+    #|  if (s[0] != 'a' || s[1] != 'b' || s[2] != 'c') return 1;
+    #|  if (s[3] != 0 || s[4] != 0) return 2;
+    #|  if (exact[0] != 'x' || exact[1] != 'y' || exact[2] != 'z') return 3;
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter handles scalar memory prefix updates" {
+  let source =
+    #|struct S { int x; };
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int *p = &x;
+    #|  int a[2];
+    #|  struct S s;
+    #|  a[0] = 2;
+    #|  s.x = 7;
+    #|  ++*p;
+    #|  --a[0];
+    #|  ++s.x;
+    #|  return x + a[0] + s.x;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 14L)
+}
+
+///|
+test "mir body interpreter handles side effecting scalar memory prefix updates" {
+  let source =
+    #|int main(void) {
+    #|  int a[2];
+    #|  int i = 0;
+    #|  a[0] = 4;
+    #|  int got = ++a[i++];
+    #|  return got * 10 + a[0] + i;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 56L)
+}
+
+///|
+test "mir body interpreter handles side effecting scalar memory compound updates" {
+  let source =
+    #|int main(void) {
+    #|  int a[2];
+    #|  int i = 0;
+    #|  a[0] = 4;
+    #|  int got = (a[i++] += 3);
+    #|  return got * 10 + a[0] + i;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 78L)
+}
+
+///|
+test "mir body interpreter handles side effecting non-additive compound updates" {
+  let source =
+    #|int main(void) {
+    #|  int a[2];
+    #|  int i = 0;
+    #|  a[0] = 4;
+    #|  int got = (a[i++] *= 3);
+    #|  return got * 10 + a[0] + i;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 133L)
+}
+
+///|
+test "mir body interpreter handles scalar memory postfix updates" {
+  let source =
+    #|struct S { int x; };
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int *p = &x;
+    #|  int a[2];
+    #|  int i = 0;
+    #|  struct S s;
+    #|  a[0] = 9;
+    #|  s.x = 7;
+    #|  int old_p = (*p)++;
+    #|  int old_a = a[i++]--;
+    #|  int old_s = s.x++;
+    #|  return old_p * 1000 + old_a * 100 + old_s * 10 + x + a[0] + s.x + i;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 4992L)
+}
+
+///|
+test "mir body lowering folds scalar builtin calls" {
+  let source =
+    #|int main(void) {
+    #|  int x = 0;
+    #|  return __builtin_constant_p(1 + 2) * 10 +
+    #|    __builtin_constant_p(x) +
+    #|    __builtin_unpredictable(5) +
+    #|    (__builtin_bswap32(0x01020304u) == 0x04030201u) +
+    #|    __builtin_flt_rounds() +
+    #|    (__builtin_object_size("abc", 0) == 4) +
+    #|    (__builtin_dynamic_object_size("a\0bc", 2) == 5) +
+    #|    (__builtin_object_size(&x, 0) == sizeof(x)) +
+    #|    (__builtin_strlen((char *)"hello") == 5) +
+    #|    (__builtin_strlen("a\0bc") == 1);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 22L)
+}
+
+///|
+test "mir body lowering handles side effect free identity builtins" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  void *p = (void *)32;
+    #|  void *ra = (void *)77;
+    #|  return __builtin_expect(x, 1) +
+    #|    __builtin_expect_with_probability(x, 0, 0.9) +
+    #|    ((unsigned long)__builtin_assume_aligned(p, 16) == 32ul) +
+    #|    ((unsigned long)__builtin_extract_return_addr(ra) == 77ul) +
+    #|    ((unsigned long)__builtin_frob_return_addr(ra) == 77ul);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 11L)
+}
+
+///|
+test "mir body interpreter handles no-op builtins" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  __builtin_prefetch((void *)(long)(side += 1), 0, 0);
+    #|  __builtin_assume(side += 10);
+    #|  return side + 41;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter handles alloca return size and nullness" {
+  let source =
+    #|int main(void) {
+    #|  int n = 16;
+    #|  void *p = __builtin_alloca(n += 1);
+    #|  if (n != 17) return 1;
+    #|  if (p == 0) return 2;
+    #|  char *a = __builtin_alloca(n += 2);
+    #|  char *b = __builtin_alloca(n += 3);
+    #|  if (n != 22) return 3;
+    #|  if (a == 0 || b == 0) return 4;
+    #|  if (a == b || a == p || b == p) return 5;
+    #|  return sizeof(__builtin_alloca(16)) + 34;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter handles scalar globals" {
+  let source =
+    #|int g = 5;
+    #|int h;
+    #|int bump(void) {
+    #|  g += 3;
+    #|  h = g++;
+    #|  return h;
+    #|}
+    #|int main(void) {
+    #|  h = 2;
+    #|  return bump() + g + h;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("bump"), content="true")
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 25L)
+}
+
+///|
+test "mir body interpreter handles scalar global arrays" {
+  let source =
+    #|int a[3];
+    #|int main(void) {
+    #|  a[0] = 4;
+    #|  a[1] = a[0] + 5;
+    #|  int *p = &a[1];
+    #|  p[1] = 7;
+    #|  return a[0] + a[1] + a[2];
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 20L)
+}
+
+///|
+test "mir body interpreter handles scalar global pointer loads" {
+  let source =
+    #|int a[2];
+    #|int *p;
+    #|int main(void) {
+    #|  a[0] = 21;
+    #|  p = &a[0];
+    #|  if (*p != 21) return 1;
+    #|  *p = 42;
+    #|  return *p;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter handles initialized scalar global arrays" {
+  let source =
+    #|int a[3] = {1, 2, 3};
+    #|int main(void) {
+    #|  a[1] += 5;
+    #|  return a[0] + a[1] + a[2];
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 11L)
+}
+
+///|
+test "mir body interpreter handles sparse initialized scalar global arrays" {
+  let source =
+    #|int a[4] = { [2] = 9, [0] = 1 };
+    #|int main(void) {
+    #|  return a[0] + a[1] + a[2] + a[3];
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 10L)
+}
+
+///|
+test "mir body interpreter handles string literal byte loads" {
+  let source =
+    #|int main(void) {
+    #|  char *s = "abc";
+    #|  return s[1] + "xy"[0] + "z"[1];
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 218L)
+}
+
+///|
+test "mir body interpreter handles scalar compound literals" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  int a = (int){40};
+    #|  unsigned char b = (unsigned char){255 + 1};
+    #|  int c = (int){side += 2};
+    #|  return a + b + c + side;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 44L)
+}
+
+///|
+test "mir body interpreter handles address of scalar compound literals" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  int *p = &(int){side += 3};
+    #|  return *p + side;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 6L)
+}
+
+///|
+test "mir body interpreter handles address of aggregate compound literals" {
+  let source =
+    #|struct Pair { int x; int y; };
+    #|int main(void) {
+    #|  return (&(struct Pair){ 20, 22 })->x +
+    #|    (&(struct Pair){ 20, 22 })->y;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter handles casted address of aggregate compound literals" {
+  let source =
+    #|struct Pair { int x; int y; };
+    #|int main(void) {
+    #|  return ((struct Pair *)&(struct Pair){ 20, 22 })->x +
+    #|    ((struct Pair *)&(struct Pair){ 20, 22 })->y;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body lowering cancels address of aggregate member objects" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { struct Inner inner; };
+    #|int main(void) {
+    #|  struct S s = { { 42 } };
+    #|  return (&s.inner)->z;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body lowering cancels casted address of aggregate member objects" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { struct Inner inner; };
+    #|int main(void) {
+    #|  struct S s = { { 42 } };
+    #|  return ((struct Inner *)&s.inner)->z;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body lowering handles nested casted known aggregate addresses" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { struct Inner inner; };
+    #|struct Pair { int x; int y; };
+    #|int main(void) {
+    #|  struct S s = { { 20 } };
+    #|  return ((struct Inner *)(void *)&s.inner)->z +
+    #|    ((struct Pair *)(void *)&(struct Pair){ 1, 22 })->y;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body lowering keeps side effecting ignored builtin operands" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int side = 0;
+    #|  return __builtin_expect(x, side += 1) + side;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 5L)
+}
+
+///|
+test "mir body interpreter handles scalar aggregate fields" {
+  let source =
+    #|struct S { int x; unsigned char y; };
+    #|int main(void) {
+    #|  struct S s;
+    #|  s.x = 4;
+    #|  s.y = 250 + 10;
+    #|  return s.x + s.y;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 8L)
+}
+
+///|
+test "mir body interpreter handles local struct initializers" {
+  let source =
+    #|struct S { int x; unsigned char y; int z; };
+    #|int main(void) {
+    #|  int side = 1;
+    #|  struct S s = { side += 2, 250 + 10 };
+    #|  return s.x + s.y + s.z + side;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 10L)
+}
+
+///|
+test "mir body interpreter handles nested local struct initializers" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct Outer { int tag; struct Inner inner; int tail; };
+    #|int main(void) {
+    #|  struct Outer o = { .inner = { 22 }, .tag = 20 };
+    #|  return o.tag + o.inner.z + o.tail;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter handles local struct copy initializers" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { int tag; struct Inner inner; int tail; };
+    #|int main(void) {
+    #|  struct S a = { .inner = { 22 }, .tag = 20 };
+    #|  struct S b = a;
+    #|  a.inner.z = 1;
+    #|  return b.tag + b.inner.z + b.tail;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter handles ignored local struct assignments" {
+  let source =
+    #|struct S { int x; int y; };
+    #|int main(void) {
+    #|  struct S a = { 20, 22 };
+    #|  struct S b = { 1, 2 };
+    #|  b = a;
+    #|  a.x = 0;
+    #|  return b.x + b.y;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter handles ignored local struct compound literal assignments" {
+  let source =
+    #|struct S { int x; int y; int z; };
+    #|int main(void) {
+    #|  struct S b = { 19, 2, 3 };
+    #|  b = (struct S){ b.x + 1, 22 };
+    #|  return b.x + b.y + b.z;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter handles nested aggregate compound literal assignments" {
+  let source =
+    #|struct Inner { int z; int q; };
+    #|struct S { int tag; struct Inner inner; int a[2]; int tail; };
+    #|int main(void) {
+    #|  struct S s = {0};
+    #|  s = (struct S){
+    #|    .tag = 1,
+    #|    .inner = { .z = 20, .q = 2 },
+    #|    .a = { [1] = 4, [0] = 3 },
+    #|    .tail = 12
+    #|  };
+    #|  return s.tag + s.inner.z + s.inner.q + s.a[0] + s.a[1] + s.tail;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter handles scalar array fields in struct copies" {
+  let source =
+    #|struct S { int a[2]; int z; };
+    #|int main(void) {
+    #|  struct S s;
+    #|  s.a[0] = 20;
+    #|  s.a[1] = 21;
+    #|  s.z = 1;
+    #|  struct S b = s;
+    #|  s.a[0] = 0;
+    #|  return b.a[0] + b.a[1] + b.z;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter handles local union initializers" {
+  let source =
+    #|union U { int x; unsigned char c; };
+    #|int main(void) {
+    #|  union U u = { 42 };
+    #|  return u.x;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body lowering handles implicit external scalar calls" {
+  let source =
+    #|int main(void) {
+    #|  return external_value();
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+}
+
+///|
+test "mir body interpreter handles sync synchronize builtin" {
+  let source =
+    #|int main(void) {
+    #|  __sync_synchronize();
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter handles atomic fence builtins" {
+  let source =
+    #|int main(void) {
+    #|  int x = 0;
+    #|  __atomic_thread_fence((x = x + 1, 5));
+    #|  __atomic_signal_fence((x = x + 1, 5));
+    #|  __c11_atomic_thread_fence((x = x + 1, 5));
+    #|  __c11_atomic_signal_fence((x = x + 1, 5));
+    #|  return x + 38;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter models frame and return address nullness" {
+  let source =
+    #|int main(void) {
+    #|  void *fa = __builtin_frame_address(0);
+    #|  void *ra = __builtin_return_address(0);
+    #|  if (fa == 0) return 1;
+    #|  if (ra == 0) return 2;
+    #|  if (__builtin_frame_address(1) != 0) return 3;
+    #|  if (__builtin_return_address(1) != 0) return 4;
+    #|  if (__builtin_extract_return_addr(ra) != ra) return 5;
+    #|  if (__builtin_frob_return_addr(ra) != ra) return 6;
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter handles ignored local union assignments" {
+  let source =
+    #|union U { unsigned char c; int x; };
+    #|int main(void) {
+    #|  union U a = { .x = 19 };
+    #|  union U b = { .c = 1 };
+    #|  b = a;
+    #|  a.x = 0;
+    #|  b = (union U){ .x = b.x + 21 };
+    #|  return b.x + 2;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter handles nested union compound literal assignments" {
+  let source =
+    #|union U { unsigned char c; int x; };
+    #|struct S { union U u; int tail; };
+    #|int main(void) {
+    #|  struct S s = {0};
+    #|  s = (struct S){ .u = { .x = 40 }, .tail = 2 };
+    #|  return s.u.x + s.tail;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body lowering handles nested aggregate fields" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { struct Inner inner; };
+    #|int main(void) {
+    #|  struct S s;
+    #|  s.inner.z = 7;
+    #|  return s.inner.z;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 7L)
+}
+
+///|
+test "mir body interpreter handles nested global aggregate fields" {
+  let source =
+    #|struct Inner { int z; char c; };
+    #|struct S { struct Inner inner; int tail; };
+    #|struct S g;
+    #|int main(void) {
+    #|  g.inner.z = 9;
+    #|  g.inner.c = 4;
+    #|  g.tail = 11;
+    #|  return g.inner.z + g.inner.c + g.tail;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 24L)
+}
+
+///|
+test "mir body lowering refuses unsupported parser constructs" {
+  let source =
+    #|int main(void) {
+    #|  goto *0;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="false")
+  match mir.interpret_body_i64("main", []) {
+    Ok(_) => abort("expected missing MIR body")
+    Err(err) => inspect(err.contains("no MIR body"), content="true")
+  }
 }
 
 ///|
@@ -455,6 +1739,16 @@ test "mir interpreter executes integer control flow and globals" {
 }
 
 ///|
+test "mir interpreters use merged global initializer after extern declaration" {
+  let source =
+    #|extern int g;
+    #|int g = 7;
+    #|int main(void) { return g; }
+  expect_interp(source, 7L)
+  expect_body_interp(source, 7L)
+}
+
+///|
 test "mir interpreter evaluates scalar address dereference cancellation" {
   let source =
     #|int main(void) {
@@ -494,6 +1788,7 @@ test "mir interpreter evaluates integer overflow builtins" {
     #|  return total;
     #|}
   expect_interp(source, 7L)
+  expect_body_interp(source, 7L)
 }
 
 ///|
@@ -1031,6 +2326,7 @@ test "mir interpreter models void builtin return sizes" {
     #|    variadic(0, 1);
     #|}
   expect_interp(source, 0L)
+  expect_body_interp(source, 0L)
 }
 
 ///|
@@ -1135,6 +2431,7 @@ test "mir interpreter evaluates unobserved varargs setup builtins" {
     #|  return variadic(41, 1, 2);
     #|}
   expect_interp(source, 42L)
+  expect_body_interp(source, 42L)
 }
 
 ///|
@@ -1672,6 +2969,7 @@ test "mir interpreter evaluates ignored unsupported local initializer side effec
     #|  return side + 35;
     #|}
   expect_interp(source, 42L)
+  expect_body_interp(source, 42L)
 }
 
 ///|

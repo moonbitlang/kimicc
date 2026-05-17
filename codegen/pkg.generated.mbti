@@ -10,6 +10,20 @@ import {
 // Values
 pub fn generate_assembly_for_target(@parser.Program, @target.Target) -> String
 
+pub fn generate_assembly_for_target_strict(@parser.Program, @target.Target) -> Result[String, String]
+
+pub fn generate_assembly_for_target_with_parser_fallback(@parser.Program, @target.Target) -> String
+
+pub fn generate_assembly_from_mir(@mir.Program) -> String
+
+pub fn generate_assembly_from_mir_module(@mir.MirModule) -> String
+
+pub fn generate_assembly_from_mir_module_strict(@mir.MirModule) -> Result[String, String]
+
+pub fn generate_assembly_from_mir_strict(@mir.Program) -> Result[String, String]
+
+pub fn generate_assembly_from_mir_with_parser_fallback(@mir.Program) -> String
+
 pub fn generate_jit_image(@parser.Program) -> JitImage
 
 pub fn generate_macho_object(@parser.Program) -> Bytes
@@ -20,6 +34,7 @@ pub fn generate_macho_object(@parser.Program) -> Bytes
 pub struct Codegen {
   output : StringBuilder
   mut mir : @mir.Program?
+  mut mir_module : @mir.MirModule?
   mut label_counter : Int
   mut local_offsets : Map[String, Int]
   mut var_types : Map[String, @parser.Type]
@@ -35,7 +50,7 @@ pub struct Codegen {
   strings : Array[String]
   mut break_label : String?
   mut continue_label : String?
-  globals : Map[String, @parser.GlobalDecl]
+  globals : Map[String, CodegenGlobalDecl]
   mut emitted_labels : Map[String, String]
   mut defined_labels : Map[String, Bool]
   mut fp_literals : Array[Double]
@@ -46,6 +61,8 @@ pub struct Codegen {
 }
 pub fn Codegen::generate(Self, @parser.Program) -> String
 pub fn Codegen::new() -> Self
+
+type CodegenGlobalDecl
 
 pub struct JitImage {
   code : Bytes

@@ -93,6 +93,127 @@ async test "run arrays fixture" {
 }
 
 ///|
+async test "e2e MIR body scalar globals" {
+  let source =
+    #|int g = 5;
+    #|int h;
+    #|int bump(void) {
+    #|  g += 3;
+    #|  h = g++;
+    #|  return h;
+    #|}
+    #|int main(void) {
+    #|  h = 2;
+    #|  return bump() + g + h;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="25")
+}
+
+///|
+async test "e2e MIR body no-op builtins" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  __builtin_prefetch((void *)(long)(side += 1), 0, 0);
+    #|  __builtin_assume(side += 10);
+    #|  return side + 41;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "e2e MIR body scalar global arrays" {
+  let source =
+    #|int a[3];
+    #|int main(void) {
+    #|  a[0] = 4;
+    #|  a[1] = a[0] + 5;
+    #|  int *p = &a[1];
+    #|  p[1] = 7;
+    #|  return a[0] + a[1] + a[2];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="20")
+}
+
+///|
+async test "e2e MIR body initialized scalar global arrays" {
+  let source =
+    #|int a[3] = {1, 2, 3};
+    #|int main(void) {
+    #|  a[1] += 5;
+    #|  return a[0] + a[1] + a[2];
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="11")
+}
+
+///|
+async test "e2e MIR body scalar memory postfix updates" {
+  let source =
+    #|struct S { int x; };
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int *p = &x;
+    #|  int a[2];
+    #|  int i = 0;
+    #|  struct S s;
+    #|  a[0] = 9;
+    #|  s.x = 7;
+    #|  int old_p = (*p)++;
+    #|  int old_a = a[i++]--;
+    #|  int old_s = s.x++;
+    #|  return old_p * 1000 + old_a * 100 + old_s * 10 + x + a[0] + s.x + i;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="128")
+}
+
+///|
+async test "e2e MIR body side effecting memory prefix update" {
+  let source =
+    #|int main(void) {
+    #|  int a[2];
+    #|  int i = 0;
+    #|  a[0] = 4;
+    #|  int got = ++a[i++];
+    #|  return got * 10 + a[0] + i;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="56")
+}
+
+///|
+async test "e2e MIR body side effecting memory compound update" {
+  let source =
+    #|int main(void) {
+    #|  int a[2];
+    #|  int i = 0;
+    #|  a[0] = 4;
+    #|  int got = (a[i++] += 3);
+    #|  return got * 10 + a[0] + i;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="78")
+}
+
+///|
+async test "e2e MIR body side effecting non-additive compound update" {
+  let source =
+    #|int main(void) {
+    #|  int a[2];
+    #|  int i = 0;
+    #|  a[0] = 4;
+    #|  int got = (a[i++] *= 3);
+    #|  return got * 10 + a[0] + i;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="133")
+}
+
+///|
 async test "e2e c11 generic selection chooses compatible type" {
   let source =
     #|int main(void) {
@@ -429,6 +550,129 @@ async test "local struct definition and typedef" {
 }
 
 ///|
+async test "nested local struct initializer" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct Outer { int tag; struct Inner inner; int tail; };
+    #|int main(void) {
+    #|  struct Outer o = { .inner = { 22 }, .tag = 20 };
+    #|  return o.tag + o.inner.z + o.tail;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "local struct copy initializer" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { int tag; struct Inner inner; int tail; };
+    #|int main(void) {
+    #|  struct S a = { .inner = { 22 }, .tag = 20 };
+    #|  struct S b = a;
+    #|  a.inner.z = 1;
+    #|  return b.tag + b.inner.z + b.tail;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "ignored local struct assignment" {
+  let source =
+    #|struct S { int x; int y; };
+    #|int main(void) {
+    #|  struct S a = { 20, 22 };
+    #|  struct S b = { 1, 2 };
+    #|  b = a;
+    #|  a.x = 0;
+    #|  return b.x + b.y;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "ignored local struct compound literal assignment" {
+  let source =
+    #|struct S { int x; int y; int z; };
+    #|int main(void) {
+    #|  struct S b = { 19, 2, 3 };
+    #|  b = (struct S){ b.x + 1, 22 };
+    #|  return b.x + b.y + b.z;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "nested aggregate compound literal assignment" {
+  let source =
+    #|struct Inner { int z; int q; };
+    #|struct S { int tag; struct Inner inner; int a[2]; int tail; };
+    #|int main(void) {
+    #|  struct S s = {0};
+    #|  s = (struct S){
+    #|    .tag = 1,
+    #|    .inner = { .z = 20, .q = 2 },
+    #|    .a = { [1] = 4, [0] = 3 },
+    #|    .tail = 12
+    #|  };
+    #|  return s.tag + s.inner.z + s.inner.q + s.a[0] + s.a[1] + s.tail;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "scalar array fields in struct copies" {
+  let source =
+    #|struct S { int a[2]; int z; };
+    #|int main(void) {
+    #|  struct S s;
+    #|  s.a[0] = 20;
+    #|  s.a[1] = 21;
+    #|  s.z = 1;
+    #|  struct S b = s;
+    #|  s.a[0] = 0;
+    #|  return b.a[0] + b.a[1] + b.z;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "local union initializer" {
+  let source =
+    #|union U { int x; unsigned char c; };
+    #|int main(void) {
+    #|  union U u = { 42 };
+    #|  return u.x;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "local union and nested union compound literal assignments" {
+  let source =
+    #|union U { unsigned char c; int x; };
+    #|struct S { union U u; int tail; };
+    #|int main(void) {
+    #|  union U a = { .x = 19 };
+    #|  union U b = { .c = 1 };
+    #|  b = a;
+    #|  a.x = 0;
+    #|  b = (union U){ .x = b.x + 1 };
+    #|  struct S s = {0};
+    #|  s = (struct S){ .u = { .x = 20 }, .tail = 2 };
+    #|  return b.x + s.u.x + s.tail;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "comma separated typedef" {
   let source =
     #|typedef int foo_t, bar_t, *baz_t;
@@ -500,6 +744,95 @@ async test "compound literal" {
     #|}
   let assembly = compile(source)
   assert_true(assembly.contains("_main:"))
+}
+
+///|
+async test "address of scalar compound literal" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  int *p = &(int){side += 3};
+    #|  return *p + side;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="6")
+}
+
+///|
+async test "casted scalar address load store" {
+  let source =
+    #|int main(void) {
+    #|  int x = 0;
+    #|  *(int *)(void *)&x = 42;
+    #|  return *(int *)(void *)&x;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "address of aggregate compound literal" {
+  let source =
+    #|struct Pair { int x; int y; };
+    #|int main(void) {
+    #|  return (&(struct Pair){ 20, 22 })->x +
+    #|    (&(struct Pair){ 20, 22 })->y;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "casted address of aggregate compound literal" {
+  let source =
+    #|struct Pair { int x; int y; };
+    #|int main(void) {
+    #|  return ((struct Pair *)&(struct Pair){ 20, 22 })->x +
+    #|    ((struct Pair *)&(struct Pair){ 20, 22 })->y;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "address of aggregate member object" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { struct Inner inner; };
+    #|int main(void) {
+    #|  struct S s = { { 42 } };
+    #|  return (&s.inner)->z;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "casted address of aggregate member object" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { struct Inner inner; };
+    #|int main(void) {
+    #|  struct S s = { { 42 } };
+    #|  return ((struct Inner *)&s.inner)->z;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "nested casted known aggregate addresses" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { struct Inner inner; };
+    #|struct Pair { int x; int y; };
+    #|int main(void) {
+    #|  struct S s = { { 20 } };
+    #|  return ((struct Inner *)(void *)&s.inner)->z +
+    #|    ((struct Pair *)(void *)&(struct Pair){ 1, 22 })->y;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
 }
 
 ///|
@@ -707,6 +1040,40 @@ async test "large struct field offset materializes address" {
     #|}
   let exit_code = run_source_async(source)
   inspect(exit_code, content="0")
+}
+
+///|
+async test "nested struct field assignment" {
+  let source =
+    #|struct Inner { int z; char c; };
+    #|struct Outer { char tag; struct Inner inner; int tail; };
+    #|int main() {
+    #|  struct Outer s;
+    #|  s.tag = 1;
+    #|  s.inner.z = 37;
+    #|  s.inner.c = 5;
+    #|  s.tail = 11;
+    #|  return s.inner.z + s.inner.c;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "nested global struct field assignment" {
+  let source =
+    #|struct Inner { int z; char c; };
+    #|struct Outer { char tag; struct Inner inner; int tail; };
+    #|struct Outer g;
+    #|int main() {
+    #|  g.tag = 1;
+    #|  g.inner.z = 37;
+    #|  g.inner.c = 5;
+    #|  g.tail = 11;
+    #|  return g.inner.z + g.inner.c;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
 }
 
 ///|
@@ -1209,6 +1576,33 @@ async test "char array initializer" {
     #|}
   let exit_code = run_source_async(source)
   inspect(exit_code, content="6")
+}
+
+///|
+async test "fixed local string array initializer" {
+  let source =
+    #|int main(void) {
+    #|  char s[5] = "abc";
+    #|  char exact[3] = "xyz";
+    #|  if (s[0] != 'a' || s[1] != 'b' || s[2] != 'c') return 1;
+    #|  if (s[3] != 0 || s[4] != 0) return 2;
+    #|  if (exact[0] != 'x' || exact[1] != 'y' || exact[2] != 'z') return 3;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
+async test "indirect function pointer call" {
+  let source =
+    #|int bump(int x) { return x + 1; }
+    #|int main(void) {
+    #|  int (*fp)(int) = bump;
+    #|  return fp(20) + (*fp)(20);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
 }
 
 ///|

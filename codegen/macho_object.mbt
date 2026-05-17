@@ -1552,19 +1552,32 @@ fn encode_fmov(rest : String) -> UInt {
 }
 
 ///|
-fn encode_fp_three_register(rest : String, base : UInt, name : String) -> UInt {
+fn encode_fp_three_register(
+  rest : String,
+  double_base : UInt,
+  single_base : UInt,
+  name : String,
+) -> UInt {
   let parts = split_operands(rest)
   if parts.length() != 3 {
     abort("malformed " + name + " instruction")
   }
-  if !parts[0].has_prefix("d") ||
-    !parts[1].has_prefix("d") ||
-    !parts[2].has_prefix("d") {
+  if (
+      !parts[0].has_prefix("d") ||
+      !parts[1].has_prefix("d") ||
+      !parts[2].has_prefix("d")
+    ) &&
+    (
+      !parts[0].has_prefix("s") ||
+      !parts[1].has_prefix("s") ||
+      !parts[2].has_prefix("s")
+    ) {
     abort("unsupported " + name + " operand width in object backend")
   }
   let rd = parse_fp_register(parts[0])
   let rn = parse_fp_register(parts[1])
   let rm = parse_fp_register(parts[2])
+  let base = if parts[0].has_prefix("d") { double_base } else { single_base }
   base |
   (rm.reinterpret_as_uint() << 16) |
   (rn.reinterpret_as_uint() << 5) |
@@ -2199,7 +2212,7 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
   let mut current_section = -1
   for raw in assembly.split("\n") {
     let line = raw.trim().to_owned()
-    if line == "" {
+    if line == "" || line.has_prefix("//") || line.has_prefix("#") {
       continue
     } else if line.has_prefix(".section") {
       current_section = parse_section_index(sections, line)
@@ -2420,22 +2433,42 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
       } else if line.has_prefix("fadd\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_fp_three_register(slice_from(line, 5), 0x1e602800U, "fadd"),
+          encode_fp_three_register(
+            slice_from(line, 5),
+            0x1e602800U,
+            0x1e202800U,
+            "fadd",
+          ),
         )
       } else if line.has_prefix("fsub\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_fp_three_register(slice_from(line, 5), 0x1e603800U, "fsub"),
+          encode_fp_three_register(
+            slice_from(line, 5),
+            0x1e603800U,
+            0x1e203800U,
+            "fsub",
+          ),
         )
       } else if line.has_prefix("fmul\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_fp_three_register(slice_from(line, 5), 0x1e600800U, "fmul"),
+          encode_fp_three_register(
+            slice_from(line, 5),
+            0x1e600800U,
+            0x1e200800U,
+            "fmul",
+          ),
         )
       } else if line.has_prefix("fdiv\t") {
         append_u32_to_section(
           sections[current_section],
-          encode_fp_three_register(slice_from(line, 5), 0x1e601800U, "fdiv"),
+          encode_fp_three_register(
+            slice_from(line, 5),
+            0x1e601800U,
+            0x1e201800U,
+            "fdiv",
+          ),
         )
       } else if line.has_prefix("fneg\t") {
         append_u32_to_section(

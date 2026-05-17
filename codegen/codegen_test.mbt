@@ -5,8 +5,3302 @@ test "generate simple function" {
   let codegen = @codegen.Codegen::new()
   let assembly = codegen.generate(prog)
   inspect(assembly.contains("_main:"), content="true")
+  inspect(assembly.contains("kimicc: mir-body"), content="false")
   inspect(assembly.contains("\tmov\tx9, #42"), content="true")
   inspect(assembly.contains("\tret"), content="true")
+}
+
+///|
+fn generate_darwin_mir_fallback(source : String) -> String {
+  @codegen.generate_assembly_from_mir_with_parser_fallback(
+    @mir.lower(@parser.parse(source), @target.Target::default()),
+  )
+}
+
+///|
+test "generate darwin arm64 assembly from MIR strict" {
+  let source = "int main(void) { int x = 40; return x + 2; }"
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_strict(mir) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tadd\tx9, x9, x10"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 assembly for target strict" {
+  let source = "int main(void) { int x = 40; return x + 2; }"
+  let prog = @parser.parse(source)
+  match
+    @codegen.generate_assembly_for_target_strict(
+      prog,
+      @target.Target::default(),
+    ) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tadd\tx9, x9, x10"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 assembly from parser-free MIR module strict" {
+  let source = "int main(void) { int x = 40; return x + 2; }"
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  let mir_module = mir.to_module()
+  match @codegen.generate_assembly_from_mir_module_strict(mir_module) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tadd\tx9, x9, x10"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 assembly from parser-free MIR module" {
+  let source = "int main(void) { int x = 40; return x + 2; }"
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  let assembly = @codegen.generate_assembly_from_mir_module(mir.to_module())
+  inspect(assembly.contains("_main:"), content="true")
+  inspect(assembly.contains("kimicc: mir-body"), content="true")
+  inspect(assembly.contains("\tadd\tx9, x9, x10"), content="true")
+}
+
+///|
+test "generate darwin arm64 strict MIR scalar compound literals" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  int a = (int){40};
+    #|  unsigned char b = (unsigned char){255 + 1};
+    #|  int c = (int){side += 2};
+    #|  return a + b + c + side;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR address of scalar compound literal" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  int *p = &(int){side += 3};
+    #|  return *p + side;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR casted scalar address load store" {
+  let source =
+    #|int main(void) {
+    #|  int x = 0;
+    #|  *(int *)(void *)&x = 42;
+    #|  return *(int *)(void *)&x;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR address of aggregate compound literal" {
+  let source =
+    #|struct Pair { int x; int y; };
+    #|int main(void) {
+    #|  return (&(struct Pair){ 20, 22 })->x +
+    #|    (&(struct Pair){ 20, 22 })->y;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR casted address of aggregate compound literal" {
+  let source =
+    #|struct Pair { int x; int y; };
+    #|int main(void) {
+    #|  return ((struct Pair *)&(struct Pair){ 20, 22 })->x +
+    #|    ((struct Pair *)&(struct Pair){ 20, 22 })->y;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR address of aggregate member object" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { struct Inner inner; };
+    #|int main(void) {
+    #|  struct S s = { { 42 } };
+    #|  return (&s.inner)->z;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR casted address of aggregate member object" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { struct Inner inner; };
+    #|int main(void) {
+    #|  struct S s = { { 42 } };
+    #|  return ((struct Inner *)&s.inner)->z;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR nested casted known aggregate addresses" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { struct Inner inner; };
+    #|struct Pair { int x; int y; };
+    #|int main(void) {
+    #|  struct S s = { { 20 } };
+    #|  return ((struct Inner *)(void *)&s.inner)->z +
+    #|    ((struct Pair *)(void *)&(struct Pair){ 1, 22 })->y;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR local struct initializer" {
+  let source =
+    #|struct S { int x; unsigned char y; int z; };
+    #|int main(void) {
+    #|  int side = 1;
+    #|  struct S s = { side += 2, 250 + 10 };
+    #|  return s.x + s.y + s.z + side;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR nested local struct initializer" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct Outer { int tag; struct Inner inner; int tail; };
+    #|int main(void) {
+    #|  struct Outer o = { .inner = { 22 }, .tag = 20 };
+    #|  return o.tag + o.inner.z + o.tail;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR local struct copy initializer" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { int tag; struct Inner inner; int tail; };
+    #|int main(void) {
+    #|  struct S a = { .inner = { 22 }, .tag = 20 };
+    #|  struct S b = a;
+    #|  a.inner.z = 1;
+    #|  return b.tag + b.inner.z + b.tail;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR ignored local struct assignment" {
+  let source =
+    #|struct S { int x; int y; };
+    #|int main(void) {
+    #|  struct S a = { 20, 22 };
+    #|  struct S b = { 1, 2 };
+    #|  b = a;
+    #|  a.x = 0;
+    #|  return b.x + b.y;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR ignored local struct compound literal assignment" {
+  let source =
+    #|struct S { int x; int y; int z; };
+    #|int main(void) {
+    #|  struct S b = { 19, 2, 3 };
+    #|  b = (struct S){ b.x + 1, 22 };
+    #|  return b.x + b.y + b.z;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR nested aggregate compound literal assignment" {
+  let source =
+    #|struct Inner { int z; int q; };
+    #|struct S { int tag; struct Inner inner; int a[2]; int tail; };
+    #|int main(void) {
+    #|  struct S s = {0};
+    #|  s = (struct S){
+    #|    .tag = 1,
+    #|    .inner = { .z = 20, .q = 2 },
+    #|    .a = { [1] = 4, [0] = 3 },
+    #|    .tail = 12
+    #|  };
+    #|  return s.tag + s.inner.z + s.inner.q + s.a[0] + s.a[1] + s.tail;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR scalar array fields in struct copies" {
+  let source =
+    #|struct S { int a[2]; int z; };
+    #|int main(void) {
+    #|  struct S s;
+    #|  s.a[0] = 20;
+    #|  s.a[1] = 21;
+    #|  s.z = 1;
+    #|  struct S b = s;
+    #|  s.a[0] = 0;
+    #|  return b.a[0] + b.a[1] + b.z;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR local union initializer" {
+  let source =
+    #|union U { int x; unsigned char c; };
+    #|int main(void) {
+    #|  union U u = { 42 };
+    #|  return u.x;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR ignored local union assignment" {
+  let source =
+    #|union U { unsigned char c; int x; };
+    #|int main(void) {
+    #|  union U a = { .x = 19 };
+    #|  union U b = { .c = 1 };
+    #|  b = a;
+    #|  a.x = 0;
+    #|  b = (union U){ .x = b.x + 21 };
+    #|  return b.x + 2;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR nested union compound literal assignment" {
+  let source =
+    #|union U { unsigned char c; int x; };
+    #|struct S { union U u; int tail; };
+    #|int main(void) {
+    #|  struct S s = {0};
+    #|  s = (struct S){ .u = { .x = 40 }, .tail = 2 };
+    #|  return s.u.x + s.tail;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR local array initializer" {
+  let source =
+    #|int main(void) {
+    #|  int a[5] = { 10, 20, 30, 40, 50 };
+    #|  int *p = &a[4];
+    #|  int *q = &a[1];
+    #|  int *r = q + 1;
+    #|  return (p - q) + *r;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tsdiv\tx9, x9, x10"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR fixed local string array initializer" {
+  let source =
+    #|int main(void) {
+    #|  char s[5] = "abc";
+    #|  char exact[3] = "xyz";
+    #|  if (s[0] != 'a' || s[1] != 'b' || s[2] != 'c') return 1;
+    #|  if (s[3] != 0 || s[4] != 0) return 2;
+    #|  if (exact[0] != 'x' || exact[1] != 'y' || exact[2] != 'z') return 3;
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR indirect function pointer call" {
+  let source =
+    #|int bump(int x) { return x + 1; }
+    #|int main(void) {
+    #|  int (*fp)(int) = bump;
+    #|  return fp(20) + (*fp)(20);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tblr\tx15"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR returned function pointer call" {
+  let source =
+    #|int hash(const void *p, int n) { return n + 40; }
+    #|int (*pick(int key_class))(const void *, int) {
+    #|  return &hash;
+    #|}
+    #|int main(void) {
+    #|  int (*xHash)(const void *, int) = pick(1);
+    #|  return (*xHash)("hi", 2);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_pick:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tblr\tx15"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR implicit external scalar call" {
+  let source =
+    #|int main(void) {
+    #|  return external_value();
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tbl\t_external_value"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR double underscore external scalar call" {
+  let source =
+    #|int __kimicc_external(void);
+    #|int main(void) {
+    #|  return __kimicc_external();
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tbl\t___kimicc_external"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "strict MIR rejects implicit external scalar call arguments" {
+  let source =
+    #|int main(void) {
+    #|  return strcmp("kimicc", "kimicc");
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(_) => abort("expected strict MIR implicit call rejection")
+    Err(err) =>
+      inspect(
+        err.contains("unsupported MIR body codegen for main"),
+        content="true",
+      )
+  }
+}
+
+///|
+test "strict MIR still rejects unsupported builtin direct calls" {
+  let source =
+    #|int main(void) {
+    #|  __builtin_mempcpy((void *)0, (void *)0, 0);
+    #|  return 0;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(_) => abort("expected strict MIR builtin rejection")
+    Err(err) =>
+      inspect(
+        err.contains("unsupported MIR body codegen for main"),
+        content="true",
+      )
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR memory builtin libcalls" {
+  let source =
+    #|int main(void) {
+    #|  char src[4];
+    #|  char dst[4];
+    #|  __builtin_memcpy(dst, src, 4);
+    #|  __builtin_memset(src, 0, 4);
+    #|  __builtin_memmove(src, dst, 4);
+    #|  __builtin___memcpy_chk(dst, src, 4, 4);
+    #|  __builtin___memset_chk(src, 0, 4, 4);
+    #|  __builtin___memmove_chk(src, dst, 4, 4);
+    #|  return 0;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tbl\t_memcpy"), content="true")
+      inspect(assembly.contains("\tbl\t_memset"), content="true")
+      inspect(assembly.contains("\tbl\t_memmove"), content="true")
+      inspect(assembly.contains("\tbl\t___builtin_memcpy"), content="false")
+      inspect(assembly.contains("\tbl\t___builtin_memset"), content="false")
+      inspect(assembly.contains("\tbl\t___builtin_memmove"), content="false")
+      inspect(
+        assembly.contains("\tbl\t___builtin___memcpy_chk"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("\tbl\t___builtin___memset_chk"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("\tbl\t___builtin___memmove_chk"),
+        content="false",
+      )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR string destination builtin libcalls" {
+  let source =
+    #|int main(void) {
+    #|  char dst[4];
+    #|  __builtin_strcpy(dst, "");
+    #|  __builtin___strcpy_chk(dst, "", 4);
+    #|  __builtin_strcat(dst, "");
+    #|  __builtin___strcat_chk(dst, "", 4);
+    #|  __builtin_strncpy(dst, "", 0);
+    #|  __builtin___strncpy_chk(dst, "", 0, 4);
+    #|  __builtin_strncat(dst, "", 0);
+    #|  __builtin___strncat_chk(dst, "", 0, 4);
+    #|  return 0;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tbl\t_strcpy"), content="true")
+      inspect(assembly.contains("\tbl\t_strcat"), content="true")
+      inspect(assembly.contains("\tbl\t_strncpy"), content="true")
+      inspect(assembly.contains("\tbl\t_strncat"), content="true")
+      inspect(assembly.contains("\tbl\t___builtin_strcpy"), content="false")
+      inspect(assembly.contains("\tbl\t___builtin_strcat"), content="false")
+      inspect(assembly.contains("\tbl\t___builtin_strncpy"), content="false")
+      inspect(assembly.contains("\tbl\t___builtin_strncat"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR checked strl builtin libcalls" {
+  let source =
+    #|int main(void) {
+    #|  char *dst = __builtin_alloca(8);
+    #|  __builtin___strlcpy_chk(dst, "abcdef", 4, 8);
+    #|  __builtin___strlcat_chk(dst, "abc", 0, 8);
+    #|  return 0;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tbl\t_strlcpy"), content="true")
+      inspect(assembly.contains("\tbl\t_strlcat"), content="true")
+      inspect(
+        assembly.contains("\tbl\t___builtin___strlcpy_chk"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("\tbl\t___builtin___strlcat_chk"),
+        content="false",
+      )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR mutable local string array" {
+  let source =
+    #|int main(void) {
+    #|  char s[] = "abc";
+    #|  char *tail = s + 1;
+    #|  s[1] = 'z';
+    #|  if (__builtin_strcmp(s, "azc") != 0) return 1;
+    #|  *tail = 'b';
+    #|  if (__builtin_strcmp(s, "abc") != 0) return 2;
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tstrb\t"), content="true")
+      inspect(assembly.contains("\tbl\t_strcmp"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR checked printf family libcalls" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(32);
+    #|  __builtin___snprintf_chk(dst, 4, 0, 32, "n=%05d", n += 6);
+    #|  __builtin___sprintf_chk(dst, 0, 32, "%s%%", "ok");
+    #|  return __builtin___printf_chk(1, "x=%x", n);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tbl\t_snprintf"), content="true")
+      inspect(assembly.contains("\tbl\t_sprintf"), content="true")
+      inspect(assembly.contains("\tbl\t_printf"), content="true")
+      inspect(assembly.contains("\tsub\tsp, sp, #64"), content="true")
+      inspect(assembly.contains("\tstr\tx9, [sp, #0]"), content="true")
+      inspect(assembly.contains("__builtin___snprintf_chk"), content="false")
+      inspect(assembly.contains("__builtin___sprintf_chk"), content="false")
+      inspect(assembly.contains("__builtin___printf_chk"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR string query builtin libcalls" {
+  let source =
+    #|int main(void) {
+    #|  char *s = (char *)"abc";
+    #|  char *tail = s + 1;
+    #|  char *u = (char *)"abba";
+    #|  char *hay = (char *)"abcde";
+    #|  char *needle = (char *)"cd";
+    #|  if (__builtin_strlen(s) != 3) return 1;
+    #|  if (__builtin_strcmp(s, "abc") != 0) return 2;
+    #|  if (__builtin_strncmp(tail, "bc", 2) != 0) return 3;
+    #|  if (__builtin_memcmp(tail, "bc", 2) != 0) return 4;
+    #|  if (__builtin_strchr(s, 'b') != s + 1) return 5;
+    #|  if (__builtin_strrchr(u, 'b') != u + 2) return 6;
+    #|  if (__builtin_memchr(s, 'b', 2) != s + 1) return 7;
+    #|  if (__builtin_strstr(hay, needle) != hay + 2) return 8;
+    #|  return 0;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tbl\t_strlen"), content="true")
+      inspect(assembly.contains("\tbl\t_strcmp"), content="true")
+      inspect(assembly.contains("\tbl\t_strncmp"), content="true")
+      inspect(assembly.contains("\tbl\t_memcmp"), content="true")
+      inspect(assembly.contains("\tbl\t_strchr"), content="true")
+      inspect(assembly.contains("\tbl\t_strrchr"), content="true")
+      inspect(assembly.contains("\tbl\t_memchr"), content="true")
+      inspect(assembly.contains("\tbl\t_strstr"), content="true")
+      inspect(assembly.contains("__builtin_strlen"), content="false")
+      inspect(assembly.contains("__builtin_strcmp"), content="false")
+      inspect(assembly.contains("__builtin_strncmp"), content="false")
+      inspect(assembly.contains("__builtin_memcmp"), content="false")
+      inspect(assembly.contains("__builtin_strchr"), content="false")
+      inspect(assembly.contains("__builtin_strrchr"), content="false")
+      inspect(assembly.contains("__builtin_memchr"), content="false")
+      inspect(assembly.contains("__builtin_strstr"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR string literal scalar facts" {
+  let source =
+    #|int main(void) {
+    #|  if (sizeof("abc") != 4) return 1;
+    #|  if (__alignof__("abc") != 1) return 2;
+    #|  if (!"abc") return 3;
+    #|  if (*"abc" != 'a') return 4;
+    #|  if ("abc"[1] != 'b') return 5;
+    #|  if ("abc"[3] != 0) return 6;
+    #|  if (__func__[0] != 'm') return 7;
+    #|  if (__builtin_strlen("hello") != 5) return 8;
+    #|  if (*((char *)"abc") != 'a') return 9;
+    #|  if (((char *)"abc")[2] != 'c') return 10;
+    #|  if (((unsigned char *)"abc")[3] != 0) return 11;
+    #|  if (__builtin_strlen((const char *)"hello") != 5) return 12;
+    #|  if (*("abcd" + 1) != 'b') return 13;
+    #|  if ((1 + "abcd")[2] != 'd') return 14;
+    #|  int side = 0;
+    #|  if (*((const char *)"abcd" + (side += 2)) != 'c') return 15;
+    #|  if (side != 2) return 16;
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tldrb\t"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR folded floating builtins" {
+  let source =
+    #|int main(void) {
+    #|  if (!__builtin_isgreater(2.0, 1.0)) return 1;
+    #|  if (!__builtin_isgreaterequal(2.0, 2.0)) return 2;
+    #|  if (!__builtin_isless(1.0, 2.0)) return 3;
+    #|  if (!__builtin_islessequal(2.0, 2.0)) return 4;
+    #|  if (!__builtin_islessgreater(1.0, 2.0)) return 5;
+    #|  if (__builtin_islessgreater(2.0, 2.0)) return 6;
+    #|  if (!__builtin_isunordered(__builtin_nan(""), 1.0)) return 7;
+    #|  if (__builtin_isgreater(__builtin_nan(""), 1.0)) return 8;
+    #|  if (!__builtin_isnan(__builtin_nan(""))) return 9;
+    #|  if (__builtin_isnan(1.0)) return 10;
+    #|  if (!__builtin_isnanf(__builtin_nanf(""))) return 11;
+    #|  if (!__builtin_isnanl(__builtin_nanl(""))) return 12;
+    #|  if (!__builtin_isinf(__builtin_inf())) return 13;
+    #|  if (!__builtin_isinf(-__builtin_inf())) return 14;
+    #|  if (__builtin_isinf(1.0)) return 15;
+    #|  if (!__builtin_isinff(__builtin_inff())) return 16;
+    #|  if (!__builtin_isinfl(__builtin_infl())) return 17;
+    #|  if (!__builtin_isfinite(1.0)) return 18;
+    #|  if (__builtin_isfinite(__builtin_inf())) return 19;
+    #|  if (!__builtin_isfinitef(1.0f)) return 20;
+    #|  if (!__builtin_isfinitel(1.0L)) return 21;
+    #|  if (!__builtin_isnormal(1.0)) return 22;
+    #|  if (__builtin_isnormal(0.0)) return 23;
+    #|  if (__builtin_isnormal(__builtin_inf())) return 24;
+    #|  if (!__builtin_isnormalf(1.0f)) return 25;
+    #|  if (!__builtin_isnormall(1.0L)) return 26;
+    #|  if (!__builtin_signbit(-1.0)) return 27;
+    #|  if (!__builtin_signbit(-0.0)) return 28;
+    #|  if (__builtin_signbit(1.0)) return 29;
+    #|  if (!__builtin_signbitf(-0.0f)) return 30;
+    #|  if (!__builtin_signbitl(-1.0L)) return 31;
+    #|  if ((int)__builtin_fabs(-4.5) != 4) return 32;
+    #|  if ((int)__builtin_fabsf(-3.5f) != 3) return 33;
+    #|  if ((int)__builtin_fabsl(-2.5L) != 2) return 34;
+    #|  if ((int)__builtin_copysign(3.0, -1.0) != -3) return 35;
+    #|  if ((int)__builtin_copysign(-3.0, 1.0) != 3) return 36;
+    #|  if ((int)__builtin_copysignf(2.0f, -1.0f) != -2) return 37;
+    #|  if (!__builtin_signbit(__builtin_copysign(0.0, -1.0))) return 38;
+    #|  if ((int)__builtin_sqrt(81.0) != 9) return 39;
+    #|  if ((int)__builtin_sqrtf(25.0f) != 5) return 40;
+    #|  if ((int)__builtin_sqrtl(16.0L) != 4) return 41;
+    #|  if (!__builtin_isnan(__builtin_sqrt(-1.0))) return 42;
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("__builtin_isgreater"), content="false")
+      inspect(assembly.contains("__builtin_isnan"), content="false")
+      inspect(assembly.contains("__builtin_fabs"), content="false")
+      inspect(assembly.contains("__builtin_copysign"), content="false")
+      inspect(assembly.contains("__builtin_sqrt"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR lowers overflow builtins" {
+  let source =
+    #|int main(void) {
+    #|  int i = 0;
+    #|  unsigned int u = 0;
+    #|  long long l = 0;
+    #|  unsigned long long ul = 0;
+    #|  if (__builtin_add_overflow(1, 2, &i)) return 1;
+    #|  if (!__builtin_add_overflow(2147483647, 1, &i)) return 2;
+    #|  if (!__builtin_sub_overflow(0u, 1u, &u)) return 3;
+    #|  if (!__builtin_mul_overflow(50000, 50000, &i)) return 4;
+    #|  if (!__builtin_mul_overflow(0xffffffffu, 2u, &u)) return 5;
+    #|  if (__builtin_add_overflow(l, 1LL, &l)) return 6;
+    #|  if (!__builtin_ssubll_overflow(-9223372036854775807LL - 1LL, 1LL, &l)) return 7;
+    #|  if (!__builtin_uaddll_overflow(0xffffffffffffffffULL, 1ULL, &ul)) return 8;
+    #|  if (!__builtin_umulll_overflow(0xffffffffffffffffULL, 2ULL, &ul)) return 9;
+    #|  return i + (int)u + (int)l + (int)ul;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcset\tx11, vs"), content="true")
+      inspect(assembly.contains("\tcset\tx11, hi"), content="true")
+      inspect(assembly.contains("\tumull\tx9, w9, w10"), content="true")
+      inspect(assembly.contains("\tsmull\tx9, w9, w10"), content="true")
+      inspect(assembly.contains("__builtin_add_overflow"), content="false")
+      inspect(assembly.contains("__builtin_sub_overflow"), content="false")
+      inspect(assembly.contains("__builtin_mul_overflow"), content="false")
+      inspect(assembly.contains("__builtin_ssubll_overflow"), content="false")
+      inspect(assembly.contains("__builtin_uaddll_overflow"), content="false")
+      inspect(assembly.contains("__builtin_umulll_overflow"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR ignored unsupported local initializer side effects" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  int a[2];
+    #|  double d = (a[side += 1] = side += 2);
+    #|  double e = side += 4;
+    #|  return side + 35;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("__mir_2_d"), content="false")
+      inspect(assembly.contains("__mir_3_e"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "strict MIR still rejects unsupported local reads" {
+  let source = "int main(void) { double d; return (int)d; }"
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(_) => abort("expected strict MIR unsupported local read rejection")
+    Err(err) =>
+      inspect(err.contains("unsupported MIR body codegen"), content="true")
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR varargs setup builtins" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|int variadic(int last, ...) {
+    #|  va_list ap;
+    #|  int n = sizeof(__builtin_va_start(ap, last)) +
+    #|    sizeof(__builtin_va_copy(ap, ap)) +
+    #|    sizeof(__builtin_va_end(ap));
+    #|  __builtin_va_start(ap, last);
+    #|  __builtin_va_copy(ap, ap);
+    #|  __builtin_va_end(ap);
+    #|  return last + n + 1;
+    #|}
+    #|int main(void) {
+    #|  return variadic(41, 1, 2);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_variadic:"), content="true")
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tsub\tsp, sp, #64"), content="true")
+      inspect(assembly.contains("\tstr\tx9, [sp, #0]"), content="true")
+      inspect(assembly.contains("__builtin_va_start"), content="false")
+      inspect(assembly.contains("__builtin_va_copy"), content="false")
+      inspect(assembly.contains("__builtin_va_end"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR bzero builtin libcall" {
+  let source =
+    #|int main(void) {
+    #|  char dst[4];
+    #|  __builtin_bzero(dst, 4);
+    #|  return 0;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tbl\t_bzero"), content="true")
+      inspect(assembly.contains("\tbl\t___builtin_bzero"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR trap builtins" {
+  let source =
+    #|int trapper(void) {
+    #|  __builtin_trap();
+    #|}
+    #|int unreachable_marker(void) {
+    #|  __builtin_unreachable();
+    #|}
+    #|int main(void) {
+    #|  return 0;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_trapper:"), content="true")
+      inspect(assembly.contains("_unreachable_marker:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tbrk\t#0x1"), content="true")
+      inspect(assembly.contains("\tbl\t___builtin_trap"), content="false")
+      inspect(
+        assembly.contains("\tbl\t___builtin_unreachable"),
+        content="false",
+      )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR alloca builtin" {
+  let source =
+    #|int main(void) {
+    #|  int n = 13;
+    #|  char *p = __builtin_alloca(n += 1);
+    #|  if (n != 14) return 1;
+    #|  return p != 0;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tbic\tx9, x9, #0xF"), content="true")
+      inspect(assembly.contains("\tsub\tsp, sp, x9"), content="true")
+      inspect(assembly.contains("\tbl\t___builtin_alloca"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR sync synchronize builtin" {
+  let source =
+    #|int main(void) {
+    #|  __sync_synchronize();
+    #|  return 0;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tdmb\tish"), content="true")
+      inspect(assembly.contains("\tbl\t___sync_synchronize"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR atomic fence builtins" {
+  let source =
+    #|int main(void) {
+    #|  __atomic_thread_fence(5);
+    #|  __atomic_signal_fence(5);
+    #|  __c11_atomic_thread_fence(5);
+    #|  __c11_atomic_signal_fence(5);
+    #|  return 0;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tdmb\tish"), content="true")
+      inspect(
+        assembly.contains("\tbl\t___atomic_thread_fence"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("\tbl\t___atomic_signal_fence"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("\tbl\t___c11_atomic_thread_fence"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("\tbl\t___c11_atomic_signal_fence"),
+        content="false",
+      )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 MIR module uses module function metadata" {
+  let source = "int main(void) { return 42; }"
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  let mir_module = mir.to_module()
+  let decl = mir_module.decls[0]
+  mir_module.decls[0] = {
+    ret: decl.ret,
+    name: decl.name,
+    params: decl.params,
+    variadic: decl.variadic,
+    is_static: decl.is_static,
+    is_inline: decl.is_inline,
+    is_weak: true,
+    visibility: decl.visibility,
+    symbol_alias: decl.symbol_alias,
+    section: decl.section,
+    is_constructor: decl.is_constructor,
+    is_destructor: decl.is_destructor,
+    has_body: decl.has_body,
+  }
+  match @codegen.generate_assembly_from_mir_module_strict(mir_module) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.weak_definition\t_main"), content="true")
+      inspect(assembly.contains("\t.globl\t_main"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 MIR body uses MIR function metadata" {
+  let source = "int main(void) { return 42; }"
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  let decl = mir.decls[0]
+  mir.decls[0] = {
+    ret: decl.ret,
+    name: decl.name,
+    params: decl.params,
+    variadic: decl.variadic,
+    is_static: decl.is_static,
+    is_inline: decl.is_inline,
+    is_weak: true,
+    visibility: decl.visibility,
+    symbol_alias: decl.symbol_alias,
+    section: decl.section,
+    is_constructor: decl.is_constructor,
+    is_destructor: decl.is_destructor,
+    has_body: decl.has_body,
+  }
+  let assembly = @codegen.generate_assembly_from_mir(mir)
+  inspect(assembly.contains("\t.weak_definition\t_main"), content="true")
+  inspect(assembly.contains("\t.globl\t_main"), content="false")
+}
+
+///|
+test "generate darwin arm64 global scalar initializer uses MIR metadata" {
+  let source = "int g = 0; int main(void) { return g; }"
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  let g = mir.global_decls[0]
+  mir.global_decls[0] = {
+    ty: g.ty,
+    name: g.name,
+    init: Some(@mir.MirGlobalInit::MirGlobalScalarInt(7L)),
+    has_init: g.has_init,
+    is_static: g.is_static,
+    is_extern: g.is_extern,
+    is_weak: true,
+    visibility: g.visibility,
+    symbol_alias: g.symbol_alias,
+    section: g.section,
+  }
+  let assembly = @codegen.generate_assembly_from_mir(mir)
+  inspect(assembly.contains("\t.weak_definition\t_g"), content="true")
+  inspect(assembly.contains("\t.globl\t_g"), content="false")
+  inspect(assembly.contains("_g:\n\t.long\t7"), content="true")
+  inspect(assembly.contains("_g:\n\t.long\t0"), content="false")
+}
+
+///|
+test "generate darwin arm64 strict MIR floating global initializers" {
+  let source =
+    #|double gfp_div = 1.0 / 2.0;
+    #|float gternary_int = 1 ? 3 / 2 : 9.0f;
+    #|int gfp_expr_to_int = (double)3 / 2;
+    #|int main(void) { return 0; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_gfp_div:\n\t.double\t0.5"), content="true")
+      inspect(assembly.contains("_gternary_int:\n\t.single\t1"), content="true")
+      inspect(
+        assembly.contains("_gfp_expr_to_int:\n\t.long\t1"),
+        content="true",
+      )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 global symbol initializer uses MIR metadata" {
+  let source = "int g; int *p = 0; int main(void) { return 0; }"
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  let p = mir.global_decls[1]
+  mir.global_decls[1] = {
+    ty: p.ty,
+    name: p.name,
+    init: Some(@mir.MirGlobalInit::MirGlobalSymbol("g")),
+    has_init: p.has_init,
+    is_static: p.is_static,
+    is_extern: p.is_extern,
+    is_weak: p.is_weak,
+    visibility: p.visibility,
+    symbol_alias: p.symbol_alias,
+    section: p.section,
+  }
+  let assembly = @codegen.generate_assembly_from_mir(mir)
+  inspect(assembly.contains("_p:\n\t.quad\t_g"), content="true")
+  inspect(assembly.contains("_p:\n\t.quad\t0"), content="false")
+}
+
+///|
+test "generate darwin arm64 global symbol offset initializer uses MIR metadata" {
+  let source = "int g[3]; int *p = 0; int main(void) { return 0; }"
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  let p = mir.global_decls[1]
+  mir.global_decls[1] = {
+    ty: p.ty,
+    name: p.name,
+    init: Some(@mir.MirGlobalInit::MirGlobalSymbolOffset("g", 4)),
+    has_init: p.has_init,
+    is_static: p.is_static,
+    is_extern: p.is_extern,
+    is_weak: p.is_weak,
+    visibility: p.visibility,
+    symbol_alias: p.symbol_alias,
+    section: p.section,
+  }
+  let assembly = @codegen.generate_assembly_from_mir(mir)
+  inspect(assembly.contains("_p:\n\t.quad\t_g+4"), content="true")
+  inspect(assembly.contains("_p:\n\t.quad\t0"), content="false")
+}
+
+///|
+test "generate darwin arm64 strict MIR global aggregate initializer" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { char tag; struct Inner inner; int tail; };
+    #|struct S g = { 1, { 33752069 }, 6 };
+    #|int main(void) { return 0; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) =>
+      inspect(
+        assembly.contains(
+          "_g:\n\t.byte\t1\n\t.space\t3\n\t.long\t33752069\n\t.long\t6",
+        ),
+        content="true",
+      )
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR sparse global array initializer" {
+  let source =
+    #|int g[4] = { [2] = 9, [0] = 1 };
+    #|int main(void) { return 0; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) =>
+      inspect(
+        assembly.contains(
+          "_g:\n\t.long\t1\n\t.space\t4\n\t.long\t9\n\t.space\t4",
+        ),
+        content="true",
+      )
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR sparse aggregate field initializer" {
+  let source =
+    #|struct S { int a; int b; int c; };
+    #|struct S g = { .c = 9, .a = 1 };
+    #|int main(void) { return 0; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) =>
+      inspect(
+        assembly.contains("_g:\n\t.long\t1\n\t.space\t4\n\t.long\t9"),
+        content="true",
+      )
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR nested aggregate designator initializer" {
+  let source =
+    #|struct S { int a[4]; int b; };
+    #|struct S g = { .a = { [2] = 9 }, .b = 5 };
+    #|int main(void) { return 0; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) =>
+      inspect(
+        assembly.contains(
+          "_g:\n\t.space\t4\n\t.space\t4\n\t.long\t9\n\t.space\t4\n\t.long\t5",
+        ),
+        content="true",
+      )
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 assembly from MIR strict" {
+  let source = "int main(void) { int x = 40; return x + 2; }"
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse(source), target)
+  match @codegen.generate_assembly_from_mir_strict(mir) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tadd\trax, r10"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 assembly from parser-free MIR module strict" {
+  let source = "int main(void) { int x = 40; return x + 2; }"
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  let mir_module = mir.to_module()
+  match @codegen.generate_assembly_from_mir_module_strict(mir_module) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tadd\trax, r10"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR scalar compound literals" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  int a = (int){40};
+    #|  unsigned char b = (unsigned char){255 + 1};
+    #|  int c = (int){side += 2};
+    #|  return a + b + c + side;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR address of scalar compound literal" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  int *p = &(int){side += 3};
+    #|  return *p + side;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR casted scalar address load store" {
+  let source =
+    #|int main(void) {
+    #|  int x = 0;
+    #|  *(int *)(void *)&x = 42;
+    #|  return *(int *)(void *)&x;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR address of aggregate compound literal" {
+  let source =
+    #|struct Pair { int x; int y; };
+    #|int main(void) {
+    #|  return (&(struct Pair){ 20, 22 })->x +
+    #|    (&(struct Pair){ 20, 22 })->y;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR casted address of aggregate compound literal" {
+  let source =
+    #|struct Pair { int x; int y; };
+    #|int main(void) {
+    #|  return ((struct Pair *)&(struct Pair){ 20, 22 })->x +
+    #|    ((struct Pair *)&(struct Pair){ 20, 22 })->y;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR address of aggregate member object" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { struct Inner inner; };
+    #|int main(void) {
+    #|  struct S s = { { 42 } };
+    #|  return (&s.inner)->z;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR casted address of aggregate member object" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { struct Inner inner; };
+    #|int main(void) {
+    #|  struct S s = { { 42 } };
+    #|  return ((struct Inner *)&s.inner)->z;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR nested casted known aggregate addresses" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { struct Inner inner; };
+    #|struct Pair { int x; int y; };
+    #|int main(void) {
+    #|  struct S s = { { 20 } };
+    #|  return ((struct Inner *)(void *)&s.inner)->z +
+    #|    ((struct Pair *)(void *)&(struct Pair){ 1, 22 })->y;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR local struct initializer" {
+  let source =
+    #|struct S { int x; unsigned char y; int z; };
+    #|int main(void) {
+    #|  int side = 1;
+    #|  struct S s = { side += 2, 250 + 10 };
+    #|  return s.x + s.y + s.z + side;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR nested local struct initializer" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct Outer { int tag; struct Inner inner; int tail; };
+    #|int main(void) {
+    #|  struct Outer o = { .inner = { 22 }, .tag = 20 };
+    #|  return o.tag + o.inner.z + o.tail;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR local struct copy initializer" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { int tag; struct Inner inner; int tail; };
+    #|int main(void) {
+    #|  struct S a = { .inner = { 22 }, .tag = 20 };
+    #|  struct S b = a;
+    #|  a.inner.z = 1;
+    #|  return b.tag + b.inner.z + b.tail;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR ignored local struct assignment" {
+  let source =
+    #|struct S { int x; int y; };
+    #|int main(void) {
+    #|  struct S a = { 20, 22 };
+    #|  struct S b = { 1, 2 };
+    #|  b = a;
+    #|  a.x = 0;
+    #|  return b.x + b.y;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR ignored local struct compound literal assignment" {
+  let source =
+    #|struct S { int x; int y; int z; };
+    #|int main(void) {
+    #|  struct S b = { 19, 2, 3 };
+    #|  b = (struct S){ b.x + 1, 22 };
+    #|  return b.x + b.y + b.z;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR nested aggregate compound literal assignment" {
+  let source =
+    #|struct Inner { int z; int q; };
+    #|struct S { int tag; struct Inner inner; int a[2]; int tail; };
+    #|int main(void) {
+    #|  struct S s = {0};
+    #|  s = (struct S){
+    #|    .tag = 1,
+    #|    .inner = { .z = 20, .q = 2 },
+    #|    .a = { [1] = 4, [0] = 3 },
+    #|    .tail = 12
+    #|  };
+    #|  return s.tag + s.inner.z + s.inner.q + s.a[0] + s.a[1] + s.tail;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR scalar array fields in struct copies" {
+  let source =
+    #|struct S { int a[2]; int z; };
+    #|int main(void) {
+    #|  struct S s;
+    #|  s.a[0] = 20;
+    #|  s.a[1] = 21;
+    #|  s.z = 1;
+    #|  struct S b = s;
+    #|  s.a[0] = 0;
+    #|  return b.a[0] + b.a[1] + b.z;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR local union initializer" {
+  let source =
+    #|union U { int x; unsigned char c; };
+    #|int main(void) {
+    #|  union U u = { 42 };
+    #|  return u.x;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR ignored local union assignment" {
+  let source =
+    #|union U { unsigned char c; int x; };
+    #|int main(void) {
+    #|  union U a = { .x = 19 };
+    #|  union U b = { .c = 1 };
+    #|  b = a;
+    #|  a.x = 0;
+    #|  b = (union U){ .x = b.x + 21 };
+    #|  return b.x + 2;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR nested union compound literal assignment" {
+  let source =
+    #|union U { unsigned char c; int x; };
+    #|struct S { union U u; int tail; };
+    #|int main(void) {
+    #|  struct S s = {0};
+    #|  s = (struct S){ .u = { .x = 40 }, .tail = 2 };
+    #|  return s.u.x + s.tail;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR local array initializer" {
+  let source =
+    #|int main(void) {
+    #|  int a[5] = { 10, 20, 30, 40, 50 };
+    #|  int *p = &a[4];
+    #|  int *q = &a[1];
+    #|  int *r = q + 1;
+    #|  return (p - q) + *r;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tidiv\tr10"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR fixed local string array initializer" {
+  let source =
+    #|int main(void) {
+    #|  char s[5] = "abc";
+    #|  char exact[3] = "xyz";
+    #|  if (s[0] != 'a' || s[1] != 'b' || s[2] != 'c') return 1;
+    #|  if (s[3] != 0 || s[4] != 0) return 2;
+    #|  if (exact[0] != 'x' || exact[1] != 'y' || exact[2] != 'z') return 3;
+    #|  return 42;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR indirect function pointer call" {
+  let source =
+    #|int bump(int x) { return x + 1; }
+    #|int main(void) {
+    #|  int (*fp)(int) = bump;
+    #|  return fp(20) + (*fp)(20);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\tr10"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR returned function pointer call" {
+  let source =
+    #|int hash(const void *p, int n) { return n + 40; }
+    #|int (*pick(int key_class))(const void *, int) {
+    #|  return &hash;
+    #|}
+    #|int main(void) {
+    #|  int (*xHash)(const void *, int) = pick(1);
+    #|  return (*xHash)("hi", 2);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.type\tpick, @function"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\tr10"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR implicit external scalar call" {
+  let source =
+    #|int main(void) {
+    #|  return external_value();
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\texternal_value"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR double underscore external scalar call" {
+  let source =
+    #|int __kimicc_external(void);
+    #|int main(void) {
+    #|  return __kimicc_external();
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\t__kimicc_external"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR memory builtin libcalls" {
+  let source =
+    #|int main(void) {
+    #|  char src[4];
+    #|  char dst[4];
+    #|  __builtin_memcpy(dst, src, 4);
+    #|  __builtin_memset(src, 0, 4);
+    #|  __builtin_memmove(src, dst, 4);
+    #|  __builtin___memcpy_chk(dst, src, 4, 4);
+    #|  __builtin___memset_chk(src, 0, 4, 4);
+    #|  __builtin___memmove_chk(src, dst, 4, 4);
+    #|  return 0;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\tmemcpy"), content="true")
+      inspect(assembly.contains("\tcall\tmemset"), content="true")
+      inspect(assembly.contains("\tcall\tmemmove"), content="true")
+      inspect(assembly.contains("\tcall\t__builtin_memcpy"), content="false")
+      inspect(assembly.contains("\tcall\t__builtin_memset"), content="false")
+      inspect(assembly.contains("\tcall\t__builtin_memmove"), content="false")
+      inspect(
+        assembly.contains("\tcall\t__builtin___memcpy_chk"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("\tcall\t__builtin___memset_chk"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("\tcall\t__builtin___memmove_chk"),
+        content="false",
+      )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR string destination builtin libcalls" {
+  let source =
+    #|int main(void) {
+    #|  char dst[4];
+    #|  __builtin_strcpy(dst, "");
+    #|  __builtin___strcpy_chk(dst, "", 4);
+    #|  __builtin_strcat(dst, "");
+    #|  __builtin___strcat_chk(dst, "", 4);
+    #|  __builtin_strncpy(dst, "", 0);
+    #|  __builtin___strncpy_chk(dst, "", 0, 4);
+    #|  __builtin_strncat(dst, "", 0);
+    #|  __builtin___strncat_chk(dst, "", 0, 4);
+    #|  return 0;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\tstrcpy"), content="true")
+      inspect(assembly.contains("\tcall\tstrcat"), content="true")
+      inspect(assembly.contains("\tcall\tstrncpy"), content="true")
+      inspect(assembly.contains("\tcall\tstrncat"), content="true")
+      inspect(assembly.contains("\tcall\t__builtin_strcpy"), content="false")
+      inspect(assembly.contains("\tcall\t__builtin_strcat"), content="false")
+      inspect(assembly.contains("\tcall\t__builtin_strncpy"), content="false")
+      inspect(assembly.contains("\tcall\t__builtin_strncat"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR checked strl builtin libcalls" {
+  let source =
+    #|int main(void) {
+    #|  char *dst = __builtin_alloca(8);
+    #|  __builtin___strlcpy_chk(dst, "abcdef", 4, 8);
+    #|  __builtin___strlcat_chk(dst, "abc", 0, 8);
+    #|  return 0;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\tstrlcpy"), content="true")
+      inspect(assembly.contains("\tcall\tstrlcat"), content="true")
+      inspect(
+        assembly.contains("\tcall\t__builtin___strlcpy_chk"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("\tcall\t__builtin___strlcat_chk"),
+        content="false",
+      )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR mutable local string array" {
+  let source =
+    #|int main(void) {
+    #|  char s[] = "abc";
+    #|  char *tail = s + 1;
+    #|  s[1] = 'z';
+    #|  if (__builtin_strcmp(s, "azc") != 0) return 1;
+    #|  *tail = 'b';
+    #|  if (__builtin_strcmp(s, "abc") != 0) return 2;
+    #|  return 42;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tmov\tBYTE PTR"), content="true")
+      inspect(assembly.contains("\tcall\tstrcmp"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR checked printf family libcalls" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(32);
+    #|  __builtin___snprintf_chk(dst, 4, 0, 32, "n=%05d", n += 6);
+    #|  __builtin___sprintf_chk(dst, 0, 32, "%s%%", "ok");
+    #|  return __builtin___printf_chk(1, "x=%x", n);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\tsnprintf"), content="true")
+      inspect(assembly.contains("\tcall\tsprintf"), content="true")
+      inspect(assembly.contains("\tcall\tprintf"), content="true")
+      inspect(assembly.contains("\tmov\tal, 0"), content="true")
+      inspect(assembly.contains("__builtin___snprintf_chk"), content="false")
+      inspect(assembly.contains("__builtin___sprintf_chk"), content="false")
+      inspect(assembly.contains("__builtin___printf_chk"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR string query builtin libcalls" {
+  let source =
+    #|int main(void) {
+    #|  char *s = (char *)"abc";
+    #|  char *tail = s + 1;
+    #|  char *u = (char *)"abba";
+    #|  char *hay = (char *)"abcde";
+    #|  char *needle = (char *)"cd";
+    #|  if (__builtin_strlen(s) != 3) return 1;
+    #|  if (__builtin_strcmp(s, "abc") != 0) return 2;
+    #|  if (__builtin_strncmp(tail, "bc", 2) != 0) return 3;
+    #|  if (__builtin_memcmp(tail, "bc", 2) != 0) return 4;
+    #|  if (__builtin_strchr(s, 'b') != s + 1) return 5;
+    #|  if (__builtin_strrchr(u, 'b') != u + 2) return 6;
+    #|  if (__builtin_memchr(s, 'b', 2) != s + 1) return 7;
+    #|  if (__builtin_strstr(hay, needle) != hay + 2) return 8;
+    #|  return 0;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\tstrlen"), content="true")
+      inspect(assembly.contains("\tcall\tstrcmp"), content="true")
+      inspect(assembly.contains("\tcall\tstrncmp"), content="true")
+      inspect(assembly.contains("\tcall\tmemcmp"), content="true")
+      inspect(assembly.contains("\tcall\tstrchr"), content="true")
+      inspect(assembly.contains("\tcall\tstrrchr"), content="true")
+      inspect(assembly.contains("\tcall\tmemchr"), content="true")
+      inspect(assembly.contains("\tcall\tstrstr"), content="true")
+      inspect(assembly.contains("__builtin_strlen"), content="false")
+      inspect(assembly.contains("__builtin_strcmp"), content="false")
+      inspect(assembly.contains("__builtin_strncmp"), content="false")
+      inspect(assembly.contains("__builtin_memcmp"), content="false")
+      inspect(assembly.contains("__builtin_strchr"), content="false")
+      inspect(assembly.contains("__builtin_strrchr"), content="false")
+      inspect(assembly.contains("__builtin_memchr"), content="false")
+      inspect(assembly.contains("__builtin_strstr"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR string literal scalar facts" {
+  let source =
+    #|int main(void) {
+    #|  if (sizeof("abc") != 4) return 1;
+    #|  if (__alignof__("abc") != 1) return 2;
+    #|  if (!"abc") return 3;
+    #|  if (*"abc" != 'a') return 4;
+    #|  if ("abc"[1] != 'b') return 5;
+    #|  if ("abc"[3] != 0) return 6;
+    #|  if (__func__[0] != 'm') return 7;
+    #|  if (__builtin_strlen("hello") != 5) return 8;
+    #|  if (*((char *)"abc") != 'a') return 9;
+    #|  if (((char *)"abc")[2] != 'c') return 10;
+    #|  if (((unsigned char *)"abc")[3] != 0) return 11;
+    #|  if (__builtin_strlen((const char *)"hello") != 5) return 12;
+    #|  if (*("abcd" + 1) != 'b') return 13;
+    #|  if ((1 + "abcd")[2] != 'd') return 14;
+    #|  int side = 0;
+    #|  if (*((const char *)"abcd" + (side += 2)) != 'c') return 15;
+    #|  if (side != 2) return 16;
+    #|  return 42;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("BYTE PTR"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR folded floating builtins" {
+  let source =
+    #|int main(void) {
+    #|  if (!__builtin_isgreater(2.0, 1.0)) return 1;
+    #|  if (!__builtin_isgreaterequal(2.0, 2.0)) return 2;
+    #|  if (!__builtin_isless(1.0, 2.0)) return 3;
+    #|  if (!__builtin_islessequal(2.0, 2.0)) return 4;
+    #|  if (!__builtin_islessgreater(1.0, 2.0)) return 5;
+    #|  if (__builtin_islessgreater(2.0, 2.0)) return 6;
+    #|  if (!__builtin_isunordered(__builtin_nan(""), 1.0)) return 7;
+    #|  if (__builtin_isgreater(__builtin_nan(""), 1.0)) return 8;
+    #|  if (!__builtin_isnan(__builtin_nan(""))) return 9;
+    #|  if (__builtin_isnan(1.0)) return 10;
+    #|  if (!__builtin_isnanf(__builtin_nanf(""))) return 11;
+    #|  if (!__builtin_isnanl(__builtin_nanl(""))) return 12;
+    #|  if (!__builtin_isinf(__builtin_inf())) return 13;
+    #|  if (!__builtin_isinf(-__builtin_inf())) return 14;
+    #|  if (__builtin_isinf(1.0)) return 15;
+    #|  if (!__builtin_isinff(__builtin_inff())) return 16;
+    #|  if (!__builtin_isinfl(__builtin_infl())) return 17;
+    #|  if (!__builtin_isfinite(1.0)) return 18;
+    #|  if (__builtin_isfinite(__builtin_inf())) return 19;
+    #|  if (!__builtin_isfinitef(1.0f)) return 20;
+    #|  if (!__builtin_isfinitel(1.0L)) return 21;
+    #|  if (!__builtin_isnormal(1.0)) return 22;
+    #|  if (__builtin_isnormal(0.0)) return 23;
+    #|  if (__builtin_isnormal(__builtin_inf())) return 24;
+    #|  if (!__builtin_isnormalf(1.0f)) return 25;
+    #|  if (!__builtin_isnormall(1.0L)) return 26;
+    #|  if (!__builtin_signbit(-1.0)) return 27;
+    #|  if (!__builtin_signbit(-0.0)) return 28;
+    #|  if (__builtin_signbit(1.0)) return 29;
+    #|  if (!__builtin_signbitf(-0.0f)) return 30;
+    #|  if (!__builtin_signbitl(-1.0L)) return 31;
+    #|  if ((int)__builtin_fabs(-4.5) != 4) return 32;
+    #|  if ((int)__builtin_fabsf(-3.5f) != 3) return 33;
+    #|  if ((int)__builtin_fabsl(-2.5L) != 2) return 34;
+    #|  if ((int)__builtin_copysign(3.0, -1.0) != -3) return 35;
+    #|  if ((int)__builtin_copysign(-3.0, 1.0) != 3) return 36;
+    #|  if ((int)__builtin_copysignf(2.0f, -1.0f) != -2) return 37;
+    #|  if (!__builtin_signbit(__builtin_copysign(0.0, -1.0))) return 38;
+    #|  if ((int)__builtin_sqrt(81.0) != 9) return 39;
+    #|  if ((int)__builtin_sqrtf(25.0f) != 5) return 40;
+    #|  if ((int)__builtin_sqrtl(16.0L) != 4) return 41;
+    #|  if (!__builtin_isnan(__builtin_sqrt(-1.0))) return 42;
+    #|  return 42;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("__builtin_isgreater"), content="false")
+      inspect(assembly.contains("__builtin_isnan"), content="false")
+      inspect(assembly.contains("__builtin_fabs"), content="false")
+      inspect(assembly.contains("__builtin_copysign"), content="false")
+      inspect(assembly.contains("__builtin_sqrt"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR lowers overflow builtins" {
+  let source =
+    #|int main(void) {
+    #|  int i = 0;
+    #|  unsigned int u = 0;
+    #|  long long l = 0;
+    #|  unsigned long long ul = 0;
+    #|  if (__builtin_add_overflow(1, 2, &i)) return 1;
+    #|  if (!__builtin_add_overflow(2147483647, 1, &i)) return 2;
+    #|  if (!__builtin_sub_overflow(0u, 1u, &u)) return 3;
+    #|  if (!__builtin_mul_overflow(50000, 50000, &i)) return 4;
+    #|  if (!__builtin_mul_overflow(0xffffffffu, 2u, &u)) return 5;
+    #|  if (__builtin_add_overflow(l, 1LL, &l)) return 6;
+    #|  if (!__builtin_ssubll_overflow(-9223372036854775807LL - 1LL, 1LL, &l)) return 7;
+    #|  if (!__builtin_uaddll_overflow(0xffffffffffffffffULL, 1ULL, &ul)) return 8;
+    #|  if (!__builtin_umulll_overflow(0xffffffffffffffffULL, 2ULL, &ul)) return 9;
+    #|  return i + (int)u + (int)l + (int)ul;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tseto\tr11b"), content="true")
+      inspect(assembly.contains("\tsetb\tr11b"), content="true")
+      inspect(assembly.contains("\timul\tr10d"), content="true")
+      inspect(assembly.contains("\tmul\tr10"), content="true")
+      inspect(
+        assembly.contains("call\t__builtin_add_overflow"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("call\t__builtin_sub_overflow"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("call\t__builtin_mul_overflow"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("call\t__builtin_ssubll_overflow"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("call\t__builtin_uaddll_overflow"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("call\t__builtin_umulll_overflow"),
+        content="false",
+      )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR ignored unsupported local initializer side effects" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  int a[2];
+    #|  double d = (a[side += 1] = side += 2);
+    #|  double e = side += 4;
+    #|  return side + 35;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("__mir_2_d"), content="false")
+      inspect(assembly.contains("__mir_3_e"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR varargs setup builtins" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|int variadic(int last, ...) {
+    #|  va_list ap;
+    #|  int n = sizeof(__builtin_va_start(ap, last)) +
+    #|    sizeof(__builtin_va_copy(ap, ap)) +
+    #|    sizeof(__builtin_va_end(ap));
+    #|  __builtin_va_start(ap, last);
+    #|  __builtin_va_copy(ap, ap);
+    #|  __builtin_va_end(ap);
+    #|  return last + n + 1;
+    #|}
+    #|int main(void) {
+    #|  return variadic(41, 1, 2);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\t.type\tvariadic, @function"), content="true")
+      inspect(assembly.contains("\t.type\tmain, @function"), content="true")
+      inspect(assembly.contains("\tmov\tal, 0"), content="true")
+      inspect(assembly.contains("__builtin_va_start"), content="false")
+      inspect(assembly.contains("__builtin_va_copy"), content="false")
+      inspect(assembly.contains("__builtin_va_end"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR bzero builtin libcall" {
+  let source =
+    #|int main(void) {
+    #|  char dst[4];
+    #|  __builtin_bzero(dst, 4);
+    #|  return 0;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\tbzero"), content="true")
+      inspect(assembly.contains("\tcall\t__builtin_bzero"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR trap builtins" {
+  let source =
+    #|int trapper(void) {
+    #|  __builtin_trap();
+    #|}
+    #|int unreachable_marker(void) {
+    #|  __builtin_unreachable();
+    #|}
+    #|int main(void) {
+    #|  return 0;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("trapper:"), content="true")
+      inspect(assembly.contains("unreachable_marker:"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tud2"), content="true")
+      inspect(assembly.contains("\tcall\t__builtin_trap"), content="false")
+      inspect(
+        assembly.contains("\tcall\t__builtin_unreachable"),
+        content="false",
+      )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR alloca builtin" {
+  let source =
+    #|int main(void) {
+    #|  int n = 13;
+    #|  char *p = __builtin_alloca(n += 1);
+    #|  if (n != 14) return 1;
+    #|  return p != 0;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tand\trax, -16"), content="true")
+      inspect(assembly.contains("\tsub\trsp, rax"), content="true")
+      inspect(assembly.contains("\tcall\t__builtin_alloca"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR lowers return address builtin" {
+  let source =
+    #|int main(void) {
+    #|  void *fa = __builtin_frame_address(0);
+    #|  void *ra = __builtin_return_address(0);
+    #|  if (fa == 0) return 1;
+    #|  if (ra == 0) return 2;
+    #|  if (__builtin_frame_address(1) != 0) return 3;
+    #|  if (__builtin_return_address(1) != 0) return 4;
+    #|  if (__builtin_extract_return_addr(ra) != ra) return 5;
+    #|  if (__builtin_frob_return_addr(ra) != ra) return 6;
+    #|  return 0;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tmov\trax, rbp"), content="true")
+      inspect(
+        assembly.contains("\tmov\trax, QWORD PTR [rbp + 8]"),
+        content="true",
+      )
+      inspect(assembly.contains("\tmov\trax, 0"), content="true")
+      inspect(
+        assembly.contains("call\t__builtin_return_address"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("call\t__builtin_frame_address"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("call\t__builtin_extract_return_addr"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("call\t__builtin_frob_return_addr"),
+        content="false",
+      )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR sync synchronize builtin" {
+  let source =
+    #|int main(void) {
+    #|  __sync_synchronize();
+    #|  return 0;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tmfence"), content="true")
+      inspect(assembly.contains("\tcall\t__sync_synchronize"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR atomic fence builtins" {
+  let source =
+    #|int main(void) {
+    #|  __atomic_thread_fence(5);
+    #|  __atomic_signal_fence(5);
+    #|  __c11_atomic_thread_fence(5);
+    #|  __c11_atomic_signal_fence(5);
+    #|  return 0;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tmfence"), content="true")
+      inspect(
+        assembly.contains("\tcall\t__atomic_thread_fence"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("\tcall\t__atomic_signal_fence"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("\tcall\t__c11_atomic_thread_fence"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("\tcall\t__c11_atomic_signal_fence"),
+        content="false",
+      )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR global aggregate initializer" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { char tag; struct Inner inner; int tail; };
+    #|struct S g = { 1, { 33752069 }, 6 };
+    #|int main(void) { return 0; }
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) =>
+      inspect(
+        assembly.contains(
+          "g:\n\t.byte\t1\n\t.zero\t3\n\t.long\t33752069\n\t.long\t6",
+        ),
+        content="true",
+      )
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR sparse global array initializer" {
+  let source =
+    #|int g[4] = { [2] = 9, [0] = 1 };
+    #|int main(void) { return 0; }
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) =>
+      inspect(
+        assembly.contains("g:\n\t.long\t1\n\t.zero\t4\n\t.long\t9\n\t.zero\t4"),
+        content="true",
+      )
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR sparse aggregate field initializer" {
+  let source =
+    #|struct S { int a; int b; int c; };
+    #|struct S g = { .c = 9, .a = 1 };
+    #|int main(void) { return 0; }
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) =>
+      inspect(
+        assembly.contains("g:\n\t.long\t1\n\t.zero\t4\n\t.long\t9"),
+        content="true",
+      )
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR nested aggregate designator initializer" {
+  let source =
+    #|struct S { int a[4]; int b; };
+    #|struct S g = { .a = { [2] = 9 }, .b = 5 };
+    #|int main(void) { return 0; }
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) =>
+      inspect(
+        assembly.contains(
+          "g:\n\t.zero\t4\n\t.zero\t4\n\t.long\t9\n\t.zero\t4\n\t.long\t5",
+        ),
+        content="true",
+      )
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR global bit-field initializers" {
+  let source =
+    #|struct GBits { unsigned a : 3; signed b : 4; unsigned c : 5; };
+    #|union GUBits { unsigned a : 3; signed b : 4; };
+    #|struct GBits gbits = { .a = 5, .b = -3, .c = 17 };
+    #|union GUBits gubits = { .b = -3 };
+    #|int main(void) { return 0; }
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("gbits:\n\t.long\t2285"), content="true")
+      inspect(assembly.contains("gubits:\n\t.long\t13"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR global scalar initializer uses MIR metadata" {
+  let source = "int g = 0; int main(void) { return 42; }"
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  let g = mir.global_decls[0]
+  mir.global_decls[0] = {
+    ty: g.ty,
+    name: g.name,
+    init: Some(@mir.MirGlobalInit::MirGlobalScalarInt(11L)),
+    has_init: g.has_init,
+    is_static: g.is_static,
+    is_extern: g.is_extern,
+    is_weak: g.is_weak,
+    visibility: g.visibility,
+    symbol_alias: g.symbol_alias,
+    section: g.section,
+  }
+  match @codegen.generate_assembly_from_mir_strict(mir) {
+    Ok(assembly) => {
+      inspect(assembly.contains("g:\n\t.long\t11"), content="true")
+      inspect(assembly.contains("g:\n\t.long\t0"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR floating global initializers" {
+  let source =
+    #|double gfp_div = 1.0 / 2.0;
+    #|float gternary_int = 1 ? 3 / 2 : 9.0f;
+    #|int gfp_expr_to_int = (double)3 / 2;
+    #|int main(void) { return 0; }
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("gfp_div:\n\t.double\t0.5"), content="true")
+      inspect(assembly.contains("gternary_int:\n\t.float\t1"), content="true")
+      inspect(assembly.contains("gfp_expr_to_int:\n\t.long\t1"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 MIR body uses MIR function metadata" {
+  let source = "int main(void) { return 42; }"
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  let decl = mir.decls[0]
+  mir.decls[0] = {
+    ret: decl.ret,
+    name: decl.name,
+    params: decl.params,
+    variadic: decl.variadic,
+    is_static: decl.is_static,
+    is_inline: decl.is_inline,
+    is_weak: true,
+    visibility: decl.visibility,
+    symbol_alias: decl.symbol_alias,
+    section: decl.section,
+    is_constructor: decl.is_constructor,
+    is_destructor: decl.is_destructor,
+    has_body: decl.has_body,
+  }
+  let assembly = @codegen.generate_assembly_from_mir(mir)
+  inspect(assembly.contains("\t.weak\tmain"), content="true")
+  inspect(assembly.contains("\t.globl\tmain"), content="false")
+}
+
+///|
+test "strict MIR assembly rejects parser body fallback" {
+  let source =
+    #|int main(void) {
+    #|  goto *0;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="false")
+  match @codegen.generate_assembly_from_mir_strict(mir) {
+    Ok(_) => abort("expected strict MIR codegen rejection")
+    Err(err) =>
+      inspect(err.contains("missing MIR body for main"), content="true")
+  }
+}
+
+///|
+test "strict target assembly rejects parser body fallback" {
+  let source =
+    #|int main(void) {
+    #|  goto *0;
+    #|}
+  let prog = @parser.parse(source)
+  match
+    @codegen.generate_assembly_for_target_strict(
+      prog,
+      @target.Target::default(),
+    ) {
+    Ok(_) => abort("expected strict target codegen rejection")
+    Err(err) =>
+      inspect(err.contains("missing MIR body for main"), content="true")
+  }
+}
+
+///|
+test "parser AST codegen fallback is explicit" {
+  let source =
+    #|int main(void) {
+    #|  goto *0;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  let assembly = @codegen.generate_assembly_from_mir_with_parser_fallback(mir)
+  inspect(assembly.contains("kimicc: mir-body"), content="false")
+  inspect(assembly.contains("_main:"), content="true")
+  let prog = @parser.parse(source)
+  let target_assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog,
+    @target.Target::default(),
+  )
+  inspect(target_assembly.contains("kimicc: mir-body"), content="false")
+  inspect(target_assembly.contains("_main:"), content="true")
+}
+
+///|
+test "strict MIR assembly rejects parser global initializer fallback" {
+  let source =
+    #|int g[1] = { [2] = 9 };
+    #|int main(void) { return 0; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_strict(mir) {
+    Ok(_) => abort("expected strict MIR global initializer rejection")
+    Err(err) =>
+      inspect(
+        err.contains("unsupported MIR global initializer for g"),
+        content="true",
+      )
+  }
+}
+
+///|
+test "generate darwin arm64 MIR body direct call" {
+  let source =
+    #|int add(int a, int b) { return a + b; }
+    #|int main(void) { return add(20, 22); }
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+  inspect(assembly.contains("\tbl\t_add"), content="true")
+}
+
+///|
+test "generate darwin arm64 MIR body declared external call" {
+  let source =
+    #|int ext(int x);
+    #|int main(void) { return ext(42); }
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+  inspect(assembly.contains("\tbl\t_ext"), content="true")
+}
+
+///|
+test "generate darwin arm64 MIR body for loop control" {
+  let source =
+    #|int main(void) {
+    #|  int sum = 0;
+    #|  for (int i = 0; i < 8; i = i + 1) {
+    #|    if (i == 2) continue;
+    #|    if (i == 6) break;
+    #|    sum = sum + i;
+    #|  }
+    #|  return sum;
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+  inspect(assembly.contains("\tb\tL"), content="true")
+}
+
+///|
+test "generate darwin arm64 MIR body do while control" {
+  let source =
+    #|int main(void) {
+    #|  int i = 0;
+    #|  do {
+    #|    i = i + 1;
+    #|  } while (i < 3);
+    #|  return i;
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+  inspect(assembly.contains("\tcbnz\tx9, L"), content="true")
+}
+
+///|
+test "generate darwin arm64 MIR body switch control" {
+  let source =
+    #|int main(void) {
+    #|  int total = 0;
+    #|  switch (2) {
+    #|    case 1: total = 10; break;
+    #|    case 2: total = 20; break;
+    #|    default: total = 30;
+    #|  }
+    #|  return total;
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+  inspect(assembly.contains("\tb.eq\tL"), content="true")
+}
+
+///|
+test "generate darwin arm64 MIR body goto control" {
+  let source =
+    #|int main(void) {
+    #|  int x = 1;
+    #|  x++;
+    #|  x += 2;
+    #|  goto done;
+    #|  x = 0;
+    #|done:
+    #|  return x;
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+  inspect(assembly.contains("\tb\t_main_label_done"), content="true")
+}
+
+///|
+test "generate darwin arm64 MIR body address cancellation" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  *&x += 5;
+    #|  return *&x;
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+}
+
+///|
+test "generate darwin arm64 MIR body postfix update value" {
+  let source =
+    #|int main(void) {
+    #|  int i = 4;
+    #|  int old = i++;
+    #|  return old * 10 + i;
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+}
+
+///|
+test "generate darwin arm64 MIR body scalar local pointer" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int *p = &x;
+    #|  *p += 5;
+    #|  return x + *p;
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+}
+
+///|
+test "generate darwin arm64 MIR body scalar local array" {
+  let source =
+    #|int main(void) {
+    #|  int a[3];
+    #|  a[0] = 4;
+    #|  a[1] = a[0] + 5;
+    #|  return a[0] + a[1];
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+}
+
+///|
+test "generate darwin arm64 MIR body scalar memory prefix updates" {
+  let source =
+    #|struct S { int x; };
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int *p = &x;
+    #|  int a[2];
+    #|  struct S s;
+    #|  a[0] = 2;
+    #|  s.x = 7;
+    #|  ++*p;
+    #|  --a[0];
+    #|  ++s.x;
+    #|  return x + a[0] + s.x;
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+}
+
+///|
+test "generate darwin arm64 MIR body side effecting memory prefix update" {
+  let source =
+    #|int main(void) {
+    #|  int a[2];
+    #|  int i = 0;
+    #|  a[0] = 4;
+    #|  int got = ++a[i++];
+    #|  return got * 10 + a[0] + i;
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+}
+
+///|
+test "generate darwin arm64 MIR body side effecting memory compound update" {
+  let source =
+    #|int main(void) {
+    #|  int a[2];
+    #|  int i = 0;
+    #|  a[0] = 4;
+    #|  int got = (a[i++] += 3);
+    #|  return got * 10 + a[0] + i;
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+}
+
+///|
+test "generate darwin arm64 MIR body side effecting non-additive compound update" {
+  let source =
+    #|int main(void) {
+    #|  int a[2];
+    #|  int i = 0;
+    #|  a[0] = 4;
+    #|  int got = (a[i++] *= 3);
+    #|  return got * 10 + a[0] + i;
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+}
+
+///|
+test "generate darwin arm64 MIR body scalar memory postfix updates" {
+  let source =
+    #|struct S { int x; };
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int *p = &x;
+    #|  int a[2];
+    #|  int i = 0;
+    #|  struct S s;
+    #|  a[0] = 9;
+    #|  s.x = 7;
+    #|  int old_p = (*p)++;
+    #|  int old_a = a[i++]--;
+    #|  int old_s = s.x++;
+    #|  return old_p * 1000 + old_a * 100 + old_s * 10 + x + a[0] + s.x + i;
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+}
+
+///|
+test "generate darwin arm64 MIR body folded builtin call" {
+  let source =
+    #|int main(void) {
+    #|  int x = 0;
+    #|  return __builtin_constant_p(1 + 2) * 10 +
+    #|    __builtin_constant_p(x) +
+    #|    __builtin_unpredictable(5) +
+    #|    (__builtin_bswap32(0x01020304u) == 0x04030201u) +
+    #|    __builtin_flt_rounds() +
+    #|    (__builtin_object_size("abc", 0) == 4) +
+    #|    (__builtin_dynamic_object_size("a\0bc", 2) == 5) +
+    #|    (__builtin_object_size(&x, 0) == sizeof(x)) +
+    #|    (__builtin_strlen((char *)"hello") == 5) +
+    #|    (__builtin_strlen("a\0bc") == 1);
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+}
+
+///|
+test "generate darwin arm64 MIR body identity builtin calls" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  void *p = (void *)32;
+    #|  void *ra = (void *)77;
+    #|  return __builtin_expect(x, 1) +
+    #|    __builtin_expect_with_probability(x, 0, 0.9) +
+    #|    ((unsigned long)__builtin_assume_aligned(p, 16) == 32ul) +
+    #|    ((unsigned long)__builtin_extract_return_addr(ra) == 77ul) +
+    #|    ((unsigned long)__builtin_frob_return_addr(ra) == 77ul);
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+}
+
+///|
+test "generate darwin arm64 MIR body no-op builtins" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  __builtin_prefetch((void *)(long)(side += 1), 0, 0);
+    #|  __builtin_assume(side += 10);
+    #|  return side + 41;
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+}
+
+///|
+test "generate darwin arm64 MIR body scalar globals" {
+  let source =
+    #|int g = 5;
+    #|int h;
+    #|int bump(void) {
+    #|  g += 3;
+    #|  h = g++;
+    #|  return h;
+    #|}
+    #|int main(void) {
+    #|  h = 2;
+    #|  return bump() + g + h;
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_bump:"),
+    content="true",
+  )
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+}
+
+///|
+test "generate darwin arm64 MIR body scalar global arrays" {
+  let source =
+    #|int a[3];
+    #|int main(void) {
+    #|  a[0] = 4;
+    #|  a[1] = a[0] + 5;
+    #|  int *p = &a[1];
+    #|  p[1] = 7;
+    #|  return a[0] + a[1] + a[2];
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+}
+
+///|
+test "generate darwin arm64 strict MIR scalar global pointer loads" {
+  let source =
+    #|int a[2];
+    #|int *p;
+    #|int main(void) {
+    #|  a[0] = 21;
+    #|  p = &a[0];
+    #|  if (*p != 21) return 1;
+    #|  *p = 42;
+    #|  return *p;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(
+        assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+        content="true",
+      )
+      inspect(assembly.contains("_p:"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 MIR body initialized scalar global arrays" {
+  let source =
+    #|int a[3] = {1, 2, 3};
+    #|int main(void) {
+    #|  a[1] += 5;
+    #|  return a[0] + a[1] + a[2];
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+}
+
+///|
+test "generate darwin arm64 MIR body string literal byte loads" {
+  let source =
+    #|int main(void) {
+    #|  char *s = "abc";
+    #|  return s[1] + "xy"[0] + "z"[1];
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(assembly.contains("kimicc: mir-body"), content="true")
+  inspect(assembly.contains("\t.asciz\t\"abc\""), content="true")
+  inspect(assembly.contains("\t.asciz\t\"xy\""), content="true")
+  inspect(assembly.contains("\t.asciz\t\"z\""), content="true")
+}
+
+///|
+test "generate darwin arm64 keeps side effecting identity builtin operands in MIR" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int side = 0;
+    #|  return __builtin_expect(x, side += 1) + side;
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(assembly.contains("kimicc: mir-body"), content="true")
+}
+
+///|
+test "generate darwin arm64 MIR body scalar aggregate field" {
+  let source =
+    #|struct S { int x; unsigned char y; };
+    #|int main(void) {
+    #|  struct S s;
+    #|  s.x = 4;
+    #|  s.y = 250 + 10;
+    #|  return s.x + s.y;
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
+}
+
+///|
+test "generate darwin arm64 MIR body nested aggregate field" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { struct Inner inner; };
+    #|int main(void) {
+    #|  struct S s;
+    #|  s.inner.z = 7;
+    #|  return s.inner.z;
+    #|}
+  let assembly = generate_darwin_mir_fallback(source)
+  inspect(
+    assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+    content="true",
+  )
 }
 
 ///|
@@ -41,6 +3335,27 @@ test "generate darwin arm64 global scalar constants use expression type" {
   inspect(assembly.contains("_dgternary_int:\n\t.single\t1"), content="true")
   inspect(assembly.contains("_dgint_from_float:\n\t.long\t1"), content="true")
   inspect(assembly.contains("_dgfp_expr_to_int:\n\t.long\t1"), content="true")
+}
+
+///|
+test "generate darwin arm64 integer-looking floating literals stay assembler floats" {
+  let source =
+    #|double dglarge = 18446744073709551616.0L;
+    #|double parse_number_like(void) { return 18446744073709551616.0L; }
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(
+    assembly.contains("_dglarge:\n\t.double\t18446744073709552000.0"),
+    content="true",
+  )
+  inspect(
+    assembly.contains(
+      "_fp_lit_parse_number_like_0:\n\t.double\t18446744073709552000.0",
+    ),
+    content="true",
+  )
 }
 
 ///|
@@ -158,27 +3473,54 @@ test "generate darwin arm64 global bit-field initializers" {
 }
 
 ///|
-test "generate darwin arm64 lowers return address builtin" {
+test "generate darwin arm64 strict MIR global bit-field initializers" {
+  let source =
+    #|struct DBits { unsigned a : 3; signed b : 4; unsigned c : 5; };
+    #|union DUBits { unsigned a : 3; signed b : 4; };
+    #|struct DBits dbits = { .a = 5, .b = -3, .c = 17 };
+    #|union DUBits dubits = { .b = -3 };
+    #|int main(void) { return 0; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_dbits:\n\t.long\t2285"), content="true")
+      inspect(assembly.contains("_dubits:\n\t.long\t13"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR lowers return address builtin" {
   let source =
     #|int main(void) {
     #|  void *fa = __builtin_frame_address(0);
     #|  void *ra = __builtin_return_address(0);
     #|  if (fa == 0) return 1;
     #|  if (ra == 0) return 2;
-    #|  if (__builtin_return_address(1) != 0) return 3;
-    #|  if (__builtin_extract_return_addr(ra) != ra) return 4;
-    #|  if (__builtin_frob_return_addr(ra) != ra) return 5;
+    #|  if (__builtin_frame_address(1) != 0) return 3;
+    #|  if (__builtin_return_address(1) != 0) return 4;
+    #|  if (__builtin_extract_return_addr(ra) != ra) return 5;
+    #|  if (__builtin_frob_return_addr(ra) != ra) return 6;
     #|  return 0;
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
-  inspect(assembly.contains("\tmov\tx9, x29"), content="true")
-  inspect(assembly.contains("\tldr\tx9, [x29, #8]"), content="true")
-  inspect(assembly.contains("__builtin_return_address"), content="false")
-  inspect(assembly.contains("__builtin_frame_address"), content="false")
-  inspect(assembly.contains("__builtin_extract_return_addr"), content="false")
-  inspect(assembly.contains("__builtin_frob_return_addr"), content="false")
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tmov\tx9, x29"), content="true")
+      inspect(assembly.contains("\tldr\tx9, [x29, #8]"), content="true")
+      inspect(assembly.contains("\tmov\tx9, #0"), content="true")
+      inspect(assembly.contains("__builtin_return_address"), content="false")
+      inspect(assembly.contains("__builtin_frame_address"), content="false")
+      inspect(
+        assembly.contains("__builtin_extract_return_addr"),
+        content="false",
+      )
+      inspect(assembly.contains("__builtin_frob_return_addr"), content="false")
+    }
+    Err(err) => abort(err)
+  }
 }
 
 ///|
@@ -225,8 +3567,734 @@ test "generate linux amd64 simple function" {
   let assembly = @codegen.generate_assembly_for_target(prog, target)
   inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
   inspect(assembly.contains("\t.globl\tmain"), content="true")
+  inspect(assembly.contains("kimicc: mir-body"), content="false")
   inspect(assembly.contains("\tmov\trax, 42"), content="true")
   inspect(assembly.contains("_main:"), content="false")
+}
+
+///|
+test "generate linux amd64 MIR body direct call" {
+  let source =
+    #|int add(int a, int b) { return a + b; }
+    #|int main(void) { return add(20, 22); }
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+  inspect(assembly.contains("\tcall\tadd"), content="true")
+}
+
+///|
+test "generate linux amd64 MIR body declared external call" {
+  let source =
+    #|int ext(int x);
+    #|int main(void) { return ext(42); }
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+  inspect(assembly.contains("\tcall\text"), content="true")
+}
+
+///|
+test "generate linux amd64 MIR body for loop control" {
+  let source =
+    #|int main(void) {
+    #|  int sum = 0;
+    #|  for (int i = 0; i < 8; i = i + 1) {
+    #|    if (i == 2) continue;
+    #|    if (i == 6) break;
+    #|    sum = sum + i;
+    #|  }
+    #|  return sum;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+  inspect(assembly.contains("\tjmp\t.L"), content="true")
+}
+
+///|
+test "generate linux amd64 MIR body do while control" {
+  let source =
+    #|int main(void) {
+    #|  int i = 0;
+    #|  do {
+    #|    i = i + 1;
+    #|  } while (i < 3);
+    #|  return i;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+  inspect(assembly.contains("\tjne\t.L"), content="true")
+}
+
+///|
+test "generate linux amd64 MIR body switch control" {
+  let source =
+    #|int main(void) {
+    #|  int total = 0;
+    #|  switch (2) {
+    #|    case 1: total = 10; break;
+    #|    case 2: total = 20; break;
+    #|    default: total = 30;
+    #|  }
+    #|  return total;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+  inspect(assembly.contains("\tje\t.L"), content="true")
+}
+
+///|
+test "generate linux amd64 MIR body goto control" {
+  let source =
+    #|int main(void) {
+    #|  int x = 1;
+    #|  x++;
+    #|  x += 2;
+    #|  goto done;
+    #|  x = 0;
+    #|done:
+    #|  return x;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+  inspect(assembly.contains("\tjmp\t.Lmain_label_done"), content="true")
+}
+
+///|
+test "generate linux amd64 MIR body address cancellation" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  *&x += 5;
+    #|  return *&x;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+}
+
+///|
+test "generate linux amd64 MIR body postfix update value" {
+  let source =
+    #|int main(void) {
+    #|  int i = 4;
+    #|  int old = i++;
+    #|  return old * 10 + i;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+}
+
+///|
+test "generate linux amd64 MIR body scalar local pointer" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int *p = &x;
+    #|  *p += 5;
+    #|  return x + *p;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+}
+
+///|
+test "generate linux amd64 MIR body scalar local array" {
+  let source =
+    #|int main(void) {
+    #|  int a[3];
+    #|  a[0] = 4;
+    #|  a[1] = a[0] + 5;
+    #|  return a[0] + a[1];
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+}
+
+///|
+test "generate linux amd64 MIR body scalar memory prefix updates" {
+  let source =
+    #|struct S { int x; };
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int *p = &x;
+    #|  int a[2];
+    #|  struct S s;
+    #|  a[0] = 2;
+    #|  s.x = 7;
+    #|  ++*p;
+    #|  --a[0];
+    #|  ++s.x;
+    #|  return x + a[0] + s.x;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+}
+
+///|
+test "generate linux amd64 MIR body side effecting memory prefix update" {
+  let source =
+    #|int main(void) {
+    #|  int a[2];
+    #|  int i = 0;
+    #|  a[0] = 4;
+    #|  int got = ++a[i++];
+    #|  return got * 10 + a[0] + i;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+}
+
+///|
+test "generate linux amd64 MIR body side effecting memory compound update" {
+  let source =
+    #|int main(void) {
+    #|  int a[2];
+    #|  int i = 0;
+    #|  a[0] = 4;
+    #|  int got = (a[i++] += 3);
+    #|  return got * 10 + a[0] + i;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+}
+
+///|
+test "generate linux amd64 MIR body side effecting non-additive compound update" {
+  let source =
+    #|int main(void) {
+    #|  int a[2];
+    #|  int i = 0;
+    #|  a[0] = 4;
+    #|  int got = (a[i++] *= 3);
+    #|  return got * 10 + a[0] + i;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+}
+
+///|
+test "generate linux amd64 MIR body scalar memory postfix updates" {
+  let source =
+    #|struct S { int x; };
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int *p = &x;
+    #|  int a[2];
+    #|  int i = 0;
+    #|  struct S s;
+    #|  a[0] = 9;
+    #|  s.x = 7;
+    #|  int old_p = (*p)++;
+    #|  int old_a = a[i++]--;
+    #|  int old_s = s.x++;
+    #|  return old_p * 1000 + old_a * 100 + old_s * 10 + x + a[0] + s.x + i;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+}
+
+///|
+test "generate linux amd64 MIR body folded builtin call" {
+  let source =
+    #|int main(void) {
+    #|  int x = 0;
+    #|  return __builtin_constant_p(1 + 2) * 10 +
+    #|    __builtin_constant_p(x) +
+    #|    __builtin_unpredictable(5) +
+    #|    (__builtin_bswap32(0x01020304u) == 0x04030201u) +
+    #|    __builtin_flt_rounds() +
+    #|    (__builtin_object_size("abc", 0) == 4) +
+    #|    (__builtin_dynamic_object_size("a\0bc", 2) == 5) +
+    #|    (__builtin_object_size(&x, 0) == sizeof(x)) +
+    #|    (__builtin_strlen((char *)"hello") == 5) +
+    #|    (__builtin_strlen("a\0bc") == 1);
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+}
+
+///|
+test "generate linux amd64 MIR body identity builtin calls" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  void *p = (void *)32;
+    #|  void *ra = (void *)77;
+    #|  return __builtin_expect(x, 1) +
+    #|    __builtin_expect_with_probability(x, 0, 0.9) +
+    #|    ((unsigned long)__builtin_assume_aligned(p, 16) == 32ul) +
+    #|    ((unsigned long)__builtin_extract_return_addr(ra) == 77ul) +
+    #|    ((unsigned long)__builtin_frob_return_addr(ra) == 77ul);
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+}
+
+///|
+test "generate linux amd64 MIR body no-op builtins" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  __builtin_prefetch((void *)(long)(side += 1), 0, 0);
+    #|  __builtin_assume(side += 10);
+    #|  return side + 41;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+}
+
+///|
+test "generate linux amd64 MIR body scalar globals" {
+  let source =
+    #|int g = 5;
+    #|int h;
+    #|int bump(void) {
+    #|  g += 3;
+    #|  h = g++;
+    #|  return h;
+    #|}
+    #|int main(void) {
+    #|  h = 2;
+    #|  return bump() + g + h;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tbump, @function"),
+    content="true",
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+}
+
+///|
+test "generate linux amd64 global scalar initializer uses MIR metadata" {
+  let source = "int g = 0; int main(void) { return g; }"
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  let g = mir.global_decls[0]
+  mir.global_decls[0] = {
+    ty: g.ty,
+    name: g.name,
+    init: Some(@mir.MirGlobalInit::MirGlobalScalarInt(7L)),
+    has_init: g.has_init,
+    is_static: g.is_static,
+    is_extern: g.is_extern,
+    is_weak: true,
+    visibility: g.visibility,
+    symbol_alias: g.symbol_alias,
+    section: g.section,
+  }
+  let assembly = @codegen.generate_assembly_from_mir(mir)
+  inspect(assembly.contains("\t.weak\tg"), content="true")
+  inspect(assembly.contains("\t.globl\tg"), content="false")
+  inspect(assembly.contains("g:\n\t.long\t7"), content="true")
+  inspect(assembly.contains("g:\n\t.long\t0"), content="false")
+}
+
+///|
+test "generate linux amd64 global symbol initializer uses MIR metadata" {
+  let source = "int g; int *p = 0; int main(void) { return 0; }"
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  let p = mir.global_decls[1]
+  mir.global_decls[1] = {
+    ty: p.ty,
+    name: p.name,
+    init: Some(@mir.MirGlobalInit::MirGlobalSymbol("g")),
+    has_init: p.has_init,
+    is_static: p.is_static,
+    is_extern: p.is_extern,
+    is_weak: p.is_weak,
+    visibility: p.visibility,
+    symbol_alias: p.symbol_alias,
+    section: p.section,
+  }
+  let assembly = @codegen.generate_assembly_from_mir(mir)
+  inspect(assembly.contains("p:\n\t.quad\tg"), content="true")
+  inspect(assembly.contains("p:\n\t.quad\t0"), content="false")
+}
+
+///|
+test "generate linux amd64 global symbol offset initializer uses MIR metadata" {
+  let source = "int g[3]; int *p = 0; int main(void) { return 0; }"
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  let p = mir.global_decls[1]
+  mir.global_decls[1] = {
+    ty: p.ty,
+    name: p.name,
+    init: Some(@mir.MirGlobalInit::MirGlobalSymbolOffset("g", 4)),
+    has_init: p.has_init,
+    is_static: p.is_static,
+    is_extern: p.is_extern,
+    is_weak: p.is_weak,
+    visibility: p.visibility,
+    symbol_alias: p.symbol_alias,
+    section: p.section,
+  }
+  let assembly = @codegen.generate_assembly_from_mir(mir)
+  inspect(assembly.contains("p:\n\t.quad\tg+4"), content="true")
+  inspect(assembly.contains("p:\n\t.quad\t0"), content="false")
+}
+
+///|
+test "generate linux amd64 MIR body scalar global arrays" {
+  let source =
+    #|int a[3];
+    #|int main(void) {
+    #|  a[0] = 4;
+    #|  a[1] = a[0] + 5;
+    #|  int *p = &a[1];
+    #|  p[1] = 7;
+    #|  return a[0] + a[1] + a[2];
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+}
+
+///|
+test "generate linux amd64 strict MIR scalar global pointer loads" {
+  let source =
+    #|int a[2];
+    #|int *p;
+    #|int main(void) {
+    #|  a[0] = 21;
+    #|  p = &a[0];
+    #|  if (*p != 21) return 1;
+    #|  *p = 42;
+    #|  return *p;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(
+        assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+        content="true",
+      )
+      inspect(assembly.contains("p:\n\t.zero\t8"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 MIR body initialized scalar global arrays" {
+  let source =
+    #|int a[3] = {1, 2, 3};
+    #|int main(void) {
+    #|  a[1] += 5;
+    #|  return a[0] + a[1] + a[2];
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+}
+
+///|
+test "generate linux amd64 MIR body string literal byte loads" {
+  let source =
+    #|int main(void) {
+    #|  char *s = "abc";
+    #|  return s[1] + "xy"[0] + "z"[1];
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(assembly.contains("kimicc: mir-body"), content="true")
+  inspect(assembly.contains("\t.asciz\t\"abc\""), content="true")
+  inspect(assembly.contains("\t.asciz\t\"xy\""), content="true")
+  inspect(assembly.contains("\t.asciz\t\"z\""), content="true")
+}
+
+///|
+test "generate linux amd64 keeps side effecting identity builtin operands in MIR" {
+  let source =
+    #|int main(void) {
+    #|  int x = 4;
+    #|  int side = 0;
+    #|  return __builtin_expect(x, side += 1) + side;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(assembly.contains("kimicc: mir-body"), content="true")
+}
+
+///|
+test "generate linux amd64 MIR body scalar aggregate field" {
+  let source =
+    #|struct S { int x; unsigned char y; };
+    #|int main(void) {
+    #|  struct S s;
+    #|  s.x = 4;
+    #|  s.y = 250 + 10;
+    #|  return s.x + s.y;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+}
+
+///|
+test "generate linux amd64 MIR body nested aggregate field" {
+  let source =
+    #|struct Inner { int z; };
+    #|struct S { struct Inner inner; };
+    #|int main(void) {
+    #|  struct S s;
+    #|  s.inner.z = 7;
+    #|  return s.inner.z;
+    #|}
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
 }
 
 ///|
@@ -303,10 +4371,15 @@ test "generate linux amd64 postfix increment stores new value and returns old va
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
-  inspect(assembly.contains("pop\trdx"), content="true")
-  inspect(assembly.contains("pop\tr10"), content="true")
-  inspect(assembly.contains("mov\trax, rdx"), content="true")
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
+  inspect(
+    assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+    content="true",
+  )
+  inspect(assembly.contains("\tmov\tQWORD PTR [rsp], rax"), content="true")
+  inspect(assembly.contains("\tadd\trsp, 16"), content="true")
 }
 
 ///|
@@ -630,7 +4703,7 @@ test "generate linux amd64 lowers scalar hint builtins" {
   inspect(assembly.contains("\tmov\trax, rbp"), content="true")
   inspect(assembly.contains("\tmov\trax, QWORD PTR [rbp + 8]"), content="true")
   inspect(assembly.contains("side_effect_prefetch:"), content="true")
-  inspect(assembly.contains("mov\tDWORD PTR [r10], eax"), content="true")
+  inspect(assembly.contains("mov\tDWORD PTR [rbp - 16], eax"), content="true")
   inspect(assembly.contains("call\thint_bump"), content="true")
   inspect(assembly.contains("call\t__builtin_expect"), content="false")
   inspect(
@@ -810,33 +4883,51 @@ test "generate linux amd64 lowers fortified formatted builtins" {
 test "generate linux amd64 lowers bit builtins" {
   let source =
     #|int main(void) {
-    #|  if (__builtin_clz(1u) != 31) return 1;
-    #|  if (__builtin_clzl(1ul) != 63) return 2;
-    #|  if (__builtin_clzll(1ull) != 63) return 3;
-    #|  if (__builtin_ctz(8u) != 3) return 4;
-    #|  if (__builtin_ctzl(16ul) != 4) return 5;
-    #|  if (__builtin_ctzll(32ull) != 5) return 6;
+    #|  unsigned u1 = 1u;
+    #|  unsigned u8 = 8u;
+    #|  unsigned u16 = 16u;
+    #|  unsigned u32 = 32u;
+    #|  unsigned u0102 = 0x0102u;
+    #|  unsigned u01020304 = 0x01020304u;
+    #|  unsigned urot = 0x12345678u;
+    #|  unsigned upop = 0xf0f0u;
+    #|  unsigned upar = 0xf0f1u;
+    #|  unsigned long ul1 = 1ul;
+    #|  unsigned long ul16 = 16ul;
+    #|  unsigned long ulpop = 0x0f0f0f0f0f0f0f0ful;
+    #|  unsigned long long ull1 = 1ull;
+    #|  unsigned long long ull32 = 32ull;
+    #|  unsigned long long ullswap = 0x0102030405060708ull;
+    #|  unsigned long long ullrot = 0x0123456789abcdefull;
+    #|  unsigned long long ullpop = 0x0f0f0f0f0f0f0f0full;
+    #|  unsigned long long ullpar = 0x0f0f0f0f0f0f0f0eull;
+    #|  if (__builtin_clz(u1) != 31) return 1;
+    #|  if (__builtin_clzl(ul1) != 63) return 2;
+    #|  if (__builtin_clzll(ull1) != 63) return 3;
+    #|  if (__builtin_ctz(u8) != 3) return 4;
+    #|  if (__builtin_ctzl(ul16) != 4) return 5;
+    #|  if (__builtin_ctzll(ull32) != 5) return 6;
     #|  if (__builtin_ffs(0u) != 0) return 17;
-    #|  if (__builtin_ffs(8u) != 4) return 18;
-    #|  if (__builtin_ffsl(16ul) != 5) return 19;
-    #|  if (__builtin_ffsll(32ull) != 6) return 20;
-    #|  if ((__builtin_bswap16(0x0102u) & 255) != 1) return 7;
-    #|  if ((__builtin_bswap32(0x01020304u) & 255) != 1) return 8;
-    #|  if ((__builtin_bswap64(0x0102030405060708ull) & 255) != 1) return 9;
-    #|  if ((__builtin_bswap(0x01020304u) & 255) != 1) return 24;
-    #|  if ((__builtin_bswap(0x0102030405060708ull) & 255) != 1) return 25;
-    #|  if (__builtin_rotateleft32(0x12345678u, 8) != 0x34567812u) return 10;
-    #|  if ((__builtin_rotateright32(0x12345678u, 8) & 255) != 0x56) return 11;
-    #|  if ((__builtin_rotateleft64(0x0123456789abcdefull, 16) & 255) != 0x23) return 12;
-    #|  if ((__builtin_rotateright64(0x0123456789abcdefull, 16) & 255) != 0xab) return 13;
-    #|  if (__builtin_rotateleft(0x12345678u, 8) != 0x34567812u) return 26;
-    #|  if ((__builtin_rotateright(0x0123456789abcdefull, 16) & 255) != 0xab) return 27;
-    #|  if (__builtin_popcount(0xf0f0u) != 8) return 14;
-    #|  if (__builtin_popcountl(0x0f0f0f0f0f0f0f0ful) != 32) return 15;
-    #|  if (__builtin_popcountll(0x0f0f0f0f0f0f0f0full) != 32) return 16;
-    #|  if (__builtin_parity(0xf0f1u) != 1) return 21;
-    #|  if (__builtin_parityl(0x0f0f0f0f0f0f0f0ful) != 0) return 22;
-    #|  if (__builtin_parityll(0x0f0f0f0f0f0f0f0eull) != 1) return 23;
+    #|  if (__builtin_ffs(u8) != 4) return 18;
+    #|  if (__builtin_ffsl(ul16) != 5) return 19;
+    #|  if (__builtin_ffsll(ull32) != 6) return 20;
+    #|  if ((__builtin_bswap16(u0102) & 255) != 1) return 7;
+    #|  if ((__builtin_bswap32(u01020304) & 255) != 1) return 8;
+    #|  if ((__builtin_bswap64(ullswap) & 255) != 1) return 9;
+    #|  if ((__builtin_bswap(u01020304) & 255) != 1) return 24;
+    #|  if ((__builtin_bswap(ullswap) & 255) != 1) return 25;
+    #|  if (__builtin_rotateleft32(urot, 8) != 0x34567812u) return 10;
+    #|  if ((__builtin_rotateright32(urot, 8) & 255) != 0x56) return 11;
+    #|  if ((__builtin_rotateleft64(ullrot, 16) & 255) != 0x23) return 12;
+    #|  if ((__builtin_rotateright64(ullrot, 16) & 255) != 0xab) return 13;
+    #|  if (__builtin_rotateleft(urot, 8) != 0x34567812u) return 26;
+    #|  if ((__builtin_rotateright(ullrot, 16) & 255) != 0xab) return 27;
+    #|  if (__builtin_popcount(upop) != 8) return 14;
+    #|  if (__builtin_popcountl(ulpop) != 32) return 15;
+    #|  if (__builtin_popcountll(ullpop) != 32) return 16;
+    #|  if (__builtin_parity(upar) != 1) return 21;
+    #|  if (__builtin_parityl(ulpop) != 0) return 22;
+    #|  if (__builtin_parityll(ullpar) != 1) return 23;
     #|  return 0;
     #|}
   let prog = @parser.parse(source)
@@ -1103,10 +5194,14 @@ test "generate linux amd64 lowers overflow builtins" {
 test "generate linux amd64 lowers integer abs builtins" {
   let source =
     #|int main(void) {
-    #|  if (__builtin_abs(-7) != 7) return 1;
-    #|  if (__builtin_abs(5) != 5) return 2;
-    #|  if (__builtin_labs(-1234567890123L) != 1234567890123L) return 3;
-    #|  if (__builtin_llabs(-900000000000000000LL) != 900000000000000000LL) return 4;
+    #|  int neg = -7;
+    #|  int pos = 5;
+    #|  long lneg = -1234567890123L;
+    #|  long long llneg = -900000000000000000LL;
+    #|  if (__builtin_abs(neg) != 7) return 1;
+    #|  if (__builtin_abs(pos) != 5) return 2;
+    #|  if (__builtin_labs(lneg) != 1234567890123L) return 3;
+    #|  if (__builtin_llabs(llneg) != 900000000000000000LL) return 4;
     #|  return 0;
     #|}
   let prog = @parser.parse(source)
@@ -1819,6 +5914,28 @@ test "generate linux amd64 global floating constants use expression type" {
   inspect(assembly.contains("gternary_int:\n\t.float\t1"), content="true")
   inspect(assembly.contains("gint_from_float:\n\t.long\t1"), content="true")
   inspect(assembly.contains("gfp_expr_to_int:\n\t.long\t1"), content="true")
+}
+
+///|
+test "generate linux amd64 integer-looking floating literals stay assembler floats" {
+  let source =
+    #|double glarge = 18446744073709551616.0L;
+    #|double parse_number_like(void) { return 18446744073709551616.0L; }
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(
+    assembly.contains("glarge:\n\t.double\t18446744073709552000.0"),
+    content="true",
+  )
+  inspect(
+    assembly.contains(".Lfp0:\n\t.double\t18446744073709552000.0"),
+    content="true",
+  )
 }
 
 ///|

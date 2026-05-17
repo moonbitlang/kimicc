@@ -361,19 +361,62 @@ fn Interpreter::init_local_string_array(
 }
 
 ///|
+fn interpreter_global_has_init(g : @parser.GlobalDecl) -> Bool {
+  g.init is Some(_)
+}
+
+///|
+fn interpreter_should_replace_global_decl(
+  old : @parser.GlobalDecl,
+  next : @parser.GlobalDecl,
+) -> Bool {
+  if next.is_extern && !interpreter_global_has_init(next) {
+    false
+  } else if !interpreter_global_has_init(old) &&
+    interpreter_global_has_init(next) {
+    true
+  } else if old.is_extern && !next.is_extern {
+    true
+  } else if interpreter_global_has_init(old) &&
+    !interpreter_global_has_init(next) {
+    false
+  } else {
+    interpreter_global_has_init(next)
+  }
+}
+
+///|
+fn interpreter_merge_parser_globals(
+  globals : Array[@parser.GlobalDecl],
+) -> Map[String, @parser.GlobalDecl] {
+  let merged : Map[String, @parser.GlobalDecl] = {}
+  for g in globals {
+    if !merged.contains(g.name) ||
+      interpreter_should_replace_global_decl(merged[g.name], g) {
+      merged[g.name] = g
+    }
+  }
+  merged
+}
+
+///|
 fn Interpreter::init_globals(self : Interpreter) -> Unit {
   let seen : Map[String, Bool] = {}
+  let parser_globals = interpreter_merge_parser_globals(
+    self.program.source.globals,
+  )
   for original in self.program.source.globals {
     if self.program.globals.contains(original.name) &&
       !seen.contains(original.name) {
       seen[original.name] = true
       let decl = self.program.globals[original.name]
+      let parser_decl = parser_globals[original.name]
       if !self.program.runtime_int_type(decl.ty) {
         // Non-runtime globals still provide type facts through Program::globals.
-        self.init_global_string_array(decl.name, decl.ty, decl.init)
+        self.init_global_string_array(decl.name, decl.ty, parser_decl.init)
         continue
       }
-      let value = match decl.init {
+      let value = match parser_decl.init {
         None => 0L
         Some(Scalar(expr)) =>
           self.eval_global_scalar_initializer(decl.name, decl.ty, expr)

@@ -33,6 +33,7 @@ fn expect_semantic_opt_int(
 ///|
 fn init_darwin_codegen_facts(prog : @parser.Program) -> Codegen {
   let codegen = Codegen::new()
+  let mir = @mir.lower(prog, @target.Target::default())
   for decl in prog.structs {
     codegen.struct_decls[decl.name] = decl
   }
@@ -49,8 +50,8 @@ fn init_darwin_codegen_facts(prog : @parser.Program) -> Codegen {
     }
     codegen.func_param_types[decl.name] = param_types
   }
-  for global in prog.globals {
-    codegen.globals[global.name] = global
+  for global in @mir.merge_global_decls(mir.global_decls) {
+    codegen.globals[global.name] = codegen_global_decl_from_mir(global)
   }
   codegen
 }
@@ -58,6 +59,7 @@ fn init_darwin_codegen_facts(prog : @parser.Program) -> Codegen {
 ///|
 fn init_x64_codegen_facts(prog : @parser.Program) -> X64Codegen {
   let codegen = X64Codegen::new()
+  let mir = @mir.lower(prog, semantic_linux_target())
   for decl in prog.structs {
     codegen.struct_decls[decl.name] = decl
   }
@@ -73,8 +75,8 @@ fn init_x64_codegen_facts(prog : @parser.Program) -> X64Codegen {
     }
     codegen.func_param_types[decl.name] = param_types
   }
-  for global in prog.globals {
-    codegen.globals[global.name] = global
+  for global in @mir.merge_global_decls(mir.global_decls) {
+    codegen.globals[global.name] = codegen_global_decl_from_mir(global)
   }
   codegen
 }
@@ -1048,7 +1050,7 @@ test "attached linux amd64 semantic queries use MIR state" {
 }
 
 ///|
-test "direct linux amd64 codegen attaches MIR facts" {
+test "direct linux amd64 codegen registers parser facts" {
   let target = semantic_linux_target()
   let prog = @parser.parse_for_target(
     (
@@ -1063,7 +1065,7 @@ test "direct linux amd64 codegen attaches MIR facts" {
 }
 
 ///|
-test "direct darwin arm64 codegen attaches MIR facts" {
+test "direct darwin arm64 codegen registers parser facts" {
   let prog = @parser.parse(
     (
       #|long a = sizeof(__builtin_fabsl(-1.0L));

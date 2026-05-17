@@ -2,6 +2,7 @@
 priv struct X64Codegen {
   output : StringBuilder
   mut mir : @mir.Program?
+  mut mir_module : @mir.MirModule?
   mut label_counter : Int
   mut local_offsets : Map[String, Int]
   mut var_types : Map[String, @parser.Type]
@@ -20,7 +21,7 @@ priv struct X64Codegen {
     Array[(String, @parser.Type, Int, Int, Int, Int)],
   ]
   struct_decls : Map[String, @parser.StructDecl]
-  globals : Map[String, @parser.GlobalDecl]
+  globals : Map[String, CodegenGlobalDecl]
   strings : Array[String]
   fp_literals : Array[Double]
   mut va_list_offsets : Map[String, Int]
@@ -46,6 +47,7 @@ fn X64Codegen::new() -> X64Codegen {
   {
     output: StringBuilder::new(),
     mir: None,
+    mir_module: None,
     label_counter: 0,
     local_offsets: {},
     var_types: {},
@@ -87,7 +89,89 @@ fn X64Codegen::new() -> X64Codegen {
 fn X64Codegen::new_with_mir(mir : @mir.Program) -> X64Codegen {
   let codegen = X64Codegen::new()
   codegen.mir = Some(mir)
+  codegen.mir_module = Some(mir.to_module())
   codegen
+}
+
+///|
+fn X64Codegen::new_with_mir_module(mir : @mir.MirModule) -> X64Codegen {
+  let codegen = X64Codegen::new()
+  codegen.mir_module = Some(mir)
+  codegen
+}
+
+///|
+fn X64Codegen::register_mir_function_decls(
+  self : X64Codegen,
+  mir : @mir.MirModule,
+) -> Unit {
+  for decl in mir.decls {
+    self.func_rets[decl.name] = decl.ret
+    self.func_variadic[decl.name] = decl.variadic
+    self.func_param_counts[decl.name] = decl.params.length()
+    if decl.has_body || decl.symbol_alias is Some(_) {
+      self.func_defined[decl.name] = true
+    } else if !self.func_defined.contains(decl.name) {
+      self.func_defined[decl.name] = false
+    }
+    if decl.is_weak {
+      self.func_weak[decl.name] = true
+    } else if !self.func_weak.contains(decl.name) {
+      self.func_weak[decl.name] = false
+    }
+    let param_types = []
+    for param in decl.params {
+      param_types.push(param.ty)
+    }
+    self.func_param_types[decl.name] = param_types
+  }
+}
+
+///|
+fn X64Codegen::register_parser_function_decls(
+  self : X64Codegen,
+  decls : Array[@parser.FuncDecl],
+) -> Unit {
+  for decl in decls {
+    self.func_rets[decl.name] = decl.ret
+    self.func_variadic[decl.name] = decl.variadic
+    self.func_param_counts[decl.name] = decl.params.length()
+    if decl.body is Some(_) || decl.symbol_alias is Some(_) {
+      self.func_defined[decl.name] = true
+    } else if !self.func_defined.contains(decl.name) {
+      self.func_defined[decl.name] = false
+    }
+    if decl.is_weak {
+      self.func_weak[decl.name] = true
+    } else if !self.func_weak.contains(decl.name) {
+      self.func_weak[decl.name] = false
+    }
+    let param_types = []
+    for param in decl.params {
+      param_types.push(param.ty)
+    }
+    self.func_param_types[decl.name] = param_types
+  }
+}
+
+///|
+fn X64Codegen::register_mir_global_decls(
+  self : X64Codegen,
+  mir : @mir.MirModule,
+) -> Unit {
+  for global in @mir.merge_global_decls(mir.global_decls) {
+    self.globals[global.name] = codegen_global_decl_from_mir(global)
+  }
+}
+
+///|
+fn X64Codegen::register_parser_global_decls(
+  self : X64Codegen,
+  globals : Array[@parser.GlobalDecl],
+) -> Unit {
+  for global in globals {
+    self.globals[global.name] = codegen_global_decl_from_parser(global)
+  }
 }
 
 ///|
@@ -287,9 +371,13 @@ fn x64_signed_i32_bits(value : Int64) -> Int64 {
 
 ///|
 fn X64Codegen::type_size(self : X64Codegen, ty : @parser.Type) -> Int {
-  match self.mir {
+  match self.mir_module {
     Some(mir) => return mir.type_size(ty)
-    None => ()
+    None =>
+      match self.mir {
+        Some(mir) => return mir.type_size(ty)
+        None => ()
+      }
   }
   match ty {
     Atomic(inner) | Aligned(inner, _) => self.type_size(inner)
@@ -358,9 +446,13 @@ fn X64Codegen::type_size(self : X64Codegen, ty : @parser.Type) -> Int {
 
 ///|
 fn X64Codegen::type_align(self : X64Codegen, ty : @parser.Type) -> Int {
-  match self.mir {
+  match self.mir_module {
     Some(mir) => return mir.type_align(ty)
-    None => ()
+    None =>
+      match self.mir {
+        Some(mir) => return mir.type_align(ty)
+        None => ()
+      }
   }
   match ty {
     Atomic(inner) => self.type_align(inner)
@@ -507,6 +599,42 @@ fn X64Codegen::compute_struct_layout(
     }
   }
   self.struct_layouts[decl.name] = fields
+}
+
+///|
+fn x64_field_layout_tuple(
+  layout : @mir.FieldLayout,
+) -> (String, @parser.Type, Int, Int, Int, Int) {
+  (
+    layout.name,
+    layout.ty,
+    layout.offset,
+    layout.size,
+    layout.bit_offset,
+    match layout.bit_width {
+      Some(width) => width
+      None => -1
+    },
+  )
+}
+
+///|
+fn X64Codegen::register_mir_aggregate_layouts(
+  self : X64Codegen,
+  mir : @mir.MirModule,
+) -> Unit {
+  for decl in mir.aggregate_decls {
+    match mir.layouts.get(decl.name) {
+      Some(layout) => {
+        let fields : Array[(String, @parser.Type, Int, Int, Int, Int)] = []
+        for field in layout.fields {
+          fields.push(x64_field_layout_tuple(field))
+        }
+        self.struct_layouts[decl.name] = fields
+      }
+      None => ()
+    }
+  }
 }
 
 ///|
@@ -4362,7 +4490,7 @@ fn X64Codegen::field_layout(
     Some(lookup_ty) => lookup_ty
     None => return None
   }
-  match self.mir {
+  match self.mir_module {
     Some(mir) =>
       return match mir.field_layout(lookup_ty, field_name) {
         Some(field) =>
@@ -4381,7 +4509,28 @@ fn X64Codegen::field_layout(
           )
         None => None
       }
-    None => ()
+    None =>
+      match self.mir {
+        Some(mir) =>
+          return match mir.field_layout(lookup_ty, field_name) {
+            Some(field) =>
+              Some(
+                (
+                  field.name,
+                  field.ty,
+                  field.offset,
+                  field.size,
+                  field.bit_offset,
+                  match field.bit_width {
+                    Some(width) => width
+                    None => -1
+                  },
+                ),
+              )
+            None => None
+          }
+        None => ()
+      }
   }
   let struct_name = match lookup_ty {
     Struct(name) | Union(name) => name
@@ -4402,9 +4551,13 @@ fn X64Codegen::offset_of_path(
   ty : @parser.Type,
   path : Array[@parser.OffsetDesignator],
 ) -> Int? {
-  match self.mir {
+  match self.mir_module {
     Some(mir) => return mir.offset_of_path(ty, path)
-    None => ()
+    None =>
+      match self.mir {
+        Some(mir) => return mir.offset_of_path(ty, path)
+        None => ()
+      }
   }
   let mut current_ty = ty
   let mut offset = 0
@@ -4705,9 +4858,13 @@ fn X64Codegen::global_expr_type(
   self : X64Codegen,
   expr : @parser.Expr,
 ) -> @parser.Type {
-  match self.mir {
+  match self.mir_module {
     Some(mir) => return mir.global_expr_type(expr)
-    None => ()
+    None =>
+      match self.mir {
+        Some(mir) => return mir.global_expr_type(expr)
+        None => ()
+      }
   }
   match expr {
     Number(value) => number_literal_type(value)
@@ -4739,6 +4896,7 @@ fn X64Codegen::global_expr_type(
         Array(elem, _) | Pointer(elem) => elem
         _ => SInt
       }
+    Call(_, _) => self.type_of(expr)
     MemberAccess(obj, field) => {
       let obj_ty = self.global_expr_type(obj)
       match self.field_layout(obj_ty, field) {
@@ -7534,6 +7692,9 @@ fn X64Codegen::emit_function(
   match decl.body {
     None => return
     Some(body) => {
+      if self.try_gen_mir_func(decl) {
+        return
+      }
       x64_reject_unsupported_scalar(decl.ret)
       for param in decl.params {
         x64_reject_unsupported_scalar(param.ty)
@@ -8288,6 +8449,65 @@ fn X64Codegen::fold_const_int(
         Some(offset) => Some(x64_const_int(offset.to_int64(), ULong))
         None => None
       }
+    Call(Var(name), args) => self.fold_const_builtin_int(name, args)
+    _ => None
+  }
+}
+
+///|
+fn X64Codegen::fold_const_builtin_int(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> X64ConstIntValue? {
+  match name {
+    "__builtin_constant_p" => {
+      let value = if args.length() > 0 && self.fold_const(args[0]) is Some(_) {
+        1L
+      } else {
+        0L
+      }
+      Some(x64_const_int(value, SInt))
+    }
+    "__builtin_object_size" | "__builtin_dynamic_object_size" =>
+      Some(x64_const_int(self.builtin_object_size_value(args), ULong))
+    "__builtin_bswap16" | "__builtin_bswap32" | "__builtin_bswap64" => {
+      if args.length() == 0 {
+        return None
+      }
+      let (width, ty) = match name {
+        "__builtin_bswap16" => (16, @parser.Type::UShort)
+        "__builtin_bswap32" => (32, @parser.Type::UInt)
+        _ => (64, @parser.Type::ULongLong)
+      }
+      match self.fold_const_int(args[0]) {
+        Some(arg) =>
+          Some(
+            x64_const_cast_int(
+              x64_const_int(codegen_const_byte_swap_bits(arg.bits, width), ty),
+              ty,
+            ),
+          )
+        None => None
+      }
+    }
+    "__builtin_bswap" => {
+      if args.length() == 0 {
+        return None
+      }
+      let ty = self.global_expr_type(args[0])
+      let width = x64_const_type_int_width(ty).unwrap_or(32)
+      match self.fold_const_int(args[0]) {
+        Some(arg) =>
+          Some(
+            x64_const_cast_int(
+              x64_const_int(codegen_const_byte_swap_bits(arg.bits, width), ty),
+              ty,
+            ),
+          )
+        None => None
+      }
+    }
     _ => None
   }
 }
@@ -8526,9 +8746,10 @@ fn X64Codegen::emit_global_float(
   ty : @parser.Type,
   value : Double,
 ) -> Unit {
+  let literal = codegen_float_asm_literal(value)
   match x64_core_type(ty) {
-    Float => self.emit("\t.float\t" + value.to_string())
-    _ => self.emit("\t.double\t" + value.to_string())
+    Float => self.emit("\t.float\t" + literal)
+    _ => self.emit("\t.double\t" + literal)
   }
 }
 
@@ -8682,6 +8903,511 @@ fn X64Codegen::emit_global_scalar(
       self.emit_global_array(ty, exprs)
     Var(name) => self.emit("\t.quad\t" + name)
     _ => self.emit("\t.zero\t" + self.type_size(ty).to_string())
+  }
+}
+
+///|
+fn X64Codegen::mir_global_scalar_int_supported(
+  self : X64Codegen,
+  ty : @parser.Type,
+) -> Bool {
+  match ty {
+    Aligned(inner, _) => self.mir_global_scalar_int_supported(inner)
+    _ =>
+      match x64_core_type(ty) {
+        Bool
+        | SChar
+        | UChar
+        | SShort
+        | UShort
+        | SInt
+        | UInt
+        | SLong
+        | ULong
+        | SLongLong
+        | ULongLong
+        | SInt128
+        | UInt128
+        | Float
+        | Double
+        | Pointer(_)
+        | FuncPtr(_, _, _) => true
+        _ => false
+      }
+  }
+}
+
+///|
+fn X64Codegen::mir_global_string_supported(
+  self : X64Codegen,
+  ty : @parser.Type,
+) -> Bool {
+  match ty {
+    Aligned(inner, _) => self.mir_global_string_supported(inner)
+    _ =>
+      match x64_core_type(ty) {
+        Array(SChar, _) | Array(UChar, _) | Pointer(_) => true
+        _ => false
+      }
+  }
+}
+
+///|
+fn X64Codegen::mir_global_symbol_supported(
+  self : X64Codegen,
+  ty : @parser.Type,
+) -> Bool {
+  match ty {
+    Aligned(inner, _) => self.mir_global_symbol_supported(inner)
+    _ =>
+      match x64_core_type(ty) {
+        Pointer(_) | FuncPtr(_, _, _) => true
+        _ => false
+      }
+  }
+}
+
+///|
+fn X64Codegen::mir_global_init_supported(
+  self : X64Codegen,
+  ty : @parser.Type,
+  init : @mir.MirGlobalInit,
+) -> Bool {
+  match ty {
+    Aligned(inner, _) => self.mir_global_init_supported(inner, init)
+    _ =>
+      match init {
+        MirGlobalInitUnsupported => false
+        MirGlobalScalarInt(_) => self.mir_global_scalar_int_supported(ty)
+        MirGlobalScalarFloat(_) =>
+          match x64_core_type(ty) {
+            Float | Double => true
+            _ => false
+          }
+        MirGlobalString(_) => self.mir_global_string_supported(ty)
+        MirGlobalSymbol(_) => self.mir_global_symbol_supported(ty)
+        MirGlobalSymbolOffset(_, _) => self.mir_global_symbol_supported(ty)
+        MirGlobalArraySparse(values) =>
+          match x64_core_type(ty) {
+            Array(elem_ty, n) => {
+              for item in values {
+                let index = item.0
+                let value = item.1
+                if index < 0 || index >= n {
+                  return false
+                }
+                if !self.mir_global_init_supported(elem_ty, value) {
+                  return false
+                }
+              }
+              true
+            }
+            _ => false
+          }
+        MirGlobalAggregateSparse(values) =>
+          match x64_core_type(ty) {
+            Struct(name) | Union(name) => {
+              let layout = match self.mir_aggregate_layout(name) {
+                Some(layout) => layout
+                None => return false
+              }
+              for item in values {
+                let index = item.0
+                let value = item.1
+                if index < 0 || index >= layout.fields.length() {
+                  return false
+                }
+                let field = layout.fields[index]
+                match field.bit_width {
+                  Some(width) =>
+                    if width <= 0 || !(value is MirGlobalScalarInt(_)) {
+                      return false
+                    }
+                  None =>
+                    if !self.mir_global_init_supported(field.ty, value) {
+                      return false
+                    }
+                }
+              }
+              true
+            }
+            _ => false
+          }
+        MirGlobalArray(values) =>
+          match x64_core_type(ty) {
+            Array(elem_ty, n) => {
+              if values.length() > n {
+                return false
+              }
+              for value in values {
+                if !self.mir_global_init_supported(elem_ty, value) {
+                  return false
+                }
+              }
+              true
+            }
+            Struct(name) | Union(name) => {
+              let layout = match self.mir_aggregate_layout(name) {
+                Some(layout) => layout
+                None => return false
+              }
+              if layout.is_union {
+                if values.length() > 1 {
+                  return false
+                }
+              } else if values.length() > layout.fields.length() {
+                return false
+              }
+              for i = 0; i < values.length(); i = i + 1 {
+                if i >= layout.fields.length() {
+                  return false
+                }
+                let field = layout.fields[i]
+                match field.bit_width {
+                  Some(width) =>
+                    if width <= 0 || !(values[i] is MirGlobalScalarInt(_)) {
+                      return false
+                    }
+                  None =>
+                    if !self.mir_global_init_supported(field.ty, values[i]) {
+                      return false
+                    }
+                }
+              }
+              true
+            }
+            _ => false
+          }
+      }
+  }
+}
+
+///|
+fn X64Codegen::mir_aggregate_layout(
+  self : X64Codegen,
+  name : String,
+) -> @mir.AggregateLayout? {
+  match self.mir_module {
+    Some(mir) => mir.layouts.get(name)
+    None => None
+  }
+}
+
+///|
+fn X64Codegen::emit_mir_global_scalar_int(
+  self : X64Codegen,
+  ty : @parser.Type,
+  value : Int64,
+) -> Unit {
+  match ty {
+    Aligned(inner, _) => {
+      self.emit_mir_global_scalar_int(inner, value)
+      return
+    }
+    _ => ()
+  }
+  match x64_core_type(ty) {
+    Bool | SChar | UChar => self.emit_global_int_by_size(1, value)
+    SShort | UShort => self.emit_global_int_by_size(2, value)
+    SInt | UInt => self.emit_global_int_by_size(4, value)
+    SInt128 => {
+      self.emit_global_int_by_size(8, value)
+      self.emit_global_int_by_size(8, if value < 0L { -1L } else { 0L })
+    }
+    UInt128 => {
+      self.emit_global_int_by_size(8, value)
+      self.emit_global_int_by_size(8, 0L)
+    }
+    Float | Double => self.emit_global_float(ty, value.to_double())
+    _ => self.emit_global_int_by_size(8, value)
+  }
+}
+
+///|
+fn X64Codegen::emit_mir_global_string(
+  self : X64Codegen,
+  ty : @parser.Type,
+  value : String,
+) -> Unit {
+  match ty {
+    Aligned(inner, _) => {
+      self.emit_mir_global_string(inner, value)
+      return
+    }
+    _ => ()
+  }
+  match x64_core_type(ty) {
+    Array(SChar, n) | Array(UChar, n) => {
+      self.emit("\t.asciz\t\"" + escape_string(value) + "\"")
+      let pad = n - value.length() - 1
+      if pad > 0 {
+        self.emit("\t.zero\t" + pad.to_string())
+      }
+    }
+    _ => {
+      let id = self.strings.length()
+      self.strings.push(value)
+      self.emit("\t.quad\t.Lstr" + id.to_string())
+    }
+  }
+}
+
+///|
+fn X64Codegen::emit_mir_global_init(
+  self : X64Codegen,
+  ty : @parser.Type,
+  init : @mir.MirGlobalInit,
+) -> Unit {
+  match ty {
+    Aligned(inner, _) => {
+      self.emit_mir_global_init(inner, init)
+      return
+    }
+    _ => ()
+  }
+  match init {
+    MirGlobalScalarInt(value) => self.emit_mir_global_scalar_int(ty, value)
+    MirGlobalScalarFloat(value) => self.emit_global_float(ty, value)
+    MirGlobalString(value) => self.emit_mir_global_string(ty, value)
+    MirGlobalSymbol(name) => self.emit("\t.quad\t" + name)
+    MirGlobalSymbolOffset(name, offset) =>
+      self.emit("\t.quad\t" + reloc_with_offset(name, offset))
+    MirGlobalArraySparse(values) =>
+      match x64_core_type(ty) {
+        Array(elem_ty, n) => {
+          let elem_size = self.type_size(elem_ty)
+          let slots : Array[@mir.MirGlobalInit?] = Array::make(n, None)
+          for item in values {
+            let index = item.0
+            let value = item.1
+            if index >= 0 && index < n {
+              slots[index] = Some(value)
+            }
+          }
+          for slot in slots {
+            match slot {
+              Some(value) => self.emit_mir_global_init(elem_ty, value)
+              None => self.emit("\t.zero\t" + elem_size.to_string())
+            }
+          }
+        }
+        _ => self.emit("\t.zero\t" + self.type_size(ty).to_string())
+      }
+    MirGlobalAggregateSparse(values) =>
+      match x64_core_type(ty) {
+        Struct(name) | Union(name) =>
+          self.emit_mir_global_sparse_aggregate(name, values)
+        _ => self.emit("\t.zero\t" + self.type_size(ty).to_string())
+      }
+    MirGlobalArray(values) =>
+      match x64_core_type(ty) {
+        Array(elem_ty, n) => {
+          let elem_size = self.type_size(elem_ty)
+          let mut emitted = 0
+          for value in values {
+            self.emit_mir_global_init(elem_ty, value)
+            emitted += 1
+          }
+          while emitted < n {
+            self.emit("\t.zero\t" + elem_size.to_string())
+            emitted += 1
+          }
+        }
+        Struct(name) | Union(name) =>
+          self.emit_mir_global_aggregate(name, values)
+        _ => self.emit("\t.zero\t" + self.type_size(ty).to_string())
+      }
+    MirGlobalInitUnsupported =>
+      self.emit("\t.zero\t" + self.type_size(ty).to_string())
+  }
+}
+
+///|
+fn X64Codegen::emit_mir_global_aggregate(
+  self : X64Codegen,
+  name : String,
+  values : Array[@mir.MirGlobalInit],
+) -> Unit {
+  let layout = match self.mir_aggregate_layout(name) {
+    Some(layout) => layout
+    None => {
+      self.emit("\t.zero\t8")
+      return
+    }
+  }
+  let slots : Array[@mir.MirGlobalInit?] = Array::make(
+    layout.fields.length(),
+    None,
+  )
+  let count = if layout.is_union && values.length() > 0 {
+    1
+  } else {
+    values.length()
+  }
+  for i = 0; i < count; i = i + 1 {
+    if i < slots.length() {
+      slots[i] = Some(values[i])
+    }
+  }
+  self.emit_mir_global_aggregate_slots(layout, slots)
+}
+
+///|
+fn X64Codegen::emit_mir_global_sparse_aggregate(
+  self : X64Codegen,
+  name : String,
+  values : Array[(Int, @mir.MirGlobalInit)],
+) -> Unit {
+  let layout = match self.mir_aggregate_layout(name) {
+    Some(layout) => layout
+    None => {
+      self.emit("\t.zero\t8")
+      return
+    }
+  }
+  let slots : Array[@mir.MirGlobalInit?] = Array::make(
+    layout.fields.length(),
+    None,
+  )
+  for item in values {
+    let index = item.0
+    let value = item.1
+    if index >= 0 && index < layout.fields.length() {
+      slots[index] = Some(value)
+      if layout.is_union {
+        break
+      }
+    }
+  }
+  self.emit_mir_global_aggregate_slots(layout, slots)
+}
+
+///|
+fn X64Codegen::mir_global_bitfield_bits(
+  self : X64Codegen,
+  init : @mir.MirGlobalInit?,
+  bit_width : Int,
+  bit_offset : Int,
+) -> Int64 {
+  let _ = self
+  match init {
+    Some(MirGlobalScalarInt(value)) =>
+      (value & bitfield_mask(bit_width)) << bit_offset
+    _ => 0L
+  }
+}
+
+///|
+fn X64Codegen::emit_mir_global_bitfield_container(
+  self : X64Codegen,
+  layout : @mir.AggregateLayout,
+  slots : Array[@mir.MirGlobalInit?],
+  start : Int,
+) -> (Int, Int) {
+  let field = layout.fields[start]
+  let container_offset = field.offset
+  let container_size = field.size
+  let mut container_value = 0L
+  let mut index = start
+  while index < layout.fields.length() &&
+        layout.fields[index].offset == container_offset &&
+        layout.fields[index].size == container_size &&
+        layout.fields[index].bit_width is Some(_) {
+    let bitfield = layout.fields[index]
+    match bitfield.bit_width {
+      Some(width) =>
+        container_value = container_value |
+          self.mir_global_bitfield_bits(
+            slots[index],
+            width,
+            bitfield.bit_offset,
+          )
+      None => ()
+    }
+    index += 1
+  }
+  self.emit_global_int_by_size(container_size, container_value)
+  (index, container_offset + container_size)
+}
+
+///|
+fn X64Codegen::emit_mir_global_aggregate_slots(
+  self : X64Codegen,
+  layout : @mir.AggregateLayout,
+  slots : Array[@mir.MirGlobalInit?],
+) -> Unit {
+  let mut emitted = 0
+  if layout.is_union {
+    for i = 0; i < layout.fields.length(); i = i + 1 {
+      match slots[i] {
+        Some(value) => {
+          let field = layout.fields[i]
+          if field.offset > emitted {
+            self.emit("\t.zero\t" + (field.offset - emitted).to_string())
+          }
+          match field.bit_width {
+            Some(_) => {
+              let (_, next_emitted) = self.emit_mir_global_bitfield_container(
+                layout, slots, i,
+              )
+              emitted = next_emitted
+            }
+            None => {
+              self.emit_mir_global_init(field.ty, value)
+              emitted = field.offset + field.size
+            }
+          }
+          break
+        }
+        None => ()
+      }
+    }
+  } else {
+    let mut i = 0
+    while i < layout.fields.length() {
+      let field = layout.fields[i]
+      if field.offset > emitted {
+        self.emit("\t.zero\t" + (field.offset - emitted).to_string())
+      }
+      match field.bit_width {
+        Some(_) => {
+          let (next_i, next_emitted) = self.emit_mir_global_bitfield_container(
+            layout, slots, i,
+          )
+          i = next_i
+          emitted = next_emitted
+          continue
+        }
+        None => {
+          match slots[i] {
+            Some(value) => self.emit_mir_global_init(field.ty, value)
+            None => self.emit("\t.zero\t" + field.size.to_string())
+          }
+          emitted = field.offset + field.size
+        }
+      }
+      i += 1
+    }
+  }
+  if layout.size > emitted {
+    self.emit("\t.zero\t" + (layout.size - emitted).to_string())
+  }
+}
+
+///|
+fn X64Codegen::try_emit_mir_global_init(
+  self : X64Codegen,
+  g : @mir.MirGlobalDecl,
+) -> Bool {
+  match g.init {
+    Some(init) =>
+      if self.mir_global_init_supported(g.ty, init) {
+        self.emit_mir_global_init(g.ty, init)
+        true
+      } else {
+        false
+      }
+    None => false
   }
 }
 
@@ -8856,7 +9582,64 @@ fn X64Codegen::emit_global_array(
 ///|
 fn X64Codegen::emit_globals(
   self : X64Codegen,
-  globals : Array[@parser.GlobalDecl],
+  globals : Array[CodegenGlobalDecl],
+  parser_fallbacks : Map[String, @parser.GlobalDecl],
+  mir_global_inits : Map[String, @mir.MirGlobalDecl],
+) -> Unit {
+  self.emit_global_decl_directives(globals)
+  for g in globals {
+    if g.has_init && g.symbol_alias is None {
+      self.emit_global_data_section(g.section)
+      self.emit_symbol_binding(g.name, g.is_static, g.is_weak, g.visibility)
+      self.emit("\t.align\t" + self.type_align(g.ty).to_string())
+      self.emit(g.name + ":")
+      let mut emitted_mir_init = false
+      match mir_global_inits.get(g.name) {
+        Some(mir_global) =>
+          emitted_mir_init = self.try_emit_mir_global_init(mir_global)
+        None => ()
+      }
+      if !emitted_mir_init {
+        match parser_fallbacks.get(g.name) {
+          Some(parser_global) =>
+            match parser_global.init {
+              Some(Scalar(expr)) => self.emit_global_scalar(g.ty, expr)
+              Some(Array(exprs)) => self.emit_global_array(g.ty, exprs)
+              None => ()
+            }
+          None => self.emit("\t.zero\t" + self.type_size(g.ty).to_string())
+        }
+      }
+    }
+  }
+  self.emit_global_bss_definitions(globals)
+}
+
+///|
+fn X64Codegen::emit_mir_globals(
+  self : X64Codegen,
+  globals : Array[@mir.MirGlobalDecl],
+) -> Unit {
+  let codegen_globals = codegen_global_decls_from_mir(globals)
+  self.emit_global_decl_directives(codegen_globals)
+  for g in globals {
+    if g.has_init && g.symbol_alias is None {
+      self.emit_global_data_section(g.section)
+      self.emit_symbol_binding(g.name, g.is_static, g.is_weak, g.visibility)
+      self.emit("\t.align\t" + self.type_align(g.ty).to_string())
+      self.emit(g.name + ":")
+      if !self.try_emit_mir_global_init(g) {
+        self.emit("\t.zero\t" + self.type_size(g.ty).to_string())
+      }
+    }
+  }
+  self.emit_global_bss_definitions(codegen_globals)
+}
+
+///|
+fn X64Codegen::emit_global_decl_directives(
+  self : X64Codegen,
+  globals : Array[CodegenGlobalDecl],
 ) -> Unit {
   for g in globals {
     match g.symbol_alias {
@@ -8870,30 +9653,24 @@ fn X64Codegen::emit_globals(
           Some("@object"),
         )
       None => {
-        if g.init is None && g.is_extern && g.is_weak && !g.is_static {
+        if !g.has_init && g.is_extern && g.is_weak && !g.is_static {
           self.emit("\t.weak\t" + g.name)
         }
-        if g.init is None && g.is_extern {
+        if !g.has_init && g.is_extern {
           self.emit_symbol_visibility(g.name, g.is_static, g.visibility)
         }
       }
     }
   }
+}
+
+///|
+fn X64Codegen::emit_global_bss_definitions(
+  self : X64Codegen,
+  globals : Array[CodegenGlobalDecl],
+) -> Unit {
   for g in globals {
-    if g.init is Some(_) && g.symbol_alias is None {
-      self.emit_global_data_section(g.section)
-      self.emit_symbol_binding(g.name, g.is_static, g.is_weak, g.visibility)
-      self.emit("\t.align\t" + self.type_align(g.ty).to_string())
-      self.emit(g.name + ":")
-      match g.init {
-        Some(Scalar(expr)) => self.emit_global_scalar(g.ty, expr)
-        Some(Array(exprs)) => self.emit_global_array(g.ty, exprs)
-        None => ()
-      }
-    }
-  }
-  for g in globals {
-    if g.init is None && !g.is_extern && g.symbol_alias is None {
+    if !g.has_init && !g.is_extern && g.symbol_alias is None {
       self.emit_global_bss_section(g.section)
       self.emit_symbol_binding(g.name, g.is_static, g.is_weak, g.visibility)
       self.emit("\t.align\t" + self.type_align(g.ty).to_string())
@@ -9031,7 +9808,7 @@ fn X64Codegen::emit_fp_literals(self : X64Codegen) -> Unit {
   self.emit("\t.align\t8")
   for i = 0; i < self.fp_literals.length(); i = i + 1 {
     self.emit(".Lfp" + i.to_string() + ":")
-    self.emit("\t.double\t" + self.fp_literals[i].to_string())
+    self.emit("\t.double\t" + codegen_float_asm_literal(self.fp_literals[i]))
   }
 }
 
@@ -9039,7 +9816,7 @@ fn X64Codegen::emit_fp_literals(self : X64Codegen) -> Unit {
 fn X64Codegen::emit_lifecycle_array(
   self : X64Codegen,
   section : String,
-  decls : Array[@parser.FuncDecl],
+  decls : Array[CodegenFuncDecl],
 ) -> Unit {
   let mut emitted = false
   for decl in decls {
@@ -9048,7 +9825,7 @@ fn X64Codegen::emit_lifecycle_array(
     } else {
       decl.is_destructor
     }
-    if should_emit && decl.body is Some(_) {
+    if should_emit && decl.has_body {
       if !emitted {
         let kind = if section == ".init_array" {
           "init_array"
@@ -9065,70 +9842,126 @@ fn X64Codegen::emit_lifecycle_array(
 }
 
 ///|
-fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
-  if self.mir is None {
-    self.mir = Some(@mir.lower(prog, LinuxAmd64))
+fn X64Codegen::emit_mir_function_decl_directives(
+  self : X64Codegen,
+  decl : CodegenFuncDecl,
+) -> Unit {
+  match decl.symbol_alias {
+    Some(target) =>
+      self.emit_symbol_alias(
+        decl.name,
+        target,
+        decl.is_static,
+        decl.is_weak,
+        decl.visibility,
+        Some("@function"),
+      )
+    None =>
+      if !decl.has_body &&
+        self.func_weak.get_or_default(decl.name, false) &&
+        !decl.is_static {
+        self.emit("\t.weak\t" + decl.name)
+      }
   }
+  if decl.symbol_alias is None && !decl.has_body {
+    self.emit_symbol_visibility(decl.name, decl.is_static, decl.visibility)
+  }
+}
+
+///|
+fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
   self.emit("\t.intel_syntax noprefix")
   self.emit("\t.text")
+  let mir_module = match self.mir_module {
+    Some(mir) => Some(mir)
+    None =>
+      match self.mir {
+        Some(mir) => {
+          let mir_module = mir.to_module()
+          self.mir_module = Some(mir_module)
+          Some(mir_module)
+        }
+        None => None
+      }
+  }
   for sdecl in prog.structs {
     self.struct_decls[sdecl.name] = sdecl
   }
-  for sdecl in prog.structs {
-    self.compute_struct_layout(sdecl)
+  match mir_module {
+    Some(mir) => self.register_mir_aggregate_layouts(mir)
+    None =>
+      for sdecl in prog.structs {
+        self.compute_struct_layout(sdecl)
+      }
   }
-  for decl in prog.decls {
-    self.func_rets[decl.name] = decl.ret
-    self.func_variadic[decl.name] = decl.variadic
-    self.func_param_counts[decl.name] = decl.params.length()
-    if decl.body is Some(_) || decl.symbol_alias is Some(_) {
-      self.func_defined[decl.name] = true
-    } else if !self.func_defined.contains(decl.name) {
-      self.func_defined[decl.name] = false
-    }
-    if decl.is_weak {
-      self.func_weak[decl.name] = true
-    } else if !self.func_weak.contains(decl.name) {
-      self.func_weak[decl.name] = false
-    }
-    let param_types = []
-    for param in decl.params {
-      param_types.push(param.ty)
-    }
-    self.func_param_types[decl.name] = param_types
+  match mir_module {
+    Some(mir) => self.register_mir_function_decls(mir)
+    None => self.register_parser_function_decls(prog.decls)
   }
-  let globals = merge_global_decls(prog.globals)
-  for g in globals {
-    self.globals[g.name] = g
+  let parser_globals = merge_global_decls(prog.globals)
+  let parser_global_fallbacks : Map[String, @parser.GlobalDecl] = {}
+  for g in parser_globals {
+    parser_global_fallbacks[g.name] = g
   }
-  for decl in prog.decls {
-    match decl.symbol_alias {
-      Some(target) =>
-        self.emit_symbol_alias(
-          decl.name,
-          target,
-          decl.is_static,
-          decl.is_weak,
-          decl.visibility,
-          Some("@function"),
-        )
-      None =>
-        if decl.body is None &&
-          self.func_weak.get_or_default(decl.name, false) &&
-          !decl.is_static {
-          self.emit("\t.weak\t" + decl.name)
-        }
+  match mir_module {
+    Some(mir) => self.register_mir_global_decls(mir)
+    None => self.register_parser_global_decls(parser_globals)
+  }
+  let mir_global_inits : Map[String, @mir.MirGlobalDecl] = {}
+  let codegen_globals : Array[CodegenGlobalDecl] = match mir_module {
+    Some(mir) => {
+      let globals = @mir.merge_global_decls(mir.global_decls)
+      for g in globals {
+        mir_global_inits[g.name] = g
+      }
+      codegen_global_decls_from_mir(globals)
     }
-    if decl.symbol_alias is None && decl.body is None {
-      self.emit_symbol_visibility(decl.name, decl.is_static, decl.visibility)
-    }
+    None => codegen_global_decls_from_parser(parser_globals)
+  }
+  let codegen_func_decls : Array[CodegenFuncDecl] = match mir_module {
+    Some(mir) => codegen_func_decls_from_mir(mir.decls)
+    None => codegen_func_decls_from_parser(prog.decls)
+  }
+  for decl in codegen_func_decls {
+    self.emit_mir_function_decl_directives(decl)
   }
   for decl in prog.decls {
     self.emit_function(decl)
   }
-  self.emit_globals(globals)
-  self.emit_lifecycle_array(".init_array", prog.decls)
-  self.emit_lifecycle_array(".fini_array", prog.decls)
+  self.emit_globals(codegen_globals, parser_global_fallbacks, mir_global_inits)
+  self.emit_lifecycle_array(".init_array", codegen_func_decls)
+  self.emit_lifecycle_array(".fini_array", codegen_func_decls)
+  self.emit_strings()
+  self.emit_fp_literals()
+  self.emit("\t.section\t.note.GNU-stack,\"\",@progbits")
+  self.output.to_string()
+}
+
+///|
+fn X64Codegen::generate_mir_only(
+  self : X64Codegen,
+  mir_module : @mir.MirModule,
+) -> String {
+  self.emit("\t.intel_syntax noprefix")
+  self.emit("\t.text")
+  self.register_mir_aggregate_layouts(mir_module)
+  self.register_mir_function_decls(mir_module)
+  self.register_mir_global_decls(mir_module)
+  let codegen_func_decls = codegen_func_decls_from_mir(mir_module.decls)
+  for decl in codegen_func_decls {
+    self.emit_mir_function_decl_directives(decl)
+  }
+  for decl in mir_module.decls {
+    if decl.has_body {
+      match mir_module.bodies.get(decl.name) {
+        Some(body) => self.gen_mir_func(decl, body)
+        None => ()
+      }
+    }
+  }
+  self.emit_mir_globals(@mir.merge_global_decls(mir_module.global_decls))
+  self.emit_lifecycle_array(".init_array", codegen_func_decls)
+  self.emit_lifecycle_array(".fini_array", codegen_func_decls)
   self.emit_strings()
   self.emit_fp_literals()
   self.emit("\t.section\t.note.GNU-stack,\"\",@progbits")

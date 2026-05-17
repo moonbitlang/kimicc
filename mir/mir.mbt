@@ -9,6 +9,96 @@ pub(all) struct FuncSig {
 } derive(Eq)
 
 ///|
+/// Function parameter facts owned by MIR.
+///
+/// This mirrors the semantic parameter information needed by later phases
+/// without carrying parser declaration nodes.
+pub(all) struct MirParam {
+  name : String
+  ty : @parser.Type
+} derive(Eq)
+
+///|
+/// Function declaration or definition metadata owned by MIR.
+///
+/// `has_body` records whether the parser declaration had a body, but the body
+/// itself is represented separately in `Program.bodies` when the MIR body
+/// lowering supports it.
+pub(all) struct MirFuncDecl {
+  ret : @parser.Type
+  name : String
+  params : Array[MirParam]
+  variadic : Bool
+  is_static : Bool
+  is_inline : Bool
+  is_weak : Bool
+  visibility : String?
+  symbol_alias : String?
+  section : String?
+  is_constructor : Bool
+  is_destructor : Bool
+  has_body : Bool
+} derive(Eq)
+
+///|
+/// Global declaration metadata owned by MIR.
+///
+/// Simple initializer payloads are represented by `init`; unsupported
+/// initializer syntax is marked explicitly during the data-layer transition.
+/// `has_init` lets backend-facing checks reason about declaration/definition
+/// state without reading parser declaration nodes.
+pub(all) struct MirGlobalDecl {
+  ty : @parser.Type
+  name : String
+  init : MirGlobalInit?
+  has_init : Bool
+  is_static : Bool
+  is_extern : Bool
+  is_weak : Bool
+  visibility : String?
+  symbol_alias : String?
+  section : String?
+} derive(Eq)
+
+///|
+/// MIR-owned global initializer subset.
+///
+/// `MirGlobalInitUnsupported` marks initializer syntax that still exists only
+/// as parser expressions. This lets later phases distinguish missing
+/// initializers from present-but-not-lowered initializers.
+pub(all) enum MirGlobalInit {
+  MirGlobalScalarInt(Int64)
+  MirGlobalScalarFloat(Double)
+  MirGlobalString(String)
+  MirGlobalSymbol(String)
+  MirGlobalSymbolOffset(String, Int)
+  MirGlobalArray(Array[MirGlobalInit])
+  MirGlobalArraySparse(Array[(Int, MirGlobalInit)])
+  MirGlobalAggregateSparse(Array[(Int, MirGlobalInit)])
+  MirGlobalInitUnsupported
+} derive(Eq)
+
+///|
+/// Aggregate field declaration metadata owned by MIR.
+pub(all) struct MirAggregateField {
+  name : String
+  ty : @parser.Type
+  bit_width : Int?
+} derive(Eq)
+
+///|
+/// Struct or union declaration metadata owned by MIR.
+///
+/// Target-specific byte/bit placement lives in `Program.layouts`; this keeps
+/// source declaration facts separate from computed layout facts.
+pub(all) struct MirAggregateDecl {
+  name : String
+  fields : Array[MirAggregateField]
+  is_union : Bool
+  is_packed : Bool
+} derive(Eq)
+
+///|
 /// Lexical expression-typing context used by MIR semantic queries.
 pub(all) struct Scope {
   locals : Map[String, @parser.Type]
@@ -43,10 +133,55 @@ pub(all) struct AggregateLayout {
 pub(all) struct Program {
   target : @target.Target
   source : @parser.Program
+  decls : Array[MirFuncDecl]
+  global_decls : Array[MirGlobalDecl]
+  aggregate_decls : Array[MirAggregateDecl]
   funcs : Map[String, FuncSig]
-  globals : Map[String, @parser.GlobalDecl]
-  structs : Map[String, @parser.StructDecl]
+  globals : Map[String, MirGlobalDecl]
+  aggregates : Map[String, MirAggregateDecl]
   layouts : Map[String, AggregateLayout]
+  bodies : Map[String, MirFuncBody]
+}
+
+///|
+/// Parser-free MIR module facts intended for backend consumers.
+///
+/// This is the long-term codegen boundary. `Program` keeps parser source while
+/// lowering and fallback consumers are still migrating; `MirModule` contains
+/// only MIR-owned declarations, layouts, and lowered bodies.
+pub(all) struct MirModule {
+  target : @target.Target
+  decls : Array[MirFuncDecl]
+  global_decls : Array[MirGlobalDecl]
+  aggregate_decls : Array[MirAggregateDecl]
+  funcs : Map[String, FuncSig]
+  globals : Map[String, MirGlobalDecl]
+  aggregates : Map[String, MirAggregateDecl]
+  layouts : Map[String, AggregateLayout]
+  bodies : Map[String, MirFuncBody]
+}
+
+///|
+pub fn Program::to_module(self : Program) -> MirModule {
+  for decl in self.aggregate_decls {
+    let ty = if decl.is_union {
+      @parser.Type::Union(decl.name)
+    } else {
+      @parser.Type::Struct(decl.name)
+    }
+    let _ = self.type_size(ty)
+  }
+  {
+    target: self.target,
+    decls: self.decls,
+    global_decls: self.global_decls,
+    aggregate_decls: self.aggregate_decls,
+    funcs: self.funcs,
+    globals: self.globals,
+    aggregates: self.aggregates,
+    layouts: self.layouts,
+    bodies: self.bodies,
+  }
 }
 
 ///|
@@ -55,35 +190,586 @@ pub fn Scope::empty() -> Scope {
 }
 
 ///|
-fn global_has_init(g : @parser.GlobalDecl) -> Bool {
-  g.init is Some(_)
-}
-
-///|
-fn should_replace_global_decl(
-  old : @parser.GlobalDecl,
-  next : @parser.GlobalDecl,
+fn should_replace_mir_global_decl(
+  old : MirGlobalDecl,
+  next : MirGlobalDecl,
 ) -> Bool {
-  if next.is_extern && !global_has_init(next) {
+  if next.is_extern && !next.has_init {
     false
-  } else if !global_has_init(old) && global_has_init(next) {
+  } else if !old.has_init && next.has_init {
     true
   } else if old.is_extern && !next.is_extern {
     true
-  } else if global_has_init(old) && !global_has_init(next) {
+  } else if old.has_init && !next.has_init {
     false
   } else {
-    global_has_init(next)
+    next.has_init
+  }
+}
+
+///|
+fn merge_mir_global_visibility(
+  primary : MirGlobalDecl,
+  other : MirGlobalDecl,
+) -> String? {
+  match primary.visibility {
+    Some(_) => primary.visibility
+    None => other.visibility
+  }
+}
+
+///|
+fn merge_mir_global_alias(
+  primary : MirGlobalDecl,
+  other : MirGlobalDecl,
+) -> String? {
+  match primary.symbol_alias {
+    Some(_) => primary.symbol_alias
+    None => other.symbol_alias
+  }
+}
+
+///|
+fn merge_mir_global_section(
+  primary : MirGlobalDecl,
+  other : MirGlobalDecl,
+) -> String? {
+  match primary.section {
+    Some(_) => primary.section
+    None => other.section
+  }
+}
+
+///|
+fn MirGlobalDecl::with_merged_attrs(
+  self : MirGlobalDecl,
+  other : MirGlobalDecl,
+) -> MirGlobalDecl {
+  {
+    ty: self.ty,
+    name: self.name,
+    init: self.init,
+    has_init: self.has_init,
+    is_static: self.is_static,
+    is_extern: self.is_extern,
+    is_weak: self.is_weak || other.is_weak,
+    visibility: merge_mir_global_visibility(self, other),
+    symbol_alias: merge_mir_global_alias(self, other),
+    section: merge_mir_global_section(self, other),
+  }
+}
+
+///|
+pub fn merge_global_decls(
+  globals : Array[MirGlobalDecl],
+) -> Array[MirGlobalDecl] {
+  let merged : Array[MirGlobalDecl] = []
+  for g in globals {
+    let mut found = -1
+    for i = 0; i < merged.length(); i = i + 1 {
+      if merged[i].name == g.name {
+        found = i
+      }
+    }
+    if found < 0 {
+      merged.push(g)
+    } else if should_replace_mir_global_decl(merged[found], g) {
+      merged[found] = g.with_merged_attrs(merged[found])
+    } else {
+      merged[found] = merged[found].with_merged_attrs(g)
+    }
+  }
+  merged
+}
+
+///|
+fn MirGlobalDecl::with_init(
+  self : MirGlobalDecl,
+  init : MirGlobalInit?,
+) -> MirGlobalDecl {
+  {
+    ty: self.ty,
+    name: self.name,
+    init,
+    has_init: self.has_init,
+    is_static: self.is_static,
+    is_extern: self.is_extern,
+    is_weak: self.is_weak,
+    visibility: self.visibility,
+    symbol_alias: self.symbol_alias,
+    section: self.section,
+  }
+}
+
+///|
+fn MirGlobalDecl::from_parser(g : @parser.GlobalDecl) -> MirGlobalDecl {
+  {
+    ty: g.ty,
+    name: g.name,
+    init: None,
+    has_init: g.init is Some(_),
+    is_static: g.is_static,
+    is_extern: g.is_extern,
+    is_weak: g.is_weak,
+    visibility: g.visibility,
+    symbol_alias: g.symbol_alias,
+    section: g.section,
+  }
+}
+
+///|
+fn Program::lower_mir_global_init(
+  self : Program,
+  ty : @parser.Type,
+  init : @parser.GlobalInit?,
+) -> MirGlobalInit? {
+  match init {
+    None => None
+    Some(Scalar(expr)) =>
+      Some(self.lower_mir_global_scalar_init_for_type(ty, expr))
+    Some(Array(exprs)) => {
+      if exprs.length() == 1 {
+        match exprs[0] {
+          String(s) => return Some(MirGlobalString(s))
+          _ => ()
+        }
+      }
+      Some(self.lower_mir_global_array_init_for_type(ty, exprs))
+    }
+  }
+}
+
+///|
+fn mir_global_array_uses_sparse(exprs : Array[@parser.Expr]) -> Bool {
+  for expr in exprs {
+    match expr {
+      DesignatedIndex(_, _) | DesignatedRange(_, _, _) => return true
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+fn mir_global_aggregate_uses_sparse(exprs : Array[@parser.Expr]) -> Bool {
+  for expr in exprs {
+    match expr {
+      DesignatedField(_, _) => return true
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+fn Program::lower_mir_global_array_value(
+  self : Program,
+  expr : @parser.Expr,
+) -> MirGlobalInit {
+  match expr {
+    Array(nested) => {
+      let nested_values : Array[MirGlobalInit] = []
+      for nested_expr in nested {
+        nested_values.push(self.lower_mir_global_array_value(nested_expr))
+      }
+      MirGlobalArray(nested_values)
+    }
+    _ => self.lower_mir_global_scalar_init(expr)
+  }
+}
+
+///|
+fn Program::lower_mir_global_value_for_type(
+  self : Program,
+  ty : @parser.Type,
+  expr : @parser.Expr,
+) -> MirGlobalInit {
+  match expr {
+    Array(exprs) => self.lower_mir_global_array_init_for_type(ty, exprs)
+    DesignatedField(_, value)
+    | DesignatedIndex(_, value)
+    | DesignatedRange(_, _, value) =>
+      if self.mir_global_designator_matches_type(ty, expr) {
+        self.lower_mir_global_array_init_for_type(ty, [expr])
+      } else {
+        self.lower_mir_global_value_for_type(ty, value)
+      }
+    _ => self.lower_mir_global_scalar_init(expr)
+  }
+}
+
+///|
+fn Program::mir_global_designator_matches_type(
+  self : Program,
+  ty : @parser.Type,
+  expr : @parser.Expr,
+) -> Bool {
+  match (self.core_type(ty), expr) {
+    (Struct(_), DesignatedField(field, _))
+    | (Union(_), DesignatedField(field, _)) =>
+      self.field_layout(ty, field) is Some(_)
+    (Array(_, _), DesignatedIndex(_, _))
+    | (Array(_, _), DesignatedRange(_, _, _)) => true
+    _ => false
+  }
+}
+
+///|
+fn Program::lower_mir_global_array_init_for_type(
+  self : Program,
+  ty : @parser.Type,
+  exprs : Array[@parser.Expr],
+) -> MirGlobalInit {
+  match self.core_type(ty) {
+    Array(elem_ty, _) =>
+      if mir_global_array_uses_sparse(exprs) {
+        self.lower_mir_global_sparse_array_init(elem_ty, exprs)
+      } else {
+        let values : Array[MirGlobalInit] = []
+        for expr in exprs {
+          values.push(self.lower_mir_global_value_for_type(elem_ty, expr))
+        }
+        MirGlobalArray(values)
+      }
+    Struct(name) | Union(name) => {
+      let layout = self.aggregate_layout_by_name(name)
+      if mir_global_aggregate_uses_sparse(exprs) {
+        self.lower_mir_global_sparse_aggregate_init(layout, exprs)
+      } else {
+        self.lower_mir_global_dense_aggregate_init(layout, exprs)
+      }
+    }
+    _ => {
+      let values : Array[MirGlobalInit] = []
+      for expr in exprs {
+        values.push(self.lower_mir_global_array_value(expr))
+      }
+      MirGlobalArray(values)
+    }
+  }
+}
+
+///|
+fn Program::lower_mir_global_sparse_array_init(
+  self : Program,
+  elem_ty : @parser.Type,
+  exprs : Array[@parser.Expr],
+) -> MirGlobalInit {
+  let values : Array[(Int, MirGlobalInit)] = []
+  let mut cursor = 0
+  for expr in exprs {
+    match expr {
+      DesignatedIndex(index, value) => {
+        let idx = index.to_int()
+        values.push((idx, self.lower_mir_global_value_for_type(elem_ty, value)))
+        cursor = idx + 1
+      }
+      DesignatedRange(first, last, value) => {
+        let start = first.to_int()
+        let end = last.to_int()
+        for idx = start; idx <= end; idx = idx + 1 {
+          values.push(
+            (idx, self.lower_mir_global_value_for_type(elem_ty, value)),
+          )
+        }
+        cursor = end + 1
+      }
+      _ => {
+        values.push(
+          (cursor, self.lower_mir_global_value_for_type(elem_ty, expr)),
+        )
+        cursor += 1
+      }
+    }
+  }
+  MirGlobalArraySparse(values)
+}
+
+///|
+fn aggregate_field_index(layout : AggregateLayout, field_name : String) -> Int {
+  for i = 0; i < layout.fields.length(); i = i + 1 {
+    if layout.fields[i].name == field_name {
+      return i
+    }
+  }
+  -1
+}
+
+///|
+fn Program::lower_mir_global_sparse_aggregate_init(
+  self : Program,
+  layout : AggregateLayout,
+  exprs : Array[@parser.Expr],
+) -> MirGlobalInit {
+  let values : Array[(Int, MirGlobalInit)] = []
+  if layout.is_union {
+    if exprs.length() > 0 {
+      match exprs[0] {
+        DesignatedField(field_name, value) => {
+          let index = aggregate_field_index(layout, field_name)
+          let init = if index >= 0 {
+            self.lower_mir_global_value_for_type(layout.fields[index].ty, value)
+          } else {
+            self.lower_mir_global_array_value(value)
+          }
+          values.push((index, init))
+        }
+        value =>
+          if layout.fields.length() > 0 {
+            values.push(
+              (
+                0,
+                self.lower_mir_global_value_for_type(layout.fields[0].ty, value),
+              ),
+            )
+          } else {
+            values.push((0, self.lower_mir_global_array_value(value)))
+          }
+      }
+    }
+    return MirGlobalAggregateSparse(values)
+  }
+  let mut positional = 0
+  for expr in exprs {
+    match expr {
+      DesignatedField(field_name, value) => {
+        let index = aggregate_field_index(layout, field_name)
+        if index >= 0 {
+          positional = index + 1
+          values.push(
+            (
+              index,
+              self.lower_mir_global_value_for_type(
+                layout.fields[index].ty,
+                value,
+              ),
+            ),
+          )
+        } else {
+          values.push((index, self.lower_mir_global_array_value(value)))
+        }
+      }
+      value => {
+        if positional < layout.fields.length() {
+          values.push(
+            (
+              positional,
+              self.lower_mir_global_value_for_type(
+                layout.fields[positional].ty,
+                value,
+              ),
+            ),
+          )
+        } else {
+          values.push((positional, self.lower_mir_global_array_value(value)))
+        }
+        positional += 1
+      }
+    }
+  }
+  MirGlobalAggregateSparse(values)
+}
+
+///|
+fn Program::lower_mir_global_dense_aggregate_init(
+  self : Program,
+  layout : AggregateLayout,
+  exprs : Array[@parser.Expr],
+) -> MirGlobalInit {
+  let values : Array[MirGlobalInit] = []
+  let count = if layout.is_union && exprs.length() > 0 {
+    1
+  } else {
+    exprs.length()
+  }
+  for i = 0; i < count; i = i + 1 {
+    if i < layout.fields.length() {
+      values.push(
+        self.lower_mir_global_value_for_type(layout.fields[i].ty, exprs[i]),
+      )
+    } else {
+      values.push(self.lower_mir_global_array_value(exprs[i]))
+    }
+  }
+  MirGlobalArray(values)
+}
+
+///|
+fn Program::lower_mir_global_scalar_init(
+  self : Program,
+  expr : @parser.Expr,
+) -> MirGlobalInit {
+  match expr {
+    Number(n) => MirGlobalScalarInt(n)
+    String(s) => MirGlobalString(s)
+    DesignatedField(_, _) | DesignatedIndex(_, _) | DesignatedRange(_, _, _) =>
+      MirGlobalInitUnsupported
+    _ =>
+      match self.lower_mir_global_address_reloc_parts(expr) {
+        Some((name, offset)) =>
+          if offset == 0 {
+            MirGlobalSymbol(name)
+          } else {
+            MirGlobalSymbolOffset(name, offset)
+          }
+        None =>
+          match self.fold_const(expr, Scope::empty()) {
+            Some(n) => MirGlobalScalarInt(n)
+            None => MirGlobalInitUnsupported
+          }
+      }
+  }
+}
+
+///|
+fn Program::lower_mir_global_scalar_init_for_type(
+  self : Program,
+  ty : @parser.Type,
+  expr : @parser.Expr,
+) -> MirGlobalInit {
+  if ty.is_floating() {
+    match self.fold_float_const(expr, Scope::empty()) {
+      Some(value) => return MirGlobalScalarFloat(value)
+      None => ()
+    }
+  } else if ty.is_integer() &&
+    self.expr_type(expr, Scope::empty()).is_floating() {
+    match self.fold_float_const(expr, Scope::empty()) {
+      Some(value) => return MirGlobalScalarInt(value.to_int().to_int64())
+      None => ()
+    }
+  }
+  self.lower_mir_global_scalar_init(expr)
+}
+
+///|
+fn Program::global_init_pointer_element_size(
+  self : Program,
+  elem_ty : @parser.Type,
+) -> Int {
+  match self.core_type(elem_ty) {
+    Void => 1
+    _ => self.type_size(elem_ty)
+  }
+}
+
+///|
+fn Program::global_init_offset_bytes(
+  self : Program,
+  base : @parser.Expr,
+  offset : Int64,
+) -> Int {
+  match self.core_type(self.global_expr_type(base)) {
+    Pointer(elem) | Array(elem, _) =>
+      offset.to_int() * self.global_init_pointer_element_size(elem)
+    _ => offset.to_int()
+  }
+}
+
+///|
+fn Program::lower_mir_global_lvalue_reloc_parts(
+  self : Program,
+  expr : @parser.Expr,
+) -> (String, Int)? {
+  match expr {
+    Var(name) => Some((name, 0))
+    Cast(_, inner) => self.lower_mir_global_lvalue_reloc_parts(inner)
+    Deref(inner) => self.lower_mir_global_address_reloc_parts(inner)
+    ArrayAccess(base, index) =>
+      match
+        (
+          self.lower_mir_global_lvalue_reloc_parts(base),
+          self.lower_mir_global_address_reloc_parts(base),
+        ) {
+        (Some(parts), _) | (None, Some(parts)) => {
+          let (name, base_offset) = parts
+          let elem_size = match self.core_type(self.global_expr_type(base)) {
+            Array(elem, _) | Pointer(elem) =>
+              self.global_init_pointer_element_size(elem)
+            _ => 1
+          }
+          match self.fold_const(index, Scope::empty()) {
+            Some(i) => Some((name, base_offset + i.to_int() * elem_size))
+            None => None
+          }
+        }
+        _ => None
+      }
+    MemberAccess(obj, field) =>
+      match self.lower_mir_global_lvalue_reloc_parts(obj) {
+        Some((name, base_offset)) =>
+          match self.field_layout(self.global_expr_type(obj), field) {
+            Some(layout) => Some((name, base_offset + layout.offset))
+            None => None
+          }
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
+fn Program::lower_mir_global_address_reloc_parts(
+  self : Program,
+  expr : @parser.Expr,
+) -> (String, Int)? {
+  match expr {
+    Var(name) => Some((name, 0))
+    Cast(_, inner) => self.lower_mir_global_address_reloc_parts(inner)
+    AddrOf(inner) => self.lower_mir_global_lvalue_reloc_parts(inner)
+    Binary("+", base, offset_expr) =>
+      match
+        (
+          self.lower_mir_global_address_reloc_parts(base),
+          self.fold_const(offset_expr, Scope::empty()),
+        ) {
+        (Some((name, base_offset)), Some(offset)) =>
+          Some(
+            (name, base_offset + self.global_init_offset_bytes(base, offset)),
+          )
+        _ =>
+          match
+            (
+              self.lower_mir_global_address_reloc_parts(offset_expr),
+              self.fold_const(base, Scope::empty()),
+            ) {
+            (Some((name, base_offset)), Some(offset)) =>
+              Some(
+                (
+                  name,
+                  base_offset +
+                  self.global_init_offset_bytes(offset_expr, offset),
+                ),
+              )
+            _ => None
+          }
+      }
+    Binary("-", base, offset_expr) =>
+      match
+        (
+          self.lower_mir_global_address_reloc_parts(base),
+          self.fold_const(offset_expr, Scope::empty()),
+        ) {
+        (Some((name, base_offset)), Some(offset)) =>
+          Some(
+            (name, base_offset - self.global_init_offset_bytes(base, offset)),
+          )
+        _ => None
+      }
+    _ => None
   }
 }
 
 ///|
 pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
   let funcs : Map[String, FuncSig] = {}
+  let decls : Array[MirFuncDecl] = []
   for decl in source.decls {
     let param_types : Array[@parser.Type] = []
+    let params : Array[MirParam] = []
     for param in decl.params {
       param_types.push(param.ty)
+      params.push({ name: param.name, ty: param.ty })
     }
     funcs[decl.name] = {
       ret: decl.ret,
@@ -92,19 +778,90 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
       defined: decl.body is Some(_) || decl.symbol_alias is Some(_),
       weak: decl.is_weak,
     }
+    decls.push({
+      ret: decl.ret,
+      name: decl.name,
+      params,
+      variadic: decl.variadic,
+      is_static: decl.is_static,
+      is_inline: decl.is_inline,
+      is_weak: decl.is_weak,
+      visibility: decl.visibility,
+      symbol_alias: decl.symbol_alias,
+      section: decl.section,
+      is_constructor: decl.is_constructor,
+      is_destructor: decl.is_destructor,
+      has_body: decl.body is Some(_),
+    })
   }
-  let globals : Map[String, @parser.GlobalDecl] = {}
+  let globals : Map[String, MirGlobalDecl] = {}
+  let global_decls : Array[MirGlobalDecl] = []
   for g in source.globals {
+    let mir_global = MirGlobalDecl::from_parser(g)
     if !globals.contains(g.name) ||
-      should_replace_global_decl(globals[g.name], g) {
-      globals[g.name] = g
+      should_replace_mir_global_decl(globals[g.name], mir_global) {
+      if globals.contains(g.name) {
+        globals[g.name] = mir_global.with_merged_attrs(globals[g.name])
+      } else {
+        globals[g.name] = mir_global
+      }
+    } else {
+      globals[g.name] = globals[g.name].with_merged_attrs(mir_global)
+    }
+    global_decls.push(mir_global)
+  }
+  let aggregates : Map[String, MirAggregateDecl] = {}
+  let aggregate_decls : Array[MirAggregateDecl] = []
+  for decl in source.structs {
+    let fields : Array[MirAggregateField] = []
+    for field in decl.fields {
+      fields.push({ name: field.name, ty: field.ty, bit_width: field.bit_width })
+    }
+    let aggregate_decl = {
+      name: decl.name,
+      fields,
+      is_union: decl.is_union,
+      is_packed: decl.is_packed,
+    }
+    aggregates[decl.name] = aggregate_decl
+    aggregate_decls.push(aggregate_decl)
+  }
+  let program = {
+    target,
+    source,
+    decls,
+    global_decls,
+    aggregate_decls,
+    funcs,
+    globals,
+    aggregates,
+    layouts: {},
+    bodies: {},
+  }
+  for i = 0; i < source.globals.length(); i = i + 1 {
+    let g = source.globals[i]
+    program.global_decls[i] = program.global_decls[i].with_init(
+      program.lower_mir_global_init(g.ty, g.init),
+    )
+  }
+  for g in merge_global_decls(program.global_decls) {
+    program.globals[g.name] = g
+  }
+  for decl in source.decls {
+    match program.lower_mir_func_body(decl) {
+      Some(body) => program.bodies[decl.name] = body
+      None => ()
     }
   }
-  let structs : Map[String, @parser.StructDecl] = {}
-  for decl in source.structs {
-    structs[decl.name] = decl
-  }
-  { target, source, funcs, globals, structs, layouts: {} }
+  program
+}
+
+///|
+pub fn lower_to_module(
+  source : @parser.Program,
+  target : @target.Target,
+) -> MirModule {
+  lower(source, target).to_module()
 }
 
 ///|
@@ -217,6 +974,14 @@ fn Program::is_floating_type(self : Program, ty : @parser.Type) -> Bool {
   match self.core_type(ty) {
     Float | Double => true
     LongDouble => self.target is DarwinArm64
+    _ => false
+  }
+}
+
+///|
+fn Program::is_floating_const_type(self : Program, ty : @parser.Type) -> Bool {
+  match self.core_type(ty) {
+    Float | Double | LongDouble => true
     _ => false
   }
 }
@@ -476,7 +1241,7 @@ fn Program::flatten_anon_fields(
 ///|
 fn Program::compute_struct_layout(
   self : Program,
-  decl : @parser.StructDecl,
+  decl : MirAggregateDecl,
 ) -> AggregateLayout {
   let fields : Array[FieldLayout] = []
   let mut offset = 0
@@ -588,7 +1353,7 @@ fn Program::compute_struct_layout(
 ///|
 fn Program::compute_union_layout(
   self : Program,
-  decl : @parser.StructDecl,
+  decl : MirAggregateDecl,
 ) -> AggregateLayout {
   let fields : Array[FieldLayout] = []
   let mut max_size = 0
@@ -657,7 +1422,7 @@ fn Program::ensure_layout(self : Program, name : String) -> Unit {
   if self.layouts.contains(name) {
     return
   }
-  if !self.structs.contains(name) {
+  if !self.aggregates.contains(name) {
     self.layouts[name] = {
       fields: [],
       size: 8,
@@ -667,7 +1432,7 @@ fn Program::ensure_layout(self : Program, name : String) -> Unit {
     }
     return
   }
-  let decl = self.structs[name]
+  let decl = self.aggregates[name]
   self.layouts[name] = if decl.is_union {
     self.compute_union_layout(decl)
   } else {
@@ -732,6 +1497,227 @@ pub fn Program::offset_of_path(
     }
   }
   Some(offset)
+}
+
+///|
+fn MirModule::core_type(self : MirModule, ty : @parser.Type) -> @parser.Type {
+  match ty {
+    Atomic(inner) | Aligned(inner, _) => self.core_type(inner)
+    _ => ty
+  }
+}
+
+///|
+fn MirModule::offset_array_element(
+  self : MirModule,
+  ty : @parser.Type,
+) -> @parser.Type? {
+  match self.core_type(ty) {
+    Array(elem, _) => Some(elem)
+    _ => None
+  }
+}
+
+///|
+fn MirModule::pointer_element(
+  self : MirModule,
+  ty : @parser.Type,
+) -> @parser.Type? {
+  match self.core_type(ty) {
+    Pointer(elem) | Array(elem, _) => Some(elem)
+    _ => None
+  }
+}
+
+///|
+fn MirModule::aggregate_layout_by_name(
+  self : MirModule,
+  name : String,
+) -> AggregateLayout {
+  match self.layouts.get(name) {
+    Some(layout) => layout
+    None => { fields: [], size: 8, align: 8, is_union: false, is_packed: false }
+  }
+}
+
+///|
+pub fn MirModule::type_size(self : MirModule, ty : @parser.Type) -> Int {
+  match ty {
+    Atomic(inner) | Aligned(inner, _) => self.type_size(inner)
+    _ =>
+      match self.core_type(ty) {
+        Void => 0
+        Bool | SChar | UChar => 1
+        SShort | UShort => 2
+        Float16 =>
+          match self.target {
+            DarwinArm64 => abort("_Float16 size is not supported")
+            LinuxAmd64 => 2
+          }
+        SInt | UInt | Float => 4
+        Float128 =>
+          match self.target {
+            DarwinArm64 => abort("__float128 size is not supported")
+            LinuxAmd64 => 16
+          }
+        LongDouble =>
+          match self.target {
+            DarwinArm64 => 8
+            LinuxAmd64 => 16
+          }
+        SLong
+        | ULong
+        | SLongLong
+        | ULongLong
+        | Double
+        | Pointer(_)
+        | FuncPtr(_, _, _) => 8
+        SInt128 | UInt128 => 16
+        Array(elem, n) => self.type_size(elem) * n
+        Struct(name) | Union(name) => self.aggregate_layout_by_name(name).size
+        Atomic(_) | Aligned(_, _) => abort("unreachable wrapped type")
+      }
+  }
+}
+
+///|
+pub fn MirModule::type_align(self : MirModule, ty : @parser.Type) -> Int {
+  match ty {
+    Atomic(inner) => self.type_align(inner)
+    Aligned(inner, align) => {
+      let inner_align = self.type_align(inner)
+      if align > inner_align {
+        align
+      } else {
+        inner_align
+      }
+    }
+    _ =>
+      match self.core_type(ty) {
+        Void => 1
+        Bool | SChar | UChar => 1
+        SShort | UShort => 2
+        Float16 =>
+          match self.target {
+            DarwinArm64 => abort("_Float16 alignment is not supported")
+            LinuxAmd64 => 2
+          }
+        SInt | UInt | Float => 4
+        Float128 =>
+          match self.target {
+            DarwinArm64 => abort("__float128 alignment is not supported")
+            LinuxAmd64 => 16
+          }
+        LongDouble =>
+          match self.target {
+            DarwinArm64 => 8
+            LinuxAmd64 => 16
+          }
+        SLong
+        | ULong
+        | SLongLong
+        | ULongLong
+        | Double
+        | Pointer(_)
+        | FuncPtr(_, _, _) => 8
+        SInt128 | UInt128 => 16
+        Array(elem, _) => self.type_align(elem)
+        Struct(name) | Union(name) => self.aggregate_layout_by_name(name).align
+        Atomic(_) | Aligned(_, _) => abort("unreachable wrapped type")
+      }
+  }
+}
+
+///|
+pub fn MirModule::field_layout(
+  self : MirModule,
+  ty : @parser.Type,
+  field : String,
+) -> FieldLayout? {
+  let name = match self.core_type(ty) {
+    Struct(n) | Union(n) => n
+    _ => return None
+  }
+  let layout = self.aggregate_layout_by_name(name)
+  for item in layout.fields {
+    if item.name == field {
+      return Some(item)
+    }
+  }
+  None
+}
+
+///|
+pub fn MirModule::offset_of_path(
+  self : MirModule,
+  ty : @parser.Type,
+  path : Array[@parser.OffsetDesignator],
+) -> Int? {
+  let mut current_ty = ty
+  let mut offset = 0
+  for designator in path {
+    match designator {
+      OffsetField(field) =>
+        match self.field_layout(current_ty, field) {
+          Some(layout) => {
+            offset += layout.offset
+            current_ty = layout.ty
+          }
+          None => return None
+        }
+      OffsetIndex(index) =>
+        match self.offset_array_element(current_ty) {
+          Some(elem) => {
+            offset += index.to_int() * self.type_size(elem)
+            current_ty = elem
+          }
+          None => return None
+        }
+    }
+  }
+  Some(offset)
+}
+
+///|
+pub fn MirModule::global_expr_type(
+  self : MirModule,
+  expr : @parser.Expr,
+) -> @parser.Type {
+  match expr {
+    Number(value) => number_literal_type(value)
+    FloatLiteral(_) => Double
+    Var(name) =>
+      if self.globals.contains(name) {
+        self.globals[name].ty
+      } else if self.funcs.contains(name) {
+        let sig = self.funcs[name]
+        FuncPtr(sig.ret, sig.params, sig.variadic)
+      } else {
+        Pointer(Void)
+      }
+    String(value) => Array(SChar, value.length() + 1)
+    CompoundLiteral(ty, _, _) => ty
+    DesignatedField(_, e) | DesignatedIndex(_, e) | DesignatedRange(_, _, e) =>
+      self.global_expr_type(e)
+    Cast(ty, _) => ty
+    AddrOf(e) => Pointer(self.global_expr_type(e))
+    Deref(e) =>
+      match self.core_type(self.global_expr_type(e)) {
+        Pointer(elem) | Array(elem, _) => elem
+        _ => SInt
+      }
+    ArrayAccess(base, _) =>
+      match self.pointer_element(self.global_expr_type(base)) {
+        Some(elem) => elem
+        None => SInt
+      }
+    MemberAccess(obj, field) =>
+      match self.field_layout(self.global_expr_type(obj), field) {
+        Some(layout) => layout.ty
+        None => SInt
+      }
+    _ => SInt
+  }
 }
 
 ///|
@@ -1855,6 +2841,93 @@ fn Program::fold_scalar_builtin_const(
 }
 
 ///|
+fn Program::fold_float_builtin_int_const(
+  self : Program,
+  name : String,
+  args : Array[@parser.Expr],
+  scope : Scope,
+) -> ConstIntValue? {
+  match name {
+    "__builtin_isgreater"
+    | "__builtin_isgreaterequal"
+    | "__builtin_isless"
+    | "__builtin_islessequal"
+    | "__builtin_islessgreater"
+    | "__builtin_isunordered" =>
+      if args.length() >= 2 {
+        match
+          (
+            self.fold_float_const(args[0], scope),
+            self.fold_float_const(args[1], scope),
+          ) {
+          (Some(left), Some(right)) => {
+            let unordered = left != left || right != right
+            let result = match name {
+              "__builtin_isgreater" => !unordered && left > right
+              "__builtin_isgreaterequal" => !unordered && left >= right
+              "__builtin_isless" => !unordered && left < right
+              "__builtin_islessequal" => !unordered && left <= right
+              "__builtin_islessgreater" => !unordered && left != right
+              "__builtin_isunordered" => unordered
+              _ => false
+            }
+            Some(const_bool(result))
+          }
+          _ => None
+        }
+      } else {
+        None
+      }
+    "__builtin_isnan"
+    | "__builtin_isnanf"
+    | "__builtin_isnanl"
+    | "__builtin_isinf"
+    | "__builtin_isinff"
+    | "__builtin_isinfl"
+    | "__builtin_isfinite"
+    | "__builtin_isfinitef"
+    | "__builtin_isfinitel"
+    | "__builtin_isnormal"
+    | "__builtin_isnormalf"
+    | "__builtin_isnormall"
+    | "__builtin_signbit"
+    | "__builtin_signbitf"
+    | "__builtin_signbitl" =>
+      if args.length() >= 1 {
+        match self.fold_float_const(args[0], scope) {
+          Some(value) => {
+            let nan = value != value
+            let pos_inf = 1.0 / 0.0
+            let neg_inf = -pos_inf
+            let inf = !nan && (value == pos_inf || value == neg_inf)
+            let finite = !nan && !inf
+            let result = match name {
+              "__builtin_isnan" | "__builtin_isnanf" | "__builtin_isnanl" => nan
+              "__builtin_isinf" | "__builtin_isinff" | "__builtin_isinfl" => inf
+              "__builtin_isfinite"
+              | "__builtin_isfinitef"
+              | "__builtin_isfinitel" => finite
+              "__builtin_isnormal"
+              | "__builtin_isnormalf"
+              | "__builtin_isnormall" =>
+                finite && floating_abs(value) >= fp_class_normal_min(name)
+              "__builtin_signbit"
+              | "__builtin_signbitf"
+              | "__builtin_signbitl" => floating_signbit(value)
+              _ => false
+            }
+            Some(const_bool(result))
+          }
+          None => None
+        }
+      } else {
+        None
+      }
+    _ => None
+  }
+}
+
+///|
 fn Program::fold_const_int(
   self : Program,
   expr : @parser.Expr,
@@ -1999,7 +3072,21 @@ fn Program::fold_const_int(
         Some(_) =>
           match self.fold_const_int(e, scope) {
             Some(value) => Some(self.const_cast_int(value, ty))
-            None => None
+            None =>
+              if self.is_floating_const_type(self.expr_type(e, scope)) {
+                match self.fold_float_const(e, scope) {
+                  Some(value) =>
+                    Some(
+                      self.const_cast_int(
+                        self.const_int(value.to_int().to_int64(), ty),
+                        ty,
+                      ),
+                    )
+                  None => None
+                }
+              } else {
+                None
+              }
           }
         None => None
       }
@@ -2059,7 +3146,11 @@ fn Program::fold_const_int(
       }
       Some(self.const_int(value, SInt))
     }
-    Call(Var(name), args) => self.fold_scalar_builtin_const(name, args, scope)
+    Call(Var(name), args) =>
+      match self.fold_float_builtin_int_const(name, args, scope) {
+        Some(value) => Some(value)
+        None => self.fold_scalar_builtin_const(name, args, scope)
+      }
     _ => None
   }
 }
@@ -2108,9 +3199,9 @@ pub fn Program::fold_float_const(
   scope : Scope,
 ) -> Double? {
   let expr_ty = self.expr_type(expr, scope)
-  if !self.is_floating_type(expr_ty) {
+  if !self.is_floating_const_type(expr_ty) {
     match expr {
-      Cast(_, e) if self.is_floating_type(self.expr_type(e, scope)) =>
+      Cast(_, e) if self.is_floating_const_type(self.expr_type(e, scope)) =>
         match self.fold_float_const(e, scope) {
           Some(value) => Some(value.to_int().to_double())
           None => None
