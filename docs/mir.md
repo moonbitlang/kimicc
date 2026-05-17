@@ -55,8 +55,9 @@ integer-scalar subset.
   zero-fill, scalar-leaf struct copy initializers,
   ignored assignments from local objects and compound literals including
   scalar-field unions and nested scalar aggregate fields, fixed-size string
-  array initialization, scalar aggregate fields including nested member access
-  and scalar array field access, foldable
+  array initialization, initializer side effects for unused unsupported local
+  declarations, scalar aggregate fields including nested member access and
+  scalar array field access, foldable
   `__builtin_constant_p`, literal `__builtin_strlen`, identity builtins such as
   `__builtin_expect` and `__builtin_assume_aligned` including their modeled
   hint-operand side effects,

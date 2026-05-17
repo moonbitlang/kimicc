@@ -2967,6 +2967,7 @@ test "mir interpreter evaluates ignored unsupported local initializer side effec
     #|  return side + 35;
     #|}
   expect_interp(source, 42L)
+  expect_body_interp(source, 42L)
 }
 
 ///|

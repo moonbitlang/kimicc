@@ -722,6 +722,39 @@ test "generate darwin arm64 strict MIR lowers overflow builtins" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR ignored unsupported local initializer side effects" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  int a[2];
+    #|  double d = (a[side += 1] = side += 2);
+    #|  double e = side += 4;
+    #|  return side + 35;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("__mir_2_d"), content="false")
+      inspect(assembly.contains("__mir_3_e"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "strict MIR still rejects unsupported local reads" {
+  let source = "int main(void) { double d; return (int)d; }"
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(_) => abort("expected strict MIR unsupported local read rejection")
+    Err(err) =>
+      inspect(err.contains("unsupported MIR body codegen"), content="true")
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR bzero builtin libcall" {
   let source =
     #|int main(void) {
@@ -1843,6 +1876,31 @@ test "generate linux amd64 strict MIR lowers overflow builtins" {
         assembly.contains("call\t__builtin_umulll_overflow"),
         content="false",
       )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR ignored unsupported local initializer side effects" {
+  let source =
+    #|int main(void) {
+    #|  int side = 0;
+    #|  int a[2];
+    #|  double d = (a[side += 1] = side += 2);
+    #|  double e = side += 4;
+    #|  return side + 35;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("__mir_2_d"), content="false")
+      inspect(assembly.contains("__mir_3_e"), content="false")
     }
     Err(err) => abort(err)
   }

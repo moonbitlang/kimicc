@@ -477,7 +477,11 @@ fn mir_body_codegen_stmt_supported(
   match stmt {
     MirDeclare(binding, init) => {
       if !mir_body_codegen_local_type(binding.ty) {
-        return false
+        match init {
+          Some(value) =>
+            return mir_body_codegen_value_supported(value, int_arg_limit, mir)
+          None => return true
+        }
       }
       match peel_aligned_type(binding.ty) {
         Array(_, _) => return init is None
@@ -559,11 +563,6 @@ fn mir_body_codegen_func_supported(
   }
   for binding in body.params {
     if !mir_body_codegen_scalar_type(binding.ty) {
-      return false
-    }
-  }
-  for binding in body.locals {
-    if !mir_body_codegen_local_type(binding.ty) {
       return false
     }
   }
@@ -656,10 +655,12 @@ fn Codegen::mir_body_offsets(
 ) -> Map[Int, Int] {
   let offsets : Map[Int, Int] = {}
   for binding in body.locals {
-    offsets[binding.id] = self.alloc_local(
-      mir_body_local_name(binding),
-      binding.ty,
-    )
+    if mir_body_codegen_local_type(binding.ty) {
+      offsets[binding.id] = self.alloc_local(
+        mir_body_local_name(binding),
+        binding.ty,
+      )
+    }
   }
   offsets
 }
@@ -1172,13 +1173,20 @@ fn Codegen::gen_mir_stmt(
 ) -> Unit {
   match stmt {
     MirDeclare(binding, init) =>
-      match init {
-        Some(value) => {
-          self.gen_mir_value(value, offsets, frame_size)
-          self.emit_scalar_conversion_to(binding.ty)
-          self.emit_store_local("x9", offsets[binding.id], frame_size)
+      if mir_body_codegen_local_type(binding.ty) {
+        match init {
+          Some(value) => {
+            self.gen_mir_value(value, offsets, frame_size)
+            self.emit_scalar_conversion_to(binding.ty)
+            self.emit_store_local("x9", offsets[binding.id], frame_size)
+          }
+          None => ()
         }
-        None => ()
+      } else {
+        match init {
+          Some(value) => self.gen_mir_value(value, offsets, frame_size)
+          None => ()
+        }
       }
     MirExprStmt(value) => self.gen_mir_value(value, offsets, frame_size)
     MirReturn(value) => {
@@ -1442,10 +1450,12 @@ fn X64Codegen::mir_body_offsets(
 ) -> Map[Int, Int] {
   let offsets : Map[Int, Int] = {}
   for binding in body.locals {
-    offsets[binding.id] = self.alloc_local(
-      mir_body_local_name(binding),
-      binding.ty,
-    )
+    if mir_body_codegen_local_type(binding.ty) {
+      offsets[binding.id] = self.alloc_local(
+        mir_body_local_name(binding),
+        binding.ty,
+      )
+    }
   }
   offsets
 }
@@ -1964,13 +1974,20 @@ fn X64Codegen::gen_mir_stmt(
 ) -> Unit {
   match stmt {
     MirDeclare(binding, init) =>
-      match init {
-        Some(value) => {
-          self.gen_mir_value(value, offsets)
-          self.emit_int_conversion_to(binding.ty)
-          self.emit_store_local_from_rax(offsets[binding.id], binding.ty)
+      if mir_body_codegen_local_type(binding.ty) {
+        match init {
+          Some(value) => {
+            self.gen_mir_value(value, offsets)
+            self.emit_int_conversion_to(binding.ty)
+            self.emit_store_local_from_rax(offsets[binding.id], binding.ty)
+          }
+          None => ()
         }
-        None => ()
+      } else {
+        match init {
+          Some(value) => self.gen_mir_value(value, offsets)
+          None => ()
+        }
       }
     MirExprStmt(value) => self.gen_mir_value(value, offsets)
     MirReturn(value) => {
