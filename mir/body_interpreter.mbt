@@ -585,6 +585,11 @@ fn BodyInterpreter::eval_value(
     MirCast(ty, inner) =>
       self.program.runtime_cast_int(self.eval_value(frame, inner), ty)
     MirCall(name, args, ty) => {
+      if name == "__sync_synchronize" &&
+        args.length() == 0 &&
+        self.program.core_type(ty) is Void {
+        return 0L
+      }
       let values : Array[Int64] = []
       for arg in args {
         values.push(self.eval_value(frame, arg))

@@ -1191,6 +1191,18 @@ test "mir body lowering handles implicit external scalar calls" {
 }
 
 ///|
+test "mir body interpreter handles sync synchronize builtin" {
+  let source =
+    #|int main(void) {
+    #|  __sync_synchronize();
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body interpreter handles ignored local union assignments" {
   let source =
     #|union U { unsigned char c; int x; };

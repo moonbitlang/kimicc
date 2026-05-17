@@ -579,7 +579,7 @@ test "strict MIR still rejects unsupported builtin direct calls" {
 }
 
 ///|
-test "strict MIR still rejects unsupported sync builtin direct calls" {
+test "generate darwin arm64 strict MIR sync synchronize builtin" {
   let source =
     #|int main(void) {
     #|  __sync_synchronize();
@@ -587,12 +587,13 @@ test "strict MIR still rejects unsupported sync builtin direct calls" {
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
-    Ok(_) => abort("expected strict MIR sync builtin rejection")
-    Err(err) =>
-      inspect(
-        err.contains("unsupported MIR body codegen for main"),
-        content="true",
-      )
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tdmb\tish"), content="true")
+      inspect(assembly.contains("\tbl\t___sync_synchronize"), content="false")
+    }
+    Err(err) => abort(err)
   }
 }
 
@@ -1418,6 +1419,29 @@ test "generate linux amd64 strict MIR double underscore external scalar call" {
       inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
       inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
       inspect(assembly.contains("\tcall\t__kimicc_external"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR sync synchronize builtin" {
+  let source =
+    #|int main(void) {
+    #|  __sync_synchronize();
+    #|  return 0;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tmfence"), content="true")
+      inspect(assembly.contains("\tcall\t__sync_synchronize"), content="false")
     }
     Err(err) => abort(err)
   }

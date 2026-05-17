@@ -136,6 +136,17 @@ fn mir_body_codegen_builtin_call_name(name : String) -> Bool {
 }
 
 ///|
+fn mir_body_codegen_sync_synchronize_call(
+  name : String,
+  args : Array[@mir.MirValue],
+  ret : @parser.Type,
+) -> Bool {
+  name == "__sync_synchronize" &&
+  args.length() == 0 &&
+  peel_aligned_type(ret) is Void
+}
+
+///|
 fn mir_body_codegen_call_supported(
   name : String,
   args : Array[@mir.MirValue],
@@ -143,6 +154,9 @@ fn mir_body_codegen_call_supported(
   int_arg_limit : Int,
   mir : @mir.MirModule,
 ) -> Bool {
+  if mir_body_codegen_sync_synchronize_call(name, args, ret) {
+    return true
+  }
   if mir_body_codegen_builtin_call_name(name) ||
     args.length() > int_arg_limit ||
     !mir_body_codegen_scalar_type(ret) {
@@ -594,6 +608,11 @@ fn Codegen::gen_mir_value(
       self.emit(end_label + ":")
     }
     MirCall(name, args, ty) => {
+      if mir_body_codegen_sync_synchronize_call(name, args, ty) {
+        self.emit("\tdmb\tish")
+        self.emit("\tmov\tx9, #0")
+        return
+      }
       for i in 0..<args.length() {
         let arg = args[i]
         self.gen_mir_value(arg, offsets, frame_size)
@@ -1278,6 +1297,11 @@ fn X64Codegen::gen_mir_value(
       self.emit(end_label + ":")
     }
     MirCall(name, args, ty) => {
+      if mir_body_codegen_sync_synchronize_call(name, args, ty) {
+        self.emit("\tmfence")
+        self.emit("\tmov\trax, 0")
+        return
+      }
       for i in 0..<args.length() {
         let arg = args[i]
         self.gen_mir_value(arg, offsets)
