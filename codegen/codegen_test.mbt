@@ -384,6 +384,48 @@ test "generate darwin arm64 strict MIR local union initializer" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR ignored local union assignment" {
+  let source =
+    #|union U { unsigned char c; int x; };
+    #|int main(void) {
+    #|  union U a = { .x = 19 };
+    #|  union U b = { .c = 1 };
+    #|  b = a;
+    #|  a.x = 0;
+    #|  b = (union U){ .x = b.x + 21 };
+    #|  return b.x + 2;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR nested union compound literal assignment" {
+  let source =
+    #|union U { unsigned char c; int x; };
+    #|struct S { union U u; int tail; };
+    #|int main(void) {
+    #|  struct S s = {0};
+    #|  s = (struct S){ .u = { .x = 40 }, .tail = 2 };
+    #|  return s.u.x + s.tail;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR local array initializer" {
   let source =
     #|int main(void) {
@@ -1086,6 +1128,56 @@ test "generate linux amd64 strict MIR local union initializer" {
     #|int main(void) {
     #|  union U u = { 42 };
     #|  return u.x;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR ignored local union assignment" {
+  let source =
+    #|union U { unsigned char c; int x; };
+    #|int main(void) {
+    #|  union U a = { .x = 19 };
+    #|  union U b = { .c = 1 };
+    #|  b = a;
+    #|  a.x = 0;
+    #|  b = (union U){ .x = b.x + 21 };
+    #|  return b.x + 2;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR nested union compound literal assignment" {
+  let source =
+    #|union U { unsigned char c; int x; };
+    #|struct S { union U u; int tail; };
+    #|int main(void) {
+    #|  struct S s = {0};
+    #|  s = (struct S){ .u = { .x = 40 }, .tail = 2 };
+    #|  return s.u.x + s.tail;
     #|}
   let target = match @target.Target::parse("linux-amd64") {
     Some(target) => target

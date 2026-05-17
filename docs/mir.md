@@ -52,10 +52,10 @@ integer-scalar subset.
   simple non-variadic indirect calls and function addresses, scalar local arrays,
   string literal byte loads, simple local array initializers, local aggregate
   initializers with nested zero-fill, scalar-leaf struct copy initializers,
-  ignored assignments from local objects and compound literals including nested
-  scalar aggregate fields, fixed-size string array initialization, scalar
-  aggregate fields including nested member access and scalar array field access,
-  foldable
+  ignored assignments from local objects and compound literals including
+  scalar-field unions and nested scalar aggregate fields, fixed-size string
+  array initialization, scalar aggregate fields including nested member access
+  and scalar array field access, foldable
   `__builtin_constant_p`, literal `__builtin_strlen`, identity builtins such as
   `__builtin_expect` and `__builtin_assume_aligned` including their modeled
   hint-operand side effects,
@@ -78,10 +78,10 @@ integer-scalar subset.
   simple non-variadic indirect calls and function addresses, scalar local arrays,
   string literal byte loads, simple local array initializers, local aggregate
   initializers with nested zero-fill, scalar-leaf struct copy initializers,
-  ignored assignments from local objects and compound literals including nested
-  scalar aggregate fields, fixed-size string array initialization, scalar
-  aggregate fields including nested member access and scalar array field access,
-  foldable
+  ignored assignments from local objects and compound literals including
+  scalar-field unions and nested scalar aggregate fields, fixed-size string
+  array initialization, scalar aggregate fields including nested member access
+  and scalar array field access, foldable
   `__builtin_constant_p`, literal `__builtin_strlen`, identity builtins such as
   `__builtin_expect` and `__builtin_assume_aligned` including their modeled
   hint-operand side effects,

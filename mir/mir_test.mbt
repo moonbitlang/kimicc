@@ -1181,6 +1181,38 @@ test "mir body interpreter handles local union initializers" {
 }
 
 ///|
+test "mir body interpreter handles ignored local union assignments" {
+  let source =
+    #|union U { unsigned char c; int x; };
+    #|int main(void) {
+    #|  union U a = { .x = 19 };
+    #|  union U b = { .c = 1 };
+    #|  b = a;
+    #|  a.x = 0;
+    #|  b = (union U){ .x = b.x + 21 };
+    #|  return b.x + 2;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
+test "mir body interpreter handles nested union compound literal assignments" {
+  let source =
+    #|union U { unsigned char c; int x; };
+    #|struct S { union U u; int tail; };
+    #|int main(void) {
+    #|  struct S s = {0};
+    #|  s = (struct S){ .u = { .x = 40 }, .tail = 2 };
+    #|  return s.u.x + s.tail;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body lowering handles nested aggregate fields" {
   let source =
     #|struct Inner { int z; };

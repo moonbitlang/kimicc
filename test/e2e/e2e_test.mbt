@@ -654,6 +654,25 @@ async test "local union initializer" {
 }
 
 ///|
+async test "local union and nested union compound literal assignments" {
+  let source =
+    #|union U { unsigned char c; int x; };
+    #|struct S { union U u; int tail; };
+    #|int main(void) {
+    #|  union U a = { .x = 19 };
+    #|  union U b = { .c = 1 };
+    #|  b = a;
+    #|  a.x = 0;
+    #|  b = (union U){ .x = b.x + 1 };
+    #|  struct S s = {0};
+    #|  s = (struct S){ .u = { .x = 20 }, .tail = 2 };
+    #|  return b.x + s.u.x + s.tail;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "comma separated typedef" {
   let source =
     #|typedef int foo_t, bar_t, *baz_t;
