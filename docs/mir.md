@@ -136,7 +136,10 @@ integer-scalar subset.
   Floating comparison and classification builtins such as
   `__builtin_isgreater`, `__builtin_isunordered`, `__builtin_isnan`, and
   `__builtin_signbit` are modeled for operands covered by MIR floating
-  constant folding, returning only their integer predicate result.
+  constant folding, returning only their integer predicate result. Floating
+  math builtins covered by MIR floating constant folding, including
+  `__builtin_fabs`, `__builtin_copysign`, and `__builtin_sqrt`, can also feed
+  integer casts and those folded predicates.
   Runtime `__builtin_va_start`, `__builtin_va_copy`, and `__builtin_va_end` are
   no-ops for scalar tests that do not inspect `va_list` contents.
   Runtime `__builtin_expect`, `__builtin_expect_with_probability`, and

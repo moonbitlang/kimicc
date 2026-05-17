@@ -814,6 +814,69 @@ test "generate darwin arm64 strict MIR string literal scalar facts" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR folded floating builtins" {
+  let source =
+    #|int main(void) {
+    #|  if (!__builtin_isgreater(2.0, 1.0)) return 1;
+    #|  if (!__builtin_isgreaterequal(2.0, 2.0)) return 2;
+    #|  if (!__builtin_isless(1.0, 2.0)) return 3;
+    #|  if (!__builtin_islessequal(2.0, 2.0)) return 4;
+    #|  if (!__builtin_islessgreater(1.0, 2.0)) return 5;
+    #|  if (__builtin_islessgreater(2.0, 2.0)) return 6;
+    #|  if (!__builtin_isunordered(__builtin_nan(""), 1.0)) return 7;
+    #|  if (__builtin_isgreater(__builtin_nan(""), 1.0)) return 8;
+    #|  if (!__builtin_isnan(__builtin_nan(""))) return 9;
+    #|  if (__builtin_isnan(1.0)) return 10;
+    #|  if (!__builtin_isnanf(__builtin_nanf(""))) return 11;
+    #|  if (!__builtin_isnanl(__builtin_nanl(""))) return 12;
+    #|  if (!__builtin_isinf(__builtin_inf())) return 13;
+    #|  if (!__builtin_isinf(-__builtin_inf())) return 14;
+    #|  if (__builtin_isinf(1.0)) return 15;
+    #|  if (!__builtin_isinff(__builtin_inff())) return 16;
+    #|  if (!__builtin_isinfl(__builtin_infl())) return 17;
+    #|  if (!__builtin_isfinite(1.0)) return 18;
+    #|  if (__builtin_isfinite(__builtin_inf())) return 19;
+    #|  if (!__builtin_isfinitef(1.0f)) return 20;
+    #|  if (!__builtin_isfinitel(1.0L)) return 21;
+    #|  if (!__builtin_isnormal(1.0)) return 22;
+    #|  if (__builtin_isnormal(0.0)) return 23;
+    #|  if (__builtin_isnormal(__builtin_inf())) return 24;
+    #|  if (!__builtin_isnormalf(1.0f)) return 25;
+    #|  if (!__builtin_isnormall(1.0L)) return 26;
+    #|  if (!__builtin_signbit(-1.0)) return 27;
+    #|  if (!__builtin_signbit(-0.0)) return 28;
+    #|  if (__builtin_signbit(1.0)) return 29;
+    #|  if (!__builtin_signbitf(-0.0f)) return 30;
+    #|  if (!__builtin_signbitl(-1.0L)) return 31;
+    #|  if ((int)__builtin_fabs(-4.5) != 4) return 32;
+    #|  if ((int)__builtin_fabsf(-3.5f) != 3) return 33;
+    #|  if ((int)__builtin_fabsl(-2.5L) != 2) return 34;
+    #|  if ((int)__builtin_copysign(3.0, -1.0) != -3) return 35;
+    #|  if ((int)__builtin_copysign(-3.0, 1.0) != 3) return 36;
+    #|  if ((int)__builtin_copysignf(2.0f, -1.0f) != -2) return 37;
+    #|  if (!__builtin_signbit(__builtin_copysign(0.0, -1.0))) return 38;
+    #|  if ((int)__builtin_sqrt(81.0) != 9) return 39;
+    #|  if ((int)__builtin_sqrtf(25.0f) != 5) return 40;
+    #|  if ((int)__builtin_sqrtl(16.0L) != 4) return 41;
+    #|  if (!__builtin_isnan(__builtin_sqrt(-1.0))) return 42;
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("__builtin_isgreater"), content="false")
+      inspect(assembly.contains("__builtin_isnan"), content="false")
+      inspect(assembly.contains("__builtin_fabs"), content="false")
+      inspect(assembly.contains("__builtin_copysign"), content="false")
+      inspect(assembly.contains("__builtin_sqrt"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR lowers overflow builtins" {
   let source =
     #|int main(void) {
@@ -2122,6 +2185,72 @@ test "generate linux amd64 strict MIR string literal scalar facts" {
     Ok(assembly) => {
       inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
       inspect(assembly.contains("BYTE PTR"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR folded floating builtins" {
+  let source =
+    #|int main(void) {
+    #|  if (!__builtin_isgreater(2.0, 1.0)) return 1;
+    #|  if (!__builtin_isgreaterequal(2.0, 2.0)) return 2;
+    #|  if (!__builtin_isless(1.0, 2.0)) return 3;
+    #|  if (!__builtin_islessequal(2.0, 2.0)) return 4;
+    #|  if (!__builtin_islessgreater(1.0, 2.0)) return 5;
+    #|  if (__builtin_islessgreater(2.0, 2.0)) return 6;
+    #|  if (!__builtin_isunordered(__builtin_nan(""), 1.0)) return 7;
+    #|  if (__builtin_isgreater(__builtin_nan(""), 1.0)) return 8;
+    #|  if (!__builtin_isnan(__builtin_nan(""))) return 9;
+    #|  if (__builtin_isnan(1.0)) return 10;
+    #|  if (!__builtin_isnanf(__builtin_nanf(""))) return 11;
+    #|  if (!__builtin_isnanl(__builtin_nanl(""))) return 12;
+    #|  if (!__builtin_isinf(__builtin_inf())) return 13;
+    #|  if (!__builtin_isinf(-__builtin_inf())) return 14;
+    #|  if (__builtin_isinf(1.0)) return 15;
+    #|  if (!__builtin_isinff(__builtin_inff())) return 16;
+    #|  if (!__builtin_isinfl(__builtin_infl())) return 17;
+    #|  if (!__builtin_isfinite(1.0)) return 18;
+    #|  if (__builtin_isfinite(__builtin_inf())) return 19;
+    #|  if (!__builtin_isfinitef(1.0f)) return 20;
+    #|  if (!__builtin_isfinitel(1.0L)) return 21;
+    #|  if (!__builtin_isnormal(1.0)) return 22;
+    #|  if (__builtin_isnormal(0.0)) return 23;
+    #|  if (__builtin_isnormal(__builtin_inf())) return 24;
+    #|  if (!__builtin_isnormalf(1.0f)) return 25;
+    #|  if (!__builtin_isnormall(1.0L)) return 26;
+    #|  if (!__builtin_signbit(-1.0)) return 27;
+    #|  if (!__builtin_signbit(-0.0)) return 28;
+    #|  if (__builtin_signbit(1.0)) return 29;
+    #|  if (!__builtin_signbitf(-0.0f)) return 30;
+    #|  if (!__builtin_signbitl(-1.0L)) return 31;
+    #|  if ((int)__builtin_fabs(-4.5) != 4) return 32;
+    #|  if ((int)__builtin_fabsf(-3.5f) != 3) return 33;
+    #|  if ((int)__builtin_fabsl(-2.5L) != 2) return 34;
+    #|  if ((int)__builtin_copysign(3.0, -1.0) != -3) return 35;
+    #|  if ((int)__builtin_copysign(-3.0, 1.0) != 3) return 36;
+    #|  if ((int)__builtin_copysignf(2.0f, -1.0f) != -2) return 37;
+    #|  if (!__builtin_signbit(__builtin_copysign(0.0, -1.0))) return 38;
+    #|  if ((int)__builtin_sqrt(81.0) != 9) return 39;
+    #|  if ((int)__builtin_sqrtf(25.0f) != 5) return 40;
+    #|  if ((int)__builtin_sqrtl(16.0L) != 4) return 41;
+    #|  if (!__builtin_isnan(__builtin_sqrt(-1.0))) return 42;
+    #|  return 42;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("__builtin_isgreater"), content="false")
+      inspect(assembly.contains("__builtin_isnan"), content="false")
+      inspect(assembly.contains("__builtin_fabs"), content="false")
+      inspect(assembly.contains("__builtin_copysign"), content="false")
+      inspect(assembly.contains("__builtin_sqrt"), content="false")
     }
     Err(err) => abort(err)
   }

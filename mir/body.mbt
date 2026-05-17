@@ -1380,11 +1380,18 @@ fn Program::lower_mir_expr(
         Some(value) => Some(MirUnary(op, value, ty))
         None => None
       }
-    Cast(cast_ty, inner) =>
+    Cast(cast_ty, inner) => {
+      if self.is_floating_const_type(self.expr_type(inner, scope)) {
+        match self.fold_const(expr, scope) {
+          Some(value) => return Some(MirConst(value, ty))
+          None => ()
+        }
+      }
       match self.lower_mir_expr(inner, ctx) {
         Some(value) => Some(MirCast(cast_ty, value))
         None => None
       }
+    }
     Assign(lhs, rhs) => {
       let lhs_ty = self.expr_type(lhs, scope)
       match

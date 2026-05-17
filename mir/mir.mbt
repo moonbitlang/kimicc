@@ -979,6 +979,14 @@ fn Program::is_floating_type(self : Program, ty : @parser.Type) -> Bool {
 }
 
 ///|
+fn Program::is_floating_const_type(self : Program, ty : @parser.Type) -> Bool {
+  match self.core_type(ty) {
+    Float | Double | LongDouble => true
+    _ => false
+  }
+}
+
+///|
 fn Program::unary_numeric_result_type(
   self : Program,
   ty : @parser.Type,
@@ -2833,6 +2841,93 @@ fn Program::fold_scalar_builtin_const(
 }
 
 ///|
+fn Program::fold_float_builtin_int_const(
+  self : Program,
+  name : String,
+  args : Array[@parser.Expr],
+  scope : Scope,
+) -> ConstIntValue? {
+  match name {
+    "__builtin_isgreater"
+    | "__builtin_isgreaterequal"
+    | "__builtin_isless"
+    | "__builtin_islessequal"
+    | "__builtin_islessgreater"
+    | "__builtin_isunordered" =>
+      if args.length() >= 2 {
+        match
+          (
+            self.fold_float_const(args[0], scope),
+            self.fold_float_const(args[1], scope),
+          ) {
+          (Some(left), Some(right)) => {
+            let unordered = left != left || right != right
+            let result = match name {
+              "__builtin_isgreater" => !unordered && left > right
+              "__builtin_isgreaterequal" => !unordered && left >= right
+              "__builtin_isless" => !unordered && left < right
+              "__builtin_islessequal" => !unordered && left <= right
+              "__builtin_islessgreater" => !unordered && left != right
+              "__builtin_isunordered" => unordered
+              _ => false
+            }
+            Some(const_bool(result))
+          }
+          _ => None
+        }
+      } else {
+        None
+      }
+    "__builtin_isnan"
+    | "__builtin_isnanf"
+    | "__builtin_isnanl"
+    | "__builtin_isinf"
+    | "__builtin_isinff"
+    | "__builtin_isinfl"
+    | "__builtin_isfinite"
+    | "__builtin_isfinitef"
+    | "__builtin_isfinitel"
+    | "__builtin_isnormal"
+    | "__builtin_isnormalf"
+    | "__builtin_isnormall"
+    | "__builtin_signbit"
+    | "__builtin_signbitf"
+    | "__builtin_signbitl" =>
+      if args.length() >= 1 {
+        match self.fold_float_const(args[0], scope) {
+          Some(value) => {
+            let nan = value != value
+            let pos_inf = 1.0 / 0.0
+            let neg_inf = -pos_inf
+            let inf = !nan && (value == pos_inf || value == neg_inf)
+            let finite = !nan && !inf
+            let result = match name {
+              "__builtin_isnan" | "__builtin_isnanf" | "__builtin_isnanl" => nan
+              "__builtin_isinf" | "__builtin_isinff" | "__builtin_isinfl" => inf
+              "__builtin_isfinite"
+              | "__builtin_isfinitef"
+              | "__builtin_isfinitel" => finite
+              "__builtin_isnormal"
+              | "__builtin_isnormalf"
+              | "__builtin_isnormall" =>
+                finite && floating_abs(value) >= fp_class_normal_min(name)
+              "__builtin_signbit"
+              | "__builtin_signbitf"
+              | "__builtin_signbitl" => floating_signbit(value)
+              _ => false
+            }
+            Some(const_bool(result))
+          }
+          None => None
+        }
+      } else {
+        None
+      }
+    _ => None
+  }
+}
+
+///|
 fn Program::fold_const_int(
   self : Program,
   expr : @parser.Expr,
@@ -2977,7 +3072,21 @@ fn Program::fold_const_int(
         Some(_) =>
           match self.fold_const_int(e, scope) {
             Some(value) => Some(self.const_cast_int(value, ty))
-            None => None
+            None =>
+              if self.is_floating_const_type(self.expr_type(e, scope)) {
+                match self.fold_float_const(e, scope) {
+                  Some(value) =>
+                    Some(
+                      self.const_cast_int(
+                        self.const_int(value.to_int().to_int64(), ty),
+                        ty,
+                      ),
+                    )
+                  None => None
+                }
+              } else {
+                None
+              }
           }
         None => None
       }
@@ -3037,7 +3146,11 @@ fn Program::fold_const_int(
       }
       Some(self.const_int(value, SInt))
     }
-    Call(Var(name), args) => self.fold_scalar_builtin_const(name, args, scope)
+    Call(Var(name), args) =>
+      match self.fold_float_builtin_int_const(name, args, scope) {
+        Some(value) => Some(value)
+        None => self.fold_scalar_builtin_const(name, args, scope)
+      }
     _ => None
   }
 }
@@ -3086,9 +3199,9 @@ pub fn Program::fold_float_const(
   scope : Scope,
 ) -> Double? {
   let expr_ty = self.expr_type(expr, scope)
-  if !self.is_floating_type(expr_ty) {
+  if !self.is_floating_const_type(expr_ty) {
     match expr {
-      Cast(_, e) if self.is_floating_type(self.expr_type(e, scope)) =>
+      Cast(_, e) if self.is_floating_const_type(self.expr_type(e, scope)) =>
         match self.fold_float_const(e, scope) {
           Some(value) => Some(value.to_int().to_double())
           None => None
