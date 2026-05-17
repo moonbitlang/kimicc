@@ -69,6 +69,20 @@ test "driver strict MIR codegen emits parser-free supported assembly" {
 }
 
 ///|
+test "driver default codegen uses direct AST path" {
+  let opts = match
+    parse_driver_args(["kimicc", "--preprocessed", "-S", "-o", "-", "foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  let source =
+    #|int main(void) { return 0; }
+  let assembly = generate_assembly_from_preprocessed(source, opts)
+  assert_true(!assembly.contains("kimicc: mir-body"))
+  assert_true(assembly.contains("_main:"))
+}
+
+///|
 test "driver command-line defines support function-like and empty macros" {
   let opts = match
     parse_driver_args([

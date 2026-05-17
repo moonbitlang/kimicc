@@ -50,7 +50,7 @@ pub struct Codegen {
   strings : Array[String]
   mut break_label : String?
   mut continue_label : String?
-  globals : Map[String, @mir.MirGlobalDecl]
+  globals : Map[String, CodegenGlobalDecl]
   mut emitted_labels : Map[String, String]
   mut defined_labels : Map[String, Bool]
   mut fp_literals : Array[Double]
@@ -61,6 +61,8 @@ pub struct Codegen {
 }
 pub fn Codegen::generate(Self, @parser.Program) -> String
 pub fn Codegen::new() -> Self
+
+type CodegenGlobalDecl
 
 pub struct JitImage {
   code : Bytes

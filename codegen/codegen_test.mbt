@@ -5,9 +5,16 @@ test "generate simple function" {
   let codegen = @codegen.Codegen::new()
   let assembly = codegen.generate(prog)
   inspect(assembly.contains("_main:"), content="true")
-  inspect(assembly.contains("kimicc: mir-body"), content="true")
+  inspect(assembly.contains("kimicc: mir-body"), content="false")
   inspect(assembly.contains("\tmov\tx9, #42"), content="true")
   inspect(assembly.contains("\tret"), content="true")
+}
+
+///|
+fn generate_darwin_mir_fallback(source : String) -> String {
+  @codegen.generate_assembly_from_mir_with_parser_fallback(
+    @mir.lower(@parser.parse(source), @target.Target::default()),
+  )
 }
 
 ///|
@@ -2835,9 +2842,7 @@ test "generate darwin arm64 MIR body direct call" {
   let source =
     #|int add(int a, int b) { return a + b; }
     #|int main(void) { return add(20, 22); }
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
     content="true",
@@ -2850,9 +2855,7 @@ test "generate darwin arm64 MIR body declared external call" {
   let source =
     #|int ext(int x);
     #|int main(void) { return ext(42); }
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
     content="true",
@@ -2872,9 +2875,7 @@ test "generate darwin arm64 MIR body for loop control" {
     #|  }
     #|  return sum;
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
     content="true",
@@ -2892,9 +2893,7 @@ test "generate darwin arm64 MIR body do while control" {
     #|  } while (i < 3);
     #|  return i;
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
     content="true",
@@ -2914,9 +2913,7 @@ test "generate darwin arm64 MIR body switch control" {
     #|  }
     #|  return total;
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
     content="true",
@@ -2936,9 +2933,7 @@ test "generate darwin arm64 MIR body goto control" {
     #|done:
     #|  return x;
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
     content="true",
@@ -2954,9 +2949,7 @@ test "generate darwin arm64 MIR body address cancellation" {
     #|  *&x += 5;
     #|  return *&x;
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
     content="true",
@@ -2971,9 +2964,7 @@ test "generate darwin arm64 MIR body postfix update value" {
     #|  int old = i++;
     #|  return old * 10 + i;
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
     content="true",
@@ -2989,9 +2980,7 @@ test "generate darwin arm64 MIR body scalar local pointer" {
     #|  *p += 5;
     #|  return x + *p;
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
     content="true",
@@ -3007,9 +2996,7 @@ test "generate darwin arm64 MIR body scalar local array" {
     #|  a[1] = a[0] + 5;
     #|  return a[0] + a[1];
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
     content="true",
@@ -3032,9 +3019,7 @@ test "generate darwin arm64 MIR body scalar memory prefix updates" {
     #|  ++s.x;
     #|  return x + a[0] + s.x;
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
     content="true",
@@ -3051,9 +3036,7 @@ test "generate darwin arm64 MIR body side effecting memory prefix update" {
     #|  int got = ++a[i++];
     #|  return got * 10 + a[0] + i;
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
     content="true",
@@ -3070,9 +3053,7 @@ test "generate darwin arm64 MIR body side effecting memory compound update" {
     #|  int got = (a[i++] += 3);
     #|  return got * 10 + a[0] + i;
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
     content="true",
@@ -3089,9 +3070,7 @@ test "generate darwin arm64 MIR body side effecting non-additive compound update
     #|  int got = (a[i++] *= 3);
     #|  return got * 10 + a[0] + i;
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
     content="true",
@@ -3115,9 +3094,7 @@ test "generate darwin arm64 MIR body scalar memory postfix updates" {
     #|  int old_s = s.x++;
     #|  return old_p * 1000 + old_a * 100 + old_s * 10 + x + a[0] + s.x + i;
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
     content="true",
@@ -3140,9 +3117,7 @@ test "generate darwin arm64 MIR body folded builtin call" {
     #|    (__builtin_strlen((char *)"hello") == 5) +
     #|    (__builtin_strlen("a\0bc") == 1);
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
     content="true",
@@ -3162,9 +3137,7 @@ test "generate darwin arm64 MIR body identity builtin calls" {
     #|    ((unsigned long)__builtin_extract_return_addr(ra) == 77ul) +
     #|    ((unsigned long)__builtin_frob_return_addr(ra) == 77ul);
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
     content="true",
@@ -3180,9 +3153,7 @@ test "generate darwin arm64 MIR body no-op builtins" {
     #|  __builtin_assume(side += 10);
     #|  return side + 41;
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
     content="true",
@@ -3203,9 +3174,7 @@ test "generate darwin arm64 MIR body scalar globals" {
     #|  h = 2;
     #|  return bump() + g + h;
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_bump:"),
     content="true",
@@ -3227,9 +3196,7 @@ test "generate darwin arm64 MIR body scalar global arrays" {
     #|  p[1] = 7;
     #|  return a[0] + a[1] + a[2];
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
     content="true",
@@ -3269,9 +3236,7 @@ test "generate darwin arm64 MIR body initialized scalar global arrays" {
     #|  a[1] += 5;
     #|  return a[0] + a[1] + a[2];
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
     content="true",
@@ -3285,9 +3250,7 @@ test "generate darwin arm64 MIR body string literal byte loads" {
     #|  char *s = "abc";
     #|  return s[1] + "xy"[0] + "z"[1];
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(assembly.contains("kimicc: mir-body"), content="true")
   inspect(assembly.contains("\t.asciz\t\"abc\""), content="true")
   inspect(assembly.contains("\t.asciz\t\"xy\""), content="true")
@@ -3302,9 +3265,7 @@ test "generate darwin arm64 keeps side effecting identity builtin operands in MI
     #|  int side = 0;
     #|  return __builtin_expect(x, side += 1) + side;
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(assembly.contains("kimicc: mir-body"), content="true")
 }
 
@@ -3318,9 +3279,7 @@ test "generate darwin arm64 MIR body scalar aggregate field" {
     #|  s.y = 250 + 10;
     #|  return s.x + s.y;
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
     content="true",
@@ -3337,9 +3296,7 @@ test "generate darwin arm64 MIR body nested aggregate field" {
     #|  s.inner.z = 7;
     #|  return s.inner.z;
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
+  let assembly = generate_darwin_mir_fallback(source)
   inspect(
     assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
     content="true",
@@ -3378,6 +3335,27 @@ test "generate darwin arm64 global scalar constants use expression type" {
   inspect(assembly.contains("_dgternary_int:\n\t.single\t1"), content="true")
   inspect(assembly.contains("_dgint_from_float:\n\t.long\t1"), content="true")
   inspect(assembly.contains("_dgfp_expr_to_int:\n\t.long\t1"), content="true")
+}
+
+///|
+test "generate darwin arm64 integer-looking floating literals stay assembler floats" {
+  let source =
+    #|double dglarge = 18446744073709551616.0L;
+    #|double parse_number_like(void) { return 18446744073709551616.0L; }
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  let codegen = @codegen.Codegen::new()
+  let assembly = codegen.generate(prog)
+  inspect(
+    assembly.contains("_dglarge:\n\t.double\t18446744073709552000.0"),
+    content="true",
+  )
+  inspect(
+    assembly.contains(
+      "_fp_lit_parse_number_like_0:\n\t.double\t18446744073709552000.0",
+    ),
+    content="true",
+  )
 }
 
 ///|
@@ -3589,7 +3567,7 @@ test "generate linux amd64 simple function" {
   let assembly = @codegen.generate_assembly_for_target(prog, target)
   inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
   inspect(assembly.contains("\t.globl\tmain"), content="true")
-  inspect(assembly.contains("kimicc: mir-body"), content="true")
+  inspect(assembly.contains("kimicc: mir-body"), content="false")
   inspect(assembly.contains("\tmov\trax, 42"), content="true")
   inspect(assembly.contains("_main:"), content="false")
 }
@@ -3604,7 +3582,9 @@ test "generate linux amd64 MIR body direct call" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -3622,7 +3602,9 @@ test "generate linux amd64 MIR body declared external call" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -3647,7 +3629,9 @@ test "generate linux amd64 MIR body for loop control" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -3670,7 +3654,9 @@ test "generate linux amd64 MIR body do while control" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -3695,7 +3681,9 @@ test "generate linux amd64 MIR body switch control" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -3720,7 +3708,9 @@ test "generate linux amd64 MIR body goto control" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -3741,7 +3731,9 @@ test "generate linux amd64 MIR body address cancellation" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -3761,7 +3753,9 @@ test "generate linux amd64 MIR body postfix update value" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -3782,7 +3776,9 @@ test "generate linux amd64 MIR body scalar local pointer" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -3803,7 +3799,9 @@ test "generate linux amd64 MIR body scalar local array" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -3831,7 +3829,9 @@ test "generate linux amd64 MIR body scalar memory prefix updates" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -3853,7 +3853,9 @@ test "generate linux amd64 MIR body side effecting memory prefix update" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -3875,7 +3877,9 @@ test "generate linux amd64 MIR body side effecting memory compound update" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -3897,7 +3901,9 @@ test "generate linux amd64 MIR body side effecting non-additive compound update"
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -3926,7 +3932,9 @@ test "generate linux amd64 MIR body scalar memory postfix updates" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -3954,7 +3962,9 @@ test "generate linux amd64 MIR body folded builtin call" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -3979,7 +3989,9 @@ test "generate linux amd64 MIR body identity builtin calls" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -4000,7 +4012,9 @@ test "generate linux amd64 MIR body no-op builtins" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -4026,7 +4040,9 @@ test "generate linux amd64 MIR body scalar globals" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tbump, @function"),
     content="true",
@@ -4133,7 +4149,9 @@ test "generate linux amd64 MIR body scalar global arrays" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -4182,7 +4200,9 @@ test "generate linux amd64 MIR body initialized scalar global arrays" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -4201,7 +4221,9 @@ test "generate linux amd64 MIR body string literal byte loads" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(assembly.contains("kimicc: mir-body"), content="true")
   inspect(assembly.contains("\t.asciz\t\"abc\""), content="true")
   inspect(assembly.contains("\t.asciz\t\"xy\""), content="true")
@@ -4221,7 +4243,9 @@ test "generate linux amd64 keeps side effecting identity builtin operands in MIR
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(assembly.contains("kimicc: mir-body"), content="true")
 }
 
@@ -4240,7 +4264,9 @@ test "generate linux amd64 MIR body scalar aggregate field" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -4262,7 +4288,9 @@ test "generate linux amd64 MIR body nested aggregate field" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -4343,7 +4371,9 @@ test "generate linux amd64 postfix increment stores new value and returns old va
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  let assembly = @codegen.generate_assembly_for_target_with_parser_fallback(
+    prog, target,
+  )
   inspect(
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
@@ -5884,6 +5914,28 @@ test "generate linux amd64 global floating constants use expression type" {
   inspect(assembly.contains("gternary_int:\n\t.float\t1"), content="true")
   inspect(assembly.contains("gint_from_float:\n\t.long\t1"), content="true")
   inspect(assembly.contains("gfp_expr_to_int:\n\t.long\t1"), content="true")
+}
+
+///|
+test "generate linux amd64 integer-looking floating literals stay assembler floats" {
+  let source =
+    #|double glarge = 18446744073709551616.0L;
+    #|double parse_number_like(void) { return 18446744073709551616.0L; }
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let assembly = @codegen.generate_assembly_for_target(prog, target)
+  inspect(
+    assembly.contains("glarge:\n\t.double\t18446744073709552000.0"),
+    content="true",
+  )
+  inspect(
+    assembly.contains(".Lfp0:\n\t.double\t18446744073709552000.0"),
+    content="true",
+  )
 }
 
 ///|

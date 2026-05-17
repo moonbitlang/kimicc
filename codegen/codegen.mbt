@@ -26,7 +26,7 @@ pub struct Codegen {
   strings : Array[String]
   mut break_label : String?
   mut continue_label : String?
-  globals : Map[String, @mir.MirGlobalDecl]
+  globals : Map[String, CodegenGlobalDecl]
   mut emitted_labels : Map[String, String]
   mut defined_labels : Map[String, Bool]
   mut fp_literals : Array[Double]
@@ -182,6 +182,135 @@ fn merge_global_decls(
     }
   }
   merged
+}
+
+///|
+priv struct CodegenFuncDecl {
+  name : String
+  is_static : Bool
+  is_weak : Bool
+  visibility : String?
+  symbol_alias : String?
+  is_constructor : Bool
+  is_destructor : Bool
+  has_body : Bool
+}
+
+///|
+struct CodegenGlobalDecl {
+  ty : @parser.Type
+  name : String
+  has_init : Bool
+  is_static : Bool
+  is_extern : Bool
+  is_weak : Bool
+  visibility : String?
+  symbol_alias : String?
+  section : String?
+}
+
+///|
+fn codegen_func_decl_from_parser(decl : @parser.FuncDecl) -> CodegenFuncDecl {
+  {
+    name: decl.name,
+    is_static: decl.is_static,
+    is_weak: decl.is_weak,
+    visibility: decl.visibility,
+    symbol_alias: decl.symbol_alias,
+    is_constructor: decl.is_constructor,
+    is_destructor: decl.is_destructor,
+    has_body: decl.body is Some(_),
+  }
+}
+
+///|
+fn codegen_func_decl_from_mir(decl : @mir.MirFuncDecl) -> CodegenFuncDecl {
+  {
+    name: decl.name,
+    is_static: decl.is_static,
+    is_weak: decl.is_weak,
+    visibility: decl.visibility,
+    symbol_alias: decl.symbol_alias,
+    is_constructor: decl.is_constructor,
+    is_destructor: decl.is_destructor,
+    has_body: decl.has_body,
+  }
+}
+
+///|
+fn codegen_func_decls_from_parser(
+  decls : Array[@parser.FuncDecl],
+) -> Array[CodegenFuncDecl] {
+  let result = []
+  for decl in decls {
+    result.push(codegen_func_decl_from_parser(decl))
+  }
+  result
+}
+
+///|
+fn codegen_func_decls_from_mir(
+  decls : Array[@mir.MirFuncDecl],
+) -> Array[CodegenFuncDecl] {
+  let result = []
+  for decl in decls {
+    result.push(codegen_func_decl_from_mir(decl))
+  }
+  result
+}
+
+///|
+fn codegen_global_decl_from_parser(
+  decl : @parser.GlobalDecl,
+) -> CodegenGlobalDecl {
+  {
+    ty: decl.ty,
+    name: decl.name,
+    has_init: decl.init is Some(_),
+    is_static: decl.is_static,
+    is_extern: decl.is_extern,
+    is_weak: decl.is_weak,
+    visibility: decl.visibility,
+    symbol_alias: decl.symbol_alias,
+    section: decl.section,
+  }
+}
+
+///|
+fn codegen_global_decl_from_mir(decl : @mir.MirGlobalDecl) -> CodegenGlobalDecl {
+  {
+    ty: decl.ty,
+    name: decl.name,
+    has_init: decl.has_init,
+    is_static: decl.is_static,
+    is_extern: decl.is_extern,
+    is_weak: decl.is_weak,
+    visibility: decl.visibility,
+    symbol_alias: decl.symbol_alias,
+    section: decl.section,
+  }
+}
+
+///|
+fn codegen_global_decls_from_parser(
+  decls : Array[@parser.GlobalDecl],
+) -> Array[CodegenGlobalDecl] {
+  let result = []
+  for decl in decls {
+    result.push(codegen_global_decl_from_parser(decl))
+  }
+  result
+}
+
+///|
+fn codegen_global_decls_from_mir(
+  decls : Array[@mir.MirGlobalDecl],
+) -> Array[CodegenGlobalDecl] {
+  let result = []
+  for decl in decls {
+    result.push(codegen_global_decl_from_mir(decl))
+  }
+  result
 }
 
 ///|
@@ -368,6 +497,7 @@ fn Codegen::global_expr_type(
         Array(elem, _) | Pointer(elem) => elem
         _ => SInt
       }
+    Call(func, args) => self.call_return_type(func, args, 0)
     MemberAccess(obj, field) => {
       let obj_ty = self.global_expr_type(obj)
       match self.find_field_layout_for_type(obj_ty, field) {
@@ -678,6 +808,107 @@ fn darwin_const_shift(
 }
 
 ///|
+fn codegen_const_mask_int_width(value : Int64, width : Int) -> Int64 {
+  if width >= 64 {
+    value
+  } else {
+    value & ((1L << width) - 1L)
+  }
+}
+
+///|
+fn codegen_const_byte_swap_bits(value : Int64, width : Int) -> Int64 {
+  let value = codegen_const_mask_int_width(value, width)
+  let mut result = 0L
+  for i in 0..<(width / 8) {
+    result = (result << 8) | ((value >> (i * 8)) & 0xFFL)
+  }
+  result
+}
+
+///|
+fn codegen_float_asm_literal(value : Double) -> String {
+  let text = value.to_string()
+  if text.contains(".") ||
+    text.contains("e") ||
+    text.contains("E") ||
+    text.contains("inf") ||
+    text.contains("Inf") ||
+    text.contains("nan") ||
+    text.contains("NaN") {
+    text
+  } else {
+    text + ".0"
+  }
+}
+
+///|
+fn Codegen::fold_const_builtin_int(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> DarwinConstIntValue? {
+  match name {
+    "__builtin_constant_p" => {
+      let value = if args.length() > 0 && self.fold_const(args[0]) is Some(_) {
+        1L
+      } else {
+        0L
+      }
+      Some(darwin_const_int(value, SInt))
+    }
+    "__builtin_object_size" | "__builtin_dynamic_object_size" => {
+      let value = self.builtin_object_size_value(args)
+      Some(darwin_const_int(value, ULong))
+    }
+    "__builtin_bswap16" | "__builtin_bswap32" | "__builtin_bswap64" => {
+      if args.length() == 0 {
+        return None
+      }
+      let (width, ty) = match name {
+        "__builtin_bswap16" => (16, @parser.Type::UShort)
+        "__builtin_bswap32" => (32, @parser.Type::UInt)
+        _ => (64, @parser.Type::ULongLong)
+      }
+      match self.fold_const_int(args[0]) {
+        Some(arg) =>
+          Some(
+            darwin_const_cast_int(
+              darwin_const_int(
+                codegen_const_byte_swap_bits(arg.bits, width),
+                ty,
+              ),
+              ty,
+            ),
+          )
+        None => None
+      }
+    }
+    "__builtin_bswap" => {
+      if args.length() == 0 {
+        return None
+      }
+      let ty = self.global_expr_type(args[0])
+      let width = darwin_const_type_int_width(ty).unwrap_or(32)
+      match self.fold_const_int(args[0]) {
+        Some(arg) =>
+          Some(
+            darwin_const_cast_int(
+              darwin_const_int(
+                codegen_const_byte_swap_bits(arg.bits, width),
+                ty,
+              ),
+              ty,
+            ),
+          )
+        None => None
+      }
+    }
+    _ => None
+  }
+}
+
+///|
 fn Codegen::fold_const_int(
   self : Codegen,
   expr : @parser.Expr,
@@ -870,6 +1101,7 @@ fn Codegen::fold_const_int(
         Some(offset) => Some(darwin_const_int(offset.to_int64(), ULong))
         None => None
       }
+    Call(Var(name), args) => self.fold_const_builtin_int(name, args)
     _ => None
   }
 }
@@ -985,9 +1217,10 @@ fn Codegen::emit_global_float(
   ty : @parser.Type,
   v : Double,
 ) -> Unit {
+  let literal = codegen_float_asm_literal(v)
   match ty {
-    Float => self.emit("\t.single\t" + v.to_string())
-    _ => self.emit("\t.double\t" + v.to_string())
+    Float => self.emit("\t.single\t" + literal)
+    _ => self.emit("\t.double\t" + literal)
   }
 }
 
@@ -1188,12 +1421,39 @@ fn Codegen::register_mir_function_decls(
 }
 
 ///|
+fn Codegen::register_parser_function_decls(
+  self : Codegen,
+  decls : Array[@parser.FuncDecl],
+) -> Unit {
+  for decl in decls {
+    self.func_rets[decl.name] = decl.ret
+    self.func_variadic[decl.name] = decl.variadic
+    self.func_param_counts[decl.name] = decl.params.length()
+    let param_types = []
+    for param in decl.params {
+      param_types.push(param.ty)
+    }
+    self.func_param_types[decl.name] = param_types
+  }
+}
+
+///|
 fn Codegen::register_mir_global_decls(
   self : Codegen,
   mir : @mir.MirModule,
 ) -> Unit {
   for global in @mir.merge_global_decls(mir.global_decls) {
-    self.globals[global.name] = global
+    self.globals[global.name] = codegen_global_decl_from_mir(global)
+  }
+}
+
+///|
+fn Codegen::register_parser_global_decls(
+  self : Codegen,
+  globals : Array[@parser.GlobalDecl],
+) -> Unit {
+  for global in globals {
+    self.globals[global.name] = codegen_global_decl_from_parser(global)
   }
 }
 
@@ -2058,9 +2318,6 @@ fn Codegen::emit_global_p2align(self : Codegen, ty : @parser.Type) -> Unit {
 /// The input must come from `bobzhang/kimicc/parser`. The returned string is
 /// assembly text intended for the macOS assembler and linker.
 pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
-  if self.mir is None {
-    self.mir = Some(@mir.lower(prog, @target.Target::default()))
-  }
   self.output.write_string(
     "\t.section\t__TEXT,__text,regular,pure_instructions\n",
   )
@@ -2092,7 +2349,7 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   // Precompute function return types, variadic flags, and param counts
   match mir_module {
     Some(mir) => self.register_mir_function_decls(mir)
-    None => ()
+    None => self.register_parser_function_decls(prog.decls)
   }
   let inline_decls : Map[String, @parser.FuncDecl] = {}
   for decl in prog.decls {
@@ -2118,15 +2375,22 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   // Record global variables
   match mir_module {
     Some(mir) => self.register_mir_global_decls(mir)
-    None => ()
+    None => self.register_parser_global_decls(parser_globals)
   }
-  let mir_globals : Array[@mir.MirGlobalDecl] = match mir_module {
-    Some(mir) => @mir.merge_global_decls(mir.global_decls)
-    None => []
+  let mir_global_inits : Map[String, @mir.MirGlobalDecl] = {}
+  let codegen_globals : Array[CodegenGlobalDecl] = match mir_module {
+    Some(mir) => {
+      let globals = @mir.merge_global_decls(mir.global_decls)
+      for g in globals {
+        mir_global_inits[g.name] = g
+      }
+      codegen_global_decls_from_mir(globals)
+    }
+    None => codegen_global_decls_from_parser(parser_globals)
   }
-  let mir_func_decls : Array[@mir.MirFuncDecl] = match mir_module {
-    Some(mir) => mir.decls
-    None => []
+  let codegen_func_decls : Array[CodegenFuncDecl] = match mir_module {
+    Some(mir) => codegen_func_decls_from_mir(mir.decls)
+    None => codegen_func_decls_from_parser(prog.decls)
   }
   let func_label_maps : Map[String, Map[String, String]] = {}
   for decl in prog.decls {
@@ -2138,7 +2402,7 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   }
   // Emit initialized global variables
   let mut has_data = false
-  for g in mir_globals {
+  for g in codegen_globals {
     if g.has_init {
       if !has_data {
         self.emit("	.section	__DATA,__data")
@@ -2155,7 +2419,7 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
       self.emit("_" + g.name + ":")
       let saved_func_name = self.func_name
       let saved_emitted_labels = self.emitted_labels
-      match static_global_owner_name(g.name, mir_func_decls) {
+      match static_global_owner_name(g.name, codegen_func_decls) {
         Some(owner) => {
           self.func_name = owner
           match func_label_maps.get(owner) {
@@ -2165,7 +2429,13 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
         }
         None => ()
       }
-      if !self.try_emit_mir_global_init(g) {
+      let mut emitted_mir_init = false
+      match mir_global_inits.get(g.name) {
+        Some(mir_global) =>
+          emitted_mir_init = self.try_emit_mir_global_init(mir_global)
+        None => ()
+      }
+      if !emitted_mir_init {
         match parser_global_fallbacks.get(g.name) {
           Some(parser_global) =>
             match parser_global.init {
@@ -2182,7 +2452,7 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   }
   // Emit uninitialized global variables
   let mut has_bss = false
-  for g in mir_globals {
+  for g in codegen_globals {
     if !g.has_init && !g.is_extern {
       if !has_bss {
         self.emit("	.section	__DATA,__bss")
@@ -2289,19 +2559,23 @@ fn Codegen::generate_mir_only(
 /// `DarwinArm64` preserves the existing macOS ARM64 assembly output.
 /// `LinuxAmd64` emits GNU assembler syntax for the System V x86-64 ABI.
 ///
-/// This is the compatibility entry point and may fall back to parser AST
-/// codegen. Use `generate_assembly_for_target_strict` to require parser-free
-/// MIR-module backend emission.
+/// This is the fast educational path: parsed C AST goes directly to target
+/// codegen without first lowering through MIR. Use
+/// `generate_assembly_for_target_strict` to require parser-free MIR-module
+/// backend emission.
 pub fn generate_assembly_for_target(
   prog : @parser.Program,
   target : @target.Target,
 ) -> String {
-  generate_assembly_for_target_with_parser_fallback(prog, target)
+  match target {
+    DarwinArm64 => Codegen::new().generate(prog)
+    LinuxAmd64 => X64Codegen::new().generate(prog)
+  }
 }
 
 ///|
-/// Lowers a parsed C translation unit and generates assembly, falling back to
-/// parser AST codegen when MIR coverage is not sufficient yet.
+/// Lowers a parsed C translation unit through MIR and generates assembly,
+/// falling back to parser AST codegen when MIR coverage is not sufficient yet.
 pub fn generate_assembly_for_target_with_parser_fallback(
   prog : @parser.Program,
   target : @target.Target,
@@ -2461,7 +2735,7 @@ fn mir_module_body_codegen_strict_error(mir_module : @mir.MirModule) -> String? 
 ///|
 fn static_global_owner_name(
   name : String,
-  decls : Array[@mir.MirFuncDecl],
+  decls : Array[CodegenFuncDecl],
 ) -> String? {
   let mut owner : String? = None
   let mut owner_prefix_len = 0

@@ -3490,6 +3490,14 @@ fn Codegen::emit_init_value_at_addr(
       _ => ()
     }
     match value {
+      String(s) =>
+        match ty {
+          Array(_, _) => {
+            self.emit_init_string_array_at_addr(ty, s, frame_size)
+            return
+          }
+          _ => ()
+        }
       CompoundLiteral(_, init_exprs, _) | Array(init_exprs) =>
         self.emit_init_aggregate_at_addr(ty, init_exprs, frame_size)
       Number(0) => ()
@@ -3554,6 +3562,37 @@ fn Codegen::emit_init_bitfield_at_addr(
     2 => self.emit("\tstrh\tw11, [x10]")
     4 => self.emit("\tstr\tw11, [x10]")
     _ => self.emit("\tstr\tx11, [x10]")
+  }
+}
+
+///|
+fn Codegen::emit_init_string_array_at_addr(
+  self : Codegen,
+  ty : @parser.Type,
+  value : String,
+  frame_size : Int,
+) -> Unit {
+  match ty {
+    Array(elem_ty, n) => {
+      self.emit("\tstr\tx9, [sp, #-16]!")
+      self.emit("\tldr\tx0, [sp]")
+      self.emit("\tmov\tx1, #0")
+      self.emit_load_int("x2", self.type_size(ty).to_int64())
+      self.emit("\tbl\t_memset")
+      let elem_size = self.type_size(elem_ty)
+      let count = if value.length() < n { value.length() } else { n }
+      for i = 0; i < count; i = i + 1 {
+        self.emit("\tldr\tx9, [sp]")
+        self.emit_add_offset_to_x9(i * elem_size)
+        self.emit_init_scalar_at_addr(
+          elem_ty,
+          Number(value[i].to_int().to_int64()),
+          frame_size,
+        )
+      }
+      self.emit("\tadd\tsp, sp, #16")
+    }
+    _ => ()
   }
 }
 
@@ -5448,7 +5487,16 @@ fn Codegen::gen_aggregate_addr(
         self.alloc_local(name, ty)
       }
       self.emit_local_addr(offset, frame_size)
-      self.emit_init_aggregate_at_addr(ty, init_exprs, frame_size)
+      if is_aggregate_type(ty) {
+        self.emit_init_aggregate_at_addr(ty, init_exprs, frame_size)
+      } else {
+        let init_expr = if init_exprs.length() > 0 {
+          init_exprs[0]
+        } else {
+          Number(0)
+        }
+        self.emit_init_scalar_at_addr(ty, init_expr, frame_size)
+      }
       self.emit_local_addr(offset, frame_size)
     }
     _ => self.gen_addr(expr, frame_size)

@@ -2301,6 +2301,13 @@ fn generate_assembly_from_preprocessed(
   opts : DriverOptions,
 ) -> String {
   let prog = @parser.parse_for_target(parser_input, opts.target)
+  match @parser.validate_semantics(prog) {
+    Ok(_) => ()
+    Err(err) => {
+      fail(err)
+      return ""
+    }
+  }
   if opts.strict_mir_codegen {
     match @codegen.generate_assembly_for_target_strict(prog, opts.target) {
       Ok(assembly) => assembly
@@ -2310,10 +2317,7 @@ fn generate_assembly_from_preprocessed(
       }
     }
   } else {
-    @codegen.generate_assembly_for_target_with_parser_fallback(
-      prog,
-      opts.target,
-    )
+    @codegen.generate_assembly_for_target(prog, opts.target)
   }
 }
 
@@ -2663,6 +2667,13 @@ fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
             source, input_path, opts,
           )
           let prog = @parser.parse_for_target(preprocessed.text, opts.target)
+          match @parser.validate_semantics(prog) {
+            Ok(_) => ()
+            Err(err) => {
+              fail(err)
+              return
+            }
+          }
           let object = @codegen.generate_macho_object(prog)
           if !write_bytes_file(output_path, object) {
             fail("cannot write file: " + output_path)
@@ -2700,7 +2711,14 @@ fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
       let preprocessed = preprocess_source_with_dependencies(
         source, input_path, opts,
       )
-      let _ = @parser.parse_for_target(preprocessed.text, opts.target)
+      let prog = @parser.parse_for_target(preprocessed.text, opts.target)
+      match @parser.validate_semantics(prog) {
+        Ok(_) => ()
+        Err(err) => {
+          fail(err)
+          return
+        }
+      }
       write_dependency_file(
         opts,
         input_path,
