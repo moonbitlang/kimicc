@@ -698,6 +698,22 @@ test "mir body interpreter decays local arrays in call arguments" {
 }
 
 ///|
+test "mir body interpreter handles memory builtin first-arg returns" {
+  let source =
+    #|int main(void) {
+    #|  char src[4];
+    #|  char dst[4];
+    #|  if (__builtin_memcpy(dst, src, 0) != &dst[0]) return 1;
+    #|  if (__builtin_memmove(dst, src, 0) != &dst[0]) return 2;
+    #|  if (__builtin_memset(dst, 0, 0) != &dst[0]) return 3;
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body interpreter handles local array initializers" {
   let source =
     #|int main(void) {

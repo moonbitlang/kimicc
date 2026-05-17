@@ -227,16 +227,24 @@ fn mir_body_codegen_builtin_lib_call_supported(
   ret : @parser.Type,
   int_arg_limit : Int,
 ) -> Bool {
-  name == "__builtin_bzero" &&
-  args.length() == 2 &&
-  args.length() <= int_arg_limit &&
-  peel_aligned_type(ret) is Void
+  if args.length() > int_arg_limit {
+    return false
+  }
+  match name {
+    "__builtin_bzero" => args.length() == 2 && peel_aligned_type(ret) is Void
+    "__builtin_memcpy" | "__builtin_memmove" | "__builtin_memset" =>
+      args.length() == 3 && mir_body_codegen_return_pointer_type(ret)
+    _ => false
+  }
 }
 
 ///|
 fn mir_body_codegen_direct_call_symbol(name : String) -> String {
   match name {
     "__builtin_bzero" => "bzero"
+    "__builtin_memcpy" => "memcpy"
+    "__builtin_memmove" => "memmove"
+    "__builtin_memset" => "memset"
     _ => name
   }
 }
