@@ -147,6 +147,28 @@ fn mir_body_codegen_sync_synchronize_call(
 }
 
 ///|
+fn mir_body_codegen_atomic_thread_fence_call(
+  name : String,
+  args : Array[@mir.MirValue],
+  ret : @parser.Type,
+) -> Bool {
+  (name == "__atomic_thread_fence" || name == "__c11_atomic_thread_fence") &&
+  args.length() == 1 &&
+  peel_aligned_type(ret) is Void
+}
+
+///|
+fn mir_body_codegen_atomic_signal_fence_call(
+  name : String,
+  args : Array[@mir.MirValue],
+  ret : @parser.Type,
+) -> Bool {
+  (name == "__atomic_signal_fence" || name == "__c11_atomic_signal_fence") &&
+  args.length() == 1 &&
+  peel_aligned_type(ret) is Void
+}
+
+///|
 fn mir_body_codegen_call_supported(
   name : String,
   args : Array[@mir.MirValue],
@@ -154,7 +176,9 @@ fn mir_body_codegen_call_supported(
   int_arg_limit : Int,
   mir : @mir.MirModule,
 ) -> Bool {
-  if mir_body_codegen_sync_synchronize_call(name, args, ret) {
+  if mir_body_codegen_sync_synchronize_call(name, args, ret) ||
+    mir_body_codegen_atomic_thread_fence_call(name, args, ret) ||
+    mir_body_codegen_atomic_signal_fence_call(name, args, ret) {
     return true
   }
   if mir_body_codegen_builtin_call_name(name) ||
@@ -610,6 +634,19 @@ fn Codegen::gen_mir_value(
     MirCall(name, args, ty) => {
       if mir_body_codegen_sync_synchronize_call(name, args, ty) {
         self.emit("\tdmb\tish")
+        self.emit("\tmov\tx9, #0")
+        return
+      } else if mir_body_codegen_atomic_thread_fence_call(name, args, ty) {
+        for arg in args {
+          self.gen_mir_value(arg, offsets, frame_size)
+        }
+        self.emit("\tdmb\tish")
+        self.emit("\tmov\tx9, #0")
+        return
+      } else if mir_body_codegen_atomic_signal_fence_call(name, args, ty) {
+        for arg in args {
+          self.gen_mir_value(arg, offsets, frame_size)
+        }
         self.emit("\tmov\tx9, #0")
         return
       }
@@ -1299,6 +1336,19 @@ fn X64Codegen::gen_mir_value(
     MirCall(name, args, ty) => {
       if mir_body_codegen_sync_synchronize_call(name, args, ty) {
         self.emit("\tmfence")
+        self.emit("\tmov\trax, 0")
+        return
+      } else if mir_body_codegen_atomic_thread_fence_call(name, args, ty) {
+        for arg in args {
+          self.gen_mir_value(arg, offsets)
+        }
+        self.emit("\tmfence")
+        self.emit("\tmov\trax, 0")
+        return
+      } else if mir_body_codegen_atomic_signal_fence_call(name, args, ty) {
+        for arg in args {
+          self.gen_mir_value(arg, offsets)
+        }
         self.emit("\tmov\trax, 0")
         return
       }

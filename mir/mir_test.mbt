@@ -1203,6 +1203,22 @@ test "mir body interpreter handles sync synchronize builtin" {
 }
 
 ///|
+test "mir body interpreter handles atomic fence builtins" {
+  let source =
+    #|int main(void) {
+    #|  int x = 0;
+    #|  __atomic_thread_fence((x = x + 1, 5));
+    #|  __atomic_signal_fence((x = x + 1, 5));
+    #|  __c11_atomic_thread_fence((x = x + 1, 5));
+    #|  __c11_atomic_signal_fence((x = x + 1, 5));
+    #|  return x + 38;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body interpreter handles ignored local union assignments" {
   let source =
     #|union U { unsigned char c; int x; };

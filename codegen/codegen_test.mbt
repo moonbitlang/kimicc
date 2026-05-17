@@ -598,6 +598,43 @@ test "generate darwin arm64 strict MIR sync synchronize builtin" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR atomic fence builtins" {
+  let source =
+    #|int main(void) {
+    #|  __atomic_thread_fence(5);
+    #|  __atomic_signal_fence(5);
+    #|  __c11_atomic_thread_fence(5);
+    #|  __c11_atomic_signal_fence(5);
+    #|  return 0;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tdmb\tish"), content="true")
+      inspect(
+        assembly.contains("\tbl\t___atomic_thread_fence"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("\tbl\t___atomic_signal_fence"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("\tbl\t___c11_atomic_thread_fence"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("\tbl\t___c11_atomic_signal_fence"),
+        content="false",
+      )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 MIR module uses module function metadata" {
   let source = "int main(void) { return 42; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
@@ -1442,6 +1479,47 @@ test "generate linux amd64 strict MIR sync synchronize builtin" {
       inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
       inspect(assembly.contains("\tmfence"), content="true")
       inspect(assembly.contains("\tcall\t__sync_synchronize"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR atomic fence builtins" {
+  let source =
+    #|int main(void) {
+    #|  __atomic_thread_fence(5);
+    #|  __atomic_signal_fence(5);
+    #|  __c11_atomic_thread_fence(5);
+    #|  __c11_atomic_signal_fence(5);
+    #|  return 0;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tmfence"), content="true")
+      inspect(
+        assembly.contains("\tcall\t__atomic_thread_fence"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("\tcall\t__atomic_signal_fence"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("\tcall\t__c11_atomic_thread_fence"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("\tcall\t__c11_atomic_signal_fence"),
+        content="false",
+      )
     }
     Err(err) => abort(err)
   }

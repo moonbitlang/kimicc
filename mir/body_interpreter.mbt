@@ -590,6 +590,17 @@ fn BodyInterpreter::eval_value(
         self.program.core_type(ty) is Void {
         return 0L
       }
+      if (
+          name == "__atomic_thread_fence" ||
+          name == "__atomic_signal_fence" ||
+          name == "__c11_atomic_thread_fence" ||
+          name == "__c11_atomic_signal_fence"
+        ) &&
+        args.length() == 1 &&
+        self.program.core_type(ty) is Void {
+        ignore(self.eval_value(frame, args[0]))
+        return 0L
+      }
       let values : Array[Int64] = []
       for arg in args {
         values.push(self.eval_value(frame, arg))
