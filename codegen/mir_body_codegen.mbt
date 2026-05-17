@@ -169,6 +169,17 @@ fn mir_body_codegen_atomic_signal_fence_call(
 }
 
 ///|
+fn mir_body_codegen_trap_call(
+  name : String,
+  args : Array[@mir.MirValue],
+  ret : @parser.Type,
+) -> Bool {
+  (name == "__builtin_trap" || name == "__builtin_unreachable") &&
+  args.length() == 0 &&
+  peel_aligned_type(ret) is Void
+}
+
+///|
 fn mir_body_codegen_call_supported(
   name : String,
   args : Array[@mir.MirValue],
@@ -178,7 +189,8 @@ fn mir_body_codegen_call_supported(
 ) -> Bool {
   if mir_body_codegen_sync_synchronize_call(name, args, ret) ||
     mir_body_codegen_atomic_thread_fence_call(name, args, ret) ||
-    mir_body_codegen_atomic_signal_fence_call(name, args, ret) {
+    mir_body_codegen_atomic_signal_fence_call(name, args, ret) ||
+    mir_body_codegen_trap_call(name, args, ret) {
     return true
   }
   if mir_body_codegen_builtin_call_name(name) ||
@@ -647,6 +659,10 @@ fn Codegen::gen_mir_value(
         for arg in args {
           self.gen_mir_value(arg, offsets, frame_size)
         }
+        self.emit("\tmov\tx9, #0")
+        return
+      } else if mir_body_codegen_trap_call(name, args, ty) {
+        self.emit("\tbrk\t#0x1")
         self.emit("\tmov\tx9, #0")
         return
       }
@@ -1349,6 +1365,10 @@ fn X64Codegen::gen_mir_value(
         for arg in args {
           self.gen_mir_value(arg, offsets)
         }
+        self.emit("\tmov\trax, 0")
+        return
+      } else if mir_body_codegen_trap_call(name, args, ty) {
+        self.emit("\tud2")
         self.emit("\tmov\trax, 0")
         return
       }

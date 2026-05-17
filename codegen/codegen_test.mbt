@@ -564,7 +564,7 @@ test "strict MIR rejects implicit external scalar call arguments" {
 test "strict MIR still rejects unsupported builtin direct calls" {
   let source =
     #|int main(void) {
-    #|  __builtin_trap();
+    #|  __builtin_bzero((void *)0, 0);
     #|  return 0;
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
@@ -575,6 +575,35 @@ test "strict MIR still rejects unsupported builtin direct calls" {
         err.contains("unsupported MIR body codegen for main"),
         content="true",
       )
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR trap builtins" {
+  let source =
+    #|int trapper(void) {
+    #|  __builtin_trap();
+    #|}
+    #|int unreachable_marker(void) {
+    #|  __builtin_unreachable();
+    #|}
+    #|int main(void) {
+    #|  return 0;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_trapper:"), content="true")
+      inspect(assembly.contains("_unreachable_marker:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tbrk\t#0x1"), content="true")
+      inspect(assembly.contains("\tbl\t___builtin_trap"), content="false")
+      inspect(
+        assembly.contains("\tbl\t___builtin_unreachable"),
+        content="false",
+      )
+    }
+    Err(err) => abort(err)
   }
 }
 
@@ -1456,6 +1485,39 @@ test "generate linux amd64 strict MIR double underscore external scalar call" {
       inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
       inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
       inspect(assembly.contains("\tcall\t__kimicc_external"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR trap builtins" {
+  let source =
+    #|int trapper(void) {
+    #|  __builtin_trap();
+    #|}
+    #|int unreachable_marker(void) {
+    #|  __builtin_unreachable();
+    #|}
+    #|int main(void) {
+    #|  return 0;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("trapper:"), content="true")
+      inspect(assembly.contains("unreachable_marker:"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tud2"), content="true")
+      inspect(assembly.contains("\tcall\t__builtin_trap"), content="false")
+      inspect(
+        assembly.contains("\tcall\t__builtin_unreachable"),
+        content="false",
+      )
     }
     Err(err) => abort(err)
   }
