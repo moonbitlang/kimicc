@@ -8,6 +8,7 @@ core_packages=(
   parser
   preprocessor
   codegen
+  mir_codegen
   cmd/main
   jit
 )

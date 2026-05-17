@@ -45,6 +45,14 @@ fn Codegen::type_of(
   expr : @parser.Expr,
   frame_size : Int,
 ) -> @parser.Type {
+  match self.mir {
+    Some(mir) =>
+      return mir.expr_type(expr, @mir.Scope::{
+        locals: self.var_types,
+        current_func: self.func_name,
+      })
+    None => ()
+  }
   match expr {
     Number(value) => number_literal_type(value)
     FloatLiteral(_) => Double
@@ -708,6 +716,14 @@ fn Codegen::call_return_type(
   args : Array[@parser.Expr],
   frame_size : Int,
 ) -> @parser.Type {
+  match self.mir {
+    Some(mir) =>
+      return mir.expr_type(Call(func, args), @mir.Scope::{
+        locals: self.var_types,
+        current_func: self.func_name,
+      })
+    None => ()
+  }
   match self.type_of(func, frame_size) {
     FuncPtr(ret, _, _) => ret
     _ =>
@@ -1873,6 +1889,18 @@ fn Codegen::builtin_object_size_value(
   self : Codegen,
   args : Array[@parser.Expr],
 ) -> Int64 {
+  match self.mir {
+    Some(mir) =>
+      match
+        mir.fold_const(Call(Var("__builtin_object_size"), args), @mir.Scope::{
+          locals: self.var_types,
+          current_func: self.func_name,
+        }) {
+        Some(value) => return value
+        None => ()
+      }
+    None => ()
+  }
   if args.length() > 0 {
     match codegen_literal_string_arg(args[0]) {
       Some(value) => return (value.length() + 1).to_int64()

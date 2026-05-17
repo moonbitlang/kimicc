@@ -1,5 +1,13 @@
 ///|
 fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
+  match self.mir_module {
+    Some(mir) => return mir.type_size(ty)
+    None =>
+      match self.mir {
+        Some(mir) => return mir.type_size(ty)
+        None => ()
+      }
+  }
   match ty {
     Void => 0
     Bool | SChar | UChar => 1
@@ -82,6 +90,14 @@ fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
 
 ///|
 fn Codegen::type_align(self : Codegen, ty : @parser.Type) -> Int {
+  match self.mir_module {
+    Some(mir) => return mir.type_align(ty)
+    None =>
+      match self.mir {
+        Some(mir) => return mir.type_align(ty)
+        None => ()
+      }
+  }
   match ty {
     Void => 1
     Bool | SChar | UChar => 1
@@ -319,6 +335,43 @@ fn Codegen::compute_union_layout(
 }
 
 ///|
+fn darwin_field_layout_tuple(
+  layout : @mir.FieldLayout,
+) -> (String, @parser.Type, Int, Int, Int, Int) {
+  let bit_width = match layout.bit_width {
+    Some(width) => width
+    None => 0
+  }
+  (
+    layout.name,
+    layout.ty,
+    layout.offset,
+    layout.size,
+    layout.bit_offset,
+    bit_width,
+  )
+}
+
+///|
+fn Codegen::register_mir_aggregate_layouts(
+  self : Codegen,
+  mir : @mir.MirModule,
+) -> Unit {
+  for decl in mir.aggregate_decls {
+    match mir.layouts.get(decl.name) {
+      Some(layout) => {
+        let fields : Array[(String, @parser.Type, Int, Int, Int, Int)] = []
+        for field in layout.fields {
+          fields.push(darwin_field_layout_tuple(field))
+        }
+        self.struct_layouts[decl.name] = fields
+      }
+      None => ()
+    }
+  }
+}
+
+///|
 fn darwin_field_receiver_type(ty : @parser.Type) -> @parser.Type? {
   match peel_aligned_type(ty) {
     Struct(name) => Some(Struct(name))
@@ -339,6 +392,45 @@ fn Codegen::find_field_layout(
   struct_name : String,
   field : String,
 ) -> (String, @parser.Type, Int, Int, Int, Int)? {
+  match self.mir_module {
+    Some(mir) => {
+      let ty = match mir.aggregates.get(struct_name) {
+        Some(decl) =>
+          if decl.is_union {
+            @parser.Type::Union(struct_name)
+          } else {
+            @parser.Type::Struct(struct_name)
+          }
+        None =>
+          if self.struct_decls.contains(struct_name) &&
+            self.struct_decls[struct_name].is_union {
+            @parser.Type::Union(struct_name)
+          } else {
+            @parser.Type::Struct(struct_name)
+          }
+      }
+      match mir.field_layout(ty, field) {
+        Some(layout) => return Some(darwin_field_layout_tuple(layout))
+        None => return None
+      }
+    }
+    None =>
+      match self.mir {
+        Some(mir) => {
+          let ty = if self.struct_decls.contains(struct_name) &&
+            self.struct_decls[struct_name].is_union {
+            @parser.Type::Union(struct_name)
+          } else {
+            @parser.Type::Struct(struct_name)
+          }
+          match mir.field_layout(ty, field) {
+            Some(layout) => return Some(darwin_field_layout_tuple(layout))
+            None => return None
+          }
+        }
+        None => ()
+      }
+  }
   if !self.struct_layouts.contains(struct_name) {
     return None
   }
@@ -360,6 +452,22 @@ fn Codegen::find_field_layout_for_type(
     Some(lookup_ty) => lookup_ty
     None => return None
   }
+  match self.mir_module {
+    Some(mir) =>
+      match mir.field_layout(lookup_ty, field) {
+        Some(layout) => return Some(darwin_field_layout_tuple(layout))
+        None => return None
+      }
+    None =>
+      match self.mir {
+        Some(mir) =>
+          match mir.field_layout(lookup_ty, field) {
+            Some(layout) => return Some(darwin_field_layout_tuple(layout))
+            None => return None
+          }
+        None => ()
+      }
+  }
   match lookup_ty {
     Struct(name) | Union(name) => self.find_field_layout(name, field)
     _ => None
@@ -372,6 +480,14 @@ fn Codegen::offset_of_path(
   ty : @parser.Type,
   path : Array[@parser.OffsetDesignator],
 ) -> Int? {
+  match self.mir_module {
+    Some(mir) => return mir.offset_of_path(ty, path)
+    None =>
+      match self.mir {
+        Some(mir) => return mir.offset_of_path(ty, path)
+        None => ()
+      }
+  }
   let mut current_ty = ty
   let mut offset = 0
   for designator in path {

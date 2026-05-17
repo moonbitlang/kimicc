@@ -1,11 +1,7 @@
 import {
   "moonbitlang/core/buffer",
   "moonbitlang/core/string",
+  "bobzhang/kimicc/mir",
   "bobzhang/kimicc/target",
   "bobzhang/kimicc/parser",
 }
-
-import {
-  "bobzhang/kimicc/mir",
-  "bobzhang/kimicc/mir_codegen",
-} for "test"

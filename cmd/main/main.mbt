@@ -2309,7 +2309,7 @@ fn generate_assembly_from_preprocessed(
     }
   }
   if opts.strict_mir_codegen {
-    match @codegen.generate_assembly_for_target_strict(prog, opts.target) {
+    match @mir_codegen.generate_assembly_for_target_strict(prog, opts.target) {
       Ok(assembly) => assembly
       Err(err) => {
         fail(err)
