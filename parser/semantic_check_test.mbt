@@ -30,6 +30,25 @@ test "semantic validation accepts direct codegen basics" {
 }
 
 ///|
+test "semantic validation accepts dereferenced function pointer call" {
+  let source =
+    #|struct Pair { long a; long b; };
+    #|int pair_sum(struct Pair p) { return p.a + p.b; }
+    #|struct Pair make_pair(long a, long b) {
+    #|  struct Pair p;
+    #|  p.a = a;
+    #|  p.b = b;
+    #|  return p;
+    #|}
+    #|int main(void) {
+    #|  int (*ps)(struct Pair) = pair_sum;
+    #|  struct Pair (*mk)(long, long) = make_pair;
+    #|  return (*ps)(mk(0, 1));
+    #|}
+  expect_semantic_ok(source)
+}
+
+///|
 test "semantic validation rejects pointer plus pointer" {
   let source =
     #|int main(void) {

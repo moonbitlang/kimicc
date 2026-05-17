@@ -86,6 +86,7 @@ fn semantic_call_result_type(ty : Type) -> Type {
 fn semantic_pointer_element_type(ty : Type) -> Type? {
   match semantic_core_type(ty) {
     Pointer(elem) | Array(elem, _) => Some(elem)
+    FuncPtr(_, _, _) => Some(ty)
     _ => None
   }
 }
