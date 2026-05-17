@@ -305,6 +305,36 @@ fn mir_body_codegen_builtin_lib_call_arg_count(
       } else {
         None
       }
+    "__builtin_strlen" =>
+      if args.length() == 1 && ret.is_integer() {
+        Some(1)
+      } else {
+        None
+      }
+    "__builtin_strcmp" =>
+      if args.length() == 2 && ret.is_integer() {
+        Some(2)
+      } else {
+        None
+      }
+    "__builtin_strncmp" | "__builtin_memcmp" =>
+      if args.length() == 3 && ret.is_integer() {
+        Some(3)
+      } else {
+        None
+      }
+    "__builtin_strchr" | "__builtin_strrchr" | "__builtin_strstr" =>
+      if args.length() == 2 && mir_body_codegen_return_pointer_type(ret) {
+        Some(2)
+      } else {
+        None
+      }
+    "__builtin_memchr" =>
+      if args.length() == 3 && mir_body_codegen_return_pointer_type(ret) {
+        Some(3)
+      } else {
+        None
+      }
     "__builtin_memcpy" | "__builtin_memmove" | "__builtin_memset" =>
       if args.length() == 3 && mir_body_codegen_return_pointer_type(ret) {
         Some(3)
@@ -368,6 +398,14 @@ fn mir_body_codegen_builtin_lib_call_supported(
 fn mir_body_codegen_direct_call_symbol(name : String) -> String {
   match name {
     "__builtin_bzero" => "bzero"
+    "__builtin_strlen" => "strlen"
+    "__builtin_strcmp" => "strcmp"
+    "__builtin_strncmp" => "strncmp"
+    "__builtin_memcmp" => "memcmp"
+    "__builtin_strchr" => "strchr"
+    "__builtin_strrchr" => "strrchr"
+    "__builtin_memchr" => "memchr"
+    "__builtin_strstr" => "strstr"
     "__builtin_memcpy" | "__builtin___memcpy_chk" => "memcpy"
     "__builtin_memmove" | "__builtin___memmove_chk" => "memmove"
     "__builtin_memset" | "__builtin___memset_chk" => "memset"
@@ -505,6 +543,37 @@ fn mir_body_codegen_lowered_builtin_arg_type(
   index : Int,
 ) -> @parser.Type? {
   match name {
+    "__builtin_strlen" => if index == 0 { Some(Pointer(SChar)) } else { None }
+    "__builtin_strcmp" | "__builtin_strstr" =>
+      match index {
+        0 | 1 => Some(Pointer(SChar))
+        _ => None
+      }
+    "__builtin_strncmp" =>
+      match index {
+        0 | 1 => Some(Pointer(SChar))
+        2 => Some(ULong)
+        _ => None
+      }
+    "__builtin_memcmp" =>
+      match index {
+        0 | 1 => Some(Pointer(Void))
+        2 => Some(ULong)
+        _ => None
+      }
+    "__builtin_strchr" | "__builtin_strrchr" =>
+      match index {
+        0 => Some(Pointer(SChar))
+        1 => Some(SInt)
+        _ => None
+      }
+    "__builtin_memchr" =>
+      match index {
+        0 => Some(Pointer(Void))
+        1 => Some(SInt)
+        2 => Some(ULong)
+        _ => None
+      }
     "__builtin___snprintf_chk" =>
       match index {
         0 => Some(Pointer(SChar))
@@ -1276,17 +1345,25 @@ fn Codegen::gen_mir_binary(
     }
     _ => ()
   }
-  let left_ty = mir_body_binary_left_type(op, lhs.ty(), rhs.ty())
-  let right_ty = mir_body_binary_right_type(op, lhs.ty(), rhs.ty())
-  self.gen_mir_value(lhs, offsets, frame_size)
-  self.emit_numeric_conversion(lhs.ty(), left_ty)
-  self.emit_scalar_conversion_to(left_ty)
-  self.emit("\tstr\tx9, [sp, #-16]!")
-  self.gen_mir_value(rhs, offsets, frame_size)
-  self.emit_numeric_conversion(rhs.ty(), right_ty)
-  self.emit_scalar_conversion_to(right_ty)
-  self.emit("\tldr\tx10, [sp], #16")
   if mir_body_pointer_integer_op(op, lhs.ty(), rhs.ty()) {
+    self.gen_mir_value(lhs, offsets, frame_size)
+    if lhs.ty().is_integer() {
+      self.emit_numeric_conversion(
+        lhs.ty(),
+        unary_integer_result_type(lhs.ty()),
+      )
+      self.emit_scalar_conversion_to(unary_integer_result_type(lhs.ty()))
+    }
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_mir_value(rhs, offsets, frame_size)
+    if rhs.ty().is_integer() {
+      self.emit_numeric_conversion(
+        rhs.ty(),
+        unary_integer_result_type(rhs.ty()),
+      )
+      self.emit_scalar_conversion_to(unary_integer_result_type(rhs.ty()))
+    }
+    self.emit("\tldr\tx10, [sp], #16")
     match pointer_or_array_element_type(lhs.ty()) {
       Some(elem_ty) => {
         let scale = self.type_size(elem_ty)
@@ -1316,6 +1393,16 @@ fn Codegen::gen_mir_binary(
     self.emit_scalar_conversion_to(ty)
     return
   }
+  let left_ty = mir_body_binary_left_type(op, lhs.ty(), rhs.ty())
+  let right_ty = mir_body_binary_right_type(op, lhs.ty(), rhs.ty())
+  self.gen_mir_value(lhs, offsets, frame_size)
+  self.emit_numeric_conversion(lhs.ty(), left_ty)
+  self.emit_scalar_conversion_to(left_ty)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.gen_mir_value(rhs, offsets, frame_size)
+  self.emit_numeric_conversion(rhs.ty(), right_ty)
+  self.emit_scalar_conversion_to(right_ty)
+  self.emit("\tldr\tx10, [sp], #16")
   match op {
     "+" => self.emit("\tadd\tx9, x9, x10")
     "-" => {
@@ -2083,16 +2170,18 @@ fn X64Codegen::gen_mir_binary(
     }
     _ => ()
   }
-  let left_ty = mir_body_binary_left_type(op, lhs.ty(), rhs.ty())
-  let right_ty = mir_body_binary_right_type(op, lhs.ty(), rhs.ty())
-  self.gen_mir_value(lhs, offsets)
-  self.emit_int_conversion_to(left_ty)
-  self.emit_mir_push_rax()
-  self.gen_mir_value(rhs, offsets)
-  self.emit_int_conversion_to(right_ty)
-  self.emit("\tmov\tr10, rax")
-  self.emit_mir_pop_rax()
   if mir_body_pointer_integer_op(op, lhs.ty(), rhs.ty()) {
+    self.gen_mir_value(lhs, offsets)
+    if lhs.ty().is_integer() {
+      self.emit_int_conversion_to(unary_integer_result_type(lhs.ty()))
+    }
+    self.emit_mir_push_rax()
+    self.gen_mir_value(rhs, offsets)
+    if rhs.ty().is_integer() {
+      self.emit_int_conversion_to(unary_integer_result_type(rhs.ty()))
+    }
+    self.emit("\tmov\tr10, rax")
+    self.emit_mir_pop_rax()
     match pointer_or_array_element_type(lhs.ty()) {
       Some(elem_ty) => {
         let scale = self.type_size(elem_ty)
@@ -2120,6 +2209,15 @@ fn X64Codegen::gen_mir_binary(
     self.emit_int_conversion_to(ty)
     return
   }
+  let left_ty = mir_body_binary_left_type(op, lhs.ty(), rhs.ty())
+  let right_ty = mir_body_binary_right_type(op, lhs.ty(), rhs.ty())
+  self.gen_mir_value(lhs, offsets)
+  self.emit_int_conversion_to(left_ty)
+  self.emit_mir_push_rax()
+  self.gen_mir_value(rhs, offsets)
+  self.emit_int_conversion_to(right_ty)
+  self.emit("\tmov\tr10, rax")
+  self.emit_mir_pop_rax()
   match op {
     "+" => self.emit("\tadd\trax, r10")
     "-" => {

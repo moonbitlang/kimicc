@@ -98,8 +98,8 @@ integer-scalar subset.
   builtins for non-128-bit result pointers, trivial variadic bodies with
   unobserved `__builtin_va_start`/`__builtin_va_copy`/`__builtin_va_end`,
   `__builtin_bzero` and selected memory/string builtin libcalls including
-  checked variants, checked `strlcpy`/`strlcat`, and checked
-  `snprintf`/`sprintf`/`printf`, and runtime `__builtin_alloca` stack
+  string query calls, checked variants, checked `strlcpy`/`strlcat`, and
+  checked `snprintf`/`sprintf`/`printf`, and runtime `__builtin_alloca` stack
   allocation,
   return-address transforms, no-op `__builtin_assume`, runtime
   `__builtin_prefetch` address evaluation, identity `__builtin_unpredictable`,

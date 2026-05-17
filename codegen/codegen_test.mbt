@@ -711,6 +711,51 @@ test "generate darwin arm64 strict MIR checked printf family libcalls" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR string query builtin libcalls" {
+  let source =
+    #|int main(void) {
+    #|  char *s = (char *)"abc";
+    #|  char *tail = s + 1;
+    #|  char *u = (char *)"abba";
+    #|  char *hay = (char *)"abcde";
+    #|  char *needle = (char *)"cd";
+    #|  if (__builtin_strlen(s) != 3) return 1;
+    #|  if (__builtin_strcmp(s, "abc") != 0) return 2;
+    #|  if (__builtin_strncmp(tail, "bc", 2) != 0) return 3;
+    #|  if (__builtin_memcmp(tail, "bc", 2) != 0) return 4;
+    #|  if (__builtin_strchr(s, 'b') != s + 1) return 5;
+    #|  if (__builtin_strrchr(u, 'b') != u + 2) return 6;
+    #|  if (__builtin_memchr(s, 'b', 2) != s + 1) return 7;
+    #|  if (__builtin_strstr(hay, needle) != hay + 2) return 8;
+    #|  return 0;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tbl\t_strlen"), content="true")
+      inspect(assembly.contains("\tbl\t_strcmp"), content="true")
+      inspect(assembly.contains("\tbl\t_strncmp"), content="true")
+      inspect(assembly.contains("\tbl\t_memcmp"), content="true")
+      inspect(assembly.contains("\tbl\t_strchr"), content="true")
+      inspect(assembly.contains("\tbl\t_strrchr"), content="true")
+      inspect(assembly.contains("\tbl\t_memchr"), content="true")
+      inspect(assembly.contains("\tbl\t_strstr"), content="true")
+      inspect(assembly.contains("__builtin_strlen"), content="false")
+      inspect(assembly.contains("__builtin_strcmp"), content="false")
+      inspect(assembly.contains("__builtin_strncmp"), content="false")
+      inspect(assembly.contains("__builtin_memcmp"), content="false")
+      inspect(assembly.contains("__builtin_strchr"), content="false")
+      inspect(assembly.contains("__builtin_strrchr"), content="false")
+      inspect(assembly.contains("__builtin_memchr"), content="false")
+      inspect(assembly.contains("__builtin_strstr"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR lowers overflow builtins" {
   let source =
     #|int main(void) {
@@ -1907,6 +1952,54 @@ test "generate linux amd64 strict MIR checked printf family libcalls" {
       inspect(assembly.contains("__builtin___snprintf_chk"), content="false")
       inspect(assembly.contains("__builtin___sprintf_chk"), content="false")
       inspect(assembly.contains("__builtin___printf_chk"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR string query builtin libcalls" {
+  let source =
+    #|int main(void) {
+    #|  char *s = (char *)"abc";
+    #|  char *tail = s + 1;
+    #|  char *u = (char *)"abba";
+    #|  char *hay = (char *)"abcde";
+    #|  char *needle = (char *)"cd";
+    #|  if (__builtin_strlen(s) != 3) return 1;
+    #|  if (__builtin_strcmp(s, "abc") != 0) return 2;
+    #|  if (__builtin_strncmp(tail, "bc", 2) != 0) return 3;
+    #|  if (__builtin_memcmp(tail, "bc", 2) != 0) return 4;
+    #|  if (__builtin_strchr(s, 'b') != s + 1) return 5;
+    #|  if (__builtin_strrchr(u, 'b') != u + 2) return 6;
+    #|  if (__builtin_memchr(s, 'b', 2) != s + 1) return 7;
+    #|  if (__builtin_strstr(hay, needle) != hay + 2) return 8;
+    #|  return 0;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\tstrlen"), content="true")
+      inspect(assembly.contains("\tcall\tstrcmp"), content="true")
+      inspect(assembly.contains("\tcall\tstrncmp"), content="true")
+      inspect(assembly.contains("\tcall\tmemcmp"), content="true")
+      inspect(assembly.contains("\tcall\tstrchr"), content="true")
+      inspect(assembly.contains("\tcall\tstrrchr"), content="true")
+      inspect(assembly.contains("\tcall\tmemchr"), content="true")
+      inspect(assembly.contains("\tcall\tstrstr"), content="true")
+      inspect(assembly.contains("__builtin_strlen"), content="false")
+      inspect(assembly.contains("__builtin_strcmp"), content="false")
+      inspect(assembly.contains("__builtin_strncmp"), content="false")
+      inspect(assembly.contains("__builtin_memcmp"), content="false")
+      inspect(assembly.contains("__builtin_strchr"), content="false")
+      inspect(assembly.contains("__builtin_strrchr"), content="false")
+      inspect(assembly.contains("__builtin_memchr"), content="false")
+      inspect(assembly.contains("__builtin_strstr"), content="false")
     }
     Err(err) => abort(err)
   }
