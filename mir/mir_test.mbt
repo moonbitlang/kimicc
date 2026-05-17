@@ -717,6 +717,26 @@ test "mir body interpreter handles memory builtin first-arg returns" {
 }
 
 ///|
+test "mir body interpreter handles string destination builtin returns" {
+  let source =
+    #|int main(void) {
+    #|  char *dst = __builtin_alloca(4);
+    #|  if (__builtin_strcpy(dst, "") != dst) return 1;
+    #|  if (__builtin___strcpy_chk(dst, "", 4) != dst) return 2;
+    #|  if (__builtin_strcat(dst, "") != dst) return 3;
+    #|  if (__builtin___strcat_chk(dst, "", 4) != dst) return 4;
+    #|  if (__builtin_strncpy(dst, "", 0) != dst) return 5;
+    #|  if (__builtin___strncpy_chk(dst, "", 0, 4) != dst) return 6;
+    #|  if (__builtin_strncat(dst, "", 0) != dst) return 7;
+    #|  if (__builtin___strncat_chk(dst, "", 0, 4) != dst) return 8;
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body interpreter handles local array initializers" {
   let source =
     #|int main(void) {

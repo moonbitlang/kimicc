@@ -659,6 +659,24 @@ fn BodyInterpreter::eval_value(
         }
         return values[0]
       }
+      if (
+          name == "__builtin_strcpy" ||
+          name == "__builtin___strcpy_chk" ||
+          name == "__builtin_strcat" ||
+          name == "__builtin___strcat_chk" ||
+          name == "__builtin_strncpy" ||
+          name == "__builtin___strncpy_chk" ||
+          name == "__builtin_strncat" ||
+          name == "__builtin___strncat_chk"
+        ) &&
+        args.length() > 0 &&
+        self.program.core_type(ty) is Pointer(_) {
+        let values : Array[Int64] = []
+        for arg in args {
+          values.push(self.eval_value(frame, arg))
+        }
+        return values[0]
+      }
       let values : Array[Int64] = []
       for arg in args {
         values.push(self.eval_value(frame, arg))

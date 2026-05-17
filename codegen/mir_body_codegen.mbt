@@ -262,6 +262,30 @@ fn mir_body_codegen_builtin_lib_call_arg_count(
       } else {
         None
       }
+    "__builtin_strcpy" | "__builtin_strcat" =>
+      if args.length() == 2 && mir_body_codegen_return_pointer_type(ret) {
+        Some(2)
+      } else {
+        None
+      }
+    "__builtin___strcpy_chk" | "__builtin___strcat_chk" =>
+      if args.length() == 3 && mir_body_codegen_return_pointer_type(ret) {
+        Some(2)
+      } else {
+        None
+      }
+    "__builtin_strncpy" | "__builtin_strncat" =>
+      if args.length() == 3 && mir_body_codegen_return_pointer_type(ret) {
+        Some(3)
+      } else {
+        None
+      }
+    "__builtin___strncpy_chk" | "__builtin___strncat_chk" =>
+      if args.length() == 4 && mir_body_codegen_return_pointer_type(ret) {
+        Some(3)
+      } else {
+        None
+      }
     _ => None
   }
 }
@@ -284,6 +308,10 @@ fn mir_body_codegen_direct_call_symbol(name : String) -> String {
     "__builtin_memcpy" | "__builtin___memcpy_chk" => "memcpy"
     "__builtin_memmove" | "__builtin___memmove_chk" => "memmove"
     "__builtin_memset" | "__builtin___memset_chk" => "memset"
+    "__builtin_strcpy" | "__builtin___strcpy_chk" => "strcpy"
+    "__builtin_strcat" | "__builtin___strcat_chk" => "strcat"
+    "__builtin_strncpy" | "__builtin___strncpy_chk" => "strncpy"
+    "__builtin_strncat" | "__builtin___strncat_chk" => "strncat"
     _ => name
   }
 }
@@ -296,7 +324,10 @@ fn mir_body_codegen_direct_call_arg_count(
   match name {
     "__builtin___memcpy_chk"
     | "__builtin___memmove_chk"
-    | "__builtin___memset_chk" => 3
+    | "__builtin___memset_chk"
+    | "__builtin___strncpy_chk"
+    | "__builtin___strncat_chk" => 3
+    "__builtin___strcpy_chk" | "__builtin___strcat_chk" => 2
     _ => args.length()
   }
 }

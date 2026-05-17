@@ -621,6 +621,39 @@ test "generate darwin arm64 strict MIR memory builtin libcalls" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR string destination builtin libcalls" {
+  let source =
+    #|int main(void) {
+    #|  char dst[4];
+    #|  __builtin_strcpy(dst, "");
+    #|  __builtin___strcpy_chk(dst, "", 4);
+    #|  __builtin_strcat(dst, "");
+    #|  __builtin___strcat_chk(dst, "", 4);
+    #|  __builtin_strncpy(dst, "", 0);
+    #|  __builtin___strncpy_chk(dst, "", 0, 4);
+    #|  __builtin_strncat(dst, "", 0);
+    #|  __builtin___strncat_chk(dst, "", 0, 4);
+    #|  return 0;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tbl\t_strcpy"), content="true")
+      inspect(assembly.contains("\tbl\t_strcat"), content="true")
+      inspect(assembly.contains("\tbl\t_strncpy"), content="true")
+      inspect(assembly.contains("\tbl\t_strncat"), content="true")
+      inspect(assembly.contains("\tbl\t___builtin_strcpy"), content="false")
+      inspect(assembly.contains("\tbl\t___builtin_strcat"), content="false")
+      inspect(assembly.contains("\tbl\t___builtin_strncpy"), content="false")
+      inspect(assembly.contains("\tbl\t___builtin_strncat"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR bzero builtin libcall" {
   let source =
     #|int main(void) {
@@ -1614,6 +1647,42 @@ test "generate linux amd64 strict MIR memory builtin libcalls" {
         assembly.contains("\tcall\t__builtin___memmove_chk"),
         content="false",
       )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR string destination builtin libcalls" {
+  let source =
+    #|int main(void) {
+    #|  char dst[4];
+    #|  __builtin_strcpy(dst, "");
+    #|  __builtin___strcpy_chk(dst, "", 4);
+    #|  __builtin_strcat(dst, "");
+    #|  __builtin___strcat_chk(dst, "", 4);
+    #|  __builtin_strncpy(dst, "", 0);
+    #|  __builtin___strncpy_chk(dst, "", 0, 4);
+    #|  __builtin_strncat(dst, "", 0);
+    #|  __builtin___strncat_chk(dst, "", 0, 4);
+    #|  return 0;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\tstrcpy"), content="true")
+      inspect(assembly.contains("\tcall\tstrcat"), content="true")
+      inspect(assembly.contains("\tcall\tstrncpy"), content="true")
+      inspect(assembly.contains("\tcall\tstrncat"), content="true")
+      inspect(assembly.contains("\tcall\t__builtin_strcpy"), content="false")
+      inspect(assembly.contains("\tcall\t__builtin_strcat"), content="false")
+      inspect(assembly.contains("\tcall\t__builtin_strncpy"), content="false")
+      inspect(assembly.contains("\tcall\t__builtin_strncat"), content="false")
     }
     Err(err) => abort(err)
   }
