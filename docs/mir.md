@@ -67,8 +67,9 @@ integer-scalar subset.
   `MirFuncBody`. It emits Darwin ARM64 and linux/amd64 assembly for
   integer-scalar MIR bodies with local variables, assignments, branches,
   `while`/`for`/`do while` loops, `break`/`continue`, ternaries, casts, direct
-  calls to other MIR-bodied functions or declared non-variadic integer-scalar
-  externs, directly labeled scalar `switch`, simple labels/goto, local compound
+  calls to other MIR-bodied functions, declared non-variadic integer-scalar
+  externs, or zero-argument implicit integer-scalar externs, directly labeled
+  scalar `switch`, simple labels/goto, local compound
   assignment, local postfix updates, scalar globals and initialized global arrays, scalar memory
   prefix/postfix updates, scalar and aggregate compound literals including
   address-taking through transparent casts,
@@ -202,8 +203,9 @@ integer-scalar subset.
 Darwin ARM64 receives a lowered MIR program through `generate_assembly_for_target`,
 and direct `Codegen::generate` construction attaches a darwin/arm64 MIR program
 if one is not already present. For supported integer-scalar functions, including
-direct calls to other MIR-bodied functions and declared non-variadic
-integer-scalar externs, directly labeled scalar `switch`, and simple
+direct calls to other MIR-bodied functions, declared non-variadic
+integer-scalar externs, and zero-argument implicit integer-scalar externs,
+directly labeled scalar `switch`, and simple
 labels/goto, it emits from `MirFuncBody`; other function bodies still fall back
 to parser AST statement walking. It delegates size, alignment, field-layout,
 offsetof path, expression type, global-expression type, and covered
@@ -215,8 +217,9 @@ semantic paths remain in place for whitebox consistency tests and as fallbacks.
 Linux/amd64 receives a lowered MIR program through `generate_assembly_for_target`,
 and direct private `X64Codegen::generate` construction attaches a linux/amd64 MIR
 program if one is not already present. For supported integer-scalar functions,
-including direct calls to other MIR-bodied functions and declared non-variadic
-integer-scalar externs, directly labeled scalar `switch`, and simple
+including direct calls to other MIR-bodied functions, declared non-variadic
+integer-scalar externs, and zero-argument implicit integer-scalar externs,
+directly labeled scalar `switch`, and simple
 labels/goto, it emits from `MirFuncBody`; other function bodies still fall back
 to parser AST statement walking. The private `X64Codegen` delegates size,
 alignment, field-layout, offsetof path, expression type, global-expression type,

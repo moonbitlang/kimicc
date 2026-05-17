@@ -1181,6 +1181,16 @@ test "mir body interpreter handles local union initializers" {
 }
 
 ///|
+test "mir body lowering handles implicit external scalar calls" {
+  let source =
+    #|int main(void) {
+    #|  return external_value();
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+}
+
+///|
 test "mir body interpreter handles ignored local union assignments" {
   let source =
     #|union U { unsigned char c; int x; };

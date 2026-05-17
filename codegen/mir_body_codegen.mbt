@@ -144,7 +144,7 @@ fn mir_body_codegen_call_supported(
     return true
   }
   if !mir.funcs.contains(name) {
-    return false
+    return args.length() == 0 && !mir.globals.contains(name)
   }
   let sig = mir.funcs[name]
   if sig.defined || sig.variadic || !mir_body_codegen_scalar_type(sig.ret) {

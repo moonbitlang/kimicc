@@ -1471,8 +1471,12 @@ fn Program::lower_mir_expr(
           None => return None
         }
       }
-      if ctx.lookup_local(name) is None && self.funcs.contains(name) {
-        Some(MirCall(name, values, ty))
+      if ctx.lookup_local(name) is None {
+        if self.funcs.contains(name) || !self.globals.contains(name) {
+          Some(MirCall(name, values, ty))
+        } else {
+          self.lower_mir_indirect_call(Var(name), args, ty, ctx)
+        }
       } else {
         self.lower_mir_indirect_call(Var(name), args, ty, ctx)
       }

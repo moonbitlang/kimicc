@@ -509,6 +509,40 @@ test "generate darwin arm64 strict MIR returned function pointer call" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR implicit external scalar call" {
+  let source =
+    #|int main(void) {
+    #|  return external_value();
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tbl\t_external_value"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "strict MIR rejects implicit external scalar call arguments" {
+  let source =
+    #|int main(void) {
+    #|  return strcmp("kimicc", "kimicc");
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(_) => abort("expected strict MIR implicit call rejection")
+    Err(err) =>
+      inspect(
+        err.contains("unsupported MIR body codegen for main"),
+        content="true",
+      )
+  }
+}
+
+///|
 test "generate darwin arm64 MIR module uses module function metadata" {
   let source = "int main(void) { return 42; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
@@ -1287,6 +1321,27 @@ test "generate linux amd64 strict MIR returned function pointer call" {
       inspect(assembly.contains("\t.type\tpick, @function"), content="true")
       inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
       inspect(assembly.contains("\tcall\tr10"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR implicit external scalar call" {
+  let source =
+    #|int main(void) {
+    #|  return external_value();
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\texternal_value"), content="true")
     }
     Err(err) => abort(err)
   }
