@@ -683,6 +683,30 @@ test "generate darwin arm64 strict MIR checked strl builtin libcalls" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR mutable local string array" {
+  let source =
+    #|int main(void) {
+    #|  char s[] = "abc";
+    #|  char *tail = s + 1;
+    #|  s[1] = 'z';
+    #|  if (__builtin_strcmp(s, "azc") != 0) return 1;
+    #|  *tail = 'b';
+    #|  if (__builtin_strcmp(s, "abc") != 0) return 2;
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tstrb\t"), content="true")
+      inspect(assembly.contains("\tbl\t_strcmp"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR checked printf family libcalls" {
   let source =
     #|int main(void) {
@@ -1922,6 +1946,33 @@ test "generate linux amd64 strict MIR checked strl builtin libcalls" {
         assembly.contains("\tcall\t__builtin___strlcat_chk"),
         content="false",
       )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR mutable local string array" {
+  let source =
+    #|int main(void) {
+    #|  char s[] = "abc";
+    #|  char *tail = s + 1;
+    #|  s[1] = 'z';
+    #|  if (__builtin_strcmp(s, "azc") != 0) return 1;
+    #|  *tail = 'b';
+    #|  if (__builtin_strcmp(s, "abc") != 0) return 2;
+    #|  return 42;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tmov\tBYTE PTR"), content="true")
+      inspect(assembly.contains("\tcall\tstrcmp"), content="true")
     }
     Err(err) => abort(err)
   }

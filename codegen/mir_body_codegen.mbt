@@ -36,6 +36,34 @@ fn mir_body_codegen_local_type(ty : @parser.Type) -> Bool {
 }
 
 ///|
+fn mir_body_codegen_array_address_base(
+  value : @mir.MirValue,
+  int_arg_limit : Int,
+  mir : @mir.MirModule,
+) -> Bool {
+  match value {
+    MirLocal(binding) =>
+      match peel_aligned_type(binding.ty) {
+        Array(_, _) => mir_body_codegen_local_type(binding.ty)
+        _ => mir_body_codegen_value_supported(value, int_arg_limit, mir)
+      }
+    _ => mir_body_codegen_value_supported(value, int_arg_limit, mir)
+  }
+}
+
+///|
+fn mir_body_codegen_pointer_operand_supported(
+  value : @mir.MirValue,
+  int_arg_limit : Int,
+  mir : @mir.MirModule,
+) -> Bool {
+  match pointer_or_array_element_type(value.ty()) {
+    Some(_) => mir_body_codegen_array_address_base(value, int_arg_limit, mir)
+    None => mir_body_codegen_value_supported(value, int_arg_limit, mir)
+  }
+}
+
+///|
 fn mir_body_codegen_value_supported(
   value : @mir.MirValue,
   int_arg_limit : Int,
@@ -54,7 +82,7 @@ fn mir_body_codegen_value_supported(
     MirStringAddr(_) => true
     MirElemAddr(base, index, elem_ty) =>
       mir_body_codegen_scalar_type(elem_ty) &&
-      mir_body_codegen_value_supported(base, int_arg_limit, mir) &&
+      mir_body_codegen_array_address_base(base, int_arg_limit, mir) &&
       mir_body_codegen_value_supported(index, int_arg_limit, mir)
     MirOffsetAddr(base, _, ty) =>
       mir_body_codegen_local_type(ty) &&
@@ -65,10 +93,20 @@ fn mir_body_codegen_value_supported(
     MirUnary(_, inner, ty) =>
       mir_body_codegen_scalar_type(ty) &&
       mir_body_codegen_value_supported(inner, int_arg_limit, mir)
-    MirBinary(_, lhs, rhs, ty) =>
-      mir_body_codegen_scalar_type(ty) &&
-      mir_body_codegen_value_supported(lhs, int_arg_limit, mir) &&
-      mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
+    MirBinary(op, lhs, rhs, ty) => {
+      if !mir_body_codegen_scalar_type(ty) {
+        return false
+      }
+      if mir_body_pointer_integer_op(op, lhs.ty(), rhs.ty()) {
+        return mir_body_codegen_pointer_operand_supported(
+            lhs, int_arg_limit, mir,
+          ) &&
+          mir_body_codegen_pointer_operand_supported(rhs, int_arg_limit, mir)
+      } else {
+        return mir_body_codegen_value_supported(lhs, int_arg_limit, mir) &&
+          mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
+      }
+    }
     MirCast(ty, inner) =>
       mir_body_codegen_scalar_type(ty) &&
       mir_body_codegen_value_supported(inner, int_arg_limit, mir)
@@ -968,7 +1006,7 @@ fn Codegen::gen_mir_value(
       self.emit("\tadd\tx9, x9, " + label + "@PAGEOFF")
     }
     MirElemAddr(base, index, elem_ty) => {
-      self.gen_mir_value(base, offsets, frame_size)
+      self.gen_mir_address_base(base, offsets, frame_size)
       self.emit("\tstr\tx9, [sp, #-16]!")
       self.gen_mir_value(index, offsets, frame_size)
       self.emit_load_int("x10", self.type_size(elem_ty).to_int64())
@@ -1262,6 +1300,23 @@ fn Codegen::gen_mir_value(
 }
 
 ///|
+fn Codegen::gen_mir_address_base(
+  self : Codegen,
+  value : @mir.MirValue,
+  offsets : Map[Int, Int],
+  frame_size : Int,
+) -> Unit {
+  match value {
+    MirLocal(binding) =>
+      match peel_aligned_type(binding.ty) {
+        Array(_, _) => self.emit_local_addr(offsets[binding.id], frame_size)
+        _ => self.gen_mir_value(value, offsets, frame_size)
+      }
+    _ => self.gen_mir_value(value, offsets, frame_size)
+  }
+}
+
+///|
 fn Codegen::mir_call_arg_type(
   self : Codegen,
   name : String,
@@ -1346,7 +1401,10 @@ fn Codegen::gen_mir_binary(
     _ => ()
   }
   if mir_body_pointer_integer_op(op, lhs.ty(), rhs.ty()) {
-    self.gen_mir_value(lhs, offsets, frame_size)
+    match pointer_or_array_element_type(lhs.ty()) {
+      Some(_) => self.gen_mir_address_base(lhs, offsets, frame_size)
+      None => self.gen_mir_value(lhs, offsets, frame_size)
+    }
     if lhs.ty().is_integer() {
       self.emit_numeric_conversion(
         lhs.ty(),
@@ -1355,7 +1413,10 @@ fn Codegen::gen_mir_binary(
       self.emit_scalar_conversion_to(unary_integer_result_type(lhs.ty()))
     }
     self.emit("\tstr\tx9, [sp, #-16]!")
-    self.gen_mir_value(rhs, offsets, frame_size)
+    match pointer_or_array_element_type(rhs.ty()) {
+      Some(_) => self.gen_mir_address_base(rhs, offsets, frame_size)
+      None => self.gen_mir_value(rhs, offsets, frame_size)
+    }
     if rhs.ty().is_integer() {
       self.emit_numeric_conversion(
         rhs.ty(),
@@ -1836,7 +1897,7 @@ fn X64Codegen::gen_mir_value(
       self.emit("\tlea\trax, [rip + .Lstr" + id.to_string() + "]")
     }
     MirElemAddr(base, index, elem_ty) => {
-      self.gen_mir_value(base, offsets)
+      self.gen_mir_address_base(base, offsets)
       self.emit_mir_push_rax()
       self.gen_mir_value(index, offsets)
       let elem_size = self.type_size(elem_ty)
@@ -2101,6 +2162,22 @@ fn X64Codegen::gen_mir_value(
 }
 
 ///|
+fn X64Codegen::gen_mir_address_base(
+  self : X64Codegen,
+  value : @mir.MirValue,
+  offsets : Map[Int, Int],
+) -> Unit {
+  match value {
+    MirLocal(binding) =>
+      match peel_aligned_type(binding.ty) {
+        Array(_, _) => self.emit_local_addr(offsets[binding.id])
+        _ => self.gen_mir_value(value, offsets)
+      }
+    _ => self.gen_mir_value(value, offsets)
+  }
+}
+
+///|
 fn X64Codegen::mir_call_arg_type(
   self : X64Codegen,
   name : String,
@@ -2171,12 +2248,18 @@ fn X64Codegen::gen_mir_binary(
     _ => ()
   }
   if mir_body_pointer_integer_op(op, lhs.ty(), rhs.ty()) {
-    self.gen_mir_value(lhs, offsets)
+    match pointer_or_array_element_type(lhs.ty()) {
+      Some(_) => self.gen_mir_address_base(lhs, offsets)
+      None => self.gen_mir_value(lhs, offsets)
+    }
     if lhs.ty().is_integer() {
       self.emit_int_conversion_to(unary_integer_result_type(lhs.ty()))
     }
     self.emit_mir_push_rax()
-    self.gen_mir_value(rhs, offsets)
+    match pointer_or_array_element_type(rhs.ty()) {
+      Some(_) => self.gen_mir_address_base(rhs, offsets)
+      None => self.gen_mir_value(rhs, offsets)
+    }
     if rhs.ty().is_integer() {
       self.emit_int_conversion_to(unary_integer_result_type(rhs.ty()))
     }
