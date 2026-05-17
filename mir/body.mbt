@@ -1320,14 +1320,14 @@ fn Program::lower_mir_expr(
     AddrOf(MemberAccess(obj, field)) =>
       self.lower_mir_member_addr(obj, field, ctx)
     Deref(Var(name)) =>
-      match (ctx.lookup_local(name), self.lower_mir_expr(Var(name), ctx)) {
-        (Some(_), Some(value)) =>
+      match self.lower_mir_expr(Var(name), ctx) {
+        Some(value) =>
           if mir_body_scalar_type(ty) {
             Some(MirLoad(value, ty))
           } else {
             None
           }
-        _ => None
+        None => None
       }
     Deref(ptr) =>
       match self.lower_mir_known_object_ptr_expr(ptr, ctx) {

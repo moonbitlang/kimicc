@@ -48,7 +48,7 @@ integer-scalar subset.
   address-taking through transparent casts,
   scalar `*&` / `&*` cancellation, transparent casted scalar address
   loads/stores, address-of aggregate member cancellation including transparent
-  casts, simple scalar local pointer loads/stores,
+  casts, simple scalar local/global pointer loads/stores,
   simple non-variadic indirect calls and function addresses, scalar local arrays
   including array-to-pointer decay in call arguments, string literal byte loads,
   simple local array initializers, local aggregate initializers with nested
@@ -78,7 +78,7 @@ integer-scalar subset.
   address-taking through transparent casts,
   scalar `*&` / `&*` cancellation, transparent casted scalar address
   loads/stores, address-of aggregate member cancellation including transparent
-  casts, simple scalar local pointer loads/stores,
+  casts, simple scalar local/global pointer loads/stores,
   simple non-variadic indirect calls and function addresses, scalar local arrays
   including array-to-pointer decay in call arguments, string literal byte loads,
   simple local array initializers, local aggregate initializers with nested

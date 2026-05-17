@@ -925,6 +925,23 @@ test "mir body interpreter handles scalar global arrays" {
 }
 
 ///|
+test "mir body interpreter handles scalar global pointer loads" {
+  let source =
+    #|int a[2];
+    #|int *p;
+    #|int main(void) {
+    #|  a[0] = 21;
+    #|  p = &a[0];
+    #|  if (*p != 21) return 1;
+    #|  *p = 42;
+    #|  return *p;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body interpreter handles initialized scalar global arrays" {
   let source =
     #|int a[3] = {1, 2, 3};

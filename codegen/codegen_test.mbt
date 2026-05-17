@@ -2432,6 +2432,31 @@ test "generate darwin arm64 MIR body scalar global arrays" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR scalar global pointer loads" {
+  let source =
+    #|int a[2];
+    #|int *p;
+    #|int main(void) {
+    #|  a[0] = 21;
+    #|  p = &a[0];
+    #|  if (*p != 21) return 1;
+    #|  *p = 42;
+    #|  return *p;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(
+        assembly.contains("\t// kimicc: mir-body\n\t.p2align\t2\n_main:"),
+        content="true",
+      )
+      inspect(assembly.contains("_p:"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 MIR body initialized scalar global arrays" {
   let source =
     #|int a[3] = {1, 2, 3};
@@ -3308,6 +3333,35 @@ test "generate linux amd64 MIR body scalar global arrays" {
     assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
     content="true",
   )
+}
+
+///|
+test "generate linux amd64 strict MIR scalar global pointer loads" {
+  let source =
+    #|int a[2];
+    #|int *p;
+    #|int main(void) {
+    #|  a[0] = 21;
+    #|  p = &a[0];
+    #|  if (*p != 21) return 1;
+    #|  *p = 42;
+    #|  return *p;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(
+        assembly.contains("\t# kimicc: mir-body\n\t.type\tmain, @function"),
+        content="true",
+      )
+      inspect(assembly.contains("p:\n\t.zero\t8"), content="true")
+    }
+    Err(err) => abort(err)
+  }
 }
 
 ///|
