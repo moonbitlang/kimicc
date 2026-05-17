@@ -1219,6 +1219,25 @@ test "mir body interpreter handles atomic fence builtins" {
 }
 
 ///|
+test "mir body interpreter models frame and return address nullness" {
+  let source =
+    #|int main(void) {
+    #|  void *fa = __builtin_frame_address(0);
+    #|  void *ra = __builtin_return_address(0);
+    #|  if (fa == 0) return 1;
+    #|  if (ra == 0) return 2;
+    #|  if (__builtin_frame_address(1) != 0) return 3;
+    #|  if (__builtin_return_address(1) != 0) return 4;
+    #|  if (__builtin_extract_return_addr(ra) != ra) return 5;
+    #|  if (__builtin_frob_return_addr(ra) != ra) return 6;
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body interpreter handles ignored local union assignments" {
   let source =
     #|union U { unsigned char c; int x; };

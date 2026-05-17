@@ -60,10 +60,10 @@ integer-scalar subset.
   `__builtin_expect` and `__builtin_assume_aligned` including their modeled
   hint-operand side effects,
   no-argument `__sync_synchronize`, atomic thread/signal fence builtins,
-  and return-address transforms, no-op `__builtin_assume`, runtime `__builtin_prefetch` address
-  evaluation, identity `__builtin_unpredictable`, `break`/`continue`, and
-  ternaries. Missing bodies return `Err` instead of falling back to parser AST
-  execution.
+  frame/return-address nullness, and return-address transforms, no-op
+  `__builtin_assume`, runtime `__builtin_prefetch` address evaluation, identity
+  `__builtin_unpredictable`, `break`/`continue`, and ternaries. Missing bodies
+  return `Err` instead of falling back to parser AST execution.
 - `codegen/mir_body_codegen.mbt` is the first production backend consumer of
   `MirFuncBody`. It emits Darwin ARM64 and linux/amd64 assembly for
   integer-scalar MIR bodies with local variables, assignments, branches,
@@ -88,10 +88,11 @@ integer-scalar subset.
   `__builtin_expect` and `__builtin_assume_aligned` including their modeled
   hint-operand side effects,
   no-argument `__sync_synchronize`, atomic thread/signal fence builtins,
-  trap/unreachable builtins, and return-address transforms, no-op
-  `__builtin_assume`, runtime `__builtin_prefetch` address evaluation, identity
-  `__builtin_unpredictable`, and arithmetic/logical operators. Unsupported MIR
-  bodies still fall back to the existing parser-AST codegen path.
+  trap/unreachable builtins, frame/return-address builtins, and return-address
+  transforms, no-op `__builtin_assume`, runtime `__builtin_prefetch` address
+  evaluation, identity `__builtin_unpredictable`, and arithmetic/logical
+  operators. Unsupported MIR bodies still fall back to the existing parser-AST
+  codegen path.
 - `Program::interpret_i64` is an integer-only interpreter intended for
   compile-test oracles. It supports scalar functions, locals, globals, calls,
   casts, arithmetic, conditionals, loops, scalar switches, simple gotos, selected

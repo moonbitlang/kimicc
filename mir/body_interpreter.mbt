@@ -601,6 +601,19 @@ fn BodyInterpreter::eval_value(
         ignore(self.eval_value(frame, args[0]))
         return 0L
       }
+      if (
+          name == "__builtin_frame_address" ||
+          name == "__builtin_return_address"
+        ) &&
+        args.length() <= 1 &&
+        self.program.core_type(ty) is Pointer(_) {
+        let level = if args.length() == 0 {
+          0L
+        } else {
+          self.eval_value(frame, args[0])
+        }
+        return if level == 0L { 1L } else { 0L }
+      }
       let values : Array[Int64] = []
       for arg in args {
         values.push(self.eval_value(frame, arg))

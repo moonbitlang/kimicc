@@ -180,6 +180,47 @@ fn mir_body_codegen_trap_call(
 }
 
 ///|
+fn mir_body_codegen_return_pointer_type(ty : @parser.Type) -> Bool {
+  peel_aligned_type(ty) is Pointer(_)
+}
+
+///|
+fn mir_body_codegen_const_builtin_level(args : Array[@mir.MirValue]) -> Int64? {
+  if args.length() == 0 {
+    return Some(0L)
+  }
+  if args.length() != 1 {
+    return None
+  }
+  match args[0] {
+    MirConst(value, _) => Some(value)
+    _ => None
+  }
+}
+
+///|
+fn mir_body_codegen_frame_address_call(
+  name : String,
+  args : Array[@mir.MirValue],
+  ret : @parser.Type,
+) -> Bool {
+  name == "__builtin_frame_address" &&
+  mir_body_codegen_const_builtin_level(args) is Some(_) &&
+  mir_body_codegen_return_pointer_type(ret)
+}
+
+///|
+fn mir_body_codegen_return_address_call(
+  name : String,
+  args : Array[@mir.MirValue],
+  ret : @parser.Type,
+) -> Bool {
+  name == "__builtin_return_address" &&
+  mir_body_codegen_const_builtin_level(args) is Some(_) &&
+  mir_body_codegen_return_pointer_type(ret)
+}
+
+///|
 fn mir_body_codegen_call_supported(
   name : String,
   args : Array[@mir.MirValue],
@@ -190,7 +231,9 @@ fn mir_body_codegen_call_supported(
   if mir_body_codegen_sync_synchronize_call(name, args, ret) ||
     mir_body_codegen_atomic_thread_fence_call(name, args, ret) ||
     mir_body_codegen_atomic_signal_fence_call(name, args, ret) ||
-    mir_body_codegen_trap_call(name, args, ret) {
+    mir_body_codegen_trap_call(name, args, ret) ||
+    mir_body_codegen_frame_address_call(name, args, ret) ||
+    mir_body_codegen_return_address_call(name, args, ret) {
     return true
   }
   if mir_body_codegen_builtin_call_name(name) ||
@@ -664,6 +707,28 @@ fn Codegen::gen_mir_value(
       } else if mir_body_codegen_trap_call(name, args, ty) {
         self.emit("\tbrk\t#0x1")
         self.emit("\tmov\tx9, #0")
+        return
+      } else if mir_body_codegen_frame_address_call(name, args, ty) {
+        let level = match mir_body_codegen_const_builtin_level(args) {
+          Some(level) => level
+          None => 0L
+        }
+        if level == 0L {
+          self.emit("\tmov\tx9, x29")
+        } else {
+          self.emit("\tmov\tx9, #0")
+        }
+        return
+      } else if mir_body_codegen_return_address_call(name, args, ty) {
+        let level = match mir_body_codegen_const_builtin_level(args) {
+          Some(level) => level
+          None => 0L
+        }
+        if level == 0L {
+          self.emit("\tldr\tx9, [x29, #8]")
+        } else {
+          self.emit("\tmov\tx9, #0")
+        }
         return
       }
       for i in 0..<args.length() {
@@ -1370,6 +1435,28 @@ fn X64Codegen::gen_mir_value(
       } else if mir_body_codegen_trap_call(name, args, ty) {
         self.emit("\tud2")
         self.emit("\tmov\trax, 0")
+        return
+      } else if mir_body_codegen_frame_address_call(name, args, ty) {
+        let level = match mir_body_codegen_const_builtin_level(args) {
+          Some(level) => level
+          None => 0L
+        }
+        if level == 0L {
+          self.emit("\tmov\trax, rbp")
+        } else {
+          self.emit("\tmov\trax, 0")
+        }
+        return
+      } else if mir_body_codegen_return_address_call(name, args, ty) {
+        let level = match mir_body_codegen_const_builtin_level(args) {
+          Some(level) => level
+          None => 0L
+        }
+        if level == 0L {
+          self.emit("\tmov\trax, QWORD PTR [rbp + 8]")
+        } else {
+          self.emit("\tmov\trax, 0")
+        }
         return
       }
       for i in 0..<args.length() {

@@ -1524,6 +1524,55 @@ test "generate linux amd64 strict MIR trap builtins" {
 }
 
 ///|
+test "generate linux amd64 strict MIR lowers return address builtin" {
+  let source =
+    #|int main(void) {
+    #|  void *fa = __builtin_frame_address(0);
+    #|  void *ra = __builtin_return_address(0);
+    #|  if (fa == 0) return 1;
+    #|  if (ra == 0) return 2;
+    #|  if (__builtin_frame_address(1) != 0) return 3;
+    #|  if (__builtin_return_address(1) != 0) return 4;
+    #|  if (__builtin_extract_return_addr(ra) != ra) return 5;
+    #|  if (__builtin_frob_return_addr(ra) != ra) return 6;
+    #|  return 0;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tmov\trax, rbp"), content="true")
+      inspect(
+        assembly.contains("\tmov\trax, QWORD PTR [rbp + 8]"),
+        content="true",
+      )
+      inspect(assembly.contains("\tmov\trax, 0"), content="true")
+      inspect(
+        assembly.contains("call\t__builtin_return_address"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("call\t__builtin_frame_address"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("call\t__builtin_extract_return_addr"),
+        content="false",
+      )
+      inspect(
+        assembly.contains("call\t__builtin_frob_return_addr"),
+        content="false",
+      )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate linux amd64 strict MIR sync synchronize builtin" {
   let source =
     #|int main(void) {
@@ -2504,27 +2553,36 @@ test "generate darwin arm64 strict MIR global bit-field initializers" {
 }
 
 ///|
-test "generate darwin arm64 lowers return address builtin" {
+test "generate darwin arm64 strict MIR lowers return address builtin" {
   let source =
     #|int main(void) {
     #|  void *fa = __builtin_frame_address(0);
     #|  void *ra = __builtin_return_address(0);
     #|  if (fa == 0) return 1;
     #|  if (ra == 0) return 2;
-    #|  if (__builtin_return_address(1) != 0) return 3;
-    #|  if (__builtin_extract_return_addr(ra) != ra) return 4;
-    #|  if (__builtin_frob_return_addr(ra) != ra) return 5;
+    #|  if (__builtin_frame_address(1) != 0) return 3;
+    #|  if (__builtin_return_address(1) != 0) return 4;
+    #|  if (__builtin_extract_return_addr(ra) != ra) return 5;
+    #|  if (__builtin_frob_return_addr(ra) != ra) return 6;
     #|  return 0;
     #|}
-  let prog = @parser.parse(source)
-  let codegen = @codegen.Codegen::new()
-  let assembly = codegen.generate(prog)
-  inspect(assembly.contains("\tmov\tx9, x29"), content="true")
-  inspect(assembly.contains("\tldr\tx9, [x29, #8]"), content="true")
-  inspect(assembly.contains("__builtin_return_address"), content="false")
-  inspect(assembly.contains("__builtin_frame_address"), content="false")
-  inspect(assembly.contains("__builtin_extract_return_addr"), content="false")
-  inspect(assembly.contains("__builtin_frob_return_addr"), content="false")
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tmov\tx9, x29"), content="true")
+      inspect(assembly.contains("\tldr\tx9, [x29, #8]"), content="true")
+      inspect(assembly.contains("\tmov\tx9, #0"), content="true")
+      inspect(assembly.contains("__builtin_return_address"), content="false")
+      inspect(assembly.contains("__builtin_frame_address"), content="false")
+      inspect(
+        assembly.contains("__builtin_extract_return_addr"),
+        content="false",
+      )
+      inspect(assembly.contains("__builtin_frob_return_addr"), content="false")
+    }
+    Err(err) => abort(err)
+  }
 }
 
 ///|
