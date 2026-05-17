@@ -285,7 +285,17 @@ fn mir_body_codegen_builtin_lib_call_arg_count(
   ret : @parser.Type,
   int_arg_limit : Int,
 ) -> Int? {
-  if args.length() > int_arg_limit {
+  match mir_body_codegen_checked_printf_source_indexes(name, args, ret) {
+    Some(indexes) =>
+      if indexes.length() <= int_arg_limit {
+        return Some(indexes.length())
+      } else {
+        return None
+      }
+    None => ()
+  }
+  if mir_body_codegen_direct_call_source_indexes(name, args).length() >
+    int_arg_limit {
     return None
   }
   match name {
@@ -367,16 +377,64 @@ fn mir_body_codegen_direct_call_symbol(name : String) -> String {
     "__builtin_strncat" | "__builtin___strncat_chk" => "strncat"
     "__builtin___strlcpy_chk" => "strlcpy"
     "__builtin___strlcat_chk" => "strlcat"
+    "__builtin___snprintf_chk" => "snprintf"
+    "__builtin___sprintf_chk" => "sprintf"
+    "__builtin___printf_chk" => "printf"
     _ => name
   }
 }
 
 ///|
-fn mir_body_codegen_direct_call_arg_count(
+fn mir_body_codegen_checked_printf_source_indexes(
   name : String,
   args : Array[@mir.MirValue],
-) -> Int {
+  ret : @parser.Type,
+) -> Array[Int]? {
   match name {
+    "__builtin___snprintf_chk" =>
+      if args.length() >= 5 && ret.is_integer() {
+        let indexes = [0, 1, 4]
+        for i in 5..<args.length() {
+          indexes.push(i)
+        }
+        Some(indexes)
+      } else {
+        None
+      }
+    "__builtin___sprintf_chk" =>
+      if args.length() >= 4 && ret.is_integer() {
+        let indexes = [0, 3]
+        for i in 4..<args.length() {
+          indexes.push(i)
+        }
+        Some(indexes)
+      } else {
+        None
+      }
+    "__builtin___printf_chk" =>
+      if args.length() >= 2 && ret.is_integer() {
+        let indexes = [1]
+        for i in 2..<args.length() {
+          indexes.push(i)
+        }
+        Some(indexes)
+      } else {
+        None
+      }
+    _ => None
+  }
+}
+
+///|
+fn mir_body_codegen_direct_call_source_indexes(
+  name : String,
+  args : Array[@mir.MirValue],
+) -> Array[Int] {
+  match mir_body_codegen_checked_printf_source_indexes(name, args, SInt) {
+    Some(indexes) => return indexes
+    None => ()
+  }
+  let count = match name {
     "__builtin___memcpy_chk"
     | "__builtin___memmove_chk"
     | "__builtin___memset_chk"
@@ -386,6 +444,87 @@ fn mir_body_codegen_direct_call_arg_count(
     | "__builtin___strlcat_chk" => 3
     "__builtin___strcpy_chk" | "__builtin___strcat_chk" => 2
     _ => args.length()
+  }
+  let indexes = []
+  for i in 0..<count {
+    indexes.push(i)
+  }
+  indexes
+}
+
+///|
+fn mir_body_codegen_direct_call_variadic(name : String) -> Bool {
+  match name {
+    "__builtin___snprintf_chk"
+    | "__builtin___sprintf_chk"
+    | "__builtin___printf_chk" => true
+    _ => false
+  }
+}
+
+///|
+fn mir_body_codegen_direct_call_named_arg_count(name : String) -> Int {
+  match name {
+    "__builtin___snprintf_chk" => 3
+    "__builtin___sprintf_chk" => 2
+    "__builtin___printf_chk" => 1
+    _ => 0
+  }
+}
+
+///|
+fn Codegen::mir_direct_call_variadic(self : Codegen, name : String) -> Bool {
+  mir_body_codegen_direct_call_variadic(name) ||
+  self.func_variadic.get_or_default(name, false)
+}
+
+///|
+fn Codegen::mir_direct_call_named_arg_count(
+  self : Codegen,
+  name : String,
+) -> Int {
+  if mir_body_codegen_direct_call_variadic(name) {
+    mir_body_codegen_direct_call_named_arg_count(name)
+  } else {
+    self.func_param_counts.get_or_default(name, 0)
+  }
+}
+
+///|
+fn X64Codegen::mir_direct_call_variadic(
+  self : X64Codegen,
+  name : String,
+) -> Bool {
+  mir_body_codegen_direct_call_variadic(name) ||
+  self.func_variadic.get_or_default(name, false)
+}
+
+///|
+fn mir_body_codegen_lowered_builtin_arg_type(
+  name : String,
+  index : Int,
+) -> @parser.Type? {
+  match name {
+    "__builtin___snprintf_chk" =>
+      match index {
+        0 => Some(Pointer(SChar))
+        1 => Some(ULong)
+        2 => Some(Pointer(SChar))
+        _ => None
+      }
+    "__builtin___sprintf_chk" =>
+      match index {
+        0 => Some(Pointer(SChar))
+        1 => Some(Pointer(SChar))
+        _ => None
+      }
+    "__builtin___printf_chk" =>
+      if index == 0 {
+        Some(Pointer(SChar))
+      } else {
+        None
+      }
+    _ => None
   }
 }
 
@@ -970,19 +1109,64 @@ fn Codegen::gen_mir_value(
           }
         None => ()
       }
-      let arg_count = mir_body_codegen_direct_call_arg_count(name, args)
-      for i in 0..<arg_count {
-        let arg = args[i]
-        self.gen_mir_value(arg, offsets, frame_size)
-        let expected = self.mir_call_arg_type(name, i, arg.ty())
-        self.emit_numeric_conversion(arg.ty(), expected)
-        self.emit_scalar_conversion_to(expected)
-        self.emit("\tstr\tx9, [sp, #-16]!")
+      let source_indexes = mir_body_codegen_direct_call_source_indexes(
+        name, args,
+      )
+      if self.mir_direct_call_variadic(name) {
+        let named_count = self.mir_direct_call_named_arg_count(name)
+        for i in 0..<source_indexes.length() {
+          let arg = args[source_indexes[i]]
+          self.gen_mir_value(arg, offsets, frame_size)
+          let expected = self.mir_call_arg_type(name, i, arg.ty())
+          self.emit_numeric_conversion(arg.ty(), expected)
+          self.emit_scalar_conversion_to(expected)
+          self.emit("\tstr\tx9, [sp, #-16]!")
+        }
+        let variadic_slots = source_indexes.length() - named_count
+        let variadic_area = if variadic_slots * 8 > 64 {
+          (variadic_slots * 8 + 15) / 16 * 16
+        } else {
+          64
+        }
+        self.emit("\tsub\tsp, sp, #" + variadic_area.to_string())
+        for i in 0..<source_indexes.length() {
+          self.emit(
+            "\tldr\tx" +
+            i.to_string() +
+            ", [sp, #" +
+            (variadic_area + (source_indexes.length() - 1 - i) * 16).to_string() +
+            "]",
+          )
+        }
+        for i in named_count..<source_indexes.length() {
+          self.emit(
+            "\tldr\tx9, [sp, #" +
+            (variadic_area + (source_indexes.length() - 1 - i) * 16).to_string() +
+            "]",
+          )
+          self.emit(
+            "\tstr\tx9, [sp, #" + ((i - named_count) * 8).to_string() + "]",
+          )
+        }
+        self.emit("\tbl\t_" + mir_body_codegen_direct_call_symbol(name))
+        self.emit(
+          "\tadd\tsp, sp, #" +
+          (variadic_area + source_indexes.length() * 16).to_string(),
+        )
+      } else {
+        for i in 0..<source_indexes.length() {
+          let arg = args[source_indexes[i]]
+          self.gen_mir_value(arg, offsets, frame_size)
+          let expected = self.mir_call_arg_type(name, i, arg.ty())
+          self.emit_numeric_conversion(arg.ty(), expected)
+          self.emit_scalar_conversion_to(expected)
+          self.emit("\tstr\tx9, [sp, #-16]!")
+        }
+        for i = source_indexes.length() - 1; i >= 0; i = i - 1 {
+          self.emit("\tldr\tx" + i.to_string() + ", [sp], #16")
+        }
+        self.emit("\tbl\t_" + mir_body_codegen_direct_call_symbol(name))
       }
-      for i = arg_count - 1; i >= 0; i = i - 1 {
-        self.emit("\tldr\tx" + i.to_string() + ", [sp], #16")
-      }
-      self.emit("\tbl\t_" + mir_body_codegen_direct_call_symbol(name))
       self.emit("\tmov\tx9, x0")
       self.emit_mir_abi_int_return_conversion(ty)
     }
@@ -1015,6 +1199,10 @@ fn Codegen::mir_call_arg_type(
   index : Int,
   actual : @parser.Type,
 ) -> @parser.Type {
+  match mir_body_codegen_lowered_builtin_arg_type(name, index) {
+    Some(ty) => return ty
+    None => ()
+  }
   if self.func_param_types.contains(name) {
     let params = self.func_param_types[name]
     if index < params.length() {
@@ -1781,17 +1969,22 @@ fn X64Codegen::gen_mir_value(
           }
         None => ()
       }
-      let arg_count = mir_body_codegen_direct_call_arg_count(name, args)
-      for i in 0..<arg_count {
-        let arg = args[i]
+      let source_indexes = mir_body_codegen_direct_call_source_indexes(
+        name, args,
+      )
+      for i in 0..<source_indexes.length() {
+        let arg = args[source_indexes[i]]
         self.gen_mir_value(arg, offsets)
         self.emit_int_conversion_to(self.mir_call_arg_type(name, i, arg.ty()))
         self.emit_mir_push_rax()
       }
       let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
-      for i = arg_count - 1; i >= 0; i = i - 1 {
+      for i = source_indexes.length() - 1; i >= 0; i = i - 1 {
         self.emit("\tmov\t" + arg_regs[i] + ", QWORD PTR [rsp]")
         self.emit("\tadd\trsp, 16")
+      }
+      if self.mir_direct_call_variadic(name) {
+        self.emit("\tmov\tal, 0")
       }
       self.emit("\tcall\t" + mir_body_codegen_direct_call_symbol(name))
       self.emit_abi_int_return_conversion(ty)
@@ -1827,6 +2020,10 @@ fn X64Codegen::mir_call_arg_type(
   index : Int,
   actual : @parser.Type,
 ) -> @parser.Type {
+  match mir_body_codegen_lowered_builtin_arg_type(name, index) {
+    Some(ty) => return ty
+    None => ()
+  }
   if self.func_param_types.contains(name) {
     let params = self.func_param_types[name]
     if index < params.length() {

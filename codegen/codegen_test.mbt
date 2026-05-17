@@ -683,6 +683,34 @@ test "generate darwin arm64 strict MIR checked strl builtin libcalls" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR checked printf family libcalls" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(32);
+    #|  __builtin___snprintf_chk(dst, 4, 0, 32, "n=%05d", n += 6);
+    #|  __builtin___sprintf_chk(dst, 0, 32, "%s%%", "ok");
+    #|  return __builtin___printf_chk(1, "x=%x", n);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tbl\t_snprintf"), content="true")
+      inspect(assembly.contains("\tbl\t_sprintf"), content="true")
+      inspect(assembly.contains("\tbl\t_printf"), content="true")
+      inspect(assembly.contains("\tsub\tsp, sp, #64"), content="true")
+      inspect(assembly.contains("\tstr\tx9, [sp, #0]"), content="true")
+      inspect(assembly.contains("__builtin___snprintf_chk"), content="false")
+      inspect(assembly.contains("__builtin___sprintf_chk"), content="false")
+      inspect(assembly.contains("__builtin___printf_chk"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR lowers overflow builtins" {
   let source =
     #|int main(void) {
@@ -777,6 +805,8 @@ test "generate darwin arm64 strict MIR varargs setup builtins" {
       inspect(assembly.contains("_variadic:"), content="true")
       inspect(assembly.contains("_main:"), content="true")
       inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tsub\tsp, sp, #64"), content="true")
+      inspect(assembly.contains("\tstr\tx9, [sp, #0]"), content="true")
       inspect(assembly.contains("__builtin_va_start"), content="false")
       inspect(assembly.contains("__builtin_va_copy"), content="false")
       inspect(assembly.contains("__builtin_va_end"), content="false")
@@ -1853,6 +1883,36 @@ test "generate linux amd64 strict MIR checked strl builtin libcalls" {
 }
 
 ///|
+test "generate linux amd64 strict MIR checked printf family libcalls" {
+  let source =
+    #|int main(void) {
+    #|  int n = 0;
+    #|  char *dst = __builtin_alloca(32);
+    #|  __builtin___snprintf_chk(dst, 4, 0, 32, "n=%05d", n += 6);
+    #|  __builtin___sprintf_chk(dst, 0, 32, "%s%%", "ok");
+    #|  return __builtin___printf_chk(1, "x=%x", n);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\tsnprintf"), content="true")
+      inspect(assembly.contains("\tcall\tsprintf"), content="true")
+      inspect(assembly.contains("\tcall\tprintf"), content="true")
+      inspect(assembly.contains("\tmov\tal, 0"), content="true")
+      inspect(assembly.contains("__builtin___snprintf_chk"), content="false")
+      inspect(assembly.contains("__builtin___sprintf_chk"), content="false")
+      inspect(assembly.contains("__builtin___printf_chk"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate linux amd64 strict MIR lowers overflow builtins" {
   let source =
     #|int main(void) {
@@ -1964,6 +2024,7 @@ test "generate linux amd64 strict MIR varargs setup builtins" {
       inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
       inspect(assembly.contains("\t.type\tvariadic, @function"), content="true")
       inspect(assembly.contains("\t.type\tmain, @function"), content="true")
+      inspect(assembly.contains("\tmov\tal, 0"), content="true")
       inspect(assembly.contains("__builtin_va_start"), content="false")
       inspect(assembly.contains("__builtin_va_copy"), content="false")
       inspect(assembly.contains("__builtin_va_end"), content="false")
