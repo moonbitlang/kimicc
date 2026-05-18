@@ -33,6 +33,7 @@ pub(all) enum MirValue {
   MirBinary(String, MirValue, MirValue, @ctype.Type)
   MirCast(@ctype.Type, MirValue)
   MirVaArg(MirValue, @ctype.Type)
+  MirVaArgAddr(MirValue, @ctype.Type)
   MirCall(String, Array[MirValue], @ctype.Type)
   MirIndirectCall(MirValue, Array[MirValue], @ctype.Type)
   MirAssignLocal(MirLocal, MirValue)
@@ -88,6 +89,7 @@ pub fn MirValue::ty(self : MirValue) -> @ctype.Type {
     MirBinary(_, _, _, ty) => ty
     MirCast(ty, _) => ty
     MirVaArg(_, ty) => ty
+    MirVaArgAddr(_, ty) => Pointer(ty)
     MirCall(_, _, ty) => ty
     MirIndirectCall(_, _, ty) => ty
     MirAssignLocal(binding, _) => binding.ty
@@ -730,6 +732,50 @@ fn Program::lower_mir_copy_init_stores(
 }
 
 ///|
+fn Program::lower_mir_va_arg_copy_init_stores(
+  self : Program,
+  dest_base : MirValue,
+  dest_ty : @ctype.Type,
+  init : @parser.Expr,
+  ctx : BodyLowerContext,
+) -> Array[MirStmt]? {
+  match init {
+    VaArg(ap, va_ty) => {
+      if self.core_type(dest_ty) != self.core_type(va_ty) {
+        return None
+      }
+      match self.core_type(va_ty) {
+        Struct(_) | Union(_) => ()
+        _ => return None
+      }
+      let ap_value = match self.lower_mir_expr(ap, ctx) {
+        Some(value) => value
+        None => return None
+      }
+      let temp = ctx.declare_temp(Pointer(va_ty))
+      let stores : Array[MirStmt] = [
+        MirExprStmt(MirAssignLocal(temp, MirVaArgAddr(ap_value, va_ty))),
+      ]
+      let copy_stores = match
+        self.lower_mir_copy_init_stores(
+          dest_base,
+          dest_ty,
+          MirLocal(temp),
+          va_ty,
+        ) {
+        Some(stores) => stores
+        None => return None
+      }
+      for store in copy_stores {
+        stores.push(store)
+      }
+      Some(stores)
+    }
+    _ => None
+  }
+}
+
+///|
 fn Program::lower_mir_struct_init_stores(
   self : Program,
   base : MirValue,
@@ -740,6 +786,10 @@ fn Program::lower_mir_struct_init_stores(
   let struct_name = match self.core_type(ty) {
     Struct(name) | Union(name) => name
     _ => return None
+  }
+  match self.lower_mir_va_arg_copy_init_stores(base, ty, init, ctx) {
+    Some(stores) => return Some(stores)
+    None => ()
   }
   match init {
     Number(_) | Array(_) | CompoundLiteral(_, _, _) => ()
@@ -1599,6 +1649,11 @@ fn Program::lower_mir_ignored_aggregate_assign(
   }
   if !mir_body_local_copy_source_addr(dest_addr) {
     return None
+  }
+  match self.lower_mir_va_arg_copy_init_stores(dest_addr, lhs_ty, rhs, ctx) {
+    Some(stores) =>
+      return mir_body_sequence_exprs(stores, MirConst(0L, SInt), SInt)
+    None => ()
   }
   match rhs {
     CompoundLiteral(_, _, _) => {

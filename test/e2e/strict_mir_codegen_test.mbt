@@ -32,6 +32,27 @@ fn run_source_strict_mir(source : String) -> Int {
 }
 
 ///|
+fn run_strict_mir_with_clang_driver(
+  callee_source : String,
+  driver_source : String,
+) -> Int {
+  let assembly = compile_strict_mir(callee_source)
+  let id = source_id(callee_source + driver_source)
+  let asm_path = "/tmp/kimicc_strict_mir_driver_" + id + ".s"
+  let driver_path = "/tmp/kimicc_strict_mir_driver_" + id + ".c"
+  let bin_path = "/tmp/kimicc_strict_mir_driver_" + id
+  write_text_file(asm_path, assembly)
+  write_text_file(driver_path, driver_source)
+  let link_rc = moonbit_system(
+    @utf8.encode("clang -o " + bin_path + " " + asm_path + " " + driver_path),
+  )
+  if link_rc != 0 {
+    abort("strict MIR driver link failed with code: " + link_rc.to_string())
+  }
+  run_command_exit_silent(shell_quote(bin_path), "strict_mir_run_driver")
+}
+
+///|
 test "strict MIR codegen executes scalar control flow and calls" {
   let source =
     #|int add(int a, int b) { return a + b; }
@@ -281,4 +302,26 @@ test "strict MIR codegen executes scalar va_arg reads" {
     #|  return read_variadic(4, 10, 20LL, 3.5);
     #|}
   assert_eq(run_source_strict_mir(source), 37)
+}
+
+///|
+test "strict MIR codegen executes aggregate va_arg reads from clang caller" {
+  let callee =
+    #|typedef __builtin_va_list va_list;
+    #|struct Pair { long long a; long long b; };
+    #|int read_pair(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  struct Pair p = __builtin_va_arg(ap, struct Pair);
+    #|  __builtin_va_end(ap);
+    #|  return tag + (int)p.a + (int)p.b;
+    #|}
+  let driver =
+    #|struct Pair { long long a; long long b; };
+    #|int read_pair(int tag, ...);
+    #|int main(void) {
+    #|  struct Pair p = {10, 20};
+    #|  return read_pair(4, p);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 34)
 }

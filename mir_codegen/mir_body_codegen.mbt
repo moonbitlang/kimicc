@@ -344,6 +344,13 @@ fn mir_body_codegen_value_supported(
       !(peel_aligned_type(ty) is Void) &&
       mir_body_codegen_abi_scalar_type(ty) &&
       mir_body_codegen_value_supported(ap, int_arg_limit, mir)
+    MirVaArgAddr(ap, ty) =>
+      (match peel_aligned_type(ty) {
+        Struct(_) | Union(_) => true
+        _ => false
+      }) &&
+      mir_body_codegen_local_type(ty) &&
+      mir_body_codegen_value_supported(ap, int_arg_limit, mir)
     MirAssignLocal(binding, rhs) =>
       mir_body_codegen_scalar_type(binding.ty) &&
       mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
@@ -1312,6 +1319,30 @@ fn Codegen::emit_mir_va_arg(
 }
 
 ///|
+fn Codegen::emit_mir_va_arg_addr(
+  self : Codegen,
+  ap : @mir.MirValue,
+  ty : @ctype.Type,
+  offsets : Map[Int, Int],
+  frame_size : Int,
+) -> Unit {
+  let binding = match ap {
+    MirLocal(binding) => binding
+    _ =>
+      abort(
+        "Darwin ARM64 MIR aggregate va_arg only supports local va_list values",
+      )
+  }
+  self.gen_mir_value(ap, offsets, frame_size)
+  self.emit("\tmov\tx11, x9")
+  self.emit_add_offset_to_x9(
+    mir_body_codegen_va_slot_advance(self.type_size(ty)),
+  )
+  self.emit_store_local("x9", offsets[binding.id], frame_size)
+  self.emit("\tmov\tx9, x11")
+}
+
+///|
 fn Codegen::gen_mir_value(
   self : Codegen,
   value : @mir.MirValue,
@@ -1385,6 +1416,8 @@ fn Codegen::gen_mir_value(
       self.emit_scalar_conversion_to(ty)
     }
     MirVaArg(ap, ty) => self.emit_mir_va_arg(ap, ty, offsets, frame_size)
+    MirVaArgAddr(ap, ty) =>
+      self.emit_mir_va_arg_addr(ap, ty, offsets, frame_size)
     MirAssignLocal(binding, rhs) => {
       self.gen_mir_value(rhs, offsets, frame_size)
       self.emit_numeric_conversion(rhs.ty(), binding.ty)
@@ -2461,6 +2494,19 @@ fn X64Codegen::collect_mir_va_list_storage_value(
     }
     MirCast(_, inner) | MirVaArg(inner, _) =>
       self.collect_mir_va_list_storage_value(inner)
+    MirVaArgAddr(inner, ty) => {
+      if x64_is_aggregate_type(ty) {
+        let size = self.type_size(ty)
+        if size > self.va_arg_scratch_size {
+          self.va_arg_scratch_size = size
+        }
+        let align = self.type_align(ty)
+        if align > self.va_arg_scratch_align {
+          self.va_arg_scratch_align = align
+        }
+      }
+      self.collect_mir_va_list_storage_value(inner)
+    }
     MirCall(name, args, _) => {
       if name == "__builtin_va_start" || name == "__builtin_va_copy" {
         match args.get(0) {
@@ -2569,6 +2615,12 @@ fn X64Codegen::mir_body_offsets(
   }
   for stmt in body.body {
     self.collect_mir_va_list_storage_stmt(stmt)
+  }
+  if self.va_arg_scratch_size > 0 {
+    self.va_arg_scratch_offset = self.alloc_local(
+      "__kimicc_mir_va_arg_scratch",
+      Aligned(Array(UChar, self.va_arg_scratch_size), self.va_arg_scratch_align),
+    )
   }
   offsets
 }
@@ -2762,6 +2814,111 @@ fn X64Codegen::emit_mir_va_arg(
 }
 
 ///|
+fn X64Codegen::emit_mir_copy_va_arg_overflow_aggregate(
+  self : X64Codegen,
+  ty : @ctype.Type,
+) -> Unit {
+  self.emit("\tmov\tr10, QWORD PTR [r11 + 8]")
+  let align = self.type_align(ty)
+  if align > 8 {
+    self.emit("\tadd\tr10, " + (align - 1).to_string())
+    self.emit("\tand\tr10, -" + align.to_string())
+  }
+  let overflow_size = x64_align_to(self.type_size(ty), 8)
+  self.emit("\tlea\trax, [r10 + " + overflow_size.to_string() + "]")
+  self.emit("\tmov\tQWORD PTR [r11 + 8], rax")
+  self.emit("\tmov\tr11, r10")
+  self.emit("\tlea\tr10, " + self.local_ref(self.va_arg_scratch_offset))
+  self.emit_copy_aggregate_from_addr(ty)
+  self.emit("\tmov\trax, r10")
+}
+
+///|
+fn X64Codegen::emit_mir_va_arg_aggregate_addr(
+  self : X64Codegen,
+  ap : @mir.MirValue,
+  ty : @ctype.Type,
+  offsets : Map[Int, Int],
+) -> Unit {
+  if self.va_arg_scratch_offset < 0 {
+    abort("x86-64 MIR backend missing aggregate va_arg scratch storage")
+  }
+  let overflow_label = self.new_label()
+  let done_label = self.new_label()
+  self.gen_mir_value(ap, offsets)
+  self.emit("\tmov\tr11, rax")
+  let classes = match self.aggregate_classes(ty) {
+    Some(classes) => classes
+    None => {
+      self.emit_mir_copy_va_arg_overflow_aggregate(ty)
+      return
+    }
+  }
+  let int_needed = x64_class_count(classes, IntClass)
+  let fp_needed = x64_class_count(classes, SseClass)
+  if int_needed > 0 {
+    let gp_limit = 48 - int_needed * 8
+    self.emit("\tmov\teax, DWORD PTR [r11]")
+    self.emit("\tcmp\teax, " + gp_limit.to_string())
+    self.emit("\tja\t" + overflow_label)
+  }
+  if fp_needed > 0 {
+    let fp_limit = 176 - fp_needed * 16
+    self.emit("\tmov\tecx, DWORD PTR [r11 + 4]")
+    self.emit("\tcmp\tecx, " + fp_limit.to_string())
+    self.emit("\tja\t" + overflow_label)
+  }
+  self.emit("\tmov\tr9, QWORD PTR [r11 + 16]")
+  if int_needed > 0 {
+    self.emit("\tmov\teax, DWORD PTR [r11]")
+  }
+  if fp_needed > 0 {
+    self.emit("\tmov\tecx, DWORD PTR [r11 + 4]")
+  }
+  self.emit("\tlea\tr10, " + self.local_ref(self.va_arg_scratch_offset))
+  let mut int_cursor = 0
+  let mut fp_cursor = 0
+  for word in 0..<classes.length() {
+    let width = self.aggregate_word_width(ty, word)
+    match classes[word] {
+      IntClass => {
+        self.emit("\tmov\tr8d, eax")
+        if int_cursor > 0 {
+          self.emit("\tadd\tr8, " + (int_cursor * 8).to_string())
+        }
+        self.emit("\tmov\trdx, QWORD PTR [r9 + r8]")
+        self.emit_store_int_bytes_to_mem_reg("rdx", "r10", word * 8, width)
+        int_cursor += 1
+      }
+      SseClass => {
+        self.emit("\tmov\tr8d, ecx")
+        if fp_cursor > 0 {
+          self.emit("\tadd\tr8, " + (fp_cursor * 16).to_string())
+        }
+        if width <= 4 {
+          self.emit("\tmovss\txmm0, DWORD PTR [r9 + r8]")
+        } else {
+          self.emit("\tmovsd\txmm0, QWORD PTR [r9 + r8]")
+        }
+        self.emit_store_sse_word_to_mem_reg("xmm0", "r10", word * 8, width)
+        fp_cursor += 1
+      }
+    }
+  }
+  if int_needed > 0 {
+    self.emit("\tadd\tDWORD PTR [r11], " + (int_needed * 8).to_string())
+  }
+  if fp_needed > 0 {
+    self.emit("\tadd\tDWORD PTR [r11 + 4], " + (fp_needed * 16).to_string())
+  }
+  self.emit("\tmov\trax, r10")
+  self.emit("\tjmp\t" + done_label)
+  self.emit(overflow_label + ":")
+  self.emit_mir_copy_va_arg_overflow_aggregate(ty)
+  self.emit(done_label + ":")
+}
+
+///|
 fn X64Codegen::emit_mir_overflow_arithmetic_builtin(
   self : X64Codegen,
   args : Array[@mir.MirValue],
@@ -2889,6 +3046,7 @@ fn X64Codegen::gen_mir_value(
       self.emit_int_conversion_to(ty)
     }
     MirVaArg(ap, ty) => self.emit_mir_va_arg(ap, ty, offsets)
+    MirVaArgAddr(ap, ty) => self.emit_mir_va_arg_aggregate_addr(ap, ty, offsets)
     MirAssignLocal(binding, rhs) => {
       self.gen_mir_value(rhs, offsets)
       self.emit_mir_numeric_conversion(rhs.ty(), binding.ty)
@@ -3878,6 +4036,8 @@ fn X64Codegen::gen_mir_func(
   self.va_initial_overflow_offset = 16
   self.sret_scratch_offset = -1
   self.va_arg_scratch_offset = -1
+  self.va_arg_scratch_size = 0
+  self.va_arg_scratch_align = 1
   self.break_label = None
   self.continue_label = None
   self.emitted_labels = {}
