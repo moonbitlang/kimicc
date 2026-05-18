@@ -965,12 +965,37 @@ test "generate darwin arm64 strict MIR floating comparisons" {
 }
 
 ///|
-test "strict MIR still rejects unsupported floating arithmetic" {
-  let source = "int main(void) { double d = 1.0; return (int)(d + 1.0); }"
+test "generate darwin arm64 strict MIR floating arithmetic" {
+  let source =
+    #|int main(void) {
+    #|  double x = 5.5;
+    #|  double y = 2.0;
+    #|  return (int)(x + y) + (int)(x - y) + (int)(x * y) + (int)(x / y) + (int)(x + 2);
+    #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
-    Ok(_) =>
-      abort("expected strict MIR unsupported floating arithmetic rejection")
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tfadd\td9, d9, d10"), content="true")
+      inspect(assembly.contains("\tfsub\td9, d9, d10"), content="true")
+      inspect(assembly.contains("\tfmul\td9, d9, d10"), content="true")
+      inspect(assembly.contains("\tfdiv\td9, d9, d10"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "strict MIR still rejects unsupported floating ABI" {
+  let source =
+    #|double id(double x) { return x; }
+    #|int main(void) {
+    #|  return (int)id(1.0);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(_) => abort("expected strict MIR unsupported floating ABI rejection")
     Err(err) =>
       inspect(err.contains("unsupported MIR body codegen"), content="true")
   }
@@ -2362,6 +2387,31 @@ test "generate linux amd64 strict MIR floating comparisons" {
       inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
       inspect(assembly.contains("\tucomisd\txmm0, xmm1"), content="true")
       inspect(assembly.contains("\tsetb\tal"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR floating arithmetic" {
+  let source =
+    #|int main(void) {
+    #|  double x = 5.5;
+    #|  double y = 2.0;
+    #|  return (int)(x + y) + (int)(x - y) + (int)(x * y) + (int)(x / y) + (int)(x + 2);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\taddsd\txmm0, xmm1"), content="true")
+      inspect(assembly.contains("\tsubsd\txmm0, xmm1"), content="true")
+      inspect(assembly.contains("\tmulsd\txmm0, xmm1"), content="true")
+      inspect(assembly.contains("\tdivsd\txmm0, xmm1"), content="true")
     }
     Err(err) => abort(err)
   }

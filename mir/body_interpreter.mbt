@@ -156,6 +156,36 @@ fn BodyInterpreter::eval_fp_compare_values(
 }
 
 ///|
+fn BodyInterpreter::eval_fp_arith_values(
+  self : BodyInterpreter,
+  op : String,
+  left : Int64,
+  left_ty : @ctype.Type,
+  right : Int64,
+  right_ty : @ctype.Type,
+) -> Int64? {
+  if self.program.core_type(left_ty) != Double &&
+    self.program.core_type(right_ty) != Double {
+    return None
+  }
+  match
+    (
+      self.program.runtime_body_double(left, left_ty),
+      self.program.runtime_body_double(right, right_ty),
+    ) {
+    (Some(left), Some(right)) =>
+      match op {
+        "+" => Some((left + right).reinterpret_as_int64())
+        "-" => Some((left - right).reinterpret_as_int64())
+        "*" => Some((left * right).reinterpret_as_int64())
+        "/" => Some((left / right).reinterpret_as_int64())
+        _ => None
+      }
+    _ => None
+  }
+}
+
+///|
 fn BodyInterpreter::new(program : Program) -> BodyInterpreter {
   let globals : Map[String, Int64] = {}
   let global_memory : Map[Int64, Int64] = {}
@@ -511,6 +541,10 @@ fn BodyInterpreter::eval_binary_values(
     None => ()
   }
   match self.eval_fp_compare_values(op, left, left_ty, right, right_ty) {
+    Some(value) => return value
+    None => ()
+  }
+  match self.eval_fp_arith_values(op, left, left_ty, right, right_ty) {
     Some(value) => return value
     None => ()
   }
