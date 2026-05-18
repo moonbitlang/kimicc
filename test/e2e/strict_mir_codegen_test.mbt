@@ -32,23 +32,6 @@ fn run_source_strict_mir(source : String) -> Int {
 }
 
 ///|
-fn strict_mir_codegen_error(source : String) -> String {
-  let target = @target.Target::default()
-  let prog = @parser.parse_for_target(source, target)
-  match @parser.validate_semantics(prog) {
-    Ok(_) => ()
-    Err(err) => abort("strict MIR semantic validation failed: " + err)
-  }
-  match
-    @mir_codegen.generate_assembly_from_mir_module_strict(
-      @mir.lower_to_module(prog, target),
-    ) {
-    Ok(_) => abort("strict MIR codegen unexpectedly succeeded")
-    Err(err) => err
-  }
-}
-
-///|
 test "strict MIR codegen executes scalar control flow and calls" {
   let source =
     #|int add(int a, int b) { return a + b; }
@@ -201,13 +184,12 @@ test "strict MIR codegen executes floating variadic libcalls" {
 }
 
 ///|
-test "strict MIR codegen rejects unsupported stack-passed floating variadic calls instead of using AST fallback" {
+test "strict MIR codegen executes stack-passed floating variadic libcalls" {
   let source =
-    #|double variadic(int tag, ...) { return 1.0; }
     #|int main(void) {
-    #|  return (int)variadic(0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0);
+    #|  char buf[32];
+    #|  int n = __builtin___snprintf_chk(buf, 32, 0, 32, "%.0f%.0f%.0f%.0f%.0f%.0f%.0f%.0f%.0f", 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0);
+    #|  return n + (buf[0] == '1') + (buf[1] == '2') + (buf[2] == '3') + (buf[3] == '4') + (buf[4] == '5') + (buf[5] == '6') + (buf[6] == '7') + (buf[7] == '8') + (buf[8] == '9');
     #|}
-  assert_true(
-    strict_mir_codegen_error(source).contains("unsupported MIR body codegen"),
-  )
+  assert_eq(run_source_strict_mir(source), 18)
 }
