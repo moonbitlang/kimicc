@@ -467,6 +467,48 @@ fn mir_body_codegen_small_aggregate_call_value_supported(
 }
 
 ///|
+fn mir_body_codegen_memory_aggregate_call_value_supported(
+  value : @mir.MirValue,
+  int_arg_limit : Int,
+  mir : @mir.MirModule,
+) -> Bool {
+  match value {
+    MirCall(name, args, ty) => {
+      if !mir_body_codegen_x64_memory_aggregate_return_type(ty, mir) ||
+        !mir_body_codegen_call_supported(name, args, ty, int_arg_limit, mir) {
+        return false
+      }
+      for arg in args {
+        if !mir_body_codegen_value_supported(arg, int_arg_limit, mir) {
+          return false
+        }
+      }
+      true
+    }
+    MirIndirectCall(callee, args, ty) => {
+      if !mir_body_codegen_x64_memory_aggregate_return_type(ty, mir) ||
+        !mir_body_codegen_value_supported(callee, int_arg_limit, mir) ||
+        !mir_body_codegen_indirect_call_supported(
+          callee.ty(),
+          args,
+          ty,
+          int_arg_limit,
+          mir,
+        ) {
+        return false
+      }
+      for arg in args {
+        if !mir_body_codegen_value_supported(arg, int_arg_limit, mir) {
+          return false
+        }
+      }
+      true
+    }
+    _ => false
+  }
+}
+
+///|
 fn mir_body_codegen_value_supported(
   value : @mir.MirValue,
   int_arg_limit : Int,
@@ -481,13 +523,19 @@ fn mir_body_codegen_value_supported(
       return aggregate &&
         mir_body_codegen_value_supported(addr, int_arg_limit, mir)
     }
-    MirCall(_, _, _) | MirIndirectCall(_, _, _) =>
+    MirCall(_, _, _) | MirIndirectCall(_, _, _) => {
       if mir_body_codegen_small_aggregate_call_value_supported(
           value, int_arg_limit, mir,
         ) {
         return true
       }
-    MirStore(ptr, rhs, ty) =>
+      if mir_body_codegen_memory_aggregate_call_value_supported(
+          value, int_arg_limit, mir,
+        ) {
+        return true
+      }
+    }
+    MirStore(ptr, rhs, ty) => {
       if mir_body_codegen_x64_small_aggregate_return_type(ty, mir) &&
         mir_body_codegen_value_supported(ptr, int_arg_limit, mir) &&
         mir_body_codegen_small_aggregate_call_value_supported(
@@ -495,6 +543,14 @@ fn mir_body_codegen_value_supported(
         ) {
         return true
       }
+      if mir_body_codegen_x64_memory_aggregate_return_type(ty, mir) &&
+        mir_body_codegen_value_supported(ptr, int_arg_limit, mir) &&
+        mir_body_codegen_memory_aggregate_call_value_supported(
+          rhs, int_arg_limit, mir,
+        ) {
+        return true
+      }
+    }
     _ => ()
   }
   if !mir_body_codegen_scalar_type(value.ty()) {
@@ -1145,7 +1201,8 @@ fn mir_body_codegen_call_supported(
   if mir_body_codegen_builtin_call_name(name) ||
     (
       !mir_body_codegen_abi_scalar_type(ret) &&
-      !mir_body_codegen_x64_small_aggregate_return_type(ret, mir)
+      !mir_body_codegen_x64_small_aggregate_return_type(ret, mir) &&
+      !mir_body_codegen_x64_memory_aggregate_return_type(ret, mir)
     ) {
     return false
   }
@@ -1156,7 +1213,8 @@ fn mir_body_codegen_call_supported(
   if (sig.defined && !mir.bodies.contains(name)) ||
     (
       !mir_body_codegen_abi_scalar_type(sig.ret) &&
-      !mir_body_codegen_x64_small_aggregate_return_type(sig.ret, mir)
+      !mir_body_codegen_x64_small_aggregate_return_type(sig.ret, mir) &&
+      !mir_body_codegen_x64_memory_aggregate_return_type(sig.ret, mir)
     ) {
     return false
   }
@@ -1214,14 +1272,16 @@ fn mir_body_codegen_indirect_call_supported(
   mir : @mir.MirModule,
 ) -> Bool {
   let ret_supported = mir_body_codegen_abi_scalar_type(ret) ||
-    mir_body_codegen_x64_small_aggregate_return_type(ret, mir)
+    mir_body_codegen_x64_small_aggregate_return_type(ret, mir) ||
+    mir_body_codegen_x64_memory_aggregate_return_type(ret, mir)
   if !ret_supported {
     return false
   }
   match peel_aligned_type(callee_ty) {
     FuncPtr(sig_ret, params, variadic) => {
       let sig_ret_supported = mir_body_codegen_abi_scalar_type(sig_ret) ||
-        mir_body_codegen_x64_small_aggregate_return_type(sig_ret, mir)
+        mir_body_codegen_x64_small_aggregate_return_type(sig_ret, mir) ||
+        mir_body_codegen_x64_memory_aggregate_return_type(sig_ret, mir)
       if variadic || params.length() != args.length() || !sig_ret_supported {
         return false
       }
@@ -1285,6 +1345,10 @@ fn mir_body_codegen_memory_aggregate_return_value_supported(
     MirAggregateArg(addr, _) =>
       mir_body_codegen_value_supported(addr, int_arg_limit, mir)
     MirLoad(ptr, _) => mir_body_codegen_value_supported(ptr, int_arg_limit, mir)
+    MirCall(_, _, _) | MirIndirectCall(_, _, _) =>
+      mir_body_codegen_memory_aggregate_call_value_supported(
+        value, int_arg_limit, mir,
+      )
     _ => false
   }
 }
@@ -2853,6 +2917,12 @@ fn X64Codegen::emit_mir_save_aggregate_call_arg_raw(
         self.emit("\tsub\trsp, " + raw_size.to_string())
         self.emit("\tmov\tr10, rsp")
         self.emit_store_small_aggregate_return(ty)
+      } else if self.is_memory_aggregate(ty) {
+        self.gen_mir_value(arg, offsets)
+        self.emit("\tsub\trsp, " + raw_size.to_string())
+        self.emit("\tmov\tr11, rax")
+        self.emit("\tmov\tr10, rsp")
+        self.emit_copy_aggregate_from_addr(ty)
       } else {
         abort("unsupported x86-64 MIR aggregate call argument")
       }
@@ -2982,6 +3052,16 @@ fn X64Codegen::collect_mir_va_list_storage_value(
       self.collect_mir_va_list_storage_value(inner)
     }
     MirCall(name, args, _) => {
+      if self.is_memory_aggregate(value.ty()) {
+        let size = self.type_size(value.ty())
+        if size > self.sret_scratch_size {
+          self.sret_scratch_size = size
+        }
+        let align = self.type_align(value.ty())
+        if align > self.sret_scratch_align {
+          self.sret_scratch_align = align
+        }
+      }
       if name == "__builtin_va_start" || name == "__builtin_va_copy" {
         match args.get(0) {
           Some(MirLocal(binding)) => {
@@ -2995,6 +3075,16 @@ fn X64Codegen::collect_mir_va_list_storage_value(
       }
     }
     MirIndirectCall(callee, args, _) => {
+      if self.is_memory_aggregate(value.ty()) {
+        let size = self.type_size(value.ty())
+        if size > self.sret_scratch_size {
+          self.sret_scratch_size = size
+        }
+        let align = self.type_align(value.ty())
+        if align > self.sret_scratch_align {
+          self.sret_scratch_align = align
+        }
+      }
       self.collect_mir_va_list_storage_value(callee)
       for arg in args {
         self.collect_mir_va_list_storage_value(arg)
@@ -3094,6 +3184,12 @@ fn X64Codegen::mir_body_offsets(
     self.va_arg_scratch_offset = self.alloc_local(
       "__kimicc_mir_va_arg_scratch",
       Aligned(Array(UChar, self.va_arg_scratch_size), self.va_arg_scratch_align),
+    )
+  }
+  if self.sret_scratch_size > 0 {
+    self.sret_scratch_offset = self.alloc_local(
+      "__kimicc_mir_sret_scratch",
+      Aligned(Array(UChar, self.sret_scratch_size), self.sret_scratch_align),
     )
   }
   offsets
@@ -3540,6 +3636,15 @@ fn X64Codegen::gen_mir_value(
             self.emit_store_small_aggregate_return(ty)
             self.emit("\tmov\trax, r10")
             self.emit("\tadd\trsp, 16")
+          } else if self.is_memory_aggregate(ty) {
+            self.gen_mir_value(ptr, offsets)
+            self.emit_mir_push_rax()
+            self.gen_mir_value(rhs, offsets)
+            self.emit("\tmov\tr11, rax")
+            self.emit("\tmov\tr10, QWORD PTR [rsp]")
+            self.emit_copy_aggregate_from_addr(ty)
+            self.emit("\tmov\trax, r10")
+            self.emit("\tadd\trsp, 16")
           } else {
             self.gen_mir_value(ptr, offsets)
             self.emit_mir_push_rax()
@@ -3733,6 +3838,7 @@ fn X64Codegen::gen_mir_value(
       let source_indexes = mir_body_codegen_direct_call_source_indexes(
         name, args,
       )
+      let has_sret = self.is_memory_aggregate(ty)
       let mut call_stack_cleanup = 0
       if self.mir_direct_call_variadic(name) {
         let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
@@ -3747,7 +3853,7 @@ fn X64Codegen::gen_mir_value(
         let arg_classes : Array[Array[X64AggregateClass]] = []
         let arg_words : Array[Int] = []
         let raw_sizes : Array[Int] = []
-        let mut int_arg_index = 0
+        let mut int_arg_index = if has_sret { 1 } else { 0 }
         let mut fp_arg_index = 0
         let mut stack_arg_index = 0
         let mut call_stack_align = 16
@@ -3963,7 +4069,7 @@ fn X64Codegen::gen_mir_value(
         let arg_classes : Array[Array[X64AggregateClass]] = []
         let arg_words : Array[Int] = []
         let raw_sizes : Array[Int] = []
-        let mut int_arg_index = 0
+        let mut int_arg_index = if has_sret { 1 } else { 0 }
         let mut fp_arg_index = 0
         let mut stack_arg_index = 0
         let mut call_stack_align = 16
@@ -4165,11 +4271,16 @@ fn X64Codegen::gen_mir_value(
           }
         }
       }
+      if has_sret {
+        self.emit_call_sret_addr(ty)
+      }
       self.emit("\tcall\t" + mir_body_codegen_direct_call_symbol(name))
       if call_stack_cleanup > 0 {
         self.emit("\tadd\trsp, " + call_stack_cleanup.to_string())
       }
       if self.is_supported_small_aggregate(ty) {
+        ()
+      } else if self.is_memory_aggregate(ty) {
         ()
       } else if !mir_body_codegen_abi_fp_type(ty) {
         self.emit_abi_int_return_conversion(ty)
@@ -4178,6 +4289,7 @@ fn X64Codegen::gen_mir_value(
     MirIndirectCall(callee, args, ty) => {
       self.gen_mir_value(callee, offsets)
       self.emit_mir_push_rax()
+      let has_sret = self.is_memory_aggregate(ty)
       let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
       let fp_arg_regs = [
         "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
@@ -4186,7 +4298,7 @@ fn X64Codegen::gen_mir_value(
       let int_arg_indexes : Array[Int] = []
       let fp_arg_indexes : Array[Int] = []
       let stack_arg_indexes : Array[Int] = []
-      let mut int_arg_index = 0
+      let mut int_arg_index = if has_sret { 1 } else { 0 }
       let mut fp_arg_index = 0
       let mut stack_arg_index = 0
       for i in 0..<args.length() {
@@ -4291,11 +4403,16 @@ fn X64Codegen::gen_mir_value(
       self.emit(
         "\tmov\tr10, QWORD PTR " + x64_rsp_ref(stack_area + args.length() * 16),
       )
+      if has_sret {
+        self.emit_call_sret_addr(ty)
+      }
       self.emit("\tcall\tr10")
       if raw_area + stack_area > 0 {
         self.emit("\tadd\trsp, " + (raw_area + stack_area).to_string())
       }
       if self.is_supported_small_aggregate(ty) {
+        ()
+      } else if self.is_memory_aggregate(ty) {
         ()
       } else if !mir_body_codegen_abi_fp_type(ty) {
         self.emit_abi_int_return_conversion(ty)
@@ -4563,6 +4680,8 @@ fn X64Codegen::gen_mir_aggregate_return_addr(
     MirLocal(binding) => self.emit_local_addr(offsets[binding.id])
     MirAggregateArg(addr, _) => self.gen_mir_value(addr, offsets)
     MirLoad(ptr, _) => self.gen_mir_value(ptr, offsets)
+    MirCall(_, _, _) | MirIndirectCall(_, _, _) =>
+      self.gen_mir_value(value, offsets)
     _ => abort("unsupported x86-64 MIR aggregate return source")
   }
 }
@@ -4596,6 +4715,14 @@ fn X64Codegen::gen_mir_stmt(
                     binding.ty,
                     offsets[binding.id],
                   )
+                } else if self.is_memory_aggregate(binding.ty) {
+                  self.gen_mir_value(value, offsets)
+                  self.emit("\tmov\tr11, rax")
+                  self.emit(
+                    "\tlea\tr10, " + self.local_ref(offsets[binding.id]),
+                  )
+                  self.emit_copy_aggregate_from_addr(binding.ty)
+                  self.emit("\tmov\trax, r10")
                 } else {
                   self.gen_mir_value(value, offsets)
                   self.emit_mir_numeric_conversion(value.ty(), binding.ty)
@@ -4804,6 +4931,8 @@ fn X64Codegen::gen_mir_func(
   self.va_initial_overflow_offset = 16
   self.sret_dest_offset = -1
   self.sret_scratch_offset = -1
+  self.sret_scratch_size = 0
+  self.sret_scratch_align = 1
   self.va_arg_scratch_offset = -1
   self.va_arg_scratch_size = 0
   self.va_arg_scratch_align = 1
