@@ -1037,6 +1037,34 @@ test "generate darwin arm64 strict MIR floating ternary conversions" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR floating compound updates" {
+  let source =
+    #|int main(void) {
+    #|  double x = 1.5;
+    #|  double y = x++;
+    #|  x += 2.5;
+    #|  x *= 2.0;
+    #|  double *p = &x;
+    #|  *p -= 1.0;
+    #|  int i = 1;
+    #|  i += 2.5;
+    #|  return (int)y + (int)x + i;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tfadd\td9, d9, d10"), content="true")
+      inspect(assembly.contains("\tfmul\td9, d9, d10"), content="true")
+      inspect(assembly.contains("\tfsub\td9, d9, d10"), content="true")
+      inspect(assembly.contains("\tfcvtzs\tx9, d9"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR floating arithmetic" {
   let source =
     #|int main(void) {
@@ -2828,6 +2856,37 @@ test "generate linux amd64 strict MIR floating ternary conversions" {
       inspect(assembly.contains("\tucomisd\txmm0, xmm1"), content="true")
       inspect(assembly.contains("\tcvtsi2sd\txmm0, rax"), content="true")
       inspect(assembly.contains("\tcvtsi2ss\txmm0, rax"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR floating compound updates" {
+  let source =
+    #|int main(void) {
+    #|  double x = 1.5;
+    #|  double y = x++;
+    #|  x += 2.5;
+    #|  x *= 2.0;
+    #|  double *p = &x;
+    #|  *p -= 1.0;
+    #|  int i = 1;
+    #|  i += 2.5;
+    #|  return (int)y + (int)x + i;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\taddsd\txmm0, xmm1"), content="true")
+      inspect(assembly.contains("\tmulsd\txmm0, xmm1"), content="true")
+      inspect(assembly.contains("\tsubsd\txmm0, xmm1"), content="true")
+      inspect(assembly.contains("\tcvttsd2si\trax, xmm0"), content="true")
     }
     Err(err) => abort(err)
   }

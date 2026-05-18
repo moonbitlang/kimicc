@@ -243,7 +243,8 @@ fn lower_mir_local_update(
 ) -> MirValue? {
   match ctx.lookup_local(name) {
     Some(binding) =>
-      if binding.ty.is_integer() {
+      if binding.ty.is_integer() ||
+        (binding.ty.is_floating() && mir_body_floating_update_op(op)) {
         Some(MirAssignLocal(binding, MirBinary(op, MirLocal(binding), rhs, ty)))
       } else {
         None
@@ -269,7 +270,8 @@ fn lower_mir_post_update(
   rhs : MirValue,
   ty : @ctype.Type,
 ) -> MirValue? {
-  if binding.ty.is_integer() {
+  if binding.ty.is_integer() ||
+    (binding.ty.is_floating() && mir_body_floating_update_op(op)) {
     Some(MirPostUpdateLocal(binding, op, rhs, ty))
   } else {
     None
@@ -288,7 +290,7 @@ fn Program::lower_mir_post_step(
     Some(binding) => lower_mir_post_update(binding, op, MirConst(1L, SInt), ty)
     None => {
       let lhs_ty = self.expr_type(expr, ctx.scope())
-      if !lhs_ty.is_integer() {
+      if !lhs_ty.is_integer() && !lhs_ty.is_floating() {
         return None
       }
       match self.lower_mir_scalar_lvalue_addr(expr, lhs_ty, ctx) {
@@ -325,6 +327,14 @@ fn mir_body_reusable_scalar_lvalue(expr : @parser.Expr) -> Bool {
 fn mir_body_memory_update_op(op : String) -> Bool {
   match op {
     "+" | "-" | "*" | "/" | "%" | "|" | "&" | "^" | "<<" | ">>" => true
+    _ => false
+  }
+}
+
+///|
+fn mir_body_floating_update_op(op : String) -> Bool {
+  match op {
+    "+" | "-" | "*" | "/" => true
     _ => false
   }
 }
@@ -1038,12 +1048,14 @@ fn Program::lower_mir_compound_memory_update(
   result_ty : @ctype.Type,
   ctx : BodyLowerContext,
 ) -> MirValue? {
-  if !lhs_ty.is_integer() {
+  if !lhs_ty.is_integer() &&
+    !(lhs_ty.is_floating() && mir_body_floating_update_op(op)) {
     return None
   }
   match self.lower_mir_scalar_lvalue_addr(lhs, lhs_ty, ctx) {
     Some(addr) =>
-      if mir_body_memory_update_op(op) {
+      if mir_body_memory_update_op(op) ||
+        (lhs_ty.is_floating() && mir_body_floating_update_op(op)) {
         Some(MirPreUpdateMemory(addr, op, value, lhs_ty))
       } else if mir_body_reusable_scalar_lvalue(lhs) {
         Some(
@@ -1072,7 +1084,7 @@ fn Program::lower_mir_prefix_step(
     Some(binding) => lower_mir_local_step(binding.name, op, ty, ctx)
     None => {
       let lhs_ty = self.expr_type(expr, ctx.scope())
-      if !lhs_ty.is_integer() {
+      if !lhs_ty.is_integer() && !lhs_ty.is_floating() {
         return None
       }
       match self.lower_mir_scalar_lvalue_addr(expr, lhs_ty, ctx) {
