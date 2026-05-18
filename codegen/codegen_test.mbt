@@ -1015,6 +1015,28 @@ test "generate darwin arm64 strict MIR floating comparisons" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR floating ternary conversions" {
+  let source =
+    #|int main(void) {
+    #|  double c = 1.0;
+    #|  double d = c ? 3 : 2.5;
+    #|  float f = c ? (float)1.25 : 4;
+    #|  return (int)d + (int)f;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tfcmp\td9, #0.0"), content="true")
+      inspect(assembly.contains("\tscvtf\td9, x9"), content="true")
+      inspect(assembly.contains("\tscvtf\ts9, x9"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR floating arithmetic" {
   let source =
     #|int main(void) {
@@ -2781,6 +2803,31 @@ test "generate linux amd64 strict MIR floating comparisons" {
       inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
       inspect(assembly.contains("\tucomisd\txmm0, xmm1"), content="true")
       inspect(assembly.contains("\tsetb\tal"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR floating ternary conversions" {
+  let source =
+    #|int main(void) {
+    #|  double c = 1.0;
+    #|  double d = c ? 3 : 2.5;
+    #|  float f = c ? (float)1.25 : 4;
+    #|  return (int)d + (int)f;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tucomisd\txmm0, xmm1"), content="true")
+      inspect(assembly.contains("\tcvtsi2sd\txmm0, rax"), content="true")
+      inspect(assembly.contains("\tcvtsi2ss\txmm0, rax"), content="true")
     }
     Err(err) => abort(err)
   }
