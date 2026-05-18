@@ -613,10 +613,16 @@ fn mir_body_codegen_value_supported(
     MirLoad(ptr, ty) =>
       mir_body_codegen_scalar_type(ty) &&
       mir_body_codegen_value_supported(ptr, int_arg_limit, mir)
-    MirUnary(_, inner, ty) =>
+    MirUnary(op, inner, ty) =>
       mir_body_codegen_scalar_type(ty) &&
-      !mir_body_codegen_floating_type(ty) &&
-      !mir_body_codegen_floating_type(inner.ty()) &&
+      (if mir_body_codegen_floating_type(ty) ||
+        mir_body_codegen_floating_type(inner.ty()) {
+        (op == "+" || op == "-") &&
+        mir_body_codegen_floating_type(ty) &&
+        mir_body_codegen_floating_type(inner.ty())
+      } else {
+        true
+      }) &&
       mir_body_codegen_value_supported(inner, int_arg_limit, mir)
     MirBinary(op, lhs, rhs, ty) => {
       if !mir_body_codegen_scalar_type(ty) {
@@ -2596,7 +2602,30 @@ fn Codegen::gen_mir_value(
       self.gen_mir_value(inner, offsets, frame_size)
       match op {
         "+" => ()
-        "-" => self.emit("\tneg\tx9, x9")
+        "-" =>
+          if mir_body_codegen_floating_type(ty) {
+            self.emit_numeric_conversion(inner.ty(), ty)
+            self.emit(
+              "\tfmov\t" +
+              mir_body_codegen_arm_fp_reg(ty, 9) +
+              ", " +
+              mir_body_codegen_arm_fp_bits_reg(ty, "x9"),
+            )
+            self.emit(
+              "\tfneg\t" +
+              mir_body_codegen_arm_fp_reg(ty, 9) +
+              ", " +
+              mir_body_codegen_arm_fp_reg(ty, 9),
+            )
+            self.emit(
+              "\tfmov\t" +
+              mir_body_codegen_arm_fp_bits_reg(ty, "x9") +
+              ", " +
+              mir_body_codegen_arm_fp_reg(ty, 9),
+            )
+          } else {
+            self.emit("\tneg\tx9, x9")
+          }
         "!" => {
           self.emit("\tcmp\tx9, #0")
           self.emit("\tcset\tx9, eq")
@@ -4856,7 +4885,24 @@ fn X64Codegen::gen_mir_value(
       self.gen_mir_value(inner, offsets)
       match op {
         "+" => ()
-        "-" => self.emit("\tneg\trax")
+        "-" =>
+          if x64_is_fp_type(ty) {
+            self.emit_mir_numeric_conversion(inner.ty(), ty)
+            match x64_core_type(ty) {
+              Float => {
+                self.emit("\tmov\teax, -2147483648")
+                self.emit("\tmovd\txmm1, eax")
+                self.emit("\txorps\txmm0, xmm1")
+              }
+              _ => {
+                self.emit("\tmovabs\trax, -9223372036854775808")
+                self.emit("\tmovq\txmm1, rax")
+                self.emit("\txorpd\txmm0, xmm1")
+              }
+            }
+          } else {
+            self.emit("\tneg\trax")
+          }
         "!" => {
           self.emit("\tcmp\trax, 0")
           self.emit_setcc("sete")

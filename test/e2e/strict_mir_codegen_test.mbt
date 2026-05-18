@@ -819,6 +819,21 @@ test "strict MIR codegen executes float local arithmetic" {
 }
 
 ///|
+test "strict MIR codegen executes floating unary operators" {
+  let source =
+    #|int main(void) {
+    #|  double d = 3.5;
+    #|  float f = (float)2.25;
+    #|  if ((int)(-d) != -3) return 1;
+    #|  if ((int)(-f) != -2) return 2;
+    #|  if ((int)(+d) != 3) return 3;
+    #|  if ((int)(+f) != 2) return 4;
+    #|  return 37;
+    #|}
+  assert_eq(run_source_strict_mir(source), 37)
+}
+
+///|
 test "strict MIR codegen executes floating direct calls" {
   let source =
     #|double add(double x, double y) { return x + y; }

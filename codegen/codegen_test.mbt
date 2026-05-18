@@ -1037,6 +1037,26 @@ test "generate darwin arm64 strict MIR floating arithmetic" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR floating unary operators" {
+  let source =
+    #|int main(void) {
+    #|  double d = 3.5;
+    #|  float f = (float)2.25;
+    #|  return (int)(+d) + (int)(+f) + (int)(-d) + (int)(-f);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tfneg\td9, d9"), content="true")
+      inspect(assembly.contains("\tfneg\ts9, s9"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR float arithmetic" {
   let source =
     #|int main(void) {
@@ -2811,6 +2831,29 @@ test "generate linux amd64 strict MIR float arithmetic" {
       inspect(assembly.contains("\tsubss\txmm0, xmm1"), content="true")
       inspect(assembly.contains("\tmulss\txmm0, xmm1"), content="true")
       inspect(assembly.contains("\tdivss\txmm0, xmm1"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR floating unary operators" {
+  let source =
+    #|int main(void) {
+    #|  double d = 3.5;
+    #|  float f = (float)2.25;
+    #|  return (int)(+d) + (int)(+f) + (int)(-d) + (int)(-f);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\txorpd\txmm0, xmm1"), content="true")
+      inspect(assembly.contains("\txorps\txmm0, xmm1"), content="true")
     }
     Err(err) => abort(err)
   }
