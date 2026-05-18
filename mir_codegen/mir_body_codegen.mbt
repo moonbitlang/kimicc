@@ -175,16 +175,17 @@ fn mir_body_codegen_x64_variadic_args_supported(
       match peel_aligned_type(param) {
         Struct(_) | Union(_) =>
           if i >= named_count {
-            let classes = match codegen.aggregate_classes(param) {
-              Some(classes) => classes
-              None => return false
-            }
-            let int_needed = x64_class_count(classes, IntClass)
-            let fp_needed = x64_class_count(classes, SseClass)
-            if int_count + int_needed <= int_arg_limit &&
-              fp_count + fp_needed <= 8 {
-              int_count += int_needed
-              fp_count += fp_needed
+            match codegen.aggregate_classes(param) {
+              Some(classes) => {
+                let int_needed = x64_class_count(classes, IntClass)
+                let fp_needed = x64_class_count(classes, SseClass)
+                if int_count + int_needed <= int_arg_limit &&
+                  fp_count + fp_needed <= 8 {
+                  int_count += int_needed
+                  fp_count += fp_needed
+                }
+              }
+              None => ()
             }
           } else {
             return false
@@ -2624,6 +2625,20 @@ fn X64Codegen::emit_mir_push_xmm0(self : X64Codegen, ty : @ctype.Type) -> Unit {
 }
 
 ///|
+fn mir_body_codegen_raw_arg_offset(
+  raw_sizes : Array[Int],
+  index : Int,
+  stack_area : Int,
+) -> Int {
+  let mut offset = stack_area
+  let start = index + 1
+  for i in start..<raw_sizes.length() {
+    offset += raw_sizes[i]
+  }
+  offset
+}
+
+///|
 fn X64Codegen::emit_mir_pop_rax(self : X64Codegen) -> Unit {
   self.emit("\tmov\trax, QWORD PTR [rsp]")
   self.emit("\tadd\trsp, 16")
@@ -3416,6 +3431,7 @@ fn X64Codegen::gen_mir_value(
         let arg_is_aggregate : Array[Bool] = []
         let arg_classes : Array[Array[X64AggregateClass]] = []
         let arg_words : Array[Int] = []
+        let raw_sizes : Array[Int] = []
         let mut int_arg_index = 0
         let mut fp_arg_index = 0
         let mut stack_arg_index = 0
@@ -3428,6 +3444,7 @@ fn X64Codegen::gen_mir_value(
             arg_is_aggregate.push(false)
             arg_classes.push([])
             arg_words.push(1)
+            raw_sizes.push(16)
             int_arg_indexes.push(-1)
             if fp_arg_index < fp_arg_regs.length() {
               fp_arg_indexes.push(fp_arg_index)
@@ -3445,16 +3462,22 @@ fn X64Codegen::gen_mir_value(
             peel_aligned_type(expected) is Union(_) {
             let classes = match self.aggregate_classes(expected) {
               Some(classes) => classes
-              None =>
-                abort("unsupported x86-64 MIR aggregate variadic call argument")
+              None => []
             }
-            let words = classes.length()
+            let words = if classes.length() > 0 {
+              classes.length()
+            } else {
+              self.aggregate_word_count(expected)
+            }
+            let raw_size = if classes.length() > 0 { 16 } else { words * 8 }
             let int_needed = x64_class_count(classes, IntClass)
             let fp_needed = x64_class_count(classes, SseClass)
             arg_is_aggregate.push(true)
             arg_classes.push(classes)
             arg_words.push(words)
-            if int_arg_index + int_needed <= arg_regs.length() &&
+            raw_sizes.push(raw_size)
+            if classes.length() > 0 &&
+              int_arg_index + int_needed <= arg_regs.length() &&
               fp_arg_index + fp_needed <= fp_arg_regs.length() {
               int_arg_indexes.push(int_arg_index)
               fp_arg_indexes.push(fp_arg_index)
@@ -3473,7 +3496,7 @@ fn X64Codegen::gen_mir_value(
               stack_arg_index += words
             }
             self.gen_mir_value(arg, offsets)
-            self.emit("\tsub\trsp, 16")
+            self.emit("\tsub\trsp, " + raw_size.to_string())
             self.emit("\tmov\tr11, rax")
             self.emit("\tmov\tr10, rsp")
             self.emit_copy_aggregate_from_addr(expected)
@@ -3481,6 +3504,7 @@ fn X64Codegen::gen_mir_value(
             arg_is_aggregate.push(false)
             arg_classes.push([])
             arg_words.push(1)
+            raw_sizes.push(16)
             if int_arg_index < arg_regs.length() {
               int_arg_indexes.push(int_arg_index)
               stack_arg_indexes.push(-1)
@@ -3496,7 +3520,10 @@ fn X64Codegen::gen_mir_value(
             self.emit_mir_push_rax()
           }
         }
-        let raw_area = source_indexes.length() * 16
+        let mut raw_area = 0
+        for size in raw_sizes {
+          raw_area += size
+        }
         let stack_area = x64_align_to(stack_arg_index * 8, call_stack_align)
         if stack_area > 0 {
           self.emit("\tsub\trsp, " + stack_area.to_string())
@@ -3504,7 +3531,9 @@ fn X64Codegen::gen_mir_value(
         call_stack_cleanup = raw_area + stack_area
         for i in 0..<source_indexes.length() {
           if stack_arg_indexes[i] >= 0 {
-            let raw_offset = stack_area + (source_indexes.length() - 1 - i) * 16
+            let raw_offset = mir_body_codegen_raw_arg_offset(
+              raw_sizes, i, stack_area,
+            )
             if arg_is_aggregate[i] {
               let stack_offset = stack_arg_indexes[i] * 8
               for word in 0..<arg_words[i] {
@@ -3553,7 +3582,9 @@ fn X64Codegen::gen_mir_value(
           }
         }
         for i in 0..<source_indexes.length() {
-          let raw_offset = stack_area + (source_indexes.length() - 1 - i) * 16
+          let raw_offset = mir_body_codegen_raw_arg_offset(
+            raw_sizes, i, stack_area,
+          )
           if mir_body_codegen_abi_fp_type(expected_types[i]) {
             if fp_arg_indexes[i] >= 0 {
               let suffix = x64_fp_suffix(expected_types[i])

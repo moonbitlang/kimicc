@@ -3227,10 +3227,11 @@ test "generate linux amd64 strict MIR aggregate va_arg reads" {
 }
 
 ///|
-test "generate linux amd64 strict MIR aggregate variadic call argument" {
+test "generate linux amd64 strict MIR aggregate variadic call arguments" {
   let source =
     #|typedef __builtin_va_list va_list;
     #|struct Pair { long a; long b; };
+    #|struct Big { long a; long b; long c; };
     #|int read_pair(int tag, ...) {
     #|  va_list ap;
     #|  __builtin_va_start(ap, tag);
@@ -3238,9 +3239,17 @@ test "generate linux amd64 strict MIR aggregate variadic call argument" {
     #|  __builtin_va_end(ap);
     #|  return tag + (int)p.a + (int)p.b;
     #|}
+    #|int read_big(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  struct Big p = __builtin_va_arg(ap, struct Big);
+    #|  __builtin_va_end(ap);
+    #|  return tag + (int)p.a + (int)p.b + (int)p.c;
+    #|}
     #|int main(void) {
     #|  struct Pair p = {10, 20};
-    #|  return read_pair(4, p);
+    #|  struct Big b = {1, 2, 3};
+    #|  return read_pair(4, p) + read_big(5, b);
     #|}
   let target = match @target.Target::parse("linux-amd64") {
     Some(target) => target
@@ -3251,6 +3260,7 @@ test "generate linux amd64 strict MIR aggregate variadic call argument" {
     Ok(assembly) => {
       inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
       inspect(assembly.contains("\tcall\tread_pair"), content="true")
+      inspect(assembly.contains("\tcall\tread_big"), content="true")
       inspect(assembly.contains("\tmov\trsi, QWORD PTR "), content="true")
       inspect(assembly.contains("\tmov\trdx, QWORD PTR "), content="true")
       inspect(assembly.contains("__builtin_va_arg"), content="false")
