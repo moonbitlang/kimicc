@@ -229,6 +229,8 @@ strict_mir_return_args_source_path="/tmp/kimicc-linux-amd64-strict-mir-return-ar
 strict_mir_return_args_binary_path="/tmp/kimicc-linux-amd64-strict-mir-return-args"
 strict_mir_indirect_returns_source_path="/tmp/kimicc-linux-amd64-strict-mir-indirect-returns.c"
 strict_mir_indirect_returns_binary_path="/tmp/kimicc-linux-amd64-strict-mir-indirect-returns"
+strict_mir_indirect_arg_source_path="/tmp/kimicc-linux-amd64-strict-mir-indirect-aggregate-args.c"
+strict_mir_indirect_arg_binary_path="/tmp/kimicc-linux-amd64-strict-mir-indirect-aggregate-args"
 strict_mir_memory_returns_source_path="/tmp/kimicc-linux-amd64-strict-mir-memory-returns.c"
 strict_mir_memory_returns_driver_path="/tmp/kimicc-linux-amd64-strict-mir-memory-returns-driver.c"
 strict_mir_memory_returns_object_path="/tmp/kimicc-linux-amd64-strict-mir-memory-returns.o"
@@ -3621,6 +3623,75 @@ status=$?
 set -e
 if [ "$status" -ne 93 ]; then
   echo "expected strict MIR indirect aggregate returns smoke binary to exit 93, got $status" >&2
+  exit 1
+fi
+
+cat > "$strict_mir_indirect_arg_source_path" <<'C'
+struct Pair {
+  long a;
+  long b;
+};
+
+struct DPair {
+  double a;
+  double b;
+};
+
+struct Mix {
+  long a;
+  double b;
+};
+
+struct Big {
+  long a;
+  long b;
+  long c;
+};
+
+int pair_sum(struct Pair p) { return (int)(p.a + p.b); }
+
+int pair_tail(int a, int b, int c, int d, int e, int f, struct Pair p) {
+  return (int)(p.a + p.b);
+}
+
+int dpair_sum(struct DPair p) { return (int)(p.a + p.b); }
+
+int mix_sum(struct Mix p) { return (int)(p.a + p.b); }
+
+int big_sum(struct Big p) { return (int)(p.a + p.b + p.c); }
+
+struct Big combine_big(struct Big b, struct Pair p) {
+  struct Big out;
+  out.a = b.a + p.a;
+  out.b = b.b + p.b;
+  out.c = b.c + p.a + p.b;
+  return out;
+}
+
+int main(void) {
+  struct Pair p = {10, 20};
+  struct DPair d = {19.5, 22.5};
+  struct Mix m = {5, 6.5};
+  struct Big b = {1, 2, 3};
+  int (*fp)(struct Pair) = pair_sum;
+  int (*ft)(int, int, int, int, int, int, struct Pair) = pair_tail;
+  int (*fd)(struct DPair) = dpair_sum;
+  int (*fm)(struct Mix) = mix_sum;
+  int (*fb)(struct Big) = big_sum;
+  struct Big (*fg)(struct Big, struct Pair) = combine_big;
+  struct Big out = fg(b, p);
+  return fp(p) + ft(1, 2, 3, 4, 5, 6, p) + fd(d) + fm(m) + fb(b) + big_sum(out);
+}
+C
+
+"$kimicc" --strict-mir-codegen -target linux-amd64 \
+  -o "$strict_mir_indirect_arg_binary_path" "$strict_mir_indirect_arg_source_path"
+set +e
+"$strict_mir_indirect_arg_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 185 ]; then
+  echo "expected strict MIR indirect aggregate args smoke binary to exit 185, got $status" >&2
   exit 1
 fi
 
