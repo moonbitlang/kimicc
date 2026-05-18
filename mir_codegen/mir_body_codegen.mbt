@@ -152,6 +152,15 @@ fn mir_body_codegen_x64_memory_aggregate_return_type(
 }
 
 ///|
+fn mir_body_codegen_register_aggregate_return_type(
+  ty : @ctype.Type,
+  mir : @mir.MirModule,
+) -> Bool {
+  mir_body_codegen_x64_small_aggregate_return_type(ty, mir) ||
+  mir_body_codegen_darwin_hfa_return_type(ty, mir)
+}
+
+///|
 fn mir_body_codegen_variadic_args_supported(
   params : Array[@ctype.Type],
   named_count : Int,
@@ -443,14 +452,14 @@ fn mir_body_codegen_pointer_operand_supported(
 }
 
 ///|
-fn mir_body_codegen_small_aggregate_call_value_supported(
+fn mir_body_codegen_register_aggregate_call_value_supported(
   value : @mir.MirValue,
   int_arg_limit : Int,
   mir : @mir.MirModule,
 ) -> Bool {
   match value {
     MirCall(name, args, ty) => {
-      if !mir_body_codegen_x64_small_aggregate_return_type(ty, mir) ||
+      if !mir_body_codegen_register_aggregate_return_type(ty, mir) ||
         !mir_body_codegen_call_supported(name, args, ty, int_arg_limit, mir) {
         return false
       }
@@ -462,7 +471,7 @@ fn mir_body_codegen_small_aggregate_call_value_supported(
       true
     }
     MirIndirectCall(callee, args, ty) => {
-      if !mir_body_codegen_x64_small_aggregate_return_type(ty, mir) ||
+      if !mir_body_codegen_register_aggregate_return_type(ty, mir) ||
         !mir_body_codegen_value_supported(callee, int_arg_limit, mir) ||
         !mir_body_codegen_indirect_call_supported(
           callee.ty(),
@@ -542,7 +551,7 @@ fn mir_body_codegen_value_supported(
         mir_body_codegen_value_supported(addr, int_arg_limit, mir)
     }
     MirCall(_, _, _) | MirIndirectCall(_, _, _) => {
-      if mir_body_codegen_small_aggregate_call_value_supported(
+      if mir_body_codegen_register_aggregate_call_value_supported(
           value, int_arg_limit, mir,
         ) {
         return true
@@ -554,7 +563,7 @@ fn mir_body_codegen_value_supported(
       }
     }
     MirStore(ptr, rhs, ty) => {
-      if mir_body_codegen_x64_small_aggregate_return_type(ty, mir) &&
+      if mir_body_codegen_register_aggregate_return_type(ty, mir) &&
         mir_body_codegen_value_supported(ptr, int_arg_limit, mir) &&
         mir_body_codegen_aggregate_return_value_supported(
           rhs, int_arg_limit, mir,
@@ -1219,7 +1228,7 @@ fn mir_body_codegen_call_supported(
   if mir_body_codegen_builtin_call_name(name) ||
     (
       !mir_body_codegen_abi_scalar_type(ret) &&
-      !mir_body_codegen_x64_small_aggregate_return_type(ret, mir) &&
+      !mir_body_codegen_register_aggregate_return_type(ret, mir) &&
       !mir_body_codegen_x64_memory_aggregate_return_type(ret, mir)
     ) {
     return false
@@ -1231,7 +1240,7 @@ fn mir_body_codegen_call_supported(
   if (sig.defined && !mir.bodies.contains(name)) ||
     (
       !mir_body_codegen_abi_scalar_type(sig.ret) &&
-      !mir_body_codegen_x64_small_aggregate_return_type(sig.ret, mir) &&
+      !mir_body_codegen_register_aggregate_return_type(sig.ret, mir) &&
       !mir_body_codegen_x64_memory_aggregate_return_type(sig.ret, mir)
     ) {
     return false
@@ -1291,7 +1300,7 @@ fn mir_body_codegen_indirect_call_supported(
 ) -> Bool {
   ignore(int_arg_limit)
   let ret_supported = mir_body_codegen_abi_scalar_type(ret) ||
-    mir_body_codegen_x64_small_aggregate_return_type(ret, mir) ||
+    mir_body_codegen_register_aggregate_return_type(ret, mir) ||
     mir_body_codegen_x64_memory_aggregate_return_type(ret, mir)
   if !ret_supported {
     return false
@@ -1299,7 +1308,7 @@ fn mir_body_codegen_indirect_call_supported(
   match peel_aligned_type(callee_ty) {
     FuncPtr(sig_ret, params, variadic) => {
       let sig_ret_supported = mir_body_codegen_abi_scalar_type(sig_ret) ||
-        mir_body_codegen_x64_small_aggregate_return_type(sig_ret, mir) ||
+        mir_body_codegen_register_aggregate_return_type(sig_ret, mir) ||
         mir_body_codegen_x64_memory_aggregate_return_type(sig_ret, mir)
       if variadic || params.length() != args.length() || !sig_ret_supported {
         return false
@@ -1337,7 +1346,7 @@ fn mir_body_codegen_aggregate_return_value_supported(
   int_arg_limit : Int,
   mir : @mir.MirModule,
 ) -> Bool {
-  if !mir_body_codegen_x64_small_aggregate_return_type(value.ty(), mir) {
+  if !mir_body_codegen_register_aggregate_return_type(value.ty(), mir) {
     return false
   }
   match value {
@@ -1346,7 +1355,7 @@ fn mir_body_codegen_aggregate_return_value_supported(
       mir_body_codegen_value_supported(addr, int_arg_limit, mir)
     MirLoad(ptr, _) => mir_body_codegen_value_supported(ptr, int_arg_limit, mir)
     MirCall(_, _, _) | MirIndirectCall(_, _, _) =>
-      mir_body_codegen_small_aggregate_call_value_supported(
+      mir_body_codegen_register_aggregate_call_value_supported(
         value, int_arg_limit, mir,
       )
     _ => false
@@ -1385,7 +1394,7 @@ fn mir_body_codegen_return_value_supported(
   if mir_body_codegen_abi_scalar_type(ret) {
     return mir_body_codegen_value_supported(value, int_arg_limit, mir)
   }
-  if mir_body_codegen_x64_small_aggregate_return_type(ret, mir) {
+  if mir_body_codegen_register_aggregate_return_type(ret, mir) {
     return mir_body_codegen_aggregate_return_value_supported(
       value, int_arg_limit, mir,
     )
@@ -1491,7 +1500,7 @@ fn mir_body_codegen_func_supported(
 ) -> Bool {
   ignore(variadic)
   if !mir_body_codegen_abi_scalar_type(body.ret) &&
-    !mir_body_codegen_x64_small_aggregate_return_type(body.ret, mir) &&
+    !mir_body_codegen_register_aggregate_return_type(body.ret, mir) &&
     !mir_body_codegen_x64_memory_aggregate_return_type(body.ret, mir) {
     return false
   }
@@ -1979,7 +1988,140 @@ fn Codegen::darwin_hfa_parts(
 
 ///|
 fn Codegen::is_hfa_aggregate(self : Codegen, ty : @ctype.Type) -> Bool {
-  self.darwin_hfa_parts(ty) is Some(_)
+  match peel_aligned_type(ty) {
+    Struct(_) | Union(_) => self.darwin_hfa_parts(ty) is Some(_)
+    _ => false
+  }
+}
+
+///|
+fn Codegen::darwin_hfa_member_offsets(
+  self : Codegen,
+  ty : @ctype.Type,
+  base_offset : Int,
+) -> (@ctype.Type, Array[Int])? {
+  match peel_aligned_type(ty) {
+    Float => {
+      let offsets : Array[Int] = []
+      offsets.push(base_offset)
+      Some((@ctype.Type::Float, offsets))
+    }
+    Double | LongDouble => {
+      let offsets : Array[Int] = []
+      offsets.push(base_offset)
+      Some((@ctype.Type::Double, offsets))
+    }
+    Array(elem, len) => {
+      let (base, elem_offsets) = match
+        self.darwin_hfa_member_offsets(elem, base_offset) {
+        Some(parts) => parts
+        None => return None
+      }
+      let offsets : Array[Int] = []
+      let elem_size = self.type_size(elem)
+      for i in 0..<len {
+        for offset in elem_offsets {
+          offsets.push(offset + i * elem_size)
+        }
+      }
+      if offsets.length() > 0 && offsets.length() <= 4 {
+        Some((base, offsets))
+      } else {
+        None
+      }
+    }
+    Struct(name) | Union(name) => {
+      let layout = match self.mir_aggregate_layout(name) {
+        Some(layout) => layout
+        None => return None
+      }
+      if layout.fields.length() == 0 {
+        return None
+      }
+      let offsets : Array[Int] = []
+      let mut union_offsets : Array[Int] = []
+      let mut fp_ty : @ctype.Type? = None
+      for field in layout.fields {
+        if field.bit_width is Some(_) {
+          return None
+        }
+        let field_offset = if layout.is_union {
+          base_offset
+        } else {
+          base_offset + field.offset
+        }
+        let (field_base, field_offsets) = match
+          self.darwin_hfa_member_offsets(field.ty, field_offset) {
+          Some(parts) => parts
+          None => return None
+        }
+        match fp_ty {
+          Some(seen) => if seen != field_base { return None }
+          None => fp_ty = Some(field_base)
+        }
+        if layout.is_union {
+          if field_offsets.length() > union_offsets.length() {
+            union_offsets = field_offsets
+          }
+        } else {
+          for offset in field_offsets {
+            offsets.push(offset)
+          }
+        }
+      }
+      let result_offsets = if layout.is_union { union_offsets } else { offsets }
+      match fp_ty {
+        Some(base) =>
+          if result_offsets.length() > 0 && result_offsets.length() <= 4 {
+            Some((base, result_offsets))
+          } else {
+            None
+          }
+        None => None
+      }
+    }
+    Atomic(inner) | Aligned(inner, _) =>
+      self.darwin_hfa_member_offsets(inner, base_offset)
+    _ => None
+  }
+}
+
+///|
+fn Codegen::emit_load_hfa_aggregate_return_from_x9(
+  self : Codegen,
+  ty : @ctype.Type,
+) -> Unit {
+  let (base, offsets) = match self.darwin_hfa_member_offsets(ty, 0) {
+    Some(parts) => parts
+    None => abort("unsupported Darwin ARM64 HFA aggregate return load")
+  }
+  for i in 0..<offsets.length() {
+    self.emit(
+      "\tldr\t" +
+      mir_body_codegen_arm_fp_reg(base, i) +
+      ", " +
+      mir_body_codegen_arm_addr_ref("x9", offsets[i]),
+    )
+  }
+}
+
+///|
+fn Codegen::emit_store_hfa_aggregate_return_to_x9(
+  self : Codegen,
+  ty : @ctype.Type,
+) -> Unit {
+  let (base, offsets) = match self.darwin_hfa_member_offsets(ty, 0) {
+    Some(parts) => parts
+    None => abort("unsupported Darwin ARM64 HFA aggregate return store")
+  }
+  for i in 0..<offsets.length() {
+    self.emit(
+      "\tstr\t" +
+      mir_body_codegen_arm_fp_reg(base, i) +
+      ", " +
+      mir_body_codegen_arm_addr_ref("x9", offsets[i]),
+    )
+  }
 }
 
 ///|
@@ -2278,7 +2420,20 @@ fn Codegen::gen_mir_value(
       self.emit_store_local("x9", offsets[binding.id], frame_size)
     }
     MirStore(ptr, rhs, ty) =>
-      if self.is_register_aggregate(ty) {
+      if self.is_hfa_aggregate(ty) {
+        self.gen_mir_value(ptr, offsets, frame_size)
+        self.emit("\tstr\tx9, [sp, #-16]!")
+        match rhs {
+          MirCall(_, _, _) | MirIndirectCall(_, _, _) =>
+            self.gen_mir_value(rhs, offsets, frame_size)
+          _ => {
+            self.gen_mir_aggregate_return_addr(rhs, offsets, frame_size)
+            self.emit_load_hfa_aggregate_return_from_x9(ty)
+          }
+        }
+        self.emit("\tldr\tx9, [sp], #16")
+        self.emit_store_hfa_aggregate_return_to_x9(ty)
+      } else if self.is_register_aggregate(ty) {
         self.gen_mir_value(ptr, offsets, frame_size)
         self.emit("\tstr\tx9, [sp, #-16]!")
         match rhs {
@@ -2666,6 +2821,8 @@ fn Codegen::gen_mir_value(
       }
       if self.is_memory_aggregate(ty) {
         self.emit_sret_result_addr(ty, frame_size)
+      } else if self.is_hfa_aggregate(ty) {
+        ()
       } else if mir_body_codegen_abi_fp_type(ty) {
         self.emit_mir_fp_return_to_x9(ty)
       } else {
@@ -2758,6 +2915,8 @@ fn Codegen::gen_mir_value(
       }
       if self.is_memory_aggregate(ty) {
         self.emit_sret_result_addr(ty, frame_size)
+      } else if self.is_hfa_aggregate(ty) {
+        ()
       } else if mir_body_codegen_abi_fp_type(ty) {
         self.emit_mir_fp_return_to_x9(ty)
       } else {
@@ -3079,7 +3238,18 @@ fn Codegen::gen_mir_stmt(
       if mir_body_codegen_local_type(binding.ty) {
         match init {
           Some(value) =>
-            if self.is_register_aggregate(binding.ty) {
+            if self.is_hfa_aggregate(binding.ty) {
+              match value {
+                MirCall(_, _, _) | MirIndirectCall(_, _, _) =>
+                  self.gen_mir_value(value, offsets, frame_size)
+                _ => {
+                  self.gen_mir_aggregate_return_addr(value, offsets, frame_size)
+                  self.emit_load_hfa_aggregate_return_from_x9(binding.ty)
+                }
+              }
+              self.emit_local_addr(offsets[binding.id], frame_size)
+              self.emit_store_hfa_aggregate_return_to_x9(binding.ty)
+            } else if self.is_register_aggregate(binding.ty) {
               match value {
                 MirCall(_, _, _) | MirIndirectCall(_, _, _) =>
                   self.gen_mir_value(value, offsets, frame_size)
@@ -3125,7 +3295,16 @@ fn Codegen::gen_mir_stmt(
       match value {
         Some(value) => {
           let ret_ty = self.func_rets[self.func_name]
-          if self.is_register_aggregate(ret_ty) {
+          if self.is_hfa_aggregate(ret_ty) {
+            match value {
+              MirCall(_, _, _) | MirIndirectCall(_, _, _) =>
+                self.gen_mir_value(value, offsets, frame_size)
+              _ => {
+                self.gen_mir_aggregate_return_addr(value, offsets, frame_size)
+                self.emit_load_hfa_aggregate_return_from_x9(ret_ty)
+              }
+            }
+          } else if self.is_register_aggregate(ret_ty) {
             match value {
               MirCall(_, _, _) | MirIndirectCall(_, _, _) =>
                 self.gen_mir_value(value, offsets, frame_size)
