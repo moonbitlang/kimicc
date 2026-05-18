@@ -11,11 +11,14 @@ pub(all) struct MirLocal {
 } derive(Eq)
 
 ///|
-/// Integer/scalar MIR value expression.
+/// Scalar MIR value expression.
 ///
 /// This is intentionally smaller than the parser AST. Unsupported source
 /// expressions simply keep the containing function out of `Program.bodies`
 /// until the MIR layer learns that feature.
+///
+/// `MirConst` stores integer values as integer bits and floating constants as
+/// their raw IEEE payload bits.
 pub(all) enum MirValue {
   MirConst(Int64, @ctype.Type)
   MirLocal(MirLocal)
@@ -197,6 +200,8 @@ fn mir_body_scalar_type(ty : @ctype.Type) -> Bool {
     | ULong
     | SLongLong
     | ULongLong
+    | Float
+    | Double
     | Pointer(_)
     | FuncPtr(_, _, _) => true
     Atomic(inner) | Aligned(inner, _) => mir_body_scalar_type(inner)
@@ -1293,6 +1298,7 @@ fn Program::lower_mir_expr(
   let ty = self.expr_type(expr, scope)
   match expr {
     Number(value) => Some(MirConst(value, ty))
+    FloatLiteral(value) => Some(MirConst(value.reinterpret_as_int64(), ty))
     String(value) => Some(MirStringAddr(value))
     Var(name) =>
       match ctx.lookup_local(name) {

@@ -18,9 +18,42 @@ fn mir_body_codegen_scalar_type(ty : @ctype.Type) -> Bool {
     | ULong
     | SLongLong
     | ULongLong
+    | Float
+    | Double
     | Pointer(_)
     | FuncPtr(_, _, _) => true
     Atomic(inner) => mir_body_codegen_scalar_type(inner)
+    _ => false
+  }
+}
+
+///|
+fn mir_body_codegen_abi_scalar_type(ty : @ctype.Type) -> Bool {
+  match peel_aligned_type(ty) {
+    Void
+    | Bool
+    | SChar
+    | UChar
+    | SShort
+    | UShort
+    | SInt
+    | UInt
+    | SLong
+    | ULong
+    | SLongLong
+    | ULongLong
+    | Pointer(_)
+    | FuncPtr(_, _, _) => true
+    Atomic(inner) => mir_body_codegen_abi_scalar_type(inner)
+    _ => false
+  }
+}
+
+///|
+fn mir_body_codegen_floating_type(ty : @ctype.Type) -> Bool {
+  match peel_aligned_type(ty) {
+    Float | Double => true
+    Atomic(inner) => mir_body_codegen_floating_type(inner)
     _ => false
   }
 }
@@ -92,9 +125,16 @@ fn mir_body_codegen_value_supported(
       mir_body_codegen_value_supported(ptr, int_arg_limit, mir)
     MirUnary(_, inner, ty) =>
       mir_body_codegen_scalar_type(ty) &&
+      !mir_body_codegen_floating_type(ty) &&
+      !mir_body_codegen_floating_type(inner.ty()) &&
       mir_body_codegen_value_supported(inner, int_arg_limit, mir)
     MirBinary(op, lhs, rhs, ty) => {
       if !mir_body_codegen_scalar_type(ty) {
+        return false
+      }
+      if mir_body_codegen_floating_type(lhs.ty()) ||
+        mir_body_codegen_floating_type(rhs.ty()) ||
+        mir_body_codegen_floating_type(ty) {
         return false
       }
       if mir_body_pointer_integer_op(op, lhs.ty(), rhs.ty()) {
@@ -120,17 +160,22 @@ fn mir_body_codegen_value_supported(
     MirPostUpdateLocal(binding, _, rhs, ty) =>
       mir_body_codegen_scalar_type(binding.ty) &&
       mir_body_codegen_scalar_type(ty) &&
+      !mir_body_codegen_floating_type(binding.ty) &&
+      !mir_body_codegen_floating_type(ty) &&
       mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
     MirPreUpdateMemory(ptr, _, rhs, ty) =>
       mir_body_codegen_scalar_type(ty) &&
+      !mir_body_codegen_floating_type(ty) &&
       mir_body_codegen_value_supported(ptr, int_arg_limit, mir) &&
       mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
     MirPostUpdateMemory(ptr, _, rhs, ty) =>
       mir_body_codegen_scalar_type(ty) &&
+      !mir_body_codegen_floating_type(ty) &&
       mir_body_codegen_value_supported(ptr, int_arg_limit, mir) &&
       mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
     MirTernary(cond, then_, else_, ty) =>
       mir_body_codegen_scalar_type(ty) &&
+      !mir_body_codegen_floating_type(ty) &&
       mir_body_codegen_value_supported(cond, int_arg_limit, mir) &&
       mir_body_codegen_value_supported(then_, int_arg_limit, mir) &&
       mir_body_codegen_value_supported(else_, int_arg_limit, mir)
@@ -659,7 +704,7 @@ fn mir_body_codegen_call_supported(
   }
   if mir_body_codegen_builtin_call_name(name) ||
     args.length() > int_arg_limit ||
-    !mir_body_codegen_scalar_type(ret) {
+    !mir_body_codegen_abi_scalar_type(ret) {
     return false
   }
   if mir.bodies.contains(name) {
@@ -669,7 +714,7 @@ fn mir_body_codegen_call_supported(
     return args.length() == 0 && !mir.globals.contains(name)
   }
   let sig = mir.funcs[name]
-  if sig.defined || sig.variadic || !mir_body_codegen_scalar_type(sig.ret) {
+  if sig.defined || sig.variadic || !mir_body_codegen_abi_scalar_type(sig.ret) {
     return false
   }
   if sig.params.length() != args.length() {
@@ -679,7 +724,7 @@ fn mir_body_codegen_call_supported(
     return false
   }
   for ty in sig.params {
-    if !mir_body_codegen_scalar_type(ty) {
+    if !mir_body_codegen_abi_scalar_type(ty) {
       return false
     }
   }
@@ -693,19 +738,19 @@ fn mir_body_codegen_indirect_call_supported(
   ret : @ctype.Type,
   int_arg_limit : Int,
 ) -> Bool {
-  if args.length() > int_arg_limit || !mir_body_codegen_scalar_type(ret) {
+  if args.length() > int_arg_limit || !mir_body_codegen_abi_scalar_type(ret) {
     return false
   }
   match peel_aligned_type(callee_ty) {
     FuncPtr(sig_ret, params, variadic) => {
       if variadic ||
         params.length() != args.length() ||
-        !mir_body_codegen_scalar_type(sig_ret) ||
-        !mir_body_codegen_scalar_type(ret) {
+        !mir_body_codegen_abi_scalar_type(sig_ret) ||
+        !mir_body_codegen_abi_scalar_type(ret) {
         return false
       }
       for param in params {
-        if !mir_body_codegen_scalar_type(param) {
+        if !mir_body_codegen_abi_scalar_type(param) {
           return false
         }
       }
@@ -823,11 +868,11 @@ fn mir_body_codegen_func_supported(
   if body.params.length() > int_arg_limit {
     return false
   }
-  if !mir_body_codegen_scalar_type(body.ret) {
+  if !mir_body_codegen_abi_scalar_type(body.ret) {
     return false
   }
   for binding in body.params {
-    if !mir_body_codegen_scalar_type(binding.ty) {
+    if !mir_body_codegen_abi_scalar_type(binding.ty) {
       return false
     }
   }
@@ -1042,10 +1087,12 @@ fn Codegen::gen_mir_value(
       self.gen_mir_binary(op, lhs, rhs, ty, offsets, frame_size)
     MirCast(ty, inner) => {
       self.gen_mir_value(inner, offsets, frame_size)
+      self.emit_numeric_conversion(inner.ty(), ty)
       self.emit_scalar_conversion_to(ty)
     }
     MirAssignLocal(binding, rhs) => {
       self.gen_mir_value(rhs, offsets, frame_size)
+      self.emit_numeric_conversion(rhs.ty(), binding.ty)
       self.emit_scalar_conversion_to(binding.ty)
       self.emit_store_local("x9", offsets[binding.id], frame_size)
     }
@@ -1053,6 +1100,7 @@ fn Codegen::gen_mir_value(
       self.gen_mir_value(ptr, offsets, frame_size)
       self.emit("\tstr\tx9, [sp, #-16]!")
       self.gen_mir_value(rhs, offsets, frame_size)
+      self.emit_numeric_conversion(rhs.ty(), ty)
       self.emit_scalar_conversion_to(ty)
       self.emit("\tldr\tx10, [sp], #16")
       self.emit_store_typed("x9", "x10", ty)
@@ -1535,6 +1583,7 @@ fn Codegen::gen_mir_stmt(
         match init {
           Some(value) => {
             self.gen_mir_value(value, offsets, frame_size)
+            self.emit_numeric_conversion(value.ty(), binding.ty)
             self.emit_scalar_conversion_to(binding.ty)
             self.emit_store_local("x9", offsets[binding.id], frame_size)
           }
@@ -1551,7 +1600,9 @@ fn Codegen::gen_mir_stmt(
       match value {
         Some(value) => {
           self.gen_mir_value(value, offsets, frame_size)
-          self.emit_scalar_conversion_to(self.func_rets[self.func_name])
+          let ret_ty = self.func_rets[self.func_name]
+          self.emit_numeric_conversion(value.ty(), ret_ty)
+          self.emit_scalar_conversion_to(ret_ty)
           self.emit("\tmov\tx0, x9")
         }
         None => self.emit("\tmov\tx0, #0")
@@ -1749,6 +1800,45 @@ fn X64Codegen::emit_load_mir_int(self : X64Codegen, value : Int64) -> Unit {
 }
 
 ///|
+fn X64Codegen::emit_mir_numeric_conversion(
+  self : X64Codegen,
+  src : @ctype.Type,
+  dst : @ctype.Type,
+) -> Unit {
+  let src_core = x64_core_type(src)
+  let dst_core = x64_core_type(dst)
+  if src_core == dst_core {
+    return
+  }
+  if x64_is_fp_type(src_core) {
+    if x64_is_fp_type(dst_core) {
+      if src_core == Float && dst_core == Double {
+        self.emit("\tcvtss2sd\txmm0, xmm0")
+      } else if src_core == Double && dst_core == Float {
+        self.emit("\tcvtsd2ss\txmm0, xmm0")
+      }
+    } else if dst_core == Bool {
+      self.emit_fp_to_bool(src_core)
+    } else if dst_core.is_integer() {
+      if src_core == Float {
+        self.emit("\tcvttss2si\trax, xmm0")
+      } else {
+        self.emit("\tcvttsd2si\trax, xmm0")
+      }
+      self.emit_int_conversion_to(dst_core)
+    }
+  } else if x64_is_fp_type(dst_core) {
+    if dst_core == Float {
+      self.emit("\tcvtsi2ss\txmm0, rax")
+    } else {
+      self.emit("\tcvtsi2sd\txmm0, rax")
+    }
+  } else {
+    self.emit_int_conversion_to(dst_core)
+  }
+}
+
+///|
 fn X64Codegen::emit_mir_push_rax(self : X64Codegen) -> Unit {
   self.emit("\tsub\trsp, 16")
   self.emit("\tmov\tQWORD PTR [rsp], rax")
@@ -1839,10 +1929,16 @@ fn X64Codegen::gen_mir_value(
   offsets : Map[Int, Int],
 ) -> Unit {
   match value {
-    MirConst(bits, ty) => {
-      self.emit_load_mir_int(bits)
-      self.emit_int_conversion_to(ty)
-    }
+    MirConst(bits, ty) =>
+      if x64_is_fp_type(ty) {
+        self.emit_load_fp_literal(bits.reinterpret_as_double())
+        if x64_core_type(ty) == Float {
+          self.emit("\tcvtsd2ss\txmm0, xmm0")
+        }
+      } else {
+        self.emit_load_mir_int(bits)
+        self.emit_int_conversion_to(ty)
+      }
     MirLocal(binding) => {
       self.emit_local_addr(offsets[binding.id])
       self.emit_load_indirect(binding.ty)
@@ -1895,10 +1991,12 @@ fn X64Codegen::gen_mir_value(
       self.gen_mir_binary(op, lhs, rhs, ty, offsets)
     MirCast(ty, inner) => {
       self.gen_mir_value(inner, offsets)
+      self.emit_mir_numeric_conversion(inner.ty(), ty)
       self.emit_int_conversion_to(ty)
     }
     MirAssignLocal(binding, rhs) => {
       self.gen_mir_value(rhs, offsets)
+      self.emit_mir_numeric_conversion(rhs.ty(), binding.ty)
       self.emit_int_conversion_to(binding.ty)
       self.emit_store_local_from_rax(offsets[binding.id], binding.ty)
     }
@@ -1906,6 +2004,7 @@ fn X64Codegen::gen_mir_value(
       self.gen_mir_value(ptr, offsets)
       self.emit_mir_push_rax()
       self.gen_mir_value(rhs, offsets)
+      self.emit_mir_numeric_conversion(rhs.ty(), ty)
       self.emit_int_conversion_to(ty)
       self.emit("\tmov\tr10, QWORD PTR [rsp]")
       self.emit("\tadd\trsp, 16")
@@ -2340,6 +2439,7 @@ fn X64Codegen::gen_mir_stmt(
         match init {
           Some(value) => {
             self.gen_mir_value(value, offsets)
+            self.emit_mir_numeric_conversion(value.ty(), binding.ty)
             self.emit_int_conversion_to(binding.ty)
             self.emit_store_local_from_rax(offsets[binding.id], binding.ty)
           }
@@ -2356,7 +2456,9 @@ fn X64Codegen::gen_mir_stmt(
       match value {
         Some(value) => {
           self.gen_mir_value(value, offsets)
-          self.emit_int_conversion_to(self.func_rets[self.func_name])
+          let ret_ty = self.func_rets[self.func_name]
+          self.emit_mir_numeric_conversion(value.ty(), ret_ty)
+          self.emit_int_conversion_to(ret_ty)
         }
         None => self.emit("\tmov\trax, 0")
       }

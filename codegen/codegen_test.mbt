@@ -945,11 +945,12 @@ test "generate darwin arm64 strict MIR ignored unsupported local initializer sid
 }
 
 ///|
-test "strict MIR still rejects unsupported local reads" {
-  let source = "int main(void) { double d; return (int)d; }"
+test "strict MIR still rejects unsupported floating comparisons" {
+  let source = "int main(void) { double d = 1.0; return d > 0.0; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
-    Ok(_) => abort("expected strict MIR unsupported local read rejection")
+    Ok(_) =>
+      abort("expected strict MIR unsupported floating comparison rejection")
     Err(err) =>
       inspect(err.contains("unsupported MIR body codegen"), content="true")
   }
