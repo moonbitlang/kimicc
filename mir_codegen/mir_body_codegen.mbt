@@ -1271,6 +1271,7 @@ fn mir_body_codegen_indirect_call_supported(
   int_arg_limit : Int,
   mir : @mir.MirModule,
 ) -> Bool {
+  ignore(int_arg_limit)
   let ret_supported = mir_body_codegen_abi_scalar_type(ret) ||
     mir_body_codegen_x64_small_aggregate_return_type(ret, mir) ||
     mir_body_codegen_x64_memory_aggregate_return_type(ret, mir)
@@ -1285,8 +1286,11 @@ fn mir_body_codegen_indirect_call_supported(
       if variadic || params.length() != args.length() || !sig_ret_supported {
         return false
       }
-      ignore(int_arg_limit)
-      mir_body_codegen_abi_args_with_stack_supported(params)
+      if mir.target is LinuxAmd64 {
+        mir_body_codegen_x64_args_with_stack_supported(params)
+      } else {
+        mir_body_codegen_abi_args_with_stack_supported(params)
+      }
     }
     _ => false
   }
@@ -4298,14 +4302,23 @@ fn X64Codegen::gen_mir_value(
       let int_arg_indexes : Array[Int] = []
       let fp_arg_indexes : Array[Int] = []
       let stack_arg_indexes : Array[Int] = []
+      let arg_is_aggregate : Array[Bool] = []
+      let arg_classes : Array[Array[X64AggregateClass]] = []
+      let arg_words : Array[Int] = []
+      let raw_sizes : Array[Int] = []
       let mut int_arg_index = if has_sret { 1 } else { 0 }
       let mut fp_arg_index = 0
       let mut stack_arg_index = 0
+      let mut call_stack_align = 16
       for i in 0..<args.length() {
         let arg = args[i]
         let expected = mir_indirect_call_arg_type(callee.ty(), i, arg.ty())
         expected_types.push(expected)
         if mir_body_codegen_abi_fp_type(expected) {
+          arg_is_aggregate.push(false)
+          arg_classes.push([])
+          arg_words.push(1)
+          raw_sizes.push(16)
           int_arg_indexes.push(-1)
           if fp_arg_index < fp_arg_regs.length() {
             fp_arg_indexes.push(fp_arg_index)
@@ -4316,7 +4329,54 @@ fn X64Codegen::gen_mir_value(
             stack_arg_index += 1
           }
           fp_arg_index += 1
+          self.gen_mir_value(arg, offsets)
+          self.emit_mir_numeric_conversion(arg.ty(), expected)
+          self.emit_mir_push_xmm0(expected)
+        } else if peel_aligned_type(expected) is Struct(_) ||
+          peel_aligned_type(expected) is Union(_) {
+          let classes = match self.aggregate_classes(expected) {
+            Some(classes) => classes
+            None => []
+          }
+          let words = if classes.length() > 0 {
+            classes.length()
+          } else {
+            self.aggregate_word_count(expected)
+          }
+          let raw_size = if classes.length() > 0 { 16 } else { words * 8 }
+          let int_needed = x64_class_count(classes, IntClass)
+          let fp_needed = x64_class_count(classes, SseClass)
+          arg_is_aggregate.push(true)
+          arg_classes.push(classes)
+          arg_words.push(words)
+          raw_sizes.push(raw_size)
+          if classes.length() > 0 &&
+            int_arg_index + int_needed <= arg_regs.length() &&
+            fp_arg_index + fp_needed <= fp_arg_regs.length() {
+            int_arg_indexes.push(int_arg_index)
+            fp_arg_indexes.push(fp_arg_index)
+            stack_arg_indexes.push(-1)
+            int_arg_index += int_needed
+            fp_arg_index += fp_needed
+          } else {
+            int_arg_indexes.push(-1)
+            fp_arg_indexes.push(-1)
+            let (aligned_stack_arg_index, aligned_call_stack_align) = self.align_call_stack_arg(
+              stack_arg_index, call_stack_align, expected,
+            )
+            stack_arg_index = aligned_stack_arg_index
+            call_stack_align = aligned_call_stack_align
+            stack_arg_indexes.push(stack_arg_index)
+            stack_arg_index += words
+          }
+          self.emit_mir_save_aggregate_call_arg_raw(
+            arg, expected, raw_size, offsets,
+          )
         } else {
+          arg_is_aggregate.push(false)
+          arg_classes.push([])
+          arg_words.push(1)
+          raw_sizes.push(16)
           if int_arg_index < arg_regs.length() {
             int_arg_indexes.push(int_arg_index)
             stack_arg_indexes.push(-1)
@@ -4327,24 +4387,42 @@ fn X64Codegen::gen_mir_value(
           }
           fp_arg_indexes.push(-1)
           int_arg_index += 1
-        }
-        self.gen_mir_value(arg, offsets)
-        self.emit_mir_numeric_conversion(arg.ty(), expected)
-        if mir_body_codegen_abi_fp_type(expected) {
-          self.emit_mir_push_xmm0(expected)
-        } else {
+          self.gen_mir_value(arg, offsets)
+          self.emit_mir_numeric_conversion(arg.ty(), expected)
           self.emit_mir_push_rax()
         }
       }
-      let raw_area = (args.length() + 1) * 16
-      let stack_area = (stack_arg_index * 8 + 15) / 16 * 16
+      let mut raw_area = 16
+      for size in raw_sizes {
+        raw_area += size
+      }
+      let stack_area = x64_align_to(stack_arg_index * 8, call_stack_align)
       if stack_area > 0 {
         self.emit("\tsub\trsp, " + stack_area.to_string())
       }
       for i in 0..<args.length() {
-        let raw_offset = stack_area + (args.length() - 1 - i) * 16
+        let raw_offset = mir_body_codegen_raw_arg_offset(
+          raw_sizes, i, stack_area,
+        )
         if stack_arg_indexes[i] >= 0 {
-          if mir_body_codegen_abi_fp_type(expected_types[i]) {
+          if arg_is_aggregate[i] {
+            let stack_offset = stack_arg_indexes[i] * 8
+            for word in 0..<arg_words[i] {
+              let width = self.aggregate_word_width(expected_types[i], word)
+              self.emit_load_int_bytes_from_mem_reg(
+                "rax",
+                "rsp",
+                raw_offset + word * 8,
+                width,
+              )
+              self.emit_store_int_bytes_to_mem_reg(
+                "rax",
+                "rsp",
+                stack_offset + word * 8,
+                width,
+              )
+            }
+          } else if mir_body_codegen_abi_fp_type(expected_types[i]) {
             let suffix = x64_fp_suffix(expected_types[i])
             let size = if suffix == "ss" { "DWORD" } else { "QWORD" }
             self.emit(
@@ -4375,7 +4453,9 @@ fn X64Codegen::gen_mir_value(
         }
       }
       for i in 0..<args.length() {
-        let raw_offset = stack_area + (args.length() - 1 - i) * 16
+        let raw_offset = mir_body_codegen_raw_arg_offset(
+          raw_sizes, i, stack_area,
+        )
         if mir_body_codegen_abi_fp_type(expected_types[i]) {
           if fp_arg_indexes[i] >= 0 {
             let suffix = x64_fp_suffix(expected_types[i])
@@ -4391,6 +4471,32 @@ fn X64Codegen::gen_mir_value(
               x64_rsp_ref(raw_offset),
             )
           }
+        } else if arg_is_aggregate[i] && stack_arg_indexes[i] < 0 {
+          let mut int_cursor = int_arg_indexes[i]
+          let mut fp_cursor = fp_arg_indexes[i]
+          for word in 0..<arg_words[i] {
+            let width = self.aggregate_word_width(expected_types[i], word)
+            match arg_classes[i][word] {
+              IntClass => {
+                self.emit_load_int_bytes_from_mem_reg(
+                  arg_regs[int_cursor],
+                  "rsp",
+                  raw_offset + word * 8,
+                  width,
+                )
+                int_cursor += 1
+              }
+              SseClass => {
+                self.emit_load_sse_word_from_mem_reg(
+                  fp_arg_regs[fp_cursor],
+                  "rsp",
+                  raw_offset + word * 8,
+                  width,
+                )
+                fp_cursor += 1
+              }
+            }
+          }
         } else if int_arg_indexes[i] >= 0 {
           self.emit(
             "\tmov\t" +
@@ -4401,7 +4507,7 @@ fn X64Codegen::gen_mir_value(
         }
       }
       self.emit(
-        "\tmov\tr10, QWORD PTR " + x64_rsp_ref(stack_area + args.length() * 16),
+        "\tmov\tr10, QWORD PTR " + x64_rsp_ref(stack_area + raw_area - 16),
       )
       if has_sret {
         self.emit_call_sret_addr(ty)
