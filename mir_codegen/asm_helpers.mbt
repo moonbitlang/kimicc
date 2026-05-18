@@ -128,6 +128,7 @@ fn Codegen::emit_load_typed(
       self.emit("\tldr\t" + w_reg(reg) + ", [" + addr_reg + "]")
       self.emit("\tsxtw\t" + reg + ", " + w_reg(reg))
     }
+    Float => self.emit("\tldr\t" + w_reg(reg) + ", [" + addr_reg + "]")
     SInt128 | UInt128 =>
       if reg == addr_reg {
         self.emit("\tldr\t" + paired_high_reg(reg) + ", [" + addr_reg + ", #8]")
