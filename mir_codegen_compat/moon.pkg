@@ -1,0 +1,7 @@
+import {
+  "bobzhang/kimicc/codegen",
+  "bobzhang/kimicc/mir",
+  "bobzhang/kimicc/mir_codegen",
+  "bobzhang/kimicc/parser",
+  "bobzhang/kimicc/target",
+}

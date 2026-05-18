@@ -1,4 +1,5 @@
 ///|
+#warnings("-unused_mut")
 priv struct X64Codegen {
   output : StringBuilder
   mut mir : @mir.Program?
@@ -83,14 +84,6 @@ fn X64Codegen::new() -> X64Codegen {
     emitted_labels: {},
     defined_labels: {},
   }
-}
-
-///|
-fn X64Codegen::new_with_mir(mir : @mir.Program) -> X64Codegen {
-  let codegen = X64Codegen::new()
-  codegen.mir = Some(mir)
-  codegen.mir_module = Some(mir.to_module())
-  codegen
 }
 
 ///|
@@ -9866,75 +9859,6 @@ fn X64Codegen::emit_mir_function_decl_directives(
   if decl.symbol_alias is None && !decl.has_body {
     self.emit_symbol_visibility(decl.name, decl.is_static, decl.visibility)
   }
-}
-
-///|
-fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
-  self.emit("\t.intel_syntax noprefix")
-  self.emit("\t.text")
-  let mir_module = match self.mir_module {
-    Some(mir) => Some(mir)
-    None =>
-      match self.mir {
-        Some(mir) => {
-          let mir_module = mir.to_module()
-          self.mir_module = Some(mir_module)
-          Some(mir_module)
-        }
-        None => None
-      }
-  }
-  for sdecl in prog.structs {
-    self.struct_decls[sdecl.name] = sdecl
-  }
-  match mir_module {
-    Some(mir) => self.register_mir_aggregate_layouts(mir)
-    None =>
-      for sdecl in prog.structs {
-        self.compute_struct_layout(sdecl)
-      }
-  }
-  match mir_module {
-    Some(mir) => self.register_mir_function_decls(mir)
-    None => self.register_parser_function_decls(prog.decls)
-  }
-  let parser_globals = merge_global_decls(prog.globals)
-  let parser_global_fallbacks : Map[String, @parser.GlobalDecl] = {}
-  for g in parser_globals {
-    parser_global_fallbacks[g.name] = g
-  }
-  match mir_module {
-    Some(mir) => self.register_mir_global_decls(mir)
-    None => self.register_parser_global_decls(parser_globals)
-  }
-  let mir_global_inits : Map[String, @mir.MirGlobalDecl] = {}
-  let codegen_globals : Array[CodegenGlobalDecl] = match mir_module {
-    Some(mir) => {
-      let globals = @mir.merge_global_decls(mir.global_decls)
-      for g in globals {
-        mir_global_inits[g.name] = g
-      }
-      codegen_global_decls_from_mir(globals)
-    }
-    None => codegen_global_decls_from_parser(parser_globals)
-  }
-  let codegen_func_decls : Array[CodegenFuncDecl] = match mir_module {
-    Some(mir) => codegen_func_decls_from_mir(mir.decls)
-    None => codegen_func_decls_from_parser(prog.decls)
-  }
-  for decl in codegen_func_decls {
-    self.emit_mir_function_decl_directives(decl)
-  }
-  for decl in prog.decls {
-    self.emit_function(decl)
-  }
-  self.emit_globals(codegen_globals, parser_global_fallbacks, mir_global_inits)
-  self.emit_lifecycle_array(".init_array", codegen_func_decls)
-  self.emit_lifecycle_array(".fini_array", codegen_func_decls)
-  self.emit_strings()
-  self.emit_fp_literals()
-  self.emit("\t.section\t.note.GNU-stack,\"\",@progbits")
-  self.output.to_string()
 }
 
 ///|

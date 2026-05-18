@@ -3,6 +3,7 @@ import {
   "bobzhang/kimicc/parser",
   "bobzhang/kimicc/preprocessor",
   "bobzhang/kimicc/codegen",
+  "bobzhang/kimicc/mir",
   "bobzhang/kimicc/mir_codegen",
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",

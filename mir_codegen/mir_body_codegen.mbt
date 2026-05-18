@@ -1739,7 +1739,6 @@ fn Codegen::gen_mir_func(
   self.defined_labels = {}
   self.fp_literals = []
   self.func_name = decl.name
-  self.func_params = []
   self.sret_dest_offset = -1
   self.sret_scratch_offset = -1
   self.sret_scratch_size = 0

@@ -2309,7 +2309,8 @@ fn generate_assembly_from_preprocessed(
     }
   }
   if opts.strict_mir_codegen {
-    match @mir_codegen.generate_assembly_for_target_strict(prog, opts.target) {
+    let mir_module = @mir.lower_to_module(prog, opts.target)
+    match @mir_codegen.generate_assembly_from_mir_module_strict(mir_module) {
       Ok(assembly) => assembly
       Err(err) => {
         fail(err)
@@ -2538,7 +2539,7 @@ fn print_usage() -> Unit {
     #|  -nostdinc           disable built-in system include paths
     #|  --preprocessed      skip preprocessing and parse input as already preprocessed C
     #|  --strict-mir-codegen
-    #|                      require parser-free MIR codegen; reject unsupported coverage
+    #|                      require parser-AST-free MIR codegen; reject unsupported coverage
     #|
     #|Output options:
     #|  -o PATH             set output path

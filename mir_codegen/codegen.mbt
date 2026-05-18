@@ -1,10 +1,11 @@
 ///|
-/// Darwin ARM64 assembly generator for a parsed C program.
-///
-/// Construct with `Codegen::new`. The fields are exposed by the current
-/// MoonBit API surface, but callers should treat them as implementation
-/// details and use `generate` as the stable entry point.
-pub struct Codegen {
+#warnings("-unused_mut")
+priv struct Codegen {
+  /// Darwin ARM64 assembly generator for a parsed C program.
+  ///
+  /// Construct with `Codegen::new`. The fields are exposed by the current
+  /// MoonBit API surface, but callers should treat them as implementation
+  /// details and use `generate` as the stable entry point.
   output : StringBuilder
   mut mir : @mir.Program?
   mut mir_module : @mir.MirModule?
@@ -13,7 +14,6 @@ pub struct Codegen {
   mut var_types : Map[String, @parser.Type]
   mut stack_size : Int
   mut func_name : String
-  mut func_params : Array[@parser.Param]
   func_rets : Map[String, @parser.Type]
   func_variadic : Map[String, Bool]
   func_param_counts : Map[String, Int]
@@ -197,7 +197,7 @@ priv struct CodegenFuncDecl {
 }
 
 ///|
-struct CodegenGlobalDecl {
+priv struct CodegenGlobalDecl {
   ty : @parser.Type
   name : String
   has_init : Bool
@@ -1357,7 +1357,7 @@ fn Codegen::global_offset_bytes(
 
 ///|
 /// Creates a fresh code generator with empty per-program state.
-pub fn Codegen::new() -> Codegen {
+fn Codegen::new() -> Codegen {
   {
     output: StringBuilder::new(),
     mir: None,
@@ -1367,7 +1367,6 @@ pub fn Codegen::new() -> Codegen {
     var_types: {},
     stack_size: 0,
     func_name: "",
-    func_params: [],
     func_rets: {},
     func_variadic: {},
     func_param_counts: {},
@@ -1386,14 +1385,6 @@ pub fn Codegen::new() -> Codegen {
     sret_scratch_size: 0,
     pending_sret_offset: -1,
   }
-}
-
-///|
-fn Codegen::new_with_mir(mir : @mir.Program) -> Codegen {
-  let codegen = Codegen::new()
-  codegen.mir = Some(mir)
-  codegen.mir_module = Some(mir.to_module())
-  codegen
 }
 
 ///|
@@ -2313,176 +2304,6 @@ fn Codegen::emit_global_p2align(self : Codegen, ty : @parser.Type) -> Unit {
 }
 
 ///|
-/// Generates Darwin ARM64 assembly for a parsed C translation unit.
-///
-/// The input must come from `bobzhang/kimicc/parser`. The returned string is
-/// assembly text intended for the macOS assembler and linker.
-pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
-  self.output.write_string(
-    "\t.section\t__TEXT,__text,regular,pure_instructions\n",
-  )
-  self.output.write_string("\t.build_version macos, 14, 0\n")
-  // Register all struct/union declarations first (to handle forward refs)
-  for sdecl in prog.structs {
-    self.struct_decls[sdecl.name] = sdecl
-  }
-  // Then seed layouts in a second pass
-  let mir_module = match self.mir_module {
-    Some(mir) => Some(mir)
-    None =>
-      match self.mir {
-        Some(mir) => {
-          let mir_module = mir.to_module()
-          self.mir_module = Some(mir_module)
-          Some(mir_module)
-        }
-        None => None
-      }
-  }
-  match mir_module {
-    Some(mir) => self.register_mir_aggregate_layouts(mir)
-    None =>
-      for sdecl in prog.structs {
-        self.compute_struct_layout(sdecl)
-      }
-  }
-  // Precompute function return types, variadic flags, and param counts
-  match mir_module {
-    Some(mir) => self.register_mir_function_decls(mir)
-    None => self.register_parser_function_decls(prog.decls)
-  }
-  let inline_decls : Map[String, @parser.FuncDecl] = {}
-  for decl in prog.decls {
-    if decl.is_inline {
-      inline_decls[decl.name] = decl
-    }
-  }
-  let needed_inline : Map[String, Bool] = {}
-  for decl in prog.decls {
-    if !decl.is_inline {
-      match decl.body {
-        Some(body) =>
-          collect_static_inline_stmt(body, inline_decls, needed_inline)
-        None => ()
-      }
-    }
-  }
-  let parser_globals = merge_global_decls(prog.globals)
-  let parser_global_fallbacks : Map[String, @parser.GlobalDecl] = {}
-  for g in parser_globals {
-    parser_global_fallbacks[g.name] = g
-  }
-  // Record global variables
-  match mir_module {
-    Some(mir) => self.register_mir_global_decls(mir)
-    None => self.register_parser_global_decls(parser_globals)
-  }
-  let mir_global_inits : Map[String, @mir.MirGlobalDecl] = {}
-  let codegen_globals : Array[CodegenGlobalDecl] = match mir_module {
-    Some(mir) => {
-      let globals = @mir.merge_global_decls(mir.global_decls)
-      for g in globals {
-        mir_global_inits[g.name] = g
-      }
-      codegen_global_decls_from_mir(globals)
-    }
-    None => codegen_global_decls_from_parser(parser_globals)
-  }
-  let codegen_func_decls : Array[CodegenFuncDecl] = match mir_module {
-    Some(mir) => codegen_func_decls_from_mir(mir.decls)
-    None => codegen_func_decls_from_parser(prog.decls)
-  }
-  let func_label_maps : Map[String, Map[String, String]] = {}
-  for decl in prog.decls {
-    if decl.is_inline && !needed_inline.contains(decl.name) {
-      continue
-    }
-    self.gen_func(decl)
-    func_label_maps[decl.name] = self.emitted_labels
-  }
-  // Emit initialized global variables
-  let mut has_data = false
-  for g in codegen_globals {
-    if g.has_init {
-      if !has_data {
-        self.emit("	.section	__DATA,__data")
-        has_data = true
-      }
-      if !g.is_static {
-        if g.is_weak {
-          self.emit("	.weak_definition	_" + g.name)
-        } else {
-          self.emit("	.globl	_" + g.name)
-        }
-      }
-      self.emit_global_p2align(g.ty)
-      self.emit("_" + g.name + ":")
-      let saved_func_name = self.func_name
-      let saved_emitted_labels = self.emitted_labels
-      match static_global_owner_name(g.name, codegen_func_decls) {
-        Some(owner) => {
-          self.func_name = owner
-          match func_label_maps.get(owner) {
-            Some(labels) => self.emitted_labels = labels
-            None => ()
-          }
-        }
-        None => ()
-      }
-      let mut emitted_mir_init = false
-      match mir_global_inits.get(g.name) {
-        Some(mir_global) =>
-          emitted_mir_init = self.try_emit_mir_global_init(mir_global)
-        None => ()
-      }
-      if !emitted_mir_init {
-        match parser_global_fallbacks.get(g.name) {
-          Some(parser_global) =>
-            match parser_global.init {
-              Some(Scalar(expr)) => self.emit_global_scalar(g.ty, expr)
-              Some(Array(exprs)) => self.emit_global_array(g.ty, exprs)
-              None => ()
-            }
-          None => self.emit("\t.space\t" + self.type_size(g.ty).to_string())
-        }
-      }
-      self.func_name = saved_func_name
-      self.emitted_labels = saved_emitted_labels
-    }
-  }
-  // Emit uninitialized global variables
-  let mut has_bss = false
-  for g in codegen_globals {
-    if !g.has_init && !g.is_extern {
-      if !has_bss {
-        self.emit("	.section	__DATA,__bss")
-        has_bss = true
-      }
-      let size = self.type_size(g.ty)
-      if !g.is_static {
-        if g.is_weak {
-          self.emit("	.weak_definition	_" + g.name)
-        } else {
-          self.emit("	.globl	_" + g.name)
-        }
-      }
-      self.emit_global_p2align(g.ty)
-      self.emit("_" + g.name + ":")
-      self.emit("	.space	" + size.to_string())
-    }
-  }
-  // Emit string literals
-  if self.strings.length() > 0 {
-    self.emit("	.section	__TEXT,__const")
-    for i = 0; i < self.strings.length(); i = i + 1 {
-      self.emit("_str" + i.to_string() + ":")
-      self.emit("	.asciz	\"" + escape_string(self.strings[i]) + "\"")
-    }
-  }
-  self.output.to_string()
-}
-
-///|
 fn Codegen::generate_mir_only(
   self : Codegen,
   mir_module : @mir.MirModule,
@@ -2554,58 +2375,8 @@ fn Codegen::generate_mir_only(
 }
 
 ///|
-/// Generates assembly for `prog` using the requested target backend.
-///
-/// `DarwinArm64` preserves the existing macOS ARM64 assembly output.
-/// `LinuxAmd64` emits GNU assembler syntax for the System V x86-64 ABI.
-///
-/// This is the fast educational path: parsed C AST goes directly to target
-/// codegen without first lowering through MIR. Use
-/// `generate_assembly_for_target_strict` to require parser-free MIR-module
-/// backend emission.
-pub fn generate_assembly_for_target(
-  prog : @parser.Program,
-  target : @target.Target,
-) -> String {
-  match target {
-    DarwinArm64 => Codegen::new().generate(prog)
-    LinuxAmd64 => X64Codegen::new().generate(prog)
-  }
-}
-
-///|
-/// Lowers a parsed C translation unit through MIR and generates assembly,
-/// falling back to parser AST codegen when MIR coverage is not sufficient yet.
-pub fn generate_assembly_for_target_with_parser_fallback(
-  prog : @parser.Program,
-  target : @target.Target,
-) -> String {
-  generate_assembly_from_mir_with_parser_fallback(@mir.lower(prog, target))
-}
-
-///|
-/// Lowers a parsed C translation unit to `MirModule` and generates assembly
-/// only when MIR coverage is sufficient for parser-free backend emission.
-pub fn generate_assembly_for_target_strict(
-  prog : @parser.Program,
-  target : @target.Target,
-) -> Result[String, String] {
-  generate_assembly_from_mir_module_strict(@mir.lower_to_module(prog, target))
-}
-
-///|
-/// Generates assembly from an already lowered MIR program.
-///
-/// This is the backend-facing entry point. It does not use the parser AST
-/// fallback stored on transitional MIR programs; unsupported MIR coverage is a
-/// hard error.
-pub fn generate_assembly_from_mir(mir : @mir.Program) -> String {
-  generate_assembly_from_mir_module(mir.to_module())
-}
-
-///|
-/// Generates assembly from a parser-free MIR module, aborting when the current
-/// MIR-only backend coverage is insufficient.
+/// Generates assembly from a parser-AST-free MIR module, aborting when the
+/// current MIR-only backend coverage is insufficient.
 pub fn generate_assembly_from_mir_module(mir_module : @mir.MirModule) -> String {
   match generate_assembly_from_mir_module_strict(mir_module) {
     Ok(assembly) => assembly
@@ -2614,24 +2385,8 @@ pub fn generate_assembly_from_mir_module(mir_module : @mir.MirModule) -> String 
 }
 
 ///|
-/// Generates assembly from MIR, falling back to parser AST codegen for source
-/// constructs that are not represented in MIR yet.
-pub fn generate_assembly_from_mir_with_parser_fallback(
-  mir : @mir.Program,
-) -> String {
-  match generate_assembly_from_mir_strict(mir) {
-    Ok(assembly) => return assembly
-    Err(_) => ()
-  }
-  match mir.target {
-    DarwinArm64 => Codegen::new_with_mir(mir).generate(mir.source)
-    LinuxAmd64 => X64Codegen::new_with_mir(mir).generate(mir.source)
-  }
-}
-
-///|
-/// Generates assembly from a parser-free MIR module when the current MIR-only
-/// backend coverage is sufficient.
+/// Generates assembly from a parser-AST-free MIR module when the current
+/// MIR-only backend coverage is sufficient.
 pub fn generate_assembly_from_mir_module_strict(
   mir_module : @mir.MirModule,
 ) -> Result[String, String] {
@@ -2643,19 +2398,6 @@ pub fn generate_assembly_from_mir_module_strict(
         None => Ok(generate_assembly_from_mir_module_unchecked(mir_module))
       }
   }
-}
-
-///|
-/// Generates assembly from MIR only when every source function definition can
-/// use the MIR-body backend path.
-///
-/// This strict gate is deliberately narrower than full parser independence: it
-/// prevents parser statement/expression fallback for function bodies while
-/// globals and metadata continue to migrate into MIR-owned declarations.
-pub fn generate_assembly_from_mir_strict(
-  mir : @mir.Program,
-) -> Result[String, String] {
-  generate_assembly_from_mir_module_strict(mir.to_module())
 }
 
 ///|

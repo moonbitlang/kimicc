@@ -3,79 +3,16 @@ package "bobzhang/kimicc/mir_codegen"
 
 import {
   "bobzhang/kimicc/mir",
-  "bobzhang/kimicc/parser",
-  "bobzhang/kimicc/target",
 }
 
 // Values
-pub fn generate_assembly_for_target(@parser.Program, @target.Target) -> String
-
-pub fn generate_assembly_for_target_strict(@parser.Program, @target.Target) -> Result[String, String]
-
-pub fn generate_assembly_for_target_with_parser_fallback(@parser.Program, @target.Target) -> String
-
-pub fn generate_assembly_from_mir(@mir.Program) -> String
-
 pub fn generate_assembly_from_mir_module(@mir.MirModule) -> String
 
 pub fn generate_assembly_from_mir_module_strict(@mir.MirModule) -> Result[String, String]
 
-pub fn generate_assembly_from_mir_strict(@mir.Program) -> Result[String, String]
-
-pub fn generate_assembly_from_mir_with_parser_fallback(@mir.Program) -> String
-
-pub fn generate_jit_image(@parser.Program) -> JitImage
-
-pub fn generate_macho_object(@parser.Program) -> Bytes
-
 // Errors
 
 // Types and methods
-pub struct Codegen {
-  output : StringBuilder
-  mut mir : @mir.Program?
-  mut mir_module : @mir.MirModule?
-  mut label_counter : Int
-  mut local_offsets : Map[String, Int]
-  mut var_types : Map[String, @parser.Type]
-  mut stack_size : Int
-  mut func_name : String
-  mut func_params : Array[@parser.Param]
-  func_rets : Map[String, @parser.Type]
-  func_variadic : Map[String, Bool]
-  func_param_counts : Map[String, Int]
-  func_param_types : Map[String, Array[@parser.Type]]
-  struct_layouts : Map[String, Array[(String, @parser.Type, Int, Int, Int, Int)]]
-  struct_decls : Map[String, @parser.StructDecl]
-  strings : Array[String]
-  mut break_label : String?
-  mut continue_label : String?
-  globals : Map[String, CodegenGlobalDecl]
-  mut emitted_labels : Map[String, String]
-  mut defined_labels : Map[String, Bool]
-  mut fp_literals : Array[Double]
-  mut sret_dest_offset : Int
-  mut sret_scratch_offset : Int
-  mut sret_scratch_size : Int
-  mut pending_sret_offset : Int
-}
-pub fn Codegen::generate(Self, @parser.Program) -> String
-pub fn Codegen::new() -> Self
-
-type CodegenGlobalDecl
-
-pub struct JitImage {
-  code : Bytes
-  executable_size : Int
-  base_relocations : Bytes
-  external_relocations : Bytes
-  symbols : Array[JitSymbol]
-}
-
-pub struct JitSymbol {
-  name : String
-  offset : Int
-}
 
 // Type aliases
 
