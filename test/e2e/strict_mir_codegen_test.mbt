@@ -812,6 +812,33 @@ test "strict MIR codegen executes floating ternary conversions" {
 }
 
 ///|
+test "strict MIR codegen executes floating compound updates" {
+  let source =
+    #|int main(void) {
+    #|  double x = 1.5;
+    #|  double old = x++;
+    #|  x += 2.5;
+    #|  x *= 2.0;
+    #|  double arr[1];
+    #|  arr[0] = 3.0;
+    #|  double *p = arr;
+    #|  double before = (*p)++;
+    #|  *p += 4.0;
+    #|  float f = (float)1.25;
+    #|  ++f;
+    #|  f *= (float)2.0;
+    #|  int i = 1;
+    #|  i += 2.5;
+    #|  int ints[1];
+    #|  ints[0] = 1;
+    #|  int *q = ints;
+    #|  *q += 2.5;
+    #|  return (int)(old * 10) + (int)x + (int)(before * 10) + (int)arr[0] + (int)(f * 10) + i + ints[0];
+    #|}
+  assert_eq(run_source_strict_mir(source), 114)
+}
+
+///|
 test "strict MIR codegen executes floating local arithmetic" {
   let source =
     #|int main(void) {
