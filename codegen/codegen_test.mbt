@@ -3357,7 +3357,7 @@ test "generate linux amd64 strict MIR memory aggregate returns" {
 }
 
 ///|
-test "reject linux amd64 strict MIR memory aggregate return calls" {
+test "generate linux amd64 strict MIR memory aggregate return calls" {
   let source =
     #|struct Big { long a; long b; long c; };
     #|struct Big make_big(long a, long b, long c) {
@@ -3368,19 +3368,35 @@ test "reject linux amd64 strict MIR memory aggregate return calls" {
     #|  return p;
     #|}
     #|struct Big forward_big(long a, long b, long c) { return make_big(a, b, c); }
+    #|int big_sum(struct Big p) { return (int)(p.a + p.b + p.c); }
+    #|int main(void) {
+    #|  struct Big p = forward_big(10, 20, 30);
+    #|  struct Big q;
+    #|  q = make_big(1, 2, 3);
+    #|  return big_sum(make_big(4, 5, 6)) + big_sum(p) + big_sum(q);
+    #|}
   let target = match @target.Target::parse("linux-amd64") {
     Some(target) => target
     None => abort("target parse failed")
   }
   let mir = @mir.lower(@parser.parse_for_target(source, target), target)
   match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
-    Ok(_) =>
-      abort("expected strict MIR memory aggregate return call to be rejected")
-    Err(err) =>
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\tmake_big"), content="true")
+      inspect(assembly.contains("\tcall\tforward_big"), content="true")
+      inspect(assembly.contains("\tcall\tbig_sum"), content="true")
+      inspect(assembly.contains("\tmov\trdi, rax"), content="true")
       inspect(
-        err.contains("unsupported MIR body codegen for forward_big"),
+        assembly.contains("\tmov\tQWORD PTR [r10 + 16], rax"),
         content="true",
       )
+      inspect(
+        assembly.contains("unsupported MIR body codegen"),
+        content="false",
+      )
+    }
+    Err(err) => abort(err)
   }
 }
 

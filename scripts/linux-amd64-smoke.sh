@@ -234,6 +234,8 @@ strict_mir_memory_returns_driver_path="/tmp/kimicc-linux-amd64-strict-mir-memory
 strict_mir_memory_returns_object_path="/tmp/kimicc-linux-amd64-strict-mir-memory-returns.o"
 strict_mir_memory_returns_driver_object_path="/tmp/kimicc-linux-amd64-strict-mir-memory-returns-driver.o"
 strict_mir_memory_returns_binary_path="/tmp/kimicc-linux-amd64-strict-mir-memory-returns"
+strict_mir_memory_return_calls_source_path="/tmp/kimicc-linux-amd64-strict-mir-memory-return-calls.c"
+strict_mir_memory_return_calls_binary_path="/tmp/kimicc-linux-amd64-strict-mir-memory-return-calls"
 
 mkdir -p "$probe_include_dir" "$probe_after_include_dir" "$probe_prefix_dir/headers"
 cat > "$probe_include_dir/probe_header.h" <<'H'
@@ -3668,6 +3670,49 @@ status=$?
 set -e
 if [ "$status" -ne 60 ]; then
   echo "expected strict MIR memory aggregate returns smoke binary to exit 60, got $status" >&2
+  exit 1
+fi
+
+cat > "$strict_mir_memory_return_calls_source_path" <<'C'
+struct Big {
+  long a;
+  long b;
+  long c;
+};
+
+struct Big make_big(long a, long b, long c) {
+  struct Big p;
+  p.a = a;
+  p.b = b;
+  p.c = c;
+  return p;
+}
+
+struct Big forward_big(long a, long b, long c) {
+  return make_big(a, b, c);
+}
+
+int big_sum(struct Big p) {
+  return (int)(p.a + p.b + p.c);
+}
+
+int main(void) {
+  struct Big p = forward_big(10, 20, 30);
+  struct Big q;
+  q = make_big(1, 2, 3);
+  return big_sum(make_big(4, 5, 6)) + big_sum(p) + big_sum(q);
+}
+C
+
+"$kimicc" --strict-mir-codegen -target linux-amd64 \
+  -o "$strict_mir_memory_return_calls_binary_path" \
+  "$strict_mir_memory_return_calls_source_path"
+set +e
+"$strict_mir_memory_return_calls_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 81 ]; then
+  echo "expected strict MIR memory aggregate return calls smoke binary to exit 81, got $status" >&2
   exit 1
 fi
 

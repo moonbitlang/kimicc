@@ -27,6 +27,8 @@ priv struct X64Codegen {
   mut va_initial_overflow_offset : Int
   mut sret_dest_offset : Int
   mut sret_scratch_offset : Int
+  mut sret_scratch_size : Int
+  mut sret_scratch_align : Int
   mut va_arg_scratch_offset : Int
   mut va_arg_scratch_size : Int
   mut va_arg_scratch_align : Int
@@ -65,6 +67,8 @@ fn X64Codegen::new() -> X64Codegen {
     va_initial_overflow_offset: 16,
     sret_dest_offset: -1,
     sret_scratch_offset: -1,
+    sret_scratch_size: 0,
+    sret_scratch_align: 1,
     va_arg_scratch_offset: -1,
     va_arg_scratch_size: 0,
     va_arg_scratch_align: 1,
