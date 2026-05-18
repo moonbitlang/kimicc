@@ -713,6 +713,24 @@ test "strict MIR codegen takes address of aggregate objects" {
 }
 
 ///|
+test "strict MIR codegen accesses aggregate pointer members" {
+  let source =
+    #|struct Pair { long a; long b; };
+    #|int sum_pair(struct Pair *p) {
+    #|  p->a = p->a + 6;
+    #|  return (int)(p->a + p->b);
+    #|}
+    #|int main(void) {
+    #|  struct Pair local_pair = { 1, 2 };
+    #|  struct Pair *p = &local_pair;
+    #|  int seen = sum_pair(p);
+    #|  if (local_pair.a != 7) return 1;
+    #|  return seen;
+    #|}
+  assert_eq(run_source_strict_mir(source), 9)
+}
+
+///|
 test "strict MIR codegen executes globals arrays and structs" {
   let source =
     #|struct Pair { int x; int y; };

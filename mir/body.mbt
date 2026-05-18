@@ -1306,7 +1306,11 @@ fn Program::lower_mir_object_addr(
         None => None
       }
     }
-    Deref(ptr) => self.lower_mir_known_object_ptr_expr(ptr, ctx)
+    Deref(ptr) =>
+      match self.lower_mir_known_object_ptr_expr(ptr, ctx) {
+        Some(addr) => Some(addr)
+        None => self.lower_mir_expr_with_array_decay(ptr, ctx)
+      }
     _ => None
   }
 }
