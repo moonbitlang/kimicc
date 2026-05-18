@@ -987,6 +987,28 @@ test "generate darwin arm64 strict MIR floating arithmetic" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR float arithmetic" {
+  let source =
+    #|int main(void) {
+    #|  float x = (float)5.5;
+    #|  float y = (float)2.0;
+    #|  return (int)(x + y) + (int)(x - y) + (int)(x * y) + (int)(x / y) + (int)(x + 2);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tfadd\ts9, s9, s10"), content="true")
+      inspect(assembly.contains("\tfsub\ts9, s9, s10"), content="true")
+      inspect(assembly.contains("\tfmul\ts9, s9, s10"), content="true")
+      inspect(assembly.contains("\tfdiv\ts9, s9, s10"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR floating direct calls" {
   let source =
     #|double add(double x, double y) { return x + y; }
@@ -1003,6 +1025,29 @@ test "generate darwin arm64 strict MIR floating direct calls" {
       inspect(assembly.contains("\tbl\t_mix"), content="true")
       inspect(assembly.contains("\tfmov\td0, x9"), content="true")
       inspect(assembly.contains("\tfmov\tx9, d0"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate darwin arm64 strict MIR float direct and indirect calls" {
+  let source =
+    #|float addf(float x, float y) { return x + y; }
+    #|float mixf(int a, float b, int c) { return a + b + c; }
+    #|int main(void) {
+    #|  float (*fp)(float, float) = addf;
+    #|  return (int)addf((float)2.25, (float)3.75) + (int)mixf(2, (float)3.5, 4) + (int)fp((float)1.25, (float)2.75);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_addf:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tbl\t_addf"), content="true")
+      inspect(assembly.contains("\tblr\tx15"), content="true")
+      inspect(assembly.contains("\tfmov\ts0, w9"), content="true")
+      inspect(assembly.contains("\tfmov\tw9, s0"), content="true")
     }
     Err(err) => abort(err)
   }
@@ -2468,6 +2513,31 @@ test "generate linux amd64 strict MIR floating arithmetic" {
 }
 
 ///|
+test "generate linux amd64 strict MIR float arithmetic" {
+  let source =
+    #|int main(void) {
+    #|  float x = (float)5.5;
+    #|  float y = (float)2.0;
+    #|  return (int)(x + y) + (int)(x - y) + (int)(x * y) + (int)(x / y) + (int)(x + 2);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\taddss\txmm0, xmm1"), content="true")
+      inspect(assembly.contains("\tsubss\txmm0, xmm1"), content="true")
+      inspect(assembly.contains("\tmulss\txmm0, xmm1"), content="true")
+      inspect(assembly.contains("\tdivss\txmm0, xmm1"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate linux amd64 strict MIR floating direct calls" {
   let source =
     #|double add(double x, double y) { return x + y; }
@@ -2491,6 +2561,38 @@ test "generate linux amd64 strict MIR floating direct calls" {
       )
       inspect(
         assembly.contains("\tmovsd\txmm0, QWORD PTR [rsp]"),
+        content="true",
+      )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR float direct and indirect calls" {
+  let source =
+    #|float addf(float x, float y) { return x + y; }
+    #|float mixf(int a, float b, int c) { return a + b + c; }
+    #|int main(void) {
+    #|  float (*fp)(float, float) = addf;
+    #|  return (int)addf((float)2.25, (float)3.75) + (int)mixf(2, (float)3.5, 4) + (int)fp((float)1.25, (float)2.75);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\taddf"), content="true")
+      inspect(assembly.contains("\tcall\tr10"), content="true")
+      inspect(
+        assembly.contains("\tmovss\tDWORD PTR [rsp], xmm0"),
+        content="true",
+      )
+      inspect(
+        assembly.contains("\tmovss\txmm0, DWORD PTR [rsp]"),
         content="true",
       )
     }

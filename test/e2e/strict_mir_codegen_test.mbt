@@ -143,6 +143,17 @@ test "strict MIR codegen executes floating local arithmetic" {
 }
 
 ///|
+test "strict MIR codegen executes float local arithmetic" {
+  let source =
+    #|int main(void) {
+    #|  float x = (float)5.5;
+    #|  float y = (float)2.0;
+    #|  return (int)(x + y) + (int)(x - y) + (int)(x * y) + (int)(x / y) + (int)(x + 2);
+    #|}
+  assert_eq(run_source_strict_mir(source), 30)
+}
+
+///|
 test "strict MIR codegen executes floating direct calls" {
   let source =
     #|double add(double x, double y) { return x + y; }
@@ -151,6 +162,18 @@ test "strict MIR codegen executes floating direct calls" {
     #|  return (int)add(2.25, 3.75) + (int)mix(2, 3.5, 4);
     #|}
   assert_eq(run_source_strict_mir(source), 15)
+}
+
+///|
+test "strict MIR codegen executes float direct and indirect calls" {
+  let source =
+    #|float addf(float x, float y) { return x + y; }
+    #|float mixf(int a, float b, int c) { return a + b + c; }
+    #|int main(void) {
+    #|  float (*fp)(float, float) = addf;
+    #|  return (int)addf((float)2.25, (float)3.75) + (int)mixf(2, (float)3.5, 4) + (int)fp((float)1.25, (float)2.75);
+    #|}
+  assert_eq(run_source_strict_mir(source), 19)
 }
 
 ///|
