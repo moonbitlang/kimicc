@@ -1031,6 +1031,28 @@ test "generate darwin arm64 strict MIR floating direct calls" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR stack-passed integer direct calls" {
+  let source =
+    #|int sum9(int a, int b, int c, int d, int e, int f, int g, int h, int i) {
+    #|  return a + b + c + d + e + f + g + h + i;
+    #|}
+    #|int main(void) {
+    #|  return sum9(1, 2, 3, 4, 5, 6, 7, 8, 9);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_sum9:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tldr\tx9, [x29, #16]"), content="true")
+      inspect(assembly.contains("\tstr\tx9, [sp, #0]"), content="true")
+      inspect(assembly.contains("\tbl\t_sum9"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR float direct and indirect calls" {
   let source =
     #|float addf(float x, float y) { return x + y; }
@@ -2583,6 +2605,42 @@ test "generate linux amd64 strict MIR floating direct calls" {
         assembly.contains("\tmovsd\txmm0, QWORD PTR [rsp]"),
         content="true",
       )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR stack-passed integer direct calls" {
+  let source =
+    #|int sum8(int a, int b, int c, int d, int e, int f, int g, int h) {
+    #|  return a + b + c + d + e + f + g + h;
+    #|}
+    #|int main(void) {
+    #|  return sum8(1, 2, 3, 4, 5, 6, 7, 8);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(
+        assembly.contains("\tmov\trax, QWORD PTR [rbp + 16]"),
+        content="true",
+      )
+      inspect(
+        assembly.contains("\tmov\trax, QWORD PTR [rbp + 24]"),
+        content="true",
+      )
+      inspect(assembly.contains("\tmov\tQWORD PTR [rsp], rax"), content="true")
+      inspect(
+        assembly.contains("\tmov\tQWORD PTR [rsp + 8], rax"),
+        content="true",
+      )
+      inspect(assembly.contains("\tcall\tsum8"), content="true")
     }
     Err(err) => abort(err)
   }
