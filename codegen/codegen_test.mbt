@@ -3314,7 +3314,7 @@ test "generate linux amd64 strict MIR small aggregate returns" {
 }
 
 ///|
-test "reject linux amd64 strict MIR memory aggregate returns" {
+test "generate linux amd64 strict MIR memory aggregate returns" {
   let source =
     #|struct Big { long a; long b; long c; };
     #|struct Big make_big(long a, long b, long c) {
@@ -3330,10 +3330,55 @@ test "reject linux amd64 strict MIR memory aggregate returns" {
   }
   let mir = @mir.lower(@parser.parse_for_target(source, target), target)
   match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
-    Ok(_) => abort("expected strict MIR memory aggregate return to be rejected")
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\t.type\tmake_big, @function"), content="true")
+      inspect(assembly.contains(", rdi"), content="true")
+      inspect(
+        assembly.contains("\tmov\tr10, QWORD PTR [rbp - "),
+        content="true",
+      )
+      inspect(assembly.contains("\tmov\tQWORD PTR [r10], rax"), content="true")
+      inspect(
+        assembly.contains("\tmov\tQWORD PTR [r10 + 8], rax"),
+        content="true",
+      )
+      inspect(
+        assembly.contains("\tmov\tQWORD PTR [r10 + 16], rax"),
+        content="true",
+      )
+      inspect(
+        assembly.contains("unsupported MIR body codegen"),
+        content="false",
+      )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "reject linux amd64 strict MIR memory aggregate return calls" {
+  let source =
+    #|struct Big { long a; long b; long c; };
+    #|struct Big make_big(long a, long b, long c) {
+    #|  struct Big p;
+    #|  p.a = a;
+    #|  p.b = b;
+    #|  p.c = c;
+    #|  return p;
+    #|}
+    #|struct Big forward_big(long a, long b, long c) { return make_big(a, b, c); }
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(_) =>
+      abort("expected strict MIR memory aggregate return call to be rejected")
     Err(err) =>
       inspect(
-        err.contains("unsupported MIR body codegen for make_big"),
+        err.contains("unsupported MIR body codegen for forward_big"),
         content="true",
       )
   }
