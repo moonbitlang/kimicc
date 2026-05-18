@@ -3265,11 +3265,26 @@ struct Pair {
   long b;
 };
 
+struct DPair {
+  double a;
+  double b;
+};
+
 struct Big {
   long a;
   long b;
   long c;
 };
+
+int pair_sum(struct Pair p) { return (int)(p.a + p.b); }
+
+int pair_tail(int a, int b, int c, int d, int e, int f, struct Pair p) {
+  return (int)(p.a + p.b);
+}
+
+int dpair_sum(struct DPair p) { return (int)(p.a + p.b); }
+
+int big_sum(struct Big p) { return (int)(p.a + p.b + p.c); }
 
 int read_pair(int tag, ...) {
   va_list ap;
@@ -3291,13 +3306,17 @@ int read_big(int tag, ...) {
 
 int main(void) {
   struct Pair p;
+  struct DPair d;
   struct Big b;
   p.a = 10;
   p.b = 20;
+  d.a = 19.5;
+  d.b = 22.5;
   b.a = 1;
   b.b = 2;
   b.c = 3;
-  return read_pair(4, p) + read_big(5, b);
+  return pair_sum(p) + pair_tail(1, 2, 3, 4, 5, 6, p) + dpair_sum(d) +
+         big_sum(b) + read_pair(4, p) + read_big(5, b);
 }
 C
 
@@ -3306,8 +3325,8 @@ set +e
 "$strict_mir_varargs_binary_path"
 status=$?
 set -e
-if [ "$status" -ne 45 ]; then
-  echo "expected strict MIR aggregate varargs smoke binary to exit 45, got $status" >&2
+if [ "$status" -ne 153 ]; then
+  echo "expected strict MIR aggregate varargs smoke binary to exit 153, got $status" >&2
   exit 1
 fi
 
