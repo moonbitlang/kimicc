@@ -1429,15 +1429,9 @@ fn Program::lower_mir_expr(
     }
     AddrOf(Var(name)) =>
       match ctx.lookup_local(name) {
-        Some(binding) =>
-          if mir_body_scalar_type(binding.ty) {
-            Some(MirAddrLocal(binding))
-          } else {
-            None
-          }
+        Some(binding) => Some(MirAddrLocal(binding))
         None =>
-          if self.globals.contains(name) &&
-            mir_body_scalar_type(self.globals[name].ty) {
+          if self.globals.contains(name) {
             Some(MirAddrGlobal(name, self.globals[name].ty))
           } else if self.funcs.contains(name) {
             Some(MirFuncAddr(name, self.expr_type(Var(name), scope)))
