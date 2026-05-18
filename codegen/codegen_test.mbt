@@ -1076,6 +1076,29 @@ test "generate darwin arm64 strict MIR stack-passed integer direct calls" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR stack-passed floating direct calls" {
+  let source =
+    #|double sum9d(double a, double b, double c, double d, double e, double f, double g, double h, double i) {
+    #|  return a + b + c + d + e + f + g + h + i;
+    #|}
+    #|int main(void) {
+    #|  return (int)sum9d(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_sum9d:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tldr\tx9, [x29, #16]"), content="true")
+      inspect(assembly.contains("\tstr\tx9, [sp, #0]"), content="true")
+      inspect(assembly.contains("\tfmov\td0, x9"), content="true")
+      inspect(assembly.contains("\tbl\t_sum9d"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR float direct and indirect calls" {
   let source =
     #|float addf(float x, float y) { return x + y; }
@@ -2720,6 +2743,37 @@ test "generate linux amd64 strict MIR stack-passed integer direct calls" {
         content="true",
       )
       inspect(assembly.contains("\tcall\tsum8"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR stack-passed floating direct calls" {
+  let source =
+    #|double sum9d(double a, double b, double c, double d, double e, double f, double g, double h, double i) {
+    #|  return a + b + c + d + e + f + g + h + i;
+    #|}
+    #|int main(void) {
+    #|  return (int)sum9d(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(
+        assembly.contains("\tmovsd\txmm0, QWORD PTR [rbp + 16]"),
+        content="true",
+      )
+      inspect(
+        assembly.contains("\tmovsd\tQWORD PTR [rsp], xmm0"),
+        content="true",
+      )
+      inspect(assembly.contains("\tcall\tsum9d"), content="true")
     }
     Err(err) => abort(err)
   }
