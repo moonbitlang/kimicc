@@ -64,21 +64,6 @@ fn mir_body_codegen_abi_fp_type(ty : @ctype.Type) -> Bool {
 }
 
 ///|
-fn mir_body_codegen_abi_args_with_stack_supported(
-  params : Array[@ctype.Type],
-) -> Bool {
-  for param in params {
-    if mir_body_codegen_abi_fp_type(param) ||
-      mir_body_codegen_abi_int_type(param) {
-      ()
-    } else {
-      return false
-    }
-  }
-  true
-}
-
-///|
 fn mir_body_codegen_x64_arg_with_stack_supported(ty : @ctype.Type) -> Bool {
   if mir_body_codegen_abi_fp_type(ty) || mir_body_codegen_abi_int_type(ty) {
     return true
@@ -1341,7 +1326,7 @@ fn mir_body_codegen_indirect_call_supported(
       if mir.target is LinuxAmd64 {
         mir_body_codegen_x64_args_with_stack_supported(params)
       } else {
-        mir_body_codegen_abi_args_with_stack_supported(params)
+        mir_body_codegen_darwin_args_with_stack_supported(params, mir)
       }
     }
     _ => false
@@ -3113,6 +3098,10 @@ fn Codegen::gen_mir_value(
       let int_arg_indexes : Array[Int] = []
       let fp_arg_indexes : Array[Int] = []
       let stack_arg_indexes : Array[Int] = []
+      let arg_is_hfa : Array[Bool] = []
+      let arg_is_register_aggregate : Array[Bool] = []
+      let arg_slot_counts : Array[Int] = []
+      let arg_raw_sizes : Array[Int] = []
       let mut int_arg_index = 0
       let mut fp_arg_index = 0
       let mut stack_arg_index = 0
@@ -3121,6 +3110,9 @@ fn Codegen::gen_mir_value(
         let expected = mir_indirect_call_arg_type(callee.ty(), i, arg.ty())
         expected_types.push(expected)
         if mir_body_codegen_abi_fp_type(expected) {
+          arg_is_hfa.push(false)
+          arg_is_register_aggregate.push(false)
+          arg_slot_counts.push(1)
           int_arg_indexes.push(-1)
           if fp_arg_index < 8 {
             fp_arg_indexes.push(fp_arg_index)
@@ -3131,7 +3123,59 @@ fn Codegen::gen_mir_value(
             stack_arg_index += 1
           }
           fp_arg_index += 1
+          arg_raw_sizes.push(16)
+          self.gen_mir_value(arg, offsets, frame_size)
+          self.emit_numeric_conversion(arg.ty(), expected)
+          self.emit_scalar_conversion_to(expected)
+          self.emit("\tstr\tx9, [sp, #-16]!")
+        } else if self.is_hfa_aggregate(expected) {
+          let hfa_count = match self.darwin_hfa_parts(expected) {
+            Some((_, count)) => count
+            None => abort("unsupported Darwin ARM64 MIR HFA indirect argument")
+          }
+          arg_is_hfa.push(true)
+          arg_is_register_aggregate.push(false)
+          arg_slot_counts.push(hfa_count)
+          int_arg_indexes.push(-1)
+          if fp_arg_index + hfa_count <= 8 {
+            fp_arg_indexes.push(fp_arg_index)
+            stack_arg_indexes.push(-1)
+          } else {
+            let stack_slots = (self.type_size(expected) + 7) / 8
+            fp_arg_indexes.push(-1)
+            stack_arg_indexes.push(stack_arg_index)
+            stack_arg_index += stack_slots
+          }
+          fp_arg_index += hfa_count
+          let raw_size = (self.type_size(expected) + 15) / 16 * 16
+          arg_raw_sizes.push(raw_size)
+          self.emit_save_darwin_aggregate_call_arg_raw(
+            arg, expected, raw_size, offsets, frame_size,
+          )
+        } else if self.is_register_aggregate(expected) {
+          let slots = (self.type_size(expected) + 7) / 8
+          arg_is_hfa.push(false)
+          arg_is_register_aggregate.push(true)
+          arg_slot_counts.push(slots)
+          if int_arg_index + slots <= 8 {
+            int_arg_indexes.push(int_arg_index)
+            stack_arg_indexes.push(-1)
+          } else {
+            int_arg_indexes.push(-1)
+            stack_arg_indexes.push(stack_arg_index)
+            stack_arg_index += slots
+          }
+          fp_arg_indexes.push(-1)
+          int_arg_index += slots
+          let raw_size = (self.type_size(expected) + 15) / 16 * 16
+          arg_raw_sizes.push(raw_size)
+          self.emit_save_darwin_aggregate_call_arg_raw(
+            arg, expected, raw_size, offsets, frame_size,
+          )
         } else {
+          arg_is_hfa.push(false)
+          arg_is_register_aggregate.push(false)
+          arg_slot_counts.push(1)
           if int_arg_index < 8 {
             int_arg_indexes.push(int_arg_index)
             stack_arg_indexes.push(-1)
@@ -3142,20 +3186,59 @@ fn Codegen::gen_mir_value(
           }
           fp_arg_indexes.push(-1)
           int_arg_index += 1
+          arg_raw_sizes.push(16)
+          self.gen_mir_value(arg, offsets, frame_size)
+          self.emit_numeric_conversion(arg.ty(), expected)
+          self.emit_scalar_conversion_to(expected)
+          self.emit("\tstr\tx9, [sp, #-16]!")
         }
-        self.gen_mir_value(arg, offsets, frame_size)
-        self.emit_numeric_conversion(arg.ty(), expected)
-        self.emit_scalar_conversion_to(expected)
-        self.emit("\tstr\tx9, [sp, #-16]!")
       }
-      let raw_area = (args.length() + 1) * 16
+      let mut raw_args_area = 0
+      for raw_size in arg_raw_sizes {
+        raw_args_area += raw_size
+      }
+      let raw_area = raw_args_area + 16
       let stack_area = (stack_arg_index * 8 + 15) / 16 * 16
       if stack_area > 0 {
         self.emit("\tsub\tsp, sp, #" + stack_area.to_string())
       }
+      let mut raw_offset_cursor = stack_area + raw_args_area
       for i in 0..<args.length() {
-        let raw_offset = stack_area + (args.length() - 1 - i) * 16
-        if mir_body_codegen_abi_fp_type(expected_types[i]) {
+        raw_offset_cursor -= arg_raw_sizes[i]
+        let raw_offset = raw_offset_cursor
+        if arg_is_hfa[i] {
+          if fp_arg_indexes[i] >= 0 {
+            self.emit_load_hfa_aggregate_arg_from_raw(
+              expected_types[i],
+              raw_offset,
+              fp_arg_indexes[i],
+            )
+          } else {
+            self.emit_copy_darwin_aggregate_arg_from_raw_to_stack(
+              expected_types[i],
+              raw_offset,
+              stack_arg_indexes[i] * 8,
+            )
+          }
+        } else if arg_is_register_aggregate[i] {
+          if int_arg_indexes[i] >= 0 {
+            for j in 0..<arg_slot_counts[i] {
+              self.emit(
+                "\tldr\tx" +
+                (int_arg_indexes[i] + j).to_string() +
+                ", [sp, #" +
+                (raw_offset + j * 8).to_string() +
+                "]",
+              )
+            }
+          } else {
+            self.emit_copy_darwin_aggregate_arg_from_raw_to_stack(
+              expected_types[i],
+              raw_offset,
+              stack_arg_indexes[i] * 8,
+            )
+          }
+        } else if mir_body_codegen_abi_fp_type(expected_types[i]) {
           self.emit("\tldr\tx9, [sp, #" + raw_offset.to_string() + "]")
           if fp_arg_indexes[i] >= 0 {
             self.emit_mir_fp_arg_from_x9(expected_types[i], fp_arg_indexes[i])
@@ -3180,9 +3263,7 @@ fn Codegen::gen_mir_value(
         }
       }
       self.emit(
-        "\tldr\tx15, [sp, #" +
-        (stack_area + args.length() * 16).to_string() +
-        "]",
+        "\tldr\tx15, [sp, #" + (stack_area + raw_args_area).to_string() + "]",
       )
       self.emit_call_sret_addr(ty, frame_size)
       self.emit("\tblr\tx15")

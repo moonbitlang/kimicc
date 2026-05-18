@@ -474,6 +474,99 @@ test "strict MIR codegen passes stack aggregate parameters to clang callees" {
 }
 
 ///|
+test "strict MIR codegen executes indirect register aggregate parameters" {
+  let source =
+    #|struct Pair { long a; long b; };
+    #|struct Tiny { char a; short b; };
+    #|struct H { double a[2]; };
+    #|struct F { float a; float b; float c; };
+    #|long sum_pair(struct Pair p, long z) {
+    #|  return p.a + p.b + z;
+    #|}
+    #|int sum_tiny(struct Tiny t) {
+    #|  return t.a + t.b;
+    #|}
+    #|int sum_h(struct H h) {
+    #|  return (int)(h.a[0] + h.a[1]);
+    #|}
+    #|int sum_f(struct F f) {
+    #|  return (int)(f.a + f.b + f.c);
+    #|}
+    #|int main(void) {
+    #|  struct Pair p;
+    #|  struct Tiny t;
+    #|  struct H h;
+    #|  struct F f;
+    #|  long (*fp_pair)(struct Pair, long) = sum_pair;
+    #|  int (*fp_tiny)(struct Tiny) = sum_tiny;
+    #|  int (*fp_h)(struct H) = sum_h;
+    #|  int (*fp_f)(struct F) = sum_f;
+    #|  p.a = 10;
+    #|  p.b = 20;
+    #|  t.a = 5;
+    #|  t.b = 30;
+    #|  h.a[0] = 3.0;
+    #|  h.a[1] = 4.0;
+    #|  f.a = 1.0f;
+    #|  f.b = 2.0f;
+    #|  f.c = 3.0f;
+    #|  return (int)fp_pair(p, 5) + fp_tiny(t) + fp_h(h) + fp_f(f);
+    #|}
+  assert_eq(run_source_strict_mir(source), 83)
+}
+
+///|
+test "strict MIR codegen passes indirect stack aggregate parameters to clang callees" {
+  let caller =
+    #|struct Pair { long a; long b; };
+    #|struct Tiny { char a; short b; };
+    #|struct H { double a[2]; };
+    #|struct Hthree { double a[3]; };
+    #|long sum_pair_stack(long a0, long a1, long a2, long a3, long a4, long a5, long a6, struct Pair p, long z);
+    #|int sum_tiny_stack(long a0, long a1, long a2, long a3, long a4, long a5, long a6, long a7, struct Tiny t, long z);
+    #|int sum_h_stack(double d0, double d1, double d2, double d3, double d4, double d5, double d6, struct H h, double z);
+    #|int sum_h3_stack(double d0, double d1, double d2, double d3, double d4, double d5, struct Hthree h, double z);
+    #|int main(void) {
+    #|  struct Pair p;
+    #|  struct Tiny t;
+    #|  struct H h;
+    #|  struct Hthree hthree;
+    #|  long (*fp_pair)(long, long, long, long, long, long, long, struct Pair, long) = sum_pair_stack;
+    #|  int (*fp_tiny)(long, long, long, long, long, long, long, long, struct Tiny, long) = sum_tiny_stack;
+    #|  int (*fp_h)(double, double, double, double, double, double, double, struct H, double) = sum_h_stack;
+    #|  int (*fp_hthree)(double, double, double, double, double, double, struct Hthree, double) = sum_h3_stack;
+    #|  p.a = 10;
+    #|  p.b = 20;
+    #|  t.a = 5;
+    #|  t.b = 30;
+    #|  h.a[0] = 3.0;
+    #|  h.a[1] = 4.0;
+    #|  hthree.a[0] = 2.0;
+    #|  hthree.a[1] = 3.0;
+    #|  hthree.a[2] = 4.0;
+    #|  return (int)fp_pair(1, 2, 3, 4, 5, 6, 7, p, 9) + fp_tiny(1, 2, 3, 4, 5, 6, 7, 8, t, 9) + fp_h(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, h, 9.0) + fp_hthree(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, hthree, 5.0);
+    #|}
+  let callee =
+    #|struct Pair { long a; long b; };
+    #|struct Tiny { char a; short b; };
+    #|struct H { double a[2]; };
+    #|struct Hthree { double a[3]; };
+    #|long sum_pair_stack(long a0, long a1, long a2, long a3, long a4, long a5, long a6, struct Pair p, long z) {
+    #|  return a0 + a1 + a2 + a3 + a4 + a5 + a6 + p.a + p.b + z;
+    #|}
+    #|int sum_tiny_stack(long a0, long a1, long a2, long a3, long a4, long a5, long a6, long a7, struct Tiny t, long z) {
+    #|  return (int)(a0 + a1 + a2 + a3 + a4 + a5 + a6 + a7 + t.a + t.b + z);
+    #|}
+    #|int sum_h_stack(double d0, double d1, double d2, double d3, double d4, double d5, double d6, struct H h, double z) {
+    #|  return (int)(d0 + d1 + d2 + d3 + d4 + d5 + d6 + h.a[0] + h.a[1] + z);
+    #|}
+    #|int sum_h3_stack(double d0, double d1, double d2, double d3, double d4, double d5, struct Hthree h, double z) {
+    #|  return (int)(d0 + d1 + d2 + d3 + d4 + d5 + h.a[0] + h.a[1] + h.a[2] + z);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 226)
+}
+
+///|
 test "strict MIR codegen executes memory aggregate call results" {
   let source =
     #|struct Big { long a; long b; long c; };
