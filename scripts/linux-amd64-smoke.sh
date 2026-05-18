@@ -229,6 +229,11 @@ strict_mir_return_args_source_path="/tmp/kimicc-linux-amd64-strict-mir-return-ar
 strict_mir_return_args_binary_path="/tmp/kimicc-linux-amd64-strict-mir-return-args"
 strict_mir_indirect_returns_source_path="/tmp/kimicc-linux-amd64-strict-mir-indirect-returns.c"
 strict_mir_indirect_returns_binary_path="/tmp/kimicc-linux-amd64-strict-mir-indirect-returns"
+strict_mir_memory_returns_source_path="/tmp/kimicc-linux-amd64-strict-mir-memory-returns.c"
+strict_mir_memory_returns_driver_path="/tmp/kimicc-linux-amd64-strict-mir-memory-returns-driver.c"
+strict_mir_memory_returns_object_path="/tmp/kimicc-linux-amd64-strict-mir-memory-returns.o"
+strict_mir_memory_returns_driver_object_path="/tmp/kimicc-linux-amd64-strict-mir-memory-returns-driver.o"
+strict_mir_memory_returns_binary_path="/tmp/kimicc-linux-amd64-strict-mir-memory-returns"
 
 mkdir -p "$probe_include_dir" "$probe_after_include_dir" "$probe_prefix_dir/headers"
 cat > "$probe_include_dir/probe_header.h" <<'H'
@@ -3614,6 +3619,55 @@ status=$?
 set -e
 if [ "$status" -ne 93 ]; then
   echo "expected strict MIR indirect aggregate returns smoke binary to exit 93, got $status" >&2
+  exit 1
+fi
+
+cat > "$strict_mir_memory_returns_source_path" <<'C'
+struct Big {
+  long a;
+  long b;
+  long c;
+};
+
+struct Big make_big(long a, long b, long c) {
+  struct Big p;
+  p.a = a;
+  p.b = b;
+  p.c = c;
+  return p;
+}
+C
+
+cat > "$strict_mir_memory_returns_driver_path" <<'C'
+struct Big {
+  long a;
+  long b;
+  long c;
+};
+
+struct Big make_big(long, long, long);
+
+int main(void) {
+  struct Big p = make_big(10, 20, 30);
+  return (int)(p.a + p.b + p.c);
+}
+C
+
+"$kimicc" --strict-mir-codegen -c -target linux-amd64 \
+  -o "$strict_mir_memory_returns_object_path" \
+  "$strict_mir_memory_returns_source_path"
+clang -target x86_64-linux-gnu -c \
+  -o "$strict_mir_memory_returns_driver_object_path" \
+  "$strict_mir_memory_returns_driver_path"
+clang -o "$strict_mir_memory_returns_binary_path" \
+  "$strict_mir_memory_returns_object_path" \
+  "$strict_mir_memory_returns_driver_object_path"
+set +e
+"$strict_mir_memory_returns_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 60 ]; then
+  echo "expected strict MIR memory aggregate returns smoke binary to exit 60, got $status" >&2
   exit 1
 fi
 

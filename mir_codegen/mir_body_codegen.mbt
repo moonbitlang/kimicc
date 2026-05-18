@@ -118,6 +118,22 @@ fn mir_body_codegen_x64_small_aggregate_return_type(
 }
 
 ///|
+fn mir_body_codegen_x64_memory_aggregate_return_type(
+  ty : @ctype.Type,
+  mir : @mir.MirModule,
+) -> Bool {
+  match mir.target {
+    LinuxAmd64 =>
+      match peel_aligned_type(ty) {
+        Struct(_) | Union(_) =>
+          X64Codegen::new_with_mir_module(mir).is_memory_aggregate(ty)
+        _ => false
+      }
+    DarwinArm64 => false
+  }
+}
+
+///|
 fn mir_body_codegen_variadic_args_supported(
   params : Array[@ctype.Type],
   named_count : Int,
@@ -1256,6 +1272,24 @@ fn mir_body_codegen_aggregate_return_value_supported(
 }
 
 ///|
+fn mir_body_codegen_memory_aggregate_return_value_supported(
+  value : @mir.MirValue,
+  int_arg_limit : Int,
+  mir : @mir.MirModule,
+) -> Bool {
+  if !mir_body_codegen_x64_memory_aggregate_return_type(value.ty(), mir) {
+    return false
+  }
+  match value {
+    MirLocal(binding) => mir_body_codegen_local_type(binding.ty)
+    MirAggregateArg(addr, _) =>
+      mir_body_codegen_value_supported(addr, int_arg_limit, mir)
+    MirLoad(ptr, _) => mir_body_codegen_value_supported(ptr, int_arg_limit, mir)
+    _ => false
+  }
+}
+
+///|
 fn mir_body_codegen_return_value_supported(
   value : @mir.MirValue,
   ret : @ctype.Type,
@@ -1267,6 +1301,11 @@ fn mir_body_codegen_return_value_supported(
   }
   if mir_body_codegen_x64_small_aggregate_return_type(ret, mir) {
     return mir_body_codegen_aggregate_return_value_supported(
+      value, int_arg_limit, mir,
+    )
+  }
+  if mir_body_codegen_x64_memory_aggregate_return_type(ret, mir) {
+    return mir_body_codegen_memory_aggregate_return_value_supported(
       value, int_arg_limit, mir,
     )
   }
@@ -1366,7 +1405,8 @@ fn mir_body_codegen_func_supported(
 ) -> Bool {
   ignore(variadic)
   if !mir_body_codegen_abi_scalar_type(body.ret) &&
-    !mir_body_codegen_x64_small_aggregate_return_type(body.ret, mir) {
+    !mir_body_codegen_x64_small_aggregate_return_type(body.ret, mir) &&
+    !mir_body_codegen_x64_memory_aggregate_return_type(body.ret, mir) {
     return false
   }
   let param_types : Array[@ctype.Type] = []
@@ -3062,8 +3102,9 @@ fn X64Codegen::mir_body_offsets(
 ///|
 fn x64_compute_mir_va_initial_offsets(
   params : Array[@mir.MirLocal],
+  initial_int_slots : Int,
 ) -> (Int, Int, Int) {
-  let mut int_idx = 0
+  let mut int_idx = initial_int_slots
   let mut fp_idx = 0
   let mut stack_idx = 0
   for param in params {
@@ -4593,6 +4634,14 @@ fn X64Codegen::gen_mir_stmt(
                 self.emit_load_small_aggregate_return(ret_ty)
               }
             }
+          } else if self.is_memory_aggregate(ret_ty) {
+            self.gen_mir_aggregate_return_addr(value, offsets)
+            self.emit("\tmov\tr11, rax")
+            self.emit(
+              "\tmov\tr10, QWORD PTR " + self.local_ref(self.sret_dest_offset),
+            )
+            self.emit_copy_aggregate_from_addr(ret_ty)
+            self.emit("\tmov\trax, r10")
           } else {
             self.gen_mir_value(value, offsets)
             self.emit_mir_numeric_conversion(value.ty(), ret_ty)
@@ -4753,6 +4802,7 @@ fn X64Codegen::gen_mir_func(
   self.va_initial_gp_offset = 0
   self.va_initial_fp_offset = 48
   self.va_initial_overflow_offset = 16
+  self.sret_dest_offset = -1
   self.sret_scratch_offset = -1
   self.va_arg_scratch_offset = -1
   self.va_arg_scratch_size = 0
@@ -4762,9 +4812,21 @@ fn X64Codegen::gen_mir_func(
   self.emitted_labels = {}
   self.defined_labels = {}
   let offsets = self.mir_body_offsets(body)
+  let has_sret = self.is_memory_aggregate(decl.ret)
+  if has_sret {
+    self.sret_dest_offset = self.alloc_local(
+      "__kimicc_mir_sret_dest",
+      Pointer(Void),
+    )
+  }
   if decl.variadic {
     let (gp_offset, fp_offset, overflow_offset) = x64_compute_mir_va_initial_offsets(
       body.params,
+      if has_sret {
+        1
+      } else {
+        0
+      },
     )
     self.va_initial_gp_offset = gp_offset
     self.va_initial_fp_offset = fp_offset
@@ -4790,12 +4852,17 @@ fn X64Codegen::gen_mir_func(
   if frame_size > 0 {
     self.emit("\tsub\trsp, " + frame_size.to_string())
   }
+  if self.sret_dest_offset >= 0 {
+    self.emit(
+      "\tmov\tQWORD PTR " + self.local_ref(self.sret_dest_offset) + ", rdi",
+    )
+  }
   self.emit_mir_save_variadic_registers()
   let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
   let fp_arg_regs = [
     "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
   ]
-  let mut int_arg_index = 0
+  let mut int_arg_index = if has_sret { 1 } else { 0 }
   let mut fp_arg_index = 0
   let mut stack_arg_index = 0
   let mut call_stack_align = 16
