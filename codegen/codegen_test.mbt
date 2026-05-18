@@ -1261,6 +1261,35 @@ test "generate darwin arm64 strict MIR varargs setup builtins" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR scalar va_arg reads" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|int variadic(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  int a = __builtin_va_arg(ap, int);
+    #|  double b = __builtin_va_arg(ap, double);
+    #|  __builtin_va_end(ap);
+    #|  return tag + a + (int)b;
+    #|}
+    #|int main(void) {
+    #|  return variadic(4, 10, 3.5);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_variadic:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tadd\tx9, x29, #16"), content="true")
+      inspect(assembly.contains("\tldr\tw9, [x11]"), content="true")
+      inspect(assembly.contains("\tldr\tx9, [x11]"), content="true")
+      inspect(assembly.contains("__builtin_va_arg"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR bzero builtin libcall" {
   let source =
     #|int main(void) {
@@ -3039,6 +3068,43 @@ test "generate linux amd64 strict MIR varargs setup builtins" {
       inspect(assembly.contains("__builtin_va_start"), content="false")
       inspect(assembly.contains("__builtin_va_copy"), content="false")
       inspect(assembly.contains("__builtin_va_end"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR scalar va_arg reads" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|int variadic(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  int a = __builtin_va_arg(ap, int);
+    #|  double b = __builtin_va_arg(ap, double);
+    #|  __builtin_va_end(ap);
+    #|  return tag + a + (int)b;
+    #|}
+    #|int main(void) {
+    #|  return variadic(4, 10, 3.5);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tmovups\tXMMWORD PTR "), content="true")
+      inspect(assembly.contains("\tcmp\teax, 48"), content="true")
+      inspect(assembly.contains("\tadd\tDWORD PTR [r11], 8"), content="true")
+      inspect(assembly.contains("\tcmp\teax, 176"), content="true")
+      inspect(
+        assembly.contains("\tadd\tDWORD PTR [r11 + 4], 16"),
+        content="true",
+      )
+      inspect(assembly.contains("__builtin_va_arg"), content="false")
     }
     Err(err) => abort(err)
   }

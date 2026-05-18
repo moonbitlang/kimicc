@@ -340,6 +340,10 @@ fn mir_body_codegen_value_supported(
     MirCast(ty, inner) =>
       mir_body_codegen_scalar_type(ty) &&
       mir_body_codegen_value_supported(inner, int_arg_limit, mir)
+    MirVaArg(ap, ty) =>
+      !(peel_aligned_type(ty) is Void) &&
+      mir_body_codegen_abi_scalar_type(ty) &&
+      mir_body_codegen_value_supported(ap, int_arg_limit, mir)
     MirAssignLocal(binding, rhs) =>
       mir_body_codegen_scalar_type(binding.ty) &&
       mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
@@ -510,14 +514,18 @@ fn mir_body_codegen_va_setup_call(
   args : Array[@mir.MirValue],
   ret : @ctype.Type,
 ) -> Bool {
-  let arity = match name {
-    "__builtin_va_start" | "__builtin_va_copy" => Some(2)
-    "__builtin_va_end" => Some(1)
-    _ => None
+  if !(peel_aligned_type(ret) is Void) {
+    return false
   }
-  match arity {
-    Some(count) => args.length() == count && peel_aligned_type(ret) is Void
-    None => false
+  match name {
+    "__builtin_va_start" | "__builtin_va_copy" =>
+      args.length() == 2 &&
+      (match args[0] {
+        MirLocal(_) => true
+        _ => false
+      })
+    "__builtin_va_end" => args.length() == 1
+    _ => false
   }
 }
 
@@ -1231,6 +1239,79 @@ fn Codegen::emit_mir_overflow_arithmetic_builtin(
 }
 
 ///|
+fn mir_body_codegen_va_slot_advance(size : Int) -> Int {
+  if size < 8 {
+    8
+  } else {
+    (size + 7) / 8 * 8
+  }
+}
+
+///|
+fn Codegen::emit_mir_va_start(
+  self : Codegen,
+  args : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+  frame_size : Int,
+) -> Unit {
+  match args.get(0) {
+    Some(MirLocal(binding)) => {
+      self.emit("\tadd\tx9, x29, #16")
+      self.emit_store_local("x9", offsets[binding.id], frame_size)
+    }
+    _ => ()
+  }
+  self.emit("\tmov\tx9, #0")
+}
+
+///|
+fn Codegen::emit_mir_va_copy(
+  self : Codegen,
+  args : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+  frame_size : Int,
+) -> Unit {
+  if args.length() < 2 {
+    self.emit("\tmov\tx9, #0")
+    return
+  }
+  match args[0] {
+    MirLocal(binding) => {
+      self.gen_mir_value(args[1], offsets, frame_size)
+      self.emit_store_local("x9", offsets[binding.id], frame_size)
+    }
+    _ => ()
+  }
+  self.emit("\tmov\tx9, #0")
+}
+
+///|
+fn Codegen::emit_mir_va_arg(
+  self : Codegen,
+  ap : @mir.MirValue,
+  ty : @ctype.Type,
+  offsets : Map[Int, Int],
+  frame_size : Int,
+) -> Unit {
+  let binding = match ap {
+    MirLocal(binding) => binding
+    _ => abort("Darwin ARM64 MIR va_arg only supports local va_list values")
+  }
+  self.gen_mir_value(ap, offsets, frame_size)
+  self.emit("\tmov\tx11, x9")
+  self.emit_load_typed("x9", "x11", ty)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.emit(
+    "\tadd\tx11, x11, #" +
+    mir_body_codegen_va_slot_advance(self.type_size(ty)).to_string(),
+  )
+  self.emit("\tmov\tx9, x11")
+  self.emit_store_local("x9", offsets[binding.id], frame_size)
+  self.emit("\tldr\tx9, [sp], #16")
+  self.emit_scalar_conversion_to(ty)
+}
+
+///|
 fn Codegen::gen_mir_value(
   self : Codegen,
   value : @mir.MirValue,
@@ -1303,6 +1384,7 @@ fn Codegen::gen_mir_value(
       self.emit_numeric_conversion(inner.ty(), ty)
       self.emit_scalar_conversion_to(ty)
     }
+    MirVaArg(ap, ty) => self.emit_mir_va_arg(ap, ty, offsets, frame_size)
     MirAssignLocal(binding, rhs) => {
       self.gen_mir_value(rhs, offsets, frame_size)
       self.emit_numeric_conversion(rhs.ty(), binding.ty)
@@ -1464,7 +1546,13 @@ fn Codegen::gen_mir_value(
         }
         return
       } else if mir_body_codegen_va_setup_call(name, args, ty) {
-        self.emit("\tmov\tx9, #0")
+        match name {
+          "__builtin_va_start" =>
+            self.emit_mir_va_start(args, offsets, frame_size)
+          "__builtin_va_copy" =>
+            self.emit_mir_va_copy(args, offsets, frame_size)
+          _ => self.emit("\tmov\tx9, #0")
+        }
         return
       }
       match overflow_builtin_operator(name) {
@@ -2342,6 +2430,130 @@ fn X64Codegen::emit_mir_pop_rax(self : X64Codegen) -> Unit {
 }
 
 ///|
+fn X64Codegen::ensure_mir_va_list_storage(
+  self : X64Codegen,
+  binding : @mir.MirLocal,
+) -> Int {
+  self.ensure_va_list_storage(mir_body_local_name(binding))
+}
+
+///|
+fn X64Codegen::collect_mir_va_list_storage_value(
+  self : X64Codegen,
+  value : @mir.MirValue,
+) -> Unit {
+  match value {
+    MirConst(_, _)
+    | MirLocal(_)
+    | MirAddrLocal(_)
+    | MirAddrGlobal(_, _)
+    | MirFuncAddr(_, _)
+    | MirStringAddr(_) => ()
+    MirElemAddr(base, index, _) => {
+      self.collect_mir_va_list_storage_value(base)
+      self.collect_mir_va_list_storage_value(index)
+    }
+    MirOffsetAddr(base, _, _) | MirLoad(base, _) | MirUnary(_, base, _) =>
+      self.collect_mir_va_list_storage_value(base)
+    MirBinary(_, lhs, rhs, _) | MirStore(lhs, rhs, _) => {
+      self.collect_mir_va_list_storage_value(lhs)
+      self.collect_mir_va_list_storage_value(rhs)
+    }
+    MirCast(_, inner) | MirVaArg(inner, _) =>
+      self.collect_mir_va_list_storage_value(inner)
+    MirCall(name, args, _) => {
+      if name == "__builtin_va_start" || name == "__builtin_va_copy" {
+        match args.get(0) {
+          Some(MirLocal(binding)) => {
+            let _ = self.ensure_mir_va_list_storage(binding)
+          }
+          _ => ()
+        }
+      }
+      for arg in args {
+        self.collect_mir_va_list_storage_value(arg)
+      }
+    }
+    MirIndirectCall(callee, args, _) => {
+      self.collect_mir_va_list_storage_value(callee)
+      for arg in args {
+        self.collect_mir_va_list_storage_value(arg)
+      }
+    }
+    MirAssignLocal(_, rhs) | MirPostUpdateLocal(_, _, rhs, _) =>
+      self.collect_mir_va_list_storage_value(rhs)
+    MirPreUpdateMemory(ptr, _, rhs, _) | MirPostUpdateMemory(ptr, _, rhs, _) => {
+      self.collect_mir_va_list_storage_value(ptr)
+      self.collect_mir_va_list_storage_value(rhs)
+    }
+    MirTernary(cond, then_, else_, _) => {
+      self.collect_mir_va_list_storage_value(cond)
+      self.collect_mir_va_list_storage_value(then_)
+      self.collect_mir_va_list_storage_value(else_)
+    }
+  }
+}
+
+///|
+fn X64Codegen::collect_mir_va_list_storage_stmt(
+  self : X64Codegen,
+  stmt : @mir.MirStmt,
+) -> Unit {
+  match stmt {
+    MirDeclare(_, init) =>
+      match init {
+        Some(value) => self.collect_mir_va_list_storage_value(value)
+        None => ()
+      }
+    MirExprStmt(value) => self.collect_mir_va_list_storage_value(value)
+    MirReturn(value) =>
+      match value {
+        Some(value) => self.collect_mir_va_list_storage_value(value)
+        None => ()
+      }
+    MirIf(cond, then_, else_) => {
+      self.collect_mir_va_list_storage_value(cond)
+      for nested in then_ {
+        self.collect_mir_va_list_storage_stmt(nested)
+      }
+      for nested in else_ {
+        self.collect_mir_va_list_storage_stmt(nested)
+      }
+    }
+    MirWhile(cond, body) | MirDoWhile(cond, body) => {
+      self.collect_mir_va_list_storage_value(cond)
+      for nested in body {
+        self.collect_mir_va_list_storage_stmt(nested)
+      }
+    }
+    MirFor(init, cond, inc, body) => {
+      for nested in init {
+        self.collect_mir_va_list_storage_stmt(nested)
+      }
+      self.collect_mir_va_list_storage_value(cond)
+      match inc {
+        Some(value) => self.collect_mir_va_list_storage_value(value)
+        None => ()
+      }
+      for nested in body {
+        self.collect_mir_va_list_storage_stmt(nested)
+      }
+    }
+    MirSwitch(control, _, body) => {
+      self.collect_mir_va_list_storage_value(control)
+      for nested in body {
+        self.collect_mir_va_list_storage_stmt(nested)
+      }
+    }
+    MirBlock(stmts) =>
+      for nested in stmts {
+        self.collect_mir_va_list_storage_stmt(nested)
+      }
+    MirLabel(_) | MirGoto(_) | MirBreak | MirContinue => ()
+  }
+}
+
+///|
 fn X64Codegen::mir_body_offsets(
   self : X64Codegen,
   body : @mir.MirFuncBody,
@@ -2355,7 +2567,198 @@ fn X64Codegen::mir_body_offsets(
       )
     }
   }
+  for stmt in body.body {
+    self.collect_mir_va_list_storage_stmt(stmt)
+  }
   offsets
+}
+
+///|
+fn x64_compute_mir_va_initial_offsets(
+  params : Array[@mir.MirLocal],
+) -> (Int, Int, Int) {
+  let mut int_idx = 0
+  let mut fp_idx = 0
+  let mut stack_idx = 0
+  for param in params {
+    if mir_body_codegen_abi_fp_type(param.ty) {
+      if fp_idx < 8 {
+        fp_idx += 1
+      } else {
+        stack_idx += 1
+      }
+    } else if int_idx < 6 {
+      int_idx += 1
+    } else {
+      stack_idx += 1
+    }
+  }
+  (int_idx * 8, 48 + fp_idx * 16, 16 + stack_idx * 8)
+}
+
+///|
+fn X64Codegen::emit_mir_save_variadic_registers(self : X64Codegen) -> Unit {
+  if self.va_reg_save_offset < 0 {
+    return
+  }
+  let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
+  let fp_arg_regs = [
+    "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
+  ]
+  for i in 0..<arg_regs.length() {
+    self.emit(
+      "\tmov\tQWORD PTR " +
+      self.local_neg_ref(self.va_reg_save_offset, i * 8) +
+      ", " +
+      arg_regs[i],
+    )
+  }
+  for i in 0..<fp_arg_regs.length() {
+    self.emit(
+      "\tmovups\tXMMWORD PTR " +
+      self.local_neg_ref(self.va_reg_save_offset, 48 + i * 16) +
+      ", " +
+      fp_arg_regs[i],
+    )
+  }
+}
+
+///|
+fn X64Codegen::emit_mir_store_va_list_pointer(
+  self : X64Codegen,
+  binding : @mir.MirLocal,
+  state_offset : Int,
+  offsets : Map[Int, Int],
+) -> Unit {
+  self.emit("\tlea\trax, " + self.local_ref(state_offset))
+  self.emit("\tmov\tQWORD PTR " + self.local_ref(offsets[binding.id]) + ", rax")
+}
+
+///|
+fn X64Codegen::emit_mir_va_start(
+  self : X64Codegen,
+  args : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+) -> Unit {
+  if args.length() == 0 {
+    self.emit("\tmov\trax, 0")
+    return
+  }
+  if self.va_reg_save_offset < 0 {
+    abort("__builtin_va_start used in non-variadic x86-64 MIR function")
+  }
+  match args[0] {
+    MirLocal(binding) => {
+      let state_offset = self.ensure_mir_va_list_storage(binding)
+      self.emit(
+        "\tmov\tDWORD PTR " +
+        self.local_neg_ref(state_offset, 0) +
+        ", " +
+        self.va_initial_gp_offset.to_string(),
+      )
+      self.emit(
+        "\tmov\tDWORD PTR " +
+        self.local_neg_ref(state_offset, 4) +
+        ", " +
+        self.va_initial_fp_offset.to_string(),
+      )
+      self.emit(
+        "\tlea\trax, [rbp + " +
+        self.va_initial_overflow_offset.to_string() +
+        "]",
+      )
+      self.emit(
+        "\tmov\tQWORD PTR " + self.local_neg_ref(state_offset, 8) + ", rax",
+      )
+      self.emit("\tlea\trax, " + self.local_ref(self.va_reg_save_offset))
+      self.emit(
+        "\tmov\tQWORD PTR " + self.local_neg_ref(state_offset, 16) + ", rax",
+      )
+      self.emit_mir_store_va_list_pointer(binding, state_offset, offsets)
+    }
+    _ => ()
+  }
+  self.emit("\tmov\trax, 0")
+}
+
+///|
+fn X64Codegen::emit_mir_va_copy(
+  self : X64Codegen,
+  args : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+) -> Unit {
+  if args.length() < 2 {
+    self.emit("\tmov\trax, 0")
+    return
+  }
+  match args[0] {
+    MirLocal(binding) => {
+      let dest_offset = self.ensure_mir_va_list_storage(binding)
+      self.gen_mir_value(args[1], offsets)
+      self.emit("\tmov\tr11, rax")
+      self.emit("\tmov\trax, QWORD PTR [r11]")
+      self.emit(
+        "\tmov\tQWORD PTR " + self.local_neg_ref(dest_offset, 0) + ", rax",
+      )
+      self.emit("\tmov\trax, QWORD PTR [r11 + 8]")
+      self.emit(
+        "\tmov\tQWORD PTR " + self.local_neg_ref(dest_offset, 8) + ", rax",
+      )
+      self.emit("\tmov\trax, QWORD PTR [r11 + 16]")
+      self.emit(
+        "\tmov\tQWORD PTR " + self.local_neg_ref(dest_offset, 16) + ", rax",
+      )
+      self.emit_mir_store_va_list_pointer(binding, dest_offset, offsets)
+    }
+    _ => ()
+  }
+  self.emit("\tmov\trax, 0")
+}
+
+///|
+fn X64Codegen::emit_mir_va_arg(
+  self : X64Codegen,
+  ap : @mir.MirValue,
+  ty : @ctype.Type,
+  offsets : Map[Int, Int],
+) -> Unit {
+  let overflow_label = self.new_label()
+  let load_label = self.new_label()
+  if mir_body_codegen_abi_fp_type(ty) {
+    self.gen_mir_value(ap, offsets)
+    self.emit("\tmov\tr11, rax")
+    self.emit("\tmov\teax, DWORD PTR [r11 + 4]")
+    self.emit("\tcmp\teax, 176")
+    self.emit("\tjae\t" + overflow_label)
+    self.emit("\tmov\tr10, QWORD PTR [r11 + 16]")
+    self.emit("\tadd\tr10, rax")
+    self.emit("\tadd\tDWORD PTR [r11 + 4], 16")
+    self.emit("\tjmp\t" + load_label)
+    self.emit(overflow_label + ":")
+    self.emit("\tmov\tr10, QWORD PTR [r11 + 8]")
+    self.emit("\tlea\trax, [r10 + 8]")
+    self.emit("\tmov\tQWORD PTR [r11 + 8], rax")
+    self.emit(load_label + ":")
+    self.emit("\tmov\trax, r10")
+    self.emit_load_indirect(ty)
+  } else {
+    self.gen_mir_value(ap, offsets)
+    self.emit("\tmov\tr11, rax")
+    self.emit("\tmov\teax, DWORD PTR [r11]")
+    self.emit("\tcmp\teax, 48")
+    self.emit("\tjae\t" + overflow_label)
+    self.emit("\tmov\tr10, QWORD PTR [r11 + 16]")
+    self.emit("\tadd\tr10, rax")
+    self.emit("\tadd\tDWORD PTR [r11], 8")
+    self.emit("\tjmp\t" + load_label)
+    self.emit(overflow_label + ":")
+    self.emit("\tmov\tr10, QWORD PTR [r11 + 8]")
+    self.emit("\tlea\trax, [r10 + 8]")
+    self.emit("\tmov\tQWORD PTR [r11 + 8], rax")
+    self.emit(load_label + ":")
+    self.emit("\tmov\trax, r10")
+    self.emit_load_indirect(ty)
+  }
 }
 
 ///|
@@ -2485,6 +2888,7 @@ fn X64Codegen::gen_mir_value(
       self.emit_mir_numeric_conversion(inner.ty(), ty)
       self.emit_int_conversion_to(ty)
     }
+    MirVaArg(ap, ty) => self.emit_mir_va_arg(ap, ty, offsets)
     MirAssignLocal(binding, rhs) => {
       self.gen_mir_value(rhs, offsets)
       self.emit_mir_numeric_conversion(rhs.ty(), binding.ty)
@@ -2655,7 +3059,11 @@ fn X64Codegen::gen_mir_value(
         }
         return
       } else if mir_body_codegen_va_setup_call(name, args, ty) {
-        self.emit("\tmov\trax, 0")
+        match name {
+          "__builtin_va_start" => self.emit_mir_va_start(args, offsets)
+          "__builtin_va_copy" => self.emit_mir_va_copy(args, offsets)
+          _ => self.emit("\tmov\trax, 0")
+        }
         return
       }
       match overflow_builtin_operator(name) {
@@ -3475,6 +3883,18 @@ fn X64Codegen::gen_mir_func(
   self.emitted_labels = {}
   self.defined_labels = {}
   let offsets = self.mir_body_offsets(body)
+  if decl.variadic {
+    let (gp_offset, fp_offset, overflow_offset) = x64_compute_mir_va_initial_offsets(
+      body.params,
+    )
+    self.va_initial_gp_offset = gp_offset
+    self.va_initial_fp_offset = fp_offset
+    self.va_initial_overflow_offset = overflow_offset
+    self.va_reg_save_offset = self.alloc_local(
+      "__kimicc_va_reg_save",
+      Array(UChar, 176),
+    )
+  }
   let frame_size = x64_align_to(self.stack_size, 16)
   self.emit_function_section(decl.section)
   self.emit_symbol_binding(
@@ -3491,6 +3911,7 @@ fn X64Codegen::gen_mir_func(
   if frame_size > 0 {
     self.emit("\tsub\trsp, " + frame_size.to_string())
   }
+  self.emit_mir_save_variadic_registers()
   let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
   let fp_arg_regs = [
     "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",

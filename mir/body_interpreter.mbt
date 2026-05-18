@@ -793,6 +793,10 @@ fn BodyInterpreter::eval_value(
         inner.ty(),
         ty,
       )
+    MirVaArg(_, _) => {
+      self.fail("unsupported MIR body va_arg")
+      0L
+    }
     MirCall(name, args, ty) => {
       if name == "__sync_synchronize" &&
         args.length() == 0 &&
