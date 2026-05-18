@@ -3266,6 +3266,80 @@ test "generate linux amd64 strict MIR aggregate direct call arguments" {
 }
 
 ///|
+test "generate linux amd64 strict MIR small aggregate returns" {
+  let source =
+    #|struct Pair { long a; long b; };
+    #|struct DPair { double a; double b; };
+    #|struct Mix { long a; double b; };
+    #|struct Pair make_pair(long a, long b) { struct Pair p; p.a = a; p.b = b; return p; }
+    #|struct DPair make_dpair(double a, double b) { struct DPair p; p.a = a; p.b = b; return p; }
+    #|struct Mix make_mix(long a, double b) { struct Mix p; p.a = a; p.b = b; return p; }
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(
+        assembly.contains("\t.type\tmake_pair, @function"),
+        content="true",
+      )
+      inspect(
+        assembly.contains("\t.type\tmake_dpair, @function"),
+        content="true",
+      )
+      inspect(assembly.contains("\t.type\tmake_mix, @function"), content="true")
+      inspect(assembly.contains("\tmov\trax, QWORD PTR [r10]"), content="true")
+      inspect(
+        assembly.contains("\tmov\trdx, QWORD PTR [r10 + 8]"),
+        content="true",
+      )
+      inspect(
+        assembly.contains("\tmovsd\txmm0, QWORD PTR [r10]"),
+        content="true",
+      )
+      inspect(
+        assembly.contains("\tmovsd\txmm1, QWORD PTR [r10 + 8]"),
+        content="true",
+      )
+      inspect(
+        assembly.contains("unsupported MIR body codegen"),
+        content="false",
+      )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "reject linux amd64 strict MIR memory aggregate returns" {
+  let source =
+    #|struct Big { long a; long b; long c; };
+    #|struct Big make_big(long a, long b, long c) {
+    #|  struct Big p;
+    #|  p.a = a;
+    #|  p.b = b;
+    #|  p.c = c;
+    #|  return p;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(_) => abort("expected strict MIR memory aggregate return to be rejected")
+    Err(err) =>
+      inspect(
+        err.contains("unsupported MIR body codegen for make_big"),
+        content="true",
+      )
+  }
+}
+
+///|
 test "generate linux amd64 strict MIR aggregate variadic call arguments" {
   let source =
     #|typedef __builtin_va_list va_list;

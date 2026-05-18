@@ -102,6 +102,22 @@ fn mir_body_codegen_x64_args_with_stack_supported(
 }
 
 ///|
+fn mir_body_codegen_x64_small_aggregate_return_type(
+  ty : @ctype.Type,
+  mir : @mir.MirModule,
+) -> Bool {
+  match mir.target {
+    LinuxAmd64 =>
+      match peel_aligned_type(ty) {
+        Struct(_) | Union(_) =>
+          X64Codegen::new_with_mir_module(mir).aggregate_classes(ty) is Some(_)
+        _ => false
+      }
+    DarwinArm64 => false
+  }
+}
+
+///|
 fn mir_body_codegen_variadic_args_supported(
   params : Array[@ctype.Type],
   named_count : Int,
@@ -1153,8 +1169,45 @@ fn mir_indirect_call_arg_type(
 }
 
 ///|
+fn mir_body_codegen_aggregate_return_value_supported(
+  value : @mir.MirValue,
+  int_arg_limit : Int,
+  mir : @mir.MirModule,
+) -> Bool {
+  if !mir_body_codegen_x64_small_aggregate_return_type(value.ty(), mir) {
+    return false
+  }
+  match value {
+    MirLocal(binding) => mir_body_codegen_local_type(binding.ty)
+    MirAggregateArg(addr, _) =>
+      mir_body_codegen_value_supported(addr, int_arg_limit, mir)
+    MirLoad(ptr, _) => mir_body_codegen_value_supported(ptr, int_arg_limit, mir)
+    _ => false
+  }
+}
+
+///|
+fn mir_body_codegen_return_value_supported(
+  value : @mir.MirValue,
+  ret : @ctype.Type,
+  int_arg_limit : Int,
+  mir : @mir.MirModule,
+) -> Bool {
+  if mir_body_codegen_abi_scalar_type(ret) {
+    return mir_body_codegen_value_supported(value, int_arg_limit, mir)
+  }
+  if mir_body_codegen_x64_small_aggregate_return_type(ret, mir) {
+    return mir_body_codegen_aggregate_return_value_supported(
+      value, int_arg_limit, mir,
+    )
+  }
+  false
+}
+
+///|
 fn mir_body_codegen_stmt_supported(
   stmt : @mir.MirStmt,
+  ret : @ctype.Type,
   int_arg_limit : Int,
   mir : @mir.MirModule,
 ) -> Bool {
@@ -1182,50 +1235,53 @@ fn mir_body_codegen_stmt_supported(
     MirReturn(value) =>
       match value {
         Some(value) =>
-          mir_body_codegen_value_supported(value, int_arg_limit, mir)
+          mir_body_codegen_return_value_supported(
+            value, ret, int_arg_limit, mir,
+          )
         None => true
       }
     MirIf(cond, then_, else_) =>
       mir_body_codegen_value_supported(cond, int_arg_limit, mir) &&
-      mir_body_codegen_stmts_supported(then_, int_arg_limit, mir) &&
-      mir_body_codegen_stmts_supported(else_, int_arg_limit, mir)
+      mir_body_codegen_stmts_supported(then_, ret, int_arg_limit, mir) &&
+      mir_body_codegen_stmts_supported(else_, ret, int_arg_limit, mir)
     MirWhile(cond, body) =>
       mir_body_codegen_value_supported(cond, int_arg_limit, mir) &&
-      mir_body_codegen_stmts_supported(body, int_arg_limit, mir)
+      mir_body_codegen_stmts_supported(body, ret, int_arg_limit, mir)
     MirFor(init, cond, inc, body) => {
       let inc_supported = match inc {
         Some(value) =>
           mir_body_codegen_value_supported(value, int_arg_limit, mir)
         None => true
       }
-      mir_body_codegen_stmts_supported(init, int_arg_limit, mir) &&
+      mir_body_codegen_stmts_supported(init, ret, int_arg_limit, mir) &&
       mir_body_codegen_value_supported(cond, int_arg_limit, mir) &&
       inc_supported &&
-      mir_body_codegen_stmts_supported(body, int_arg_limit, mir)
+      mir_body_codegen_stmts_supported(body, ret, int_arg_limit, mir)
     }
     MirDoWhile(cond, body) =>
       mir_body_codegen_value_supported(cond, int_arg_limit, mir) &&
-      mir_body_codegen_stmts_supported(body, int_arg_limit, mir)
+      mir_body_codegen_stmts_supported(body, ret, int_arg_limit, mir)
     MirSwitch(control, _, body) =>
       mir_body_codegen_value_supported(control, int_arg_limit, mir) &&
-      mir_body_codegen_stmts_supported(body, int_arg_limit, mir)
+      mir_body_codegen_stmts_supported(body, ret, int_arg_limit, mir)
     MirLabel(_) => true
     MirGoto(_) => true
     MirBreak => true
     MirContinue => true
     MirBlock(stmts) =>
-      mir_body_codegen_stmts_supported(stmts, int_arg_limit, mir)
+      mir_body_codegen_stmts_supported(stmts, ret, int_arg_limit, mir)
   }
 }
 
 ///|
 fn mir_body_codegen_stmts_supported(
   stmts : Array[@mir.MirStmt],
+  ret : @ctype.Type,
   int_arg_limit : Int,
   mir : @mir.MirModule,
 ) -> Bool {
   for stmt in stmts {
-    if !mir_body_codegen_stmt_supported(stmt, int_arg_limit, mir) {
+    if !mir_body_codegen_stmt_supported(stmt, ret, int_arg_limit, mir) {
       return false
     }
   }
@@ -1240,7 +1296,8 @@ fn mir_body_codegen_func_supported(
   mir : @mir.MirModule,
 ) -> Bool {
   ignore(variadic)
-  if !mir_body_codegen_abi_scalar_type(body.ret) {
+  if !mir_body_codegen_abi_scalar_type(body.ret) &&
+    !mir_body_codegen_x64_small_aggregate_return_type(body.ret, mir) {
     return false
   }
   let param_types : Array[@ctype.Type] = []
@@ -1257,7 +1314,7 @@ fn mir_body_codegen_func_supported(
         return false
       }
   }
-  mir_body_codegen_stmts_supported(body.body, int_arg_limit, mir)
+  mir_body_codegen_stmts_supported(body.body, body.ret, int_arg_limit, mir)
 }
 
 ///|
@@ -4337,6 +4394,20 @@ fn X64Codegen::gen_mir_binary(
 }
 
 ///|
+fn X64Codegen::gen_mir_aggregate_return_addr(
+  self : X64Codegen,
+  value : @mir.MirValue,
+  offsets : Map[Int, Int],
+) -> Unit {
+  match value {
+    MirLocal(binding) => self.emit_local_addr(offsets[binding.id])
+    MirAggregateArg(addr, _) => self.gen_mir_value(addr, offsets)
+    MirLoad(ptr, _) => self.gen_mir_value(ptr, offsets)
+    _ => abort("unsupported x86-64 MIR aggregate return source")
+  }
+}
+
+///|
 fn X64Codegen::gen_mir_stmt(
   self : X64Codegen,
   stmt : @mir.MirStmt,
@@ -4364,10 +4435,15 @@ fn X64Codegen::gen_mir_stmt(
     MirReturn(value) => {
       match value {
         Some(value) => {
-          self.gen_mir_value(value, offsets)
           let ret_ty = self.func_rets[self.func_name]
-          self.emit_mir_numeric_conversion(value.ty(), ret_ty)
-          self.emit_int_conversion_to(ret_ty)
+          if self.is_supported_small_aggregate(ret_ty) {
+            self.gen_mir_aggregate_return_addr(value, offsets)
+            self.emit_load_small_aggregate_return(ret_ty)
+          } else {
+            self.gen_mir_value(value, offsets)
+            self.emit_mir_numeric_conversion(value.ty(), ret_ty)
+            self.emit_int_conversion_to(ret_ty)
+          }
         }
         None => self.emit("\tmov\trax, 0")
       }
