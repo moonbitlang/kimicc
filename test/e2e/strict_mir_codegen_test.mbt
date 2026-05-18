@@ -227,6 +227,129 @@ test "strict MIR codegen returns HFA aggregates to clang callers" {
 }
 
 ///|
+test "strict MIR codegen executes register aggregate parameters" {
+  let source =
+    #|struct Pair { long a; long b; };
+    #|struct Tiny { char a; short b; };
+    #|struct H { double a[2]; };
+    #|struct F { float a; float b; float c; };
+    #|long sum_pair(struct Pair p, long z) {
+    #|  return p.a + p.b + z;
+    #|}
+    #|int sum_tiny(struct Tiny t) {
+    #|  return t.a + t.b;
+    #|}
+    #|int sum_h(struct H h) {
+    #|  return (int)(h.a[0] + h.a[1]);
+    #|}
+    #|int sum_f(struct F f) {
+    #|  return (int)(f.a + f.b + f.c);
+    #|}
+    #|int main(void) {
+    #|  struct Pair p;
+    #|  struct Tiny t;
+    #|  struct H h;
+    #|  struct F f;
+    #|  p.a = 10;
+    #|  p.b = 20;
+    #|  t.a = 5;
+    #|  t.b = 30;
+    #|  h.a[0] = 3.0;
+    #|  h.a[1] = 4.0;
+    #|  f.a = 1.0f;
+    #|  f.b = 2.0f;
+    #|  f.c = 3.0f;
+    #|  return (int)sum_pair(p, 5) + sum_tiny(t) + sum_h(h) + sum_f(f);
+    #|}
+  assert_eq(run_source_strict_mir(source), 83)
+}
+
+///|
+test "strict MIR codegen receives register aggregate parameters from clang callers" {
+  let callee =
+    #|struct Pair { long a; long b; };
+    #|struct Tiny { char a; short b; };
+    #|struct H { double a[2]; };
+    #|struct F { float a; float b; float c; };
+    #|long sum_pair(struct Pair p, long z) {
+    #|  return p.a + p.b + z;
+    #|}
+    #|int sum_tiny(struct Tiny t) {
+    #|  return t.a + t.b;
+    #|}
+    #|int sum_h(struct H h) {
+    #|  return (int)(h.a[0] + h.a[1]);
+    #|}
+    #|int sum_f(struct F f) {
+    #|  return (int)(f.a + f.b + f.c);
+    #|}
+  let driver =
+    #|struct Pair { long a; long b; };
+    #|struct Tiny { char a; short b; };
+    #|struct H { double a[2]; };
+    #|struct F { float a; float b; float c; };
+    #|long sum_pair(struct Pair p, long z);
+    #|int sum_tiny(struct Tiny t);
+    #|int sum_h(struct H h);
+    #|int sum_f(struct F f);
+    #|int main(void) {
+    #|  struct Pair p = {10, 20};
+    #|  struct Tiny t = {5, 30};
+    #|  struct H h = {{3.0, 4.0}};
+    #|  struct F f = {1.0f, 2.0f, 3.0f};
+    #|  return (int)sum_pair(p, 5) + sum_tiny(t) + sum_h(h) + sum_f(f);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 83)
+}
+
+///|
+test "strict MIR codegen passes register aggregate parameters to clang callees" {
+  let caller =
+    #|struct Pair { long a; long b; };
+    #|struct Tiny { char a; short b; };
+    #|struct H { double a[2]; };
+    #|struct F { float a; float b; float c; };
+    #|long sum_pair(struct Pair p, long z);
+    #|int sum_tiny(struct Tiny t);
+    #|int sum_h(struct H h);
+    #|int sum_f(struct F f);
+    #|int main(void) {
+    #|  struct Pair p;
+    #|  struct Tiny t;
+    #|  struct H h;
+    #|  struct F f;
+    #|  p.a = 10;
+    #|  p.b = 20;
+    #|  t.a = 5;
+    #|  t.b = 30;
+    #|  h.a[0] = 3.0;
+    #|  h.a[1] = 4.0;
+    #|  f.a = 1.0f;
+    #|  f.b = 2.0f;
+    #|  f.c = 3.0f;
+    #|  return (int)sum_pair(p, 5) + sum_tiny(t) + sum_h(h) + sum_f(f);
+    #|}
+  let callee =
+    #|struct Pair { long a; long b; };
+    #|struct Tiny { char a; short b; };
+    #|struct H { double a[2]; };
+    #|struct F { float a; float b; float c; };
+    #|long sum_pair(struct Pair p, long z) {
+    #|  return p.a + p.b + z;
+    #|}
+    #|int sum_tiny(struct Tiny t) {
+    #|  return t.a + t.b;
+    #|}
+    #|int sum_h(struct H h) {
+    #|  return (int)(h.a[0] + h.a[1]);
+    #|}
+    #|int sum_f(struct F f) {
+    #|  return (int)(f.a + f.b + f.c);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 83)
+}
+
+///|
 test "strict MIR codegen executes memory aggregate call results" {
   let source =
     #|struct Big { long a; long b; long c; };

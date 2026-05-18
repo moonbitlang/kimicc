@@ -231,6 +231,41 @@ fn mir_body_codegen_darwin_variadic_args_supported(
 }
 
 ///|
+fn mir_body_codegen_darwin_args_with_stack_supported(
+  params : Array[@ctype.Type],
+  mir : @mir.MirModule,
+) -> Bool {
+  let codegen = Codegen::new_with_mir_module(mir)
+  let mut int_count = 0
+  let mut fp_count = 0
+  for param in params {
+    if mir_body_codegen_abi_fp_type(param) {
+      fp_count += 1
+    } else if mir_body_codegen_abi_int_type(param) {
+      int_count += 1
+    } else if codegen.is_hfa_aggregate(param) {
+      let count = match codegen.darwin_hfa_parts(param) {
+        Some((_, count)) => count
+        None => return false
+      }
+      if fp_count + count > 8 {
+        return false
+      }
+      fp_count += count
+    } else if codegen.is_register_aggregate(param) {
+      let slots = (codegen.type_size(param) + 7) / 8
+      if int_count + slots > 8 {
+        return false
+      }
+      int_count += slots
+    } else {
+      return false
+    }
+  }
+  true
+}
+
+///|
 fn mir_body_codegen_x64_variadic_args_supported(
   params : Array[@ctype.Type],
   named_count : Int,
@@ -1286,7 +1321,7 @@ fn mir_body_codegen_call_supported(
   if mir.target is LinuxAmd64 {
     mir_body_codegen_x64_args_with_stack_supported(sig.params)
   } else {
-    mir_body_codegen_abi_args_with_stack_supported(sig.params)
+    mir_body_codegen_darwin_args_with_stack_supported(sig.params, mir)
   }
 }
 
@@ -1514,7 +1549,7 @@ fn mir_body_codegen_func_supported(
         return false
       }
     DarwinArm64 =>
-      if !mir_body_codegen_abi_args_with_stack_supported(param_types) {
+      if !mir_body_codegen_darwin_args_with_stack_supported(param_types, mir) {
         return false
       }
   }
@@ -2120,6 +2155,111 @@ fn Codegen::emit_store_hfa_aggregate_return_to_x9(
       mir_body_codegen_arm_fp_reg(base, i) +
       ", " +
       mir_body_codegen_arm_addr_ref("x9", offsets[i]),
+    )
+  }
+}
+
+///|
+fn Codegen::emit_save_darwin_aggregate_call_arg_raw(
+  self : Codegen,
+  arg : @mir.MirValue,
+  ty : @ctype.Type,
+  offsets : Map[Int, Int],
+  frame_size : Int,
+) -> Unit {
+  match arg {
+    MirCall(_, _, _) | MirIndirectCall(_, _, _) => {
+      self.gen_mir_value(arg, offsets, frame_size)
+      self.emit("\tsub\tsp, sp, #16")
+      self.emit("\tmov\tx9, sp")
+      if self.is_hfa_aggregate(ty) {
+        self.emit_store_hfa_aggregate_return_to_x9(ty)
+      } else if self.is_register_aggregate(ty) {
+        self.emit_store_register_aggregate_return_to_x9(ty)
+      } else {
+        abort("unsupported Darwin ARM64 MIR aggregate call argument")
+      }
+    }
+    _ => {
+      self.gen_mir_value(arg, offsets, frame_size)
+      self.emit("\tsub\tsp, sp, #16")
+      self.emit("\tmov\tx11, x9")
+      self.emit("\tmov\tx10, sp")
+      self.emit_copy_memory_aggregate_from_x11_to_x10(ty)
+    }
+  }
+}
+
+///|
+fn Codegen::emit_load_hfa_aggregate_arg_from_raw(
+  self : Codegen,
+  ty : @ctype.Type,
+  raw_offset : Int,
+  fp_start : Int,
+) -> Unit {
+  let (base, offsets) = match self.darwin_hfa_member_offsets(ty, 0) {
+    Some(parts) => parts
+    None => abort("unsupported Darwin ARM64 HFA aggregate argument load")
+  }
+  for i in 0..<offsets.length() {
+    self.emit(
+      "\tldr\t" +
+      mir_body_codegen_arm_fp_reg(base, fp_start + i) +
+      ", " +
+      mir_body_codegen_arm_addr_ref("sp", raw_offset + offsets[i]),
+    )
+  }
+}
+
+///|
+fn Codegen::emit_store_hfa_aggregate_param_from_regs(
+  self : Codegen,
+  ty : @ctype.Type,
+  local_offset : Int,
+  fp_start : Int,
+  frame_size : Int,
+) -> Unit {
+  let (base, offsets) = match self.darwin_hfa_member_offsets(ty, 0) {
+    Some(parts) => parts
+    None => abort("unsupported Darwin ARM64 HFA aggregate parameter store")
+  }
+  self.emit_local_addr(local_offset, frame_size)
+  for i in 0..<offsets.length() {
+    self.emit(
+      "\tstr\t" +
+      mir_body_codegen_arm_fp_reg(base, fp_start + i) +
+      ", " +
+      mir_body_codegen_arm_addr_ref("x9", offsets[i]),
+    )
+  }
+}
+
+///|
+fn Codegen::emit_store_register_aggregate_param_from_regs(
+  self : Codegen,
+  ty : @ctype.Type,
+  local_offset : Int,
+  int_start : Int,
+  frame_size : Int,
+) -> Unit {
+  let size = self.type_size(ty)
+  self.emit_local_addr(local_offset, frame_size)
+  self.emit_store_reg_bytes_to_addr(
+    "x" + int_start.to_string(),
+    "x9",
+    0,
+    if size > 8 {
+      8
+    } else {
+      size
+    },
+  )
+  if size > 8 {
+    self.emit_store_reg_bytes_to_addr(
+      "x" + (int_start + 1).to_string(),
+      "x9",
+      8,
+      size - 8,
     )
   }
 }
@@ -2745,6 +2885,9 @@ fn Codegen::gen_mir_value(
         let int_arg_indexes : Array[Int] = []
         let fp_arg_indexes : Array[Int] = []
         let stack_arg_indexes : Array[Int] = []
+        let arg_is_hfa : Array[Bool] = []
+        let arg_is_register_aggregate : Array[Bool] = []
+        let arg_slot_counts : Array[Int] = []
         let mut int_arg_index = 0
         let mut fp_arg_index = 0
         let mut stack_arg_index = 0
@@ -2753,6 +2896,9 @@ fn Codegen::gen_mir_value(
           let expected = self.mir_call_arg_type(name, i, arg.ty())
           expected_types.push(expected)
           if mir_body_codegen_abi_fp_type(expected) {
+            arg_is_hfa.push(false)
+            arg_is_register_aggregate.push(false)
+            arg_slot_counts.push(1)
             int_arg_indexes.push(-1)
             if fp_arg_index < 8 {
               fp_arg_indexes.push(fp_arg_index)
@@ -2763,7 +2909,47 @@ fn Codegen::gen_mir_value(
               stack_arg_index += 1
             }
             fp_arg_index += 1
+            self.gen_mir_value(arg, offsets, frame_size)
+            self.emit_numeric_conversion(arg.ty(), expected)
+            self.emit_scalar_conversion_to(expected)
+            self.emit("\tstr\tx9, [sp, #-16]!")
+          } else if self.is_hfa_aggregate(expected) {
+            let hfa_count = match self.darwin_hfa_parts(expected) {
+              Some((_, count)) => count
+              None => abort("unsupported Darwin ARM64 MIR HFA call argument")
+            }
+            if fp_arg_index + hfa_count > 8 {
+              abort("unsupported Darwin ARM64 MIR HFA stack argument")
+            }
+            arg_is_hfa.push(true)
+            arg_is_register_aggregate.push(false)
+            arg_slot_counts.push(hfa_count)
+            int_arg_indexes.push(-1)
+            fp_arg_indexes.push(fp_arg_index)
+            stack_arg_indexes.push(-1)
+            fp_arg_index += hfa_count
+            self.emit_save_darwin_aggregate_call_arg_raw(
+              arg, expected, offsets, frame_size,
+            )
+          } else if self.is_register_aggregate(expected) {
+            let slots = (self.type_size(expected) + 7) / 8
+            if int_arg_index + slots > 8 {
+              abort("unsupported Darwin ARM64 MIR aggregate stack argument")
+            }
+            arg_is_hfa.push(false)
+            arg_is_register_aggregate.push(true)
+            arg_slot_counts.push(slots)
+            int_arg_indexes.push(int_arg_index)
+            fp_arg_indexes.push(-1)
+            stack_arg_indexes.push(-1)
+            int_arg_index += slots
+            self.emit_save_darwin_aggregate_call_arg_raw(
+              arg, expected, offsets, frame_size,
+            )
           } else {
+            arg_is_hfa.push(false)
+            arg_is_register_aggregate.push(false)
+            arg_slot_counts.push(1)
             if int_arg_index < 8 {
               int_arg_indexes.push(int_arg_index)
               stack_arg_indexes.push(-1)
@@ -2774,11 +2960,11 @@ fn Codegen::gen_mir_value(
             }
             fp_arg_indexes.push(-1)
             int_arg_index += 1
+            self.gen_mir_value(arg, offsets, frame_size)
+            self.emit_numeric_conversion(arg.ty(), expected)
+            self.emit_scalar_conversion_to(expected)
+            self.emit("\tstr\tx9, [sp, #-16]!")
           }
-          self.gen_mir_value(arg, offsets, frame_size)
-          self.emit_numeric_conversion(arg.ty(), expected)
-          self.emit_scalar_conversion_to(expected)
-          self.emit("\tstr\tx9, [sp, #-16]!")
         }
         let raw_area = source_indexes.length() * 16
         let stack_area = (stack_arg_index * 8 + 15) / 16 * 16
@@ -2787,7 +2973,23 @@ fn Codegen::gen_mir_value(
         }
         for i in 0..<source_indexes.length() {
           let raw_offset = stack_area + (source_indexes.length() - 1 - i) * 16
-          if mir_body_codegen_abi_fp_type(expected_types[i]) {
+          if arg_is_hfa[i] {
+            self.emit_load_hfa_aggregate_arg_from_raw(
+              expected_types[i],
+              raw_offset,
+              fp_arg_indexes[i],
+            )
+          } else if arg_is_register_aggregate[i] {
+            for j in 0..<arg_slot_counts[i] {
+              self.emit(
+                "\tldr\tx" +
+                (int_arg_indexes[i] + j).to_string() +
+                ", [sp, #" +
+                (raw_offset + j * 8).to_string() +
+                "]",
+              )
+            }
+          } else if mir_body_codegen_abi_fp_type(expected_types[i]) {
             self.emit("\tldr\tx9, [sp, #" + raw_offset.to_string() + "]")
             if fp_arg_indexes[i] >= 0 {
               self.emit_mir_fp_arg_from_x9(expected_types[i], fp_arg_indexes[i])
@@ -3537,6 +3739,33 @@ fn Codegen::gen_mir_func(
         stack_arg_index += 1
       }
       fp_arg_index += 1
+    } else if self.is_hfa_aggregate(param.ty) {
+      let hfa_count = match self.darwin_hfa_parts(param.ty) {
+        Some((_, count)) => count
+        None => abort("unsupported Darwin ARM64 MIR HFA parameter")
+      }
+      if fp_arg_index + hfa_count > 8 {
+        abort("unsupported Darwin ARM64 MIR HFA stack parameter")
+      }
+      self.emit_store_hfa_aggregate_param_from_regs(
+        param.ty,
+        offsets[param.id],
+        fp_arg_index,
+        frame_size,
+      )
+      fp_arg_index += hfa_count
+    } else if self.is_register_aggregate(param.ty) {
+      let slots = (self.type_size(param.ty) + 7) / 8
+      if int_arg_index + slots > 8 {
+        abort("unsupported Darwin ARM64 MIR aggregate stack parameter")
+      }
+      self.emit_store_register_aggregate_param_from_regs(
+        param.ty,
+        offsets[param.id],
+        int_arg_index,
+        frame_size,
+      )
+      int_arg_index += slots
     } else {
       if int_arg_index < 8 {
         self.emit_store_local(
