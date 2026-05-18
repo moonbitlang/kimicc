@@ -32,6 +32,7 @@ pub(all) enum MirValue {
   MirUnary(String, MirValue, @ctype.Type)
   MirBinary(String, MirValue, MirValue, @ctype.Type)
   MirCast(@ctype.Type, MirValue)
+  MirAggregateArg(MirValue, @ctype.Type)
   MirVaArg(MirValue, @ctype.Type)
   MirVaArgAddr(MirValue, @ctype.Type)
   MirCall(String, Array[MirValue], @ctype.Type)
@@ -88,6 +89,7 @@ pub fn MirValue::ty(self : MirValue) -> @ctype.Type {
     MirUnary(_, _, ty) => ty
     MirBinary(_, _, _, ty) => ty
     MirCast(ty, _) => ty
+    MirAggregateArg(_, ty) => ty
     MirVaArg(_, ty) => ty
     MirVaArgAddr(_, ty) => Pointer(ty)
     MirCall(_, _, ty) => ty
@@ -1113,10 +1115,19 @@ fn Program::lower_mir_call_arg(
   arg : @parser.Expr,
   ctx : BodyLowerContext,
 ) -> MirValue? {
-  if mir_body_array_local_type(self.expr_type(arg, ctx.scope())) {
-    self.lower_mir_array_base_addr(arg, ctx)
-  } else {
-    self.lower_mir_expr(arg, ctx)
+  let ty = self.expr_type(arg, ctx.scope())
+  match self.core_type(ty) {
+    Struct(_) | Union(_) =>
+      match self.lower_mir_object_addr(arg, ctx) {
+        Some(addr) => Some(MirAggregateArg(addr, ty))
+        None => None
+      }
+    _ =>
+      if mir_body_array_local_type(ty) {
+        self.lower_mir_array_base_addr(arg, ctx)
+      } else {
+        self.lower_mir_expr(arg, ctx)
+      }
   }
 }
 

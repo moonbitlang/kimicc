@@ -325,3 +325,22 @@ test "strict MIR codegen executes aggregate va_arg reads from clang caller" {
     #|}
   assert_eq(run_strict_mir_with_clang_driver(callee, driver), 34)
 }
+
+///|
+test "strict MIR codegen executes aggregate va_arg reads from MIR caller" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|struct Pair { long long a; long long b; };
+    #|int read_pair(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  struct Pair p = __builtin_va_arg(ap, struct Pair);
+    #|  __builtin_va_end(ap);
+    #|  return tag + (int)p.a + (int)p.b;
+    #|}
+    #|int main(void) {
+    #|  struct Pair p = {10, 20};
+    #|  return read_pair(4, p);
+    #|}
+  assert_eq(run_source_strict_mir(source), 34)
+}
