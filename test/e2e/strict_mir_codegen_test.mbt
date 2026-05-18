@@ -205,3 +205,14 @@ test "strict MIR codegen executes stack-passed floating variadic libcalls" {
     #|}
   assert_eq(run_source_strict_mir(source), 18)
 }
+
+///|
+test "strict MIR codegen executes stack-passed integer variadic libcalls" {
+  let source =
+    #|int main(void) {
+    #|  char buf[32];
+    #|  int n = __builtin___snprintf_chk(buf, 32, 0, 32, "%d%d%d%d%d%d", 1, 2, 3, 4, 5, 6);
+    #|  return n + (buf[0] == '1') + (buf[1] == '2') + (buf[2] == '3') + (buf[3] == '4') + (buf[4] == '5') + (buf[5] == '6');
+    #|}
+  assert_eq(run_source_strict_mir(source), 12)
+}

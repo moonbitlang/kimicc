@@ -1139,6 +1139,25 @@ test "generate darwin arm64 strict MIR stack-passed floating variadic libcalls" 
 }
 
 ///|
+test "generate darwin arm64 strict MIR stack-passed integer variadic libcalls" {
+  let source =
+    #|int main(void) {
+    #|  char buf[64];
+    #|  return __builtin___snprintf_chk(buf, 64, 0, 64, "%d%d%d%d%d%d", 1, 2, 3, 4, 5, 6);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tstr\tx9, [sp, #40]"), content="true")
+      inspect(assembly.contains("\tbl\t_snprintf"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR varargs setup builtins" {
   let source =
     #|typedef __builtin_va_list va_list;
@@ -2762,6 +2781,33 @@ test "generate linux amd64 strict MIR stack-passed floating variadic libcalls" {
       inspect(assembly.contains("\tmov\tal, 8"), content="true")
       inspect(assembly.contains("\tcall\tsnprintf"), content="true")
       inspect(assembly.contains("\tadd\trsp, "), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR stack-passed integer variadic libcalls" {
+  let source =
+    #|int main(void) {
+    #|  char buf[64];
+    #|  return __builtin___snprintf_chk(buf, 64, 0, 64, "%d%d%d%d%d", 1, 2, 3, 4, 5);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tmov\tQWORD PTR [rsp], rax"), content="true")
+      inspect(
+        assembly.contains("\tmov\tQWORD PTR [rsp + 8], rax"),
+        content="true",
+      )
+      inspect(assembly.contains("\tmov\tal, 0"), content="true")
+      inspect(assembly.contains("\tcall\tsnprintf"), content="true")
     }
     Err(err) => abort(err)
   }
