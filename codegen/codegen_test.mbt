@@ -3383,6 +3383,62 @@ test "generate linux amd64 strict MIR small aggregate return calls" {
 }
 
 ///|
+test "generate linux amd64 strict MIR aggregate return call arguments" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|struct Pair { long a; long b; };
+    #|struct DPair { double a; double b; };
+    #|struct Mix { long a; double b; };
+    #|struct Pair make_pair(long a, long b) { struct Pair p; p.a = a; p.b = b; return p; }
+    #|struct DPair make_dpair(double a, double b) { struct DPair p; p.a = a; p.b = b; return p; }
+    #|struct Mix make_mix(long a, double b) { struct Mix p; p.a = a; p.b = b; return p; }
+    #|int pair_sum(struct Pair p) { return (int)(p.a + p.b); }
+    #|int pair_tail(int a, int b, int c, int d, int e, int f, struct Pair p) { return (int)(p.a + p.b); }
+    #|int dpair_sum(struct DPair p) { return (int)(p.a + p.b); }
+    #|int mix_sum(struct Mix p) { return (int)(p.a + p.b); }
+    #|int read_pair(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  struct Pair p = __builtin_va_arg(ap, struct Pair);
+    #|  __builtin_va_end(ap);
+    #|  return tag + (int)p.a + (int)p.b;
+    #|}
+    #|int main(void) {
+    #|  return pair_sum(make_pair(10, 20)) +
+    #|         pair_tail(1, 2, 3, 4, 5, 6, make_pair(1, 2)) +
+    #|         dpair_sum(make_dpair(19.5, 22.5)) +
+    #|         mix_sum(make_mix(5, 6.5)) +
+    #|         read_pair(3, make_pair(4, 5));
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\tmake_pair"), content="true")
+      inspect(assembly.contains("\tcall\tmake_dpair"), content="true")
+      inspect(assembly.contains("\tcall\tmake_mix"), content="true")
+      inspect(assembly.contains("\tcall\tpair_sum"), content="true")
+      inspect(assembly.contains("\tcall\tpair_tail"), content="true")
+      inspect(assembly.contains("\tcall\tread_pair"), content="true")
+      inspect(assembly.contains("\tmov\tQWORD PTR [r10], rax"), content="true")
+      inspect(
+        assembly.contains("\tmovsd\tQWORD PTR [r10], xmm0"),
+        content="true",
+      )
+      inspect(
+        assembly.contains("unsupported MIR body codegen"),
+        content="false",
+      )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate linux amd64 strict MIR aggregate variadic call arguments" {
   let source =
     #|typedef __builtin_va_list va_list;

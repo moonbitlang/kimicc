@@ -2777,6 +2777,34 @@ fn mir_body_codegen_raw_arg_offset(
 }
 
 ///|
+fn X64Codegen::emit_mir_save_aggregate_call_arg_raw(
+  self : X64Codegen,
+  arg : @mir.MirValue,
+  ty : @ctype.Type,
+  raw_size : Int,
+  offsets : Map[Int, Int],
+) -> Unit {
+  match arg {
+    MirCall(_, _, _) =>
+      if self.is_supported_small_aggregate(ty) {
+        self.gen_mir_value(arg, offsets)
+        self.emit("\tsub\trsp, " + raw_size.to_string())
+        self.emit("\tmov\tr10, rsp")
+        self.emit_store_small_aggregate_return(ty)
+      } else {
+        abort("unsupported x86-64 MIR aggregate call argument")
+      }
+    _ => {
+      self.gen_mir_value(arg, offsets)
+      self.emit("\tsub\trsp, " + raw_size.to_string())
+      self.emit("\tmov\tr11, rax")
+      self.emit("\tmov\tr10, rsp")
+      self.emit_copy_aggregate_from_addr(ty)
+    }
+  }
+}
+
+///|
 fn X64Codegen::emit_mir_store_aggregate_param_from_regs(
   self : X64Codegen,
   ty : @ctype.Type,
@@ -3709,11 +3737,9 @@ fn X64Codegen::gen_mir_value(
               stack_arg_indexes.push(stack_arg_index)
               stack_arg_index += words
             }
-            self.gen_mir_value(arg, offsets)
-            self.emit("\tsub\trsp, " + raw_size.to_string())
-            self.emit("\tmov\tr11, rax")
-            self.emit("\tmov\tr10, rsp")
-            self.emit_copy_aggregate_from_addr(expected)
+            self.emit_mir_save_aggregate_call_arg_raw(
+              arg, expected, raw_size, offsets,
+            )
           } else {
             arg_is_aggregate.push(false)
             arg_classes.push([])
@@ -3927,11 +3953,9 @@ fn X64Codegen::gen_mir_value(
               stack_arg_indexes.push(stack_arg_index)
               stack_arg_index += words
             }
-            self.gen_mir_value(arg, offsets)
-            self.emit("\tsub\trsp, " + raw_size.to_string())
-            self.emit("\tmov\tr11, rax")
-            self.emit("\tmov\tr10, rsp")
-            self.emit_copy_aggregate_from_addr(expected)
+            self.emit_mir_save_aggregate_call_arg_raw(
+              arg, expected, raw_size, offsets,
+            )
           } else {
             arg_is_aggregate.push(false)
             arg_classes.push([])

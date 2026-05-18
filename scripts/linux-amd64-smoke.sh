@@ -225,6 +225,8 @@ strict_mir_returns_driver_object_path="/tmp/kimicc-linux-amd64-strict-mir-return
 strict_mir_returns_binary_path="/tmp/kimicc-linux-amd64-strict-mir-returns"
 strict_mir_return_calls_source_path="/tmp/kimicc-linux-amd64-strict-mir-return-calls.c"
 strict_mir_return_calls_binary_path="/tmp/kimicc-linux-amd64-strict-mir-return-calls"
+strict_mir_return_args_source_path="/tmp/kimicc-linux-amd64-strict-mir-return-args.c"
+strict_mir_return_args_binary_path="/tmp/kimicc-linux-amd64-strict-mir-return-args"
 
 mkdir -p "$probe_include_dir" "$probe_after_include_dir" "$probe_prefix_dir/headers"
 cat > "$probe_include_dir/probe_header.h" <<'H'
@@ -3476,6 +3478,83 @@ status=$?
 set -e
 if [ "$status" -ne 83 ]; then
   echo "expected strict MIR aggregate return calls smoke binary to exit 83, got $status" >&2
+  exit 1
+fi
+
+cat > "$strict_mir_return_args_source_path" <<'C'
+typedef __builtin_va_list va_list;
+
+struct Pair {
+  long a;
+  long b;
+};
+
+struct DPair {
+  double a;
+  double b;
+};
+
+struct Mix {
+  long a;
+  double b;
+};
+
+struct Pair make_pair(long a, long b) {
+  struct Pair p;
+  p.a = a;
+  p.b = b;
+  return p;
+}
+
+struct DPair make_dpair(double a, double b) {
+  struct DPair p;
+  p.a = a;
+  p.b = b;
+  return p;
+}
+
+struct Mix make_mix(long a, double b) {
+  struct Mix p;
+  p.a = a;
+  p.b = b;
+  return p;
+}
+
+int pair_sum(struct Pair p) { return (int)(p.a + p.b); }
+
+int pair_tail(int a, int b, int c, int d, int e, int f, struct Pair p) {
+  return (int)(p.a + p.b);
+}
+
+int dpair_sum(struct DPair p) { return (int)(p.a + p.b); }
+
+int mix_sum(struct Mix p) { return (int)(p.a + p.b); }
+
+int read_pair(int tag, ...) {
+  va_list ap;
+  __builtin_va_start(ap, tag);
+  struct Pair p = __builtin_va_arg(ap, struct Pair);
+  __builtin_va_end(ap);
+  return tag + (int)p.a + (int)p.b;
+}
+
+int main(void) {
+  return pair_sum(make_pair(10, 20)) +
+         pair_tail(1, 2, 3, 4, 5, 6, make_pair(1, 2)) +
+         dpair_sum(make_dpair(19.5, 22.5)) +
+         mix_sum(make_mix(5, 6.5)) +
+         read_pair(3, make_pair(4, 5));
+}
+C
+
+"$kimicc" --strict-mir-codegen -target linux-amd64 \
+  -o "$strict_mir_return_args_binary_path" "$strict_mir_return_args_source_path"
+set +e
+"$strict_mir_return_args_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 98 ]; then
+  echo "expected strict MIR aggregate return args smoke binary to exit 98, got $status" >&2
   exit 1
 fi
 
