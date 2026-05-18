@@ -2984,6 +2984,17 @@ test "mir body interpreter handles floating local casts to int" {
 }
 
 ///|
+test "mir body interpreter handles floating local comparisons" {
+  let source =
+    #|int main(void) {
+    #|  double x = 1.5;
+    #|  double y = 2.5;
+    #|  return (x < y) + (x != y) + (y > 2.0) + (x == 1.5) + (x <= y) + (y >= x);
+    #|}
+  expect_body_interp(source, 6L)
+}
+
+///|
 test "mir interpreter reports unsupported initialized local reads" {
   let source = "int main(void) { double d = 0.0; return (int)d; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())

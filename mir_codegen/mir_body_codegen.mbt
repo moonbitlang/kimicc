@@ -59,6 +59,37 @@ fn mir_body_codegen_floating_type(ty : @ctype.Type) -> Bool {
 }
 
 ///|
+fn mir_body_codegen_double_type(ty : @ctype.Type) -> Bool {
+  match peel_aligned_type(ty) {
+    Double => true
+    Atomic(inner) => mir_body_codegen_double_type(inner)
+    _ => false
+  }
+}
+
+///|
+fn mir_body_compare_op(op : String) -> Bool {
+  match op {
+    "==" | "!=" | "<" | ">" | "<=" | ">=" => true
+    _ => false
+  }
+}
+
+///|
+fn mir_body_codegen_fp_compare_supported(
+  op : String,
+  lhs : @ctype.Type,
+  rhs : @ctype.Type,
+  ty : @ctype.Type,
+) -> Bool {
+  mir_body_compare_op(op) &&
+  !mir_body_codegen_floating_type(ty) &&
+  (mir_body_codegen_double_type(lhs) || lhs.is_integer()) &&
+  (mir_body_codegen_double_type(rhs) || rhs.is_integer()) &&
+  (mir_body_codegen_double_type(lhs) || mir_body_codegen_double_type(rhs))
+}
+
+///|
 fn mir_body_codegen_local_type(ty : @ctype.Type) -> Bool {
   match ty {
     Aligned(_, _) => false
@@ -131,6 +162,10 @@ fn mir_body_codegen_value_supported(
     MirBinary(op, lhs, rhs, ty) => {
       if !mir_body_codegen_scalar_type(ty) {
         return false
+      }
+      if mir_body_codegen_fp_compare_supported(op, lhs.ty(), rhs.ty(), ty) {
+        return mir_body_codegen_value_supported(lhs, int_arg_limit, mir) &&
+          mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
       }
       if mir_body_codegen_floating_type(lhs.ty()) ||
         mir_body_codegen_floating_type(rhs.ty()) ||
@@ -1504,6 +1539,28 @@ fn Codegen::gen_mir_binary(
   }
   let left_ty = mir_body_binary_left_type(op, lhs.ty(), rhs.ty())
   let right_ty = mir_body_binary_right_type(op, lhs.ty(), rhs.ty())
+  if mir_body_codegen_fp_compare_supported(op, lhs.ty(), rhs.ty(), ty) {
+    self.gen_mir_value(lhs, offsets, frame_size)
+    self.emit_numeric_conversion(lhs.ty(), Double)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_mir_value(rhs, offsets, frame_size)
+    self.emit_numeric_conversion(rhs.ty(), Double)
+    self.emit("\tldr\tx10, [sp], #16")
+    self.emit("\tfmov\td9, x10")
+    self.emit("\tfmov\td10, x9")
+    self.emit("\tfcmp\td9, d10")
+    let cc = match op {
+      "==" => "eq"
+      "!=" => "ne"
+      "<" => "mi"
+      ">" => "gt"
+      "<=" => "ls"
+      _ => "ge"
+    }
+    self.emit("\tcset\tx9, " + cc)
+    self.emit_scalar_conversion_to(ty)
+    return
+  }
   self.gen_mir_value(lhs, offsets, frame_size)
   self.emit_numeric_conversion(lhs.ty(), left_ty)
   self.emit_scalar_conversion_to(left_ty)
@@ -2352,6 +2409,21 @@ fn X64Codegen::gen_mir_binary(
   }
   let left_ty = mir_body_binary_left_type(op, lhs.ty(), rhs.ty())
   let right_ty = mir_body_binary_right_type(op, lhs.ty(), rhs.ty())
+  if mir_body_codegen_fp_compare_supported(op, lhs.ty(), rhs.ty(), ty) {
+    self.gen_mir_value(lhs, offsets)
+    self.emit_mir_numeric_conversion(lhs.ty(), Double)
+    self.emit("\tsub\trsp, 16")
+    self.emit("\tmovsd\tQWORD PTR [rsp], xmm0")
+    self.gen_mir_value(rhs, offsets)
+    self.emit_mir_numeric_conversion(rhs.ty(), Double)
+    self.emit("\tmovapd\txmm1, xmm0")
+    self.emit("\tmovsd\txmm0, QWORD PTR [rsp]")
+    self.emit("\tadd\trsp, 16")
+    self.emit("\tucomisd\txmm0, xmm1")
+    self.emit_fp_compare_result(op)
+    self.emit_int_conversion_to(ty)
+    return
+  }
   self.gen_mir_value(lhs, offsets)
   self.emit_int_conversion_to(left_ty)
   self.emit_mir_push_rax()
