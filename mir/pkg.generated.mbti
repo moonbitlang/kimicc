@@ -163,6 +163,7 @@ pub(all) enum MirValue {
   MirUnary(String, MirValue, @ctype.Type)
   MirBinary(String, MirValue, MirValue, @ctype.Type)
   MirCast(@ctype.Type, MirValue)
+  MirVaArg(MirValue, @ctype.Type)
   MirCall(String, Array[MirValue], @ctype.Type)
   MirIndirectCall(MirValue, Array[MirValue], @ctype.Type)
   MirAssignLocal(MirLocal, MirValue)

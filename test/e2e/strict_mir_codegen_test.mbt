@@ -263,3 +263,22 @@ test "strict MIR codegen executes stack-passed integer variadic libcalls" {
     #|}
   assert_eq(run_source_strict_mir(source), 12)
 }
+
+///|
+test "strict MIR codegen executes scalar va_arg reads" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|int read_variadic(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  int a = __builtin_va_arg(ap, int);
+    #|  long long b = __builtin_va_arg(ap, long long);
+    #|  double c = __builtin_va_arg(ap, double);
+    #|  __builtin_va_end(ap);
+    #|  return tag + a + (int)b + (int)c;
+    #|}
+    #|int main(void) {
+    #|  return read_variadic(4, 10, 20LL, 3.5);
+    #|}
+  assert_eq(run_source_strict_mir(source), 37)
+}

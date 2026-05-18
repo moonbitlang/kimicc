@@ -32,6 +32,7 @@ pub(all) enum MirValue {
   MirUnary(String, MirValue, @ctype.Type)
   MirBinary(String, MirValue, MirValue, @ctype.Type)
   MirCast(@ctype.Type, MirValue)
+  MirVaArg(MirValue, @ctype.Type)
   MirCall(String, Array[MirValue], @ctype.Type)
   MirIndirectCall(MirValue, Array[MirValue], @ctype.Type)
   MirAssignLocal(MirLocal, MirValue)
@@ -86,6 +87,7 @@ pub fn MirValue::ty(self : MirValue) -> @ctype.Type {
     MirUnary(_, _, ty) => ty
     MirBinary(_, _, _, ty) => ty
     MirCast(ty, _) => ty
+    MirVaArg(_, ty) => ty
     MirCall(_, _, ty) => ty
     MirIndirectCall(_, _, ty) => ty
     MirAssignLocal(binding, _) => binding.ty
@@ -1559,6 +1561,15 @@ fn Program::lower_mir_expr(
         }
       } else {
         self.lower_mir_indirect_call(Var(name), args, ty, ctx)
+      }
+    }
+    VaArg(ap, va_ty) => {
+      if self.core_type(va_ty) is Void || !mir_body_scalar_type(va_ty) {
+        return None
+      }
+      match self.lower_mir_expr(ap, ctx) {
+        Some(ap_value) => Some(MirVaArg(ap_value, va_ty))
+        None => None
       }
     }
     Call(callee, args) => self.lower_mir_indirect_call(callee, args, ty, ctx)
