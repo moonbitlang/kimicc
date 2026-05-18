@@ -154,12 +154,24 @@ test "strict MIR codegen executes floating direct calls" {
 }
 
 ///|
-test "strict MIR codegen rejects unsupported floating indirect calls instead of using AST fallback" {
+test "strict MIR codegen executes floating indirect calls" {
   let source =
-    #|double id(double x) { return x; }
+    #|double add(double x, double y) { return x + y; }
+    #|double mix(int a, double b, int c) { return a + b + c; }
     #|int main(void) {
-    #|  double (*fp)(double) = id;
-    #|  return (int)fp(1.0);
+    #|  double (*fp)(double, double) = add;
+    #|  double (*gp)(int, double, int) = mix;
+    #|  return (int)fp(2.25, 3.75) + (int)gp(2, 3.5, 4);
+    #|}
+  assert_eq(run_source_strict_mir(source), 15)
+}
+
+///|
+test "strict MIR codegen rejects unsupported floating variadic calls instead of using AST fallback" {
+  let source =
+    #|double variadic(int tag, ...) { return 1.0; }
+    #|int main(void) {
+    #|  return (int)variadic(0, 1.0);
     #|}
   assert_true(
     strict_mir_codegen_error(source).contains("unsupported MIR body codegen"),

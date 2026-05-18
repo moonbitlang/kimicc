@@ -1009,6 +1009,29 @@ test "generate darwin arm64 strict MIR floating direct calls" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR floating indirect calls" {
+  let source =
+    #|double add(double x, double y) { return x + y; }
+    #|double mix(int a, double b, int c) { return a + b + c; }
+    #|int main(void) {
+    #|  double (*fp)(double, double) = add;
+    #|  double (*gp)(int, double, int) = mix;
+    #|  return (int)fp(2.25, 3.75) + (int)gp(2, 3.5, 4);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tblr\tx15"), content="true")
+      inspect(assembly.contains("\tfmov\td0, x9"), content="true")
+      inspect(assembly.contains("\tfmov\tx9, d0"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR varargs setup builtins" {
   let source =
     #|typedef __builtin_va_list va_list;
@@ -2442,6 +2465,38 @@ test "generate linux amd64 strict MIR floating direct calls" {
       inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
       inspect(assembly.contains("\tcall\tadd"), content="true")
       inspect(assembly.contains("\tcall\tmix"), content="true")
+      inspect(
+        assembly.contains("\tmovsd\tQWORD PTR [rsp], xmm0"),
+        content="true",
+      )
+      inspect(
+        assembly.contains("\tmovsd\txmm0, QWORD PTR [rsp]"),
+        content="true",
+      )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR floating indirect calls" {
+  let source =
+    #|double add(double x, double y) { return x + y; }
+    #|double mix(int a, double b, int c) { return a + b + c; }
+    #|int main(void) {
+    #|  double (*fp)(double, double) = add;
+    #|  double (*gp)(int, double, int) = mix;
+    #|  return (int)fp(2.25, 3.75) + (int)gp(2, 3.5, 4);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\tr10"), content="true")
       inspect(
         assembly.contains("\tmovsd\tQWORD PTR [rsp], xmm0"),
         content="true",

@@ -843,23 +843,18 @@ fn mir_body_codegen_indirect_call_supported(
   ret : @ctype.Type,
   int_arg_limit : Int,
 ) -> Bool {
-  if args.length() > int_arg_limit || !mir_body_codegen_abi_int_type(ret) {
+  if !mir_body_codegen_abi_scalar_type(ret) {
     return false
   }
   match peel_aligned_type(callee_ty) {
     FuncPtr(sig_ret, params, variadic) => {
       if variadic ||
         params.length() != args.length() ||
-        !mir_body_codegen_abi_int_type(sig_ret) ||
-        !mir_body_codegen_abi_int_type(ret) {
+        !mir_body_codegen_abi_scalar_type(sig_ret) ||
+        !mir_body_codegen_abi_scalar_type(ret) {
         return false
       }
-      for param in params {
-        if !mir_body_codegen_abi_int_type(param) {
-          return false
-        }
-      }
-      true
+      mir_body_codegen_abi_args_supported(params, int_arg_limit)
     }
     _ => false
   }
@@ -1458,21 +1453,45 @@ fn Codegen::gen_mir_value(
     MirIndirectCall(callee, args, ty) => {
       self.gen_mir_value(callee, offsets, frame_size)
       self.emit("\tstr\tx9, [sp, #-16]!")
+      let expected_types : Array[@ctype.Type] = []
+      let int_arg_indexes : Array[Int] = []
+      let fp_arg_indexes : Array[Int] = []
+      let mut int_arg_index = 0
+      let mut fp_arg_index = 0
       for i in 0..<args.length() {
         let arg = args[i]
-        self.gen_mir_value(arg, offsets, frame_size)
         let expected = mir_indirect_call_arg_type(callee.ty(), i, arg.ty())
+        expected_types.push(expected)
+        if mir_body_codegen_abi_double_type(expected) {
+          int_arg_indexes.push(-1)
+          fp_arg_indexes.push(fp_arg_index)
+          fp_arg_index += 1
+        } else {
+          int_arg_indexes.push(int_arg_index)
+          fp_arg_indexes.push(-1)
+          int_arg_index += 1
+        }
+        self.gen_mir_value(arg, offsets, frame_size)
         self.emit_numeric_conversion(arg.ty(), expected)
         self.emit_scalar_conversion_to(expected)
         self.emit("\tstr\tx9, [sp, #-16]!")
       }
       for i = args.length() - 1; i >= 0; i = i - 1 {
-        self.emit("\tldr\tx" + i.to_string() + ", [sp], #16")
+        if mir_body_codegen_abi_double_type(expected_types[i]) {
+          self.emit("\tldr\tx9, [sp], #16")
+          self.emit("\tfmov\td" + fp_arg_indexes[i].to_string() + ", x9")
+        } else {
+          self.emit("\tldr\tx" + int_arg_indexes[i].to_string() + ", [sp], #16")
+        }
       }
       self.emit("\tldr\tx15, [sp], #16")
       self.emit("\tblr\tx15")
-      self.emit("\tmov\tx9, x0")
-      self.emit_mir_abi_int_return_conversion(ty)
+      if mir_body_codegen_abi_double_type(ty) {
+        self.emit("\tfmov\tx9, d0")
+      } else {
+        self.emit("\tmov\tx9, x0")
+        self.emit_mir_abi_int_return_conversion(ty)
+      }
     }
   }
 }
@@ -2442,23 +2461,55 @@ fn X64Codegen::gen_mir_value(
     MirIndirectCall(callee, args, ty) => {
       self.gen_mir_value(callee, offsets)
       self.emit_mir_push_rax()
+      let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
+      let fp_arg_regs = [
+        "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
+      ]
+      let expected_types : Array[@ctype.Type] = []
+      let int_arg_indexes : Array[Int] = []
+      let fp_arg_indexes : Array[Int] = []
+      let mut int_arg_index = 0
+      let mut fp_arg_index = 0
       for i in 0..<args.length() {
         let arg = args[i]
+        let expected = mir_indirect_call_arg_type(callee.ty(), i, arg.ty())
+        expected_types.push(expected)
+        if mir_body_codegen_abi_double_type(expected) {
+          int_arg_indexes.push(-1)
+          fp_arg_indexes.push(fp_arg_index)
+          fp_arg_index += 1
+        } else {
+          int_arg_indexes.push(int_arg_index)
+          fp_arg_indexes.push(-1)
+          int_arg_index += 1
+        }
         self.gen_mir_value(arg, offsets)
-        self.emit_int_conversion_to(
-          mir_indirect_call_arg_type(callee.ty(), i, arg.ty()),
-        )
-        self.emit_mir_push_rax()
+        self.emit_mir_numeric_conversion(arg.ty(), expected)
+        if mir_body_codegen_abi_double_type(expected) {
+          self.emit_mir_push_xmm0_double()
+        } else {
+          self.emit_mir_push_rax()
+        }
       }
-      let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
       for i = args.length() - 1; i >= 0; i = i - 1 {
-        self.emit("\tmov\t" + arg_regs[i] + ", QWORD PTR [rsp]")
-        self.emit("\tadd\trsp, 16")
+        if mir_body_codegen_abi_double_type(expected_types[i]) {
+          self.emit(
+            "\tmovsd\t" + fp_arg_regs[fp_arg_indexes[i]] + ", QWORD PTR [rsp]",
+          )
+          self.emit("\tadd\trsp, 16")
+        } else {
+          self.emit(
+            "\tmov\t" + arg_regs[int_arg_indexes[i]] + ", QWORD PTR [rsp]",
+          )
+          self.emit("\tadd\trsp, 16")
+        }
       }
       self.emit("\tmov\tr10, QWORD PTR [rsp]")
       self.emit("\tadd\trsp, 16")
       self.emit("\tcall\tr10")
-      self.emit_abi_int_return_conversion(ty)
+      if !mir_body_codegen_abi_double_type(ty) {
+        self.emit_abi_int_return_conversion(ty)
+      }
     }
   }
 }
