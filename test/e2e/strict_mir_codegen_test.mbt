@@ -214,6 +214,24 @@ test "strict MIR codegen executes floating indirect calls" {
 }
 
 ///|
+test "strict MIR codegen executes stack-passed floating indirect calls" {
+  let source =
+    #|double sum9d(double a, double b, double c, double d, double e, double f, double g, double h, double i) {
+    #|  return a + b + c + d + e + f + g + h + i;
+    #|}
+    #|float sum9f(float a, float b, float c, float d, float e, float f, float g, float h, float i) {
+    #|  return a + b + c + d + e + f + g + h + i;
+    #|}
+    #|int main(void) {
+    #|  double (*dp)(double, double, double, double, double, double, double, double, double) = sum9d;
+    #|  float (*fp)(float, float, float, float, float, float, float, float, float) = sum9f;
+    #|  return (int)dp(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0) +
+    #|    (int)fp((float)1.0, (float)2.0, (float)3.0, (float)4.0, (float)5.0, (float)6.0, (float)7.0, (float)8.0, (float)9.0);
+    #|}
+  assert_eq(run_source_strict_mir(source), 90)
+}
+
+///|
 test "strict MIR codegen executes floating variadic libcalls" {
   let source =
     #|int main(void) {
