@@ -2,7 +2,6 @@
 #warnings("-unused_mut")
 priv struct X64Codegen {
   output : StringBuilder
-  mut mir : @mir.Program?
   mut mir_module : @mir.MirModule?
   mut label_counter : Int
   mut local_offsets : Map[String, Int]
@@ -30,13 +29,8 @@ priv struct X64Codegen {
   mut va_initial_gp_offset : Int
   mut va_initial_fp_offset : Int
   mut va_initial_overflow_offset : Int
-  mut sret_dest_offset : Int
   mut sret_scratch_offset : Int
-  mut sret_scratch_size : Int
-  mut sret_scratch_align : Int
   mut va_arg_scratch_offset : Int
-  mut va_arg_scratch_size : Int
-  mut va_arg_scratch_align : Int
   mut break_label : String?
   mut continue_label : String?
   mut emitted_labels : Map[String, String]
@@ -47,7 +41,6 @@ priv struct X64Codegen {
 fn X64Codegen::new() -> X64Codegen {
   {
     output: StringBuilder::new(),
-    mir: None,
     mir_module: None,
     label_counter: 0,
     local_offsets: {},
@@ -72,13 +65,8 @@ fn X64Codegen::new() -> X64Codegen {
     va_initial_gp_offset: 0,
     va_initial_fp_offset: 48,
     va_initial_overflow_offset: 16,
-    sret_dest_offset: -1,
     sret_scratch_offset: -1,
-    sret_scratch_size: 0,
-    sret_scratch_align: 1,
     va_arg_scratch_offset: -1,
-    va_arg_scratch_size: 0,
-    va_arg_scratch_align: 1,
     break_label: None,
     continue_label: None,
     emitted_labels: {},
@@ -121,49 +109,12 @@ fn X64Codegen::register_mir_function_decls(
 }
 
 ///|
-fn X64Codegen::register_parser_function_decls(
-  self : X64Codegen,
-  decls : Array[@parser.FuncDecl],
-) -> Unit {
-  for decl in decls {
-    self.func_rets[decl.name] = decl.ret
-    self.func_variadic[decl.name] = decl.variadic
-    self.func_param_counts[decl.name] = decl.params.length()
-    if decl.body is Some(_) || decl.symbol_alias is Some(_) {
-      self.func_defined[decl.name] = true
-    } else if !self.func_defined.contains(decl.name) {
-      self.func_defined[decl.name] = false
-    }
-    if decl.is_weak {
-      self.func_weak[decl.name] = true
-    } else if !self.func_weak.contains(decl.name) {
-      self.func_weak[decl.name] = false
-    }
-    let param_types = []
-    for param in decl.params {
-      param_types.push(param.ty)
-    }
-    self.func_param_types[decl.name] = param_types
-  }
-}
-
-///|
 fn X64Codegen::register_mir_global_decls(
   self : X64Codegen,
   mir : @mir.MirModule,
 ) -> Unit {
   for global in @mir.merge_global_decls(mir.global_decls) {
     self.globals[global.name] = codegen_global_decl_from_mir(global)
-  }
-}
-
-///|
-fn X64Codegen::register_parser_global_decls(
-  self : X64Codegen,
-  globals : Array[@parser.GlobalDecl],
-) -> Unit {
-  for global in globals {
-    self.globals[global.name] = codegen_global_decl_from_parser(global)
   }
 }
 
@@ -366,11 +317,7 @@ fn x64_signed_i32_bits(value : Int64) -> Int64 {
 fn X64Codegen::type_size(self : X64Codegen, ty : @parser.Type) -> Int {
   match self.mir_module {
     Some(mir) => return mir.type_size(ty)
-    None =>
-      match self.mir {
-        Some(mir) => return mir.type_size(ty)
-        None => ()
-      }
+    None => ()
   }
   match ty {
     Atomic(inner) | Aligned(inner, _) => self.type_size(inner)
@@ -441,11 +388,7 @@ fn X64Codegen::type_size(self : X64Codegen, ty : @parser.Type) -> Int {
 fn X64Codegen::type_align(self : X64Codegen, ty : @parser.Type) -> Int {
   match self.mir_module {
     Some(mir) => return mir.type_align(ty)
-    None =>
-      match self.mir {
-        Some(mir) => return mir.type_align(ty)
-        None => ()
-      }
+    None => ()
   }
   match ty {
     Atomic(inner) => self.type_align(inner)
@@ -787,20 +730,6 @@ fn X64Codegen::emit_store_int_reg_to_local(
 }
 
 ///|
-fn X64Codegen::emit_store_fp_reg_to_local(
-  self : X64Codegen,
-  reg : String,
-  offset : Int,
-  ty : @parser.Type,
-) -> Unit {
-  match x64_core_type(ty) {
-    Float =>
-      self.emit("\tmovss\tDWORD PTR " + self.local_ref(offset) + ", " + reg)
-    _ => self.emit("\tmovsd\tQWORD PTR " + self.local_ref(offset) + ", " + reg)
-  }
-}
-
-///|
 fn x64_merge_aggregate_class(
   a : X64AggregateClass,
   b : X64AggregateClass,
@@ -1027,15 +956,6 @@ fn X64Codegen::stack_arg_align_slots(
 }
 
 ///|
-fn X64Codegen::align_stack_arg_index(
-  self : X64Codegen,
-  index : Int,
-  ty : @parser.Type,
-) -> Int {
-  x64_align_to(index, self.stack_arg_align_slots(ty))
-}
-
-///|
 fn X64Codegen::align_call_stack_arg(
   self : X64Codegen,
   index : Int,
@@ -1253,24 +1173,6 @@ fn X64Codegen::emit_store_int_bytes_to_mem_reg(
 }
 
 ///|
-fn X64Codegen::emit_store_int_bytes_to_local(
-  self : X64Codegen,
-  src_reg : String,
-  local_offset : Int,
-  byte_offset : Int,
-  width : Int,
-) -> Unit {
-  self.emit_store_int_bytes_to_mem_refs(
-    src_reg,
-    self.local_neg_ref(local_offset, byte_offset),
-    self.local_neg_ref(local_offset, byte_offset + 2),
-    self.local_neg_ref(local_offset, byte_offset + 4),
-    self.local_neg_ref(local_offset, byte_offset + 6),
-    width,
-  )
-}
-
-///|
 fn X64Codegen::emit_store_int_bytes_to_mem_refs(
   self : X64Codegen,
   src_reg : String,
@@ -1357,61 +1259,6 @@ fn X64Codegen::emit_store_sse_word_to_mem_reg(
     self.emit(
       "\tmovsd\t" + x64_sized_mem_at_reg(base_reg, offset, 8) + ", " + src_reg,
     )
-  }
-}
-
-///|
-fn X64Codegen::emit_store_sse_word_to_local(
-  self : X64Codegen,
-  src_reg : String,
-  local_offset : Int,
-  byte_offset : Int,
-  width : Int,
-) -> Unit {
-  let mem = self.local_neg_ref(local_offset, byte_offset)
-  if width <= 4 {
-    self.emit("\tmovss\t" + x64_sized_mem_ref(mem, 4) + ", " + src_reg)
-  } else {
-    self.emit("\tmovsd\t" + x64_sized_mem_ref(mem, 8) + ", " + src_reg)
-  }
-}
-
-///|
-fn X64Codegen::emit_load_small_aggregate_return(
-  self : X64Codegen,
-  ty : @parser.Type,
-) -> Unit {
-  let classes = match self.aggregate_classes(ty) {
-    Some(classes) => classes
-    None => abort("x86-64 backend does not support this aggregate return yet")
-  }
-  let int_regs = ["rax", "rdx"]
-  let fp_regs = ["xmm0", "xmm1"]
-  let mut int_idx = 0
-  let mut fp_idx = 0
-  self.emit("\tmov\tr10, rax")
-  for word in 0..<classes.length() {
-    let width = self.aggregate_word_width(ty, word)
-    match classes[word] {
-      IntClass => {
-        self.emit_load_int_bytes_from_mem_reg(
-          int_regs[int_idx],
-          "r10",
-          word * 8,
-          width,
-        )
-        int_idx += 1
-      }
-      SseClass => {
-        self.emit_load_sse_word_from_mem_reg(
-          fp_regs[fp_idx],
-          "r10",
-          word * 8,
-          width,
-        )
-        fp_idx += 1
-      }
-    }
   }
 }
 
@@ -1763,85 +1610,6 @@ fn X64Codegen::emit_call_sret_addr(
     }
     self.emit_local_addr(self.sret_scratch_offset)
     self.emit("\tmov\trdi, rax")
-  }
-}
-
-///|
-fn X64Codegen::compute_va_initial_offsets(
-  self : X64Codegen,
-  params : Array[@parser.Param],
-  initial_gp_slots : Int,
-) -> (Int, Int, Int) {
-  let mut int_idx = initial_gp_slots
-  let mut fp_idx = 0
-  let mut stack_idx = 0
-  for param in params {
-    if x64_is_aggregate_type(param.ty) {
-      let classes = match self.aggregate_classes(param.ty) {
-        Some(classes) => classes
-        None => {
-          stack_idx = self.align_stack_arg_index(stack_idx, param.ty)
-          stack_idx += self.aggregate_word_count(param.ty)
-          continue
-        }
-      }
-      let int_needed = x64_class_count(classes, IntClass)
-      let fp_needed = x64_class_count(classes, SseClass)
-      if int_idx + int_needed <= 6 && fp_idx + fp_needed <= 8 {
-        int_idx += int_needed
-        fp_idx += fp_needed
-      } else {
-        stack_idx = self.align_stack_arg_index(stack_idx, param.ty)
-        stack_idx += classes.length()
-      }
-    } else if x64_is_fp_type(param.ty) {
-      if fp_idx < 8 {
-        fp_idx += 1
-      } else {
-        stack_idx = self.align_stack_arg_index(stack_idx, param.ty)
-        stack_idx += 1
-      }
-    } else if x64_is_int128_type(param.ty) {
-      if int_idx + 2 <= 6 {
-        int_idx += 2
-      } else {
-        stack_idx = self.align_stack_arg_index(stack_idx, param.ty)
-        stack_idx += 2
-      }
-    } else if int_idx < 6 {
-      int_idx += 1
-    } else {
-      stack_idx = self.align_stack_arg_index(stack_idx, param.ty)
-      stack_idx += 1
-    }
-  }
-  (int_idx * 8, 48 + fp_idx * 16, 16 + stack_idx * 8)
-}
-
-///|
-fn X64Codegen::emit_save_variadic_registers(self : X64Codegen) -> Unit {
-  if self.va_reg_save_offset < 0 {
-    return
-  }
-  let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
-  let fp_arg_regs = [
-    "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
-  ]
-  for i = 0; i < arg_regs.length(); i = i + 1 {
-    self.emit(
-      "\tmov\tQWORD PTR " +
-      self.local_neg_ref(self.va_reg_save_offset, i * 8) +
-      ", " +
-      arg_regs[i],
-    )
-  }
-  for i = 0; i < fp_arg_regs.length(); i = i + 1 {
-    self.emit(
-      "\tmovups\tXMMWORD PTR " +
-      self.local_neg_ref(self.va_reg_save_offset, 48 + i * 16) +
-      ", " +
-      fp_arg_regs[i],
-    )
   }
 }
 
@@ -2294,18 +2062,6 @@ fn X64Codegen::builtin_object_size_value(
   self : X64Codegen,
   args : Array[@parser.Expr],
 ) -> Int64 {
-  match self.mir {
-    Some(mir) =>
-      match
-        mir.fold_const(Call(Var("__builtin_object_size"), args), @mir.Scope::{
-          locals: self.var_types,
-          current_func: self.func_name,
-        }) {
-        Some(value) => return value
-        None => ()
-      }
-    None => ()
-  }
   if args.length() > 0 {
     match codegen_literal_string_arg(args[0]) {
       Some(value) => return (value.length() + 1).to_int64()
@@ -4502,28 +4258,7 @@ fn X64Codegen::field_layout(
           )
         None => None
       }
-    None =>
-      match self.mir {
-        Some(mir) =>
-          return match mir.field_layout(lookup_ty, field_name) {
-            Some(field) =>
-              Some(
-                (
-                  field.name,
-                  field.ty,
-                  field.offset,
-                  field.size,
-                  field.bit_offset,
-                  match field.bit_width {
-                    Some(width) => width
-                    None => -1
-                  },
-                ),
-              )
-            None => None
-          }
-        None => ()
-      }
+    None => ()
   }
   let struct_name = match lookup_ty {
     Struct(name) | Union(name) => name
@@ -4546,11 +4281,7 @@ fn X64Codegen::offset_of_path(
 ) -> Int? {
   match self.mir_module {
     Some(mir) => return mir.offset_of_path(ty, path)
-    None =>
-      match self.mir {
-        Some(mir) => return mir.offset_of_path(ty, path)
-        None => ()
-      }
+    None => ()
   }
   let mut current_ty = ty
   let mut offset = 0
@@ -4736,14 +4467,6 @@ fn X64Codegen::type_of(self : X64Codegen, expr : @parser.Expr) -> @parser.Type {
       }
     _ => ()
   }
-  match self.mir {
-    Some(mir) =>
-      return mir.expr_type(expr, @mir.Scope::{
-        locals: self.var_types,
-        current_func: self.func_name,
-      })
-    None => ()
-  }
   match expr {
     Number(value) => number_literal_type(value)
     FloatLiteral(_) => Double
@@ -4853,11 +4576,7 @@ fn X64Codegen::global_expr_type(
 ) -> @parser.Type {
   match self.mir_module {
     Some(mir) => return mir.global_expr_type(expr)
-    None =>
-      match self.mir {
-        Some(mir) => return mir.global_expr_type(expr)
-        None => ()
-      }
+    None => ()
   }
   match expr {
     Number(value) => number_literal_type(value)
@@ -7339,147 +7058,6 @@ fn X64Codegen::gen_expr(self : X64Codegen, expr : @parser.Expr) -> Unit {
 }
 
 ///|
-fn X64Codegen::collect_expr_locals(
-  self : X64Codegen,
-  expr : @parser.Expr,
-) -> Unit {
-  match expr {
-    Binary(_, lhs, rhs) | Assign(lhs, rhs) | CompoundAssign(_, lhs, rhs) => {
-      self.collect_expr_locals(lhs)
-      self.collect_expr_locals(rhs)
-    }
-    Unary(_, e)
-    | Deref(e)
-    | AddrOf(e)
-    | SizeofExpr(e)
-    | AlignofExpr(e)
-    | Cast(_, e)
-    | PrefixInc(e)
-    | PrefixDec(e)
-    | PostfixInc(e)
-    | PostfixDec(e)
-    | DesignatedField(_, e)
-    | DesignatedIndex(_, e)
-    | DesignatedRange(_, _, e) => self.collect_expr_locals(e)
-    Call(func, args) => {
-      let ret_ty = self.type_of(expr)
-      if self.is_memory_aggregate(ret_ty) {
-        let size = self.type_size(ret_ty)
-        if size > self.sret_scratch_size {
-          self.sret_scratch_size = size
-        }
-        let align = self.type_align(ret_ty)
-        if align > self.sret_scratch_align {
-          self.sret_scratch_align = align
-        }
-      }
-      match func {
-        Var("__builtin_va_start") | Var("__builtin_va_copy") =>
-          match args.get(0) {
-            Some(Var(name)) => {
-              let _ = self.ensure_va_list_storage(name)
-            }
-            _ => ()
-          }
-        _ => ()
-      }
-      self.collect_expr_locals(func)
-      for arg in args {
-        self.collect_expr_locals(arg)
-      }
-    }
-    VaArg(ap_expr, ty) => {
-      if x64_is_aggregate_type(ty) {
-        let size = self.type_size(ty)
-        if size > self.va_arg_scratch_size {
-          self.va_arg_scratch_size = size
-        }
-        let align = self.type_align(ty)
-        if align > self.va_arg_scratch_align {
-          self.va_arg_scratch_align = align
-        }
-      }
-      self.collect_expr_locals(ap_expr)
-    }
-    MemberAccess(obj, _) => self.collect_expr_locals(obj)
-    ArrayAccess(arr, index) => {
-      self.collect_expr_locals(arr)
-      self.collect_expr_locals(index)
-    }
-    Ternary(cond, then_, else_) => {
-      self.collect_expr_locals(cond)
-      self.collect_expr_locals(then_)
-      self.collect_expr_locals(else_)
-    }
-    Array(values) =>
-      for value in values {
-        self.collect_expr_locals(value)
-      }
-    CompoundLiteral(ty, values, id) => {
-      let _ = self.alloc_local(compound_literal_local_name(id), ty)
-      for value in values {
-        self.collect_expr_locals(value)
-      }
-    }
-    _ => ()
-  }
-}
-
-///|
-fn X64Codegen::collect_stmt_locals(
-  self : X64Codegen,
-  stmt : @parser.Stmt,
-) -> Unit {
-  match stmt {
-    VarDecl(ty, name, init) => {
-      let _ = self.alloc_local(name, ty)
-      match init {
-        Some(expr) => self.collect_expr_locals(expr)
-        None => ()
-      }
-    }
-    Compound(stmts) | StmtList(stmts) =>
-      for s in stmts {
-        self.collect_stmt_locals(s)
-      }
-    ExprStmt(expr) => self.collect_expr_locals(expr)
-    Return(Some(expr)) => self.collect_expr_locals(expr)
-    Return(None) => ()
-    If(cond, then_, else_) => {
-      self.collect_expr_locals(cond)
-      self.collect_stmt_locals(then_)
-      match else_ {
-        Some(stmt) => self.collect_stmt_locals(stmt)
-        None => ()
-      }
-    }
-    While(cond, body) | DoWhile(cond, body) => {
-      self.collect_expr_locals(cond)
-      self.collect_stmt_locals(body)
-    }
-    For(init, cond, inc, body) => {
-      match init {
-        Some(stmt) => self.collect_stmt_locals(stmt)
-        None => ()
-      }
-      self.collect_expr_locals(cond)
-      match inc {
-        Some(expr) => self.collect_expr_locals(expr)
-        None => ()
-      }
-      self.collect_stmt_locals(body)
-    }
-    Switch(expr, body, _) => {
-      self.collect_expr_locals(expr)
-      self.collect_stmt_locals(body)
-    }
-    Label(_, stmt) => self.collect_stmt_locals(stmt)
-    ComputedGoto(expr) => self.collect_expr_locals(expr)
-    Break | Continue | Goto(_) => ()
-  }
-}
-
-///|
 fn X64Codegen::label_ref(self : X64Codegen, name : String) -> String {
   if !self.emitted_labels.contains(name) {
     let label = if name == "default" ||
@@ -7493,483 +7071,6 @@ fn X64Codegen::label_ref(self : X64Codegen, name : String) -> String {
     self.emitted_labels[name] = label
   }
   self.emitted_labels[name]
-}
-
-///|
-fn X64Codegen::gen_stmt(self : X64Codegen, stmt : @parser.Stmt) -> Unit {
-  match stmt {
-    Compound(stmts) => {
-      let saved_offsets = self.local_offsets.copy()
-      let saved_types = self.var_types.copy()
-      for s in stmts {
-        self.gen_stmt(s)
-      }
-      self.local_offsets = saved_offsets
-      self.var_types = saved_types
-    }
-    StmtList(stmts) =>
-      for s in stmts {
-        self.gen_stmt(s)
-      }
-    ExprStmt(expr) => self.gen_expr(expr)
-    Return(None) => {
-      self.emit("\tmov\trax, 0")
-      self.emit("\tjmp\t.L" + self.func_name + "_ret")
-    }
-    Return(Some(expr)) => {
-      let ret_ty = self.func_rets[self.func_name]
-      if self.is_supported_small_aggregate(ret_ty) {
-        match expr {
-          Call(_, _) => self.gen_expr(expr)
-          _ => {
-            self.gen_aggregate_addr(expr)
-            self.emit_load_small_aggregate_return(ret_ty)
-          }
-        }
-      } else if x64_is_aggregate_type(ret_ty) {
-        self.gen_aggregate_addr(expr)
-        self.emit("\tmov\tr11, rax")
-        self.emit(
-          "\tmov\tr10, QWORD PTR " + self.local_ref(self.sret_dest_offset),
-        )
-        self.emit_copy_aggregate_from_addr(ret_ty)
-        self.emit("\tmov\trax, r10")
-      } else if x64_is_fp_type(ret_ty) {
-        self.gen_expr_as_fp(expr, ret_ty)
-      } else {
-        self.gen_expr_as_scalar(expr, ret_ty)
-      }
-      self.emit("\tjmp\t.L" + self.func_name + "_ret")
-    }
-    VarDecl(ty, name, init) => {
-      let offset = self.alloc_local(name, ty)
-      match init {
-        Some(expr) =>
-          if x64_is_object_aggregate_type(ty) {
-            self.emit_local_addr(offset)
-            self.emit_init_value_at_addr(ty, expr)
-          } else {
-            self.gen_expr_as_scalar(expr, ty)
-            self.emit_store_local_from_rax(offset, ty)
-          }
-        None => ()
-      }
-    }
-    If(cond, then_, else_) => {
-      let else_label = self.new_label()
-      let end_label = self.new_label()
-      self.gen_cond_jump_false(cond, else_label)
-      self.gen_stmt(then_)
-      self.emit("\tjmp\t" + end_label)
-      self.emit(else_label + ":")
-      match else_ {
-        Some(stmt) => self.gen_stmt(stmt)
-        None => ()
-      }
-      self.emit(end_label + ":")
-    }
-    While(cond, body) => {
-      let start_label = self.new_label()
-      let end_label = self.new_label()
-      let old_break = self.break_label
-      let old_continue = self.continue_label
-      self.break_label = Some(end_label)
-      self.continue_label = Some(start_label)
-      self.emit(start_label + ":")
-      self.gen_cond_jump_false(cond, end_label)
-      self.gen_stmt(body)
-      self.emit("\tjmp\t" + start_label)
-      self.emit(end_label + ":")
-      self.break_label = old_break
-      self.continue_label = old_continue
-    }
-    DoWhile(cond, body) => {
-      let start_label = self.new_label()
-      let end_label = self.new_label()
-      let old_break = self.break_label
-      let old_continue = self.continue_label
-      self.break_label = Some(end_label)
-      self.continue_label = Some(start_label)
-      self.emit(start_label + ":")
-      self.gen_stmt(body)
-      self.gen_cond_jump_false(cond, end_label)
-      self.emit("\tjmp\t" + start_label)
-      self.emit(end_label + ":")
-      self.break_label = old_break
-      self.continue_label = old_continue
-    }
-    For(init, cond, inc, body) => {
-      let start_label = self.new_label()
-      let continue_label = self.new_label()
-      let end_label = self.new_label()
-      let old_break = self.break_label
-      let old_continue = self.continue_label
-      self.break_label = Some(end_label)
-      self.continue_label = Some(continue_label)
-      match init {
-        Some(stmt) => self.gen_stmt(stmt)
-        None => ()
-      }
-      self.emit(start_label + ":")
-      self.gen_cond_jump_false(cond, end_label)
-      self.gen_stmt(body)
-      self.emit(continue_label + ":")
-      match inc {
-        Some(expr) => self.gen_expr(expr)
-        None => ()
-      }
-      self.emit("\tjmp\t" + start_label)
-      self.emit(end_label + ":")
-      self.break_label = old_break
-      self.continue_label = old_continue
-    }
-    Break =>
-      match self.break_label {
-        Some(label) => self.emit("\tjmp\t" + label)
-        None => abort("break outside loop")
-      }
-    Continue =>
-      match self.continue_label {
-        Some(label) => self.emit("\tjmp\t" + label)
-        None => abort("continue outside loop")
-      }
-    Goto(name) => self.emit("\tjmp\t" + self.label_ref(name))
-    Label(name, stmt) => {
-      let label = self.label_ref(name)
-      self.defined_labels[name] = true
-      self.emit(label + ":")
-      self.gen_stmt(stmt)
-    }
-    Switch(expr, body, cases) => {
-      let end_label = self.new_label()
-      let old_break = self.break_label
-      self.break_label = Some(end_label)
-      let control_ty = switch_control_type(self.type_of(expr))
-      self.gen_expr_as_scalar(expr, control_ty)
-      for c in cases {
-        match c.0 {
-          Some(value) => {
-            self.emit_switch_case_compare(value, control_ty)
-            self.emit("\tje\t" + self.label_ref(c.1))
-          }
-          None => ()
-        }
-      }
-      let mut default_label = end_label
-      for c in cases {
-        match c.0 {
-          None => {
-            default_label = self.label_ref(c.1)
-            break
-          }
-          Some(_) => ()
-        }
-      }
-      self.emit("\tjmp\t" + default_label)
-      self.gen_stmt(body)
-      self.emit(end_label + ":")
-      self.break_label = old_break
-    }
-    ComputedGoto(expr) => {
-      self.gen_expr(expr)
-      self.emit("\tjmp\trax")
-    }
-  }
-}
-
-///|
-fn X64Codegen::emit_function(
-  self : X64Codegen,
-  decl : @parser.FuncDecl,
-) -> Unit {
-  match decl.body {
-    None => return
-    Some(body) => {
-      if self.try_gen_mir_func(decl) {
-        return
-      }
-      x64_reject_unsupported_scalar(decl.ret)
-      for param in decl.params {
-        x64_reject_unsupported_scalar(param.ty)
-      }
-      self.local_offsets = {}
-      self.var_types = {}
-      self.stack_size = 0
-      self.stack_align = 16
-      self.local_base_reg = "rbp"
-      self.func_name = decl.name
-      self.va_list_offsets = {}
-      self.va_reg_save_offset = -1
-      self.va_initial_gp_offset = 0
-      self.va_initial_fp_offset = 48
-      self.va_initial_overflow_offset = 16
-      self.sret_dest_offset = -1
-      self.sret_scratch_offset = -1
-      self.sret_scratch_size = 0
-      self.sret_scratch_align = 1
-      self.va_arg_scratch_offset = -1
-      self.va_arg_scratch_size = 0
-      self.va_arg_scratch_align = 1
-      self.break_label = None
-      self.continue_label = None
-      self.emitted_labels = {}
-      self.defined_labels = {}
-      let param_offsets : Map[String, Int] = {}
-      let param_types : Map[String, @parser.Type] = {}
-      if self.is_memory_aggregate(decl.ret) {
-        self.sret_dest_offset = self.alloc_local(
-          "__kimicc_sret_dest",
-          Pointer(Void),
-        )
-      }
-      for param in decl.params {
-        let offset = self.alloc_local(param.name, param.ty)
-        param_offsets[param.name] = offset
-        param_types[param.name] = param.ty
-      }
-      if decl.variadic {
-        let initial_gp_slots = if self.is_memory_aggregate(decl.ret) {
-          1
-        } else {
-          0
-        }
-        let (gp_offset, fp_offset, overflow_offset) = self.compute_va_initial_offsets(
-          decl.params,
-          initial_gp_slots,
-        )
-        self.va_initial_gp_offset = gp_offset
-        self.va_initial_fp_offset = fp_offset
-        self.va_initial_overflow_offset = overflow_offset
-        self.va_reg_save_offset = self.alloc_local(
-          "__kimicc_va_reg_save",
-          Array(UChar, 176),
-        )
-      }
-      let param_stack_end = self.stack_size
-      self.collect_stmt_locals(body)
-      if self.sret_scratch_size > 0 {
-        self.sret_scratch_offset = self.alloc_local(
-          "__kimicc_sret_scratch",
-          Aligned(Array(UChar, self.sret_scratch_size), self.sret_scratch_align),
-        )
-      }
-      if self.va_arg_scratch_size > 0 {
-        self.va_arg_scratch_offset = self.alloc_local(
-          "__kimicc_va_arg_scratch",
-          Aligned(
-            Array(UChar, self.va_arg_scratch_size),
-            self.va_arg_scratch_align,
-          ),
-        )
-      }
-      let frame_align = if self.stack_align > 16 {
-        self.stack_align
-      } else {
-        16
-      }
-      let frame_size = x64_align_to(self.stack_size, frame_align)
-      if self.stack_align > 16 {
-        self.local_base_reg = "r13"
-      }
-      self.emit_function_section(decl.section)
-      self.emit_symbol_binding(
-        decl.name,
-        decl.is_static,
-        decl.is_weak,
-        decl.visibility,
-      )
-      self.emit("\t.type\t" + decl.name + ", @function")
-      self.emit(decl.name + ":")
-      self.emit("\tpush\trbp")
-      self.emit("\tmov\trbp, rsp")
-      if self.stack_align > 16 {
-        self.emit("\tpush\tr13")
-        self.emit("\tand\trsp, -" + self.stack_align.to_string())
-        self.emit("\tmov\tr13, rsp")
-      }
-      if frame_size > 0 {
-        self.emit("\tsub\trsp, " + frame_size.to_string())
-      }
-      if self.sret_dest_offset >= 0 {
-        self.emit(
-          "\tmov\tQWORD PTR " + self.local_ref(self.sret_dest_offset) + ", rdi",
-        )
-      }
-      self.emit_save_variadic_registers()
-      let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
-      let fp_arg_regs = [
-        "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
-      ]
-      let mut int_idx = if self.is_memory_aggregate(decl.ret) { 1 } else { 0 }
-      let mut fp_idx = 0
-      let mut stack_idx = 0
-      for i = 0; i < decl.params.length(); i = i + 1 {
-        let param = decl.params[i]
-        let offset = param_offsets[param.name]
-        if x64_is_aggregate_type(param.ty) {
-          let classes = match self.aggregate_classes(param.ty) {
-            Some(classes) => classes
-            None => {
-              let words = self.aggregate_word_count(param.ty)
-              stack_idx = self.align_stack_arg_index(stack_idx, param.ty)
-              for word in 0..<words {
-                let stack_off = 16 + (stack_idx + word) * 8
-                self.emit(
-                  "\tmov\trax, QWORD PTR [rbp + " + stack_off.to_string() + "]",
-                )
-                self.emit(
-                  "\tmov\tQWORD PTR " +
-                  self.local_neg_ref(offset, word * 8) +
-                  ", rax",
-                )
-              }
-              stack_idx += words
-              continue
-            }
-          }
-          let int_needed = x64_class_count(classes, IntClass)
-          let fp_needed = x64_class_count(classes, SseClass)
-          if int_idx + int_needed <= arg_regs.length() &&
-            fp_idx + fp_needed <= fp_arg_regs.length() {
-            let mut int_cursor = int_idx
-            let mut fp_cursor = fp_idx
-            for word in 0..<classes.length() {
-              let width = self.aggregate_word_width(param.ty, word)
-              match classes[word] {
-                IntClass => {
-                  self.emit_store_int_bytes_to_local(
-                    arg_regs[int_cursor],
-                    offset,
-                    word * 8,
-                    width,
-                  )
-                  int_cursor += 1
-                }
-                SseClass => {
-                  self.emit_store_sse_word_to_local(
-                    fp_arg_regs[fp_cursor],
-                    offset,
-                    word * 8,
-                    width,
-                  )
-                  fp_cursor += 1
-                }
-              }
-            }
-            int_idx += int_needed
-            fp_idx += fp_needed
-          } else {
-            stack_idx = self.align_stack_arg_index(stack_idx, param.ty)
-            for word in 0..<classes.length() {
-              let width = self.aggregate_word_width(param.ty, word)
-              let stack_off = 16 + (stack_idx + word) * 8
-              self.emit_load_int_bytes_from_mem_reg(
-                "rax", "rbp", stack_off, width,
-              )
-              self.emit_store_int_bytes_to_local("rax", offset, word * 8, width)
-            }
-            stack_idx += classes.length()
-          }
-        } else if x64_is_fp_type(param.ty) {
-          if fp_idx < fp_arg_regs.length() {
-            self.emit_store_fp_reg_to_local(
-              fp_arg_regs[fp_idx],
-              offset,
-              param.ty,
-            )
-            fp_idx += 1
-          } else {
-            stack_idx = self.align_stack_arg_index(stack_idx, param.ty)
-            let stack_off = 16 + stack_idx * 8
-            match x64_core_type(param.ty) {
-              Float =>
-                self.emit(
-                  "\tmovss\txmm0, DWORD PTR [rbp + " +
-                  stack_off.to_string() +
-                  "]",
-                )
-              _ =>
-                self.emit(
-                  "\tmovsd\txmm0, QWORD PTR [rbp + " +
-                  stack_off.to_string() +
-                  "]",
-                )
-            }
-            self.emit_store_local_from_rax(offset, param.ty)
-            stack_idx += 1
-          }
-        } else if x64_is_int128_type(param.ty) {
-          if int_idx + 2 <= arg_regs.length() {
-            self.emit(
-              "\tmov\tQWORD PTR " +
-              self.local_ref(offset) +
-              ", " +
-              arg_regs[int_idx],
-            )
-            self.emit(
-              "\tmov\tQWORD PTR " +
-              self.local_neg_ref(offset, 8) +
-              ", " +
-              arg_regs[int_idx + 1],
-            )
-            int_idx += 2
-          } else {
-            stack_idx = self.align_stack_arg_index(stack_idx, param.ty)
-            let stack_off = 16 + stack_idx * 8
-            self.emit(
-              "\tmov\trax, QWORD PTR [rbp + " + stack_off.to_string() + "]",
-            )
-            self.emit(
-              "\tmov\trdx, QWORD PTR [rbp + " +
-              (stack_off + 8).to_string() +
-              "]",
-            )
-            self.emit_store_local_from_rax(offset, param.ty)
-            stack_idx += 2
-          }
-        } else if int_idx < arg_regs.length() {
-          self.emit_store_int_reg_to_local(arg_regs[int_idx], offset)
-          int_idx += 1
-        } else {
-          stack_idx = self.align_stack_arg_index(stack_idx, param.ty)
-          let stack_off = 16 + stack_idx * 8
-          self.emit(
-            "\tmov\trax, QWORD PTR [rbp + " + stack_off.to_string() + "]",
-          )
-          self.emit_store_local_from_rax(offset, param.ty)
-          stack_idx += 1
-        }
-      }
-      self.local_offsets = param_offsets
-      self.var_types = param_types
-      self.stack_size = param_stack_end
-      self.va_list_offsets = {}
-      self.gen_stmt(body)
-      if self.is_memory_aggregate(decl.ret) {
-        self.emit(
-          "\tmov\trax, QWORD PTR " + self.local_ref(self.sret_dest_offset),
-        )
-      } else if x64_is_fp_type(decl.ret) {
-        self.emit("\tpxor\txmm0, xmm0")
-      } else {
-        self.emit("\tmov\trax, 0")
-      }
-      self.emit(".L" + decl.name + "_ret:")
-      for name, label in self.emitted_labels {
-        if !self.defined_labels.contains(name) {
-          self.emit(label + ":")
-          self.emit("\tjmp\t.L" + self.func_name + "_ret")
-        }
-      }
-      if self.stack_align > 16 {
-        self.emit("\tmov\tr13, QWORD PTR [rbp - 8]")
-      }
-      self.emit("\tmov\trsp, rbp")
-      self.emit("\tpop\trbp")
-      self.emit("\tret")
-      self.emit("\t.size\t" + decl.name + ", .-" + decl.name)
-    }
-  }
 }
 
 ///|
@@ -8507,18 +7608,6 @@ fn X64Codegen::fold_const_builtin_int(
 
 ///|
 fn X64Codegen::fold_const(self : X64Codegen, expr : @parser.Expr) -> Int64? {
-  match self.mir {
-    Some(mir) =>
-      match
-        mir.fold_const(expr, {
-          locals: self.var_types,
-          current_func: self.func_name,
-        }) {
-        Some(value) => return Some(value)
-        None => ()
-      }
-    None => ()
-  }
   match self.fold_const_int(expr) {
     Some(value) => Some(value.bits)
     None => None
@@ -8530,18 +7619,6 @@ fn X64Codegen::fold_float_const(
   self : X64Codegen,
   expr : @parser.Expr,
 ) -> Double? {
-  match self.mir {
-    Some(mir) =>
-      match
-        mir.fold_float_const(expr, {
-          locals: self.var_types,
-          current_func: self.func_name,
-        }) {
-        Some(value) => return Some(value)
-        None => ()
-      }
-    None => ()
-  }
   let expr_ty = self.type_of(expr)
   if !x64_is_fp_type(expr_ty) {
     match expr {
@@ -9570,42 +8647,6 @@ fn X64Codegen::emit_global_array(
     }
     _ => self.emit("\t.zero\t" + self.type_size(ty).to_string())
   }
-}
-
-///|
-fn X64Codegen::emit_globals(
-  self : X64Codegen,
-  globals : Array[CodegenGlobalDecl],
-  parser_fallbacks : Map[String, @parser.GlobalDecl],
-  mir_global_inits : Map[String, @mir.MirGlobalDecl],
-) -> Unit {
-  self.emit_global_decl_directives(globals)
-  for g in globals {
-    if g.has_init && g.symbol_alias is None {
-      self.emit_global_data_section(g.section)
-      self.emit_symbol_binding(g.name, g.is_static, g.is_weak, g.visibility)
-      self.emit("\t.align\t" + self.type_align(g.ty).to_string())
-      self.emit(g.name + ":")
-      let mut emitted_mir_init = false
-      match mir_global_inits.get(g.name) {
-        Some(mir_global) =>
-          emitted_mir_init = self.try_emit_mir_global_init(mir_global)
-        None => ()
-      }
-      if !emitted_mir_init {
-        match parser_fallbacks.get(g.name) {
-          Some(parser_global) =>
-            match parser_global.init {
-              Some(Scalar(expr)) => self.emit_global_scalar(g.ty, expr)
-              Some(Array(exprs)) => self.emit_global_array(g.ty, exprs)
-              None => ()
-            }
-          None => self.emit("\t.zero\t" + self.type_size(g.ty).to_string())
-        }
-      }
-    }
-  }
-  self.emit_global_bss_definitions(globals)
 }
 
 ///|

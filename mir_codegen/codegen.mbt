@@ -1,13 +1,12 @@
 ///|
 #warnings("-unused_mut")
 priv struct Codegen {
-  /// Darwin ARM64 assembly generator for a parsed C program.
+  /// Darwin ARM64 assembly generator for a lowered MIR module.
   ///
   /// Construct with `Codegen::new`. The fields are exposed by the current
   /// MoonBit API surface, but callers should treat them as implementation
   /// details and use `generate` as the stable entry point.
   output : StringBuilder
-  mut mir : @mir.Program?
   mut mir_module : @mir.MirModule?
   mut label_counter : Int
   mut local_offsets : Map[String, Int]
@@ -30,9 +29,7 @@ priv struct Codegen {
   mut emitted_labels : Map[String, String]
   mut defined_labels : Map[String, Bool]
   mut fp_literals : Array[Double]
-  mut sret_dest_offset : Int
   mut sret_scratch_offset : Int
-  mut sret_scratch_size : Int
   mut pending_sret_offset : Int
 }
 
@@ -85,106 +82,6 @@ fn reloc_with_offset(base : String, offset : Int) -> String {
 }
 
 ///|
-fn global_has_init(g : @parser.GlobalDecl) -> Bool {
-  match g.init {
-    Some(_) => true
-    None => false
-  }
-}
-
-///|
-fn should_replace_global_decl(
-  old : @parser.GlobalDecl,
-  next : @parser.GlobalDecl,
-) -> Bool {
-  if next.is_extern && !global_has_init(next) {
-    false
-  } else if !global_has_init(old) && global_has_init(next) {
-    true
-  } else if old.is_extern && !next.is_extern {
-    true
-  } else if global_has_init(old) && !global_has_init(next) {
-    false
-  } else {
-    global_has_init(next)
-  }
-}
-
-///|
-fn merge_global_visibility(
-  primary : @parser.GlobalDecl,
-  other : @parser.GlobalDecl,
-) -> String? {
-  match primary.visibility {
-    Some(_) => primary.visibility
-    None => other.visibility
-  }
-}
-
-///|
-fn merge_global_alias(
-  primary : @parser.GlobalDecl,
-  other : @parser.GlobalDecl,
-) -> String? {
-  match primary.symbol_alias {
-    Some(_) => primary.symbol_alias
-    None => other.symbol_alias
-  }
-}
-
-///|
-fn merge_global_section(
-  primary : @parser.GlobalDecl,
-  other : @parser.GlobalDecl,
-) -> String? {
-  match primary.section {
-    Some(_) => primary.section
-    None => other.section
-  }
-}
-
-///|
-fn with_merged_global_attrs(
-  primary : @parser.GlobalDecl,
-  other : @parser.GlobalDecl,
-) -> @parser.GlobalDecl {
-  {
-    ty: primary.ty,
-    name: primary.name,
-    init: primary.init,
-    is_static: primary.is_static,
-    is_extern: primary.is_extern,
-    is_weak: primary.is_weak || other.is_weak,
-    visibility: merge_global_visibility(primary, other),
-    symbol_alias: merge_global_alias(primary, other),
-    section: merge_global_section(primary, other),
-  }
-}
-
-///|
-fn merge_global_decls(
-  globals : Array[@parser.GlobalDecl],
-) -> Array[@parser.GlobalDecl] {
-  let merged : Array[@parser.GlobalDecl] = []
-  for g in globals {
-    let mut found = -1
-    for i = 0; i < merged.length(); i = i + 1 {
-      if merged[i].name == g.name {
-        found = i
-      }
-    }
-    if found < 0 {
-      merged.push(g)
-    } else if should_replace_global_decl(merged[found], g) {
-      merged[found] = with_merged_global_attrs(g, merged[found])
-    } else {
-      merged[found] = with_merged_global_attrs(merged[found], g)
-    }
-  }
-  merged
-}
-
-///|
 priv struct CodegenFuncDecl {
   name : String
   is_static : Bool
@@ -210,20 +107,6 @@ priv struct CodegenGlobalDecl {
 }
 
 ///|
-fn codegen_func_decl_from_parser(decl : @parser.FuncDecl) -> CodegenFuncDecl {
-  {
-    name: decl.name,
-    is_static: decl.is_static,
-    is_weak: decl.is_weak,
-    visibility: decl.visibility,
-    symbol_alias: decl.symbol_alias,
-    is_constructor: decl.is_constructor,
-    is_destructor: decl.is_destructor,
-    has_body: decl.body is Some(_),
-  }
-}
-
-///|
 fn codegen_func_decl_from_mir(decl : @mir.MirFuncDecl) -> CodegenFuncDecl {
   {
     name: decl.name,
@@ -238,17 +121,6 @@ fn codegen_func_decl_from_mir(decl : @mir.MirFuncDecl) -> CodegenFuncDecl {
 }
 
 ///|
-fn codegen_func_decls_from_parser(
-  decls : Array[@parser.FuncDecl],
-) -> Array[CodegenFuncDecl] {
-  let result = []
-  for decl in decls {
-    result.push(codegen_func_decl_from_parser(decl))
-  }
-  result
-}
-
-///|
 fn codegen_func_decls_from_mir(
   decls : Array[@mir.MirFuncDecl],
 ) -> Array[CodegenFuncDecl] {
@@ -257,23 +129,6 @@ fn codegen_func_decls_from_mir(
     result.push(codegen_func_decl_from_mir(decl))
   }
   result
-}
-
-///|
-fn codegen_global_decl_from_parser(
-  decl : @parser.GlobalDecl,
-) -> CodegenGlobalDecl {
-  {
-    ty: decl.ty,
-    name: decl.name,
-    has_init: decl.init is Some(_),
-    is_static: decl.is_static,
-    is_extern: decl.is_extern,
-    is_weak: decl.is_weak,
-    visibility: decl.visibility,
-    symbol_alias: decl.symbol_alias,
-    section: decl.section,
-  }
 }
 
 ///|
@@ -292,17 +147,6 @@ fn codegen_global_decl_from_mir(decl : @mir.MirGlobalDecl) -> CodegenGlobalDecl 
 }
 
 ///|
-fn codegen_global_decls_from_parser(
-  decls : Array[@parser.GlobalDecl],
-) -> Array[CodegenGlobalDecl] {
-  let result = []
-  for decl in decls {
-    result.push(codegen_global_decl_from_parser(decl))
-  }
-  result
-}
-
-///|
 fn codegen_global_decls_from_mir(
   decls : Array[@mir.MirGlobalDecl],
 ) -> Array[CodegenGlobalDecl] {
@@ -314,156 +158,13 @@ fn codegen_global_decls_from_mir(
 }
 
 ///|
-fn mark_static_inline_needed(
-  name : String,
-  inline_decls : Map[String, @parser.FuncDecl],
-  needed : Map[String, Bool],
-) -> Unit {
-  if needed.contains(name) || !inline_decls.contains(name) {
-    return
-  }
-  needed[name] = true
-  match inline_decls[name].body {
-    Some(body) => collect_static_inline_stmt(body, inline_decls, needed)
-    None => ()
-  }
-}
-
-///|
-fn collect_static_inline_expr(
-  expr : @parser.Expr,
-  inline_decls : Map[String, @parser.FuncDecl],
-  needed : Map[String, Bool],
-) -> Unit {
-  match expr {
-    Var(name) => mark_static_inline_needed(name, inline_decls, needed)
-    Number(_)
-    | FloatLiteral(_)
-    | String(_)
-    | Sizeof(_)
-    | Alignof(_)
-    | LabelAddr(_)
-    | OffsetOf(_, _) => ()
-    Binary(_, left, right)
-    | Assign(left, right)
-    | CompoundAssign(_, left, right)
-    | ArrayAccess(left, right) => {
-      collect_static_inline_expr(left, inline_decls, needed)
-      collect_static_inline_expr(right, inline_decls, needed)
-    }
-    Unary(_, inner)
-    | Deref(inner)
-    | SizeofExpr(inner)
-    | AlignofExpr(inner)
-    | Cast(_, inner)
-    | PrefixInc(inner)
-    | PrefixDec(inner)
-    | PostfixInc(inner)
-    | PostfixDec(inner)
-    | VaArg(inner, _)
-    | DesignatedField(_, inner)
-    | DesignatedIndex(_, inner)
-    | DesignatedRange(_, _, inner) =>
-      collect_static_inline_expr(inner, inline_decls, needed)
-    MemberAccess(obj, _) =>
-      collect_static_inline_expr(obj, inline_decls, needed)
-    AddrOf(inner) => {
-      match inner {
-        Var(name) => mark_static_inline_needed(name, inline_decls, needed)
-        _ => ()
-      }
-      collect_static_inline_expr(inner, inline_decls, needed)
-    }
-    Call(callee, args) => {
-      match callee {
-        Var(name) => mark_static_inline_needed(name, inline_decls, needed)
-        _ => ()
-      }
-      collect_static_inline_expr(callee, inline_decls, needed)
-      for arg in args {
-        collect_static_inline_expr(arg, inline_decls, needed)
-      }
-    }
-    Ternary(cond, yes, no) => {
-      collect_static_inline_expr(cond, inline_decls, needed)
-      collect_static_inline_expr(yes, inline_decls, needed)
-      collect_static_inline_expr(no, inline_decls, needed)
-    }
-    Array(items) | CompoundLiteral(_, items, _) =>
-      for item in items {
-        collect_static_inline_expr(item, inline_decls, needed)
-      }
-  }
-}
-
-///|
-fn collect_static_inline_stmt(
-  stmt : @parser.Stmt,
-  inline_decls : Map[String, @parser.FuncDecl],
-  needed : Map[String, Bool],
-) -> Unit {
-  match stmt {
-    ExprStmt(expr) | ComputedGoto(expr) =>
-      collect_static_inline_expr(expr, inline_decls, needed)
-    Return(expr) =>
-      match expr {
-        Some(value) => collect_static_inline_expr(value, inline_decls, needed)
-        None => ()
-      }
-    If(cond, then_, else_) => {
-      collect_static_inline_expr(cond, inline_decls, needed)
-      collect_static_inline_stmt(then_, inline_decls, needed)
-      match else_ {
-        Some(stmt) => collect_static_inline_stmt(stmt, inline_decls, needed)
-        None => ()
-      }
-    }
-    While(cond, body) | DoWhile(cond, body) => {
-      collect_static_inline_expr(cond, inline_decls, needed)
-      collect_static_inline_stmt(body, inline_decls, needed)
-    }
-    Compound(stmts) | StmtList(stmts) =>
-      for child in stmts {
-        collect_static_inline_stmt(child, inline_decls, needed)
-      }
-    VarDecl(_, _, init) =>
-      match init {
-        Some(expr) => collect_static_inline_expr(expr, inline_decls, needed)
-        None => ()
-      }
-    Switch(expr, body, _) => {
-      collect_static_inline_expr(expr, inline_decls, needed)
-      collect_static_inline_stmt(body, inline_decls, needed)
-    }
-    Label(_, body) => collect_static_inline_stmt(body, inline_decls, needed)
-    For(init, cond, update, body) => {
-      match init {
-        Some(stmt) => collect_static_inline_stmt(stmt, inline_decls, needed)
-        None => ()
-      }
-      collect_static_inline_expr(cond, inline_decls, needed)
-      match update {
-        Some(expr) => collect_static_inline_expr(expr, inline_decls, needed)
-        None => ()
-      }
-      collect_static_inline_stmt(body, inline_decls, needed)
-    }
-    Break | Continue | Goto(_) => ()
-  }
-}
-
-///|
 fn Codegen::global_expr_type(
   self : Codegen,
   expr : @parser.Expr,
 ) -> @parser.Type {
   match self.mir_module {
     Some(mir) => return mir.global_expr_type(expr)
-    None =>
-      match self.mir {
-        Some(mir) => return mir.global_expr_type(expr)
-        None => ()
-      }
+    None => ()
   }
   match expr {
     Number(value) => number_literal_type(value)
@@ -1108,18 +809,6 @@ fn Codegen::fold_const_int(
 
 ///|
 fn Codegen::fold_const(self : Codegen, expr : @parser.Expr) -> Int64? {
-  match self.mir {
-    Some(mir) =>
-      match
-        mir.fold_const(expr, {
-          locals: self.var_types,
-          current_func: self.func_name,
-        }) {
-        Some(value) => return Some(value)
-        None => ()
-      }
-    None => ()
-  }
   match self.fold_const_int(expr) {
     Some(value) => Some(value.bits)
     None => None
@@ -1128,18 +817,6 @@ fn Codegen::fold_const(self : Codegen, expr : @parser.Expr) -> Int64? {
 
 ///|
 fn Codegen::fold_float_const(self : Codegen, expr : @parser.Expr) -> Double? {
-  match self.mir {
-    Some(mir) =>
-      match
-        mir.fold_float_const(expr, {
-          locals: self.var_types,
-          current_func: self.func_name,
-        }) {
-        Some(value) => return Some(value)
-        None => ()
-      }
-    None => ()
-  }
   let expr_ty = self.type_of(expr, 0)
   if !expr_ty.is_floating() {
     match expr {
@@ -1360,7 +1037,6 @@ fn Codegen::global_offset_bytes(
 fn Codegen::new() -> Codegen {
   {
     output: StringBuilder::new(),
-    mir: None,
     mir_module: None,
     label_counter: 0,
     local_offsets: {},
@@ -1380,9 +1056,7 @@ fn Codegen::new() -> Codegen {
     emitted_labels: {},
     defined_labels: {},
     fp_literals: [],
-    sret_dest_offset: -1,
     sret_scratch_offset: -1,
-    sret_scratch_size: 0,
     pending_sret_offset: -1,
   }
 }
@@ -1412,39 +1086,12 @@ fn Codegen::register_mir_function_decls(
 }
 
 ///|
-fn Codegen::register_parser_function_decls(
-  self : Codegen,
-  decls : Array[@parser.FuncDecl],
-) -> Unit {
-  for decl in decls {
-    self.func_rets[decl.name] = decl.ret
-    self.func_variadic[decl.name] = decl.variadic
-    self.func_param_counts[decl.name] = decl.params.length()
-    let param_types = []
-    for param in decl.params {
-      param_types.push(param.ty)
-    }
-    self.func_param_types[decl.name] = param_types
-  }
-}
-
-///|
 fn Codegen::register_mir_global_decls(
   self : Codegen,
   mir : @mir.MirModule,
 ) -> Unit {
   for global in @mir.merge_global_decls(mir.global_decls) {
     self.globals[global.name] = codegen_global_decl_from_mir(global)
-  }
-}
-
-///|
-fn Codegen::register_parser_global_decls(
-  self : Codegen,
-  globals : Array[@parser.GlobalDecl],
-) -> Unit {
-  for global in globals {
-    self.globals[global.name] = codegen_global_decl_from_parser(global)
   }
 }
 
@@ -2472,23 +2119,6 @@ fn mir_module_body_codegen_strict_error(mir_module : @mir.MirModule) -> String? 
     }
   }
   None
-}
-
-///|
-fn static_global_owner_name(
-  name : String,
-  decls : Array[CodegenFuncDecl],
-) -> String? {
-  let mut owner : String? = None
-  let mut owner_prefix_len = 0
-  for decl in decls {
-    let prefix = "_" + decl.name + "_"
-    if name.has_prefix(prefix) && prefix.length() > owner_prefix_len {
-      owner = Some(decl.name)
-      owner_prefix_len = prefix.length()
-    }
-  }
-  owner
 }
 
 ///|

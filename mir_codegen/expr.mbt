@@ -45,14 +45,6 @@ fn Codegen::type_of(
   expr : @parser.Expr,
   frame_size : Int,
 ) -> @parser.Type {
-  match self.mir {
-    Some(mir) =>
-      return mir.expr_type(expr, @mir.Scope::{
-        locals: self.var_types,
-        current_func: self.func_name,
-      })
-    None => ()
-  }
   match expr {
     Number(value) => number_literal_type(value)
     FloatLiteral(_) => Double
@@ -716,14 +708,6 @@ fn Codegen::call_return_type(
   args : Array[@parser.Expr],
   frame_size : Int,
 ) -> @parser.Type {
-  match self.mir {
-    Some(mir) =>
-      return mir.expr_type(Call(func, args), @mir.Scope::{
-        locals: self.var_types,
-        current_func: self.func_name,
-      })
-    None => ()
-  }
   match self.type_of(func, frame_size) {
     FuncPtr(ret, _, _) => ret
     _ =>
@@ -1889,18 +1873,6 @@ fn Codegen::builtin_object_size_value(
   self : Codegen,
   args : Array[@parser.Expr],
 ) -> Int64 {
-  match self.mir {
-    Some(mir) =>
-      match
-        mir.fold_const(Call(Var("__builtin_object_size"), args), @mir.Scope::{
-          locals: self.var_types,
-          current_func: self.func_name,
-        }) {
-        Some(value) => return value
-        None => ()
-      }
-    None => ()
-  }
   if args.length() > 0 {
     match codegen_literal_string_arg(args[0]) {
       Some(value) => return (value.length() + 1).to_int64()
@@ -3332,17 +3304,6 @@ fn Codegen::emit_store_saved_register_aggregate_at_x9(
     self.emit("\tstr\tx10, [x9, #8]")
   }
   self.emit("\tadd\tsp, sp, #16")
-}
-
-///|
-fn Codegen::emit_load_register_aggregate_from_x9(
-  self : Codegen,
-  ty : @parser.Type,
-) -> Unit {
-  self.emit("\tldr\tx0, [x9]")
-  if self.type_size(ty) > 8 {
-    self.emit("\tldr\tx1, [x9, #8]")
-  }
 }
 
 ///|
