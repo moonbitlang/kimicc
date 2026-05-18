@@ -3265,6 +3265,12 @@ struct Pair {
   long b;
 };
 
+struct Big {
+  long a;
+  long b;
+  long c;
+};
+
 int read_pair(int tag, ...) {
   va_list ap;
   struct Pair p;
@@ -3274,11 +3280,24 @@ int read_pair(int tag, ...) {
   return tag + (int)p.a + (int)p.b;
 }
 
+int read_big(int tag, ...) {
+  va_list ap;
+  struct Big p;
+  __builtin_va_start(ap, tag);
+  p = __builtin_va_arg(ap, struct Big);
+  __builtin_va_end(ap);
+  return tag + (int)p.a + (int)p.b + (int)p.c;
+}
+
 int main(void) {
   struct Pair p;
+  struct Big b;
   p.a = 10;
   p.b = 20;
-  return read_pair(4, p);
+  b.a = 1;
+  b.b = 2;
+  b.c = 3;
+  return read_pair(4, p) + read_big(5, b);
 }
 C
 
@@ -3287,8 +3306,8 @@ set +e
 "$strict_mir_varargs_binary_path"
 status=$?
 set -e
-if [ "$status" -ne 34 ]; then
-  echo "expected strict MIR aggregate varargs smoke binary to exit 34, got $status" >&2
+if [ "$status" -ne 45 ]; then
+  echo "expected strict MIR aggregate varargs smoke binary to exit 45, got $status" >&2
   exit 1
 fi
 
