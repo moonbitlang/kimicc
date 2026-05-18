@@ -3,6 +3,9 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
   match decl.body {
     None => return
     Some(body) => {
+      if self.try_gen_mir_func(decl) {
+        return
+      }
       self.local_offsets = {}
       self.var_types = {}
       self.stack_size = 0

@@ -1,13 +1,28 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/kimicc/codegen"
+package "bobzhang/kimicc/mir_codegen"
 
 import {
+  "bobzhang/kimicc/mir",
   "bobzhang/kimicc/parser",
   "bobzhang/kimicc/target",
 }
 
 // Values
 pub fn generate_assembly_for_target(@parser.Program, @target.Target) -> String
+
+pub fn generate_assembly_for_target_strict(@parser.Program, @target.Target) -> Result[String, String]
+
+pub fn generate_assembly_for_target_with_parser_fallback(@parser.Program, @target.Target) -> String
+
+pub fn generate_assembly_from_mir(@mir.Program) -> String
+
+pub fn generate_assembly_from_mir_module(@mir.MirModule) -> String
+
+pub fn generate_assembly_from_mir_module_strict(@mir.MirModule) -> Result[String, String]
+
+pub fn generate_assembly_from_mir_strict(@mir.Program) -> Result[String, String]
+
+pub fn generate_assembly_from_mir_with_parser_fallback(@mir.Program) -> String
 
 pub fn generate_jit_image(@parser.Program) -> JitImage
 
@@ -18,6 +33,8 @@ pub fn generate_macho_object(@parser.Program) -> Bytes
 // Types and methods
 pub struct Codegen {
   output : StringBuilder
+  mut mir : @mir.Program?
+  mut mir_module : @mir.MirModule?
   mut label_counter : Int
   mut local_offsets : Map[String, Int]
   mut var_types : Map[String, @parser.Type]

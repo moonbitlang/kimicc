@@ -6,6 +6,8 @@
 /// details and use `generate` as the stable entry point.
 pub struct Codegen {
   output : StringBuilder
+  mut mir : @mir.Program?
+  mut mir_module : @mir.MirModule?
   mut label_counter : Int
   mut local_offsets : Map[String, Int]
   mut var_types : Map[String, @parser.Type]
@@ -222,12 +224,37 @@ fn codegen_func_decl_from_parser(decl : @parser.FuncDecl) -> CodegenFuncDecl {
 }
 
 ///|
+fn codegen_func_decl_from_mir(decl : @mir.MirFuncDecl) -> CodegenFuncDecl {
+  {
+    name: decl.name,
+    is_static: decl.is_static,
+    is_weak: decl.is_weak,
+    visibility: decl.visibility,
+    symbol_alias: decl.symbol_alias,
+    is_constructor: decl.is_constructor,
+    is_destructor: decl.is_destructor,
+    has_body: decl.has_body,
+  }
+}
+
+///|
 fn codegen_func_decls_from_parser(
   decls : Array[@parser.FuncDecl],
 ) -> Array[CodegenFuncDecl] {
   let result = []
   for decl in decls {
     result.push(codegen_func_decl_from_parser(decl))
+  }
+  result
+}
+
+///|
+fn codegen_func_decls_from_mir(
+  decls : Array[@mir.MirFuncDecl],
+) -> Array[CodegenFuncDecl] {
+  let result = []
+  for decl in decls {
+    result.push(codegen_func_decl_from_mir(decl))
   }
   result
 }
@@ -250,12 +277,38 @@ fn codegen_global_decl_from_parser(
 }
 
 ///|
+fn codegen_global_decl_from_mir(decl : @mir.MirGlobalDecl) -> CodegenGlobalDecl {
+  {
+    ty: decl.ty,
+    name: decl.name,
+    has_init: decl.has_init,
+    is_static: decl.is_static,
+    is_extern: decl.is_extern,
+    is_weak: decl.is_weak,
+    visibility: decl.visibility,
+    symbol_alias: decl.symbol_alias,
+    section: decl.section,
+  }
+}
+
+///|
 fn codegen_global_decls_from_parser(
   decls : Array[@parser.GlobalDecl],
 ) -> Array[CodegenGlobalDecl] {
   let result = []
   for decl in decls {
     result.push(codegen_global_decl_from_parser(decl))
+  }
+  result
+}
+
+///|
+fn codegen_global_decls_from_mir(
+  decls : Array[@mir.MirGlobalDecl],
+) -> Array[CodegenGlobalDecl] {
+  let result = []
+  for decl in decls {
+    result.push(codegen_global_decl_from_mir(decl))
   }
   result
 }
@@ -404,6 +457,14 @@ fn Codegen::global_expr_type(
   self : Codegen,
   expr : @parser.Expr,
 ) -> @parser.Type {
+  match self.mir_module {
+    Some(mir) => return mir.global_expr_type(expr)
+    None =>
+      match self.mir {
+        Some(mir) => return mir.global_expr_type(expr)
+        None => ()
+      }
+  }
   match expr {
     Number(value) => number_literal_type(value)
     FloatLiteral(_) => Double
@@ -1047,6 +1108,18 @@ fn Codegen::fold_const_int(
 
 ///|
 fn Codegen::fold_const(self : Codegen, expr : @parser.Expr) -> Int64? {
+  match self.mir {
+    Some(mir) =>
+      match
+        mir.fold_const(expr, {
+          locals: self.var_types,
+          current_func: self.func_name,
+        }) {
+        Some(value) => return Some(value)
+        None => ()
+      }
+    None => ()
+  }
   match self.fold_const_int(expr) {
     Some(value) => Some(value.bits)
     None => None
@@ -1055,6 +1128,18 @@ fn Codegen::fold_const(self : Codegen, expr : @parser.Expr) -> Int64? {
 
 ///|
 fn Codegen::fold_float_const(self : Codegen, expr : @parser.Expr) -> Double? {
+  match self.mir {
+    Some(mir) =>
+      match
+        mir.fold_float_const(expr, {
+          locals: self.var_types,
+          current_func: self.func_name,
+        }) {
+        Some(value) => return Some(value)
+        None => ()
+      }
+    None => ()
+  }
   let expr_ty = self.type_of(expr, 0)
   if !expr_ty.is_floating() {
     match expr {
@@ -1275,6 +1360,8 @@ fn Codegen::global_offset_bytes(
 pub fn Codegen::new() -> Codegen {
   {
     output: StringBuilder::new(),
+    mir: None,
+    mir_module: None,
     label_counter: 0,
     local_offsets: {},
     var_types: {},
@@ -1302,6 +1389,38 @@ pub fn Codegen::new() -> Codegen {
 }
 
 ///|
+fn Codegen::new_with_mir(mir : @mir.Program) -> Codegen {
+  let codegen = Codegen::new()
+  codegen.mir = Some(mir)
+  codegen.mir_module = Some(mir.to_module())
+  codegen
+}
+
+///|
+fn Codegen::new_with_mir_module(mir : @mir.MirModule) -> Codegen {
+  let codegen = Codegen::new()
+  codegen.mir_module = Some(mir)
+  codegen
+}
+
+///|
+fn Codegen::register_mir_function_decls(
+  self : Codegen,
+  mir : @mir.MirModule,
+) -> Unit {
+  for decl in mir.decls {
+    self.func_rets[decl.name] = decl.ret
+    self.func_variadic[decl.name] = decl.variadic
+    self.func_param_counts[decl.name] = decl.params.length()
+    let param_types = []
+    for param in decl.params {
+      param_types.push(param.ty)
+    }
+    self.func_param_types[decl.name] = param_types
+  }
+}
+
+///|
 fn Codegen::register_parser_function_decls(
   self : Codegen,
   decls : Array[@parser.FuncDecl],
@@ -1315,6 +1434,16 @@ fn Codegen::register_parser_function_decls(
       param_types.push(param.ty)
     }
     self.func_param_types[decl.name] = param_types
+  }
+}
+
+///|
+fn Codegen::register_mir_global_decls(
+  self : Codegen,
+  mir : @mir.MirModule,
+) -> Unit {
+  for global in @mir.merge_global_decls(mir.global_decls) {
+    self.globals[global.name] = codegen_global_decl_from_mir(global)
   }
 }
 
@@ -1445,6 +1574,506 @@ fn Codegen::emit_global_scalar(
       let size = self.type_size(ty)
       self.emit("\t.space\t" + size.to_string())
     }
+  }
+}
+
+///|
+fn Codegen::mir_global_scalar_int_supported(
+  self : Codegen,
+  ty : @parser.Type,
+) -> Bool {
+  match ty {
+    Aligned(inner, _) => self.mir_global_scalar_int_supported(inner)
+    _ =>
+      match ty {
+        Bool
+        | SChar
+        | UChar
+        | SShort
+        | UShort
+        | SInt
+        | UInt
+        | SLong
+        | ULong
+        | SLongLong
+        | ULongLong
+        | SInt128
+        | UInt128
+        | Float
+        | Double
+        | LongDouble
+        | Pointer(_)
+        | FuncPtr(_, _, _) => true
+        _ => false
+      }
+  }
+}
+
+///|
+fn Codegen::mir_global_string_supported(
+  self : Codegen,
+  ty : @parser.Type,
+) -> Bool {
+  match ty {
+    Aligned(inner, _) => self.mir_global_string_supported(inner)
+    _ =>
+      match ty {
+        Array(SChar, _) | Array(UChar, _) | Pointer(_) => true
+        _ => false
+      }
+  }
+}
+
+///|
+fn Codegen::mir_global_symbol_supported(
+  self : Codegen,
+  ty : @parser.Type,
+) -> Bool {
+  match ty {
+    Aligned(inner, _) => self.mir_global_symbol_supported(inner)
+    Pointer(_) | FuncPtr(_, _, _) => true
+    _ => false
+  }
+}
+
+///|
+fn Codegen::mir_global_init_supported(
+  self : Codegen,
+  ty : @parser.Type,
+  init : @mir.MirGlobalInit,
+) -> Bool {
+  match ty {
+    Aligned(inner, _) => self.mir_global_init_supported(inner, init)
+    _ =>
+      match init {
+        MirGlobalInitUnsupported => false
+        MirGlobalScalarInt(_) => self.mir_global_scalar_int_supported(ty)
+        MirGlobalScalarFloat(_) => ty.is_floating()
+        MirGlobalString(_) => self.mir_global_string_supported(ty)
+        MirGlobalSymbol(_) => self.mir_global_symbol_supported(ty)
+        MirGlobalSymbolOffset(_, _) => self.mir_global_symbol_supported(ty)
+        MirGlobalArraySparse(values) =>
+          match ty {
+            Array(elem_ty, n) => {
+              for item in values {
+                let index = item.0
+                let value = item.1
+                if index < 0 || index >= n {
+                  return false
+                }
+                if !self.mir_global_init_supported(elem_ty, value) {
+                  return false
+                }
+              }
+              true
+            }
+            _ => false
+          }
+        MirGlobalAggregateSparse(values) =>
+          match ty {
+            Struct(name) | Union(name) => {
+              let layout = match self.mir_aggregate_layout(name) {
+                Some(layout) => layout
+                None => return false
+              }
+              for item in values {
+                let index = item.0
+                let value = item.1
+                if index < 0 || index >= layout.fields.length() {
+                  return false
+                }
+                let field = layout.fields[index]
+                match field.bit_width {
+                  Some(width) =>
+                    if width <= 0 || !(value is MirGlobalScalarInt(_)) {
+                      return false
+                    }
+                  None =>
+                    if !self.mir_global_init_supported(field.ty, value) {
+                      return false
+                    }
+                }
+              }
+              true
+            }
+            _ => false
+          }
+        MirGlobalArray(values) =>
+          match ty {
+            Array(elem_ty, n) => {
+              if values.length() > n {
+                return false
+              }
+              for value in values {
+                if !self.mir_global_init_supported(elem_ty, value) {
+                  return false
+                }
+              }
+              true
+            }
+            Struct(name) | Union(name) => {
+              let layout = match self.mir_aggregate_layout(name) {
+                Some(layout) => layout
+                None => return false
+              }
+              if layout.is_union {
+                if values.length() > 1 {
+                  return false
+                }
+              } else if values.length() > layout.fields.length() {
+                return false
+              }
+              for i = 0; i < values.length(); i = i + 1 {
+                if i >= layout.fields.length() {
+                  return false
+                }
+                let field = layout.fields[i]
+                match field.bit_width {
+                  Some(width) =>
+                    if width <= 0 || !(values[i] is MirGlobalScalarInt(_)) {
+                      return false
+                    }
+                  None =>
+                    if !self.mir_global_init_supported(field.ty, values[i]) {
+                      return false
+                    }
+                }
+              }
+              true
+            }
+            _ => false
+          }
+      }
+  }
+}
+
+///|
+fn Codegen::mir_aggregate_layout(
+  self : Codegen,
+  name : String,
+) -> @mir.AggregateLayout? {
+  match self.mir_module {
+    Some(mir) => mir.layouts.get(name)
+    None => None
+  }
+}
+
+///|
+fn Codegen::emit_mir_global_scalar_int(
+  self : Codegen,
+  ty : @parser.Type,
+  value : Int64,
+) -> Unit {
+  match ty {
+    Aligned(inner, _) => {
+      self.emit_mir_global_scalar_int(inner, value)
+      return
+    }
+    _ => ()
+  }
+  match ty {
+    Bool | SChar | UChar => self.emit("\t.byte\t" + value.to_string())
+    SShort | UShort => self.emit("\t.short\t" + value.to_string())
+    SInt | UInt => self.emit("\t.long\t" + value.to_string())
+    SInt128 => {
+      self.emit("\t.quad\t" + value.to_string())
+      let high = if value < 0L { "-1" } else { "0" }
+      self.emit("\t.quad\t" + high)
+    }
+    UInt128 => {
+      self.emit("\t.quad\t" + value.to_string())
+      self.emit("\t.quad\t0")
+    }
+    Float | Double | LongDouble => self.emit_global_float(ty, value.to_double())
+    _ => self.emit("\t.quad\t" + value.to_string())
+  }
+}
+
+///|
+fn Codegen::emit_mir_global_string(
+  self : Codegen,
+  ty : @parser.Type,
+  value : String,
+) -> Unit {
+  match ty {
+    Aligned(inner, _) => {
+      self.emit_mir_global_string(inner, value)
+      return
+    }
+    _ => ()
+  }
+  match ty {
+    Array(SChar, n) | Array(UChar, n) => {
+      self.emit("\t.asciz\t\"" + escape_string(value) + "\"")
+      let pad = n - value.length() - 1
+      if pad > 0 {
+        self.emit("\t.space\t" + pad.to_string())
+      }
+    }
+    _ => {
+      let idx = self.strings.length()
+      self.strings.push(value)
+      self.emit("\t.quad\t_str" + idx.to_string())
+    }
+  }
+}
+
+///|
+fn Codegen::emit_mir_global_init(
+  self : Codegen,
+  ty : @parser.Type,
+  init : @mir.MirGlobalInit,
+) -> Unit {
+  match ty {
+    Aligned(inner, _) => {
+      self.emit_mir_global_init(inner, init)
+      return
+    }
+    _ => ()
+  }
+  match init {
+    MirGlobalScalarInt(value) => self.emit_mir_global_scalar_int(ty, value)
+    MirGlobalScalarFloat(value) => self.emit_global_float(ty, value)
+    MirGlobalString(value) => self.emit_mir_global_string(ty, value)
+    MirGlobalSymbol(name) => self.emit("\t.quad\t_" + name)
+    MirGlobalSymbolOffset(name, offset) =>
+      self.emit("\t.quad\t" + reloc_with_offset("_" + name, offset))
+    MirGlobalArraySparse(values) =>
+      match ty {
+        Array(elem_ty, n) => {
+          let elem_size = self.type_size(elem_ty)
+          let slots : Array[@mir.MirGlobalInit?] = Array::make(n, None)
+          for item in values {
+            let index = item.0
+            let value = item.1
+            if index >= 0 && index < n {
+              slots[index] = Some(value)
+            }
+          }
+          for slot in slots {
+            match slot {
+              Some(value) => self.emit_mir_global_init(elem_ty, value)
+              None => self.emit("\t.space\t" + elem_size.to_string())
+            }
+          }
+        }
+        _ => self.emit("\t.space\t" + self.type_size(ty).to_string())
+      }
+    MirGlobalAggregateSparse(values) =>
+      match ty {
+        Struct(name) | Union(name) =>
+          self.emit_mir_global_sparse_aggregate(name, values)
+        _ => self.emit("\t.space\t" + self.type_size(ty).to_string())
+      }
+    MirGlobalArray(values) =>
+      match ty {
+        Array(elem_ty, n) => {
+          let elem_size = self.type_size(elem_ty)
+          let mut emitted = 0
+          for value in values {
+            self.emit_mir_global_init(elem_ty, value)
+            emitted += 1
+          }
+          while emitted < n {
+            self.emit("\t.space\t" + elem_size.to_string())
+            emitted += 1
+          }
+        }
+        Struct(name) | Union(name) =>
+          self.emit_mir_global_aggregate(name, values)
+        _ => self.emit("\t.space\t" + self.type_size(ty).to_string())
+      }
+    MirGlobalInitUnsupported =>
+      self.emit("\t.space\t" + self.type_size(ty).to_string())
+  }
+}
+
+///|
+fn Codegen::emit_mir_global_aggregate(
+  self : Codegen,
+  name : String,
+  values : Array[@mir.MirGlobalInit],
+) -> Unit {
+  let layout = match self.mir_aggregate_layout(name) {
+    Some(layout) => layout
+    None => {
+      self.emit("\t.space\t8")
+      return
+    }
+  }
+  let slots : Array[@mir.MirGlobalInit?] = Array::make(
+    layout.fields.length(),
+    None,
+  )
+  let count = if layout.is_union && values.length() > 0 {
+    1
+  } else {
+    values.length()
+  }
+  for i = 0; i < count; i = i + 1 {
+    if i < slots.length() {
+      slots[i] = Some(values[i])
+    }
+  }
+  self.emit_mir_global_aggregate_slots(layout, slots)
+}
+
+///|
+fn Codegen::emit_mir_global_sparse_aggregate(
+  self : Codegen,
+  name : String,
+  values : Array[(Int, @mir.MirGlobalInit)],
+) -> Unit {
+  let layout = match self.mir_aggregate_layout(name) {
+    Some(layout) => layout
+    None => {
+      self.emit("\t.space\t8")
+      return
+    }
+  }
+  let slots : Array[@mir.MirGlobalInit?] = Array::make(
+    layout.fields.length(),
+    None,
+  )
+  for item in values {
+    let index = item.0
+    let value = item.1
+    if index >= 0 && index < layout.fields.length() {
+      slots[index] = Some(value)
+      if layout.is_union {
+        break
+      }
+    }
+  }
+  self.emit_mir_global_aggregate_slots(layout, slots)
+}
+
+///|
+fn Codegen::mir_global_bitfield_bits(
+  self : Codegen,
+  init : @mir.MirGlobalInit?,
+  bit_width : Int,
+  bit_offset : Int,
+) -> Int64 {
+  let _ = self
+  match init {
+    Some(MirGlobalScalarInt(value)) =>
+      (value & bitfield_mask(bit_width)) << bit_offset
+    _ => 0L
+  }
+}
+
+///|
+fn Codegen::emit_mir_global_bitfield_container(
+  self : Codegen,
+  layout : @mir.AggregateLayout,
+  slots : Array[@mir.MirGlobalInit?],
+  start : Int,
+) -> (Int, Int) {
+  let field = layout.fields[start]
+  let container_offset = field.offset
+  let container_size = field.size
+  let mut container_value = 0L
+  let mut index = start
+  while index < layout.fields.length() &&
+        layout.fields[index].offset == container_offset &&
+        layout.fields[index].size == container_size &&
+        layout.fields[index].bit_width is Some(_) {
+    let bitfield = layout.fields[index]
+    match bitfield.bit_width {
+      Some(width) =>
+        container_value = container_value |
+          self.mir_global_bitfield_bits(
+            slots[index],
+            width,
+            bitfield.bit_offset,
+          )
+      None => ()
+    }
+    index += 1
+  }
+  self.emit_global_int_by_size(container_size, container_value)
+  (index, container_offset + container_size)
+}
+
+///|
+fn Codegen::emit_mir_global_aggregate_slots(
+  self : Codegen,
+  layout : @mir.AggregateLayout,
+  slots : Array[@mir.MirGlobalInit?],
+) -> Unit {
+  let mut emitted = 0
+  if layout.is_union {
+    for i = 0; i < layout.fields.length(); i = i + 1 {
+      match slots[i] {
+        Some(value) => {
+          let field = layout.fields[i]
+          if field.offset > emitted {
+            self.emit("\t.space\t" + (field.offset - emitted).to_string())
+          }
+          match field.bit_width {
+            Some(_) => {
+              let (_, next_emitted) = self.emit_mir_global_bitfield_container(
+                layout, slots, i,
+              )
+              emitted = next_emitted
+            }
+            None => {
+              self.emit_mir_global_init(field.ty, value)
+              emitted = field.offset + field.size
+            }
+          }
+          break
+        }
+        None => ()
+      }
+    }
+  } else {
+    let mut i = 0
+    while i < layout.fields.length() {
+      let field = layout.fields[i]
+      if field.offset > emitted {
+        self.emit("\t.space\t" + (field.offset - emitted).to_string())
+      }
+      match field.bit_width {
+        Some(_) => {
+          let (next_i, next_emitted) = self.emit_mir_global_bitfield_container(
+            layout, slots, i,
+          )
+          i = next_i
+          emitted = next_emitted
+          continue
+        }
+        None => {
+          match slots[i] {
+            Some(value) => self.emit_mir_global_init(field.ty, value)
+            None => self.emit("\t.space\t" + field.size.to_string())
+          }
+          emitted = field.offset + field.size
+        }
+      }
+      i += 1
+    }
+  }
+  if layout.size > emitted {
+    self.emit("\t.space\t" + (layout.size - emitted).to_string())
+  }
+}
+
+///|
+fn Codegen::try_emit_mir_global_init(
+  self : Codegen,
+  g : @mir.MirGlobalDecl,
+) -> Bool {
+  match g.init {
+    Some(init) =>
+      if self.mir_global_init_supported(g.ty, init) {
+        self.emit_mir_global_init(g.ty, init)
+        true
+      } else {
+        false
+      }
+    None => false
   }
 }
 
@@ -1698,11 +2327,30 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
     self.struct_decls[sdecl.name] = sdecl
   }
   // Then seed layouts in a second pass
-  for sdecl in prog.structs {
-    self.compute_struct_layout(sdecl)
+  let mir_module = match self.mir_module {
+    Some(mir) => Some(mir)
+    None =>
+      match self.mir {
+        Some(mir) => {
+          let mir_module = mir.to_module()
+          self.mir_module = Some(mir_module)
+          Some(mir_module)
+        }
+        None => None
+      }
+  }
+  match mir_module {
+    Some(mir) => self.register_mir_aggregate_layouts(mir)
+    None =>
+      for sdecl in prog.structs {
+        self.compute_struct_layout(sdecl)
+      }
   }
   // Precompute function return types, variadic flags, and param counts
-  self.register_parser_function_decls(prog.decls)
+  match mir_module {
+    Some(mir) => self.register_mir_function_decls(mir)
+    None => self.register_parser_function_decls(prog.decls)
+  }
   let inline_decls : Map[String, @parser.FuncDecl] = {}
   for decl in prog.decls {
     if decl.is_inline {
@@ -1725,9 +2373,25 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
     parser_global_fallbacks[g.name] = g
   }
   // Record global variables
-  self.register_parser_global_decls(parser_globals)
-  let codegen_globals = codegen_global_decls_from_parser(parser_globals)
-  let codegen_func_decls = codegen_func_decls_from_parser(prog.decls)
+  match mir_module {
+    Some(mir) => self.register_mir_global_decls(mir)
+    None => self.register_parser_global_decls(parser_globals)
+  }
+  let mir_global_inits : Map[String, @mir.MirGlobalDecl] = {}
+  let codegen_globals : Array[CodegenGlobalDecl] = match mir_module {
+    Some(mir) => {
+      let globals = @mir.merge_global_decls(mir.global_decls)
+      for g in globals {
+        mir_global_inits[g.name] = g
+      }
+      codegen_global_decls_from_mir(globals)
+    }
+    None => codegen_global_decls_from_parser(parser_globals)
+  }
+  let codegen_func_decls : Array[CodegenFuncDecl] = match mir_module {
+    Some(mir) => codegen_func_decls_from_mir(mir.decls)
+    None => codegen_func_decls_from_parser(prog.decls)
+  }
   let func_label_maps : Map[String, Map[String, String]] = {}
   for decl in prog.decls {
     if decl.is_inline && !needed_inline.contains(decl.name) {
@@ -1765,14 +2429,22 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
         }
         None => ()
       }
-      match parser_global_fallbacks.get(g.name) {
-        Some(parser_global) =>
-          match parser_global.init {
-            Some(Scalar(expr)) => self.emit_global_scalar(g.ty, expr)
-            Some(Array(exprs)) => self.emit_global_array(g.ty, exprs)
-            None => ()
-          }
-        None => self.emit("\t.space\t" + self.type_size(g.ty).to_string())
+      let mut emitted_mir_init = false
+      match mir_global_inits.get(g.name) {
+        Some(mir_global) =>
+          emitted_mir_init = self.try_emit_mir_global_init(mir_global)
+        None => ()
+      }
+      if !emitted_mir_init {
+        match parser_global_fallbacks.get(g.name) {
+          Some(parser_global) =>
+            match parser_global.init {
+              Some(Scalar(expr)) => self.emit_global_scalar(g.ty, expr)
+              Some(Array(exprs)) => self.emit_global_array(g.ty, exprs)
+              None => ()
+            }
+          None => self.emit("\t.space\t" + self.type_size(g.ty).to_string())
+        }
       }
       self.func_name = saved_func_name
       self.emitted_labels = saved_emitted_labels
@@ -1811,13 +2483,86 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
 }
 
 ///|
+fn Codegen::generate_mir_only(
+  self : Codegen,
+  mir_module : @mir.MirModule,
+) -> String {
+  self.output.write_string(
+    "\t.section\t__TEXT,__text,regular,pure_instructions\n",
+  )
+  self.output.write_string("\t.build_version macos, 14, 0\n")
+  self.register_mir_aggregate_layouts(mir_module)
+  self.register_mir_function_decls(mir_module)
+  self.register_mir_global_decls(mir_module)
+  for decl in mir_module.decls {
+    if decl.has_body {
+      match mir_module.bodies.get(decl.name) {
+        Some(body) => self.gen_mir_func(decl, body)
+        None => ()
+      }
+    }
+  }
+  let mir_globals = @mir.merge_global_decls(mir_module.global_decls)
+  let mut has_data = false
+  for g in mir_globals {
+    if g.has_init {
+      if !has_data {
+        self.emit("	.section	__DATA,__data")
+        has_data = true
+      }
+      if !g.is_static {
+        if g.is_weak {
+          self.emit("	.weak_definition	_" + g.name)
+        } else {
+          self.emit("	.globl	_" + g.name)
+        }
+      }
+      self.emit_global_p2align(g.ty)
+      self.emit("_" + g.name + ":")
+      if !self.try_emit_mir_global_init(g) {
+        self.emit("\t.space\t" + self.type_size(g.ty).to_string())
+      }
+    }
+  }
+  let mut has_bss = false
+  for g in mir_globals {
+    if !g.has_init && !g.is_extern {
+      if !has_bss {
+        self.emit("	.section	__DATA,__bss")
+        has_bss = true
+      }
+      if !g.is_static {
+        if g.is_weak {
+          self.emit("	.weak_definition	_" + g.name)
+        } else {
+          self.emit("	.globl	_" + g.name)
+        }
+      }
+      self.emit_global_p2align(g.ty)
+      self.emit("_" + g.name + ":")
+      self.emit("	.space	" + self.type_size(g.ty).to_string())
+    }
+  }
+  if self.strings.length() > 0 {
+    self.emit("	.section	__TEXT,__const")
+    for i = 0; i < self.strings.length(); i = i + 1 {
+      self.emit("_str" + i.to_string() + ":")
+      self.emit("	.asciz	\"" + escape_string(self.strings[i]) + "\"")
+    }
+  }
+  self.output.to_string()
+}
+
+///|
 /// Generates assembly for `prog` using the requested target backend.
 ///
 /// `DarwinArm64` preserves the existing macOS ARM64 assembly output.
 /// `LinuxAmd64` emits GNU assembler syntax for the System V x86-64 ABI.
 ///
 /// This is the fast educational path: parsed C AST goes directly to target
-/// codegen without first lowering through MIR.
+/// codegen without first lowering through MIR. Use
+/// `generate_assembly_for_target_strict` to require parser-free MIR-module
+/// backend emission.
 pub fn generate_assembly_for_target(
   prog : @parser.Program,
   target : @target.Target,
@@ -1826,6 +2571,165 @@ pub fn generate_assembly_for_target(
     DarwinArm64 => Codegen::new().generate(prog)
     LinuxAmd64 => X64Codegen::new().generate(prog)
   }
+}
+
+///|
+/// Lowers a parsed C translation unit through MIR and generates assembly,
+/// falling back to parser AST codegen when MIR coverage is not sufficient yet.
+pub fn generate_assembly_for_target_with_parser_fallback(
+  prog : @parser.Program,
+  target : @target.Target,
+) -> String {
+  generate_assembly_from_mir_with_parser_fallback(@mir.lower(prog, target))
+}
+
+///|
+/// Lowers a parsed C translation unit to `MirModule` and generates assembly
+/// only when MIR coverage is sufficient for parser-free backend emission.
+pub fn generate_assembly_for_target_strict(
+  prog : @parser.Program,
+  target : @target.Target,
+) -> Result[String, String] {
+  generate_assembly_from_mir_module_strict(@mir.lower_to_module(prog, target))
+}
+
+///|
+/// Generates assembly from an already lowered MIR program.
+///
+/// This is the backend-facing entry point. It does not use the parser AST
+/// fallback stored on transitional MIR programs; unsupported MIR coverage is a
+/// hard error.
+pub fn generate_assembly_from_mir(mir : @mir.Program) -> String {
+  generate_assembly_from_mir_module(mir.to_module())
+}
+
+///|
+/// Generates assembly from a parser-free MIR module, aborting when the current
+/// MIR-only backend coverage is insufficient.
+pub fn generate_assembly_from_mir_module(mir_module : @mir.MirModule) -> String {
+  match generate_assembly_from_mir_module_strict(mir_module) {
+    Ok(assembly) => assembly
+    Err(err) => abort(err)
+  }
+}
+
+///|
+/// Generates assembly from MIR, falling back to parser AST codegen for source
+/// constructs that are not represented in MIR yet.
+pub fn generate_assembly_from_mir_with_parser_fallback(
+  mir : @mir.Program,
+) -> String {
+  match generate_assembly_from_mir_strict(mir) {
+    Ok(assembly) => return assembly
+    Err(_) => ()
+  }
+  match mir.target {
+    DarwinArm64 => Codegen::new_with_mir(mir).generate(mir.source)
+    LinuxAmd64 => X64Codegen::new_with_mir(mir).generate(mir.source)
+  }
+}
+
+///|
+/// Generates assembly from a parser-free MIR module when the current MIR-only
+/// backend coverage is sufficient.
+pub fn generate_assembly_from_mir_module_strict(
+  mir_module : @mir.MirModule,
+) -> Result[String, String] {
+  match mir_module_body_codegen_strict_error(mir_module) {
+    Some(err) => Err(err)
+    None =>
+      match mir_module_global_codegen_strict_error(mir_module) {
+        Some(err) => Err(err)
+        None => Ok(generate_assembly_from_mir_module_unchecked(mir_module))
+      }
+  }
+}
+
+///|
+/// Generates assembly from MIR only when every source function definition can
+/// use the MIR-body backend path.
+///
+/// This strict gate is deliberately narrower than full parser independence: it
+/// prevents parser statement/expression fallback for function bodies while
+/// globals and metadata continue to migrate into MIR-owned declarations.
+pub fn generate_assembly_from_mir_strict(
+  mir : @mir.Program,
+) -> Result[String, String] {
+  generate_assembly_from_mir_module_strict(mir.to_module())
+}
+
+///|
+fn generate_assembly_from_mir_module_unchecked(
+  mir_module : @mir.MirModule,
+) -> String {
+  match mir_module.target {
+    DarwinArm64 =>
+      Codegen::new_with_mir_module(mir_module).generate_mir_only(mir_module)
+    LinuxAmd64 =>
+      X64Codegen::new_with_mir_module(mir_module).generate_mir_only(mir_module)
+  }
+}
+
+///|
+fn mir_module_global_codegen_strict_error(
+  mir_module : @mir.MirModule,
+) -> String? {
+  match mir_module.target {
+    DarwinArm64 => {
+      let codegen = Codegen::new_with_mir_module(mir_module)
+      for g in @mir.merge_global_decls(mir_module.global_decls) {
+        if g.has_init {
+          match g.init {
+            Some(init) =>
+              if !codegen.mir_global_init_supported(g.ty, init) {
+                return Some("unsupported MIR global initializer for " + g.name)
+              }
+            None => return Some("missing MIR global initializer for " + g.name)
+          }
+        }
+      }
+    }
+    LinuxAmd64 => {
+      let codegen = X64Codegen::new_with_mir_module(mir_module)
+      for g in @mir.merge_global_decls(mir_module.global_decls) {
+        if g.has_init {
+          match g.init {
+            Some(init) =>
+              if !codegen.mir_global_init_supported(g.ty, init) {
+                return Some("unsupported MIR global initializer for " + g.name)
+              }
+            None => return Some("missing MIR global initializer for " + g.name)
+          }
+        }
+      }
+    }
+  }
+  None
+}
+
+///|
+fn mir_module_body_codegen_strict_error(mir_module : @mir.MirModule) -> String? {
+  let int_arg_limit = match mir_module.target {
+    DarwinArm64 => 8
+    LinuxAmd64 => 6
+  }
+  for decl in mir_module.decls {
+    if decl.has_body {
+      if !mir_module.bodies.contains(decl.name) {
+        return Some("missing MIR body for " + decl.name)
+      }
+      let body = mir_module.bodies[decl.name]
+      if !mir_body_codegen_func_supported(
+          body,
+          decl.variadic,
+          int_arg_limit,
+          mir_module,
+        ) {
+        return Some("unsupported MIR body codegen for " + decl.name)
+      }
+    }
+  }
+  None
 }
 
 ///|
