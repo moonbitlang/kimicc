@@ -1128,7 +1128,17 @@ fn Program::lower_mir_call_arg(
     Struct(_) | Union(_) =>
       match self.lower_mir_object_addr(arg, ctx) {
         Some(addr) => Some(MirAggregateArg(addr, ty))
-        None => None
+        None =>
+          match self.lower_mir_expr_for_target_type(ty, arg, ctx) {
+            Some(value) =>
+              if mir_body_aggregate_call_value(value) &&
+                self.core_type(value.ty()) == self.core_type(ty) {
+                Some(value)
+              } else {
+                None
+              }
+            None => None
+          }
       }
     _ =>
       if mir_body_array_local_type(ty) {
