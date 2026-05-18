@@ -107,6 +107,48 @@ fn mir_body_codegen_variadic_args_supported(
 }
 
 ///|
+fn mir_body_codegen_darwin_variadic_args_supported(
+  params : Array[@ctype.Type],
+  named_count : Int,
+  int_arg_limit : Int,
+  mir : @mir.MirModule,
+) -> Bool {
+  let mut int_count = 0
+  let mut fp_reg_count = 0
+  for i in 0..<params.length() {
+    let param = params[i]
+    if mir_body_codegen_abi_fp_type(param) {
+      if fp_reg_count < 8 {
+        fp_reg_count += 1
+      } else if i < named_count {
+        return false
+      }
+    } else if mir_body_codegen_abi_int_type(param) {
+      int_count += 1
+      if int_count > int_arg_limit && i < named_count {
+        return false
+      }
+    } else {
+      match peel_aligned_type(param) {
+        Struct(_) | Union(_) =>
+          if i >= named_count {
+            let size = mir.type_size(param)
+            if size == 8 || size == 16 {
+              int_count += size / 8
+            } else {
+              return false
+            }
+          } else {
+            return false
+          }
+        _ => return false
+      }
+    }
+  }
+  true
+}
+
+///|
 fn mir_body_codegen_floating_type(ty : @ctype.Type) -> Bool {
   match peel_aligned_type(ty) {
     Float | Double => true
@@ -284,6 +326,17 @@ fn mir_body_codegen_value_supported(
   int_arg_limit : Int,
   mir : @mir.MirModule,
 ) -> Bool {
+  match value {
+    MirAggregateArg(addr, ty) => {
+      let aggregate = match peel_aligned_type(ty) {
+        Struct(_) | Union(_) => true
+        _ => false
+      }
+      return aggregate &&
+        mir_body_codegen_value_supported(addr, int_arg_limit, mir)
+    }
+    _ => ()
+  }
   if !mir_body_codegen_scalar_type(value.ty()) {
     return false
   }
@@ -408,6 +461,7 @@ fn mir_body_codegen_value_supported(
       }
       true
     }
+    MirAggregateArg(_, _) => false
   }
 }
 
@@ -952,6 +1006,14 @@ fn mir_body_codegen_call_supported(
       }
       call_params.push(ty)
     }
+    if mir.target is DarwinArm64 {
+      return mir_body_codegen_darwin_variadic_args_supported(
+        call_params,
+        sig.params.length(),
+        int_arg_limit,
+        mir,
+      )
+    }
     return mir_body_codegen_variadic_args_supported(
       call_params,
       sig.params.length(),
@@ -1415,6 +1477,7 @@ fn Codegen::gen_mir_value(
       self.emit_numeric_conversion(inner.ty(), ty)
       self.emit_scalar_conversion_to(ty)
     }
+    MirAggregateArg(addr, _) => self.gen_mir_value(addr, offsets, frame_size)
     MirVaArg(ap, ty) => self.emit_mir_va_arg(ap, ty, offsets, frame_size)
     MirVaArgAddr(ap, ty) =>
       self.emit_mir_va_arg_addr(ap, ty, offsets, frame_size)
@@ -1604,16 +1667,38 @@ fn Codegen::gen_mir_value(
       if self.mir_direct_call_variadic(name) {
         let named_count = self.mir_direct_call_named_arg_count(name)
         let expected_types : Array[@ctype.Type] = []
+        let arg_slot_counts : Array[Int] = []
         for i in 0..<source_indexes.length() {
           let arg = args[source_indexes[i]]
-          self.gen_mir_value(arg, offsets, frame_size)
           let expected = self.mir_call_arg_type(name, i, arg.ty())
           expected_types.push(expected)
-          self.emit_numeric_conversion(arg.ty(), expected)
-          self.emit_scalar_conversion_to(expected)
-          self.emit("\tstr\tx9, [sp, #-16]!")
+          match peel_aligned_type(expected) {
+            Struct(_) | Union(_) => {
+              let size = self.type_size(expected)
+              let slots = if size > 8 { 2 } else { 1 }
+              arg_slot_counts.push(slots)
+              self.gen_mir_value(arg, offsets, frame_size)
+              self.emit("\tsub\tsp, sp, #16")
+              self.emit("\tldr\tx10, [x9]")
+              self.emit("\tstr\tx10, [sp]")
+              if slots == 2 {
+                self.emit("\tldr\tx10, [x9, #8]")
+                self.emit("\tstr\tx10, [sp, #8]")
+              }
+            }
+            _ => {
+              arg_slot_counts.push(1)
+              self.gen_mir_value(arg, offsets, frame_size)
+              self.emit_numeric_conversion(arg.ty(), expected)
+              self.emit_scalar_conversion_to(expected)
+              self.emit("\tstr\tx9, [sp, #-16]!")
+            }
+          }
         }
-        let variadic_slots = source_indexes.length() - named_count
+        let mut variadic_slots = 0
+        for i in named_count..<arg_slot_counts.length() {
+          variadic_slots += arg_slot_counts[i]
+        }
         let variadic_area = if variadic_slots * 8 > 64 {
           (variadic_slots * 8 + 15) / 16 * 16
         } else {
@@ -1623,38 +1708,64 @@ fn Codegen::gen_mir_value(
         let mut int_arg_index = 0
         let mut fp_arg_index = 0
         for i in 0..<source_indexes.length() {
+          let raw_offset = variadic_area +
+            (source_indexes.length() - 1 - i) * 16
           if mir_body_codegen_abi_fp_type(expected_types[i]) {
             if fp_arg_index < 8 {
-              self.emit(
-                "\tldr\tx9, [sp, #" +
-                (variadic_area + (source_indexes.length() - 1 - i) * 16).to_string() +
-                "]",
-              )
+              self.emit("\tldr\tx9, [sp, #" + raw_offset.to_string() + "]")
               self.emit_mir_fp_arg_from_x9(expected_types[i], fp_arg_index)
             }
             fp_arg_index += 1
+          } else if peel_aligned_type(expected_types[i]) is Struct(_) ||
+            peel_aligned_type(expected_types[i]) is Union(_) {
+            if int_arg_index < 8 {
+              self.emit(
+                "\tldr\tx" +
+                int_arg_index.to_string() +
+                ", [sp, #" +
+                raw_offset.to_string() +
+                "]",
+              )
+            }
+            int_arg_index += 1
+            if arg_slot_counts[i] == 2 {
+              if int_arg_index < 8 {
+                self.emit(
+                  "\tldr\tx" +
+                  int_arg_index.to_string() +
+                  ", [sp, #" +
+                  (raw_offset + 8).to_string() +
+                  "]",
+                )
+              }
+              int_arg_index += 1
+            }
           } else {
             if int_arg_index < 8 {
               self.emit(
                 "\tldr\tx" +
                 int_arg_index.to_string() +
                 ", [sp, #" +
-                (variadic_area + (source_indexes.length() - 1 - i) * 16).to_string() +
+                raw_offset.to_string() +
                 "]",
               )
             }
             int_arg_index += 1
           }
         }
+        let mut dst_slot = 0
         for i in named_count..<source_indexes.length() {
-          self.emit(
-            "\tldr\tx9, [sp, #" +
-            (variadic_area + (source_indexes.length() - 1 - i) * 16).to_string() +
-            "]",
-          )
-          self.emit(
-            "\tstr\tx9, [sp, #" + ((i - named_count) * 8).to_string() + "]",
-          )
+          let raw_offset = variadic_area +
+            (source_indexes.length() - 1 - i) * 16
+          for j in 0..<arg_slot_counts[i] {
+            self.emit(
+              "\tldr\tx9, [sp, #" + (raw_offset + j * 8).to_string() + "]",
+            )
+            self.emit(
+              "\tstr\tx9, [sp, #" + ((dst_slot + j) * 8).to_string() + "]",
+            )
+          }
+          dst_slot += arg_slot_counts[i]
         }
         self.emit("\tbl\t_" + mir_body_codegen_direct_call_symbol(name))
         self.emit(
@@ -2492,7 +2603,7 @@ fn X64Codegen::collect_mir_va_list_storage_value(
       self.collect_mir_va_list_storage_value(lhs)
       self.collect_mir_va_list_storage_value(rhs)
     }
-    MirCast(_, inner) | MirVaArg(inner, _) =>
+    MirCast(_, inner) | MirAggregateArg(inner, _) | MirVaArg(inner, _) =>
       self.collect_mir_va_list_storage_value(inner)
     MirVaArgAddr(inner, ty) => {
       if x64_is_aggregate_type(ty) {
@@ -3045,6 +3156,7 @@ fn X64Codegen::gen_mir_value(
       self.emit_mir_numeric_conversion(inner.ty(), ty)
       self.emit_int_conversion_to(ty)
     }
+    MirAggregateArg(addr, _) => self.gen_mir_value(addr, offsets)
     MirVaArg(ap, ty) => self.emit_mir_va_arg(ap, ty, offsets)
     MirVaArgAddr(ap, ty) => self.emit_mir_va_arg_aggregate_addr(ap, ty, offsets)
     MirAssignLocal(binding, rhs) => {

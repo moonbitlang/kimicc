@@ -793,6 +793,10 @@ fn BodyInterpreter::eval_value(
         inner.ty(),
         ty,
       )
+    MirAggregateArg(_, _) => {
+      self.fail("unsupported MIR body aggregate call argument")
+      0L
+    }
     MirVaArg(_, _) => {
       self.fail("unsupported MIR body va_arg")
       0L
