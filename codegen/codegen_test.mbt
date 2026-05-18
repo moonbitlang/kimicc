@@ -1290,6 +1290,31 @@ test "generate darwin arm64 strict MIR scalar va_arg reads" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR aggregate va_arg reads" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|struct Pair { long long a; long long b; };
+    #|int read_pair(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  struct Pair p = __builtin_va_arg(ap, struct Pair);
+    #|  __builtin_va_end(ap);
+    #|  return tag + (int)p.a + (int)p.b;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_read_pair:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tadd\tx9, x29, #16"), content="true")
+      inspect(assembly.contains("\tadd\tx9, x9, #16"), content="true")
+      inspect(assembly.contains("__builtin_va_arg"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR bzero builtin libcall" {
   let source =
     #|int main(void) {
@@ -3102,6 +3127,67 @@ test "generate linux amd64 strict MIR scalar va_arg reads" {
       inspect(assembly.contains("\tcmp\teax, 176"), content="true")
       inspect(
         assembly.contains("\tadd\tDWORD PTR [r11 + 4], 16"),
+        content="true",
+      )
+      inspect(assembly.contains("__builtin_va_arg"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR aggregate va_arg reads" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|struct Pair { long a; long b; };
+    #|struct DPair { double a; double b; };
+    #|struct Big { long a; long b; long c; };
+    #|struct __attribute__((packed)) Packed { char c; int x; };
+    #|int read_pair(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  struct Pair p = __builtin_va_arg(ap, struct Pair);
+    #|  __builtin_va_end(ap);
+    #|  return (int)(p.a + p.b);
+    #|}
+    #|int read_dpair(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  struct DPair p = __builtin_va_arg(ap, struct DPair);
+    #|  __builtin_va_end(ap);
+    #|  return (int)(p.a + p.b);
+    #|}
+    #|int read_big(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  struct Big p = __builtin_va_arg(ap, struct Big);
+    #|  __builtin_va_end(ap);
+    #|  return (int)(p.a + p.b + p.c);
+    #|}
+    #|int read_packed_stack(int a, int b, int c, int d, int e, int f, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, f);
+    #|  struct Packed p = __builtin_va_arg(ap, struct Packed);
+    #|  __builtin_va_end(ap);
+    #|  return p.c + p.x;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcmp\teax, 32"), content="true")
+      inspect(assembly.contains("\tcmp\tecx, 144"), content="true")
+      inspect(assembly.contains("\tadd\tDWORD PTR [r11], 16"), content="true")
+      inspect(
+        assembly.contains("\tadd\tDWORD PTR [r11 + 4], 32"),
+        content="true",
+      )
+      inspect(
+        assembly.contains("\tmov\tQWORD PTR [r11 + 8], rax"),
         content="true",
       )
       inspect(assembly.contains("__builtin_va_arg"), content="false")
