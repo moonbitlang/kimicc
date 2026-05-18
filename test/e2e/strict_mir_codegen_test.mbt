@@ -167,11 +167,22 @@ test "strict MIR codegen executes floating indirect calls" {
 }
 
 ///|
-test "strict MIR codegen rejects unsupported floating variadic calls instead of using AST fallback" {
+test "strict MIR codegen executes floating variadic libcalls" {
+  let source =
+    #|int main(void) {
+    #|  char buf[64];
+    #|  int n = __builtin___snprintf_chk(buf, 64, 0, 64, "%.1f", 1.5);
+    #|  return n + (buf[0] == '1') + (buf[1] == '.') + (buf[2] == '5');
+    #|}
+  assert_eq(run_source_strict_mir(source), 6)
+}
+
+///|
+test "strict MIR codegen rejects unsupported stack-passed floating variadic calls instead of using AST fallback" {
   let source =
     #|double variadic(int tag, ...) { return 1.0; }
     #|int main(void) {
-    #|  return (int)variadic(0, 1.0);
+    #|  return (int)variadic(0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0);
     #|}
   assert_true(
     strict_mir_codegen_error(source).contains("unsupported MIR body codegen"),
