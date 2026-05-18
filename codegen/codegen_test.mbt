@@ -609,7 +609,7 @@ test "strict MIR still rejects unsupported builtin direct calls" {
 }
 
 ///|
-test "strict MIR rejects Darwin HFA aggregate returns for now" {
+test "strict MIR accepts Darwin HFA aggregate returns" {
   let source =
     #|struct H { double a[2]; };
     #|union U { double d; };
@@ -624,11 +624,14 @@ test "strict MIR rejects Darwin HFA aggregate returns for now" {
     #|  u.d = x;
     #|  return u;
     #|}
+    #|struct H forward_h(double x, double y) {
+    #|  return make_h(x + 1.0, y + 2.0);
+    #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
-    Ok(_) => abort("expected strict MIR HFA aggregate return rejection")
+    Ok(assembly) => inspect(assembly.contains("\tldr\td0"), content="true")
     Err(err) =>
-      inspect(err.contains("unsupported MIR body codegen"), content="true")
+      abort("expected strict MIR HFA aggregate return support: " + err)
   }
 }
 

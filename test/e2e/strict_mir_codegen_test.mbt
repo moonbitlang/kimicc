@@ -147,6 +147,86 @@ test "strict MIR codegen returns small aggregates to clang callers" {
 }
 
 ///|
+test "strict MIR codegen executes HFA aggregate call results" {
+  let source =
+    #|struct H { double a[2]; };
+    #|struct F { float a; float b; float c; };
+    #|union U { double d; };
+    #|struct H make_h(double x, double y) {
+    #|  struct H h;
+    #|  h.a[0] = x;
+    #|  h.a[1] = y;
+    #|  return h;
+    #|}
+    #|struct F make_f(float x, float y, float z) {
+    #|  struct F f;
+    #|  f.a = x;
+    #|  f.b = y;
+    #|  f.c = z;
+    #|  return f;
+    #|}
+    #|union U make_u(double x) {
+    #|  union U u;
+    #|  u.d = x;
+    #|  return u;
+    #|}
+    #|int main(void) {
+    #|  struct H h = make_h(10.0, 20.0);
+    #|  struct H k;
+    #|  struct F f = make_f(1.0f, 2.0f, 3.0f);
+    #|  union U u = make_u(5.0);
+    #|  k = make_h(3.0, 4.0);
+    #|  return (int)(h.a[0] + h.a[1] + k.a[0] + k.a[1] + f.a + f.b + f.c + u.d);
+    #|}
+  assert_eq(run_source_strict_mir(source), 48)
+}
+
+///|
+test "strict MIR codegen returns HFA aggregates to clang callers" {
+  let callee =
+    #|struct H { double a[2]; };
+    #|struct F { float a; float b; float c; };
+    #|union U { double d; };
+    #|struct H make_h(double x, double y) {
+    #|  struct H h;
+    #|  h.a[0] = x;
+    #|  h.a[1] = y;
+    #|  return h;
+    #|}
+    #|struct H forward_h(double x, double y) {
+    #|  return make_h(x + 1.0, y + 2.0);
+    #|}
+    #|struct F make_f(float x, float y, float z) {
+    #|  struct F f;
+    #|  f.a = x;
+    #|  f.b = y;
+    #|  f.c = z;
+    #|  return f;
+    #|}
+    #|union U make_u(double x) {
+    #|  union U u;
+    #|  u.d = x;
+    #|  return u;
+    #|}
+  let driver =
+    #|struct H { double a[2]; };
+    #|struct F { float a; float b; float c; };
+    #|union U { double d; };
+    #|struct H make_h(double x, double y);
+    #|struct H forward_h(double x, double y);
+    #|struct F make_f(float x, float y, float z);
+    #|union U make_u(double x);
+    #|int main(void) {
+    #|  struct H h = make_h(10.0, 20.0);
+    #|  struct H k = forward_h(3.0, 4.0);
+    #|  struct F f = make_f(1.0f, 2.0f, 3.0f);
+    #|  union U u = make_u(5.0);
+    #|  return (int)(h.a[0] + h.a[1] + k.a[0] + k.a[1] + f.a + f.b + f.c + u.d);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 51)
+}
+
+///|
 test "strict MIR codegen executes memory aggregate call results" {
   let source =
     #|struct Big { long a; long b; long c; };
