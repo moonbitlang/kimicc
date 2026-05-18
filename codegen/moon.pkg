@@ -8,4 +8,5 @@ import {
 import {
   "bobzhang/kimicc/mir",
   "bobzhang/kimicc/mir_codegen",
+  "bobzhang/kimicc/mir_codegen_compat",
 } for "test"

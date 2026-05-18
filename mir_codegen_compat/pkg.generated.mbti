@@ -1,0 +1,30 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/kimicc/mir_codegen_compat"
+
+import {
+  "bobzhang/kimicc/mir",
+  "bobzhang/kimicc/parser",
+  "bobzhang/kimicc/target",
+}
+
+// Values
+pub fn generate_assembly_for_target(@parser.Program, @target.Target) -> String
+
+pub fn generate_assembly_for_target_strict(@parser.Program, @target.Target) -> Result[String, String]
+
+pub fn generate_assembly_for_target_with_parser_fallback(@parser.Program, @target.Target) -> String
+
+pub fn generate_assembly_from_mir(@mir.Program) -> String
+
+pub fn generate_assembly_from_mir_strict(@mir.Program) -> Result[String, String]
+
+pub fn generate_assembly_from_mir_with_parser_fallback(@mir.Program) -> String
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

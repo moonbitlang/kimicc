@@ -12,7 +12,7 @@ test "generate simple function" {
 
 ///|
 fn generate_darwin_mir_fallback(source : String) -> String {
-  @mir_codegen.generate_assembly_from_mir_with_parser_fallback(
+  @mir_codegen_compat.generate_assembly_from_mir_with_parser_fallback(
     @mir.lower(@parser.parse(source), @target.Target::default()),
   )
 }
@@ -21,7 +21,7 @@ fn generate_darwin_mir_fallback(source : String) -> String {
 test "generate darwin arm64 assembly from MIR strict" {
   let source = "int main(void) { int x = 40; return x + 2; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
-  match @mir_codegen.generate_assembly_from_mir_strict(mir) {
+  match @mir_codegen_compat.generate_assembly_from_mir_strict(mir) {
     Ok(assembly) => {
       inspect(assembly.contains("_main:"), content="true")
       inspect(assembly.contains("kimicc: mir-body"), content="true")
@@ -36,7 +36,7 @@ test "generate darwin arm64 assembly for target strict" {
   let source = "int main(void) { int x = 40; return x + 2; }"
   let prog = @parser.parse(source)
   match
-    @mir_codegen.generate_assembly_for_target_strict(
+    @mir_codegen_compat.generate_assembly_for_target_strict(
       prog,
       @target.Target::default(),
     ) {
@@ -1165,7 +1165,7 @@ test "generate darwin arm64 MIR body uses MIR function metadata" {
     is_destructor: decl.is_destructor,
     has_body: decl.has_body,
   }
-  let assembly = @mir_codegen.generate_assembly_from_mir(mir)
+  let assembly = @mir_codegen_compat.generate_assembly_from_mir(mir)
   inspect(assembly.contains("\t.weak_definition\t_main"), content="true")
   inspect(assembly.contains("\t.globl\t_main"), content="false")
 }
@@ -1187,7 +1187,7 @@ test "generate darwin arm64 global scalar initializer uses MIR metadata" {
     symbol_alias: g.symbol_alias,
     section: g.section,
   }
-  let assembly = @mir_codegen.generate_assembly_from_mir(mir)
+  let assembly = @mir_codegen_compat.generate_assembly_from_mir(mir)
   inspect(assembly.contains("\t.weak_definition\t_g"), content="true")
   inspect(assembly.contains("\t.globl\t_g"), content="false")
   inspect(assembly.contains("_g:\n\t.long\t7"), content="true")
@@ -1232,7 +1232,7 @@ test "generate darwin arm64 global symbol initializer uses MIR metadata" {
     symbol_alias: p.symbol_alias,
     section: p.section,
   }
-  let assembly = @mir_codegen.generate_assembly_from_mir(mir)
+  let assembly = @mir_codegen_compat.generate_assembly_from_mir(mir)
   inspect(assembly.contains("_p:\n\t.quad\t_g"), content="true")
   inspect(assembly.contains("_p:\n\t.quad\t0"), content="false")
 }
@@ -1254,7 +1254,7 @@ test "generate darwin arm64 global symbol offset initializer uses MIR metadata" 
     symbol_alias: p.symbol_alias,
     section: p.section,
   }
-  let assembly = @mir_codegen.generate_assembly_from_mir(mir)
+  let assembly = @mir_codegen_compat.generate_assembly_from_mir(mir)
   inspect(assembly.contains("_p:\n\t.quad\t_g+4"), content="true")
   inspect(assembly.contains("_p:\n\t.quad\t0"), content="false")
 }
@@ -1341,7 +1341,7 @@ test "generate linux amd64 assembly from MIR strict" {
     None => abort("target parse failed")
   }
   let mir = @mir.lower(@parser.parse(source), target)
-  match @mir_codegen.generate_assembly_from_mir_strict(mir) {
+  match @mir_codegen_compat.generate_assembly_from_mir_strict(mir) {
     Ok(assembly) => {
       inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
       inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
@@ -2709,7 +2709,7 @@ test "generate linux amd64 strict MIR global scalar initializer uses MIR metadat
     symbol_alias: g.symbol_alias,
     section: g.section,
   }
-  match @mir_codegen.generate_assembly_from_mir_strict(mir) {
+  match @mir_codegen_compat.generate_assembly_from_mir_strict(mir) {
     Ok(assembly) => {
       inspect(assembly.contains("g:\n\t.long\t11"), content="true")
       inspect(assembly.contains("g:\n\t.long\t0"), content="false")
@@ -2764,7 +2764,7 @@ test "generate linux amd64 MIR body uses MIR function metadata" {
     is_destructor: decl.is_destructor,
     has_body: decl.has_body,
   }
-  let assembly = @mir_codegen.generate_assembly_from_mir(mir)
+  let assembly = @mir_codegen_compat.generate_assembly_from_mir(mir)
   inspect(assembly.contains("\t.weak\tmain"), content="true")
   inspect(assembly.contains("\t.globl\tmain"), content="false")
 }
@@ -2777,7 +2777,7 @@ test "strict MIR assembly rejects parser body fallback" {
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   inspect(mir.bodies.contains("main"), content="false")
-  match @mir_codegen.generate_assembly_from_mir_strict(mir) {
+  match @mir_codegen_compat.generate_assembly_from_mir_strict(mir) {
     Ok(_) => abort("expected strict MIR codegen rejection")
     Err(err) =>
       inspect(err.contains("missing MIR body for main"), content="true")
@@ -2792,7 +2792,7 @@ test "strict target assembly rejects parser body fallback" {
     #|}
   let prog = @parser.parse(source)
   match
-    @mir_codegen.generate_assembly_for_target_strict(
+    @mir_codegen_compat.generate_assembly_for_target_strict(
       prog,
       @target.Target::default(),
     ) {
@@ -2809,13 +2809,13 @@ test "parser AST codegen fallback is explicit" {
     #|  goto *0;
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
-  let assembly = @mir_codegen.generate_assembly_from_mir_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_from_mir_with_parser_fallback(
     mir,
   )
   inspect(assembly.contains("kimicc: mir-body"), content="false")
   inspect(assembly.contains("_main:"), content="true")
   let prog = @parser.parse(source)
-  let target_assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let target_assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog,
     @target.Target::default(),
   )
@@ -2829,7 +2829,7 @@ test "strict MIR assembly rejects parser global initializer fallback" {
     #|int g[1] = { [2] = 9 };
     #|int main(void) { return 0; }
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
-  match @mir_codegen.generate_assembly_from_mir_strict(mir) {
+  match @mir_codegen_compat.generate_assembly_from_mir_strict(mir) {
     Ok(_) => abort("expected strict MIR global initializer rejection")
     Err(err) =>
       inspect(
@@ -3584,7 +3584,7 @@ test "generate linux amd64 MIR body direct call" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -3604,7 +3604,7 @@ test "generate linux amd64 MIR body declared external call" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -3631,7 +3631,7 @@ test "generate linux amd64 MIR body for loop control" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -3656,7 +3656,7 @@ test "generate linux amd64 MIR body do while control" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -3683,7 +3683,7 @@ test "generate linux amd64 MIR body switch control" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -3710,7 +3710,7 @@ test "generate linux amd64 MIR body goto control" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -3733,7 +3733,7 @@ test "generate linux amd64 MIR body address cancellation" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -3755,7 +3755,7 @@ test "generate linux amd64 MIR body postfix update value" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -3778,7 +3778,7 @@ test "generate linux amd64 MIR body scalar local pointer" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -3801,7 +3801,7 @@ test "generate linux amd64 MIR body scalar local array" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -3831,7 +3831,7 @@ test "generate linux amd64 MIR body scalar memory prefix updates" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -3855,7 +3855,7 @@ test "generate linux amd64 MIR body side effecting memory prefix update" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -3879,7 +3879,7 @@ test "generate linux amd64 MIR body side effecting memory compound update" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -3903,7 +3903,7 @@ test "generate linux amd64 MIR body side effecting non-additive compound update"
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -3934,7 +3934,7 @@ test "generate linux amd64 MIR body scalar memory postfix updates" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -3964,7 +3964,7 @@ test "generate linux amd64 MIR body folded builtin call" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -3991,7 +3991,7 @@ test "generate linux amd64 MIR body identity builtin calls" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -4014,7 +4014,7 @@ test "generate linux amd64 MIR body no-op builtins" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -4042,7 +4042,7 @@ test "generate linux amd64 MIR body scalar globals" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -4076,7 +4076,7 @@ test "generate linux amd64 global scalar initializer uses MIR metadata" {
     symbol_alias: g.symbol_alias,
     section: g.section,
   }
-  let assembly = @mir_codegen.generate_assembly_from_mir(mir)
+  let assembly = @mir_codegen_compat.generate_assembly_from_mir(mir)
   inspect(assembly.contains("\t.weak\tg"), content="true")
   inspect(assembly.contains("\t.globl\tg"), content="false")
   inspect(assembly.contains("g:\n\t.long\t7"), content="true")
@@ -4104,7 +4104,7 @@ test "generate linux amd64 global symbol initializer uses MIR metadata" {
     symbol_alias: p.symbol_alias,
     section: p.section,
   }
-  let assembly = @mir_codegen.generate_assembly_from_mir(mir)
+  let assembly = @mir_codegen_compat.generate_assembly_from_mir(mir)
   inspect(assembly.contains("p:\n\t.quad\tg"), content="true")
   inspect(assembly.contains("p:\n\t.quad\t0"), content="false")
 }
@@ -4130,7 +4130,7 @@ test "generate linux amd64 global symbol offset initializer uses MIR metadata" {
     symbol_alias: p.symbol_alias,
     section: p.section,
   }
-  let assembly = @mir_codegen.generate_assembly_from_mir(mir)
+  let assembly = @mir_codegen_compat.generate_assembly_from_mir(mir)
   inspect(assembly.contains("p:\n\t.quad\tg+4"), content="true")
   inspect(assembly.contains("p:\n\t.quad\t0"), content="false")
 }
@@ -4151,7 +4151,7 @@ test "generate linux amd64 MIR body scalar global arrays" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -4202,7 +4202,7 @@ test "generate linux amd64 MIR body initialized scalar global arrays" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -4223,7 +4223,7 @@ test "generate linux amd64 MIR body string literal byte loads" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(assembly.contains("kimicc: mir-body"), content="true")
@@ -4245,7 +4245,7 @@ test "generate linux amd64 keeps side effecting identity builtin operands in MIR
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(assembly.contains("kimicc: mir-body"), content="true")
@@ -4266,7 +4266,7 @@ test "generate linux amd64 MIR body scalar aggregate field" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -4290,7 +4290,7 @@ test "generate linux amd64 MIR body nested aggregate field" {
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(
@@ -4373,7 +4373,7 @@ test "generate linux amd64 postfix increment stores new value and returns old va
     Some(target) => target
     None => abort("target parse failed")
   }
-  let assembly = @mir_codegen.generate_assembly_for_target_with_parser_fallback(
+  let assembly = @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     prog, target,
   )
   inspect(

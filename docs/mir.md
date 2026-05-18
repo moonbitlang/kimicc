@@ -1,11 +1,11 @@
 # MIR Architecture
 
-`kimicc` currently uses MIR as a target-sensitive semantic layer plus an
-emerging function-body layer, not as a full instruction-level machine IR. The
-parser AST remains the main fallback representation that both assembly backends
-walk, but MIR can now own supported scalar function bodies independently of
-parser statements and both backends can consume those bodies for a narrow
-integer-scalar subset.
+`kimicc` currently has two assembly routes. The direct educational route is
+`parser.Program -> codegen`, where the backend walks the C AST in one pass. The
+modular route is `parser.Program -> MirModule -> mir_codegen`, where the backend
+entry point receives only MIR declarations, layouts, globals, and lowered
+bodies. MIR is still a target-sensitive semantic layer plus an emerging
+function-body layer, not a full instruction-level machine IR.
 
 ## Current Shape
 
@@ -13,7 +13,7 @@ integer-scalar subset.
   function signatures, selected global declarations, aggregate declarations,
   target-specific sizes/alignments, field layouts, expression types, and integer
   and floating constant folds.
-- `Program::to_module` projects those facts into `MirModule`, a parser-free
+- `Program::to_module` projects those facts into `MirModule`, a parser-AST-free
   backend-facing container for MIR declarations, layouts, globals, and lowered
   bodies. `Program` still carries parser source for transitional fallback
   consumers. `lower_to_module` is the direct parser-to-`MirModule` helper for
@@ -69,7 +69,7 @@ integer-scalar subset.
   `__builtin_assume`, runtime `__builtin_prefetch` address evaluation, identity
   `__builtin_unpredictable`, `break`/`continue`, and ternaries. Missing bodies
   return `Err` instead of falling back to parser AST execution.
-- `codegen/mir_body_codegen.mbt` is the first production backend consumer of
+- `mir_codegen/mir_body_codegen.mbt` is the first production backend consumer of
   `MirFuncBody`. It emits Darwin ARM64 and linux/amd64 assembly for
   integer-scalar MIR bodies with local variables, assignments, branches,
   `while`/`for`/`do while` loops, `break`/`continue`, ternaries, casts, direct
@@ -210,7 +210,7 @@ integer-scalar subset.
   goto, varargs, and other behavior that is not modeled yet.
 - `test/e2e/mir_oracle_test.mbt` compares selected scalar compiled binaries
   against the MIR interpreter.
-- `codegen/semantic_facts_wbtest.mbt` checks that Darwin ARM64 and linux/amd64
+- `mir_codegen/semantic_facts_wbtest.mbt` checks that Darwin ARM64 and linux/amd64
   backend-local facts agree with MIR for representative scalar, aggregate,
   packed, union, bit-field, offsetof, expression type, global-expression type,
   builtin-return type, and integer and floating constant-folding cases. It also
@@ -219,77 +219,53 @@ integer-scalar subset.
 
 ## Backend Sharing
 
-Darwin ARM64 receives a lowered MIR program through `generate_assembly_for_target`,
-and direct `Codegen::generate` construction attaches a darwin/arm64 MIR program
-if one is not already present. For supported integer-scalar functions, including
-direct calls to other MIR-bodied functions, declared non-variadic
-integer-scalar externs, and zero-argument implicit integer-scalar externs,
-directly labeled scalar `switch`, and simple
-labels/goto, it emits from `MirFuncBody`; other function bodies still fall back
-to parser AST statement walking. It delegates size, alignment, field-layout,
-offsetof path, expression type, global-expression type, and covered
-integer/floating constant-folding queries to MIR when that lowered program is
-present. Runtime `__builtin_object_size` and `__builtin_dynamic_object_size`
-lowering also use the MIR object-size fact when available. Its older local
-semantic paths remain in place for whitebox consistency tests and as fallbacks.
+`codegen.generate_assembly_for_target` is the direct C AST route. Its production
+package imports `parser` and `target`, but not `mir` or `mir_codegen`. This is
+the fast path used by default and is intentionally easy to read as a direct
+AST-to-assembly compiler.
 
-Linux/amd64 receives a lowered MIR program through `generate_assembly_for_target`,
-and direct private `X64Codegen::generate` construction attaches a linux/amd64 MIR
-program if one is not already present. For supported integer-scalar functions,
-including direct calls to other MIR-bodied functions, declared non-variadic
-integer-scalar externs, and zero-argument implicit integer-scalar externs,
-directly labeled scalar `switch`, and simple
-labels/goto, it emits from `MirFuncBody`; other function bodies still fall back
-to parser AST statement walking. The private `X64Codegen` delegates size,
-alignment, field-layout, offsetof path, expression type, global-expression type,
-and covered integer/floating constant-folding queries to MIR when that lowered
-program is present. Runtime `__builtin_object_size` and
-`__builtin_dynamic_object_size` lowering also use the MIR object-size fact when
-available. Its older local semantic paths remain in place for whitebox
-consistency tests and as fallbacks for direct private construction in tests.
-
-`generate_assembly_from_mir_module` is the parser-free backend assembly entry
-point for an already projected `MirModule`. It uses the strict MIR-module path
-and treats unsupported MIR coverage as an error instead of consulting
-`Program.source`. `generate_assembly_from_mir` is a compatibility wrapper that
-projects transitional `Program` values to `MirModule` first.
-`generate_assembly_for_target_strict` is the frontend strict path: it lowers
-parser output directly to `MirModule` and returns an error if MIR coverage is
-insufficient. `generate_assembly_for_target` is the frontend compatibility
-wrapper around `generate_assembly_for_target_with_parser_fallback`, which lowers
-parser output and then calls `generate_assembly_from_mir_with_parser_fallback`.
-This keeps existing source compilation working while coverage continues to
-migrate. The parser-free
-checking contract itself is `generate_assembly_from_mir_module_strict`: it
-accepts a `MirModule`, rejects modules that need unsupported MIR body or
+`mir_codegen.generate_assembly_from_mir_module` is the backend assembly entry
+point for an already projected `MirModule`. It treats unsupported MIR coverage
+as an error instead of consulting `Program.source`; the `MirModule` input has no
+parser-source field. The strict checking contract is
+`mir_codegen.generate_assembly_from_mir_module_strict`: it accepts a
+`MirModule`, rejects modules that need unsupported MIR body or
 global-initializer coverage, and emits through MIR-only backend paths when the
-checks pass. `generate_assembly_from_mir_strict` projects `Program` to
-`MirModule` before using that parser-free contract. This strict gate does not
-yet mean every C source program can compile without fallback; it means
+checks pass.
+
+The command-line driver exposes `--strict-mir-codegen`
+(`-fno-parser-codegen-fallback`) by parsing and validating C source, lowering it
+to `MirModule`, and then calling the backend-facing strict API. This strict gate
+does not yet mean every C source program can compile without fallback; it means
 successful strict codegen does not carry the parser AST into backend emission.
-The command-line driver also exposes `--strict-mir-codegen`
-(`-fno-parser-codegen-fallback`) to force this strict path end to end and
-reject inputs that would otherwise need legacy parser-AST codegen fallback.
-Both assembly backends also seed their function return/parameter metadata from
-`Program.decls`, rather than rebuilding those facts from parser function
-declarations. The linux/amd64 backend also emits function alias, weak
-declaration, visibility, constructor, and destructor lifecycle directives from
-`Program.decls`, leaving parser function declarations out of that metadata-only
-emission path. Supported MIR-body function emission also uses `Program.decls`
-for function binding metadata. Both backend global-symbol lookup maps are
-seeded from merged `Program.global_decls`, so type and extern/alias questions
-during expression codegen no longer require parser global declaration records.
-Global initializer emission still keeps the parser fallback path while MIR data
-initializers are being expanded. Both backends also seed their aggregate layout
-tables from MIR `Program.layouts` during normal generation, while keeping parser
-aggregate declarations available for legacy fallback paths. Both backends can
-now emit the lowered MIR subset for simple scalar integer, string,
-symbol-address, symbol-plus-offset, scalar array, and dense aggregate global
-initializers; unsupported initializer forms still fall back to the parser
-initializer path.
-Both backends' global object binding, data, and BSS emission now iterate merged
-`Program.global_decls`; parser global declarations are only consulted when MIR
-marks an initializer shape unsupported.
+
+Parser-facing transitional helpers live in `mir_codegen_compat`.
+`generate_assembly_from_mir` projects transitional `Program` values to
+`MirModule`, and the explicit parser-fallback helpers route unsupported MIR
+coverage to the direct `codegen` package. This keeps fallback behavior out of
+the backend-facing API while coverage continues to migrate.
+
+Both MIR assembly backends seed their function return/parameter metadata from
+`MirModule.decls`, not parser function declarations. The linux/amd64 backend
+also emits function alias, weak declaration, visibility, constructor, and
+destructor lifecycle directives from `MirModule.decls`, leaving parser function
+declarations out of that metadata-only emission path. Supported MIR-body
+function emission also uses `MirModule.decls` for function binding metadata.
+Both backend global-symbol lookup maps are seeded from merged
+`MirModule.global_decls`, so type and extern/alias questions during MIR emission
+do not require parser global declaration records. Both backends also seed their
+aggregate layout tables from `MirModule.layouts`.
+
+The current modular boundary is C-AST independent, not fully parser-package
+independent. `MirModule` still carries C types using `parser.Type`; removing
+that remaining package-level dependency requires extracting the C type model
+into a parser-neutral package.
+
+Both backends can now emit the lowered MIR subset for simple scalar integer,
+string, symbol-address, symbol-plus-offset, scalar array, and dense aggregate
+global initializers. Unsupported initializer forms are rejected by the strict
+MIR-module API and may use the direct `codegen` fallback only through
+`mir_codegen_compat`.
 
 ## Why This Layer Is Useful
 

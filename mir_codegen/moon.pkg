@@ -1,6 +1,4 @@
 import {
-  "moonbitlang/core/buffer",
-  "moonbitlang/core/string",
   "bobzhang/kimicc/mir",
   "bobzhang/kimicc/target",
   "bobzhang/kimicc/parser",

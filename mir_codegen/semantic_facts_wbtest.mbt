@@ -1048,31 +1048,3 @@ test "attached linux amd64 semantic queries use MIR state" {
     Binary("/", Cast(Double, Number(1)), Number(2)),
   )
 }
-
-///|
-test "direct linux amd64 codegen registers parser facts" {
-  let target = semantic_linux_target()
-  let prog = @parser.parse_for_target(
-    (
-      #|long a = sizeof(__builtin_fabsl(-1.0L));
-      #|unsigned b = __builtin_bswap32(0x01020304u);
-    ),
-    target,
-  )
-  let assembly = X64Codegen::new().generate(prog)
-  inspect(assembly.contains("a:\n\t.quad\t16"), content="true")
-  inspect(assembly.contains("b:\n\t.long\t67305985"), content="true")
-}
-
-///|
-test "direct darwin arm64 codegen registers parser facts" {
-  let prog = @parser.parse(
-    (
-      #|long a = sizeof(__builtin_fabsl(-1.0L));
-      #|unsigned b = __builtin_bswap32(0x01020304u);
-    ),
-  )
-  let assembly = Codegen::new().generate(prog)
-  inspect(assembly.contains("_a:\n\t.quad\t8"), content="true")
-  inspect(assembly.contains("_b:\n\t.long\t67305985"), content="true")
-}

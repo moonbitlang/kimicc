@@ -54,7 +54,7 @@ test "driver parses strict MIR codegen flag" {
 }
 
 ///|
-test "driver strict MIR codegen emits parser-free supported assembly" {
+test "driver strict MIR codegen emits parser-AST-free supported assembly" {
   let opts = match
     parse_driver_args([
       "kimicc", "--strict-mir-codegen", "--preprocessed", "-S", "-o", "-", "foo.c",
