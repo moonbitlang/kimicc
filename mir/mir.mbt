@@ -1,8 +1,8 @@
 ///|
 /// Function signature facts collected from a parsed translation unit.
 pub(all) struct FuncSig {
-  ret : @parser.Type
-  params : Array[@parser.Type]
+  ret : @ctype.Type
+  params : Array[@ctype.Type]
   variadic : Bool
   defined : Bool
   weak : Bool
@@ -15,7 +15,7 @@ pub(all) struct FuncSig {
 /// without carrying parser declaration nodes.
 pub(all) struct MirParam {
   name : String
-  ty : @parser.Type
+  ty : @ctype.Type
 } derive(Eq)
 
 ///|
@@ -25,7 +25,7 @@ pub(all) struct MirParam {
 /// itself is represented separately in `Program.bodies` when the MIR body
 /// lowering supports it.
 pub(all) struct MirFuncDecl {
-  ret : @parser.Type
+  ret : @ctype.Type
   name : String
   params : Array[MirParam]
   variadic : Bool
@@ -48,7 +48,7 @@ pub(all) struct MirFuncDecl {
 /// `has_init` lets backend-facing checks reason about declaration/definition
 /// state without reading parser declaration nodes.
 pub(all) struct MirGlobalDecl {
-  ty : @parser.Type
+  ty : @ctype.Type
   name : String
   init : MirGlobalInit?
   has_init : Bool
@@ -82,7 +82,7 @@ pub(all) enum MirGlobalInit {
 /// Aggregate field declaration metadata owned by MIR.
 pub(all) struct MirAggregateField {
   name : String
-  ty : @parser.Type
+  ty : @ctype.Type
   bit_width : Int?
 } derive(Eq)
 
@@ -101,7 +101,7 @@ pub(all) struct MirAggregateDecl {
 ///|
 /// Lexical expression-typing context used by MIR semantic queries.
 pub(all) struct Scope {
-  locals : Map[String, @parser.Type]
+  locals : Map[String, @ctype.Type]
   current_func : String
 } derive(Eq)
 
@@ -111,7 +111,7 @@ pub(all) struct Scope {
 /// `bit_width` is `Some(width)` for bit-fields and `None` for ordinary fields.
 pub(all) struct FieldLayout {
   name : String
-  ty : @parser.Type
+  ty : @ctype.Type
   offset : Int
   size : Int
   bit_offset : Int
@@ -165,9 +165,9 @@ pub(all) struct MirModule {
 pub fn Program::to_module(self : Program) -> MirModule {
   for decl in self.aggregate_decls {
     let ty = if decl.is_union {
-      @parser.Type::Union(decl.name)
+      @ctype.Type::Union(decl.name)
     } else {
-      @parser.Type::Struct(decl.name)
+      @ctype.Type::Struct(decl.name)
     }
     let _ = self.type_size(ty)
   }
@@ -320,7 +320,7 @@ fn MirGlobalDecl::from_parser(g : @parser.GlobalDecl) -> MirGlobalDecl {
 ///|
 fn Program::lower_mir_global_init(
   self : Program,
-  ty : @parser.Type,
+  ty : @ctype.Type,
   init : @parser.GlobalInit?,
 ) -> MirGlobalInit? {
   match init {
@@ -381,7 +381,7 @@ fn Program::lower_mir_global_array_value(
 ///|
 fn Program::lower_mir_global_value_for_type(
   self : Program,
-  ty : @parser.Type,
+  ty : @ctype.Type,
   expr : @parser.Expr,
 ) -> MirGlobalInit {
   match expr {
@@ -401,7 +401,7 @@ fn Program::lower_mir_global_value_for_type(
 ///|
 fn Program::mir_global_designator_matches_type(
   self : Program,
-  ty : @parser.Type,
+  ty : @ctype.Type,
   expr : @parser.Expr,
 ) -> Bool {
   match (self.core_type(ty), expr) {
@@ -417,7 +417,7 @@ fn Program::mir_global_designator_matches_type(
 ///|
 fn Program::lower_mir_global_array_init_for_type(
   self : Program,
-  ty : @parser.Type,
+  ty : @ctype.Type,
   exprs : Array[@parser.Expr],
 ) -> MirGlobalInit {
   match self.core_type(ty) {
@@ -452,7 +452,7 @@ fn Program::lower_mir_global_array_init_for_type(
 ///|
 fn Program::lower_mir_global_sparse_array_init(
   self : Program,
-  elem_ty : @parser.Type,
+  elem_ty : @ctype.Type,
   exprs : Array[@parser.Expr],
 ) -> MirGlobalInit {
   let values : Array[(Int, MirGlobalInit)] = []
@@ -624,7 +624,7 @@ fn Program::lower_mir_global_scalar_init(
 ///|
 fn Program::lower_mir_global_scalar_init_for_type(
   self : Program,
-  ty : @parser.Type,
+  ty : @ctype.Type,
   expr : @parser.Expr,
 ) -> MirGlobalInit {
   if ty.is_floating() {
@@ -645,7 +645,7 @@ fn Program::lower_mir_global_scalar_init_for_type(
 ///|
 fn Program::global_init_pointer_element_size(
   self : Program,
-  elem_ty : @parser.Type,
+  elem_ty : @ctype.Type,
 ) -> Int {
   match self.core_type(elem_ty) {
     Void => 1
@@ -765,7 +765,7 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
   let funcs : Map[String, FuncSig] = {}
   let decls : Array[MirFuncDecl] = []
   for decl in source.decls {
-    let param_types : Array[@parser.Type] = []
+    let param_types : Array[@ctype.Type] = []
     let params : Array[MirParam] = []
     for param in decl.params {
       param_types.push(param.ty)
@@ -865,7 +865,7 @@ pub fn lower_to_module(
 }
 
 ///|
-fn Program::core_type(self : Program, ty : @parser.Type) -> @parser.Type {
+fn Program::core_type(self : Program, ty : @ctype.Type) -> @ctype.Type {
   match ty {
     Atomic(inner) | Aligned(inner, _) => self.core_type(inner)
     _ => ty
@@ -873,7 +873,7 @@ fn Program::core_type(self : Program, ty : @parser.Type) -> @parser.Type {
 }
 
 ///|
-fn Program::pointer_element(self : Program, ty : @parser.Type) -> @parser.Type? {
+fn Program::pointer_element(self : Program, ty : @ctype.Type) -> @ctype.Type? {
   match self.core_type(ty) {
     Pointer(elem) | Array(elem, _) => Some(elem)
     _ => None
@@ -881,7 +881,7 @@ fn Program::pointer_element(self : Program, ty : @parser.Type) -> @parser.Type? 
 }
 
 ///|
-fn atomic_target_type(ty : @parser.Type) -> @parser.Type {
+fn atomic_target_type(ty : @ctype.Type) -> @ctype.Type {
   match ty {
     Pointer(Atomic(inner)) | Array(Atomic(inner), _) => inner
     Pointer(Aligned(inner, _)) | Array(Aligned(inner, _), _) => inner
@@ -894,8 +894,8 @@ fn atomic_target_type(ty : @parser.Type) -> @parser.Type {
 ///|
 fn Program::offset_array_element(
   self : Program,
-  ty : @parser.Type,
-) -> @parser.Type? {
+  ty : @ctype.Type,
+) -> @ctype.Type? {
   match self.core_type(ty) {
     Array(elem, _) => Some(elem)
     _ => None
@@ -903,7 +903,7 @@ fn Program::offset_array_element(
 }
 
 ///|
-fn is_unsigned_integer_type(ty : @parser.Type) -> Bool {
+fn is_unsigned_integer_type(ty : @ctype.Type) -> Bool {
   match ty {
     UChar | UShort | UInt | ULong | ULongLong | UInt128 => true
     _ => false
@@ -911,7 +911,7 @@ fn is_unsigned_integer_type(ty : @parser.Type) -> Bool {
 }
 
 ///|
-fn integer_rank(ty : @parser.Type) -> Int {
+fn integer_rank(ty : @ctype.Type) -> Int {
   match ty {
     Bool | SChar | UChar => 1
     SShort | UShort => 2
@@ -924,7 +924,7 @@ fn integer_rank(ty : @parser.Type) -> Int {
 }
 
 ///|
-fn integer_width_bits(ty : @parser.Type) -> Int {
+fn integer_width_bits(ty : @ctype.Type) -> Int {
   match ty {
     Bool | SChar | UChar => 8
     SShort | UShort => 16
@@ -936,7 +936,7 @@ fn integer_width_bits(ty : @parser.Type) -> Int {
 }
 
 ///|
-fn unsigned_type_for_rank(rank : Int) -> @parser.Type {
+fn unsigned_type_for_rank(rank : Int) -> @ctype.Type {
   if rank >= 6 {
     UInt128
   } else if rank == 5 {
@@ -949,7 +949,7 @@ fn unsigned_type_for_rank(rank : Int) -> @parser.Type {
 }
 
 ///|
-fn signed_type_for_rank(rank : Int) -> @parser.Type {
+fn signed_type_for_rank(rank : Int) -> @ctype.Type {
   if rank >= 6 {
     SInt128
   } else if rank == 5 {
@@ -962,7 +962,7 @@ fn signed_type_for_rank(rank : Int) -> @parser.Type {
 }
 
 ///|
-fn unary_integer_result_type(ty : @parser.Type) -> @parser.Type {
+fn unary_integer_result_type(ty : @ctype.Type) -> @ctype.Type {
   match ty {
     Bool | SChar | UChar | SShort | UShort => SInt
     _ => ty
@@ -970,7 +970,7 @@ fn unary_integer_result_type(ty : @parser.Type) -> @parser.Type {
 }
 
 ///|
-fn Program::is_floating_type(self : Program, ty : @parser.Type) -> Bool {
+fn Program::is_floating_type(self : Program, ty : @ctype.Type) -> Bool {
   match self.core_type(ty) {
     Float | Double => true
     LongDouble => self.target is DarwinArm64
@@ -979,7 +979,7 @@ fn Program::is_floating_type(self : Program, ty : @parser.Type) -> Bool {
 }
 
 ///|
-fn Program::is_floating_const_type(self : Program, ty : @parser.Type) -> Bool {
+fn Program::is_floating_const_type(self : Program, ty : @ctype.Type) -> Bool {
   match self.core_type(ty) {
     Float | Double | LongDouble => true
     _ => false
@@ -989,8 +989,8 @@ fn Program::is_floating_const_type(self : Program, ty : @parser.Type) -> Bool {
 ///|
 fn Program::unary_numeric_result_type(
   self : Program,
-  ty : @parser.Type,
-) -> @parser.Type {
+  ty : @ctype.Type,
+) -> @ctype.Type {
   if self.is_floating_type(ty) {
     ty
   } else {
@@ -1000,9 +1000,9 @@ fn Program::unary_numeric_result_type(
 
 ///|
 fn integer_common_type(
-  lhs_ty : @parser.Type,
-  rhs_ty : @parser.Type,
-) -> @parser.Type {
+  lhs_ty : @ctype.Type,
+  rhs_ty : @ctype.Type,
+) -> @ctype.Type {
   let lhs_ty = unary_integer_result_type(lhs_ty)
   let rhs_ty = unary_integer_result_type(rhs_ty)
   if lhs_ty == rhs_ty {
@@ -1038,9 +1038,9 @@ fn integer_common_type(
 fn Program::binary_result_type(
   self : Program,
   op : String,
-  lhs_ty : @parser.Type,
-  rhs_ty : @parser.Type,
-) -> @parser.Type {
+  lhs_ty : @ctype.Type,
+  rhs_ty : @ctype.Type,
+) -> @ctype.Type {
   match op {
     "==" | "!=" | "<" | ">" | "<=" | ">=" | "&&" | "||" => SInt
     "," => rhs_ty
@@ -1063,9 +1063,9 @@ fn Program::binary_result_type(
 ///|
 fn Program::ternary_result_type(
   self : Program,
-  then_ty : @parser.Type,
-  else_ty : @parser.Type,
-) -> @parser.Type {
+  then_ty : @ctype.Type,
+  else_ty : @ctype.Type,
+) -> @ctype.Type {
   match (self.core_type(then_ty), self.core_type(else_ty)) {
     (Array(elem, _), _) | (_, Array(elem, _)) => Pointer(elem)
     (Pointer(elem), _) | (_, Pointer(elem)) => Pointer(elem)
@@ -1088,7 +1088,7 @@ fn Program::ternary_result_type(
 }
 
 ///|
-fn number_literal_type(value : Int64) -> @parser.Type {
+fn number_literal_type(value : Int64) -> @ctype.Type {
   if value < -2147483648L || value > 2147483647L {
     SLongLong
   } else {
@@ -1097,7 +1097,7 @@ fn number_literal_type(value : Int64) -> @parser.Type {
 }
 
 ///|
-pub fn Program::type_size(self : Program, ty : @parser.Type) -> Int {
+pub fn Program::type_size(self : Program, ty : @ctype.Type) -> Int {
   match ty {
     Atomic(inner) | Aligned(inner, _) => self.type_size(inner)
     _ =>
@@ -1137,7 +1137,7 @@ pub fn Program::type_size(self : Program, ty : @parser.Type) -> Int {
 }
 
 ///|
-pub fn Program::type_align(self : Program, ty : @parser.Type) -> Int {
+pub fn Program::type_align(self : Program, ty : @ctype.Type) -> Int {
   match ty {
     Atomic(inner) => self.type_align(inner)
     Aligned(inner, align) => {
@@ -1199,7 +1199,7 @@ fn align_to(value : Int, align : Int) -> Int {
 }
 
 ///|
-fn is_anon_type(ty : @parser.Type) -> Bool {
+fn is_anon_type(ty : @ctype.Type) -> Bool {
   match ty {
     Struct(name) | Union(name) => name.has_prefix("__anon_")
     _ => false
@@ -1209,7 +1209,7 @@ fn is_anon_type(ty : @parser.Type) -> Bool {
 ///|
 fn Program::flatten_anon_fields(
   self : Program,
-  ty : @parser.Type,
+  ty : @ctype.Type,
   base_offset : Int,
 ) -> Array[FieldLayout] {
   let name = match self.core_type(ty) {
@@ -1452,7 +1452,7 @@ fn Program::aggregate_layout_by_name(
 ///|
 pub fn Program::field_layout(
   self : Program,
-  ty : @parser.Type,
+  ty : @ctype.Type,
   field : String,
 ) -> FieldLayout? {
   let name = match self.core_type(ty) {
@@ -1471,8 +1471,8 @@ pub fn Program::field_layout(
 ///|
 pub fn Program::offset_of_path(
   self : Program,
-  ty : @parser.Type,
-  path : Array[@parser.OffsetDesignator],
+  ty : @ctype.Type,
+  path : Array[@ctype.OffsetDesignator],
 ) -> Int? {
   let mut current_ty = ty
   let mut offset = 0
@@ -1500,7 +1500,7 @@ pub fn Program::offset_of_path(
 }
 
 ///|
-fn MirModule::core_type(self : MirModule, ty : @parser.Type) -> @parser.Type {
+fn MirModule::core_type(self : MirModule, ty : @ctype.Type) -> @ctype.Type {
   match ty {
     Atomic(inner) | Aligned(inner, _) => self.core_type(inner)
     _ => ty
@@ -1510,8 +1510,8 @@ fn MirModule::core_type(self : MirModule, ty : @parser.Type) -> @parser.Type {
 ///|
 fn MirModule::offset_array_element(
   self : MirModule,
-  ty : @parser.Type,
-) -> @parser.Type? {
+  ty : @ctype.Type,
+) -> @ctype.Type? {
   match self.core_type(ty) {
     Array(elem, _) => Some(elem)
     _ => None
@@ -1521,8 +1521,8 @@ fn MirModule::offset_array_element(
 ///|
 fn MirModule::pointer_element(
   self : MirModule,
-  ty : @parser.Type,
-) -> @parser.Type? {
+  ty : @ctype.Type,
+) -> @ctype.Type? {
   match self.core_type(ty) {
     Pointer(elem) | Array(elem, _) => Some(elem)
     _ => None
@@ -1541,7 +1541,7 @@ fn MirModule::aggregate_layout_by_name(
 }
 
 ///|
-pub fn MirModule::type_size(self : MirModule, ty : @parser.Type) -> Int {
+pub fn MirModule::type_size(self : MirModule, ty : @ctype.Type) -> Int {
   match ty {
     Atomic(inner) | Aligned(inner, _) => self.type_size(inner)
     _ =>
@@ -1581,7 +1581,7 @@ pub fn MirModule::type_size(self : MirModule, ty : @parser.Type) -> Int {
 }
 
 ///|
-pub fn MirModule::type_align(self : MirModule, ty : @parser.Type) -> Int {
+pub fn MirModule::type_align(self : MirModule, ty : @ctype.Type) -> Int {
   match ty {
     Atomic(inner) => self.type_align(inner)
     Aligned(inner, align) => {
@@ -1631,7 +1631,7 @@ pub fn MirModule::type_align(self : MirModule, ty : @parser.Type) -> Int {
 ///|
 pub fn MirModule::field_layout(
   self : MirModule,
-  ty : @parser.Type,
+  ty : @ctype.Type,
   field : String,
 ) -> FieldLayout? {
   let name = match self.core_type(ty) {
@@ -1650,8 +1650,8 @@ pub fn MirModule::field_layout(
 ///|
 pub fn MirModule::offset_of_path(
   self : MirModule,
-  ty : @parser.Type,
-  path : Array[@parser.OffsetDesignator],
+  ty : @ctype.Type,
+  path : Array[@ctype.OffsetDesignator],
 ) -> Int? {
   let mut current_ty = ty
   let mut offset = 0
@@ -1682,7 +1682,7 @@ pub fn MirModule::offset_of_path(
 pub fn MirModule::global_expr_type(
   self : MirModule,
   expr : @parser.Expr,
-) -> @parser.Type {
+) -> @ctype.Type {
   match expr {
     Number(value) => number_literal_type(value)
     FloatLiteral(_) => Double
@@ -1724,7 +1724,7 @@ pub fn MirModule::global_expr_type(
 pub fn Program::global_expr_type(
   self : Program,
   expr : @parser.Expr,
-) -> @parser.Type {
+) -> @ctype.Type {
   match expr {
     Number(value) => number_literal_type(value)
     FloatLiteral(_) => Double
@@ -1768,7 +1768,7 @@ fn Program::builtin_return_type(
   name : String,
   args : Array[@parser.Expr],
   scope : Scope,
-) -> @parser.Type? {
+) -> @ctype.Type? {
   match name {
     "__builtin_object_size" | "__builtin_dynamic_object_size" => Some(ULong)
     "__builtin_return_address"
@@ -2023,7 +2023,7 @@ pub fn Program::expr_type(
   self : Program,
   expr : @parser.Expr,
   scope : Scope,
-) -> @parser.Type {
+) -> @ctype.Type {
   match expr {
     Number(value) => number_literal_type(value)
     FloatLiteral(_) => Double
@@ -2136,14 +2136,14 @@ pub fn Program::expr_type(
 ///|
 priv struct ConstIntValue {
   bits : Int64
-  ty : @parser.Type
+  ty : @ctype.Type
 }
 
 ///|
 fn Program::const_int(
   self : Program,
   bits : Int64,
-  ty : @parser.Type,
+  ty : @ctype.Type,
 ) -> ConstIntValue {
   { bits, ty: self.core_type(ty) }
 }
@@ -2154,7 +2154,7 @@ fn const_bool(value : Bool) -> ConstIntValue {
 }
 
 ///|
-fn const_type_is_unsigned(ty : @parser.Type) -> Bool {
+fn const_type_is_unsigned(ty : @ctype.Type) -> Bool {
   match ty {
     Bool | UChar | UShort | UInt | ULong | ULongLong | UInt128 => true
     _ => false
@@ -2162,7 +2162,7 @@ fn const_type_is_unsigned(ty : @parser.Type) -> Bool {
 }
 
 ///|
-fn const_type_int_width(ty : @parser.Type) -> Int? {
+fn const_type_int_width(ty : @ctype.Type) -> Int? {
   match ty {
     Bool => Some(1)
     SChar | UChar => Some(8)
@@ -2179,7 +2179,7 @@ fn const_type_int_width(ty : @parser.Type) -> Int? {
 fn Program::const_cast_int(
   self : Program,
   value : ConstIntValue,
-  ty : @parser.Type,
+  ty : @ctype.Type,
 ) -> ConstIntValue {
   let core_ty = self.core_type(ty)
   let unsigned = const_type_is_unsigned(core_ty)
@@ -2208,9 +2208,9 @@ fn Program::const_cast_int(
 
 ///|
 fn const_integer_common_type(
-  lhs_ty : @parser.Type,
-  rhs_ty : @parser.Type,
-) -> @parser.Type {
+  lhs_ty : @ctype.Type,
+  rhs_ty : @ctype.Type,
+) -> @ctype.Type {
   integer_common_type(lhs_ty, rhs_ty)
 }
 
@@ -2219,7 +2219,7 @@ fn Program::const_apply_binary_type(
   self : Program,
   left : ConstIntValue,
   right : ConstIntValue,
-) -> (ConstIntValue, ConstIntValue, @parser.Type) {
+) -> (ConstIntValue, ConstIntValue, @ctype.Type) {
   let ty = const_integer_common_type(left.ty, right.ty)
   (self.const_cast_int(left, ty), self.const_cast_int(right, ty), ty)
 }
@@ -2344,7 +2344,7 @@ fn Program::object_size_var_type(
   self : Program,
   name : String,
   scope : Scope,
-) -> @parser.Type? {
+) -> @ctype.Type? {
   if scope.locals.contains(name) {
     Some(scope.locals[name])
   } else if self.globals.contains(name) {
@@ -2359,7 +2359,7 @@ fn Program::object_size_lvalue_type(
   self : Program,
   expr : @parser.Expr,
   scope : Scope,
-) -> @parser.Type? {
+) -> @ctype.Type? {
   match expr {
     Var(name) => self.object_size_var_type(name, scope)
     ArrayAccess(base, _) =>
@@ -2425,7 +2425,7 @@ fn Program::object_size_var_fact(
 ///|
 fn Program::object_size_array_element_fact(
   self : Program,
-  base_ty : @parser.Type,
+  base_ty : @ctype.Type,
   index : @parser.Expr,
   scope : Scope,
   base_fact : ObjectSizeFact,
@@ -2632,7 +2632,7 @@ fn Program::fold_scalar_builtin_const(
       }
     "__builtin_abs" | "__builtin_labs" | "__builtin_llabs" =>
       if args.length() > 0 {
-        let ty : @parser.Type = match name {
+        let ty : @ctype.Type = match name {
           "__builtin_labs" => SLong
           "__builtin_llabs" => SLongLong
           _ => SInt
@@ -2809,7 +2809,7 @@ fn Program::fold_scalar_builtin_const(
               "__builtin_rotateleft64" | "__builtin_rotateright64" => 64
               _ => self.generic_builtin_bit_width_for_scope(args, scope)
             }
-            let ty : @parser.Type = match name {
+            let ty : @ctype.Type = match name {
               "__builtin_rotateleft32" | "__builtin_rotateright32" => UInt
               "__builtin_rotateleft64" | "__builtin_rotateright64" => ULongLong
               _ => self.expr_type(args[0], scope)

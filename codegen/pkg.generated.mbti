@@ -2,6 +2,7 @@
 package "bobzhang/kimicc/codegen"
 
 import {
+  "bobzhang/kimicc/ctype",
   "bobzhang/kimicc/parser",
   "bobzhang/kimicc/target",
 }
@@ -20,15 +21,15 @@ pub struct Codegen {
   output : StringBuilder
   mut label_counter : Int
   mut local_offsets : Map[String, Int]
-  mut var_types : Map[String, @parser.Type]
+  mut var_types : Map[String, @ctype.Type]
   mut stack_size : Int
   mut func_name : String
   mut func_params : Array[@parser.Param]
-  func_rets : Map[String, @parser.Type]
+  func_rets : Map[String, @ctype.Type]
   func_variadic : Map[String, Bool]
   func_param_counts : Map[String, Int]
-  func_param_types : Map[String, Array[@parser.Type]]
-  struct_layouts : Map[String, Array[(String, @parser.Type, Int, Int, Int, Int)]]
+  func_param_types : Map[String, Array[@ctype.Type]]
+  struct_layouts : Map[String, Array[(String, @ctype.Type, Int, Int, Int, Int)]]
   struct_decls : Map[String, @parser.StructDecl]
   strings : Array[String]
   mut break_label : String?

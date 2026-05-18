@@ -30,11 +30,7 @@ fn Codegen::emit_local_addr(
 }
 
 ///|
-fn Codegen::alloc_local(
-  self : Codegen,
-  name : String,
-  ty : @parser.Type,
-) -> Int {
+fn Codegen::alloc_local(self : Codegen, name : String, ty : @ctype.Type) -> Int {
   let size = self.type_size(ty)
   let natural_align = self.type_align(ty)
   let align = if natural_align > 8 { natural_align } else { 8 }

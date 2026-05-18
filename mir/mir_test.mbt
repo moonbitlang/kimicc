@@ -1548,7 +1548,7 @@ test "mir folds constants with target layout" {
     scope,
     8L,
   )
-  let local_types : Map[String, @parser.Type] = {}
+  let local_types : Map[String, @ctype.Type] = {}
   local_types["local_x"] = SInt
   local_types["local_buf"] = Array(SChar, 16)
   local_types["local_s"] = Struct("S")

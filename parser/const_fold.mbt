@@ -813,9 +813,9 @@ fn Parser::fold_scalar_builtin_const(
     "__builtin_abs" | "__builtin_labs" | "__builtin_llabs" =>
       if args.length() > 0 {
         let ty = match name {
-          "__builtin_labs" => SLong
-          "__builtin_llabs" => SLongLong
-          _ => SInt
+          "__builtin_labs" => @ctype.Type::SLong
+          "__builtin_llabs" => @ctype.Type::SLongLong
+          _ => @ctype.Type::SInt
         }
         let value = const_cast_int(arg0, ty).bits
         Some(
@@ -994,8 +994,10 @@ fn Parser::fold_scalar_builtin_const(
               _ => self.const_generic_builtin_bit_width(args)
             }
             let ty = match name {
-              "__builtin_rotateleft32" | "__builtin_rotateright32" => UInt
-              "__builtin_rotateleft64" | "__builtin_rotateright64" => ULongLong
+              "__builtin_rotateleft32" | "__builtin_rotateright32" =>
+                @ctype.Type::UInt
+              "__builtin_rotateleft64" | "__builtin_rotateright64" =>
+                @ctype.Type::ULongLong
               _ => self.const_expr_type(args[0])
             }
             Some(

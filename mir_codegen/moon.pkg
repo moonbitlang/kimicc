@@ -1,5 +1,5 @@
 import {
+  "bobzhang/kimicc/ctype",
   "bobzhang/kimicc/mir",
   "bobzhang/kimicc/target",
-  "bobzhang/kimicc/parser",
 }
