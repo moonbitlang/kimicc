@@ -3340,6 +3340,49 @@ test "reject linux amd64 strict MIR memory aggregate returns" {
 }
 
 ///|
+test "generate linux amd64 strict MIR small aggregate return calls" {
+  let source =
+    #|struct Pair { long a; long b; };
+    #|struct DPair { double a; double b; };
+    #|struct Mix { long a; double b; };
+    #|struct Pair make_pair(long a, long b) { struct Pair p; p.a = a; p.b = b; return p; }
+    #|struct Pair forward_pair(long a, long b) { return make_pair(a, b); }
+    #|struct DPair make_dpair(double a, double b) { struct DPair p; p.a = a; p.b = b; return p; }
+    #|struct Mix make_mix(long a, double b) { struct Mix p; p.a = a; p.b = b; return p; }
+    #|int main(void) {
+    #|  struct Pair p = forward_pair(10, 20);
+    #|  struct DPair d = make_dpair(19.5, 22.5);
+    #|  struct Mix m;
+    #|  m = make_mix(5, 6.5);
+    #|  return (int)(p.a + p.b + d.a + d.b + m.a + m.b);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\tmake_pair"), content="true")
+      inspect(assembly.contains("\tcall\tforward_pair"), content="true")
+      inspect(assembly.contains("\tcall\tmake_dpair"), content="true")
+      inspect(assembly.contains("\tcall\tmake_mix"), content="true")
+      inspect(assembly.contains("\tmov\tQWORD PTR [r10], rax"), content="true")
+      inspect(
+        assembly.contains("\tmovsd\tQWORD PTR [r10], xmm0"),
+        content="true",
+      )
+      inspect(
+        assembly.contains("unsupported MIR body codegen"),
+        content="false",
+      )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate linux amd64 strict MIR aggregate variadic call arguments" {
   let source =
     #|typedef __builtin_va_list va_list;

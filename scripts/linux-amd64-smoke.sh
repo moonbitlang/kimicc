@@ -223,6 +223,8 @@ strict_mir_returns_driver_path="/tmp/kimicc-linux-amd64-strict-mir-returns-drive
 strict_mir_returns_object_path="/tmp/kimicc-linux-amd64-strict-mir-returns.o"
 strict_mir_returns_driver_object_path="/tmp/kimicc-linux-amd64-strict-mir-returns-driver.o"
 strict_mir_returns_binary_path="/tmp/kimicc-linux-amd64-strict-mir-returns"
+strict_mir_return_calls_source_path="/tmp/kimicc-linux-amd64-strict-mir-return-calls.c"
+strict_mir_return_calls_binary_path="/tmp/kimicc-linux-amd64-strict-mir-return-calls"
 
 mkdir -p "$probe_include_dir" "$probe_after_include_dir" "$probe_prefix_dir/headers"
 cat > "$probe_include_dir/probe_header.h" <<'H'
@@ -3413,6 +3415,67 @@ status=$?
 set -e
 if [ "$status" -ne 83 ]; then
   echo "expected strict MIR aggregate returns smoke binary to exit 83, got $status" >&2
+  exit 1
+fi
+
+cat > "$strict_mir_return_calls_source_path" <<'C'
+struct Pair {
+  long a;
+  long b;
+};
+
+struct DPair {
+  double a;
+  double b;
+};
+
+struct Mix {
+  long a;
+  double b;
+};
+
+struct Pair make_pair(long a, long b) {
+  struct Pair p;
+  p.a = a;
+  p.b = b;
+  return p;
+}
+
+struct Pair forward_pair(long a, long b) {
+  return make_pair(a, b);
+}
+
+struct DPair make_dpair(double a, double b) {
+  struct DPair p;
+  p.a = a;
+  p.b = b;
+  return p;
+}
+
+struct Mix make_mix(long a, double b) {
+  struct Mix p;
+  p.a = a;
+  p.b = b;
+  return p;
+}
+
+int main(void) {
+  struct Pair p = forward_pair(10, 20);
+  struct DPair d = make_dpair(19.5, 22.5);
+  struct Mix m;
+  m = make_mix(5, 6.5);
+  return (int)(p.a + p.b + d.a + d.b + m.a + m.b);
+}
+C
+
+"$kimicc" --strict-mir-codegen -target linux-amd64 \
+  -o "$strict_mir_return_calls_binary_path" "$strict_mir_return_calls_source_path"
+set +e
+"$strict_mir_return_calls_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 83 ]; then
+  echo "expected strict MIR aggregate return calls smoke binary to exit 83, got $status" >&2
   exit 1
 fi
 
