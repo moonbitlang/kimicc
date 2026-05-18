@@ -1064,6 +1064,35 @@ fn Program::lower_mir_call_arg(
 }
 
 ///|
+fn Program::lower_mir_expr_with_array_decay(
+  self : Program,
+  expr : @parser.Expr,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  match self.core_type(self.expr_type(expr, ctx.scope())) {
+    Array(elem_ty, _) =>
+      match self.lower_mir_array_base_addr(expr, ctx) {
+        Some(addr) => Some(MirCast(Pointer(elem_ty), addr))
+        None => None
+      }
+    _ => self.lower_mir_expr(expr, ctx)
+  }
+}
+
+///|
+fn Program::lower_mir_expr_for_target_type(
+  self : Program,
+  expected_ty : @ctype.Type,
+  expr : @parser.Expr,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  match self.core_type(expected_ty) {
+    Pointer(_) => self.lower_mir_expr_with_array_decay(expr, ctx)
+    _ => self.lower_mir_expr(expr, ctx)
+  }
+}
+
+///|
 fn Program::lower_mir_array_elem_addr(
   self : Program,
   base : @parser.Expr,
@@ -1145,7 +1174,11 @@ fn Program::lower_mir_known_object_ptr_expr(
       if !pointer_integer {
         return None
       }
-      match (self.lower_mir_expr(lhs, ctx), self.lower_mir_expr(rhs, ctx)) {
+      match
+        (
+          self.lower_mir_expr_with_array_decay(lhs, ctx),
+          self.lower_mir_expr_with_array_decay(rhs, ctx),
+        ) {
         (Some(left), Some(right)) =>
           Some(MirBinary(op, left, right, self.expr_type(expr, scope)))
         _ => None
@@ -1397,7 +1430,7 @@ fn Program::lower_mir_expr(
       match
         (
           lower_mir_cancelled_local_lvalue(lhs, ctx),
-          self.lower_mir_expr(rhs, ctx),
+          self.lower_mir_expr_for_target_type(lhs_ty, rhs, ctx),
         ) {
         (Some(binding), Some(value)) =>
           if mir_body_scalar_type(binding.ty) {
@@ -1405,7 +1438,7 @@ fn Program::lower_mir_expr(
           }
         _ => ()
       }
-      match self.lower_mir_expr(rhs, ctx) {
+      match self.lower_mir_expr_for_target_type(lhs_ty, rhs, ctx) {
         Some(value) =>
           match self.lower_mir_scalar_lvalue_addr(lhs, lhs_ty, ctx) {
             Some(addr) => Some(MirStore(addr, value, lhs_ty))
@@ -1791,7 +1824,7 @@ fn Program::lower_mir_stmt(
       }
       let init_value = match init {
         Some(expr) =>
-          match self.lower_mir_expr(expr, ctx) {
+          match self.lower_mir_expr_for_target_type(ty, expr, ctx) {
             Some(value) => Some(value)
             None => return None
           }
