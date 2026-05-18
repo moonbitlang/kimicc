@@ -697,6 +697,22 @@ test "strict MIR codegen returns memory aggregates to clang callers" {
 }
 
 ///|
+test "strict MIR codegen takes address of aggregate objects" {
+  let source =
+    #|struct Pair { long a; long b; };
+    #|struct Pair global_pair = { 5, 6 };
+    #|int main(void) {
+    #|  struct Pair local_pair = { 1, 2 };
+    #|  struct Pair copy = { 0, 0 };
+    #|  __builtin_memcpy(&copy, &local_pair, sizeof(copy));
+    #|  if (copy.a + copy.b != 3) return 1;
+    #|  __builtin_memcpy(&copy, &global_pair, sizeof(copy));
+    #|  return (int)(copy.a + copy.b);
+    #|}
+  assert_eq(run_source_strict_mir(source), 11)
+}
+
+///|
 test "strict MIR codegen executes globals arrays and structs" {
   let source =
     #|struct Pair { int x; int y; };
