@@ -71,6 +71,15 @@ fn sanitize_label(name : String) -> String {
 // Convert xN register name to wN for 32-bit operations.
 fn w_reg(x : String) -> String {
   match x {
+    "x0" => "w0"
+    "x1" => "w1"
+    "x2" => "w2"
+    "x3" => "w3"
+    "x4" => "w4"
+    "x5" => "w5"
+    "x6" => "w6"
+    "x7" => "w7"
+    "x8" => "w8"
     "x9" => "w9"
     "x10" => "w10"
     "x11" => "w11"

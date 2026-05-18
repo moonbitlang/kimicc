@@ -95,6 +95,58 @@ test "strict MIR codegen executes stack-passed integer indirect calls" {
 }
 
 ///|
+test "strict MIR codegen executes small aggregate call results" {
+  let source =
+    #|struct Pair { long a; long b; };
+    #|struct Tiny { char a; short b; };
+    #|struct Pair make_pair(long a, long b) {
+    #|  struct Pair p;
+    #|  p.a = a;
+    #|  p.b = b;
+    #|  return p;
+    #|}
+    #|struct Tiny make_tiny(int a, int b) {
+    #|  struct Tiny t;
+    #|  t.a = a;
+    #|  t.b = b;
+    #|  return t;
+    #|}
+    #|int main(void) {
+    #|  struct Pair p = make_pair(10, 20);
+    #|  struct Pair q;
+    #|  struct Tiny t = make_tiny(5, 30);
+    #|  q = make_pair(3, 4);
+    #|  return (int)(p.a + p.b + q.a + q.b) + t.a + t.b;
+    #|}
+  assert_eq(run_source_strict_mir(source), 72)
+}
+
+///|
+test "strict MIR codegen returns small aggregates to clang callers" {
+  let callee =
+    #|struct Pair { long a; long b; };
+    #|struct Pair make_pair(long a, long b) {
+    #|  struct Pair p;
+    #|  p.a = a;
+    #|  p.b = b;
+    #|  return p;
+    #|}
+    #|struct Pair forward_pair(long a, long b) {
+    #|  return make_pair(a + 1, b + 2);
+    #|}
+  let driver =
+    #|struct Pair { long a; long b; };
+    #|struct Pair make_pair(long a, long b);
+    #|struct Pair forward_pair(long a, long b);
+    #|int main(void) {
+    #|  struct Pair p = make_pair(10, 20);
+    #|  struct Pair q = forward_pair(3, 4);
+    #|  return (int)(p.a + p.b + q.a + q.b);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 40)
+}
+
+///|
 test "strict MIR codegen executes globals arrays and structs" {
   let source =
     #|struct Pair { int x; int y; };
