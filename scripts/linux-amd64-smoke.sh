@@ -218,6 +218,11 @@ va_list_source_path="/tmp/kimicc-linux-amd64-va-list.c"
 va_list_binary_path="/tmp/kimicc-linux-amd64-va-list"
 strict_mir_varargs_source_path="/tmp/kimicc-linux-amd64-strict-mir-varargs.c"
 strict_mir_varargs_binary_path="/tmp/kimicc-linux-amd64-strict-mir-varargs"
+strict_mir_returns_source_path="/tmp/kimicc-linux-amd64-strict-mir-returns.c"
+strict_mir_returns_driver_path="/tmp/kimicc-linux-amd64-strict-mir-returns-driver.c"
+strict_mir_returns_object_path="/tmp/kimicc-linux-amd64-strict-mir-returns.o"
+strict_mir_returns_driver_object_path="/tmp/kimicc-linux-amd64-strict-mir-returns-driver.o"
+strict_mir_returns_binary_path="/tmp/kimicc-linux-amd64-strict-mir-returns"
 
 mkdir -p "$probe_include_dir" "$probe_after_include_dir" "$probe_prefix_dir/headers"
 cat > "$probe_include_dir/probe_header.h" <<'H'
@@ -3327,6 +3332,87 @@ status=$?
 set -e
 if [ "$status" -ne 153 ]; then
   echo "expected strict MIR aggregate varargs smoke binary to exit 153, got $status" >&2
+  exit 1
+fi
+
+cat > "$strict_mir_returns_source_path" <<'C'
+struct Pair {
+  long a;
+  long b;
+};
+
+struct DPair {
+  double a;
+  double b;
+};
+
+struct Mix {
+  long a;
+  double b;
+};
+
+struct Pair make_pair(long a, long b) {
+  struct Pair p;
+  p.a = a;
+  p.b = b;
+  return p;
+}
+
+struct DPair make_dpair(double a, double b) {
+  struct DPair p;
+  p.a = a;
+  p.b = b;
+  return p;
+}
+
+struct Mix make_mix(long a, double b) {
+  struct Mix p;
+  p.a = a;
+  p.b = b;
+  return p;
+}
+C
+
+cat > "$strict_mir_returns_driver_path" <<'C'
+struct Pair {
+  long a;
+  long b;
+};
+
+struct DPair {
+  double a;
+  double b;
+};
+
+struct Mix {
+  long a;
+  double b;
+};
+
+struct Pair make_pair(long, long);
+struct DPair make_dpair(double, double);
+struct Mix make_mix(long, double);
+
+int main(void) {
+  struct Pair p = make_pair(10, 20);
+  struct DPair d = make_dpair(19.5, 22.5);
+  struct Mix m = make_mix(5, 6.5);
+  return (int)(p.a + p.b + d.a + d.b + m.a + m.b);
+}
+C
+
+"$kimicc" --strict-mir-codegen -c -target linux-amd64 \
+  -o "$strict_mir_returns_object_path" "$strict_mir_returns_source_path"
+clang -target x86_64-linux-gnu -c -o "$strict_mir_returns_driver_object_path" \
+  "$strict_mir_returns_driver_path"
+clang -o "$strict_mir_returns_binary_path" "$strict_mir_returns_object_path" \
+  "$strict_mir_returns_driver_object_path"
+set +e
+"$strict_mir_returns_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 83 ]; then
+  echo "expected strict MIR aggregate returns smoke binary to exit 83, got $status" >&2
   exit 1
 fi
 

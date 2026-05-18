@@ -1122,6 +1122,45 @@ fn X64Codegen::emit_store_sse_word_to_mem_reg(
 }
 
 ///|
+fn X64Codegen::emit_load_small_aggregate_return(
+  self : X64Codegen,
+  ty : @ctype.Type,
+) -> Unit {
+  let classes = match self.aggregate_classes(ty) {
+    Some(classes) => classes
+    None => abort("x86-64 backend does not support this aggregate return yet")
+  }
+  let int_regs = ["rax", "rdx"]
+  let fp_regs = ["xmm0", "xmm1"]
+  let mut int_idx = 0
+  let mut fp_idx = 0
+  self.emit("\tmov\tr10, rax")
+  for word in 0..<classes.length() {
+    let width = self.aggregate_word_width(ty, word)
+    match classes[word] {
+      IntClass => {
+        self.emit_load_int_bytes_from_mem_reg(
+          int_regs[int_idx],
+          "r10",
+          word * 8,
+          width,
+        )
+        int_idx += 1
+      }
+      SseClass => {
+        self.emit_load_sse_word_from_mem_reg(
+          fp_regs[fp_idx],
+          "r10",
+          word * 8,
+          width,
+        )
+        fp_idx += 1
+      }
+    }
+  }
+}
+
+///|
 fn X64Codegen::emit_store_small_aggregate_return(
   self : X64Codegen,
   ty : @ctype.Type,
