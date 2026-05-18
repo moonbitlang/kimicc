@@ -106,33 +106,7 @@ fn mir_body_codegen_darwin_hfa_return_type(
   ty : @ctype.Type,
   mir : @mir.MirModule,
 ) -> Bool {
-  let name = match peel_aligned_type(ty) {
-    Struct(name) => name
-    _ => return false
-  }
-  let layout = match mir.layouts.get(name) {
-    Some(layout) => layout
-    None => return false
-  }
-  if layout.fields.length() == 0 || layout.fields.length() > 4 {
-    return false
-  }
-  let mut fp_ty : @ctype.Type? = None
-  for field in layout.fields {
-    if field.bit_width is Some(_) {
-      return false
-    }
-    let field_ty = match peel_aligned_type(field.ty) {
-      Float => @ctype.Type::Float
-      Double | LongDouble => @ctype.Type::Double
-      _ => return false
-    }
-    match fp_ty {
-      Some(seen) => if seen != field_ty { return false }
-      None => fp_ty = Some(field_ty)
-    }
-  }
-  true
+  Codegen::new_with_mir_module(mir).is_hfa_aggregate(ty)
 }
 
 ///|
@@ -169,7 +143,11 @@ fn mir_body_codegen_x64_memory_aggregate_return_type(
           X64Codegen::new_with_mir_module(mir).is_memory_aggregate(ty)
         _ => false
       }
-    DarwinArm64 => false
+    DarwinArm64 =>
+      match peel_aligned_type(ty) {
+        Struct(_) | Union(_) => mir.type_size(ty) > 16
+        _ => false
+      }
   }
 }
 
@@ -578,14 +556,14 @@ fn mir_body_codegen_value_supported(
     MirStore(ptr, rhs, ty) => {
       if mir_body_codegen_x64_small_aggregate_return_type(ty, mir) &&
         mir_body_codegen_value_supported(ptr, int_arg_limit, mir) &&
-        mir_body_codegen_small_aggregate_call_value_supported(
+        mir_body_codegen_aggregate_return_value_supported(
           rhs, int_arg_limit, mir,
         ) {
         return true
       }
       if mir_body_codegen_x64_memory_aggregate_return_type(ty, mir) &&
         mir_body_codegen_value_supported(ptr, int_arg_limit, mir) &&
-        mir_body_codegen_memory_aggregate_call_value_supported(
+        mir_body_codegen_memory_aggregate_return_value_supported(
           rhs, int_arg_limit, mir,
         ) {
         return true
@@ -1627,7 +1605,146 @@ fn Codegen::mir_body_offsets(
       )
     }
   }
+  for stmt in body.body {
+    self.collect_mir_sret_scratch_stmt(stmt)
+  }
+  if self.sret_scratch_size > 0 {
+    self.sret_scratch_offset = self.alloc_local(
+      "__kimicc_mir_sret_scratch",
+      Aligned(Array(UChar, self.sret_scratch_size), self.sret_scratch_align),
+    )
+  }
   offsets
+}
+
+///|
+fn Codegen::collect_mir_sret_scratch_value(
+  self : Codegen,
+  value : @mir.MirValue,
+) -> Unit {
+  match value {
+    MirConst(_, _)
+    | MirLocal(_)
+    | MirAddrLocal(_)
+    | MirAddrGlobal(_, _)
+    | MirFuncAddr(_, _)
+    | MirStringAddr(_) => ()
+    MirElemAddr(base, index, _) => {
+      self.collect_mir_sret_scratch_value(base)
+      self.collect_mir_sret_scratch_value(index)
+    }
+    MirOffsetAddr(base, _, _) | MirLoad(base, _) | MirUnary(_, base, _) =>
+      self.collect_mir_sret_scratch_value(base)
+    MirBinary(_, lhs, rhs, _) | MirStore(lhs, rhs, _) => {
+      self.collect_mir_sret_scratch_value(lhs)
+      self.collect_mir_sret_scratch_value(rhs)
+    }
+    MirCast(_, inner)
+    | MirAggregateArg(inner, _)
+    | MirVaArg(inner, _)
+    | MirVaArgAddr(inner, _) => self.collect_mir_sret_scratch_value(inner)
+    MirCall(_, args, _) => {
+      if self.is_memory_aggregate(value.ty()) {
+        let size = self.type_size(value.ty())
+        if size > self.sret_scratch_size {
+          self.sret_scratch_size = size
+        }
+        let align = self.type_align(value.ty())
+        if align > self.sret_scratch_align {
+          self.sret_scratch_align = align
+        }
+      }
+      for arg in args {
+        self.collect_mir_sret_scratch_value(arg)
+      }
+    }
+    MirIndirectCall(callee, args, _) => {
+      if self.is_memory_aggregate(value.ty()) {
+        let size = self.type_size(value.ty())
+        if size > self.sret_scratch_size {
+          self.sret_scratch_size = size
+        }
+        let align = self.type_align(value.ty())
+        if align > self.sret_scratch_align {
+          self.sret_scratch_align = align
+        }
+      }
+      self.collect_mir_sret_scratch_value(callee)
+      for arg in args {
+        self.collect_mir_sret_scratch_value(arg)
+      }
+    }
+    MirAssignLocal(_, rhs) | MirPostUpdateLocal(_, _, rhs, _) =>
+      self.collect_mir_sret_scratch_value(rhs)
+    MirPreUpdateMemory(ptr, _, rhs, _) | MirPostUpdateMemory(ptr, _, rhs, _) => {
+      self.collect_mir_sret_scratch_value(ptr)
+      self.collect_mir_sret_scratch_value(rhs)
+    }
+    MirTernary(cond, then_, else_, _) => {
+      self.collect_mir_sret_scratch_value(cond)
+      self.collect_mir_sret_scratch_value(then_)
+      self.collect_mir_sret_scratch_value(else_)
+    }
+  }
+}
+
+///|
+fn Codegen::collect_mir_sret_scratch_stmt(
+  self : Codegen,
+  stmt : @mir.MirStmt,
+) -> Unit {
+  match stmt {
+    MirDeclare(_, init) =>
+      match init {
+        Some(value) => self.collect_mir_sret_scratch_value(value)
+        None => ()
+      }
+    MirExprStmt(value) => self.collect_mir_sret_scratch_value(value)
+    MirReturn(value) =>
+      match value {
+        Some(value) => self.collect_mir_sret_scratch_value(value)
+        None => ()
+      }
+    MirIf(cond, then_, else_) => {
+      self.collect_mir_sret_scratch_value(cond)
+      for nested in then_ {
+        self.collect_mir_sret_scratch_stmt(nested)
+      }
+      for nested in else_ {
+        self.collect_mir_sret_scratch_stmt(nested)
+      }
+    }
+    MirWhile(cond, body) | MirDoWhile(cond, body) => {
+      self.collect_mir_sret_scratch_value(cond)
+      for nested in body {
+        self.collect_mir_sret_scratch_stmt(nested)
+      }
+    }
+    MirFor(init, cond, inc, body) => {
+      for nested in init {
+        self.collect_mir_sret_scratch_stmt(nested)
+      }
+      self.collect_mir_sret_scratch_value(cond)
+      match inc {
+        Some(value) => self.collect_mir_sret_scratch_value(value)
+        None => ()
+      }
+      for nested in body {
+        self.collect_mir_sret_scratch_stmt(nested)
+      }
+    }
+    MirSwitch(control, _, body) => {
+      self.collect_mir_sret_scratch_value(control)
+      for nested in body {
+        self.collect_mir_sret_scratch_stmt(nested)
+      }
+    }
+    MirBlock(stmts) =>
+      for nested in stmts {
+        self.collect_mir_sret_scratch_stmt(nested)
+      }
+    MirLabel(_) | MirGoto(_) | MirBreak | MirContinue => ()
+  }
 }
 
 ///|
@@ -1788,34 +1905,81 @@ fn Codegen::is_register_aggregate(self : Codegen, ty : @ctype.Type) -> Bool {
 }
 
 ///|
+fn Codegen::is_memory_aggregate(self : Codegen, ty : @ctype.Type) -> Bool {
+  match peel_aligned_type(ty) {
+    Struct(_) | Union(_) => self.type_size(ty) > 16
+    _ => false
+  }
+}
+
+///|
+fn Codegen::darwin_hfa_parts(
+  self : Codegen,
+  ty : @ctype.Type,
+) -> (@ctype.Type, Int)? {
+  match peel_aligned_type(ty) {
+    Float => Some((@ctype.Type::Float, 1))
+    Double | LongDouble => Some((@ctype.Type::Double, 1))
+    Array(elem, len) =>
+      match self.darwin_hfa_parts(elem) {
+        Some((base, count)) => {
+          let total = count * len
+          if total > 0 && total <= 4 {
+            Some((base, total))
+          } else {
+            None
+          }
+        }
+        None => None
+      }
+    Struct(name) | Union(name) => {
+      let layout = match self.mir_aggregate_layout(name) {
+        Some(layout) => layout
+        None => return None
+      }
+      if layout.fields.length() == 0 {
+        return None
+      }
+      let mut fp_ty : @ctype.Type? = None
+      let mut total = 0
+      for field in layout.fields {
+        if field.bit_width is Some(_) {
+          return None
+        }
+        let (field_base, field_count) = match self.darwin_hfa_parts(field.ty) {
+          Some(parts) => parts
+          None => return None
+        }
+        match fp_ty {
+          Some(seen) => if seen != field_base { return None }
+          None => fp_ty = Some(field_base)
+        }
+        if layout.is_union {
+          if field_count > total {
+            total = field_count
+          }
+        } else {
+          total += field_count
+        }
+      }
+      match fp_ty {
+        Some(base) =>
+          if total > 0 && total <= 4 {
+            Some((base, total))
+          } else {
+            None
+          }
+        None => None
+      }
+    }
+    Atomic(inner) | Aligned(inner, _) => self.darwin_hfa_parts(inner)
+    _ => None
+  }
+}
+
+///|
 fn Codegen::is_hfa_aggregate(self : Codegen, ty : @ctype.Type) -> Bool {
-  let name = match peel_aligned_type(ty) {
-    Struct(name) => name
-    _ => return false
-  }
-  let layout = match self.mir_aggregate_layout(name) {
-    Some(layout) => layout
-    None => return false
-  }
-  if layout.fields.length() == 0 || layout.fields.length() > 4 {
-    return false
-  }
-  let mut fp_ty : @ctype.Type? = None
-  for field in layout.fields {
-    if field.bit_width is Some(_) {
-      return false
-    }
-    let field_ty = match peel_aligned_type(field.ty) {
-      Float => @ctype.Type::Float
-      Double | LongDouble => @ctype.Type::Double
-      _ => return false
-    }
-    match fp_ty {
-      Some(seen) => if seen != field_ty { return false }
-      None => fp_ty = Some(field_ty)
-    }
-  }
-  true
+  self.darwin_hfa_parts(ty) is Some(_)
 }
 
 ///|
@@ -1923,6 +2087,97 @@ fn Codegen::emit_store_register_aggregate_return_to_x9(
 }
 
 ///|
+fn Codegen::emit_copy_memory_aggregate_from_x11_to_x10(
+  self : Codegen,
+  ty : @ctype.Type,
+) -> Unit {
+  let mut offset = 0
+  let mut remaining = self.type_size(ty)
+  while remaining > 0 {
+    let chunk = if remaining >= 8 {
+      8
+    } else if remaining >= 4 {
+      4
+    } else if remaining >= 2 {
+      2
+    } else {
+      1
+    }
+    let src = mir_body_codegen_arm_addr_ref("x11", offset)
+    let dst = mir_body_codegen_arm_addr_ref("x10", offset)
+    match chunk {
+      8 => {
+        self.emit("\tldr\tx12, " + src)
+        self.emit("\tstr\tx12, " + dst)
+      }
+      4 => {
+        self.emit("\tldr\tw12, " + src)
+        self.emit("\tstr\tw12, " + dst)
+      }
+      2 => {
+        self.emit("\tldrh\tw12, " + src)
+        self.emit("\tstrh\tw12, " + dst)
+      }
+      _ => {
+        self.emit("\tldrb\tw12, " + src)
+        self.emit("\tstrb\tw12, " + dst)
+      }
+    }
+    offset += chunk
+    remaining -= chunk
+  }
+}
+
+///|
+fn Codegen::sret_result_offset(self : Codegen, ret_ty : @ctype.Type) -> Int {
+  if self.pending_sret_offset >= 0 {
+    self.pending_sret_offset
+  } else if self.is_memory_aggregate(ret_ty) {
+    if self.sret_scratch_offset < 0 {
+      abort("Darwin ARM64 MIR backend missing aggregate return scratch storage")
+    }
+    self.sret_scratch_offset
+  } else {
+    -1
+  }
+}
+
+///|
+fn Codegen::emit_call_sret_addr(
+  self : Codegen,
+  ret_ty : @ctype.Type,
+  frame_size : Int,
+) -> Unit {
+  let offset = self.sret_result_offset(ret_ty)
+  if offset >= 0 {
+    self.emit_local_addr(offset, frame_size)
+    self.emit("\tmov\tx8, x9")
+  }
+}
+
+///|
+fn Codegen::emit_sret_result_addr(
+  self : Codegen,
+  ret_ty : @ctype.Type,
+  frame_size : Int,
+) -> Unit {
+  let offset = self.sret_result_offset(ret_ty)
+  if offset < 0 {
+    abort("Darwin ARM64 MIR backend missing aggregate return result storage")
+  }
+  self.emit_local_addr(offset, frame_size)
+}
+
+///|
+fn Codegen::emit_sret_dest_addr(self : Codegen, frame_size : Int) -> Unit {
+  if self.sret_dest_offset < 0 {
+    abort("Darwin ARM64 MIR backend missing aggregate return destination")
+  }
+  self.emit_local_addr(self.sret_dest_offset, frame_size)
+  self.emit_load_typed("x9", "x9", Pointer(Void))
+}
+
+///|
 fn Codegen::gen_mir_aggregate_return_addr(
   self : Codegen,
   value : @mir.MirValue,
@@ -1933,6 +2188,8 @@ fn Codegen::gen_mir_aggregate_return_addr(
     MirLocal(binding) => self.emit_local_addr(offsets[binding.id], frame_size)
     MirAggregateArg(addr, _) => self.gen_mir_value(addr, offsets, frame_size)
     MirLoad(ptr, _) => self.gen_mir_value(ptr, offsets, frame_size)
+    MirCall(_, _, _) | MirIndirectCall(_, _, _) =>
+      self.gen_mir_value(value, offsets, frame_size)
     _ => abort("unsupported Darwin ARM64 MIR aggregate return source")
   }
 }
@@ -2034,6 +2291,14 @@ fn Codegen::gen_mir_value(
         }
         self.emit("\tldr\tx9, [sp], #16")
         self.emit_store_register_aggregate_return_to_x9(ty)
+      } else if self.is_memory_aggregate(ty) {
+        self.gen_mir_value(ptr, offsets, frame_size)
+        self.emit("\tstr\tx9, [sp, #-16]!")
+        self.gen_mir_aggregate_return_addr(rhs, offsets, frame_size)
+        self.emit("\tmov\tx11, x9")
+        self.emit("\tldr\tx10, [sp], #16")
+        self.emit_copy_memory_aggregate_from_x11_to_x10(ty)
+        self.emit("\tmov\tx9, x10")
       } else {
         self.gen_mir_value(ptr, offsets, frame_size)
         self.emit("\tstr\tx9, [sp, #-16]!")
@@ -2314,6 +2579,7 @@ fn Codegen::gen_mir_value(
           }
           dst_slot += arg_slot_counts[i]
         }
+        self.emit_call_sret_addr(ty, frame_size)
         self.emit("\tbl\t_" + mir_body_codegen_direct_call_symbol(name))
         self.emit(
           "\tadd\tsp, sp, #" +
@@ -2392,12 +2658,15 @@ fn Codegen::gen_mir_value(
             )
           }
         }
+        self.emit_call_sret_addr(ty, frame_size)
         self.emit("\tbl\t_" + mir_body_codegen_direct_call_symbol(name))
         if raw_area + stack_area > 0 {
           self.emit("\tadd\tsp, sp, #" + (raw_area + stack_area).to_string())
         }
       }
-      if mir_body_codegen_abi_fp_type(ty) {
+      if self.is_memory_aggregate(ty) {
+        self.emit_sret_result_addr(ty, frame_size)
+      } else if mir_body_codegen_abi_fp_type(ty) {
         self.emit_mir_fp_return_to_x9(ty)
       } else {
         self.emit("\tmov\tx9, x0")
@@ -2482,11 +2751,14 @@ fn Codegen::gen_mir_value(
         (stack_area + args.length() * 16).to_string() +
         "]",
       )
+      self.emit_call_sret_addr(ty, frame_size)
       self.emit("\tblr\tx15")
       if raw_area + stack_area > 0 {
         self.emit("\tadd\tsp, sp, #" + (raw_area + stack_area).to_string())
       }
-      if mir_body_codegen_abi_fp_type(ty) {
+      if self.is_memory_aggregate(ty) {
+        self.emit_sret_result_addr(ty, frame_size)
+      } else if mir_body_codegen_abi_fp_type(ty) {
         self.emit_mir_fp_return_to_x9(ty)
       } else {
         self.emit("\tmov\tx9, x0")
@@ -2818,6 +3090,22 @@ fn Codegen::gen_mir_stmt(
               }
               self.emit_local_addr(offsets[binding.id], frame_size)
               self.emit_store_register_aggregate_return_to_x9(binding.ty)
+            } else if self.is_memory_aggregate(binding.ty) {
+              match value {
+                MirCall(_, _, _) | MirIndirectCall(_, _, _) => {
+                  let saved_pending = self.pending_sret_offset
+                  self.pending_sret_offset = offsets[binding.id]
+                  self.gen_mir_value(value, offsets, frame_size)
+                  self.pending_sret_offset = saved_pending
+                }
+                _ => {
+                  self.gen_mir_aggregate_return_addr(value, offsets, frame_size)
+                  self.emit("\tmov\tx11, x9")
+                  self.emit_local_addr(offsets[binding.id], frame_size)
+                  self.emit("\tmov\tx10, x9")
+                  self.emit_copy_memory_aggregate_from_x11_to_x10(binding.ty)
+                }
+              }
             } else {
               self.gen_mir_value(value, offsets, frame_size)
               self.emit_numeric_conversion(value.ty(), binding.ty)
@@ -2846,6 +3134,13 @@ fn Codegen::gen_mir_stmt(
                 self.emit_load_register_aggregate_return_from_x9(ret_ty)
               }
             }
+          } else if self.is_memory_aggregate(ret_ty) {
+            self.gen_mir_aggregate_return_addr(value, offsets, frame_size)
+            self.emit("\tmov\tx11, x9")
+            self.emit_sret_dest_addr(frame_size)
+            self.emit("\tmov\tx10, x9")
+            self.emit_copy_memory_aggregate_from_x11_to_x10(ret_ty)
+            self.emit("\tmov\tx0, x10")
           } else {
             self.gen_mir_value(value, offsets, frame_size)
             self.emit_numeric_conversion(value.ty(), ret_ty)
@@ -3004,11 +3299,21 @@ fn Codegen::gen_mir_func(
   self.defined_labels = {}
   self.fp_literals = []
   self.func_name = decl.name
+  self.sret_dest_offset = -1
   self.sret_scratch_offset = -1
+  self.sret_scratch_size = 0
+  self.sret_scratch_align = 1
   self.pending_sret_offset = -1
   self.break_label = None
   self.continue_label = None
   let offsets = self.mir_body_offsets(body)
+  let has_sret = self.is_memory_aggregate(decl.ret)
+  if has_sret {
+    self.sret_dest_offset = self.alloc_local(
+      "__kimicc_mir_sret_dest",
+      Pointer(Void),
+    )
+  }
   let frame_size = (self.stack_size + 15) / 16 * 16
   if !decl.is_static && !decl.is_inline {
     if decl.is_weak {
@@ -3029,6 +3334,9 @@ fn Codegen::gen_mir_func(
       self.emit_load_int("x16", frame_size.to_int64())
       self.emit("\tsub\tsp, sp, x16")
     }
+  }
+  if self.sret_dest_offset >= 0 {
+    self.emit_store_local("x8", self.sret_dest_offset, frame_size)
   }
   let mut int_arg_index = 0
   let mut fp_arg_index = 0
