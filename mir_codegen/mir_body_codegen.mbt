@@ -126,7 +126,7 @@ fn mir_body_codegen_variadic_args_supported(
       }
     } else if mir_body_codegen_abi_int_type(param) {
       int_count += 1
-      if int_count > int_arg_limit {
+      if int_count > int_arg_limit && i < named_count {
         return false
       }
     } else {
@@ -1542,13 +1542,15 @@ fn Codegen::gen_mir_value(
             }
             fp_arg_index += 1
           } else {
-            self.emit(
-              "\tldr\tx" +
-              int_arg_index.to_string() +
-              ", [sp, #" +
-              (variadic_area + (source_indexes.length() - 1 - i) * 16).to_string() +
-              "]",
-            )
+            if int_arg_index < 8 {
+              self.emit(
+                "\tldr\tx" +
+                int_arg_index.to_string() +
+                ", [sp, #" +
+                (variadic_area + (source_indexes.length() - 1 - i) * 16).to_string() +
+                "]",
+              )
+            }
             int_arg_index += 1
           }
         }
@@ -2657,9 +2659,15 @@ fn X64Codegen::gen_mir_value(
             }
             fp_arg_index += 1
           } else {
-            int_arg_indexes.push(int_arg_index)
+            if int_arg_index < arg_regs.length() {
+              int_arg_indexes.push(int_arg_index)
+              stack_arg_indexes.push(-1)
+            } else {
+              int_arg_indexes.push(-1)
+              stack_arg_indexes.push(stack_arg_index)
+              stack_arg_index += 1
+            }
             fp_arg_indexes.push(-1)
-            stack_arg_indexes.push(-1)
             int_arg_index += 1
           }
           self.gen_mir_value(arg, offsets)
@@ -2677,28 +2685,36 @@ fn X64Codegen::gen_mir_value(
         }
         call_stack_cleanup = raw_area + stack_area
         for i in 0..<source_indexes.length() {
-          if mir_body_codegen_abi_fp_type(expected_types[i]) &&
-            stack_arg_indexes[i] >= 0 {
-            let suffix = x64_fp_suffix(expected_types[i])
-            let size = if suffix == "ss" { "DWORD" } else { "QWORD" }
+          if stack_arg_indexes[i] >= 0 {
             let raw_offset = stack_area + (source_indexes.length() - 1 - i) * 16
-            self.emit(
-              "\tmov" +
-              suffix +
-              "\txmm0, " +
-              size +
-              " PTR " +
-              x64_rsp_ref(raw_offset),
-            )
-            self.emit(
-              "\tmov" +
-              suffix +
-              "\t" +
-              size +
-              " PTR " +
-              x64_rsp_ref(stack_arg_indexes[i] * 8) +
-              ", xmm0",
-            )
+            if mir_body_codegen_abi_fp_type(expected_types[i]) {
+              let suffix = x64_fp_suffix(expected_types[i])
+              let size = if suffix == "ss" { "DWORD" } else { "QWORD" }
+              self.emit(
+                "\tmov" +
+                suffix +
+                "\txmm0, " +
+                size +
+                " PTR " +
+                x64_rsp_ref(raw_offset),
+              )
+              self.emit(
+                "\tmov" +
+                suffix +
+                "\t" +
+                size +
+                " PTR " +
+                x64_rsp_ref(stack_arg_indexes[i] * 8) +
+                ", xmm0",
+              )
+            } else {
+              self.emit("\tmov\trax, QWORD PTR " + x64_rsp_ref(raw_offset))
+              self.emit(
+                "\tmov\tQWORD PTR " +
+                x64_rsp_ref(stack_arg_indexes[i] * 8) +
+                ", rax",
+              )
+            }
           }
         }
         for i in 0..<source_indexes.length() {
