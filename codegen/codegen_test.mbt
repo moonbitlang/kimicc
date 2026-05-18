@@ -945,12 +945,32 @@ test "generate darwin arm64 strict MIR ignored unsupported local initializer sid
 }
 
 ///|
-test "strict MIR still rejects unsupported floating comparisons" {
-  let source = "int main(void) { double d = 1.0; return d > 0.0; }"
+test "generate darwin arm64 strict MIR floating comparisons" {
+  let source =
+    #|int main(void) {
+    #|  double x = 1.5;
+    #|  double y = 2.5;
+    #|  return (x < y) + (x != y) + (y > 2.0) + (x == 1.5) + (x <= y) + (y >= x);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tfcmp\td9, d10"), content="true")
+      inspect(assembly.contains("\tcset\tx9, mi"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "strict MIR still rejects unsupported floating arithmetic" {
+  let source = "int main(void) { double d = 1.0; return (int)(d + 1.0); }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
     Ok(_) =>
-      abort("expected strict MIR unsupported floating comparison rejection")
+      abort("expected strict MIR unsupported floating arithmetic rejection")
     Err(err) =>
       inspect(err.contains("unsupported MIR body codegen"), content="true")
   }
@@ -2319,6 +2339,29 @@ test "generate linux amd64 strict MIR lowers overflow builtins" {
         assembly.contains("call\t__builtin_umulll_overflow"),
         content="false",
       )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR floating comparisons" {
+  let source =
+    #|int main(void) {
+    #|  double x = 1.5;
+    #|  double y = 2.5;
+    #|  return (x < y) + (x != y) + (y > 2.0) + (x == 1.5) + (x <= y) + (y >= x);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tucomisd\txmm0, xmm1"), content="true")
+      inspect(assembly.contains("\tsetb\tal"), content="true")
     }
     Err(err) => abort(err)
   }

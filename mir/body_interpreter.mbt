@@ -108,6 +108,54 @@ fn Program::runtime_cast_body_scalar(
 }
 
 ///|
+fn Program::runtime_body_double(
+  self : Program,
+  bits : Int64,
+  ty : @ctype.Type,
+) -> Double? {
+  let core = self.core_type(ty)
+  if core == Double {
+    Some(bits.reinterpret_as_double())
+  } else if core.is_integer() {
+    Some(self.runtime_cast_int(bits, core).to_double())
+  } else {
+    None
+  }
+}
+
+///|
+fn BodyInterpreter::eval_fp_compare_values(
+  self : BodyInterpreter,
+  op : String,
+  left : Int64,
+  left_ty : @ctype.Type,
+  right : Int64,
+  right_ty : @ctype.Type,
+) -> Int64? {
+  if self.program.core_type(left_ty) != Double &&
+    self.program.core_type(right_ty) != Double {
+    return None
+  }
+  match
+    (
+      self.program.runtime_body_double(left, left_ty),
+      self.program.runtime_body_double(right, right_ty),
+    ) {
+    (Some(left), Some(right)) =>
+      match op {
+        "==" => Some(if left == right { 1L } else { 0L })
+        "!=" => Some(if left != right { 1L } else { 0L })
+        "<" => Some(if left < right { 1L } else { 0L })
+        ">" => Some(if left > right { 1L } else { 0L })
+        "<=" => Some(if left <= right { 1L } else { 0L })
+        ">=" => Some(if left >= right { 1L } else { 0L })
+        _ => None
+      }
+    _ => None
+  }
+}
+
+///|
 fn BodyInterpreter::new(program : Program) -> BodyInterpreter {
   let globals : Map[String, Int64] = {}
   let global_memory : Map[Int64, Int64] = {}
@@ -459,6 +507,10 @@ fn BodyInterpreter::eval_binary_values(
   right_ty : @ctype.Type,
 ) -> Int64 {
   match self.eval_pointer_binary_values(op, left, left_ty, right, right_ty) {
+    Some(value) => return value
+    None => ()
+  }
+  match self.eval_fp_compare_values(op, left, left_ty, right, right_ty) {
     Some(value) => return value
     None => ()
   }

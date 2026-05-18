@@ -121,11 +121,22 @@ test "strict MIR codegen executes floating local casts to int" {
 }
 
 ///|
+test "strict MIR codegen executes floating local comparisons" {
+  let source =
+    #|int main(void) {
+    #|  double x = 1.5;
+    #|  double y = 2.5;
+    #|  return (x < y) + (x != y) + (y > 2.0) + (x == 1.5) + (x <= y) + (y >= x);
+    #|}
+  assert_eq(run_source_strict_mir(source), 6)
+}
+
+///|
 test "strict MIR codegen rejects unsupported floating body instead of using AST fallback" {
   let source =
     #|int main(void) {
     #|  double x = 1.5;
-    #|  return x > 1.0;
+    #|  return (int)(x + 1.0);
     #|}
   assert_true(
     strict_mir_codegen_error(source).contains("unsupported MIR body codegen"),
