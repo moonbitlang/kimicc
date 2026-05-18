@@ -567,6 +567,90 @@ test "strict MIR codegen passes indirect stack aggregate parameters to clang cal
 }
 
 ///|
+test "strict MIR codegen executes large aggregate parameters" {
+  let source =
+    #|struct BigArg { long a; long b; long c; long d; };
+    #|struct BigArg make_big(long a, long b, long c, long d) {
+    #|  struct BigArg value = { a, b, c, d };
+    #|  return value;
+    #|}
+    #|int observe_big(struct BigArg value) {
+    #|  value.a = 20;
+    #|  return (int)(value.a + value.d);
+    #|}
+    #|int observe_big_stack(long a0, long a1, long a2, long a3, long a4, long a5, long a6, long a7, struct BigArg value) {
+    #|  value.b = 30;
+    #|  return (int)(a0 + a1 + a2 + a3 + a4 + a5 + a6 + a7 + value.b + value.d);
+    #|}
+    #|int main(void) {
+    #|  struct BigArg value = { 1, 2, 3, 4 };
+    #|  int total = observe_big(value) + observe_big(make_big(1, 2, 3, 4)) + observe_big_stack(1, 2, 3, 4, 5, 6, 7, 8, value);
+    #|  if (value.a != 1) return 3;
+    #|  if (value.b != 2) return 4;
+    #|  return total;
+    #|}
+  assert_eq(run_source_strict_mir(source), 118)
+}
+
+///|
+test "strict MIR codegen receives large aggregate parameters from clang callers" {
+  let callee =
+    #|struct BigArg { long a; long b; long c; long d; };
+    #|int observe_big(struct BigArg value) {
+    #|  value.a = 20;
+    #|  return (int)(value.a + value.d);
+    #|}
+    #|int observe_big_stack(long a0, long a1, long a2, long a3, long a4, long a5, long a6, long a7, struct BigArg value) {
+    #|  value.b = 30;
+    #|  return (int)(a0 + a1 + a2 + a3 + a4 + a5 + a6 + a7 + value.b + value.d);
+    #|}
+  let driver =
+    #|struct BigArg { long a; long b; long c; long d; };
+    #|int observe_big(struct BigArg value);
+    #|int observe_big_stack(long a0, long a1, long a2, long a3, long a4, long a5, long a6, long a7, struct BigArg value);
+    #|int main(void) {
+    #|  struct BigArg value = { 1, 2, 3, 4 };
+    #|  int total = observe_big(value) + observe_big_stack(1, 2, 3, 4, 5, 6, 7, 8, value);
+    #|  if (value.a != 1) return 3;
+    #|  if (value.b != 2) return 4;
+    #|  return total;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 94)
+}
+
+///|
+test "strict MIR codegen passes large aggregate parameters to clang callees" {
+  let caller =
+    #|struct BigArg { long a; long b; long c; long d; };
+    #|struct BigArg make_big(long a, long b, long c, long d) {
+    #|  struct BigArg value = { a, b, c, d };
+    #|  return value;
+    #|}
+    #|int clang_observe_big(struct BigArg value);
+    #|int clang_observe_big_stack(long a0, long a1, long a2, long a3, long a4, long a5, long a6, long a7, struct BigArg value);
+    #|int main(void) {
+    #|  struct BigArg value = { 1, 2, 3, 4 };
+    #|  int (*fp_big)(struct BigArg) = clang_observe_big;
+    #|  int (*fp_stack)(long, long, long, long, long, long, long, long, struct BigArg) = clang_observe_big_stack;
+    #|  int total = clang_observe_big(value) + fp_big(make_big(1, 2, 3, 4)) + fp_stack(1, 2, 3, 4, 5, 6, 7, 8, value);
+    #|  if (value.a != 1) return 3;
+    #|  if (value.b != 2) return 4;
+    #|  return total;
+    #|}
+  let callee =
+    #|struct BigArg { long a; long b; long c; long d; };
+    #|int clang_observe_big(struct BigArg value) {
+    #|  value.a = 20;
+    #|  return (int)(value.a + value.d);
+    #|}
+    #|int clang_observe_big_stack(long a0, long a1, long a2, long a3, long a4, long a5, long a6, long a7, struct BigArg value) {
+    #|  value.b = 30;
+    #|  return (int)(a0 + a1 + a2 + a3 + a4 + a5 + a6 + a7 + value.b + value.d);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 118)
+}
+
+///|
 test "strict MIR codegen executes memory aggregate call results" {
   let source =
     #|struct Big { long a; long b; long c; };
