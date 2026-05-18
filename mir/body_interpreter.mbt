@@ -89,6 +89,25 @@ fn mir_body_global_array_init(
 }
 
 ///|
+fn Program::runtime_cast_body_scalar(
+  self : Program,
+  bits : Int64,
+  src_ty : @ctype.Type,
+  dst_ty : @ctype.Type,
+) -> Int64 {
+  let src = self.core_type(src_ty)
+  let dst = self.core_type(dst_ty)
+  if self.is_floating_type(src) && dst.is_integer() {
+    return self.runtime_cast_int(bits.reinterpret_as_double().to_int64(), dst)
+  }
+  if src.is_integer() && self.is_floating_type(dst) {
+    let value = self.runtime_cast_int(bits, src).to_double()
+    return value.reinterpret_as_int64()
+  }
+  self.runtime_cast_int(bits, dst)
+}
+
+///|
 fn BodyInterpreter::new(program : Program) -> BodyInterpreter {
   let globals : Map[String, Int64] = {}
   let global_memory : Map[Int64, Int64] = {}
@@ -683,7 +702,11 @@ fn BodyInterpreter::eval_value(
         }
       }
     MirCast(ty, inner) =>
-      self.program.runtime_cast_int(self.eval_value(frame, inner), ty)
+      self.program.runtime_cast_body_scalar(
+        self.eval_value(frame, inner),
+        inner.ty(),
+        ty,
+      )
     MirCall(name, args, ty) => {
       if name == "__sync_synchronize" &&
         args.length() == 0 &&

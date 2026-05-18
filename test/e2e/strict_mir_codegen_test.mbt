@@ -110,11 +110,24 @@ test "strict MIR codegen executes direct array decay in pointer arithmetic" {
 }
 
 ///|
+test "strict MIR codegen executes floating local casts to int" {
+  let source =
+    #|int main(void) {
+    #|  double x = 1.75;
+    #|  double y = 2.25;
+    #|  return (int)x + (int)y;
+    #|}
+  assert_eq(run_source_strict_mir(source), 3)
+}
+
+///|
 test "strict MIR codegen rejects unsupported floating body instead of using AST fallback" {
   let source =
     #|int main(void) {
     #|  double x = 1.5;
     #|  return x > 1.0;
     #|}
-  assert_true(strict_mir_codegen_error(source).contains("missing MIR body"))
+  assert_true(
+    strict_mir_codegen_error(source).contains("unsupported MIR body codegen"),
+  )
 }

@@ -2973,6 +2973,17 @@ test "mir interpreter evaluates ignored unsupported local initializer side effec
 }
 
 ///|
+test "mir body interpreter handles floating local casts to int" {
+  let source =
+    #|int main(void) {
+    #|  double x = 1.75;
+    #|  double y = 2.25;
+    #|  return (int)x + (int)y;
+    #|}
+  expect_body_interp(source, 3L)
+}
+
+///|
 test "mir interpreter reports unsupported initialized local reads" {
   let source = "int main(void) { double d = 0.0; return (int)d; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
