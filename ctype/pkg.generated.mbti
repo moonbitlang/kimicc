@@ -1,0 +1,53 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/kimicc/ctype"
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) enum OffsetDesignator {
+  OffsetField(String)
+  OffsetIndex(Int64)
+} derive(Eq)
+
+pub(all) enum Type {
+  Void
+  Bool
+  SChar
+  UChar
+  SShort
+  UShort
+  SInt
+  UInt
+  SLong
+  ULong
+  SLongLong
+  ULongLong
+  SInt128
+  UInt128
+  Float
+  Float16
+  Float128
+  Double
+  LongDouble
+  Struct(String)
+  Union(String)
+  FuncPtr(Type, Array[Type], Bool)
+  Pointer(Type)
+  Array(Type, Int)
+  Atomic(Type)
+  Aligned(Type, Int)
+} derive(Eq)
+pub fn Type::align(Self) -> Int
+pub fn Type::is_floating(Self) -> Bool
+pub fn Type::is_integer(Self) -> Bool
+pub fn Type::is_signed(Self) -> Bool
+pub fn Type::size(Self) -> Int
+pub fn Type::to_unsigned(Self) -> Self
+pub impl Show for Type
+
+// Type aliases
+
+// Traits
+

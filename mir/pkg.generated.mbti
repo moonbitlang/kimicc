@@ -2,6 +2,7 @@
 package "bobzhang/kimicc/mir"
 
 import {
+  "bobzhang/kimicc/ctype",
   "bobzhang/kimicc/parser",
   "bobzhang/kimicc/target",
 }
@@ -28,7 +29,7 @@ pub(all) struct AggregateLayout {
 
 pub(all) struct FieldLayout {
   name : String
-  ty : @parser.Type
+  ty : @ctype.Type
   offset : Int
   size : Int
   bit_offset : Int
@@ -36,8 +37,8 @@ pub(all) struct FieldLayout {
 } derive(Eq)
 
 pub(all) struct FuncSig {
-  ret : @parser.Type
-  params : Array[@parser.Type]
+  ret : @ctype.Type
+  params : Array[@ctype.Type]
   variadic : Bool
   defined : Bool
   weak : Bool
@@ -52,20 +53,20 @@ pub(all) struct MirAggregateDecl {
 
 pub(all) struct MirAggregateField {
   name : String
-  ty : @parser.Type
+  ty : @ctype.Type
   bit_width : Int?
 } derive(Eq)
 
 pub(all) struct MirFuncBody {
   name : String
-  ret : @parser.Type
+  ret : @ctype.Type
   params : Array[MirLocal]
   locals : Array[MirLocal]
   body : Array[MirStmt]
 } derive(Eq)
 
 pub(all) struct MirFuncDecl {
-  ret : @parser.Type
+  ret : @ctype.Type
   name : String
   params : Array[MirParam]
   variadic : Bool
@@ -81,7 +82,7 @@ pub(all) struct MirFuncDecl {
 } derive(Eq)
 
 pub(all) struct MirGlobalDecl {
-  ty : @parser.Type
+  ty : @ctype.Type
   name : String
   init : MirGlobalInit?
   has_init : Bool
@@ -108,7 +109,7 @@ pub(all) enum MirGlobalInit {
 pub(all) struct MirLocal {
   id : Int
   name : String
-  ty : @parser.Type
+  ty : @ctype.Type
 } derive(Eq)
 
 pub(all) struct MirModule {
@@ -122,15 +123,15 @@ pub(all) struct MirModule {
   layouts : Map[String, AggregateLayout]
   bodies : Map[String, MirFuncBody]
 }
-pub fn MirModule::field_layout(Self, @parser.Type, String) -> FieldLayout?
-pub fn MirModule::global_expr_type(Self, @parser.Expr) -> @parser.Type
-pub fn MirModule::offset_of_path(Self, @parser.Type, Array[@parser.OffsetDesignator]) -> Int?
-pub fn MirModule::type_align(Self, @parser.Type) -> Int
-pub fn MirModule::type_size(Self, @parser.Type) -> Int
+pub fn MirModule::field_layout(Self, @ctype.Type, String) -> FieldLayout?
+pub fn MirModule::global_expr_type(Self, @parser.Expr) -> @ctype.Type
+pub fn MirModule::offset_of_path(Self, @ctype.Type, Array[@ctype.OffsetDesignator]) -> Int?
+pub fn MirModule::type_align(Self, @ctype.Type) -> Int
+pub fn MirModule::type_size(Self, @ctype.Type) -> Int
 
 pub(all) struct MirParam {
   name : String
-  ty : @parser.Type
+  ty : @ctype.Type
 } derive(Eq)
 
 pub(all) enum MirStmt {
@@ -150,28 +151,28 @@ pub(all) enum MirStmt {
 } derive(Eq)
 
 pub(all) enum MirValue {
-  MirConst(Int64, @parser.Type)
+  MirConst(Int64, @ctype.Type)
   MirLocal(MirLocal)
   MirAddrLocal(MirLocal)
-  MirAddrGlobal(String, @parser.Type)
-  MirFuncAddr(String, @parser.Type)
+  MirAddrGlobal(String, @ctype.Type)
+  MirFuncAddr(String, @ctype.Type)
   MirStringAddr(String)
-  MirElemAddr(MirValue, MirValue, @parser.Type)
-  MirOffsetAddr(MirValue, Int, @parser.Type)
-  MirLoad(MirValue, @parser.Type)
-  MirUnary(String, MirValue, @parser.Type)
-  MirBinary(String, MirValue, MirValue, @parser.Type)
-  MirCast(@parser.Type, MirValue)
-  MirCall(String, Array[MirValue], @parser.Type)
-  MirIndirectCall(MirValue, Array[MirValue], @parser.Type)
+  MirElemAddr(MirValue, MirValue, @ctype.Type)
+  MirOffsetAddr(MirValue, Int, @ctype.Type)
+  MirLoad(MirValue, @ctype.Type)
+  MirUnary(String, MirValue, @ctype.Type)
+  MirBinary(String, MirValue, MirValue, @ctype.Type)
+  MirCast(@ctype.Type, MirValue)
+  MirCall(String, Array[MirValue], @ctype.Type)
+  MirIndirectCall(MirValue, Array[MirValue], @ctype.Type)
   MirAssignLocal(MirLocal, MirValue)
-  MirStore(MirValue, MirValue, @parser.Type)
-  MirPostUpdateLocal(MirLocal, String, MirValue, @parser.Type)
-  MirPreUpdateMemory(MirValue, String, MirValue, @parser.Type)
-  MirPostUpdateMemory(MirValue, String, MirValue, @parser.Type)
-  MirTernary(MirValue, MirValue, MirValue, @parser.Type)
+  MirStore(MirValue, MirValue, @ctype.Type)
+  MirPostUpdateLocal(MirLocal, String, MirValue, @ctype.Type)
+  MirPreUpdateMemory(MirValue, String, MirValue, @ctype.Type)
+  MirPostUpdateMemory(MirValue, String, MirValue, @ctype.Type)
+  MirTernary(MirValue, MirValue, MirValue, @ctype.Type)
 } derive(Eq)
-pub fn MirValue::ty(Self) -> @parser.Type
+pub fn MirValue::ty(Self) -> @ctype.Type
 
 pub(all) struct Program {
   target : @target.Target
@@ -185,20 +186,20 @@ pub(all) struct Program {
   layouts : Map[String, AggregateLayout]
   bodies : Map[String, MirFuncBody]
 }
-pub fn Program::expr_type(Self, @parser.Expr, Scope) -> @parser.Type
-pub fn Program::field_layout(Self, @parser.Type, String) -> FieldLayout?
+pub fn Program::expr_type(Self, @parser.Expr, Scope) -> @ctype.Type
+pub fn Program::field_layout(Self, @ctype.Type, String) -> FieldLayout?
 pub fn Program::fold_const(Self, @parser.Expr, Scope) -> Int64?
 pub fn Program::fold_float_const(Self, @parser.Expr, Scope) -> Double?
-pub fn Program::global_expr_type(Self, @parser.Expr) -> @parser.Type
+pub fn Program::global_expr_type(Self, @parser.Expr) -> @ctype.Type
 pub fn Program::interpret_body_i64(Self, String, Array[Int64]) -> Result[Int64, String]
 pub fn Program::interpret_i64(Self, String, Array[Int64]) -> Result[Int64, String]
-pub fn Program::offset_of_path(Self, @parser.Type, Array[@parser.OffsetDesignator]) -> Int?
+pub fn Program::offset_of_path(Self, @ctype.Type, Array[@ctype.OffsetDesignator]) -> Int?
 pub fn Program::to_module(Self) -> MirModule
-pub fn Program::type_align(Self, @parser.Type) -> Int
-pub fn Program::type_size(Self, @parser.Type) -> Int
+pub fn Program::type_align(Self, @ctype.Type) -> Int
+pub fn Program::type_size(Self, @ctype.Type) -> Int
 
 pub(all) struct Scope {
-  locals : Map[String, @parser.Type]
+  locals : Map[String, @ctype.Type]
   current_func : String
 } derive(Eq)
 pub fn Scope::empty() -> Self

@@ -12,7 +12,7 @@ priv enum ExecFlow {
 /// Integer-only execution frame used by the MIR compile-test interpreter.
 priv struct InterpFrame {
   locals : Map[String, Int64]
-  local_types : Map[String, @parser.Type]
+  local_types : Map[String, @ctype.Type]
   name : String
 }
 
@@ -38,8 +38,8 @@ priv struct Interpreter {
 ///|
 fn Program::switch_control_type(
   self : Program,
-  ty : @parser.Type,
-) -> @parser.Type {
+  ty : @ctype.Type,
+) -> @ctype.Type {
   match ty {
     Atomic(inner) | Aligned(inner, _) => self.switch_control_type(inner)
     Bool | SChar | UChar | SShort | UShort => SInt
@@ -48,7 +48,7 @@ fn Program::switch_control_type(
 }
 
 ///|
-fn Program::runtime_int_type(self : Program, ty : @parser.Type) -> Bool {
+fn Program::runtime_int_type(self : Program, ty : @ctype.Type) -> Bool {
   match self.core_type(ty) {
     Pointer(_) | FuncPtr(_, _, _) => true
     core => const_type_int_width(core) is Some(_)
@@ -59,7 +59,7 @@ fn Program::runtime_int_type(self : Program, ty : @parser.Type) -> Bool {
 fn Program::runtime_cast_int(
   self : Program,
   value : Int64,
-  ty : @parser.Type,
+  ty : @ctype.Type,
 ) -> Int64 {
   self.const_cast_int(self.const_int(value, ty), ty).bits
 }
@@ -213,7 +213,7 @@ fn Interpreter::global_string_pointer_initializer(
 fn Interpreter::eval_global_scalar_initializer(
   self : Interpreter,
   name : String,
-  ty : @parser.Type,
+  ty : @ctype.Type,
   expr : @parser.Expr,
 ) -> Int64 {
   match self.program.fold_const(expr, Scope::empty()) {
@@ -237,7 +237,7 @@ fn Interpreter::eval_global_scalar_initializer(
 }
 
 ///|
-fn global_char_array_length(ty : @parser.Type) -> Int? {
+fn global_char_array_length(ty : @ctype.Type) -> Int? {
   match ty {
     Array(SChar, length) | Array(UChar, length) => Some(length)
     _ => None
@@ -301,7 +301,7 @@ fn zero_byte_string(length : Int) -> String {
 fn Interpreter::init_global_string_array(
   self : Interpreter,
   name : String,
-  ty : @parser.Type,
+  ty : @ctype.Type,
   init : @parser.GlobalInit?,
 ) -> Unit {
   match global_char_array_length(ty) {
@@ -327,7 +327,7 @@ fn Interpreter::init_global_string_array(
 fn Interpreter::init_local_string_array(
   self : Interpreter,
   frame : InterpFrame,
-  ty : @parser.Type,
+  ty : @ctype.Type,
   name : String,
   init : @parser.Expr?,
 ) -> Bool {
@@ -435,7 +435,7 @@ fn Interpreter::var_type(
   self : Interpreter,
   frame : InterpFrame,
   name : String,
-) -> @parser.Type? {
+) -> @ctype.Type? {
   if frame.local_types.contains(name) {
     Some(frame.local_types[name])
   } else if self.program.globals.contains(name) {
@@ -573,9 +573,9 @@ fn Interpreter::eval_pointer_binary(
   self : Interpreter,
   op : String,
   left : Int64,
-  left_ty : @parser.Type,
+  left_ty : @ctype.Type,
   right : Int64,
-  right_ty : @parser.Type,
+  right_ty : @ctype.Type,
 ) -> Int64? {
   match self.program.pointer_element(left_ty) {
     Some(elem) =>
@@ -610,9 +610,9 @@ fn Interpreter::eval_binary_values(
   self : Interpreter,
   op : String,
   left : Int64,
-  left_ty : @parser.Type,
+  left_ty : @ctype.Type,
   right : Int64,
-  right_ty : @parser.Type,
+  right_ty : @ctype.Type,
 ) -> Int64 {
   match self.eval_pointer_binary(op, left, left_ty, right, right_ty) {
     Some(value) => return value
@@ -919,7 +919,7 @@ fn Interpreter::eval_builtin_abs(
   self : Interpreter,
   frame : InterpFrame,
   args : Array[@parser.Expr],
-  ty : @parser.Type,
+  ty : @ctype.Type,
 ) -> Int64 {
   let value = self.program.runtime_cast_int(
     self.eval_first_call_arg_or_zero(frame, args),
@@ -1058,7 +1058,7 @@ fn signed_overflow_arithmetic(
 ///|
 fn Program::overflow_arithmetic_result(
   self : Program,
-  ty : @parser.Type,
+  ty : @ctype.Type,
   op : String,
   left : Int64,
   right : Int64,
@@ -2598,7 +2598,7 @@ fn Interpreter::eval_expr(
 fn Interpreter::declare_local(
   self : Interpreter,
   frame : InterpFrame,
-  ty : @parser.Type,
+  ty : @ctype.Type,
   name : String,
   init : @parser.Expr?,
 ) -> Unit {

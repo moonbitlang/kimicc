@@ -2,6 +2,7 @@
 package "bobzhang/kimicc/parser"
 
 import {
+  "bobzhang/kimicc/ctype",
   "bobzhang/kimicc/target",
 }
 
@@ -31,28 +32,28 @@ pub(all) enum Expr {
   Deref(Expr)
   AddrOf(Expr)
   ArrayAccess(Expr, Expr)
-  Sizeof(Type)
+  Sizeof(@ctype.Type)
   SizeofExpr(Expr)
-  Alignof(Type)
+  Alignof(@ctype.Type)
   AlignofExpr(Expr)
-  Cast(Type, Expr)
+  Cast(@ctype.Type, Expr)
   PrefixInc(Expr)
   PrefixDec(Expr)
   PostfixInc(Expr)
   PostfixDec(Expr)
   Ternary(Expr, Expr, Expr)
   LabelAddr(String)
-  VaArg(Expr, Type)
-  OffsetOf(Type, Array[OffsetDesignator])
+  VaArg(Expr, @ctype.Type)
+  OffsetOf(@ctype.Type, Array[@ctype.OffsetDesignator])
   Array(Array[Expr])
-  CompoundLiteral(Type, Array[Expr], Int)
+  CompoundLiteral(@ctype.Type, Array[Expr], Int)
   DesignatedField(String, Expr)
   DesignatedIndex(Int64, Expr)
   DesignatedRange(Int64, Int64, Expr)
 } derive(Eq)
 
 pub(all) struct FuncDecl {
-  ret : Type
+  ret : @ctype.Type
   name : String
   params : Array[Param]
   variadic : Bool
@@ -68,7 +69,7 @@ pub(all) struct FuncDecl {
 } derive(Eq)
 
 pub(all) struct GlobalDecl {
-  ty : Type
+  ty : @ctype.Type
   name : String
   init : GlobalInit?
   is_static : Bool
@@ -91,13 +92,8 @@ pub struct Lexer {
 pub fn Lexer::new(String) -> Self
 pub fn Lexer::next_token(Self) -> Token
 
-pub(all) enum OffsetDesignator {
-  OffsetField(String)
-  OffsetIndex(Int64)
-} derive(Eq)
-
 pub(all) struct Param {
-  ty : Type
+  ty : @ctype.Type
   name : String
   bit_width : Int?
 } derive(Eq)
@@ -106,13 +102,13 @@ pub struct Parser {
   lexer : Lexer
   target : @target.Target
   mut token : Token
-  typedefs : Map[String, Type]
+  typedefs : Map[String, @ctype.Type]
   anonymous_structs : Array[StructDecl]
   struct_decls : Map[String, StructDecl]
   mut anon_counter : Int
   enum_constants : Map[String, Int64]
   globals : Array[GlobalDecl]
-  mut value_types : Map[String, Type]
+  mut value_types : Map[String, @ctype.Type]
   mut current_func_name : String
   mut static_locals : Map[String, String]
   mut case_label_counter : Int
@@ -134,7 +130,7 @@ pub(all) enum Stmt {
   While(Expr, Stmt)
   Compound(Array[Stmt])
   StmtList(Array[Stmt])
-  VarDecl(Type, String, Expr?)
+  VarDecl(@ctype.Type, String, Expr?)
   Break
   Continue
   Switch(Expr, Stmt, Array[(Int64?, String)])
@@ -241,43 +237,10 @@ pub(all) enum Token {
   Ampersand
 } derive(Eq)
 
-pub(all) enum Type {
-  Void
-  Bool
-  SChar
-  UChar
-  SShort
-  UShort
-  SInt
-  UInt
-  SLong
-  ULong
-  SLongLong
-  ULongLong
-  SInt128
-  UInt128
-  Float
-  Float16
-  Float128
-  Double
-  LongDouble
-  Struct(String)
-  Union(String)
-  FuncPtr(Type, Array[Type], Bool)
-  Pointer(Type)
-  Array(Type, Int)
-  Atomic(Type)
-  Aligned(Type, Int)
-} derive(Eq)
-pub fn Type::align(Self) -> Int
-pub fn Type::is_floating(Self) -> Bool
-pub fn Type::is_integer(Self) -> Bool
-pub fn Type::is_signed(Self) -> Bool
-pub fn Type::size(Self) -> Int
-pub fn Type::to_unsigned(Self) -> Self
-pub impl Show for Type
-
 // Type aliases
+pub using @ctype {type OffsetDesignator}
+
+pub using @ctype {type Type}
 
 // Traits
 

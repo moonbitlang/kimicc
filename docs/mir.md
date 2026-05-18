@@ -9,6 +9,9 @@ function-body layer, not a full instruction-level machine IR.
 
 ## Current Shape
 
+- `ctype/` owns the parser-neutral C type vocabulary shared by parser, MIR,
+  and backend-facing codegen APIs. `parser.Type` and
+  `parser.OffsetDesignator` remain compatibility aliases for C AST users.
 - `mir/` lowers a parsed C translation unit into reusable semantic facts:
   function signatures, selected global declarations, aggregate declarations,
   target-specific sizes/alignments, field layouts, expression types, and integer
@@ -211,12 +214,9 @@ function-body layer, not a full instruction-level machine IR.
   goto, varargs, and other behavior that is not modeled yet.
 - `test/e2e/mir_oracle_test.mbt` compares selected scalar compiled binaries
   against the MIR interpreter.
-- `mir_codegen/semantic_facts_wbtest.mbt` checks that Darwin ARM64 and linux/amd64
-  backend-local facts agree with MIR for representative scalar, aggregate,
-  packed, union, bit-field, offsetof, expression type, global-expression type,
-  builtin-return type, and integer and floating constant-folding cases. It also
-  pins backend layout/global queries when the codegen state is attached only to
-  a `MirModule`, without relying on parser `Program` state.
+- `mir_codegen/semantic_facts_wbtest.mbt` now uses hand-built parser-free
+  `MirModule` values to pin Darwin ARM64 and linux/amd64 backend layout,
+  offsetof, and global initializer emission through the backend-facing API.
 
 ## Backend Sharing
 
@@ -262,10 +262,12 @@ function declaration, global declaration, parameter, or statement nodes in its
 MIR emission state. Legacy parser-facing fallback entry points live outside the
 package in `mir_codegen_compat`.
 
-The current modular boundary is C-AST independent, not fully parser-package
-independent. `MirModule` still carries C types using `parser.Type`; removing
-that remaining package-level dependency requires extracting the C type model
-into a parser-neutral package.
+The current `MirModule -> mir_codegen -> assembly` boundary is C-AST
+independent and uses parser-neutral `ctype.Type` / `ctype.OffsetDesignator` for
+MIR-facing type data. Remaining parser-package coupling lives on the
+`parser.Program -> MIR` side, especially transitional expression semantic
+helpers that still reason about parser `Expr` values before those facts are
+fully available as MIR-native values.
 
 Both backends can now emit the lowered MIR subset for simple scalar integer,
 string, symbol-address, symbol-plus-offset, scalar array, and dense aggregate
@@ -292,7 +294,8 @@ program behavior.
    variadic, and richer ABI calls that have explicit MIR semantics and tests.
 4. Add backend differential tests that compare parser-AST codegen with MIR-body
    codegen as the supported subset expands.
-5. Move the remaining parser expression/type helpers used for constant facts and
-   C type layout behind parser-neutral MIR/type APIs.
+5. Move the remaining parser expression helpers used for constant facts behind
+   parser-neutral MIR APIs, now that the shared C type vocabulary lives in
+   `ctype/`.
 6. Only after semantic/body sharing is stable, consider a real machine-level IR
    with explicit virtual registers, blocks, target lowering, and allocation.

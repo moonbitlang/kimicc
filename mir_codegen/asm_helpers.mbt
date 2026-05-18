@@ -110,7 +110,7 @@ fn Codegen::emit_load_typed(
   self : Codegen,
   reg : String,
   addr_reg : String,
-  ty : @parser.Type,
+  ty : @ctype.Type,
 ) -> Unit {
   match ty {
     Bool | UChar => self.emit("\tldrb\t" + w_reg(reg) + ", [" + addr_reg + "]")
@@ -148,7 +148,7 @@ fn Codegen::emit_store_typed(
   self : Codegen,
   value_reg : String,
   addr_reg : String,
-  ty : @parser.Type,
+  ty : @ctype.Type,
 ) -> Unit {
   match ty {
     Bool | SChar | UChar =>

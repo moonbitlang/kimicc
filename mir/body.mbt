@@ -7,7 +7,7 @@
 pub(all) struct MirLocal {
   id : Int
   name : String
-  ty : @parser.Type
+  ty : @ctype.Type
 } derive(Eq)
 
 ///|
@@ -17,26 +17,26 @@ pub(all) struct MirLocal {
 /// expressions simply keep the containing function out of `Program.bodies`
 /// until the MIR layer learns that feature.
 pub(all) enum MirValue {
-  MirConst(Int64, @parser.Type)
+  MirConst(Int64, @ctype.Type)
   MirLocal(MirLocal)
   MirAddrLocal(MirLocal)
-  MirAddrGlobal(String, @parser.Type)
-  MirFuncAddr(String, @parser.Type)
+  MirAddrGlobal(String, @ctype.Type)
+  MirFuncAddr(String, @ctype.Type)
   MirStringAddr(String)
-  MirElemAddr(MirValue, MirValue, @parser.Type)
-  MirOffsetAddr(MirValue, Int, @parser.Type)
-  MirLoad(MirValue, @parser.Type)
-  MirUnary(String, MirValue, @parser.Type)
-  MirBinary(String, MirValue, MirValue, @parser.Type)
-  MirCast(@parser.Type, MirValue)
-  MirCall(String, Array[MirValue], @parser.Type)
-  MirIndirectCall(MirValue, Array[MirValue], @parser.Type)
+  MirElemAddr(MirValue, MirValue, @ctype.Type)
+  MirOffsetAddr(MirValue, Int, @ctype.Type)
+  MirLoad(MirValue, @ctype.Type)
+  MirUnary(String, MirValue, @ctype.Type)
+  MirBinary(String, MirValue, MirValue, @ctype.Type)
+  MirCast(@ctype.Type, MirValue)
+  MirCall(String, Array[MirValue], @ctype.Type)
+  MirIndirectCall(MirValue, Array[MirValue], @ctype.Type)
   MirAssignLocal(MirLocal, MirValue)
-  MirStore(MirValue, MirValue, @parser.Type)
-  MirPostUpdateLocal(MirLocal, String, MirValue, @parser.Type)
-  MirPreUpdateMemory(MirValue, String, MirValue, @parser.Type)
-  MirPostUpdateMemory(MirValue, String, MirValue, @parser.Type)
-  MirTernary(MirValue, MirValue, MirValue, @parser.Type)
+  MirStore(MirValue, MirValue, @ctype.Type)
+  MirPostUpdateLocal(MirLocal, String, MirValue, @ctype.Type)
+  MirPreUpdateMemory(MirValue, String, MirValue, @ctype.Type)
+  MirPostUpdateMemory(MirValue, String, MirValue, @ctype.Type)
+  MirTernary(MirValue, MirValue, MirValue, @ctype.Type)
 } derive(Eq)
 
 ///|
@@ -62,14 +62,14 @@ pub(all) enum MirStmt {
 /// walking parser statements and expressions.
 pub(all) struct MirFuncBody {
   name : String
-  ret : @parser.Type
+  ret : @ctype.Type
   params : Array[MirLocal]
   locals : Array[MirLocal]
   body : Array[MirStmt]
 } derive(Eq)
 
 ///|
-pub fn MirValue::ty(self : MirValue) -> @parser.Type {
+pub fn MirValue::ty(self : MirValue) -> @ctype.Type {
   match self {
     MirConst(_, ty) => ty
     MirLocal(binding) => binding.ty
@@ -109,7 +109,7 @@ fn BodyLowerContext::new(current_func : String) -> BodyLowerContext {
 
 ///|
 fn BodyLowerContext::scope(self : BodyLowerContext) -> Scope {
-  let locals : Map[String, @parser.Type] = {}
+  let locals : Map[String, @ctype.Type] = {}
   for binding in self.locals {
     match self.lookup_local(binding.name) {
       Some(active) =>
@@ -138,7 +138,7 @@ fn BodyLowerContext::pop_scope(self : BodyLowerContext) -> Unit {
 fn BodyLowerContext::declare_local(
   self : BodyLowerContext,
   name : String,
-  ty : @parser.Type,
+  ty : @ctype.Type,
 ) -> MirLocal {
   let binding = { id: self.next_id, name, ty }
   self.next_id += 1
@@ -151,7 +151,7 @@ fn BodyLowerContext::declare_local(
 ///|
 fn BodyLowerContext::declare_temp(
   self : BodyLowerContext,
-  ty : @parser.Type,
+  ty : @ctype.Type,
 ) -> MirLocal {
   self.declare_local("$mir_tmp" + self.next_id.to_string(), ty)
 }
@@ -183,7 +183,7 @@ fn lower_mir_cancelled_local_lvalue(
 }
 
 ///|
-fn mir_body_scalar_type(ty : @parser.Type) -> Bool {
+fn mir_body_scalar_type(ty : @ctype.Type) -> Bool {
   match ty {
     Void => true
     Bool
@@ -205,7 +205,7 @@ fn mir_body_scalar_type(ty : @parser.Type) -> Bool {
 }
 
 ///|
-fn mir_body_array_local_type(ty : @parser.Type) -> Bool {
+fn mir_body_array_local_type(ty : @ctype.Type) -> Bool {
   match ty {
     Array(elem, _) => mir_body_scalar_type(elem)
     Aligned(inner, _) => mir_body_array_local_type(inner)
@@ -214,7 +214,7 @@ fn mir_body_array_local_type(ty : @parser.Type) -> Bool {
 }
 
 ///|
-fn mir_body_array_local_info(ty : @parser.Type) -> (@parser.Type, Int)? {
+fn mir_body_array_local_info(ty : @ctype.Type) -> (@ctype.Type, Int)? {
   match ty {
     Array(elem, len) => Some((elem, len))
     Aligned(inner, _) => mir_body_array_local_info(inner)
@@ -227,7 +227,7 @@ fn lower_mir_local_update(
   name : String,
   op : String,
   rhs : MirValue,
-  ty : @parser.Type,
+  ty : @ctype.Type,
   ctx : BodyLowerContext,
 ) -> MirValue? {
   match ctx.lookup_local(name) {
@@ -245,7 +245,7 @@ fn lower_mir_local_update(
 fn lower_mir_local_step(
   name : String,
   op : String,
-  ty : @parser.Type,
+  ty : @ctype.Type,
   ctx : BodyLowerContext,
 ) -> MirValue? {
   lower_mir_local_update(name, op, MirConst(1L, SInt), ty, ctx)
@@ -256,7 +256,7 @@ fn lower_mir_post_update(
   binding : MirLocal,
   op : String,
   rhs : MirValue,
-  ty : @parser.Type,
+  ty : @ctype.Type,
 ) -> MirValue? {
   if binding.ty.is_integer() {
     Some(MirPostUpdateLocal(binding, op, rhs, ty))
@@ -270,7 +270,7 @@ fn Program::lower_mir_post_step(
   self : Program,
   expr : @parser.Expr,
   op : String,
-  ty : @parser.Type,
+  ty : @ctype.Type,
   ctx : BodyLowerContext,
 ) -> MirValue? {
   match lower_mir_cancelled_local_lvalue(expr, ctx) {
@@ -387,7 +387,7 @@ fn mir_body_scalar_initializer_expr(expr : @parser.Expr) -> @parser.Expr {
 }
 
 ///|
-fn mir_body_char_array_elem_type(ty : @parser.Type) -> Bool {
+fn mir_body_char_array_elem_type(ty : @ctype.Type) -> Bool {
   match ty {
     SChar | UChar => true
     Atomic(inner) | Aligned(inner, _) => mir_body_char_array_elem_type(inner)
@@ -399,7 +399,7 @@ fn mir_body_char_array_elem_type(ty : @parser.Type) -> Bool {
 fn Program::lower_mir_array_init_stores(
   self : Program,
   base : MirValue,
-  ty : @parser.Type,
+  ty : @ctype.Type,
   init : @parser.Expr,
   ctx : BodyLowerContext,
 ) -> Array[MirStmt]? {
@@ -488,7 +488,7 @@ fn Program::lower_mir_local_array_init(
 fn Program::lower_mir_zero_init_stores(
   self : Program,
   base : MirValue,
-  ty : @parser.Type,
+  ty : @ctype.Type,
 ) -> Array[MirStmt]? {
   match self.core_type(ty) {
     Struct(name) | Union(name) => {
@@ -567,9 +567,9 @@ fn mir_body_local_copy_source_addr(value : MirValue) -> Bool {
 fn Program::lower_mir_union_copy_init_stores(
   self : Program,
   dest_base : MirValue,
-  dest_ty : @parser.Type,
+  dest_ty : @ctype.Type,
   src_base : MirValue,
-  src_ty : @parser.Type,
+  src_ty : @ctype.Type,
   union_name : String,
 ) -> Array[MirStmt]? {
   if self.core_type(src_ty) != Union(union_name) {
@@ -631,9 +631,9 @@ fn Program::lower_mir_union_copy_init_stores(
 fn Program::lower_mir_copy_init_stores(
   self : Program,
   dest_base : MirValue,
-  dest_ty : @parser.Type,
+  dest_ty : @ctype.Type,
   src_base : MirValue,
-  src_ty : @parser.Type,
+  src_ty : @ctype.Type,
 ) -> Array[MirStmt]? {
   match (self.core_type(dest_ty), self.core_type(src_ty)) {
     (Union(dest_name), Union(_)) =>
@@ -726,7 +726,7 @@ fn Program::lower_mir_copy_init_stores(
 fn Program::lower_mir_struct_init_stores(
   self : Program,
   base : MirValue,
-  ty : @parser.Type,
+  ty : @ctype.Type,
   init : @parser.Expr,
   ctx : BodyLowerContext,
 ) -> Array[MirStmt]? {
@@ -882,7 +882,7 @@ fn Program::lower_mir_local_struct_init(
 fn mir_body_sequence_exprs(
   stmts : Array[MirStmt],
   tail : MirValue,
-  ty : @parser.Type,
+  ty : @ctype.Type,
 ) -> MirValue? {
   let mut result = tail
   for i = stmts.length() - 1; i >= 0; i = i - 1 {
@@ -899,7 +899,7 @@ fn Program::lower_mir_identity_builtin(
   self : Program,
   args : Array[@parser.Expr],
   side_effect_arg : Int?,
-  ty : @parser.Type,
+  ty : @ctype.Type,
   ctx : BodyLowerContext,
 ) -> MirValue? {
   if args.length() == 0 {
@@ -937,7 +937,7 @@ fn Program::lower_mir_identity_builtin(
 fn Program::lower_mir_scalar_lvalue_addr(
   self : Program,
   expr : @parser.Expr,
-  lhs_ty : @parser.Type,
+  lhs_ty : @ctype.Type,
   ctx : BodyLowerContext,
 ) -> MirValue? {
   if !mir_body_scalar_type(lhs_ty) {
@@ -967,8 +967,8 @@ fn Program::lower_mir_compound_memory_update(
   lhs : @parser.Expr,
   op : String,
   value : MirValue,
-  lhs_ty : @parser.Type,
-  result_ty : @parser.Type,
+  lhs_ty : @ctype.Type,
+  result_ty : @ctype.Type,
   ctx : BodyLowerContext,
 ) -> MirValue? {
   if !lhs_ty.is_integer() {
@@ -998,7 +998,7 @@ fn Program::lower_mir_prefix_step(
   self : Program,
   expr : @parser.Expr,
   op : String,
-  ty : @parser.Type,
+  ty : @ctype.Type,
   ctx : BodyLowerContext,
 ) -> MirValue? {
   match lower_mir_cancelled_local_lvalue(expr, ctx) {
@@ -1068,7 +1068,7 @@ fn Program::lower_mir_array_elem_addr(
   self : Program,
   base : @parser.Expr,
   index : @parser.Expr,
-  elem_ty : @parser.Type,
+  elem_ty : @ctype.Type,
   ctx : BodyLowerContext,
 ) -> MirValue? {
   match
@@ -1110,7 +1110,7 @@ fn Program::lower_mir_member_addr(
 fn mir_body_offset_addr_value(
   base : MirValue,
   offset : Int,
-  ty : @parser.Type,
+  ty : @ctype.Type,
 ) -> MirValue {
   match base {
     MirOffsetAddr(inner, base_offset, _) =>
@@ -1197,7 +1197,7 @@ fn Program::lower_mir_indirect_call(
   self : Program,
   callee : @parser.Expr,
   args : Array[@parser.Expr],
-  ty : @parser.Type,
+  ty : @ctype.Type,
   ctx : BodyLowerContext,
 ) -> MirValue? {
   let normalized_callee = match callee {

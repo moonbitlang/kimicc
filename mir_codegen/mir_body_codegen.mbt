@@ -4,7 +4,7 @@ fn mir_body_local_name(binding : @mir.MirLocal) -> String {
 }
 
 ///|
-fn mir_body_codegen_scalar_type(ty : @parser.Type) -> Bool {
+fn mir_body_codegen_scalar_type(ty : @ctype.Type) -> Bool {
   match peel_aligned_type(ty) {
     Void => true
     Bool
@@ -26,7 +26,7 @@ fn mir_body_codegen_scalar_type(ty : @parser.Type) -> Bool {
 }
 
 ///|
-fn mir_body_codegen_local_type(ty : @parser.Type) -> Bool {
+fn mir_body_codegen_local_type(ty : @ctype.Type) -> Bool {
   match ty {
     Aligned(_, _) => false
     Array(elem, _) => mir_body_codegen_scalar_type(elem)
@@ -177,7 +177,7 @@ fn mir_body_codegen_builtin_call_name(name : String) -> Bool {
 fn mir_body_codegen_sync_synchronize_call(
   name : String,
   args : Array[@mir.MirValue],
-  ret : @parser.Type,
+  ret : @ctype.Type,
 ) -> Bool {
   name == "__sync_synchronize" &&
   args.length() == 0 &&
@@ -188,7 +188,7 @@ fn mir_body_codegen_sync_synchronize_call(
 fn mir_body_codegen_atomic_thread_fence_call(
   name : String,
   args : Array[@mir.MirValue],
-  ret : @parser.Type,
+  ret : @ctype.Type,
 ) -> Bool {
   (name == "__atomic_thread_fence" || name == "__c11_atomic_thread_fence") &&
   args.length() == 1 &&
@@ -199,7 +199,7 @@ fn mir_body_codegen_atomic_thread_fence_call(
 fn mir_body_codegen_atomic_signal_fence_call(
   name : String,
   args : Array[@mir.MirValue],
-  ret : @parser.Type,
+  ret : @ctype.Type,
 ) -> Bool {
   (name == "__atomic_signal_fence" || name == "__c11_atomic_signal_fence") &&
   args.length() == 1 &&
@@ -210,7 +210,7 @@ fn mir_body_codegen_atomic_signal_fence_call(
 fn mir_body_codegen_trap_call(
   name : String,
   args : Array[@mir.MirValue],
-  ret : @parser.Type,
+  ret : @ctype.Type,
 ) -> Bool {
   (name == "__builtin_trap" || name == "__builtin_unreachable") &&
   args.length() == 0 &&
@@ -218,7 +218,7 @@ fn mir_body_codegen_trap_call(
 }
 
 ///|
-fn mir_body_codegen_return_pointer_type(ty : @parser.Type) -> Bool {
+fn mir_body_codegen_return_pointer_type(ty : @ctype.Type) -> Bool {
   peel_aligned_type(ty) is Pointer(_)
 }
 
@@ -226,7 +226,7 @@ fn mir_body_codegen_return_pointer_type(ty : @parser.Type) -> Bool {
 fn mir_body_codegen_alloca_call(
   name : String,
   args : Array[@mir.MirValue],
-  ret : @parser.Type,
+  ret : @ctype.Type,
 ) -> Bool {
   name == "__builtin_alloca" &&
   args.length() == 1 &&
@@ -251,7 +251,7 @@ fn mir_body_codegen_const_builtin_level(args : Array[@mir.MirValue]) -> Int64? {
 fn mir_body_codegen_frame_address_call(
   name : String,
   args : Array[@mir.MirValue],
-  ret : @parser.Type,
+  ret : @ctype.Type,
 ) -> Bool {
   name == "__builtin_frame_address" &&
   mir_body_codegen_const_builtin_level(args) is Some(_) &&
@@ -262,7 +262,7 @@ fn mir_body_codegen_frame_address_call(
 fn mir_body_codegen_return_address_call(
   name : String,
   args : Array[@mir.MirValue],
-  ret : @parser.Type,
+  ret : @ctype.Type,
 ) -> Bool {
   name == "__builtin_return_address" &&
   mir_body_codegen_const_builtin_level(args) is Some(_) &&
@@ -273,7 +273,7 @@ fn mir_body_codegen_return_address_call(
 fn mir_body_codegen_va_setup_call(
   name : String,
   args : Array[@mir.MirValue],
-  ret : @parser.Type,
+  ret : @ctype.Type,
 ) -> Bool {
   let arity = match name {
     "__builtin_va_start" | "__builtin_va_copy" => Some(2)
@@ -289,7 +289,7 @@ fn mir_body_codegen_va_setup_call(
 ///|
 fn mir_body_codegen_overflow_result_type(
   args : Array[@mir.MirValue],
-) -> @parser.Type? {
+) -> @ctype.Type? {
   if args.length() < 3 {
     return None
   }
@@ -303,7 +303,7 @@ fn mir_body_codegen_overflow_result_type(
 fn mir_body_codegen_overflow_call(
   name : String,
   args : Array[@mir.MirValue],
-  ret : @parser.Type,
+  ret : @ctype.Type,
 ) -> Bool {
   if overflow_builtin_operator(name) is None ||
     args.length() != 3 ||
@@ -320,7 +320,7 @@ fn mir_body_codegen_overflow_call(
 fn mir_body_codegen_builtin_lib_call_arg_count(
   name : String,
   args : Array[@mir.MirValue],
-  ret : @parser.Type,
+  ret : @ctype.Type,
   int_arg_limit : Int,
 ) -> Int? {
   match mir_body_codegen_checked_printf_source_indexes(name, args, ret) {
@@ -425,7 +425,7 @@ fn mir_body_codegen_builtin_lib_call_arg_count(
 fn mir_body_codegen_builtin_lib_call_supported(
   name : String,
   args : Array[@mir.MirValue],
-  ret : @parser.Type,
+  ret : @ctype.Type,
   int_arg_limit : Int,
 ) -> Bool {
   mir_body_codegen_builtin_lib_call_arg_count(name, args, ret, int_arg_limit)
@@ -464,7 +464,7 @@ fn mir_body_codegen_direct_call_symbol(name : String) -> String {
 fn mir_body_codegen_checked_printf_source_indexes(
   name : String,
   args : Array[@mir.MirValue],
-  ret : @parser.Type,
+  ret : @ctype.Type,
 ) -> Array[Int]? {
   match name {
     "__builtin___snprintf_chk" =>
@@ -579,7 +579,7 @@ fn X64Codegen::mir_direct_call_variadic(
 fn mir_body_codegen_lowered_builtin_arg_type(
   name : String,
   index : Int,
-) -> @parser.Type? {
+) -> @ctype.Type? {
   match name {
     "__builtin_strlen" => if index == 0 { Some(Pointer(SChar)) } else { None }
     "__builtin_strcmp" | "__builtin_strstr" =>
@@ -639,7 +639,7 @@ fn mir_body_codegen_lowered_builtin_arg_type(
 fn mir_body_codegen_call_supported(
   name : String,
   args : Array[@mir.MirValue],
-  ret : @parser.Type,
+  ret : @ctype.Type,
   int_arg_limit : Int,
   mir : @mir.MirModule,
 ) -> Bool {
@@ -688,9 +688,9 @@ fn mir_body_codegen_call_supported(
 
 ///|
 fn mir_body_codegen_indirect_call_supported(
-  callee_ty : @parser.Type,
+  callee_ty : @ctype.Type,
   args : Array[@mir.MirValue],
-  ret : @parser.Type,
+  ret : @ctype.Type,
   int_arg_limit : Int,
 ) -> Bool {
   if args.length() > int_arg_limit || !mir_body_codegen_scalar_type(ret) {
@@ -717,10 +717,10 @@ fn mir_body_codegen_indirect_call_supported(
 
 ///|
 fn mir_indirect_call_arg_type(
-  callee_ty : @parser.Type,
+  callee_ty : @ctype.Type,
   index : Int,
-  actual : @parser.Type,
-) -> @parser.Type {
+  actual : @ctype.Type,
+) -> @ctype.Type {
   match peel_aligned_type(callee_ty) {
     FuncPtr(_, params, _) =>
       if index >= 0 && index < params.length() {
@@ -837,9 +837,9 @@ fn mir_body_codegen_func_supported(
 ///|
 fn mir_body_binary_left_type(
   op : String,
-  lhs : @parser.Type,
-  rhs : @parser.Type,
-) -> @parser.Type {
+  lhs : @ctype.Type,
+  rhs : @ctype.Type,
+) -> @ctype.Type {
   if op == "<<" || op == ">>" {
     unary_integer_result_type(lhs)
   } else {
@@ -850,9 +850,9 @@ fn mir_body_binary_left_type(
 ///|
 fn mir_body_binary_right_type(
   op : String,
-  lhs : @parser.Type,
-  rhs : @parser.Type,
-) -> @parser.Type {
+  lhs : @ctype.Type,
+  rhs : @ctype.Type,
+) -> @ctype.Type {
   if op == "<<" || op == ">>" {
     unary_integer_result_type(rhs)
   } else {
@@ -863,9 +863,9 @@ fn mir_body_binary_right_type(
 ///|
 fn mir_body_binary_common_type(
   op : String,
-  lhs : @parser.Type,
-  rhs : @parser.Type,
-) -> @parser.Type {
+  lhs : @ctype.Type,
+  rhs : @ctype.Type,
+) -> @ctype.Type {
   if op == "<<" || op == ">>" {
     unary_integer_result_type(lhs)
   } else {
@@ -876,8 +876,8 @@ fn mir_body_binary_common_type(
 ///|
 fn mir_body_unsigned_binary(
   op : String,
-  lhs : @parser.Type,
-  rhs : @parser.Type,
+  lhs : @ctype.Type,
+  rhs : @ctype.Type,
 ) -> Bool {
   is_unsigned_integer_type(mir_body_binary_common_type(op, lhs, rhs))
 }
@@ -885,8 +885,8 @@ fn mir_body_unsigned_binary(
 ///|
 fn mir_body_pointer_integer_op(
   op : String,
-  lhs : @parser.Type,
-  rhs : @parser.Type,
+  lhs : @ctype.Type,
+  rhs : @ctype.Type,
 ) -> Bool {
   match pointer_or_array_element_type(lhs) {
     Some(_) => (op == "+" || op == "-") && rhs.is_integer()
@@ -900,9 +900,9 @@ fn mir_body_pointer_integer_op(
 ///|
 fn mir_body_pointer_diff_elem(
   op : String,
-  lhs : @parser.Type,
-  rhs : @parser.Type,
-) -> @parser.Type? {
+  lhs : @ctype.Type,
+  rhs : @ctype.Type,
+) -> @ctype.Type? {
   if op != "-" {
     return None
   }
@@ -1321,8 +1321,8 @@ fn Codegen::mir_call_arg_type(
   self : Codegen,
   name : String,
   index : Int,
-  actual : @parser.Type,
-) -> @parser.Type {
+  actual : @ctype.Type,
+) -> @ctype.Type {
   match mir_body_codegen_lowered_builtin_arg_type(name, index) {
     Some(ty) => return ty
     None => ()
@@ -1339,7 +1339,7 @@ fn Codegen::mir_call_arg_type(
 ///|
 fn Codegen::emit_mir_abi_int_return_conversion(
   self : Codegen,
-  ty : @parser.Type,
+  ty : @ctype.Type,
 ) -> Unit {
   match peel_aligned_type(ty) {
     Bool | UChar => self.emit("\tand\tx9, x9, #0xFF")
@@ -1359,7 +1359,7 @@ fn Codegen::gen_mir_binary(
   op : String,
   lhs : @mir.MirValue,
   rhs : @mir.MirValue,
-  ty : @parser.Type,
+  ty : @ctype.Type,
   offsets : Map[Int, Int],
   frame_size : Int,
 ) -> Unit {
@@ -2141,8 +2141,8 @@ fn X64Codegen::mir_call_arg_type(
   self : X64Codegen,
   name : String,
   index : Int,
-  actual : @parser.Type,
-) -> @parser.Type {
+  actual : @ctype.Type,
+) -> @ctype.Type {
   match mir_body_codegen_lowered_builtin_arg_type(name, index) {
     Some(ty) => return ty
     None => ()
@@ -2162,7 +2162,7 @@ fn X64Codegen::gen_mir_binary(
   op : String,
   lhs : @mir.MirValue,
   rhs : @mir.MirValue,
-  ty : @parser.Type,
+  ty : @ctype.Type,
   offsets : Map[Int, Int],
 ) -> Unit {
   match op {

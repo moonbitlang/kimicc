@@ -31,7 +31,7 @@ priv struct BodyInterpreter {
 }
 
 ///|
-fn mir_body_array_len(ty : @parser.Type) -> Int? {
+fn mir_body_array_len(ty : @ctype.Type) -> Int? {
   match ty {
     Array(_, len) => Some(len)
     Aligned(inner, _) => mir_body_array_len(inner)
@@ -40,7 +40,7 @@ fn mir_body_array_len(ty : @parser.Type) -> Int? {
 }
 
 ///|
-fn mir_body_array_info(ty : @parser.Type) -> (@parser.Type, Int)? {
+fn mir_body_array_info(ty : @ctype.Type) -> (@ctype.Type, Int)? {
   match ty {
     Array(elem, len) => Some((elem, len))
     Aligned(inner, _) => mir_body_array_info(inner)
@@ -51,7 +51,7 @@ fn mir_body_array_info(ty : @parser.Type) -> (@parser.Type, Int)? {
 ///|
 fn Program::mir_body_addressable_global_type(
   self : Program,
-  ty : @parser.Type,
+  ty : @ctype.Type,
 ) -> Bool {
   if mir_body_scalar_type(ty) || mir_body_array_local_type(ty) {
     true
@@ -351,7 +351,7 @@ fn BodyInterpreter::write_address(
   frame : BodyFrame,
   addr : Int64,
   value : Int64,
-  ty : @parser.Type,
+  ty : @ctype.Type,
 ) -> Int64 {
   if frame.array_elem_addr(addr) {
     let assigned = self.program.runtime_cast_int(value, ty)
@@ -435,9 +435,9 @@ fn BodyInterpreter::eval_binary_values(
   self : BodyInterpreter,
   op : String,
   left : Int64,
-  left_ty : @parser.Type,
+  left_ty : @ctype.Type,
   right : Int64,
-  right_ty : @parser.Type,
+  right_ty : @ctype.Type,
 ) -> Int64 {
   match self.eval_pointer_binary_values(op, left, left_ty, right, right_ty) {
     Some(value) => return value
@@ -506,9 +506,9 @@ fn BodyInterpreter::eval_pointer_binary_values(
   self : BodyInterpreter,
   op : String,
   left : Int64,
-  left_ty : @parser.Type,
+  left_ty : @ctype.Type,
   right : Int64,
-  right_ty : @parser.Type,
+  right_ty : @ctype.Type,
 ) -> Int64? {
   match self.program.pointer_element(left_ty) {
     Some(_) =>

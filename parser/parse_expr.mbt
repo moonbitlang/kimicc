@@ -726,7 +726,7 @@ fn Parser::parse_offset_designators(self : Parser) -> Array[OffsetDesignator] {
   let path = []
   match self.token {
     Ident(name) => {
-      path.push(OffsetField(name))
+      path.push(@ctype.OffsetDesignator::OffsetField(name))
       self.advance()
     }
     _ => abort("expected field name in __builtin_offsetof")
@@ -737,7 +737,7 @@ fn Parser::parse_offset_designators(self : Parser) -> Array[OffsetDesignator] {
         self.advance()
         match self.token {
           Ident(name) => {
-            path.push(OffsetField(name))
+            path.push(@ctype.OffsetDesignator::OffsetField(name))
             self.advance()
           }
           _ => abort("expected field name after . in __builtin_offsetof")
@@ -748,7 +748,7 @@ fn Parser::parse_offset_designators(self : Parser) -> Array[OffsetDesignator] {
         let index = self.parse_expr()
         self.expect(RBracket)
         match self.fold_const(index) {
-          Some(value) => path.push(OffsetIndex(value))
+          Some(value) => path.push(@ctype.OffsetDesignator::OffsetIndex(value))
           None => abort("array index in __builtin_offsetof must be constant")
         }
       }

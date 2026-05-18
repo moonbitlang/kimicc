@@ -1,5 +1,5 @@
 ///|
-fn switch_control_type(ty : @parser.Type) -> @parser.Type {
+fn switch_control_type(ty : @ctype.Type) -> @ctype.Type {
   match ty {
     Atomic(inner) => switch_control_type(inner)
     Aligned(inner, _) => switch_control_type(inner)
@@ -12,7 +12,7 @@ fn switch_control_type(ty : @parser.Type) -> @parser.Type {
 fn Codegen::emit_switch_case_compare(
   self : Codegen,
   case_value : Int64,
-  control_ty : @parser.Type,
+  control_ty : @ctype.Type,
 ) -> Unit {
   match control_ty {
     SInt | UInt => {
