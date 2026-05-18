@@ -173,6 +173,22 @@ test "strict MIR codegen executes floating direct calls" {
 }
 
 ///|
+test "strict MIR codegen executes stack-passed floating direct calls" {
+  let source =
+    #|double sum9d(double a, double b, double c, double d, double e, double f, double g, double h, double i) {
+    #|  return a + b + c + d + e + f + g + h + i;
+    #|}
+    #|float sum9f(float a, float b, float c, float d, float e, float f, float g, float h, float i) {
+    #|  return a + b + c + d + e + f + g + h + i;
+    #|}
+    #|int main(void) {
+    #|  return (int)sum9d(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0) +
+    #|    (int)sum9f((float)1.0, (float)2.0, (float)3.0, (float)4.0, (float)5.0, (float)6.0, (float)7.0, (float)8.0, (float)9.0);
+    #|}
+  assert_eq(run_source_strict_mir(source), 90)
+}
+
+///|
 test "strict MIR codegen executes float direct and indirect calls" {
   let source =
     #|float addf(float x, float y) { return x + y; }
