@@ -227,6 +227,8 @@ strict_mir_return_calls_source_path="/tmp/kimicc-linux-amd64-strict-mir-return-c
 strict_mir_return_calls_binary_path="/tmp/kimicc-linux-amd64-strict-mir-return-calls"
 strict_mir_return_args_source_path="/tmp/kimicc-linux-amd64-strict-mir-return-args.c"
 strict_mir_return_args_binary_path="/tmp/kimicc-linux-amd64-strict-mir-return-args"
+strict_mir_indirect_returns_source_path="/tmp/kimicc-linux-amd64-strict-mir-indirect-returns.c"
+strict_mir_indirect_returns_binary_path="/tmp/kimicc-linux-amd64-strict-mir-indirect-returns"
 
 mkdir -p "$probe_include_dir" "$probe_after_include_dir" "$probe_prefix_dir/headers"
 cat > "$probe_include_dir/probe_header.h" <<'H'
@@ -3555,6 +3557,63 @@ status=$?
 set -e
 if [ "$status" -ne 98 ]; then
   echo "expected strict MIR aggregate return args smoke binary to exit 98, got $status" >&2
+  exit 1
+fi
+
+cat > "$strict_mir_indirect_returns_source_path" <<'C'
+struct Pair {
+  long a;
+  long b;
+};
+
+struct DPair {
+  double a;
+  double b;
+};
+
+struct Pair make_pair(long a, long b) {
+  struct Pair p;
+  p.a = a;
+  p.b = b;
+  return p;
+}
+
+struct DPair make_dpair(double a, double b) {
+  struct DPair p;
+  p.a = a;
+  p.b = b;
+  return p;
+}
+
+int pair_sum(struct Pair p) { return (int)(p.a + p.b); }
+
+int dpair_sum(struct DPair p) { return (int)(p.a + p.b); }
+
+struct Pair forward_pair(long a, long b) {
+  struct Pair (*fp)(long, long) = make_pair;
+  return fp(a, b);
+}
+
+int main(void) {
+  struct Pair (*fp)(long, long) = make_pair;
+  struct DPair (*fd)(double, double) = make_dpair;
+  struct Pair p = fp(10, 20);
+  struct Pair q;
+  q = fp(1, 2);
+  struct DPair d = fd(19.5, 22.5);
+  return pair_sum(fp(3, 4)) + pair_sum(p) + pair_sum(q) +
+         pair_sum(forward_pair(5, 6)) + dpair_sum(d);
+}
+C
+
+"$kimicc" --strict-mir-codegen -target linux-amd64 \
+  -o "$strict_mir_indirect_returns_binary_path" "$strict_mir_indirect_returns_source_path"
+set +e
+"$strict_mir_indirect_returns_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 93 ]; then
+  echo "expected strict MIR indirect aggregate returns smoke binary to exit 93, got $status" >&2
   exit 1
 fi
 
