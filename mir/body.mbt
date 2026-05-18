@@ -938,6 +938,14 @@ fn Program::lower_mir_local_struct_init(
 }
 
 ///|
+fn mir_body_aggregate_call_value(value : MirValue) -> Bool {
+  match value {
+    MirCall(_, _, _) | MirIndirectCall(_, _, _) => true
+    _ => false
+  }
+}
+
+///|
 fn mir_body_sequence_exprs(
   stmts : Array[MirStmt],
   tail : MirValue,
@@ -1666,6 +1674,18 @@ fn Program::lower_mir_ignored_aggregate_assign(
       return mir_body_sequence_exprs(stores, MirConst(0L, SInt), SInt)
     None => ()
   }
+  match self.lower_mir_expr_for_target_type(lhs_ty, rhs, ctx) {
+    Some(value) =>
+      if mir_body_aggregate_call_value(value) &&
+        self.core_type(value.ty()) == self.core_type(lhs_ty) {
+        return mir_body_sequence_exprs(
+          [MirExprStmt(MirStore(dest_addr, value, lhs_ty))],
+          MirConst(0L, SInt),
+          SInt,
+        )
+      }
+    None => ()
+  }
   match rhs {
     CompoundLiteral(_, _, _) => {
       let rhs_ty = self.expr_type(rhs, ctx.scope())
@@ -1888,7 +1908,17 @@ fn Program::lower_mir_stmt(
                 }
                 return Some(stmts)
               }
-              None => return None
+              None =>
+                match self.lower_mir_expr_for_target_type(ty, expr, ctx) {
+                  Some(value) =>
+                    if mir_body_aggregate_call_value(value) &&
+                      self.core_type(value.ty()) == self.core_type(ty) {
+                      return Some([MirDeclare(binding, Some(value))])
+                    } else {
+                      return None
+                    }
+                  None => return None
+                }
             }
           } else if mir_body_array_local_type(ty) {
             let binding = ctx.declare_local(name, ty)
