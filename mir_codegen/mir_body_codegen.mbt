@@ -1689,44 +1689,6 @@ fn Codegen::gen_mir_stmts(
 }
 
 ///|
-fn Codegen::try_gen_mir_func_decl(
-  self : Codegen,
-  mir_decl : @mir.MirFuncDecl,
-) -> Bool {
-  match self.mir_module {
-    Some(mir_module) =>
-      if mir_decl.has_body && mir_module.bodies.contains(mir_decl.name) {
-        let body = mir_module.bodies[mir_decl.name]
-        if !mir_body_codegen_func_supported(
-            body,
-            mir_decl.variadic,
-            8,
-            mir_module,
-          ) {
-          return false
-        }
-        self.gen_mir_func(mir_decl, body)
-        true
-      } else {
-        false
-      }
-    None => false
-  }
-}
-
-///|
-fn Codegen::try_gen_mir_func(self : Codegen, decl : @parser.FuncDecl) -> Bool {
-  match self.mir_module {
-    Some(mir_module) =>
-      match mir_module.decls.iter().find_first(fn(d) { d.name == decl.name }) {
-        Some(mir_decl) => self.try_gen_mir_func_decl(mir_decl)
-        None => false
-      }
-    None => false
-  }
-}
-
-///|
 fn Codegen::gen_mir_func(
   self : Codegen,
   decl : @mir.MirFuncDecl,
@@ -1739,9 +1701,7 @@ fn Codegen::gen_mir_func(
   self.defined_labels = {}
   self.fp_literals = []
   self.func_name = decl.name
-  self.sret_dest_offset = -1
   self.sret_scratch_offset = -1
-  self.sret_scratch_size = 0
   self.pending_sret_offset = -1
   self.break_label = None
   self.continue_label = None
@@ -2536,47 +2496,6 @@ fn X64Codegen::gen_mir_stmts(
 }
 
 ///|
-fn X64Codegen::try_gen_mir_func(
-  self : X64Codegen,
-  decl : @parser.FuncDecl,
-) -> Bool {
-  match self.mir_module {
-    Some(mir_module) =>
-      match mir_module.decls.iter().find_first(fn(d) { d.name == decl.name }) {
-        Some(mir_decl) => self.try_gen_mir_func_decl(mir_decl)
-        None => false
-      }
-    None => false
-  }
-}
-
-///|
-fn X64Codegen::try_gen_mir_func_decl(
-  self : X64Codegen,
-  mir_decl : @mir.MirFuncDecl,
-) -> Bool {
-  match self.mir_module {
-    Some(mir_module) =>
-      if mir_decl.has_body && mir_module.bodies.contains(mir_decl.name) {
-        let body = mir_module.bodies[mir_decl.name]
-        if !mir_body_codegen_func_supported(
-            body,
-            mir_decl.variadic,
-            6,
-            mir_module,
-          ) {
-          return false
-        }
-        self.gen_mir_func(mir_decl, body)
-        true
-      } else {
-        false
-      }
-    None => false
-  }
-}
-
-///|
 fn X64Codegen::gen_mir_func(
   self : X64Codegen,
   decl : @mir.MirFuncDecl,
@@ -2593,13 +2512,8 @@ fn X64Codegen::gen_mir_func(
   self.va_initial_gp_offset = 0
   self.va_initial_fp_offset = 48
   self.va_initial_overflow_offset = 16
-  self.sret_dest_offset = -1
   self.sret_scratch_offset = -1
-  self.sret_scratch_size = 0
-  self.sret_scratch_align = 1
   self.va_arg_scratch_offset = -1
-  self.va_arg_scratch_size = 0
-  self.va_arg_scratch_align = 1
   self.break_label = None
   self.continue_label = None
   self.emitted_labels = {}

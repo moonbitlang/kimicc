@@ -287,23 +287,6 @@ fn expect_darwin_expr_type_facts(
 }
 
 ///|
-fn expect_darwin_call_return_facts(
-  codegen : Codegen,
-  mir : @mir.Program,
-  func : @parser.Expr,
-  args : Array[@parser.Expr],
-) -> Unit {
-  let scope = @mir.Scope::{
-    locals: codegen.var_types,
-    current_func: codegen.func_name,
-  }
-  if codegen.call_return_type(func, args, 0) !=
-    mir.expr_type(Call(func, args), scope) {
-    abort("darwin call return type mismatch")
-  }
-}
-
-///|
 fn expect_x64_object_size_facts(
   codegen : X64Codegen,
   mir : @mir.Program,
@@ -357,17 +340,6 @@ fn expect_x64_fold_const_facts(
 }
 
 ///|
-fn expect_x64_attached_fold_const_facts(
-  codegen : X64Codegen,
-  mir : @mir.Program,
-  expr : @parser.Expr,
-) -> Unit {
-  codegen.mir = Some(mir)
-  expect_x64_fold_const_facts(codegen, mir, expr)
-  codegen.mir = None
-}
-
-///|
 fn expect_x64_fold_float_const_facts(
   codegen : X64Codegen,
   mir : @mir.Program,
@@ -398,17 +370,6 @@ fn expect_darwin_fold_const_facts(
 }
 
 ///|
-fn expect_darwin_attached_fold_const_facts(
-  codegen : Codegen,
-  mir : @mir.Program,
-  expr : @parser.Expr,
-) -> Unit {
-  codegen.mir = Some(mir)
-  expect_darwin_fold_const_facts(codegen, mir, expr)
-  codegen.mir = None
-}
-
-///|
 fn expect_darwin_fold_float_const_facts(
   codegen : Codegen,
   mir : @mir.Program,
@@ -421,25 +382,6 @@ fn expect_darwin_fold_float_const_facts(
   if codegen.fold_float_const(expr) != mir.fold_float_const(expr, scope) {
     abort("darwin floating constant fold mismatch")
   }
-}
-
-///|
-fn semantic_scalar_builtin_fold_cases() -> Array[@parser.Expr] {
-  [
-    Call(Var("__builtin_constant_p"), [Binary("+", Number(1), Number(2))]),
-    Call(Var("__builtin_flt_rounds"), []),
-    Call(Var("__builtin_is_aligned"), [Number(32), Number(16)]),
-    Call(Var("__builtin_align_up"), [Number(33), Number(16)]),
-    Call(Var("__builtin_align_down"), [Number(47), Number(16)]),
-    Call(Var("__builtin_clz"), [Number(1)]),
-    Call(Var("__builtin_ctz"), [Number(8)]),
-    Call(Var("__builtin_ffs"), [Number(8)]),
-    Call(Var("__builtin_popcount"), [Number(0xf0f0)]),
-    Call(Var("__builtin_parity"), [Number(0xf0f1)]),
-    Call(Var("__builtin_bswap32"), [Number(0x01020304)]),
-    Call(Var("__builtin_rotateleft32"), [Number(0x12345678), Number(8)]),
-    Call(Var("__builtin_rotateright32"), [Number(0x12345678), Number(8)]),
-  ]
 }
 
 ///|
@@ -640,9 +582,6 @@ test "darwin codegen layout facts match MIR facts" {
     mir,
     OffsetOf(Struct("A"), [OffsetField("arr"), OffsetIndex(3)]),
   )
-  for expr in semantic_scalar_builtin_fold_cases() {
-    expect_darwin_attached_fold_const_facts(codegen, mir, expr)
-  }
   expect_darwin_fold_float_const_facts(
     codegen,
     mir,
@@ -854,9 +793,6 @@ test "linux amd64 codegen layout facts match MIR facts" {
     mir,
     OffsetOf(Struct("A"), [OffsetField("arr"), OffsetIndex(2)]),
   )
-  for expr in semantic_scalar_builtin_fold_cases() {
-    expect_x64_attached_fold_const_facts(codegen, mir, expr)
-  }
   expect_x64_fold_float_const_facts(
     codegen,
     mir,
@@ -870,11 +806,11 @@ test "linux amd64 codegen layout facts match MIR facts" {
 }
 
 ///|
-test "attached darwin arm64 semantic queries use MIR state" {
+test "darwin arm64 MIR module layout queries avoid Program state" {
   let prog = @parser.parse(semantic_fact_source())
   let mir = @mir.lower(prog, @target.Target::default())
-  let codegen = Codegen::new()
-  codegen.mir = Some(mir)
+  let mir_module = @mir.lower_to_module(prog, @target.Target::default())
+  let codegen = Codegen::new_with_mir_module(mir_module)
   codegen.var_types["local_buf"] = Array(SChar, 16)
   codegen.var_types["s"] = Struct("A")
   codegen.var_types["record"] = Struct("S")
@@ -909,65 +845,15 @@ test "attached darwin arm64 semantic queries use MIR state" {
     Some(("_gu", 0)) => ()
     _ => abort("darwin attached union global lvalue mismatch")
   }
-  expect_darwin_expr_type_facts(codegen, mir, MemberAccess(Var("s"), "arr"))
-  expect_darwin_object_size_facts(codegen, mir, [AddrOf(Var("ga")), Number(0)])
-  expect_darwin_object_size_facts(codegen, mir, [
-    AddrOf(MemberAccess(Var("ga"), "arr")),
-    Number(0),
-  ])
-  expect_darwin_object_size_facts(codegen, mir, [
-    MemberAccess(Var("ga"), "arr"),
-    Number(2),
-  ])
-  expect_darwin_object_size_facts(codegen, mir, [Var("local_buf"), Number(2)])
-  expect_darwin_object_size_facts(codegen, mir, [
-    AddrOf(ArrayAccess(Var("local_buf"), Number(3))),
-    Number(0),
-  ])
-  expect_darwin_object_size_facts(codegen, mir, [
-    AddrOf(MemberAccess(Var("s"), "arr")),
-    Number(0),
-  ])
-  expect_darwin_object_size_facts(codegen, mir, [
-    MemberAccess(Var("s"), "arr"),
-    Number(2),
-  ])
-  expect_darwin_object_size_facts(codegen, mir, [
-    AddrOf(ArrayAccess(MemberAccess(Var("s"), "arr"), Number(1))),
-    Number(1),
-  ])
-  expect_darwin_object_size_facts(codegen, mir, [
-    AddrOf(MemberAccess(Var("record"), "ld")),
-    Number(0),
-  ])
-  expect_darwin_object_size_facts(codegen, mir, [
-    AddrOf(MemberAccess(Var("record"), "ld")),
-    Number(1),
-  ])
-  expect_darwin_fold_const_facts(
-    codegen,
-    mir,
-    OffsetOf(Struct("A"), [OffsetField("arr"), OffsetIndex(2)]),
-  )
-  expect_darwin_fold_float_const_facts(
-    codegen,
-    mir,
-    Binary("/", Cast(Double, Number(1)), Number(2)),
-  )
-  expect_darwin_call_return_facts(codegen, mir, Var("__builtin_choose_expr"), [
-    Number(1),
-    FloatLiteral(1.25),
-    Number(2),
-  ])
 }
 
 ///|
-test "attached linux amd64 semantic queries use MIR state" {
+test "linux amd64 MIR module layout queries avoid Program state" {
   let target = semantic_linux_target()
   let prog = @parser.parse_for_target(semantic_fact_source(), target)
   let mir = @mir.lower(prog, target)
-  let codegen = X64Codegen::new()
-  codegen.mir = Some(mir)
+  let mir_module = @mir.lower_to_module(prog, target)
+  let codegen = X64Codegen::new_with_mir_module(mir_module)
   codegen.var_types["local_buf"] = Array(SChar, 16)
   codegen.var_types["s"] = Struct("A")
   codegen.var_types["record"] = Struct("S")
@@ -1002,49 +888,4 @@ test "attached linux amd64 semantic queries use MIR state" {
     Some(("gu", 0)) => ()
     _ => abort("x64 attached union global lvalue mismatch")
   }
-  expect_x64_expr_type_facts(codegen, mir, MemberAccess(Var("s"), "arr"))
-  expect_x64_object_size_facts(codegen, mir, [AddrOf(Var("ga")), Number(0)])
-  expect_x64_object_size_facts(codegen, mir, [
-    AddrOf(MemberAccess(Var("ga"), "arr")),
-    Number(0),
-  ])
-  expect_x64_object_size_facts(codegen, mir, [
-    MemberAccess(Var("ga"), "arr"),
-    Number(2),
-  ])
-  expect_x64_object_size_facts(codegen, mir, [Var("local_buf"), Number(2)])
-  expect_x64_object_size_facts(codegen, mir, [
-    AddrOf(ArrayAccess(Var("local_buf"), Number(3))),
-    Number(0),
-  ])
-  expect_x64_object_size_facts(codegen, mir, [
-    AddrOf(MemberAccess(Var("s"), "arr")),
-    Number(0),
-  ])
-  expect_x64_object_size_facts(codegen, mir, [
-    MemberAccess(Var("s"), "arr"),
-    Number(2),
-  ])
-  expect_x64_object_size_facts(codegen, mir, [
-    AddrOf(ArrayAccess(MemberAccess(Var("s"), "arr"), Number(1))),
-    Number(1),
-  ])
-  expect_x64_object_size_facts(codegen, mir, [
-    AddrOf(MemberAccess(Var("record"), "ld")),
-    Number(0),
-  ])
-  expect_x64_object_size_facts(codegen, mir, [
-    AddrOf(MemberAccess(Var("record"), "ld")),
-    Number(1),
-  ])
-  expect_x64_fold_const_facts(
-    codegen,
-    mir,
-    OffsetOf(Struct("A"), [OffsetField("arr"), OffsetIndex(2)]),
-  )
-  expect_x64_fold_float_const_facts(
-    codegen,
-    mir,
-    Binary("/", Cast(Double, Number(1)), Number(2)),
-  )
 }

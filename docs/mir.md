@@ -104,8 +104,9 @@ function-body layer, not a full instruction-level machine IR.
   allocation,
   return-address transforms, no-op `__builtin_assume`, runtime
   `__builtin_prefetch` address evaluation, identity `__builtin_unpredictable`,
-  and arithmetic/logical operators. Unsupported MIR bodies still fall back to
-  the existing parser-AST codegen path.
+  and arithmetic/logical operators. Unsupported MIR bodies are rejected by the
+  strict MIR-module backend; parser fallback exists only through the explicit
+  compatibility wrapper.
 - `Program::interpret_i64` is an integer-only interpreter intended for
   compile-test oracles. It supports scalar functions, locals, globals, calls,
   casts, arithmetic, conditionals, loops, scalar switches, simple gotos, selected
@@ -214,8 +215,8 @@ function-body layer, not a full instruction-level machine IR.
   backend-local facts agree with MIR for representative scalar, aggregate,
   packed, union, bit-field, offsetof, expression type, global-expression type,
   builtin-return type, and integer and floating constant-folding cases. It also
-  pins attached-backend semantic queries and scalar builtin constant-folding
-  delegation to MIR without relying on pre-populated backend layout tables.
+  pins backend layout/global queries when the codegen state is attached only to
+  a `MirModule`, without relying on parser `Program` state.
 
 ## Backend Sharing
 
@@ -256,6 +257,11 @@ Both backend global-symbol lookup maps are seeded from merged
 do not require parser global declaration records. Both backends also seed their
 aggregate layout tables from `MirModule.layouts`.
 
+The production `mir_codegen` package no longer carries parser `Program`,
+function declaration, global declaration, parameter, or statement nodes in its
+MIR emission state. Legacy parser-facing fallback entry points live outside the
+package in `mir_codegen_compat`.
+
 The current modular boundary is C-AST independent, not fully parser-package
 independent. `MirModule` still carries C types using `parser.Type`; removing
 that remaining package-level dependency requires extracting the C type model
@@ -286,8 +292,7 @@ program behavior.
    variadic, and richer ABI calls that have explicit MIR semantics and tests.
 4. Add backend differential tests that compare parser-AST codegen with MIR-body
    codegen as the supported subset expands.
-5. Once both backends consume MIR bodies for ordinary scalar functions, remove
-   duplicated backend statement walking for that subset and leave parser AST use
-   in front-end-only lowering code.
+5. Move the remaining parser expression/type helpers used for constant facts and
+   C type layout behind parser-neutral MIR/type APIs.
 6. Only after semantic/body sharing is stable, consider a real machine-level IR
    with explicit virtual registers, blocks, target lowering, and allocation.
