@@ -1032,6 +1032,26 @@ test "generate darwin arm64 strict MIR floating indirect calls" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR floating variadic libcalls" {
+  let source =
+    #|int main(void) {
+    #|  char buf[64];
+    #|  return __builtin___snprintf_chk(buf, 64, 0, 64, "%.1f", 1.5);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tfmov\td0, x9"), content="true")
+      inspect(assembly.contains("\tstr\tx9, [sp, #0]"), content="true")
+      inspect(assembly.contains("\tbl\t_snprintf"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR varargs setup builtins" {
   let source =
     #|typedef __builtin_va_list va_list;
@@ -2505,6 +2525,32 @@ test "generate linux amd64 strict MIR floating indirect calls" {
         assembly.contains("\tmovsd\txmm0, QWORD PTR [rsp]"),
         content="true",
       )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR floating variadic libcalls" {
+  let source =
+    #|int main(void) {
+    #|  char buf[64];
+    #|  return __builtin___snprintf_chk(buf, 64, 0, 64, "%.1f", 1.5);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(
+        assembly.contains("\tmovsd\txmm0, QWORD PTR [rsp]"),
+        content="true",
+      )
+      inspect(assembly.contains("\tmov\tal, 1"), content="true")
+      inspect(assembly.contains("\tcall\tsnprintf"), content="true")
     }
     Err(err) => abort(err)
   }
