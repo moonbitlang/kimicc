@@ -427,6 +427,25 @@ fn mir_body_codegen_small_aggregate_call_value_supported(
       }
       true
     }
+    MirIndirectCall(callee, args, ty) => {
+      if !mir_body_codegen_x64_small_aggregate_return_type(ty, mir) ||
+        !mir_body_codegen_value_supported(callee, int_arg_limit, mir) ||
+        !mir_body_codegen_indirect_call_supported(
+          callee.ty(),
+          args,
+          ty,
+          int_arg_limit,
+          mir,
+        ) {
+        return false
+      }
+      for arg in args {
+        if !mir_body_codegen_value_supported(arg, int_arg_limit, mir) {
+          return false
+        }
+      }
+      true
+    }
     _ => false
   }
 }
@@ -446,7 +465,7 @@ fn mir_body_codegen_value_supported(
       return aggregate &&
         mir_body_codegen_value_supported(addr, int_arg_limit, mir)
     }
-    MirCall(_, _, _) =>
+    MirCall(_, _, _) | MirIndirectCall(_, _, _) =>
       if mir_body_codegen_small_aggregate_call_value_supported(
           value, int_arg_limit, mir,
         ) {
@@ -576,6 +595,7 @@ fn mir_body_codegen_value_supported(
           args,
           ty,
           int_arg_limit,
+          mir,
         ) {
         return false
       }
@@ -1175,16 +1195,18 @@ fn mir_body_codegen_indirect_call_supported(
   args : Array[@mir.MirValue],
   ret : @ctype.Type,
   int_arg_limit : Int,
+  mir : @mir.MirModule,
 ) -> Bool {
-  if !mir_body_codegen_abi_scalar_type(ret) {
+  let ret_supported = mir_body_codegen_abi_scalar_type(ret) ||
+    mir_body_codegen_x64_small_aggregate_return_type(ret, mir)
+  if !ret_supported {
     return false
   }
   match peel_aligned_type(callee_ty) {
     FuncPtr(sig_ret, params, variadic) => {
-      if variadic ||
-        params.length() != args.length() ||
-        !mir_body_codegen_abi_scalar_type(sig_ret) ||
-        !mir_body_codegen_abi_scalar_type(ret) {
+      let sig_ret_supported = mir_body_codegen_abi_scalar_type(sig_ret) ||
+        mir_body_codegen_x64_small_aggregate_return_type(sig_ret, mir)
+      if variadic || params.length() != args.length() || !sig_ret_supported {
         return false
       }
       ignore(int_arg_limit)
@@ -1225,7 +1247,7 @@ fn mir_body_codegen_aggregate_return_value_supported(
     MirAggregateArg(addr, _) =>
       mir_body_codegen_value_supported(addr, int_arg_limit, mir)
     MirLoad(ptr, _) => mir_body_codegen_value_supported(ptr, int_arg_limit, mir)
-    MirCall(_, _, _) =>
+    MirCall(_, _, _) | MirIndirectCall(_, _, _) =>
       mir_body_codegen_small_aggregate_call_value_supported(
         value, int_arg_limit, mir,
       )
@@ -2785,7 +2807,7 @@ fn X64Codegen::emit_mir_save_aggregate_call_arg_raw(
   offsets : Map[Int, Int],
 ) -> Unit {
   match arg {
-    MirCall(_, _, _) =>
+    MirCall(_, _, _) | MirIndirectCall(_, _, _) =>
       if self.is_supported_small_aggregate(ty) {
         self.gen_mir_value(arg, offsets)
         self.emit("\tsub\trsp, " + raw_size.to_string())
@@ -3468,15 +3490,25 @@ fn X64Codegen::gen_mir_value(
     }
     MirStore(ptr, rhs, ty) =>
       match rhs {
-        MirCall(_, _, _) if self.is_supported_small_aggregate(ty) => {
-          self.gen_mir_value(ptr, offsets)
-          self.emit_mir_push_rax()
-          self.gen_mir_value(rhs, offsets)
-          self.emit("\tmov\tr10, QWORD PTR [rsp]")
-          self.emit_store_small_aggregate_return(ty)
-          self.emit("\tmov\trax, r10")
-          self.emit("\tadd\trsp, 16")
-        }
+        MirCall(_, _, _) | MirIndirectCall(_, _, _) =>
+          if self.is_supported_small_aggregate(ty) {
+            self.gen_mir_value(ptr, offsets)
+            self.emit_mir_push_rax()
+            self.gen_mir_value(rhs, offsets)
+            self.emit("\tmov\tr10, QWORD PTR [rsp]")
+            self.emit_store_small_aggregate_return(ty)
+            self.emit("\tmov\trax, r10")
+            self.emit("\tadd\trsp, 16")
+          } else {
+            self.gen_mir_value(ptr, offsets)
+            self.emit_mir_push_rax()
+            self.gen_mir_value(rhs, offsets)
+            self.emit_mir_numeric_conversion(rhs.ty(), ty)
+            self.emit_int_conversion_to(ty)
+            self.emit("\tmov\tr10, QWORD PTR [rsp]")
+            self.emit("\tadd\trsp, 16")
+            self.emit_store_indirect(ty)
+          }
         _ => {
           self.gen_mir_value(ptr, offsets)
           self.emit_mir_push_rax()
@@ -4096,7 +4128,9 @@ fn X64Codegen::gen_mir_value(
       if call_stack_cleanup > 0 {
         self.emit("\tadd\trsp, " + call_stack_cleanup.to_string())
       }
-      if !mir_body_codegen_abi_fp_type(ty) {
+      if self.is_supported_small_aggregate(ty) {
+        ()
+      } else if !mir_body_codegen_abi_fp_type(ty) {
         self.emit_abi_int_return_conversion(ty)
       }
     }
@@ -4220,7 +4254,9 @@ fn X64Codegen::gen_mir_value(
       if raw_area + stack_area > 0 {
         self.emit("\tadd\trsp, " + (raw_area + stack_area).to_string())
       }
-      if !mir_body_codegen_abi_fp_type(ty) {
+      if self.is_supported_small_aggregate(ty) {
+        ()
+      } else if !mir_body_codegen_abi_fp_type(ty) {
         self.emit_abi_int_return_conversion(ty)
       }
     }
@@ -4512,13 +4548,22 @@ fn X64Codegen::gen_mir_stmt(
         match init {
           Some(value) =>
             match value {
-              MirCall(_, _, _) if self.is_supported_small_aggregate(binding.ty) => {
-                self.gen_mir_value(value, offsets)
-                self.emit_store_small_aggregate_return_to_local(
-                  binding.ty,
-                  offsets[binding.id],
-                )
-              }
+              MirCall(_, _, _) | MirIndirectCall(_, _, _) =>
+                if self.is_supported_small_aggregate(binding.ty) {
+                  self.gen_mir_value(value, offsets)
+                  self.emit_store_small_aggregate_return_to_local(
+                    binding.ty,
+                    offsets[binding.id],
+                  )
+                } else {
+                  self.gen_mir_value(value, offsets)
+                  self.emit_mir_numeric_conversion(value.ty(), binding.ty)
+                  self.emit_int_conversion_to(binding.ty)
+                  self.emit_store_local_from_rax(
+                    offsets[binding.id],
+                    binding.ty,
+                  )
+                }
               _ => {
                 self.gen_mir_value(value, offsets)
                 self.emit_mir_numeric_conversion(value.ty(), binding.ty)
@@ -4541,7 +4586,8 @@ fn X64Codegen::gen_mir_stmt(
           let ret_ty = self.func_rets[self.func_name]
           if self.is_supported_small_aggregate(ret_ty) {
             match value {
-              MirCall(_, _, _) => self.gen_mir_value(value, offsets)
+              MirCall(_, _, _) | MirIndirectCall(_, _, _) =>
+                self.gen_mir_value(value, offsets)
               _ => {
                 self.gen_mir_aggregate_return_addr(value, offsets)
                 self.emit_load_small_aggregate_return(ret_ty)

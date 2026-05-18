@@ -3439,6 +3439,55 @@ test "generate linux amd64 strict MIR aggregate return call arguments" {
 }
 
 ///|
+test "generate linux amd64 strict MIR indirect aggregate return calls" {
+  let source =
+    #|struct Pair { long a; long b; };
+    #|struct DPair { double a; double b; };
+    #|struct Pair make_pair(long a, long b) { struct Pair p; p.a = a; p.b = b; return p; }
+    #|struct DPair make_dpair(double a, double b) { struct DPair p; p.a = a; p.b = b; return p; }
+    #|int pair_sum(struct Pair p) { return (int)(p.a + p.b); }
+    #|int dpair_sum(struct DPair p) { return (int)(p.a + p.b); }
+    #|struct Pair forward_pair(long a, long b) {
+    #|  struct Pair (*fp)(long, long) = make_pair;
+    #|  return fp(a, b);
+    #|}
+    #|int main(void) {
+    #|  struct Pair (*fp)(long, long) = make_pair;
+    #|  struct DPair (*fd)(double, double) = make_dpair;
+    #|  struct Pair p = fp(10, 20);
+    #|  struct Pair q;
+    #|  q = fp(1, 2);
+    #|  struct DPair d = fd(19.5, 22.5);
+    #|  return pair_sum(fp(3, 4)) + pair_sum(p) + pair_sum(q) +
+    #|         pair_sum(forward_pair(5, 6)) + dpair_sum(d);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\tr10"), content="true")
+      inspect(assembly.contains("\tcall\tpair_sum"), content="true")
+      inspect(assembly.contains("\tcall\tdpair_sum"), content="true")
+      inspect(assembly.contains("\tcall\tforward_pair"), content="true")
+      inspect(assembly.contains("\tmov\tQWORD PTR [r10], rax"), content="true")
+      inspect(
+        assembly.contains("\tmovsd\tQWORD PTR [r10], xmm0"),
+        content="true",
+      )
+      inspect(
+        assembly.contains("unsupported MIR body codegen"),
+        content="false",
+      )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate linux amd64 strict MIR aggregate variadic call arguments" {
   let source =
     #|typedef __builtin_va_list va_list;
