@@ -3227,6 +3227,39 @@ test "generate linux amd64 strict MIR aggregate va_arg reads" {
 }
 
 ///|
+test "generate linux amd64 strict MIR aggregate variadic call argument" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|struct Pair { long a; long b; };
+    #|int read_pair(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  struct Pair p = __builtin_va_arg(ap, struct Pair);
+    #|  __builtin_va_end(ap);
+    #|  return tag + (int)p.a + (int)p.b;
+    #|}
+    #|int main(void) {
+    #|  struct Pair p = {10, 20};
+    #|  return read_pair(4, p);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\tread_pair"), content="true")
+      inspect(assembly.contains("\tmov\trsi, QWORD PTR "), content="true")
+      inspect(assembly.contains("\tmov\trdx, QWORD PTR "), content="true")
+      inspect(assembly.contains("__builtin_va_arg"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate linux amd64 strict MIR bzero builtin libcall" {
   let source =
     #|int main(void) {

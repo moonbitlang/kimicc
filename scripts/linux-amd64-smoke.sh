@@ -216,6 +216,8 @@ system_header_binary_path="/tmp/kimicc-linux-amd64-system-headers"
 header_syntax_source_path="/tmp/kimicc-linux-amd64-header-syntax.c"
 va_list_source_path="/tmp/kimicc-linux-amd64-va-list.c"
 va_list_binary_path="/tmp/kimicc-linux-amd64-va-list"
+strict_mir_varargs_source_path="/tmp/kimicc-linux-amd64-strict-mir-varargs.c"
+strict_mir_varargs_binary_path="/tmp/kimicc-linux-amd64-strict-mir-varargs"
 
 mkdir -p "$probe_include_dir" "$probe_after_include_dir" "$probe_prefix_dir/headers"
 cat > "$probe_include_dir/probe_header.h" <<'H'
@@ -3252,6 +3254,41 @@ status=$?
 set -e
 if [ "$status" -ne 42 ]; then
   echo "expected va_list interop smoke binary to exit 42, got $status" >&2
+  exit 1
+fi
+
+cat > "$strict_mir_varargs_source_path" <<'C'
+typedef __builtin_va_list va_list;
+
+struct Pair {
+  long a;
+  long b;
+};
+
+int read_pair(int tag, ...) {
+  va_list ap;
+  struct Pair p;
+  __builtin_va_start(ap, tag);
+  p = __builtin_va_arg(ap, struct Pair);
+  __builtin_va_end(ap);
+  return tag + (int)p.a + (int)p.b;
+}
+
+int main(void) {
+  struct Pair p;
+  p.a = 10;
+  p.b = 20;
+  return read_pair(4, p);
+}
+C
+
+"$kimicc" --strict-mir-codegen -target linux-amd64 -o "$strict_mir_varargs_binary_path" "$strict_mir_varargs_source_path"
+set +e
+"$strict_mir_varargs_binary_path"
+status=$?
+set -e
+if [ "$status" -ne 34 ]; then
+  echo "expected strict MIR aggregate varargs smoke binary to exit 34, got $status" >&2
   exit 1
 fi
 
