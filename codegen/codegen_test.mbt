@@ -3227,6 +3227,45 @@ test "generate linux amd64 strict MIR aggregate va_arg reads" {
 }
 
 ///|
+test "generate linux amd64 strict MIR aggregate direct call arguments" {
+  let source =
+    #|struct Pair { long a; long b; };
+    #|struct DPair { double a; double b; };
+    #|struct Big { long a; long b; long c; };
+    #|int pair_sum(struct Pair p) { return (int)(p.a + p.b); }
+    #|int pair_tail(int a, int b, int c, int d, int e, int f, struct Pair p) {
+    #|  return (int)(p.a + p.b);
+    #|}
+    #|int dpair_sum(struct DPair p) { return (int)(p.a + p.b); }
+    #|int big_sum(struct Big p) { return (int)(p.a + p.b + p.c); }
+    #|int main(void) {
+    #|  struct Pair p = {10, 20};
+    #|  struct DPair d = {19.5, 22.5};
+    #|  struct Big b = {1, 2, 3};
+    #|  return pair_sum(p) + pair_tail(1, 2, 3, 4, 5, 6, p) + dpair_sum(d) + big_sum(b);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\tpair_sum"), content="true")
+      inspect(assembly.contains("\tcall\tpair_tail"), content="true")
+      inspect(assembly.contains("\tcall\tdpair_sum"), content="true")
+      inspect(assembly.contains("\tcall\tbig_sum"), content="true")
+      inspect(
+        assembly.contains("unsupported MIR body codegen"),
+        content="false",
+      )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate linux amd64 strict MIR aggregate variadic call arguments" {
   let source =
     #|typedef __builtin_va_list va_list;
