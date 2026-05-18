@@ -21,7 +21,10 @@ priv struct Codegen {
   mut emitted_labels : Map[String, String]
   mut defined_labels : Map[String, Bool]
   mut fp_literals : Array[Double]
+  mut sret_dest_offset : Int
   mut sret_scratch_offset : Int
+  mut sret_scratch_size : Int
+  mut sret_scratch_align : Int
   mut pending_sret_offset : Int
 }
 
@@ -200,7 +203,10 @@ fn Codegen::new() -> Codegen {
     emitted_labels: {},
     defined_labels: {},
     fp_literals: [],
+    sret_dest_offset: -1,
     sret_scratch_offset: -1,
+    sret_scratch_size: 0,
+    sret_scratch_align: 1,
     pending_sret_offset: -1,
   }
 }

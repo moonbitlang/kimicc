@@ -147,6 +147,52 @@ test "strict MIR codegen returns small aggregates to clang callers" {
 }
 
 ///|
+test "strict MIR codegen executes memory aggregate call results" {
+  let source =
+    #|struct Big { long a; long b; long c; };
+    #|struct Big make_big(long a, long b, long c) {
+    #|  struct Big p;
+    #|  p.a = a;
+    #|  p.b = b;
+    #|  p.c = c;
+    #|  return p;
+    #|}
+    #|int main(void) {
+    #|  struct Big p = make_big(10, 20, 30);
+    #|  struct Big q;
+    #|  q = make_big(3, 4, 5);
+    #|  return (int)(p.a + p.b + p.c + q.a + q.b + q.c);
+    #|}
+  assert_eq(run_source_strict_mir(source), 72)
+}
+
+///|
+test "strict MIR codegen returns memory aggregates to clang callers" {
+  let callee =
+    #|struct Big { long a; long b; long c; };
+    #|struct Big make_big(long a, long b, long c) {
+    #|  struct Big p;
+    #|  p.a = a;
+    #|  p.b = b;
+    #|  p.c = c;
+    #|  return p;
+    #|}
+    #|struct Big forward_big(long a, long b, long c) {
+    #|  return make_big(a + 1, b + 2, c + 3);
+    #|}
+  let driver =
+    #|struct Big { long a; long b; long c; };
+    #|struct Big make_big(long a, long b, long c);
+    #|struct Big forward_big(long a, long b, long c);
+    #|int main(void) {
+    #|  struct Big p = make_big(10, 20, 30);
+    #|  struct Big q = forward_big(3, 4, 5);
+    #|  return (int)(p.a + p.b + p.c + q.a + q.b + q.c);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 78)
+}
+
+///|
 test "strict MIR codegen executes globals arrays and structs" {
   let source =
     #|struct Pair { int x; int y; };

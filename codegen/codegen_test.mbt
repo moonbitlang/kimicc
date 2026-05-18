@@ -609,6 +609,30 @@ test "strict MIR still rejects unsupported builtin direct calls" {
 }
 
 ///|
+test "strict MIR rejects Darwin HFA aggregate returns for now" {
+  let source =
+    #|struct H { double a[2]; };
+    #|union U { double d; };
+    #|struct H make_h(double x, double y) {
+    #|  struct H h;
+    #|  h.a[0] = x;
+    #|  h.a[1] = y;
+    #|  return h;
+    #|}
+    #|union U make_u(double x) {
+    #|  union U u;
+    #|  u.d = x;
+    #|  return u;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(_) => abort("expected strict MIR HFA aggregate return rejection")
+    Err(err) =>
+      inspect(err.contains("unsupported MIR body codegen"), content="true")
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR memory builtin libcalls" {
   let source =
     #|int main(void) {
