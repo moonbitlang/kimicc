@@ -797,6 +797,21 @@ test "strict MIR codegen executes floating local comparisons" {
 }
 
 ///|
+test "strict MIR codegen executes floating ternary conversions" {
+  let source =
+    #|int main(void) {
+    #|  double c = 1.0;
+    #|  double z = 0.0;
+    #|  double d = c ? 3 : 2.5;
+    #|  float f = c ? (float)1.25 : 4;
+    #|  int a = c ? 5 : 7;
+    #|  int b = z ? 9 : 11;
+    #|  return (int)(d * 10) + (int)(f * 10) + a + b;
+    #|}
+  assert_eq(run_source_strict_mir(source), 58)
+}
+
+///|
 test "strict MIR codegen executes floating local arithmetic" {
   let source =
     #|int main(void) {

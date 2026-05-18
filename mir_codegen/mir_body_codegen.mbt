@@ -690,7 +690,6 @@ fn mir_body_codegen_value_supported(
       mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
     MirTernary(cond, then_, else_, ty) =>
       mir_body_codegen_scalar_type(ty) &&
-      !mir_body_codegen_floating_type(ty) &&
       mir_body_codegen_value_supported(cond, int_arg_limit, mir) &&
       mir_body_codegen_value_supported(then_, int_arg_limit, mir) &&
       mir_body_codegen_value_supported(else_, int_arg_limit, mir)
@@ -2780,13 +2779,14 @@ fn Codegen::gen_mir_value(
     MirTernary(cond, then_, else_, ty) => {
       let else_label = self.new_label()
       let end_label = self.new_label()
-      self.gen_mir_value(cond, offsets, frame_size)
-      self.emit("\tcbz\tx9, " + else_label)
+      self.emit_mir_cond_jump_false(cond, offsets, frame_size, else_label)
       self.gen_mir_value(then_, offsets, frame_size)
+      self.emit_numeric_conversion(then_.ty(), ty)
       self.emit_scalar_conversion_to(ty)
       self.emit("\tb\t" + end_label)
       self.emit(else_label + ":")
       self.gen_mir_value(else_, offsets, frame_size)
+      self.emit_numeric_conversion(else_.ty(), ty)
       self.emit_scalar_conversion_to(ty)
       self.emit(end_label + ":")
     }
@@ -3416,6 +3416,30 @@ fn Codegen::gen_mir_value(
 }
 
 ///|
+fn Codegen::emit_mir_cond_jump_false(
+  self : Codegen,
+  cond : @mir.MirValue,
+  offsets : Map[Int, Int],
+  frame_size : Int,
+  false_label : String,
+) -> Unit {
+  self.gen_mir_value(cond, offsets, frame_size)
+  if mir_body_codegen_floating_type(cond.ty()) {
+    let reg = mir_body_codegen_arm_fp_reg(cond.ty(), 9)
+    self.emit(
+      "\tfmov\t" +
+      reg +
+      ", " +
+      mir_body_codegen_arm_fp_bits_reg(cond.ty(), "x9"),
+    )
+    self.emit("\tfcmp\t" + reg + ", #0.0")
+    self.emit("\tb.eq\t" + false_label)
+  } else {
+    self.emit("\tcbz\tx9, " + false_label)
+  }
+}
+
+///|
 fn Codegen::gen_mir_address_base(
   self : Codegen,
   value : @mir.MirValue,
@@ -3826,8 +3850,7 @@ fn Codegen::gen_mir_stmt(
     MirIf(cond, then_, else_) => {
       let else_label = self.new_label()
       let end_label = self.new_label()
-      self.gen_mir_value(cond, offsets, frame_size)
-      self.emit("\tcbz\tx9, " + else_label)
+      self.emit_mir_cond_jump_false(cond, offsets, frame_size, else_label)
       self.gen_mir_stmts(then_, offsets, frame_size)
       self.emit("\tb\t" + end_label)
       self.emit(else_label + ":")
@@ -3842,8 +3865,7 @@ fn Codegen::gen_mir_stmt(
       self.break_label = Some(end_label)
       self.continue_label = Some(start_label)
       self.emit(start_label + ":")
-      self.gen_mir_value(cond, offsets, frame_size)
-      self.emit("\tcbz\tx9, " + end_label)
+      self.emit_mir_cond_jump_false(cond, offsets, frame_size, end_label)
       self.gen_mir_stmts(body, offsets, frame_size)
       self.emit("\tb\t" + start_label)
       self.emit(end_label + ":")
@@ -3860,8 +3882,7 @@ fn Codegen::gen_mir_stmt(
       self.continue_label = Some(continue_label)
       self.gen_mir_stmts(init, offsets, frame_size)
       self.emit(start_label + ":")
-      self.gen_mir_value(cond, offsets, frame_size)
-      self.emit("\tcbz\tx9, " + end_label)
+      self.emit_mir_cond_jump_false(cond, offsets, frame_size, end_label)
       self.gen_mir_stmts(body, offsets, frame_size)
       self.emit(continue_label + ":")
       match inc {
@@ -3884,8 +3905,13 @@ fn Codegen::gen_mir_stmt(
       self.emit(start_label + ":")
       self.gen_mir_stmts(body, offsets, frame_size)
       self.emit(continue_label + ":")
-      self.gen_mir_value(cond, offsets, frame_size)
-      self.emit("\tcbnz\tx9, " + start_label)
+      if mir_body_codegen_floating_type(cond.ty()) {
+        self.emit_mir_cond_jump_false(cond, offsets, frame_size, end_label)
+        self.emit("\tb\t" + start_label)
+      } else {
+        self.gen_mir_value(cond, offsets, frame_size)
+        self.emit("\tcbnz\tx9, " + start_label)
+      }
       self.emit(end_label + ":")
       self.break_label = old_break
       self.continue_label = old_continue
@@ -5060,14 +5086,14 @@ fn X64Codegen::gen_mir_value(
     MirTernary(cond, then_, else_, ty) => {
       let else_label = self.new_label()
       let end_label = self.new_label()
-      self.gen_mir_value(cond, offsets)
-      self.emit("\tcmp\trax, 0")
-      self.emit("\tje\t" + else_label)
+      self.emit_mir_cond_jump_false(cond, offsets, else_label)
       self.gen_mir_value(then_, offsets)
+      self.emit_mir_numeric_conversion(then_.ty(), ty)
       self.emit_int_conversion_to(ty)
       self.emit("\tjmp\t" + end_label)
       self.emit(else_label + ":")
       self.gen_mir_value(else_, offsets)
+      self.emit_mir_numeric_conversion(else_.ty(), ty)
       self.emit_int_conversion_to(ty)
       self.emit(end_label + ":")
     }
@@ -5827,6 +5853,22 @@ fn X64Codegen::gen_mir_value(
 }
 
 ///|
+fn X64Codegen::emit_mir_cond_jump_false(
+  self : X64Codegen,
+  cond : @mir.MirValue,
+  offsets : Map[Int, Int],
+  false_label : String,
+) -> Unit {
+  self.gen_mir_value(cond, offsets)
+  if x64_is_fp_type(cond.ty()) {
+    self.emit_fp_cond_jump_false(cond.ty(), false_label)
+  } else {
+    self.emit("\tcmp\trax, 0")
+    self.emit("\tje\t" + false_label)
+  }
+}
+
+///|
 fn X64Codegen::gen_mir_address_base(
   self : X64Codegen,
   value : @mir.MirValue,
@@ -6187,9 +6229,7 @@ fn X64Codegen::gen_mir_stmt(
     MirIf(cond, then_, else_) => {
       let else_label = self.new_label()
       let end_label = self.new_label()
-      self.gen_mir_value(cond, offsets)
-      self.emit("\tcmp\trax, 0")
-      self.emit("\tje\t" + else_label)
+      self.emit_mir_cond_jump_false(cond, offsets, else_label)
       self.gen_mir_stmts(then_, offsets)
       self.emit("\tjmp\t" + end_label)
       self.emit(else_label + ":")
@@ -6204,9 +6244,7 @@ fn X64Codegen::gen_mir_stmt(
       self.break_label = Some(end_label)
       self.continue_label = Some(start_label)
       self.emit(start_label + ":")
-      self.gen_mir_value(cond, offsets)
-      self.emit("\tcmp\trax, 0")
-      self.emit("\tje\t" + end_label)
+      self.emit_mir_cond_jump_false(cond, offsets, end_label)
       self.gen_mir_stmts(body, offsets)
       self.emit("\tjmp\t" + start_label)
       self.emit(end_label + ":")
@@ -6223,9 +6261,7 @@ fn X64Codegen::gen_mir_stmt(
       self.continue_label = Some(continue_label)
       self.gen_mir_stmts(init, offsets)
       self.emit(start_label + ":")
-      self.gen_mir_value(cond, offsets)
-      self.emit("\tcmp\trax, 0")
-      self.emit("\tje\t" + end_label)
+      self.emit_mir_cond_jump_false(cond, offsets, end_label)
       self.gen_mir_stmts(body, offsets)
       self.emit(continue_label + ":")
       match inc {
@@ -6248,9 +6284,14 @@ fn X64Codegen::gen_mir_stmt(
       self.emit(start_label + ":")
       self.gen_mir_stmts(body, offsets)
       self.emit(continue_label + ":")
-      self.gen_mir_value(cond, offsets)
-      self.emit("\tcmp\trax, 0")
-      self.emit("\tjne\t" + start_label)
+      if x64_is_fp_type(cond.ty()) {
+        self.emit_mir_cond_jump_false(cond, offsets, end_label)
+        self.emit("\tjmp\t" + start_label)
+      } else {
+        self.gen_mir_value(cond, offsets)
+        self.emit("\tcmp\trax, 0")
+        self.emit("\tjne\t" + start_label)
+      }
       self.emit(end_label + ":")
       self.break_label = old_break
       self.continue_label = old_continue
