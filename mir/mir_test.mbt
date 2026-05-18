@@ -3006,6 +3006,17 @@ test "mir body interpreter handles floating local arithmetic" {
 }
 
 ///|
+test "mir body interpreter handles floating direct calls" {
+  let source =
+    #|double add(double x, double y) { return x + y; }
+    #|double mix(int a, double b, int c) { return a + b + c; }
+    #|int main(void) {
+    #|  return (int)add(2.25, 3.75) + (int)mix(2, 3.5, 4);
+    #|}
+  expect_body_interp(source, 15L)
+}
+
+///|
 test "mir interpreter reports unsupported initialized local reads" {
   let source = "int main(void) { double d = 0.0; return (int)d; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())

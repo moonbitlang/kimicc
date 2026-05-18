@@ -577,6 +577,20 @@ fn X64Codegen::emit_store_int_reg_to_local(
 }
 
 ///|
+fn X64Codegen::emit_store_fp_reg_to_local(
+  self : X64Codegen,
+  reg : String,
+  offset : Int,
+  ty : @ctype.Type,
+) -> Unit {
+  match x64_core_type(ty) {
+    Float =>
+      self.emit("\tmovss\tDWORD PTR " + self.local_ref(offset) + ", " + reg)
+    _ => self.emit("\tmovsd\tQWORD PTR " + self.local_ref(offset) + ", " + reg)
+  }
+}
+
+///|
 fn x64_merge_aggregate_class(
   a : X64AggregateClass,
   b : X64AggregateClass,

@@ -143,11 +143,23 @@ test "strict MIR codegen executes floating local arithmetic" {
 }
 
 ///|
-test "strict MIR codegen rejects unsupported floating body instead of using AST fallback" {
+test "strict MIR codegen executes floating direct calls" {
+  let source =
+    #|double add(double x, double y) { return x + y; }
+    #|double mix(int a, double b, int c) { return a + b + c; }
+    #|int main(void) {
+    #|  return (int)add(2.25, 3.75) + (int)mix(2, 3.5, 4);
+    #|}
+  assert_eq(run_source_strict_mir(source), 15)
+}
+
+///|
+test "strict MIR codegen rejects unsupported floating indirect calls instead of using AST fallback" {
   let source =
     #|double id(double x) { return x; }
     #|int main(void) {
-    #|  return (int)id(1.0);
+    #|  double (*fp)(double) = id;
+    #|  return (int)fp(1.0);
     #|}
   assert_true(
     strict_mir_codegen_error(source).contains("unsupported MIR body codegen"),

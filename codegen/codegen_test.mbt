@@ -987,17 +987,24 @@ test "generate darwin arm64 strict MIR floating arithmetic" {
 }
 
 ///|
-test "strict MIR still rejects unsupported floating ABI" {
+test "generate darwin arm64 strict MIR floating direct calls" {
   let source =
-    #|double id(double x) { return x; }
+    #|double add(double x, double y) { return x + y; }
+    #|double mix(int a, double b, int c) { return a + b + c; }
     #|int main(void) {
-    #|  return (int)id(1.0);
+    #|  return (int)add(2.25, 3.75) + (int)mix(2, 3.5, 4);
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
-    Ok(_) => abort("expected strict MIR unsupported floating ABI rejection")
-    Err(err) =>
-      inspect(err.contains("unsupported MIR body codegen"), content="true")
+    Ok(assembly) => {
+      inspect(assembly.contains("_add:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tbl\t_add"), content="true")
+      inspect(assembly.contains("\tbl\t_mix"), content="true")
+      inspect(assembly.contains("\tfmov\td0, x9"), content="true")
+      inspect(assembly.contains("\tfmov\tx9, d0"), content="true")
+    }
+    Err(err) => abort(err)
   }
 }
 
@@ -2412,6 +2419,37 @@ test "generate linux amd64 strict MIR floating arithmetic" {
       inspect(assembly.contains("\tsubsd\txmm0, xmm1"), content="true")
       inspect(assembly.contains("\tmulsd\txmm0, xmm1"), content="true")
       inspect(assembly.contains("\tdivsd\txmm0, xmm1"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR floating direct calls" {
+  let source =
+    #|double add(double x, double y) { return x + y; }
+    #|double mix(int a, double b, int c) { return a + b + c; }
+    #|int main(void) {
+    #|  return (int)add(2.25, 3.75) + (int)mix(2, 3.5, 4);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\tadd"), content="true")
+      inspect(assembly.contains("\tcall\tmix"), content="true")
+      inspect(
+        assembly.contains("\tmovsd\tQWORD PTR [rsp], xmm0"),
+        content="true",
+      )
+      inspect(
+        assembly.contains("\tmovsd\txmm0, QWORD PTR [rsp]"),
+        content="true",
+      )
     }
     Err(err) => abort(err)
   }
