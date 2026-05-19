@@ -97,6 +97,11 @@ fn Program::runtime_cast_body_scalar(
 ) -> Int64 {
   let src = self.core_type(src_ty)
   let dst = self.core_type(dst_ty)
+  match (src, dst) {
+    (Pointer(_) | FuncPtr(_, _, _), Pointer(_) | FuncPtr(_, _, _)) =>
+      return bits
+    _ => ()
+  }
   if self.is_floating_type(src) && dst.is_integer() {
     return self.runtime_cast_int(bits.reinterpret_as_double().to_int64(), dst)
   }

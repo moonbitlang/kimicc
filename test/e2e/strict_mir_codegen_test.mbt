@@ -908,6 +908,20 @@ test "strict MIR codegen executes pointer arithmetic on local arrays" {
 }
 
 ///|
+test "strict MIR codegen executes casted object pointer byte offsets" {
+  let source =
+    #|struct S { unsigned char a; unsigned char b; };
+    #|int main(void) {
+    #|  struct S s;
+    #|  s.a = 0;
+    #|  s.b = 0;
+    #|  *(((unsigned char *)&s) + __builtin_offsetof(struct S, b)) = 42;
+    #|  return s.b;
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
 test "strict MIR codegen executes direct array decay in pointer arithmetic" {
   let source =
     #|int main(void) {

@@ -1546,6 +1546,7 @@ fn mir_body_offset_addr_value(
   match base {
     MirOffsetAddr(inner, base_offset, _) =>
       MirOffsetAddr(inner, base_offset + offset, ty)
+    MirCast(_, inner) => mir_body_offset_addr_value(inner, offset, ty)
     _ => MirOffsetAddr(base, offset, ty)
   }
 }
@@ -1561,7 +1562,19 @@ fn Program::lower_mir_known_object_ptr_expr(
     AddrOf(CompoundLiteral(lit_ty, items, id)) =>
       self.lower_mir_expr(AddrOf(CompoundLiteral(lit_ty, items, id)), ctx)
     AddrOf(inner) => self.lower_mir_object_addr(inner, ctx)
-    Cast(_, inner) => self.lower_mir_known_object_ptr_expr(inner, ctx)
+    Cast(cast_ty, inner) =>
+      match self.core_type(cast_ty) {
+        Pointer(_) | FuncPtr(_, _, _) =>
+          match self.lower_mir_known_object_ptr_expr(inner, ctx) {
+            Some(value) => Some(MirCast(cast_ty, value))
+            None =>
+              match self.lower_mir_expr_with_array_decay(inner, ctx) {
+                Some(value) => Some(MirCast(cast_ty, value))
+                None => None
+              }
+          }
+        _ => self.lower_mir_known_object_ptr_expr(inner, ctx)
+      }
     Binary(op, lhs, rhs) => {
       let scope = ctx.scope()
       let lhs_ty = self.expr_type(lhs, scope)
