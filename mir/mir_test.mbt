@@ -2257,6 +2257,17 @@ test "mir interpreter models atomic builtin return sizes" {
 }
 
 ///|
+test "mir lowers pointer call args with member array decay" {
+  let source =
+    #|struct Info { unsigned aReadMark[4]; };
+    #|unsigned load_mark(struct Info *pInfo, int i) {
+    #|  return __atomic_load_n(pInfo->aReadMark + i, 0);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("load_mark"), content="true")
+}
+
+///|
 test "mir interpreter models extended atomic builtin return sizes" {
   let source =
     #|int atomic_int_value;
