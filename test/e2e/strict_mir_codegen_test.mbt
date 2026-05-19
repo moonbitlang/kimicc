@@ -1617,3 +1617,142 @@ test "strict MIR codegen executes aggregate va_arg reads from MIR caller" {
     #|}
   assert_eq(run_source_strict_mir(source), 34)
 }
+
+///|
+test "strict MIR codegen executes Darwin long double scalar ops" {
+  let source =
+    #|int main(void) {
+    #|  long double d = 1.0L;
+    #|  d = d + 2.0L;
+    #|  return (int)d;
+    #|}
+  assert_eq(run_source_strict_mir(source), 3)
+}
+
+///|
+test "strict MIR codegen executes loads through global address cancellation" {
+  let source =
+    #|char buf[3] = {4, 5, 0};
+    #|char *macro_ptr = buf;
+    #|int tok;
+    #|int next_token(void) {
+    #|  int t = **(&macro_ptr);
+    #|  *(&tok) = t, ++*(&macro_ptr);
+    #|  return tok + **(&macro_ptr);
+    #|}
+    #|int main(void) {
+    #|  return next_token();
+    #|}
+  assert_eq(run_source_strict_mir(source), 9)
+}
+
+///|
+test "strict MIR codegen executes TinyCC-style aggregate copies" {
+  let source =
+    #|typedef unsigned long long uint64_t;
+    #|typedef struct CType { int t; void *ref; } CType;
+    #|typedef union CValue {
+    #|  long double ld;
+    #|  double d;
+    #|  float f;
+    #|  uint64_t i;
+    #|  struct { char *data; int size; } str;
+    #|  int tab[((sizeof(long double)+3)/4)];
+    #|} CValue;
+    #|typedef struct SValue {
+    #|  CType type;
+    #|  unsigned short r;
+    #|  unsigned short r2;
+    #|  union { struct { int jtrue, jfalse; }; CValue c; };
+    #|  union { struct { unsigned short cmp_op, cmp_r; }; void *sym; };
+    #|} SValue;
+    #|SValue stack[2];
+    #|SValue *vtop = &stack[1];
+    #|void vsetc(CType *type, int r, CValue *vc) {
+    #|  vtop->type = *type;
+    #|  vtop->r = r;
+    #|  vtop->r2 = 0x0030;
+    #|  vtop->c = *vc;
+    #|  vtop->sym = (void*)0;
+    #|}
+    #|void vswap(void) {
+    #|  SValue tmp;
+    #|  tmp = vtop[0];
+    #|  vtop[0] = vtop[-1];
+    #|  vtop[-1] = tmp;
+    #|}
+    #|int main(void) {
+    #|  CType ty = {7, (void*)0};
+    #|  CValue value;
+    #|  value.str.data = (char*)0;
+    #|  value.str.size = 21;
+    #|  stack[0].c.i = 9;
+    #|  vsetc(&ty, 3, &value);
+    #|  vswap();
+    #|  return stack[0].c.str.size + (int)stack[1].c.i;
+    #|}
+  assert_eq(run_source_strict_mir(source), 30)
+}
+
+///|
+test "strict MIR codegen executes comma aggregate assignments" {
+  let source =
+    #|struct S { int a; int b; };
+    #|struct S values[2];
+    #|int main(void) {
+    #|  struct S tmp;
+    #|  values[0].a = 1;
+    #|  values[1].a = 2;
+    #|  tmp = values[0], values[0] = values[1], values[1] = tmp;
+    #|  return values[0].a * 10 + values[1].a;
+    #|}
+  assert_eq(run_source_strict_mir(source), 21)
+}
+
+///|
+test "strict MIR codegen executes bitfield compound updates" {
+  let source =
+    #|struct SymAttr {
+    #|  unsigned short aligned : 5, packed : 1, weak : 1, visibility : 2;
+    #|};
+    #|int main(void) {
+    #|  struct SymAttr a = {0};
+    #|  struct SymAttr b = {0};
+    #|  b.packed = 1;
+    #|  b.weak = 1;
+    #|  a.packed |= b.packed;
+    #|  a.weak |= b.weak;
+    #|  return a.packed + 2 * a.weak;
+    #|}
+  assert_eq(run_source_strict_mir(source), 3)
+}
+
+///|
+test "strict MIR codegen executes floating comma stores" {
+  let source =
+    #|union U { float f; unsigned u; };
+    #|int main(void) {
+    #|  union U x1, x2;
+    #|  x1.f = 1.0f, x2.f = -0.0f;
+    #|  return (x1.u == 0x3f800000u) + (x2.u == 0x80000000u);
+    #|}
+  assert_eq(run_source_strict_mir(source), 2)
+}
+
+///|
+test "strict MIR codegen executes function typedef pointer calls" {
+  let source =
+    #|typedef int Callback(void *data, int value);
+    #|struct Hook { Callback *call; void *data; };
+    #|int add(void *data, int value) {
+    #|  return *(int*)data + value;
+    #|}
+    #|int main(void) {
+    #|  int base = 5;
+    #|  struct Hook hook;
+    #|  hook.call = add;
+    #|  hook.data = &base;
+    #|  return hook.call(hook.data, 7);
+    #|}
+  assert_eq(run_source_strict_mir(source), 12)
+}
