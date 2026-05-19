@@ -815,6 +815,21 @@ test "mir body interpreter decays member arrays in pointer comparisons" {
 }
 
 ///|
+test "mir body lowering handles local aggregate array initializers" {
+  let source =
+    #|struct Item { const char *z; int a; int b; };
+    #|int main(void) {
+    #|  struct Item items[] = {
+    #|    { "x", 1, 2 },
+    #|    { "y", 3, 4 },
+    #|  };
+    #|  return items[1].a + items[0].b;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+}
+
+///|
 test "mir body interpreter copies from global aggregates" {
   let source =
     #|struct Item { int x; int *p; };

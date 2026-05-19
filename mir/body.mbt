@@ -458,7 +458,11 @@ fn Program::lower_mir_array_init_stores(
     Some(info) => info
     None => return None
   }
-  if !mir_body_scalar_type(elem_ty) {
+  let aggregate_elem = match self.core_type(elem_ty) {
+    Struct(_) | Union(_) => true
+    _ => false
+  }
+  if !mir_body_scalar_type(elem_ty) && !aggregate_elem {
     return None
   }
   if init is String(_) && !mir_body_char_array_elem_type(elem_ty) {
@@ -473,7 +477,17 @@ fn Program::lower_mir_array_init_stores(
   let stores : Array[MirStmt] = []
   for i in 0..<len {
     let addr = MirElemAddr(base, MirConst(i.to_int64(), SInt), elem_ty)
-    stores.push(MirExprStmt(MirStore(addr, MirConst(0L, elem_ty), elem_ty)))
+    if aggregate_elem {
+      match self.lower_mir_zero_init_stores(addr, elem_ty) {
+        Some(zero_stores) =>
+          for store in zero_stores {
+            stores.push(store)
+          }
+        None => return None
+      }
+    } else {
+      stores.push(MirExprStmt(MirStore(addr, MirConst(0L, elem_ty), elem_ty)))
+    }
   }
   match init {
     String(value) => {
@@ -514,13 +528,23 @@ fn Program::lower_mir_array_init_stores(
         (index, item)
       }
     }
-    let value = match
-      self.lower_mir_expr(mir_body_scalar_initializer_expr(value_expr), ctx) {
-      Some(value) => value
-      None => return None
-    }
     let addr = MirElemAddr(base, MirConst(index.to_int64(), SInt), elem_ty)
-    stores.push(MirExprStmt(MirStore(addr, value, elem_ty)))
+    if aggregate_elem {
+      match self.lower_mir_struct_init_stores(addr, elem_ty, value_expr, ctx) {
+        Some(init_stores) =>
+          for store in init_stores {
+            stores.push(store)
+          }
+        None => return None
+      }
+    } else {
+      let value = match
+        self.lower_mir_expr(mir_body_scalar_initializer_expr(value_expr), ctx) {
+        Some(value) => value
+        None => return None
+      }
+      stores.push(MirExprStmt(MirStore(addr, value, elem_ty)))
+    }
   }
   Some(stores)
 }
