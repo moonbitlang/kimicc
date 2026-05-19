@@ -1664,14 +1664,9 @@ fn Program::lower_mir_expr(
       }
     AddrOf(Deref(inner)) => self.lower_mir_expr(inner, ctx)
     AddrOf(ArrayAccess(base, index)) =>
-      self.lower_mir_array_elem_addr(
-        base,
-        index,
-        self.expr_type(ArrayAccess(base, index), scope),
-        ctx,
-      )
+      self.lower_mir_object_addr(ArrayAccess(base, index), ctx)
     AddrOf(MemberAccess(obj, field)) =>
-      self.lower_mir_member_addr(obj, field, ctx)
+      self.lower_mir_object_addr(MemberAccess(obj, field), ctx)
     Deref(Var(name)) =>
       match self.lower_mir_expr(Var(name), ctx) {
         Some(value) =>

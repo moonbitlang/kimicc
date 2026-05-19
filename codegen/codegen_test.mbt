@@ -1591,6 +1591,28 @@ test "generate darwin arm64 strict MIR atomic fence builtins" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR atomic scalar load store builtins" {
+  let source =
+    #|int w;
+    #|int main(void) {
+    #|  __atomic_store_n(&w, 41, 5);
+    #|  return __atomic_load_n(&w, 5) + 1;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tstlr\tw9, [x0]"), content="true")
+      inspect(assembly.contains("\tldar\tw9, [x0]"), content="true")
+      inspect(assembly.contains("\tbl\t___atomic_store_n"), content="false")
+      inspect(assembly.contains("\tbl\t___atomic_load_n"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 MIR module uses module function metadata" {
   let source = "int main(void) { return 42; }"
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
@@ -4091,6 +4113,35 @@ test "generate linux amd64 strict MIR atomic fence builtins" {
         assembly.contains("\tcall\t__c11_atomic_signal_fence"),
         content="false",
       )
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR atomic scalar load store builtins" {
+  let source =
+    #|int w;
+    #|int main(void) {
+    #|  __atomic_store_n(&w, 41, 5);
+    #|  return __atomic_load_n(&w, 5) + 1;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\txchg\tDWORD PTR [r10], eax"), content="true")
+      inspect(
+        assembly.contains("\tmovsxd\trax, DWORD PTR [rax]"),
+        content="true",
+      )
+      inspect(assembly.contains("\tcall\t__atomic_store_n"), content="false")
+      inspect(assembly.contains("\tcall\t__atomic_load_n"), content="false")
     }
     Err(err) => abort(err)
   }
