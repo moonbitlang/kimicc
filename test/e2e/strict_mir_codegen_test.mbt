@@ -1087,6 +1087,20 @@ test "strict MIR codegen executes casted global array decay" {
 }
 
 ///|
+test "strict MIR codegen returns implicit global array decay" {
+  let source =
+    #|char version[4] = "abc";
+    #|char *get(void) {
+    #|  return version;
+    #|}
+    #|int main(void) {
+    #|  char *p = get();
+    #|  return p[1];
+    #|}
+  assert_eq(run_source_strict_mir(source), 98)
+}
+
+///|
 test "strict MIR codegen executes floating local casts to int" {
   let source =
     #|int main(void) {

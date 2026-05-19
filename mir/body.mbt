@@ -2150,9 +2150,18 @@ fn Program::lower_mir_stmt(
     Return(expr) =>
       match expr {
         Some(value_expr) =>
-          match self.lower_mir_expr(value_expr, ctx) {
-            Some(value) => Some([MirReturn(Some(value))])
-            None => None
+          match self.funcs.get(ctx.current_func) {
+            Some(sig) =>
+              match
+                self.lower_mir_expr_for_target_type(sig.ret, value_expr, ctx) {
+                Some(value) => Some([MirReturn(Some(value))])
+                None => None
+              }
+            None =>
+              match self.lower_mir_expr(value_expr, ctx) {
+                Some(value) => Some([MirReturn(Some(value))])
+                None => None
+              }
           }
         None => Some([MirReturn(None)])
       }
