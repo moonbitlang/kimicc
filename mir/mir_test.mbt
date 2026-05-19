@@ -1129,6 +1129,22 @@ test "mir body interpreter handles initialized scalar global arrays" {
 }
 
 ///|
+test "mir body lowering handles static nested array access" {
+  let source =
+    #|int main(void) {
+    #|  static const unsigned char trans[2][3] = {
+    #|    { 1, 2, 3 },
+    #|    { 4, 5, 6 },
+    #|  };
+    #|  int i = 1;
+    #|  int j = 2;
+    #|  return trans[i][j];
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+}
+
+///|
 test "mir body lowering handles casted global array decay" {
   let source =
     #|int a[3] = {4, 5, 6};
