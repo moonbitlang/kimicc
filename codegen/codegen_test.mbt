@@ -4321,6 +4321,66 @@ test "strict target assembly rejects parser body fallback" {
 }
 
 ///|
+test "strict MIR assembly skips unused unsupported inline body" {
+  let source =
+    #|inline int skipped(void) {
+    #|  goto *&&target;
+    #|target:
+    #|  return 1;
+    #|}
+    #|int main(void) { return 42; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.decls[0].has_body, content="true")
+  inspect(mir.bodies.contains("skipped"), content="false")
+  match @mir_codegen_compat.generate_assembly_from_mir_strict(mir) {
+    Ok(assembly) => {
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("_skipped:"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "strict MIR assembly skips unused lowered inline body" {
+  let source =
+    #|static inline unsigned swap32(unsigned x) {
+    #|  return __builtin_bswap32(x);
+    #|}
+    #|int main(void) { return 42; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.decls[0].has_body, content="true")
+  inspect(mir.bodies.contains("swap32"), content="true")
+  match @mir_codegen_compat.generate_assembly_from_mir_strict(mir) {
+    Ok(assembly) => {
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("_swap32:"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "strict MIR assembly rejects calls to unsupported inline body" {
+  let source =
+    #|inline int skipped(void) {
+    #|  goto *&&target;
+    #|target:
+    #|  return 1;
+    #|}
+    #|int main(void) { return skipped(); }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("skipped"), content="false")
+  match @mir_codegen_compat.generate_assembly_from_mir_strict(mir) {
+    Ok(_) => abort("expected strict MIR inline call rejection")
+    Err(err) =>
+      inspect(err.contains("missing MIR body for skipped"), content="true")
+  }
+}
+
+///|
 test "parser AST codegen fallback is explicit" {
   let source =
     #|int main(void) {

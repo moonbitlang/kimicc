@@ -127,6 +127,248 @@ fn codegen_func_decls_from_mir(
 }
 
 ///|
+fn mir_codegen_inline_decls(
+  decls : Array[@mir.MirFuncDecl],
+) -> Map[String, @mir.MirFuncDecl] {
+  let inline_decls : Map[String, @mir.MirFuncDecl] = {}
+  for decl in decls {
+    if decl.is_inline {
+      inline_decls[decl.name] = decl
+    }
+  }
+  inline_decls
+}
+
+///|
+fn mir_codegen_mark_needed_inline(
+  name : String,
+  inline_decls : Map[String, @mir.MirFuncDecl],
+  bodies : Map[String, @mir.MirFuncBody],
+  needed : Map[String, Bool],
+) -> Unit {
+  if needed.contains(name) || !inline_decls.contains(name) {
+    return
+  }
+  needed[name] = true
+  match bodies.get(name) {
+    Some(body) =>
+      mir_codegen_collect_stmt_inline_refs(
+        body.body,
+        inline_decls,
+        bodies,
+        needed,
+      )
+    None => ()
+  }
+}
+
+///|
+fn mir_codegen_collect_value_inline_refs(
+  value : @mir.MirValue,
+  inline_decls : Map[String, @mir.MirFuncDecl],
+  bodies : Map[String, @mir.MirFuncBody],
+  needed : Map[String, Bool],
+) -> Unit {
+  match value {
+    MirConst(_, _)
+    | MirLocal(_)
+    | MirAddrLocal(_)
+    | MirAddrGlobal(_, _)
+    | MirStringAddr(_) => ()
+    MirFuncAddr(name, _) =>
+      mir_codegen_mark_needed_inline(name, inline_decls, bodies, needed)
+    MirElemAddr(base, index, _) => {
+      mir_codegen_collect_value_inline_refs(base, inline_decls, bodies, needed)
+      mir_codegen_collect_value_inline_refs(index, inline_decls, bodies, needed)
+    }
+    MirOffsetAddr(base, _, _)
+    | MirLoad(base, _)
+    | MirUnary(_, base, _)
+    | MirCast(_, base)
+    | MirAggregateArg(base, _)
+    | MirVaArg(base, _)
+    | MirVaArgAddr(base, _) =>
+      mir_codegen_collect_value_inline_refs(base, inline_decls, bodies, needed)
+    MirBinary(_, left, right, _) => {
+      mir_codegen_collect_value_inline_refs(left, inline_decls, bodies, needed)
+      mir_codegen_collect_value_inline_refs(right, inline_decls, bodies, needed)
+    }
+    MirCall(name, args, _) => {
+      mir_codegen_mark_needed_inline(name, inline_decls, bodies, needed)
+      for arg in args {
+        mir_codegen_collect_value_inline_refs(arg, inline_decls, bodies, needed)
+      }
+    }
+    MirIndirectCall(callee, args, _) => {
+      mir_codegen_collect_value_inline_refs(
+        callee, inline_decls, bodies, needed,
+      )
+      for arg in args {
+        mir_codegen_collect_value_inline_refs(arg, inline_decls, bodies, needed)
+      }
+    }
+    MirAssignLocal(_, rhs) =>
+      mir_codegen_collect_value_inline_refs(rhs, inline_decls, bodies, needed)
+    MirStore(addr, rhs, _) => {
+      mir_codegen_collect_value_inline_refs(addr, inline_decls, bodies, needed)
+      mir_codegen_collect_value_inline_refs(rhs, inline_decls, bodies, needed)
+    }
+    MirPostUpdateLocal(_, _, rhs, _) =>
+      mir_codegen_collect_value_inline_refs(rhs, inline_decls, bodies, needed)
+    MirPreUpdateMemory(addr, _, rhs, _)
+    | MirPostUpdateMemory(addr, _, rhs, _) => {
+      mir_codegen_collect_value_inline_refs(addr, inline_decls, bodies, needed)
+      mir_codegen_collect_value_inline_refs(rhs, inline_decls, bodies, needed)
+    }
+    MirTernary(cond, then_, else_, _) => {
+      mir_codegen_collect_value_inline_refs(cond, inline_decls, bodies, needed)
+      mir_codegen_collect_value_inline_refs(then_, inline_decls, bodies, needed)
+      mir_codegen_collect_value_inline_refs(else_, inline_decls, bodies, needed)
+    }
+  }
+}
+
+///|
+fn mir_codegen_collect_stmt_inline_refs(
+  stmts : Array[@mir.MirStmt],
+  inline_decls : Map[String, @mir.MirFuncDecl],
+  bodies : Map[String, @mir.MirFuncBody],
+  needed : Map[String, Bool],
+) -> Unit {
+  for stmt in stmts {
+    match stmt {
+      MirDeclare(_, init) =>
+        match init {
+          Some(value) =>
+            mir_codegen_collect_value_inline_refs(
+              value, inline_decls, bodies, needed,
+            )
+          None => ()
+        }
+      MirExprStmt(value) | MirReturn(Some(value)) =>
+        mir_codegen_collect_value_inline_refs(
+          value, inline_decls, bodies, needed,
+        )
+      MirReturn(None) | MirLabel(_) | MirGoto(_) | MirBreak | MirContinue => ()
+      MirIf(cond, then_, else_) => {
+        mir_codegen_collect_value_inline_refs(
+          cond, inline_decls, bodies, needed,
+        )
+        mir_codegen_collect_stmt_inline_refs(
+          then_, inline_decls, bodies, needed,
+        )
+        mir_codegen_collect_stmt_inline_refs(
+          else_, inline_decls, bodies, needed,
+        )
+      }
+      MirWhile(cond, body) | MirDoWhile(cond, body) => {
+        mir_codegen_collect_value_inline_refs(
+          cond, inline_decls, bodies, needed,
+        )
+        mir_codegen_collect_stmt_inline_refs(body, inline_decls, bodies, needed)
+      }
+      MirFor(init, cond, inc, body) => {
+        mir_codegen_collect_stmt_inline_refs(init, inline_decls, bodies, needed)
+        mir_codegen_collect_value_inline_refs(
+          cond, inline_decls, bodies, needed,
+        )
+        match inc {
+          Some(value) =>
+            mir_codegen_collect_value_inline_refs(
+              value, inline_decls, bodies, needed,
+            )
+          None => ()
+        }
+        mir_codegen_collect_stmt_inline_refs(body, inline_decls, bodies, needed)
+      }
+      MirSwitch(control, _, body) => {
+        mir_codegen_collect_value_inline_refs(
+          control, inline_decls, bodies, needed,
+        )
+        mir_codegen_collect_stmt_inline_refs(body, inline_decls, bodies, needed)
+      }
+      MirBlock(body) =>
+        mir_codegen_collect_stmt_inline_refs(body, inline_decls, bodies, needed)
+    }
+  }
+}
+
+///|
+fn mir_codegen_collect_global_init_inline_refs(
+  init : @mir.MirGlobalInit,
+  inline_decls : Map[String, @mir.MirFuncDecl],
+  bodies : Map[String, @mir.MirFuncBody],
+  needed : Map[String, Bool],
+) -> Unit {
+  match init {
+    MirGlobalSymbol(name) | MirGlobalSymbolOffset(name, _) =>
+      mir_codegen_mark_needed_inline(name, inline_decls, bodies, needed)
+    MirGlobalArray(values) =>
+      for value in values {
+        mir_codegen_collect_global_init_inline_refs(
+          value, inline_decls, bodies, needed,
+        )
+      }
+    MirGlobalArraySparse(values) | MirGlobalAggregateSparse(values) =>
+      for value in values {
+        mir_codegen_collect_global_init_inline_refs(
+          value.1,
+          inline_decls,
+          bodies,
+          needed,
+        )
+      }
+    MirGlobalScalarInt(_)
+    | MirGlobalScalarFloat(_)
+    | MirGlobalString(_)
+    | MirGlobalInitUnsupported => ()
+  }
+}
+
+///|
+fn mir_codegen_needed_inline_bodies(
+  mir_module : @mir.MirModule,
+) -> Map[String, Bool] {
+  let inline_decls = mir_codegen_inline_decls(mir_module.decls)
+  let needed : Map[String, Bool] = {}
+  for decl in mir_module.decls {
+    if !decl.is_inline && decl.has_body {
+      match mir_module.bodies.get(decl.name) {
+        Some(body) =>
+          mir_codegen_collect_stmt_inline_refs(
+            body.body,
+            inline_decls,
+            mir_module.bodies,
+            needed,
+          )
+        None => ()
+      }
+    }
+  }
+  for global in @mir.merge_global_decls(mir_module.global_decls) {
+    match global.init {
+      Some(init) =>
+        mir_codegen_collect_global_init_inline_refs(
+          init,
+          inline_decls,
+          mir_module.bodies,
+          needed,
+        )
+      None => ()
+    }
+  }
+  needed
+}
+
+///|
+fn mir_codegen_should_emit_body(
+  decl : @mir.MirFuncDecl,
+  needed_inline : Map[String, Bool],
+) -> Bool {
+  decl.has_body && (!decl.is_inline || needed_inline.contains(decl.name))
+}
+
+///|
 fn codegen_global_decl_from_mir(decl : @mir.MirGlobalDecl) -> CodegenGlobalDecl {
   {
     ty: decl.ty,
@@ -765,8 +1007,9 @@ fn Codegen::generate_mir_only(
   self.register_mir_aggregate_layouts(mir_module)
   self.register_mir_function_decls(mir_module)
   self.register_mir_global_decls(mir_module)
+  let needed_inline = mir_codegen_needed_inline_bodies(mir_module)
   for decl in mir_module.decls {
-    if decl.has_body {
+    if mir_codegen_should_emit_body(decl, needed_inline) {
       match mir_module.bodies.get(decl.name) {
         Some(body) => self.gen_mir_func(decl, body)
         None => ()
@@ -905,8 +1148,9 @@ fn mir_module_body_codegen_strict_error(mir_module : @mir.MirModule) -> String? 
     DarwinArm64 => 8
     LinuxAmd64 => 6
   }
+  let needed_inline = mir_codegen_needed_inline_bodies(mir_module)
   for decl in mir_module.decls {
-    if decl.has_body {
+    if mir_codegen_should_emit_body(decl, needed_inline) {
       if !mir_module.bodies.contains(decl.name) {
         return Some("missing MIR body for " + decl.name)
       }

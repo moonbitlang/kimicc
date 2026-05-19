@@ -113,6 +113,42 @@ fn semantic_find_field_type(
 }
 
 ///|
+fn semantic_expr_preview(expr : Expr) -> String {
+  match expr {
+    Number(n) => n.to_string()
+    FloatLiteral(n) => n.to_string()
+    String(_) => "string literal"
+    Var(name) => name
+    Binary(op, _, _) => "binary " + op
+    Unary(op, operand) => op + semantic_expr_preview(operand)
+    Call(func, _) => "call " + semantic_expr_preview(func)
+    Assign(_, _) => "assignment"
+    CompoundAssign(op, _, _) => "compound assignment " + op
+    MemberAccess(obj, field) => semantic_expr_preview(obj) + "." + field
+    Deref(ptr) => "*" + semantic_expr_preview(ptr)
+    AddrOf(e) => "&" + semantic_expr_preview(e)
+    ArrayAccess(arr, _) => semantic_expr_preview(arr) + "[]"
+    Sizeof(_) | SizeofExpr(_) => "sizeof"
+    Alignof(_) | AlignofExpr(_) => "alignof"
+    Cast(ty, e) => "(" + ty.to_string() + ")" + semantic_expr_preview(e)
+    PrefixInc(e) => "++" + semantic_expr_preview(e)
+    PrefixDec(e) => "--" + semantic_expr_preview(e)
+    PostfixInc(e) => semantic_expr_preview(e) + "++"
+    PostfixDec(e) => semantic_expr_preview(e) + "--"
+    Ternary(_, _, _) => "ternary"
+    LabelAddr(name) => "&&" + name
+    VaArg(_, ty) => "va_arg(" + ty.to_string() + ")"
+    OffsetOf(_, _) => "offsetof"
+    Array(_) => "array initializer"
+    CompoundLiteral(ty, _, _) => "compound literal " + ty.to_string()
+    DesignatedField(field, _) => "." + field
+    DesignatedIndex(index, _) => "[" + index.to_string() + "]"
+    DesignatedRange(start, end, _) =>
+      "[" + start.to_string() + "..." + end.to_string() + "]"
+  }
+}
+
+///|
 fn semantic_binary_type(
   op : String,
   lhs_ty : Type,
@@ -228,7 +264,13 @@ fn semantic_expr_type(
           if semantic_is_arithmetic_type(operand_ty) {
             Ok(operand_ty)
           } else {
-            Err("unary numeric operator requires arithmetic operand")
+            Err(
+              "unary numeric operator requires arithmetic operand: " +
+              op +
+              semantic_expr_preview(operand) +
+              " has type " +
+              operand_ty.to_string(),
+            )
           }
         "~" =>
           if operand_ty.is_integer() {
@@ -464,10 +506,19 @@ fn semantic_validate_stmt(
       }
       semantic_validate_stmt(ctx, locals.copy(), body)
     }
-    Compound(stmts) | StmtList(stmts) => {
+    Compound(stmts) => {
       let scoped = locals.copy()
       for item in stmts {
         match semantic_validate_stmt(ctx, scoped, item) {
+          Ok(_) => ()
+          Err(err) => return Err(err)
+        }
+      }
+      Ok(())
+    }
+    StmtList(stmts) => {
+      for item in stmts {
+        match semantic_validate_stmt(ctx, locals, item) {
           Ok(_) => ()
           Err(err) => return Err(err)
         }
@@ -575,7 +626,7 @@ pub fn validate_semantics(prog : Program) -> Result[Unit, String] {
       Some(init) =>
         match semantic_validate_global_init(ctx, init) {
           Ok(_) => ()
-          Err(err) => return Err(err)
+          Err(err) => return Err("global " + global.name + ": " + err)
         }
       None => ()
     }
@@ -591,7 +642,7 @@ pub fn validate_semantics(prog : Program) -> Result[Unit, String] {
         }
         match semantic_validate_stmt(ctx, locals, body) {
           Ok(_) => ()
-          Err(err) => return Err(err)
+          Err(err) => return Err("function " + func.name + ": " + err)
         }
       }
       None => ()
