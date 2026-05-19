@@ -316,6 +316,10 @@ fn Program::lower_mir_post_step(
   ty : @ctype.Type,
   ctx : BodyLowerContext,
 ) -> MirValue? {
+  match self.lower_mir_bitfield_post_step(expr, op, ty, ctx) {
+    Some(value) => return Some(value)
+    None => ()
+  }
   match lower_mir_cancelled_local_lvalue(expr, ctx) {
     Some(binding) => lower_mir_post_update(binding, op, MirConst(1L, SInt), ty)
     None => {
@@ -1183,6 +1187,81 @@ fn Program::lower_mir_identity_builtin(
 }
 
 ///|
+fn mir_body_float_const_value(value : Double, ty : @ctype.Type) -> MirValue {
+  let bits = value.reinterpret_as_int64()
+  match ty {
+    Float => MirCast(Float, MirConst(bits, Double))
+    _ => MirConst(bits, ty)
+  }
+}
+
+///|
+fn Program::lower_mir_floating_builtin(
+  self : Program,
+  name : String,
+  args : Array[@parser.Expr],
+  ty : @ctype.Type,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  let scope = ctx.scope()
+  match name {
+    "__builtin_fabs" | "__builtin_fabsf" | "__builtin_fabsl" =>
+      if args.length() == 1 {
+        match self.lower_mir_call_arg(args[0], ctx) {
+          Some(value) => Some(MirUnary("fabs", value, ty))
+          None => None
+        }
+      } else {
+        None
+      }
+    "__builtin_nan"
+    | "__builtin_nanf"
+    | "__builtin_nanl"
+    | "__builtin_huge_val"
+    | "__builtin_huge_valf"
+    | "__builtin_huge_vall"
+    | "__builtin_inf"
+    | "__builtin_inff"
+    | "__builtin_infl" => {
+      for arg in args {
+        if !mir_body_side_effect_free_expr(arg) {
+          return None
+        }
+      }
+      match self.fold_float_const(Call(Var(name), args), scope) {
+        Some(value) => Some(mir_body_float_const_value(value, ty))
+        None => None
+      }
+    }
+    _ => None
+  }
+}
+
+///|
+fn Program::lower_mir_integer_unary_builtin(
+  self : Program,
+  name : String,
+  args : Array[@parser.Expr],
+  ty : @ctype.Type,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  if args.length() != 1 {
+    return None
+  }
+  let op = match name {
+    "__builtin_clz" => "clz32"
+    "__builtin_clzl" | "__builtin_clzll" => "clz64"
+    "__builtin_ctz" => "ctz32"
+    "__builtin_ctzl" | "__builtin_ctzll" => "ctz64"
+    _ => return None
+  }
+  match self.lower_mir_call_arg(args[0], ctx) {
+    Some(value) => Some(MirUnary(op, value, ty))
+    None => None
+  }
+}
+
+///|
 fn Program::lower_mir_scalar_lvalue_addr(
   self : Program,
   expr : @parser.Expr,
@@ -1260,6 +1339,10 @@ fn Program::lower_mir_prefix_step(
   ty : @ctype.Type,
   ctx : BodyLowerContext,
 ) -> MirValue? {
+  match self.lower_mir_bitfield_compound_update(expr, op, Number(1L), ty, ctx) {
+    Some(value) => return Some(value)
+    None => ()
+  }
   match lower_mir_cancelled_local_lvalue(expr, ctx) {
     Some(binding) => lower_mir_local_step(binding.name, op, ty, ctx)
     None => {
@@ -1325,7 +1408,28 @@ fn Program::lower_mir_call_arg(
     Struct(_) | Union(_) =>
       match self.lower_mir_object_addr(arg, ctx) {
         Some(addr) => Some(MirAggregateArg(addr, ty))
-        None =>
+        None => {
+          match arg {
+            Number(_) | Array(_) | CompoundLiteral(_, _, _) => {
+              let temp = ctx.declare_temp(ty)
+              let stores = match
+                self.lower_mir_struct_init_stores(
+                  MirAddrLocal(temp),
+                  ty,
+                  arg,
+                  ctx,
+                ) {
+                Some(stores) => stores
+                None => return None
+              }
+              match
+                mir_body_sequence_exprs(stores, MirAddrLocal(temp), Pointer(ty)) {
+                Some(addr) => return Some(MirAggregateArg(addr, ty))
+                None => return None
+              }
+            }
+            _ => ()
+          }
           match self.lower_mir_expr_for_target_type(ty, arg, ctx) {
             Some(value) =>
               if mir_body_aggregate_call_value(value) &&
@@ -1336,6 +1440,7 @@ fn Program::lower_mir_call_arg(
               }
             None => None
           }
+        }
       }
     _ =>
       match self.core_type(ty) {
@@ -1608,6 +1713,41 @@ fn Program::lower_mir_bitfield_compound_update(
 }
 
 ///|
+fn Program::lower_mir_bitfield_post_step(
+  self : Program,
+  lhs : @parser.Expr,
+  op : String,
+  result_ty : @ctype.Type,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  let (obj, field) = match lhs {
+    MemberAccess(obj, field) => (obj, field)
+    _ => return None
+  }
+  let lhs_ty = self.expr_type(lhs, ctx.scope())
+  let (addr, layout) = match self.lower_mir_bitfield_storage(obj, field, ctx) {
+    Some(value) => value
+    None => return None
+  }
+  let current = match self.lower_mir_bitfield_load(obj, field, lhs_ty, ctx) {
+    Some(value) => value
+    None => return None
+  }
+  let temp = ctx.declare_temp(lhs_ty)
+  let updated = MirBinary(op, MirLocal(temp), MirConst(1L, SInt), result_ty)
+  let stored = match
+    lower_mir_bitfield_store_value(lhs_ty, addr, layout, updated, ctx) {
+    Some(value) => value
+    None => return None
+  }
+  mir_body_sequence_exprs(
+    [MirExprStmt(MirAssignLocal(temp, current)), MirExprStmt(stored)],
+    MirLocal(temp),
+    result_ty,
+  )
+}
+
+///|
 fn mir_body_offset_addr_value(
   base : MirValue,
   offset : Int,
@@ -1710,6 +1850,17 @@ fn Program::lower_mir_object_addr(
         Some(addr) => Some(addr)
         None => self.lower_mir_expr_with_array_decay(ptr, ctx)
       }
+    Cast(cast_ty, inner) => {
+      let inner_ty = self.expr_type(inner, ctx.scope())
+      match (self.core_type(cast_ty), self.core_type(inner_ty)) {
+        (Struct(_), Struct(_)) | (Union(_), Union(_)) =>
+          if self.core_type(cast_ty) == self.core_type(inner_ty) {
+            return self.lower_mir_object_addr(inner, ctx)
+          }
+        _ => ()
+      }
+      None
+    }
     ArrayAccess(base, index) => {
       let elem_ty = self.expr_type(expr, ctx.scope())
       match
@@ -1726,8 +1877,38 @@ fn Program::lower_mir_object_addr(
         _ => None
       }
     }
-    _ => None
+    _ => {
+      let ty = self.expr_type(expr, ctx.scope())
+      match self.core_type(ty) {
+        Struct(_) | Union(_) =>
+          self.lower_mir_aggregate_rvalue_addr(expr, ty, ctx)
+        _ => None
+      }
+    }
   }
+}
+
+///|
+fn Program::lower_mir_aggregate_rvalue_addr(
+  self : Program,
+  expr : @parser.Expr,
+  ty : @ctype.Type,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  let value = match self.lower_mir_expr_for_target_type(ty, expr, ctx) {
+    Some(value) => value
+    None => return None
+  }
+  if !mir_body_aggregate_call_value(value) ||
+    self.core_type(value.ty()) != self.core_type(ty) {
+    return None
+  }
+  let temp = ctx.declare_temp(ty)
+  mir_body_sequence_exprs(
+    [MirExprStmt(MirStore(MirAddrLocal(temp), value, ty))],
+    MirAddrLocal(temp),
+    Pointer(ty),
+  )
 }
 
 ///|
@@ -1965,13 +2146,21 @@ fn Program::lower_mir_expr(
         None => None
       }
     Cast(cast_ty, inner) => {
+      let inner_ty = self.expr_type(inner, scope)
+      match (self.core_type(cast_ty), self.core_type(inner_ty)) {
+        (Struct(_), Struct(_)) | (Union(_), Union(_)) =>
+          if self.core_type(cast_ty) == self.core_type(inner_ty) {
+            return self.lower_mir_expr(inner, ctx)
+          }
+        _ => ()
+      }
       if self.is_floating_const_type(self.expr_type(inner, scope)) {
         match self.fold_const(expr, scope) {
           Some(value) => return Some(MirConst(value, ty))
           None => ()
         }
       }
-      let inner_value = match self.core_type(self.expr_type(inner, scope)) {
+      let inner_value = match self.core_type(inner_ty) {
         Array(_, _) => self.lower_mir_expr_with_array_decay(inner, ctx)
         _ => self.lower_mir_expr(inner, ctx)
       }
@@ -2096,6 +2285,14 @@ fn Program::lower_mir_expr(
           return self.lower_mir_expr(args[0], ctx)
         }
         return None
+      }
+      match self.lower_mir_floating_builtin(name, args, ty, ctx) {
+        Some(value) => return Some(value)
+        None => ()
+      }
+      match self.lower_mir_integer_unary_builtin(name, args, ty, ctx) {
+        Some(value) => return Some(value)
+        None => ()
       }
       match self.fold_const(expr, scope) {
         Some(value) => return Some(MirConst(value, ty))
@@ -2314,6 +2511,31 @@ fn Program::lower_mir_ignored_expr(
 }
 
 ///|
+fn Program::lower_mir_aggregate_return(
+  self : Program,
+  ret_ty : @ctype.Type,
+  expr : @parser.Expr,
+  ctx : BodyLowerContext,
+) -> Array[MirStmt]? {
+  match self.core_type(ret_ty) {
+    Struct(_) | Union(_) => ()
+    _ => return None
+  }
+  let temp = ctx.declare_temp(ret_ty)
+  let stores = match
+    self.lower_mir_struct_init_stores(MirAddrLocal(temp), ret_ty, expr, ctx) {
+    Some(stores) => stores
+    None => return None
+  }
+  let stmts : Array[MirStmt] = [MirDeclare(temp, None)]
+  for store in stores {
+    stmts.push(store)
+  }
+  stmts.push(MirReturn(Some(MirLocal(temp))))
+  Some(stmts)
+}
+
+///|
 fn Program::lower_mir_stmt(
   self : Program,
   stmt : @parser.Stmt,
@@ -2329,12 +2551,17 @@ fn Program::lower_mir_stmt(
       match expr {
         Some(value_expr) =>
           match self.funcs.get(ctx.current_func) {
-            Some(sig) =>
+            Some(sig) => {
+              match self.lower_mir_aggregate_return(sig.ret, value_expr, ctx) {
+                Some(stmts) => return Some(stmts)
+                None => ()
+              }
               match
                 self.lower_mir_expr_for_target_type(sig.ret, value_expr, ctx) {
                 Some(value) => Some([MirReturn(Some(value))])
                 None => None
               }
+            }
             None =>
               match self.lower_mir_expr(value_expr, ctx) {
                 Some(value) => Some([MirReturn(Some(value))])

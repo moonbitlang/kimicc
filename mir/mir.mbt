@@ -2105,17 +2105,9 @@ pub fn Program::expr_type(
         Var(name) =>
           match self.builtin_return_type(name, args, scope) {
             Some(ty) => ty
-            None =>
-              match self.expr_type(func, scope) {
-                FuncPtr(ret, _, _) => ret
-                _ => SInt
-              }
+            None => self.call_expr_return_type(func, scope)
           }
-        _ =>
-          match self.expr_type(func, scope) {
-            FuncPtr(ret, _, _) => ret
-            _ => SInt
-          }
+        _ => self.call_expr_return_type(func, scope)
       }
     Assign(lhs, _) => self.expr_type(lhs, scope)
     CompoundAssign(_, lhs, _) => self.expr_type(lhs, scope)
@@ -2155,6 +2147,18 @@ pub fn Program::expr_type(
     CompoundLiteral(ty, _, _) => ty
     DesignatedField(_, e) | DesignatedIndex(_, e) | DesignatedRange(_, _, e) =>
       self.expr_type(e, scope)
+  }
+}
+
+///|
+fn Program::call_expr_return_type(
+  self : Program,
+  func : @parser.Expr,
+  scope : Scope,
+) -> @ctype.Type {
+  match self.core_type(self.expr_type(func, scope)) {
+    FuncPtr(ret, _, _) | Pointer(FuncPtr(ret, _, _)) => ret
+    _ => SInt
   }
 }
 
