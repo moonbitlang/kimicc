@@ -106,6 +106,39 @@ test "strict MIR codegen executes stack-passed integer indirect calls" {
 }
 
 ///|
+test "strict MIR codegen executes aggregate member address function table" {
+  let source =
+    #|struct Methods { int (*init)(void); };
+    #|struct Config { struct Methods methods; };
+    #|struct Config cfg;
+    #|int good(void) { return 42; }
+    #|int setup(void) {
+    #|  struct Methods *to = &cfg.methods;
+    #|  to->init = good;
+    #|  return cfg.methods.init();
+    #|}
+    #|int main(void) {
+    #|  return setup();
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
+test "strict MIR codegen executes aggregate array element address" {
+  let source =
+    #|struct Item { int v; };
+    #|struct Item items[3];
+    #|struct Item *pick(int i) {
+    #|  return &items[i];
+    #|}
+    #|int main(void) {
+    #|  items[2].v = 42;
+    #|  return pick(2)->v;
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
 test "strict MIR codegen executes small aggregate call results" {
   let source =
     #|struct Pair { long a; long b; };

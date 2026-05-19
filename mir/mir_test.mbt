@@ -1428,6 +1428,34 @@ test "mir body interpreter handles nested global aggregate fields" {
 }
 
 ///|
+test "mir body lowering handles address of aggregate member" {
+  let source =
+    #|struct Methods { int (*init)(void); };
+    #|struct Config { struct Methods methods; };
+    #|struct Config cfg;
+    #|int good(void) { return 42; }
+    #|int setup(void) {
+    #|  struct Methods *to = &cfg.methods;
+    #|  to->init = good;
+    #|  return cfg.methods.init();
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("setup"), content="true")
+}
+
+///|
+test "mir body lowering handles address of aggregate array element" {
+  let source =
+    #|struct Item { int v; };
+    #|struct Item items[2];
+    #|struct Item *pick(int i) {
+    #|  return &items[i];
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("pick"), content="true")
+}
+
+///|
 test "mir body lowering handles array element aggregate fields" {
   let source =
     #|struct Item { int v; };

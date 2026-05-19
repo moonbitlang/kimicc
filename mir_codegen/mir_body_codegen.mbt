@@ -807,6 +807,45 @@ fn mir_body_codegen_atomic_signal_fence_call(
 }
 
 ///|
+fn mir_body_codegen_atomic_target_type(ty : @ctype.Type) -> @ctype.Type {
+  match ty {
+    Pointer(Atomic(inner)) | Array(Atomic(inner), _) => inner
+    Pointer(Aligned(inner, _)) | Array(Aligned(inner, _), _) => inner
+    Pointer(inner) | Array(inner, _) => inner
+    Atomic(inner) | Aligned(inner, _) => inner
+    _ => SLongLong
+  }
+}
+
+///|
+fn mir_body_codegen_atomic_load_call(
+  name : String,
+  args : Array[@mir.MirValue],
+  ret : @ctype.Type,
+) -> Bool {
+  (name == "__atomic_load_n" || name == "__c11_atomic_load") &&
+  args.length() >= 2 &&
+  mir_body_codegen_abi_scalar_type(ret) &&
+  mir_body_codegen_abi_scalar_type(
+    mir_body_codegen_atomic_target_type(args[0].ty()),
+  )
+}
+
+///|
+fn mir_body_codegen_atomic_store_call(
+  name : String,
+  args : Array[@mir.MirValue],
+  ret : @ctype.Type,
+) -> Bool {
+  (name == "__atomic_store_n" || name == "__c11_atomic_store") &&
+  args.length() >= 2 &&
+  peel_aligned_type(ret) is Void &&
+  mir_body_codegen_abi_scalar_type(
+    mir_body_codegen_atomic_target_type(args[0].ty()),
+  )
+}
+
+///|
 fn mir_body_codegen_trap_call(
   name : String,
   args : Array[@mir.MirValue],
@@ -1270,6 +1309,8 @@ fn mir_body_codegen_call_supported(
   if mir_body_codegen_sync_synchronize_call(name, args, ret) ||
     mir_body_codegen_atomic_thread_fence_call(name, args, ret) ||
     mir_body_codegen_atomic_signal_fence_call(name, args, ret) ||
+    mir_body_codegen_atomic_load_call(name, args, ret) ||
+    mir_body_codegen_atomic_store_call(name, args, ret) ||
     mir_body_codegen_trap_call(name, args, ret) ||
     mir_body_codegen_alloca_call(name, args, ret) ||
     mir_body_codegen_frame_address_call(name, args, ret) ||
@@ -1832,6 +1873,54 @@ fn Codegen::collect_mir_sret_scratch_stmt(
       }
     MirLabel(_) | MirGoto(_) | MirBreak | MirContinue => ()
   }
+}
+
+///|
+fn Codegen::emit_mir_atomic_load_builtin(
+  self : Codegen,
+  args : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+  frame_size : Int,
+) -> Unit {
+  if args.length() < 1 {
+    self.emit("\tmov\tx9, #0")
+    return
+  }
+  let elem_ty = mir_body_codegen_atomic_target_type(args[0].ty())
+  self.gen_mir_value(args[0], offsets, frame_size)
+  self.emit("\tmov\tx0, x9")
+  match peel_aligned_type(elem_ty) {
+    Bool | SChar | UChar => self.emit("\tldarb\tw9, [x0]")
+    SShort | UShort => self.emit("\tldarh\tw9, [x0]")
+    SInt | UInt | Float => self.emit("\tldar\tw9, [x0]")
+    _ => self.emit("\tldar\tx9, [x0]")
+  }
+  self.emit_scalar_conversion_to(elem_ty)
+}
+
+///|
+fn Codegen::emit_mir_atomic_store_builtin(
+  self : Codegen,
+  args : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+  frame_size : Int,
+) -> Unit {
+  if args.length() >= 2 {
+    let elem_ty = mir_body_codegen_atomic_target_type(args[0].ty())
+    self.gen_mir_value(args[0], offsets, frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_mir_value(args[1], offsets, frame_size)
+    self.emit_numeric_conversion(args[1].ty(), elem_ty)
+    self.emit_scalar_conversion_to(elem_ty)
+    self.emit("\tldr\tx0, [sp], #16")
+    match peel_aligned_type(elem_ty) {
+      Bool | SChar | UChar => self.emit("\tstlrb\tw9, [x0]")
+      SShort | UShort => self.emit("\tstlrh\tw9, [x0]")
+      SInt | UInt | Float => self.emit("\tstlr\tw9, [x0]")
+      _ => self.emit("\tstlr\tx9, [x0]")
+    }
+  }
+  self.emit("\tmov\tx9, #0")
 }
 
 ///|
@@ -2917,6 +3006,12 @@ fn Codegen::gen_mir_value(
           self.gen_mir_value(arg, offsets, frame_size)
         }
         self.emit("\tmov\tx9, #0")
+        return
+      } else if mir_body_codegen_atomic_load_call(name, args, ty) {
+        self.emit_mir_atomic_load_builtin(args, offsets, frame_size)
+        return
+      } else if mir_body_codegen_atomic_store_call(name, args, ty) {
+        self.emit_mir_atomic_store_builtin(args, offsets, frame_size)
         return
       } else if mir_body_codegen_trap_call(name, args, ty) {
         self.emit("\tbrk\t#0x1")
@@ -4497,6 +4592,53 @@ fn X64Codegen::emit_mir_restore_scalar(
 }
 
 ///|
+fn X64Codegen::emit_mir_atomic_load_builtin(
+  self : X64Codegen,
+  args : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+) -> Unit {
+  if args.length() < 1 {
+    self.emit("\tmov\trax, 0")
+    return
+  }
+  let elem_ty = mir_body_codegen_atomic_target_type(args[0].ty())
+  self.gen_mir_value(args[0], offsets)
+  self.emit_load_indirect(elem_ty)
+}
+
+///|
+fn X64Codegen::emit_mir_atomic_store_builtin(
+  self : X64Codegen,
+  args : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+) -> Unit {
+  if args.length() >= 2 {
+    let elem_ty = mir_body_codegen_atomic_target_type(args[0].ty())
+    self.gen_mir_value(args[0], offsets)
+    self.emit_mir_push_rax()
+    self.gen_mir_value(args[1], offsets)
+    self.emit_mir_numeric_conversion(args[1].ty(), elem_ty)
+    if x64_is_fp_type(elem_ty) {
+      self.emit("\tmov\tr10, QWORD PTR [rsp]")
+      self.emit("\tadd\trsp, 16")
+      self.emit_store_indirect(elem_ty)
+    } else {
+      self.emit_int_conversion_to(elem_ty)
+      self.emit("\tmov\tr10, QWORD PTR [rsp]")
+      self.emit("\tadd\trsp, 16")
+      let width = self.type_size(elem_ty)
+      self.emit(
+        "\txchg\t" +
+        x64_atomic_mem_operand("r10", width) +
+        ", " +
+        x64_atomic_rax_reg(width),
+      )
+    }
+  }
+  self.emit("\tmov\trax, 0")
+}
+
+///|
 fn X64Codegen::emit_mir_fp_binary_xmm0_xmm1(
   self : X64Codegen,
   op : String,
@@ -5370,6 +5512,12 @@ fn X64Codegen::gen_mir_value(
           self.gen_mir_value(arg, offsets)
         }
         self.emit("\tmov\trax, 0")
+        return
+      } else if mir_body_codegen_atomic_load_call(name, args, ty) {
+        self.emit_mir_atomic_load_builtin(args, offsets)
+        return
+      } else if mir_body_codegen_atomic_store_call(name, args, ty) {
+        self.emit_mir_atomic_store_builtin(args, offsets)
         return
       } else if mir_body_codegen_trap_call(name, args, ty) {
         self.emit("\tud2")
