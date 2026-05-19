@@ -4381,6 +4381,25 @@ test "strict MIR assembly rejects calls to unsupported inline body" {
 }
 
 ///|
+test "strict MIR assembly reports missing callee body after caller" {
+  let source =
+    #|int main(void) { return callee(); }
+    #|int callee(void) {
+    #|  goto *&&target;
+    #|target:
+    #|  return 1;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  inspect(mir.bodies.contains("callee"), content="false")
+  match @mir_codegen_compat.generate_assembly_from_mir_strict(mir) {
+    Ok(_) => abort("expected strict MIR callee body rejection")
+    Err(err) =>
+      inspect(err.contains("missing MIR body for callee"), content="true")
+  }
+}
+
+///|
 test "parser AST codegen fallback is explicit" {
   let source =
     #|int main(void) {
