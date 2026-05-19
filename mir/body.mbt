@@ -605,11 +605,21 @@ fn Program::lower_mir_zero_init_stores(
 }
 
 ///|
-fn mir_body_local_copy_source_addr(value : MirValue) -> Bool {
+fn mir_body_copy_dest_addr(value : MirValue) -> Bool {
   match value {
     MirAddrGlobal(_, _) | MirFuncAddr(_, _) | MirStringAddr(_) => false
     MirElemAddr(base, _, _) | MirOffsetAddr(base, _, _) =>
-      mir_body_local_copy_source_addr(base)
+      mir_body_copy_dest_addr(base)
+    _ => true
+  }
+}
+
+///|
+fn mir_body_copy_source_addr(value : MirValue) -> Bool {
+  match value {
+    MirFuncAddr(_, _) | MirStringAddr(_) => false
+    MirElemAddr(base, _, _) | MirOffsetAddr(base, _, _) =>
+      mir_body_copy_source_addr(base)
     _ => true
   }
 }
@@ -860,7 +870,7 @@ fn Program::lower_mir_struct_init_stores(
         Some(addr) => addr
         None => return None
       }
-      if !mir_body_local_copy_source_addr(src_addr) {
+      if !mir_body_copy_source_addr(src_addr) {
         return None
       }
       return self.lower_mir_copy_init_stores(
@@ -1945,7 +1955,7 @@ fn Program::lower_mir_ignored_aggregate_assign(
     Some(addr) => addr
     None => return None
   }
-  if !mir_body_local_copy_source_addr(dest_addr) {
+  if !mir_body_copy_dest_addr(dest_addr) {
     return None
   }
   match self.lower_mir_va_arg_copy_init_stores(dest_addr, lhs_ty, rhs, ctx) {
@@ -1998,7 +2008,7 @@ fn Program::lower_mir_ignored_aggregate_assign(
     Some(addr) => addr
     None => return None
   }
-  if !mir_body_local_copy_source_addr(src_addr) {
+  if !mir_body_copy_source_addr(src_addr) {
     return None
   }
   let stores = match

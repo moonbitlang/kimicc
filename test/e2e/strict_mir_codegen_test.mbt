@@ -933,6 +933,22 @@ test "strict MIR codegen executes member array decay in pointer differences" {
 }
 
 ///|
+test "strict MIR codegen executes global aggregate copies" {
+  let source =
+    #|struct Item { int x; int *p; };
+    #|static const struct Item zeroItem = {0};
+    #|int main(void) {
+    #|  struct Item items[1];
+    #|  struct Item *p = &items[0];
+    #|  p->x = 7;
+    #|  p->p = (int*)1;
+    #|  *p = zeroItem;
+    #|  return p->x + (p->p != 0);
+    #|}
+  assert_eq(run_source_strict_mir(source), 0)
+}
+
+///|
 test "strict MIR codegen executes member array decay in pointer call args" {
   let source =
     #|struct Info { unsigned aReadMark[4]; };
