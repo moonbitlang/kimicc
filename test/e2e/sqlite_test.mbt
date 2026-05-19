@@ -83,31 +83,43 @@ async test "sqlite object prepares and steps simple select" {
 }
 
 ///|
-async test "sqlite strict MIR object prepares and steps simple select" {
+async test "sqlite strict MIR object creates table and steps simple select" {
   let driver =
     #|#include "sqlite3.h"
     #|#include <stdio.h>
+    #|#include <unistd.h>
     #|
     #|int main(void) {
     #|  sqlite3 *db = 0;
     #|  sqlite3_stmt *stmt = 0;
+    #|  char *err = 0;
     #|  int rc = sqlite3_open(":memory:", &db);
+    #|  alarm(10);
     #|  if (rc != SQLITE_OK) {
     #|    printf("open rc=%d err=%s\n", rc, db ? sqlite3_errmsg(db) : "null");
     #|    return 1;
     #|  }
+    #|  rc = sqlite3_exec(db,
+    #|    "create table t(id integer primary key, name text);", 0, 0, &err);
+    #|  if (rc != SQLITE_OK) {
+    #|    printf("create rc=%d err=%s\n", rc, err ? err : sqlite3_errmsg(db));
+    #|    sqlite3_free(err);
+    #|    sqlite3_close(db);
+    #|    return 2;
+    #|  }
+    #|  printf("strict-mir-create-table-ok\n");
     #|  rc = sqlite3_prepare_v2(db, "select 1;", -1, &stmt, 0);
     #|  if (rc != SQLITE_OK) {
     #|    printf("prepare rc=%d err=%s\n", rc, sqlite3_errmsg(db));
     #|    sqlite3_close(db);
-    #|    return 2;
+    #|    return 3;
     #|  }
     #|  rc = sqlite3_step(stmt);
     #|  if (rc != SQLITE_ROW) {
     #|    printf("step rc=%d\n", rc);
     #|    sqlite3_finalize(stmt);
     #|    sqlite3_close(db);
-    #|    return 3;
+    #|    return 4;
     #|  }
     #|  printf("strict-mir-select-value=%d\n", sqlite3_column_int(stmt, 0));
     #|  sqlite3_finalize(stmt);
@@ -120,6 +132,7 @@ async test "sqlite strict MIR object prepares and steps simple select" {
   if result.code != 0 {
     abort("SQLite strict MIR prepare/step failed:\n" + result.output)
   }
+  assert_true(result.output.contains("strict-mir-create-table-ok"))
   assert_true(result.output.contains("strict-mir-select-value=1"))
 }
 

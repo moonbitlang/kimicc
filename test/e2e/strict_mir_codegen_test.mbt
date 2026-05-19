@@ -922,6 +922,54 @@ test "strict MIR codegen executes casted object pointer byte offsets" {
 }
 
 ///|
+test "strict MIR codegen preserves memory compound update lhs across rhs" {
+  let source =
+    #|typedef unsigned long long Bitmask;
+    #|struct Item { Bitmask colUsed; };
+    #|
+    #|void mark(struct Item *item, int iCol) {
+    #|  item->colUsed |= ((Bitmask)1) << (iCol >= 64 ? 63 : iCol);
+    #|}
+    #|
+    #|int main(void) {
+    #|  struct Item item;
+    #|  Bitmask b;
+    #|  int n = 0;
+    #|  item.colUsed = 0;
+    #|  for (int i = 0; i < 5; i = i + 1) {
+    #|    mark(&item, i);
+    #|  }
+    #|  for (b = item.colUsed; b; b = b >> 1) {
+    #|    n = n + 1;
+    #|  }
+    #|  return n;
+    #|}
+  assert_eq(run_source_strict_mir(source), 5)
+}
+
+///|
+test "strict MIR codegen preserves pointer memory update lhs across rhs" {
+  let source =
+    #|struct Holder { int *p; };
+    #|
+    #|int step(int *base) {
+    #|  return base[0] - 2;
+    #|}
+    #|
+    #|int main(void) {
+    #|  int values[3];
+    #|  struct Holder holder;
+    #|  values[0] = 3;
+    #|  values[1] = 17;
+    #|  values[2] = 29;
+    #|  holder.p = values;
+    #|  holder.p += step(values);
+    #|  return *holder.p;
+    #|}
+  assert_eq(run_source_strict_mir(source), 17)
+}
+
+///|
 test "strict MIR codegen executes direct array decay in pointer arithmetic" {
   let source =
     #|int main(void) {

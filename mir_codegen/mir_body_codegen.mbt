@@ -2943,9 +2943,11 @@ fn Codegen::gen_mir_value(
         self.gen_mir_value(ptr, offsets, frame_size)
         self.emit("\tstr\tx9, [sp, #-16]!")
         self.emit_load_typed("x10", "x9", ty)
+        self.emit("\tstr\tx10, [sp, #-16]!")
         self.gen_mir_value(rhs, offsets, frame_size)
         self.emit_scalar_conversion_to(rhs.ty())
         self.emit_mir_scale_update_rhs_for_pointer(ty)
+        self.emit("\tldr\tx10, [sp], #16")
         match op {
           "+" => self.emit("\tadd\tx9, x10, x9")
           "-" => self.emit("\tsub\tx9, x10, x9")
@@ -2980,10 +2982,11 @@ fn Codegen::gen_mir_value(
       self.emit("\tmov\tx9, x10")
       self.emit_numeric_conversion(ty, left_ty)
       self.emit_scalar_conversion_to(left_ty)
-      self.emit("\tmov\tx10, x9")
+      self.emit("\tstr\tx9, [sp, #-16]!")
       self.gen_mir_value(rhs, offsets, frame_size)
       self.emit_numeric_conversion(rhs.ty(), right_ty)
       self.emit_scalar_conversion_to(right_ty)
+      self.emit("\tldr\tx10, [sp], #16")
       match op {
         "+" => self.emit("\tadd\tx9, x9, x10")
         "-" => self.emit("\tsub\tx9, x10, x9")
@@ -5612,17 +5615,15 @@ fn X64Codegen::gen_mir_value(
         self.gen_mir_value(ptr, offsets)
         self.emit_mir_push_rax()
         self.emit_load_indirect(ty)
-        self.emit("\tmov\tr11, rax")
+        self.emit_mir_push_rax()
         self.gen_mir_value(rhs, offsets)
         self.emit_int_conversion_to(rhs.ty())
         self.emit_mir_scale_update_rhs_for_pointer(ty)
+        self.emit("\tmov\tr10, rax")
+        self.emit_mir_pop_rax()
         match op {
-          "+" => self.emit("\tadd\trax, r11")
-          "-" => {
-            self.emit("\tmov\tr10, rax")
-            self.emit("\tmov\trax, r11")
-            self.emit("\tsub\trax, r10")
-          }
+          "+" => self.emit("\tadd\trax, r10")
+          "-" => self.emit("\tsub\trax, r10")
           _ => abort("unsupported MIR body memory pointer pre-update operator")
         }
         self.emit("\tmov\tr10, QWORD PTR [rsp]")
