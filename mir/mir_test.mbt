@@ -311,6 +311,66 @@ test "mir owns floating global initializer metadata" {
 }
 
 ///|
+test "mir owns typed aggregate global float initializers" {
+  let source =
+    #|struct Xform {
+    #|  unsigned char nName;
+    #|  char zName[7];
+    #|  float rLimit;
+    #|  float rXform;
+    #|};
+    #|static const struct Xform aXformType[] = {
+    #|  { 6, "second", 4.5f, 1.0f },
+    #|};
+    #|int main(void) { return 0; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match mir.globals["aXformType"].init {
+    Some(
+      MirGlobalArray(
+        [
+          MirGlobalArray(
+            [
+              MirGlobalScalarInt(6),
+              MirGlobalString("second"),
+              MirGlobalScalarFloat(4.5),
+              MirGlobalScalarFloat(1.0),
+            ]
+          ),
+        ]
+      )
+    ) => ()
+    _ => abort("expected typed aggregate MIR float global initializer")
+  }
+}
+
+///|
+test "mir owns casted string pointer global array initializers" {
+  let source =
+    #|typedef unsigned char u8;
+    #|static unsigned char * const azOne[] = { (u8*)" " };
+    #|static char *azEndings[] = { "dylib" };
+    #|static int f(void) {
+    #|  static const char *localEndings[] = { "so" };
+    #|  return localEndings[0][0];
+    #|}
+    #|int main(void) { return 0; }
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match mir.globals["azOne"].init {
+    Some(MirGlobalArray([MirGlobalString(" ")])) => ()
+    _ => abort("expected casted string pointer MIR global initializer")
+  }
+  match mir.globals["azEndings"].init {
+    Some(MirGlobalArray([MirGlobalString("dylib")])) => ()
+    _ => abort("expected string pointer array MIR global initializer")
+  }
+  match mir.globals["_f_localEndings"].init {
+    Some(MirGlobalArray([MirGlobalString("so")])) => ()
+    _ =>
+      abort("expected local static string pointer array MIR global initializer")
+  }
+}
+
+///|
 test "mir owns bitfield global initializer metadata" {
   let source =
     #|struct Bits { unsigned a : 3; signed b : 4; unsigned c : 5; };
