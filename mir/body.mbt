@@ -1811,8 +1811,8 @@ fn Program::lower_mir_expr(
       match
         (
           self.lower_mir_expr(cond, ctx),
-          self.lower_mir_expr(then_, ctx),
-          self.lower_mir_expr(else_, ctx),
+          self.lower_mir_expr_for_target_type(ty, then_, ctx),
+          self.lower_mir_expr_for_target_type(ty, else_, ctx),
         ) {
         (Some(c), Some(t), Some(e)) => Some(MirTernary(c, t, e, ty))
         _ => None
