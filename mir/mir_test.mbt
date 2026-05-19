@@ -1165,6 +1165,22 @@ test "mir body lowering handles casted global array decay" {
 }
 
 ///|
+test "mir body lowering returns implicit global array decay" {
+  let source =
+    #|char version[4] = "abc";
+    #|char *get(void) {
+    #|  return version;
+    #|}
+    #|int main(void) {
+    #|  char *p = get();
+    #|  return p[1];
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("get"), content="true")
+  inspect(mir.bodies.contains("main"), content="true")
+}
+
+///|
 test "mir body interpreter handles sparse initialized scalar global arrays" {
   let source =
     #|int a[4] = { [2] = 9, [0] = 1 };
