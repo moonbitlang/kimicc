@@ -1405,7 +1405,6 @@ fn mir_body_codegen_indirect_call_supported(
   int_arg_limit : Int,
   mir : @mir.MirModule,
 ) -> Bool {
-  ignore(int_arg_limit)
   let ret_supported = mir_body_codegen_abi_scalar_type(ret) ||
     mir_body_codegen_register_aggregate_return_type(ret, mir) ||
     mir_body_codegen_x64_memory_aggregate_return_type(ret, mir)
@@ -1417,8 +1416,39 @@ fn mir_body_codegen_indirect_call_supported(
       let sig_ret_supported = mir_body_codegen_abi_scalar_type(sig_ret) ||
         mir_body_codegen_register_aggregate_return_type(sig_ret, mir) ||
         mir_body_codegen_x64_memory_aggregate_return_type(sig_ret, mir)
-      if variadic || !sig_ret_supported {
+      if !sig_ret_supported {
         return false
+      }
+      if variadic {
+        if params.length() > args.length() {
+          return false
+        }
+        let call_params : Array[@ctype.Type] = []
+        for i in 0..<args.length() {
+          let ty = if i < params.length() { params[i] } else { args[i].ty() }
+          call_params.push(ty)
+        }
+        if mir.target is DarwinArm64 {
+          return mir_body_codegen_darwin_variadic_args_supported(
+            call_params,
+            params.length(),
+            int_arg_limit,
+            mir,
+          )
+        }
+        if mir.target is LinuxAmd64 {
+          return mir_body_codegen_x64_variadic_args_supported(
+            call_params,
+            params.length(),
+            int_arg_limit,
+            mir,
+          )
+        }
+        return mir_body_codegen_variadic_args_supported(
+          call_params,
+          params.length(),
+          int_arg_limit,
+        )
       }
       let call_params : Array[@ctype.Type] = []
       if params.length() == args.length() {
@@ -1439,6 +1469,22 @@ fn mir_body_codegen_indirect_call_supported(
       }
     }
     _ => false
+  }
+}
+
+///|
+fn mir_indirect_call_variadic(callee_ty : @ctype.Type) -> Bool {
+  match peel_aligned_type(callee_ty) {
+    FuncPtr(_, _, variadic) => variadic
+    _ => false
+  }
+}
+
+///|
+fn mir_indirect_call_named_arg_count(callee_ty : @ctype.Type) -> Int {
+  match peel_aligned_type(callee_ty) {
+    FuncPtr(_, params, _) => params.length()
+    _ => 0
   }
 }
 
@@ -3454,6 +3500,130 @@ fn Codegen::gen_mir_value(
     MirIndirectCall(callee, args, ty) => {
       self.gen_mir_value(callee, offsets, frame_size)
       self.emit("\tstr\tx9, [sp, #-16]!")
+      if mir_indirect_call_variadic(callee.ty()) {
+        let named_count = mir_indirect_call_named_arg_count(callee.ty())
+        let expected_types : Array[@ctype.Type] = []
+        let arg_slot_counts : Array[Int] = []
+        for i in 0..<args.length() {
+          let arg = args[i]
+          let expected = mir_indirect_call_arg_type(callee.ty(), i, arg.ty())
+          expected_types.push(expected)
+          match peel_aligned_type(expected) {
+            Struct(_) | Union(_) => {
+              let size = self.type_size(expected)
+              let slots = if size > 8 { 2 } else { 1 }
+              arg_slot_counts.push(slots)
+              self.gen_mir_value(arg, offsets, frame_size)
+              self.emit("\tsub\tsp, sp, #16")
+              self.emit("\tldr\tx10, [x9]")
+              self.emit("\tstr\tx10, [sp]")
+              if slots == 2 {
+                self.emit("\tldr\tx10, [x9, #8]")
+                self.emit("\tstr\tx10, [sp, #8]")
+              }
+            }
+            _ => {
+              arg_slot_counts.push(1)
+              self.gen_mir_value(arg, offsets, frame_size)
+              self.emit_numeric_conversion(arg.ty(), expected)
+              self.emit_scalar_conversion_to(expected)
+              self.emit("\tstr\tx9, [sp, #-16]!")
+            }
+          }
+        }
+        let mut variadic_slots = 0
+        for i in named_count..<arg_slot_counts.length() {
+          variadic_slots += arg_slot_counts[i]
+        }
+        let variadic_area = if variadic_slots * 8 > 64 {
+          (variadic_slots * 8 + 15) / 16 * 16
+        } else {
+          64
+        }
+        self.emit("\tsub\tsp, sp, #" + variadic_area.to_string())
+        let mut int_arg_index = 0
+        let mut fp_arg_index = 0
+        for i in 0..<args.length() {
+          let raw_offset = variadic_area + (args.length() - 1 - i) * 16
+          if mir_body_codegen_abi_fp_type(expected_types[i]) {
+            if fp_arg_index < 8 {
+              self.emit("\tldr\tx9, [sp, #" + raw_offset.to_string() + "]")
+              self.emit_mir_fp_arg_from_x9(expected_types[i], fp_arg_index)
+            }
+            fp_arg_index += 1
+          } else if peel_aligned_type(expected_types[i]) is Struct(_) ||
+            peel_aligned_type(expected_types[i]) is Union(_) {
+            if int_arg_index < 8 {
+              self.emit(
+                "\tldr\tx" +
+                int_arg_index.to_string() +
+                ", [sp, #" +
+                raw_offset.to_string() +
+                "]",
+              )
+            }
+            int_arg_index += 1
+            if arg_slot_counts[i] == 2 {
+              if int_arg_index < 8 {
+                self.emit(
+                  "\tldr\tx" +
+                  int_arg_index.to_string() +
+                  ", [sp, #" +
+                  (raw_offset + 8).to_string() +
+                  "]",
+                )
+              }
+              int_arg_index += 1
+            }
+          } else {
+            if int_arg_index < 8 {
+              self.emit(
+                "\tldr\tx" +
+                int_arg_index.to_string() +
+                ", [sp, #" +
+                raw_offset.to_string() +
+                "]",
+              )
+            }
+            int_arg_index += 1
+          }
+        }
+        let mut dst_slot = 0
+        for i in named_count..<args.length() {
+          let raw_offset = variadic_area + (args.length() - 1 - i) * 16
+          for j in 0..<arg_slot_counts[i] {
+            self.emit(
+              "\tldr\tx9, [sp, #" + (raw_offset + j * 8).to_string() + "]",
+            )
+            self.emit(
+              "\tstr\tx9, [sp, #" + ((dst_slot + j) * 8).to_string() + "]",
+            )
+          }
+          dst_slot += arg_slot_counts[i]
+        }
+        self.emit(
+          "\tldr\tx15, [sp, #" +
+          (variadic_area + args.length() * 16).to_string() +
+          "]",
+        )
+        self.emit_call_sret_addr(ty, frame_size)
+        self.emit("\tblr\tx15")
+        self.emit(
+          "\tadd\tsp, sp, #" +
+          (variadic_area + (args.length() + 1) * 16).to_string(),
+        )
+        if self.is_memory_aggregate(ty) {
+          self.emit_sret_result_addr(ty, frame_size)
+        } else if self.is_hfa_aggregate(ty) {
+          ()
+        } else if mir_body_codegen_abi_fp_type(ty) {
+          self.emit_mir_fp_return_to_x9(ty)
+        } else {
+          self.emit("\tmov\tx9, x0")
+          self.emit_mir_abi_int_return_conversion(ty)
+        }
+        return
+      }
       let expected_types : Array[@ctype.Type] = []
       let int_arg_indexes : Array[Int] = []
       let fp_arg_indexes : Array[Int] = []
@@ -6355,6 +6525,10 @@ fn X64Codegen::gen_mir_value(
             x64_rsp_ref(raw_offset),
           )
         }
+      }
+      if mir_indirect_call_variadic(callee.ty()) {
+        let fp_reg_count = if fp_arg_index > 8 { 8 } else { fp_arg_index }
+        self.emit("\tmov\tal, " + fp_reg_count.to_string())
       }
       self.emit(
         "\tmov\tr10, QWORD PTR " + x64_rsp_ref(stack_area + raw_area - 16),

@@ -494,6 +494,35 @@ test "generate darwin arm64 strict MIR indirect function pointer call" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR indirect variadic function pointer call" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|int read_variadic(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  int a = __builtin_va_arg(ap, int);
+    #|  double b = __builtin_va_arg(ap, double);
+    #|  __builtin_va_end(ap);
+    #|  return tag + a + (int)b;
+    #|}
+    #|int main(void) {
+    #|  int (*fp)(int, ...) = read_variadic;
+    #|  return fp(4, 10, 3.5);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_read_variadic:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tsub\tsp, sp, #64"), content="true")
+      inspect(assembly.contains("\tblr\tx15"), content="true")
+      inspect(assembly.contains("__builtin_va_arg"), content="false")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR stack-passed integer indirect calls" {
   let source =
     #|int sum9(int a, int b, int c, int d, int e, int f, int g, int h, int i) {
@@ -2365,6 +2394,38 @@ test "generate linux amd64 strict MIR indirect function pointer call" {
       inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
       inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
       inspect(assembly.contains("\tcall\tr10"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR indirect variadic function pointer call" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|int read_variadic(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  int a = __builtin_va_arg(ap, int);
+    #|  double b = __builtin_va_arg(ap, double);
+    #|  __builtin_va_end(ap);
+    #|  return tag + a + (int)b;
+    #|}
+    #|int main(void) {
+    #|  int (*fp)(int, ...) = read_variadic;
+    #|  return fp(4, 10, 3.5);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tmov\tal, 1"), content="true")
+      inspect(assembly.contains("\tcall\tr10"), content="true")
+      inspect(assembly.contains("__builtin_va_arg"), content="false")
     }
     Err(err) => abort(err)
   }
