@@ -1731,11 +1731,31 @@ fn Program::lower_mir_expr(
             None => None
           }
       }
-    Binary(op, lhs, rhs) =>
-      match (self.lower_mir_expr(lhs, ctx), self.lower_mir_expr(rhs, ctx)) {
+    Binary(op, lhs, rhs) => {
+      let lhs_ty = self.expr_type(lhs, scope)
+      let rhs_ty = self.expr_type(rhs, scope)
+      let pointer_arith = match
+        (self.pointer_element(lhs_ty), self.pointer_element(rhs_ty)) {
+        (Some(_), Some(_)) => op == "-"
+        (Some(_), None) => (op == "+" || op == "-") && rhs_ty.is_integer()
+        (None, Some(_)) => op == "+" && lhs_ty.is_integer()
+        _ => false
+      }
+      let left_value = if pointer_arith {
+        self.lower_mir_expr_with_array_decay(lhs, ctx)
+      } else {
+        self.lower_mir_expr(lhs, ctx)
+      }
+      let right_value = if pointer_arith {
+        self.lower_mir_expr_with_array_decay(rhs, ctx)
+      } else {
+        self.lower_mir_expr(rhs, ctx)
+      }
+      match (left_value, right_value) {
         (Some(left), Some(right)) => Some(MirBinary(op, left, right, ty))
         _ => None
       }
+    }
     Unary(op, inner) =>
       match self.lower_mir_expr(inner, ctx) {
         Some(value) => Some(MirUnary(op, value, ty))
