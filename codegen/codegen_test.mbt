@@ -1037,6 +1037,28 @@ test "generate darwin arm64 strict MIR floating ternary conversions" {
 }
 
 ///|
+test "generate darwin arm64 strict MIR floating logical operators" {
+  let source =
+    #|int main(void) {
+    #|  double z = 0.0;
+    #|  double x = 1.5;
+    #|  double n = z / z;
+    #|  return (!z) + (!x) + (!n) + (z || x) + (x && z) + (x && 2) + (n && 2) + (n || z);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tfcmp\td9, #0.0"), content="true")
+      inspect(assembly.contains("\tcset\tx9, eq"), content="true")
+      inspect(assembly.contains("\tb.eq\t"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate darwin arm64 strict MIR floating compound updates" {
   let source =
     #|int main(void) {
@@ -2856,6 +2878,31 @@ test "generate linux amd64 strict MIR floating ternary conversions" {
       inspect(assembly.contains("\tucomisd\txmm0, xmm1"), content="true")
       inspect(assembly.contains("\tcvtsi2sd\txmm0, rax"), content="true")
       inspect(assembly.contains("\tcvtsi2ss\txmm0, rax"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR floating logical operators" {
+  let source =
+    #|int main(void) {
+    #|  double z = 0.0;
+    #|  double x = 1.5;
+    #|  double n = z / z;
+    #|  return (!z) + (!x) + (!n) + (z || x) + (x && z) + (x && 2) + (n && 2) + (n || z);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tucomisd\txmm0, xmm1"), content="true")
+      inspect(assembly.contains("\tsetnp\tdl"), content="true")
+      inspect(assembly.contains("\tjp\t"), content="true")
     }
     Err(err) => abort(err)
   }

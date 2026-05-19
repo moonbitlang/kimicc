@@ -629,9 +629,14 @@ fn mir_body_codegen_value_supported(
       mir_body_codegen_scalar_type(ty) &&
       (if mir_body_codegen_floating_type(ty) ||
         mir_body_codegen_floating_type(inner.ty()) {
-        (op == "+" || op == "-") &&
-        mir_body_codegen_floating_type(ty) &&
-        mir_body_codegen_floating_type(inner.ty())
+        if op == "!" {
+          !mir_body_codegen_floating_type(ty) &&
+          mir_body_codegen_floating_type(inner.ty())
+        } else {
+          (op == "+" || op == "-") &&
+          mir_body_codegen_floating_type(ty) &&
+          mir_body_codegen_floating_type(inner.ty())
+        }
       } else {
         true
       }) &&
@@ -639,6 +644,11 @@ fn mir_body_codegen_value_supported(
     MirBinary(op, lhs, rhs, ty) => {
       if !mir_body_codegen_scalar_type(ty) {
         return false
+      }
+      if op == "&&" || op == "||" {
+        return !mir_body_codegen_floating_type(ty) &&
+          mir_body_codegen_value_supported(lhs, int_arg_limit, mir) &&
+          mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
       }
       if mir_body_codegen_fp_compare_supported(op, lhs.ty(), rhs.ty(), ty) {
         return mir_body_codegen_value_supported(lhs, int_arg_limit, mir) &&
@@ -2654,10 +2664,21 @@ fn Codegen::gen_mir_value(
           } else {
             self.emit("\tneg\tx9, x9")
           }
-        "!" => {
-          self.emit("\tcmp\tx9, #0")
-          self.emit("\tcset\tx9, eq")
-        }
+        "!" =>
+          if mir_body_codegen_floating_type(inner.ty()) {
+            let reg = mir_body_codegen_arm_fp_reg(inner.ty(), 9)
+            self.emit(
+              "\tfmov\t" +
+              reg +
+              ", " +
+              mir_body_codegen_arm_fp_bits_reg(inner.ty(), "x9"),
+            )
+            self.emit("\tfcmp\t" + reg + ", #0.0")
+            self.emit("\tcset\tx9, eq")
+          } else {
+            self.emit("\tcmp\tx9, #0")
+            self.emit("\tcset\tx9, eq")
+          }
         "~" => self.emit("\tmvn\tx9, x9")
         _ => abort("unsupported MIR body unary operator")
       }
@@ -3609,10 +3630,8 @@ fn Codegen::gen_mir_binary(
     "&&" => {
       let false_label = self.new_label()
       let end_label = self.new_label()
-      self.gen_mir_value(lhs, offsets, frame_size)
-      self.emit("\tcbz\tx9, " + false_label)
-      self.gen_mir_value(rhs, offsets, frame_size)
-      self.emit("\tcbz\tx9, " + false_label)
+      self.emit_mir_cond_jump_false(lhs, offsets, frame_size, false_label)
+      self.emit_mir_cond_jump_false(rhs, offsets, frame_size, false_label)
       self.emit("\tmov\tx9, #1")
       self.emit("\tb\t" + end_label)
       self.emit(false_label + ":")
@@ -3621,16 +3640,18 @@ fn Codegen::gen_mir_binary(
       return
     }
     "||" => {
-      let true_label = self.new_label()
+      let rhs_label = self.new_label()
       let end_label = self.new_label()
-      self.gen_mir_value(lhs, offsets, frame_size)
-      self.emit("\tcbnz\tx9, " + true_label)
-      self.gen_mir_value(rhs, offsets, frame_size)
-      self.emit("\tcbnz\tx9, " + true_label)
-      self.emit("\tmov\tx9, #0")
-      self.emit("\tb\t" + end_label)
-      self.emit(true_label + ":")
+      let false_label = self.new_label()
+      self.emit_mir_cond_jump_false(lhs, offsets, frame_size, rhs_label)
       self.emit("\tmov\tx9, #1")
+      self.emit("\tb\t" + end_label)
+      self.emit(rhs_label + ":")
+      self.emit_mir_cond_jump_false(rhs, offsets, frame_size, false_label)
+      self.emit("\tmov\tx9, #1")
+      self.emit("\tb\t" + end_label)
+      self.emit(false_label + ":")
+      self.emit("\tmov\tx9, #0")
       self.emit(end_label + ":")
       return
     }
@@ -5080,10 +5101,19 @@ fn X64Codegen::gen_mir_value(
           } else {
             self.emit("\tneg\trax")
           }
-        "!" => {
-          self.emit("\tcmp\trax, 0")
-          self.emit_setcc("sete")
-        }
+        "!" =>
+          if x64_is_fp_type(inner.ty()) {
+            let suffix = x64_fp_suffix(inner.ty())
+            self.emit("\tpxor\txmm1, xmm1")
+            self.emit("\tucomi" + suffix + "\txmm0, xmm1")
+            self.emit("\tsete\tal")
+            self.emit("\tsetnp\tdl")
+            self.emit("\tand\tal, dl")
+            self.emit("\tmovzx\trax, al")
+          } else {
+            self.emit("\tcmp\trax, 0")
+            self.emit_setcc("sete")
+          }
         "~" => self.emit("\tnot\trax")
         _ => abort("unsupported MIR body unary operator")
       }
@@ -6121,12 +6151,8 @@ fn X64Codegen::gen_mir_binary(
     "&&" => {
       let false_label = self.new_label()
       let end_label = self.new_label()
-      self.gen_mir_value(lhs, offsets)
-      self.emit("\tcmp\trax, 0")
-      self.emit("\tje\t" + false_label)
-      self.gen_mir_value(rhs, offsets)
-      self.emit("\tcmp\trax, 0")
-      self.emit("\tje\t" + false_label)
+      self.emit_mir_cond_jump_false(lhs, offsets, false_label)
+      self.emit_mir_cond_jump_false(rhs, offsets, false_label)
       self.emit("\tmov\trax, 1")
       self.emit("\tjmp\t" + end_label)
       self.emit(false_label + ":")
@@ -6135,18 +6161,18 @@ fn X64Codegen::gen_mir_binary(
       return
     }
     "||" => {
-      let true_label = self.new_label()
+      let rhs_label = self.new_label()
+      let false_label = self.new_label()
       let end_label = self.new_label()
-      self.gen_mir_value(lhs, offsets)
-      self.emit("\tcmp\trax, 0")
-      self.emit("\tjne\t" + true_label)
-      self.gen_mir_value(rhs, offsets)
-      self.emit("\tcmp\trax, 0")
-      self.emit("\tjne\t" + true_label)
-      self.emit("\tmov\trax, 0")
-      self.emit("\tjmp\t" + end_label)
-      self.emit(true_label + ":")
+      self.emit_mir_cond_jump_false(lhs, offsets, rhs_label)
       self.emit("\tmov\trax, 1")
+      self.emit("\tjmp\t" + end_label)
+      self.emit(rhs_label + ":")
+      self.emit_mir_cond_jump_false(rhs, offsets, false_label)
+      self.emit("\tmov\trax, 1")
+      self.emit("\tjmp\t" + end_label)
+      self.emit(false_label + ":")
+      self.emit("\tmov\trax, 0")
       self.emit(end_label + ":")
       return
     }
