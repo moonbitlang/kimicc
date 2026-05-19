@@ -1213,10 +1213,15 @@ fn Program::lower_mir_call_arg(
           }
       }
     _ =>
-      if mir_body_array_local_type(ty) {
-        self.lower_mir_array_base_addr(arg, ctx)
-      } else {
-        self.lower_mir_expr(arg, ctx)
+      match self.core_type(ty) {
+        Pointer(_) | FuncPtr(_, _, _) =>
+          self.lower_mir_expr_with_array_decay(arg, ctx)
+        _ =>
+          if mir_body_array_local_type(ty) {
+            self.lower_mir_array_base_addr(arg, ctx)
+          } else {
+            self.lower_mir_expr(arg, ctx)
+          }
       }
   }
 }
@@ -1227,6 +1232,10 @@ fn Program::lower_mir_expr_with_array_decay(
   expr : @parser.Expr,
   ctx : BodyLowerContext,
 ) -> MirValue? {
+  match self.lower_mir_known_object_ptr_expr(expr, ctx) {
+    Some(value) => return Some(value)
+    None => ()
+  }
   match self.core_type(self.expr_type(expr, ctx.scope())) {
     Array(elem_ty, _) =>
       match self.lower_mir_array_base_addr(expr, ctx) {

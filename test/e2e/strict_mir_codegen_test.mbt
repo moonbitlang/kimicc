@@ -905,6 +905,26 @@ test "strict MIR codegen executes direct array decay in pointer arithmetic" {
 }
 
 ///|
+test "strict MIR codegen executes member array decay in pointer call args" {
+  let source =
+    #|struct Info { unsigned aReadMark[4]; };
+    #|unsigned load_mark(struct Info *pInfo, int i) {
+    #|  return __atomic_load_n(pInfo->aReadMark + i, 0);
+    #|}
+    #|void store_mark(struct Info *pInfo, int i, unsigned value) {
+    #|  __atomic_store_n(pInfo->aReadMark + i, value, 0);
+    #|}
+    #|int main(void) {
+    #|  struct Info info;
+    #|  info.aReadMark[0] = 5;
+    #|  info.aReadMark[1] = 7;
+    #|  store_mark(&info, 1, 37);
+    #|  return (int)(load_mark(&info, 0) + load_mark(&info, 1));
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
 test "strict MIR codegen executes local pointer updates" {
   let source =
     #|int main(void) {
