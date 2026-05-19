@@ -139,6 +139,19 @@ test "strict MIR codegen executes aggregate array element address" {
 }
 
 ///|
+test "strict MIR codegen executes pointer post update through memory" {
+  let source =
+    #|int main(void) {
+    #|  int values[3] = {4, 7, 9};
+    #|  int *p = values;
+    #|  int **pp = &p;
+    #|  int first = *((*pp)++);
+    #|  return first + **pp;
+    #|}
+  assert_eq(run_source_strict_mir(source), 11)
+}
+
+///|
 test "strict MIR codegen executes small aggregate call results" {
   let source =
     #|struct Pair { long a; long b; };

@@ -1456,6 +1456,20 @@ test "mir body lowering handles address of aggregate array element" {
 }
 
 ///|
+test "mir body lowering handles pointer memory post update" {
+  let source =
+    #|int main(void) {
+    #|  int values[3] = {4, 7, 9};
+    #|  int *p = values;
+    #|  int **pp = &p;
+    #|  int first = *((*pp)++);
+    #|  return first + **pp;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+}
+
+///|
 test "mir body lowering handles array element aggregate fields" {
   let source =
     #|struct Item { int v; };

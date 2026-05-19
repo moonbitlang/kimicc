@@ -4148,6 +4148,31 @@ test "generate linux amd64 strict MIR atomic scalar load store builtins" {
 }
 
 ///|
+test "generate linux amd64 strict MIR pointer post update through memory" {
+  let source =
+    #|int main(void) {
+    #|  int values[3] = {4, 7, 9};
+    #|  int *p = values;
+    #|  int **pp = &p;
+    #|  int first = *((*pp)++);
+    #|  return first + **pp;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\timul\trax, 4"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
 test "generate linux amd64 strict MIR global aggregate initializer" {
   let source =
     #|struct Inner { int z; };

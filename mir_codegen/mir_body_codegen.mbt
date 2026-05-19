@@ -1924,6 +1924,26 @@ fn Codegen::emit_mir_atomic_store_builtin(
 }
 
 ///|
+fn Codegen::mir_pointer_update_scale(self : Codegen, ty : @ctype.Type) -> Int {
+  match pointer_or_array_element_type(ty) {
+    Some(elem_ty) => self.type_size(elem_ty)
+    None => 1
+  }
+}
+
+///|
+fn Codegen::emit_mir_scale_update_rhs_for_pointer(
+  self : Codegen,
+  ty : @ctype.Type,
+) -> Unit {
+  let scale = self.mir_pointer_update_scale(ty)
+  if scale != 1 {
+    self.emit("\tmov\tx11, #" + scale.to_string())
+    self.emit("\tmul\tx9, x9, x11")
+  }
+}
+
+///|
 fn Codegen::emit_mir_overflow_arithmetic_builtin(
   self : Codegen,
   args : Array[@mir.MirValue],
@@ -2873,6 +2893,22 @@ fn Codegen::gen_mir_value(
       self.emit_scalar_conversion_to(ty)
     }
     MirPreUpdateMemory(ptr, op, rhs, ty) => {
+      if mir_body_pointer_integer_op(op, ty, rhs.ty()) {
+        self.gen_mir_value(ptr, offsets, frame_size)
+        self.emit("\tstr\tx9, [sp, #-16]!")
+        self.emit_load_typed("x10", "x9", ty)
+        self.gen_mir_value(rhs, offsets, frame_size)
+        self.emit_scalar_conversion_to(rhs.ty())
+        self.emit_mir_scale_update_rhs_for_pointer(ty)
+        match op {
+          "+" => self.emit("\tadd\tx9, x10, x9")
+          "-" => self.emit("\tsub\tx9, x10, x9")
+          _ => abort("unsupported MIR body memory pointer pre-update operator")
+        }
+        self.emit("\tldr\tx12, [sp], #16")
+        self.emit_store_typed("x9", "x12", ty)
+        return
+      }
       if mir_body_codegen_fp_update_supported(op, ty, rhs.ty()) {
         let fp_ty = mir_body_codegen_fp_binary_type(ty, rhs.ty(), ty)
         self.gen_mir_value(ptr, offsets, frame_size)
@@ -2937,6 +2973,25 @@ fn Codegen::gen_mir_value(
       self.emit_store_typed("x9", "x12", ty)
     }
     MirPostUpdateMemory(ptr, op, rhs, ty) => {
+      if mir_body_pointer_integer_op(op, ty, rhs.ty()) {
+        self.gen_mir_value(ptr, offsets, frame_size)
+        self.emit("\tstr\tx9, [sp, #-16]!")
+        self.emit_load_typed("x10", "x9", ty)
+        self.emit("\tstr\tx10, [sp, #-16]!")
+        self.gen_mir_value(rhs, offsets, frame_size)
+        self.emit_scalar_conversion_to(rhs.ty())
+        self.emit_mir_scale_update_rhs_for_pointer(ty)
+        self.emit("\tldr\tx10, [sp], #16")
+        match op {
+          "+" => self.emit("\tadd\tx11, x10, x9")
+          "-" => self.emit("\tsub\tx11, x10, x9")
+          _ => abort("unsupported MIR body memory pointer post-update operator")
+        }
+        self.emit("\tldr\tx12, [sp], #16")
+        self.emit_store_typed("x11", "x12", ty)
+        self.emit("\tmov\tx9, x10")
+        return
+      }
       if mir_body_codegen_fp_update_supported(op, ty, rhs.ty()) {
         let fp_ty = mir_body_codegen_fp_binary_type(ty, rhs.ty(), ty)
         self.gen_mir_value(ptr, offsets, frame_size)
@@ -4639,6 +4694,28 @@ fn X64Codegen::emit_mir_atomic_store_builtin(
 }
 
 ///|
+fn X64Codegen::mir_pointer_update_scale(
+  self : X64Codegen,
+  ty : @ctype.Type,
+) -> Int {
+  match pointer_or_array_element_type(ty) {
+    Some(elem_ty) => self.type_size(elem_ty)
+    None => 1
+  }
+}
+
+///|
+fn X64Codegen::emit_mir_scale_update_rhs_for_pointer(
+  self : X64Codegen,
+  ty : @ctype.Type,
+) -> Unit {
+  let scale = self.mir_pointer_update_scale(ty)
+  if scale != 1 {
+    self.emit("\timul\trax, " + scale.to_string())
+  }
+}
+
+///|
 fn X64Codegen::emit_mir_fp_binary_xmm0_xmm1(
   self : X64Codegen,
   op : String,
@@ -5361,6 +5438,28 @@ fn X64Codegen::gen_mir_value(
       self.emit_int_conversion_to(ty)
     }
     MirPreUpdateMemory(ptr, op, rhs, ty) => {
+      if mir_body_pointer_integer_op(op, ty, rhs.ty()) {
+        self.gen_mir_value(ptr, offsets)
+        self.emit_mir_push_rax()
+        self.emit_load_indirect(ty)
+        self.emit("\tmov\tr11, rax")
+        self.gen_mir_value(rhs, offsets)
+        self.emit_int_conversion_to(rhs.ty())
+        self.emit_mir_scale_update_rhs_for_pointer(ty)
+        match op {
+          "+" => self.emit("\tadd\trax, r11")
+          "-" => {
+            self.emit("\tmov\tr10, rax")
+            self.emit("\tmov\trax, r11")
+            self.emit("\tsub\trax, r10")
+          }
+          _ => abort("unsupported MIR body memory pointer pre-update operator")
+        }
+        self.emit("\tmov\tr10, QWORD PTR [rsp]")
+        self.emit("\tadd\trsp, 16")
+        self.emit_store_indirect(ty)
+        return
+      }
       if mir_body_codegen_fp_update_supported(op, ty, rhs.ty()) {
         let fp_ty = mir_body_codegen_fp_binary_type(ty, rhs.ty(), ty)
         let suffix = x64_fp_suffix(fp_ty)
@@ -5438,6 +5537,28 @@ fn X64Codegen::gen_mir_value(
       self.emit_int_conversion_to(ty)
     }
     MirPostUpdateMemory(ptr, op, rhs, ty) => {
+      if mir_body_pointer_integer_op(op, ty, rhs.ty()) {
+        self.gen_mir_value(ptr, offsets)
+        self.emit_mir_push_rax()
+        self.emit_load_indirect(ty)
+        self.emit_mir_push_rax()
+        self.gen_mir_value(rhs, offsets)
+        self.emit_int_conversion_to(rhs.ty())
+        self.emit_mir_scale_update_rhs_for_pointer(ty)
+        self.emit("\tmov\tr10, rax")
+        self.emit_mir_pop_rax()
+        self.emit("\tmov\tr11, rax")
+        match op {
+          "+" => self.emit("\tadd\trax, r10")
+          "-" => self.emit("\tsub\trax, r10")
+          _ => abort("unsupported MIR body memory pointer post-update operator")
+        }
+        self.emit("\tmov\tr10, QWORD PTR [rsp]")
+        self.emit("\tadd\trsp, 16")
+        self.emit_store_indirect(ty)
+        self.emit("\tmov\trax, r11")
+        return
+      }
       if mir_body_codegen_fp_update_supported(op, ty, rhs.ty()) {
         let fp_ty = mir_body_codegen_fp_binary_type(ty, rhs.ty(), ty)
         let suffix = x64_fp_suffix(fp_ty)
