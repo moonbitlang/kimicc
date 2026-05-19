@@ -263,6 +263,38 @@ fn compile_source_to_object_path(source : String, tag : String) -> String {
 }
 
 ///|
+fn compile_source_to_strict_mir_assembly(source : String) -> String {
+  let target = @target.Target::default()
+  let prog = @parser.parse_for_target(source, target)
+  match @parser.validate_semantics(prog) {
+    Ok(_) => ()
+    Err(err) => abort("strict MIR semantic validation failed: " + err)
+  }
+  match
+    @mir_codegen.generate_assembly_from_mir_module_strict(
+      @mir.lower_to_module(prog, target),
+    ) {
+    Ok(assembly) => assembly
+    Err(err) => abort("strict MIR codegen failed: " + err)
+  }
+}
+
+///|
+fn compile_source_to_strict_mir_object_path(
+  source : String,
+  tag : String,
+) -> String {
+  let asm_path = temp_file_path(tag, source, ".strict-mir.s")
+  let obj_path = temp_file_path(tag, source, ".strict-mir.o")
+  write_text_file(asm_path, compile_source_to_strict_mir_assembly(source))
+  run_command_checked(
+    "clang -c -o " + obj_path + " " + asm_path,
+    "assemble strict MIR " + tag,
+  )
+  obj_path
+}
+
+///|
 fn compile_source_to_direct_object_path(
   source : String,
   tag : String,
@@ -878,11 +910,29 @@ async fn compile_sqlite_fixture_direct_object() -> String {
 }
 
 ///|
+async fn compile_sqlite_fixture_strict_mir_object() -> String {
+  let source = preprocess_c_file(
+    "test/fixtures/sqlite/sqlite3.c", "sqlite3_strict_mir_preprocessed",
+  )
+  compile_source_to_strict_mir_object_path(source, "sqlite3_strict_mir_object")
+}
+
+///|
 async fn run_driver_with_direct_sqlite_object(
   driver_source : String,
   tag : String,
 ) -> CommandResult {
   let object_path = compile_sqlite_fixture_direct_object()
+  let bin_path = compile_driver_with_object(driver_source, object_path, tag)
+  run_command_capture(bin_path, tag)
+}
+
+///|
+async fn run_driver_with_strict_mir_sqlite_object(
+  driver_source : String,
+  tag : String,
+) -> CommandResult {
+  let object_path = compile_sqlite_fixture_strict_mir_object()
   let bin_path = compile_driver_with_object(driver_source, object_path, tag)
   run_command_capture(bin_path, tag)
 }
