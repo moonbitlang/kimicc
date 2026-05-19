@@ -318,7 +318,9 @@ fn Program::lower_mir_post_step(
     Some(binding) => lower_mir_post_update(binding, op, MirConst(1L, SInt), ty)
     None => {
       let lhs_ty = self.expr_type(expr, ctx.scope())
-      if !lhs_ty.is_integer() && !lhs_ty.is_floating() {
+      if !lhs_ty.is_integer() &&
+        !lhs_ty.is_floating() &&
+        !mir_body_pointer_type(lhs_ty) {
         return None
       }
       match self.lower_mir_scalar_lvalue_addr(expr, lhs_ty, ctx) {
@@ -1100,8 +1102,12 @@ fn Program::lower_mir_compound_memory_update(
   result_ty : @ctype.Type,
   ctx : BodyLowerContext,
 ) -> MirValue? {
+  let pointer_update = mir_body_pointer_type(lhs_ty) &&
+    (op == "+" || op == "-") &&
+    value.ty().is_integer()
   if !lhs_ty.is_integer() &&
-    !(lhs_ty.is_floating() && mir_body_floating_update_op(op)) {
+    !(lhs_ty.is_floating() && mir_body_floating_update_op(op)) &&
+    !pointer_update {
     return None
   }
   match self.lower_mir_scalar_lvalue_addr(lhs, lhs_ty, ctx) {
@@ -1136,7 +1142,9 @@ fn Program::lower_mir_prefix_step(
     Some(binding) => lower_mir_local_step(binding.name, op, ty, ctx)
     None => {
       let lhs_ty = self.expr_type(expr, ctx.scope())
-      if !lhs_ty.is_integer() && !lhs_ty.is_floating() {
+      if !lhs_ty.is_integer() &&
+        !lhs_ty.is_floating() &&
+        !mir_body_pointer_type(lhs_ty) {
         return None
       }
       match self.lower_mir_scalar_lvalue_addr(expr, lhs_ty, ctx) {
