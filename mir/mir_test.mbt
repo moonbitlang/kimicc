@@ -685,6 +685,23 @@ test "mir body interpreter handles scalar local arrays" {
 }
 
 ///|
+test "mir body interpreter decays ternary local arrays before indexing" {
+  let source =
+    #|int main(void) {
+    #|  int a[2];
+    #|  int b[2];
+    #|  a[0] = 3;
+    #|  a[1] = 5;
+    #|  b[0] = 7;
+    #|  b[1] = 11;
+    #|  return (1 ? a : b)[1] + (0 ? a : b)[0];
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 12L)
+}
+
+///|
 test "mir body interpreter decays local arrays in call arguments" {
   let source =
     #|int main(void) {

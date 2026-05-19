@@ -905,6 +905,21 @@ test "strict MIR codegen executes direct array decay in pointer arithmetic" {
 }
 
 ///|
+test "strict MIR codegen executes ternary local array decay before indexing" {
+  let source =
+    #|int main(void) {
+    #|  int a[2];
+    #|  int b[2];
+    #|  a[0] = 3;
+    #|  a[1] = 5;
+    #|  b[0] = 7;
+    #|  b[1] = 11;
+    #|  return (1 ? a : b)[1] + (0 ? a : b)[0];
+    #|}
+  assert_eq(run_source_strict_mir(source), 12)
+}
+
+///|
 test "strict MIR codegen executes member array decay in pointer call args" {
   let source =
     #|struct Info { unsigned aReadMark[4]; };
