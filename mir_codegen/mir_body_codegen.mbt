@@ -20,6 +20,7 @@ fn mir_body_codegen_scalar_type(ty : @ctype.Type) -> Bool {
     | ULongLong
     | Float
     | Double
+    | LongDouble
     | Pointer(_)
     | FuncPtr(_, _, _) => true
     Atomic(inner) => mir_body_codegen_scalar_type(inner)
@@ -57,7 +58,7 @@ fn mir_body_codegen_abi_int_type(ty : @ctype.Type) -> Bool {
 ///|
 fn mir_body_codegen_abi_fp_type(ty : @ctype.Type) -> Bool {
   match peel_aligned_type(ty) {
-    Float | Double => true
+    Float | Double | LongDouble => true
     Atomic(inner) => mir_body_codegen_abi_fp_type(inner)
     _ => false
   }
@@ -294,7 +295,7 @@ fn mir_body_codegen_x64_variadic_args_supported(
 ///|
 fn mir_body_codegen_floating_type(ty : @ctype.Type) -> Bool {
   match peel_aligned_type(ty) {
-    Float | Double => true
+    Float | Double | LongDouble => true
     Atomic(inner) => mir_body_codegen_floating_type(inner)
     _ => false
   }
@@ -303,7 +304,7 @@ fn mir_body_codegen_floating_type(ty : @ctype.Type) -> Bool {
 ///|
 fn mir_body_codegen_double_type(ty : @ctype.Type) -> Bool {
   match peel_aligned_type(ty) {
-    Double => true
+    Double | LongDouble => true
     Atomic(inner) => mir_body_codegen_double_type(inner)
     _ => false
   }
@@ -312,6 +313,131 @@ fn mir_body_codegen_double_type(ty : @ctype.Type) -> Bool {
 ///|
 fn mir_body_codegen_fp_operand_type(ty : @ctype.Type) -> Bool {
   mir_body_codegen_floating_type(ty) || ty.is_integer()
+}
+
+///|
+fn mir_body_codegen_x64_unsupported_long_double_type(ty : @ctype.Type) -> Bool {
+  match peel_aligned_type(ty) {
+    LongDouble => true
+    Array(elem, _) | Atomic(elem) | Aligned(elem, _) =>
+      mir_body_codegen_x64_unsupported_long_double_type(elem)
+    _ => false
+  }
+}
+
+///|
+fn mir_body_codegen_x64_unsupported_long_double_value(
+  value : @mir.MirValue,
+) -> Bool {
+  if mir_body_codegen_x64_unsupported_long_double_type(value.ty()) {
+    return true
+  }
+  match value {
+    MirUnary(_, inner, _) | MirCast(_, inner) | MirAggregateArg(inner, _) =>
+      mir_body_codegen_x64_unsupported_long_double_value(inner)
+    MirElemAddr(base, index, _) =>
+      mir_body_codegen_x64_unsupported_long_double_value(base) ||
+      mir_body_codegen_x64_unsupported_long_double_value(index)
+    MirOffsetAddr(base, _, _) | MirLoad(base, _) =>
+      mir_body_codegen_x64_unsupported_long_double_value(base)
+    MirBinary(_, lhs, rhs, _) =>
+      mir_body_codegen_x64_unsupported_long_double_value(lhs) ||
+      mir_body_codegen_x64_unsupported_long_double_value(rhs)
+    MirCall(_, args, _) | MirIndirectCall(_, args, _) => {
+      for arg in args {
+        if mir_body_codegen_x64_unsupported_long_double_value(arg) {
+          return true
+        }
+      }
+      match value {
+        MirIndirectCall(callee, _, _) =>
+          mir_body_codegen_x64_unsupported_long_double_value(callee)
+        _ => false
+      }
+    }
+    MirStore(ptr, rhs, _)
+    | MirPreUpdateMemory(ptr, _, rhs, _)
+    | MirPostUpdateMemory(ptr, _, rhs, _) =>
+      mir_body_codegen_x64_unsupported_long_double_value(ptr) ||
+      mir_body_codegen_x64_unsupported_long_double_value(rhs)
+    MirAssignLocal(_, rhs) | MirPostUpdateLocal(_, _, rhs, _) =>
+      mir_body_codegen_x64_unsupported_long_double_value(rhs)
+    MirTernary(cond, then_, else_, _) =>
+      mir_body_codegen_x64_unsupported_long_double_value(cond) ||
+      mir_body_codegen_x64_unsupported_long_double_value(then_) ||
+      mir_body_codegen_x64_unsupported_long_double_value(else_)
+    MirVaArg(ap, _) | MirVaArgAddr(ap, _) =>
+      mir_body_codegen_x64_unsupported_long_double_value(ap)
+    _ => false
+  }
+}
+
+///|
+fn mir_body_codegen_x64_unsupported_long_double_stmt(
+  stmt : @mir.MirStmt,
+) -> Bool {
+  match stmt {
+    MirDeclare(binding, init) =>
+      mir_body_codegen_x64_unsupported_long_double_type(binding.ty) ||
+      (match init {
+        Some(value) => mir_body_codegen_x64_unsupported_long_double_value(value)
+        None => false
+      })
+    MirExprStmt(value) | MirReturn(Some(value)) =>
+      mir_body_codegen_x64_unsupported_long_double_value(value)
+    MirIf(cond, then_, else_) =>
+      mir_body_codegen_x64_unsupported_long_double_value(cond) ||
+      mir_body_codegen_x64_unsupported_long_double_stmts(then_) ||
+      mir_body_codegen_x64_unsupported_long_double_stmts(else_)
+    MirWhile(cond, body) | MirDoWhile(cond, body) =>
+      mir_body_codegen_x64_unsupported_long_double_value(cond) ||
+      mir_body_codegen_x64_unsupported_long_double_stmts(body)
+    MirFor(init, cond, inc, body) =>
+      mir_body_codegen_x64_unsupported_long_double_stmts(init) ||
+      mir_body_codegen_x64_unsupported_long_double_value(cond) ||
+      (match inc {
+        Some(value) => mir_body_codegen_x64_unsupported_long_double_value(value)
+        None => false
+      }) ||
+      mir_body_codegen_x64_unsupported_long_double_stmts(body)
+    MirSwitch(control, _, body) =>
+      mir_body_codegen_x64_unsupported_long_double_value(control) ||
+      mir_body_codegen_x64_unsupported_long_double_stmts(body)
+    MirBlock(body) => mir_body_codegen_x64_unsupported_long_double_stmts(body)
+    _ => false
+  }
+}
+
+///|
+fn mir_body_codegen_x64_unsupported_long_double_stmts(
+  stmts : Array[@mir.MirStmt],
+) -> Bool {
+  for stmt in stmts {
+    if mir_body_codegen_x64_unsupported_long_double_stmt(stmt) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn mir_body_codegen_x64_unsupported_long_double_body(
+  body : @mir.MirFuncBody,
+) -> Bool {
+  if mir_body_codegen_x64_unsupported_long_double_type(body.ret) {
+    return true
+  }
+  for param in body.params {
+    if mir_body_codegen_x64_unsupported_long_double_type(param.ty) {
+      return true
+    }
+  }
+  for binding in body.locals {
+    if mir_body_codegen_x64_unsupported_long_double_type(binding.ty) {
+      return true
+    }
+  }
+  mir_body_codegen_x64_unsupported_long_double_stmts(body.body)
 }
 
 ///|
@@ -648,6 +774,10 @@ fn mir_body_codegen_value_supported(
       if op == "&&" || op == "||" {
         return !mir_body_codegen_floating_type(ty) &&
           mir_body_codegen_value_supported(lhs, int_arg_limit, mir) &&
+          mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
+      }
+      if op == "," {
+        return mir_body_codegen_value_supported(lhs, int_arg_limit, mir) &&
           mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
       }
       if mir_body_codegen_fp_compare_supported(op, lhs.ty(), rhs.ty(), ty) {
@@ -1428,8 +1558,8 @@ fn mir_body_codegen_indirect_call_supported(
   if !ret_supported {
     return false
   }
-  match peel_aligned_type(callee_ty) {
-    FuncPtr(sig_ret, params, variadic) => {
+  match mir_indirect_callable_type(callee_ty) {
+    Some(FuncPtr(sig_ret, params, variadic)) => {
       let sig_ret_supported = mir_body_codegen_abi_scalar_type(sig_ret) ||
         mir_body_codegen_register_aggregate_return_type(sig_ret, mir) ||
         mir_body_codegen_x64_memory_aggregate_return_type(sig_ret, mir)
@@ -1490,17 +1620,28 @@ fn mir_body_codegen_indirect_call_supported(
 }
 
 ///|
-fn mir_indirect_call_variadic(callee_ty : @ctype.Type) -> Bool {
+fn mir_indirect_callable_type(callee_ty : @ctype.Type) -> @ctype.Type? {
   match peel_aligned_type(callee_ty) {
-    FuncPtr(_, _, variadic) => variadic
+    FuncPtr(sig_ret, params, variadic) =>
+      Some(FuncPtr(sig_ret, params, variadic))
+    Pointer(FuncPtr(sig_ret, params, variadic)) =>
+      Some(FuncPtr(sig_ret, params, variadic))
+    _ => None
+  }
+}
+
+///|
+fn mir_indirect_call_variadic(callee_ty : @ctype.Type) -> Bool {
+  match mir_indirect_callable_type(callee_ty) {
+    Some(FuncPtr(_, _, variadic)) => variadic
     _ => false
   }
 }
 
 ///|
 fn mir_indirect_call_named_arg_count(callee_ty : @ctype.Type) -> Int {
-  match peel_aligned_type(callee_ty) {
-    FuncPtr(_, params, _) => params.length()
+  match mir_indirect_callable_type(callee_ty) {
+    Some(FuncPtr(_, params, _)) => params.length()
     _ => 0
   }
 }
@@ -1511,8 +1652,8 @@ fn mir_indirect_call_arg_type(
   index : Int,
   actual : @ctype.Type,
 ) -> @ctype.Type {
-  match peel_aligned_type(callee_ty) {
-    FuncPtr(_, params, _) =>
+  match mir_indirect_callable_type(callee_ty) {
+    Some(FuncPtr(_, params, _)) =>
       if index >= 0 && index < params.length() {
         params[index]
       } else {
@@ -1681,6 +1822,10 @@ fn mir_body_codegen_func_supported(
   mir : @mir.MirModule,
 ) -> Bool {
   ignore(variadic)
+  if mir.target is LinuxAmd64 &&
+    mir_body_codegen_x64_unsupported_long_double_body(body) {
+    return false
+  }
   if !mir_body_codegen_abi_scalar_type(body.ret) &&
     !mir_body_codegen_register_aggregate_return_type(body.ret, mir) &&
     !mir_body_codegen_x64_memory_aggregate_return_type(body.ret, mir) {

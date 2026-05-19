@@ -1065,7 +1065,11 @@ fn Program::binary_result_type(
     "<<" | ">>" => unary_integer_result_type(lhs_ty)
     _ =>
       if self.is_floating_type(lhs_ty) || self.is_floating_type(rhs_ty) {
-        if self.core_type(lhs_ty) == Double || self.core_type(rhs_ty) == Double {
+        if self.core_type(lhs_ty) == LongDouble ||
+          self.core_type(rhs_ty) == LongDouble {
+          LongDouble
+        } else if self.core_type(lhs_ty) == Double ||
+          self.core_type(rhs_ty) == Double {
           Double
         } else {
           Float
@@ -1091,7 +1095,10 @@ fn Program::ternary_result_type(
       FuncPtr(ret, params, variadic)
     _ =>
       if self.is_floating_type(then_ty) || self.is_floating_type(else_ty) {
-        if self.core_type(then_ty) == Double ||
+        if self.core_type(then_ty) == LongDouble ||
+          self.core_type(else_ty) == LongDouble {
+          LongDouble
+        } else if self.core_type(then_ty) == Double ||
           self.core_type(else_ty) == Double {
           Double
         } else {

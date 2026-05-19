@@ -208,6 +208,7 @@ fn mir_body_scalar_type(ty : @ctype.Type) -> Bool {
     | ULongLong
     | Float
     | Double
+    | LongDouble
     | Pointer(_)
     | FuncPtr(_, _, _) => true
     Atomic(inner) | Aligned(inner, _) => mir_body_scalar_type(inner)
@@ -567,66 +568,43 @@ fn Program::lower_mir_zero_init_stores(
   ty : @ctype.Type,
 ) -> Array[MirStmt]? {
   match self.core_type(ty) {
-    Struct(name) | Union(name) => {
-      let decl = match self.aggregates.get(name) {
-        Some(decl) => decl
-        None => return None
-      }
-      if decl.is_union {
-        if decl.fields.length() == 0 {
-          return Some([])
-        }
-        let field = decl.fields[0]
-        if field.bit_width is Some(_) {
-          return None
-        }
-        let layout = match self.field_layout(ty, field.name) {
-          Some(layout) => layout
-          None => return None
-        }
-        let addr = mir_body_offset_addr_value(base, layout.offset, layout.ty)
-        return self.lower_mir_zero_init_stores(addr, layout.ty)
-      }
-      let stores : Array[MirStmt] = []
-      for field in decl.fields {
-        if field.bit_width is Some(_) {
-          return None
-        }
-        let layout = match self.field_layout(ty, field.name) {
-          Some(layout) => layout
-          None => return None
-        }
-        let addr = mir_body_offset_addr_value(base, layout.offset, layout.ty)
-        let nested = match self.lower_mir_zero_init_stores(addr, layout.ty) {
-          Some(stores) => stores
-          None => return None
-        }
-        for store in nested {
-          stores.push(store)
-        }
-      }
-      Some(stores)
-    }
-    Array(elem_ty, len) =>
-      if mir_body_scalar_type(elem_ty) {
-        let stores : Array[MirStmt] = []
-        for i in 0..<len {
-          let addr = MirElemAddr(base, MirConst(i.to_int64(), SInt), elem_ty)
-          stores.push(
-            MirExprStmt(MirStore(addr, MirConst(0L, elem_ty), elem_ty)),
-          )
-        }
-        Some(stores)
-      } else {
-        None
-      }
-    _ =>
-      if mir_body_scalar_type(ty) {
-        Some([MirExprStmt(MirStore(base, MirConst(0L, ty), ty))])
-      } else {
-        None
-      }
+    Struct(_) | Union(_) | Array(_, _) =>
+      return Some(self.lower_mir_zero_object_stores(base, ty))
+    _ => ()
   }
+  if mir_body_scalar_type(ty) {
+    Some([MirExprStmt(MirStore(base, MirConst(0L, ty), ty))])
+  } else {
+    None
+  }
+}
+
+///|
+fn Program::lower_mir_zero_object_stores(
+  self : Program,
+  base : MirValue,
+  ty : @ctype.Type,
+) -> Array[MirStmt] {
+  let stores : Array[MirStmt] = []
+  let size = self.type_size(ty)
+  let mut offset = 0
+  while offset < size {
+    let remaining = size - offset
+    let (chunk_ty, chunk_size) : (@ctype.Type, Int) = if remaining >= 8 &&
+      offset % 8 == 0 {
+      (ULongLong, 8)
+    } else if remaining >= 4 && offset % 4 == 0 {
+      (UInt, 4)
+    } else if remaining >= 2 && offset % 2 == 0 {
+      (UShort, 2)
+    } else {
+      (UChar, 1)
+    }
+    let addr = mir_body_offset_addr_value(base, offset, chunk_ty)
+    stores.push(MirExprStmt(MirStore(addr, MirConst(0L, chunk_ty), chunk_ty)))
+    offset += chunk_size
+  }
+  stores
 }
 
 ///|
@@ -731,9 +709,10 @@ fn Program::lower_mir_union_copy_init_stores(
   if !decl.is_union {
     return None
   }
+  let union_layout = self.aggregate_layout_by_name(union_name)
   let size = self.type_size(dest_ty)
   let mut copy_field = ""
-  for field in decl.fields {
+  for field in union_layout.fields {
     if field.bit_width is Some(_) {
       return None
     }
@@ -748,6 +727,34 @@ fn Program::lower_mir_union_copy_init_stores(
     }
   }
   if copy_field == "" {
+    for field in union_layout.fields {
+      if field.bit_width is Some(_) {
+        return None
+      }
+      let dest_layout = match self.field_layout(dest_ty, field.name) {
+        Some(layout) => layout
+        None => return None
+      }
+      let src_layout = match self.field_layout(src_ty, field.name) {
+        Some(layout) => layout
+        None => return None
+      }
+      if dest_layout.offset == 0 &&
+        src_layout.offset == 0 &&
+        self.type_size(dest_layout.ty) == size &&
+        self.type_size(src_layout.ty) == size {
+        return self.lower_mir_copy_init_stores(
+          mir_body_offset_addr_value(
+            dest_base,
+            dest_layout.offset,
+            dest_layout.ty,
+          ),
+          dest_layout.ty,
+          mir_body_offset_addr_value(src_base, src_layout.offset, src_layout.ty),
+          src_layout.ty,
+        )
+      }
+    }
     return None
   }
   let dest_layout = match self.field_layout(dest_ty, copy_field) {
@@ -800,8 +807,9 @@ fn Program::lower_mir_copy_init_stores(
       if decl.is_union {
         return None
       }
+      let layout = self.aggregate_layout_by_name(dest_name)
       let stores : Array[MirStmt] = []
-      for field in decl.fields {
+      for field in layout.fields {
         let dest_layout = match self.field_layout(dest_ty, field.name) {
           Some(layout) => layout
           None => return None
@@ -978,14 +986,6 @@ fn Program::lower_mir_struct_init_stores(
     Some(decl) => decl
     None => return None
   }
-  for field in decl.fields {
-    if field.bit_width is Some(_) {
-      return None
-    }
-    if self.field_layout(ty, field.name) is None {
-      return None
-    }
-  }
   let stores = match self.lower_mir_zero_init_stores(base, ty) {
     Some(stores) => stores
     None => return None
@@ -1071,10 +1071,34 @@ fn Program::lower_mir_struct_init_stores(
     }
     match self.field_layout(ty, field.name) {
       Some(layout) => {
+        if layout.bit_width is Some(_) {
+          match value {
+            MirConst(0L, _) => continue
+            _ =>
+              match
+                lower_mir_bitfield_store_value(
+                  field.ty,
+                  mir_body_offset_addr_value(base, layout.offset, layout.ty),
+                  layout,
+                  value,
+                  ctx,
+                ) {
+                Some(store) => {
+                  stores.push(MirExprStmt(store))
+                  continue
+                }
+                None => return None
+              }
+          }
+        }
         let addr = mir_body_offset_addr_value(base, layout.offset, layout.ty)
         stores.push(MirExprStmt(MirStore(addr, value, layout.ty)))
       }
-      None => return None
+      None =>
+        match value {
+          MirConst(0L, _) => continue
+          _ => return None
+        }
     }
   }
   Some(stores)
@@ -1492,15 +1516,26 @@ fn Program::lower_mir_bitfield_store(
     Some(value) => value
     None => return None
   }
-  let width = match layout.bit_width {
-    Some(value) => value
-    None => return None
-  }
   let value = match self.lower_mir_expr_for_target_type(layout.ty, rhs, ctx) {
     Some(value) => value
     None => return None
   }
+  lower_mir_bitfield_store_value(lhs_ty, addr, layout, value, ctx)
+}
+
+///|
+fn lower_mir_bitfield_store_value(
+  lhs_ty : @ctype.Type,
+  addr : MirValue,
+  layout : FieldLayout,
+  value : MirValue,
+  ctx : BodyLowerContext,
+) -> MirValue? {
   let temp = ctx.declare_temp(layout.ty)
+  let width = match layout.bit_width {
+    Some(value) => value
+    None => return None
+  }
   let mask = mir_body_bitfield_mask(width)
   let shifted_mask = mask << layout.bit_offset
   let temp_value = MirLocal(temp)
@@ -1534,6 +1569,41 @@ fn Program::lower_mir_bitfield_store(
     ],
     MirCast(lhs_ty, temp_value),
     lhs_ty,
+  )
+}
+
+///|
+fn Program::lower_mir_bitfield_compound_update(
+  self : Program,
+  lhs : @parser.Expr,
+  op : String,
+  rhs : @parser.Expr,
+  result_ty : @ctype.Type,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  let (obj, field) = match lhs {
+    MemberAccess(obj, field) => (obj, field)
+    _ => return None
+  }
+  let lhs_ty = self.expr_type(lhs, ctx.scope())
+  let (addr, layout) = match self.lower_mir_bitfield_storage(obj, field, ctx) {
+    Some(value) => value
+    None => return None
+  }
+  let current = match self.lower_mir_bitfield_load(obj, field, lhs_ty, ctx) {
+    Some(value) => value
+    None => return None
+  }
+  let rhs_value = match self.lower_mir_expr(rhs, ctx) {
+    Some(value) => value
+    None => return None
+  }
+  lower_mir_bitfield_store_value(
+    lhs_ty,
+    addr,
+    layout,
+    MirBinary(op, current, rhs_value, result_ty),
+    ctx,
   )
 }
 
@@ -1682,6 +1752,7 @@ fn Program::lower_mir_indirect_call(
   }
   match self.core_type(callee_value.ty()) {
     FuncPtr(_, _, _) => ()
+    Pointer(FuncPtr(_, _, _)) => ()
     _ => return None
   }
   let values : Array[MirValue] = []
@@ -1791,7 +1862,12 @@ fn Program::lower_mir_expr(
     Deref(AddrOf(Var(name))) =>
       match ctx.lookup_local(name) {
         Some(binding) => Some(MirLocal(binding))
-        None => None
+        None =>
+          if self.globals.contains(name) && mir_body_scalar_type(ty) {
+            Some(MirLoad(MirAddrGlobal(name, self.globals[name].ty), ty))
+          } else {
+            None
+          }
       }
     AddrOf(Deref(inner)) => self.lower_mir_expr(inner, ctx)
     AddrOf(ArrayAccess(base, index)) =>
@@ -1931,6 +2007,10 @@ fn Program::lower_mir_expr(
       }
     }
     CompoundAssign(op, lhs, rhs) => {
+      match self.lower_mir_bitfield_compound_update(lhs, op, rhs, ty, ctx) {
+        Some(value) => return Some(value)
+        None => ()
+      }
       let lhs_ty = self.expr_type(lhs, scope)
       match
         (
@@ -2219,6 +2299,15 @@ fn Program::lower_mir_ignored_expr(
       match self.lower_mir_ignored_aggregate_assign(lhs, rhs, ctx) {
         Some(value) => Some(value)
         None => self.lower_mir_expr(expr, ctx)
+      }
+    Binary(",", lhs, rhs) =>
+      match
+        (
+          self.lower_mir_ignored_expr(lhs, ctx),
+          self.lower_mir_ignored_expr(rhs, ctx),
+        ) {
+        (Some(left), Some(right)) => Some(MirBinary(",", left, right, SInt))
+        _ => None
       }
     _ => self.lower_mir_expr(expr, ctx)
   }
