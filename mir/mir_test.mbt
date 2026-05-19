@@ -786,6 +786,21 @@ test "mir body interpreter handles local array initializers" {
 }
 
 ///|
+test "mir body interpreter decays member arrays in pointer differences" {
+  let source =
+    #|struct S { int a[4]; unsigned char iPrev; };
+    #|int main(void) {
+    #|  struct S s;
+    #|  int *p = &s.a[2];
+    #|  s.iPrev = (unsigned char)(p - s.a);
+    #|  return s.iPrev;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 2L)
+}
+
+///|
 test "mir body interpreter handles fixed local string array initializers" {
   let source =
     #|int main(void) {

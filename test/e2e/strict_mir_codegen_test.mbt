@@ -920,6 +920,19 @@ test "strict MIR codegen executes ternary local array decay before indexing" {
 }
 
 ///|
+test "strict MIR codegen executes member array decay in pointer differences" {
+  let source =
+    #|struct S { int a[4]; unsigned char iPrev; };
+    #|int main(void) {
+    #|  struct S s;
+    #|  int *p = &s.a[2];
+    #|  s.iPrev = (unsigned char)(p - s.a);
+    #|  return s.iPrev;
+    #|}
+  assert_eq(run_source_strict_mir(source), 2)
+}
+
+///|
 test "strict MIR codegen executes member array decay in pointer call args" {
   let source =
     #|struct Info { unsigned aReadMark[4]; };
