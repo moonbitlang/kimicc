@@ -1751,12 +1751,25 @@ fn Program::lower_mir_expr(
         (None, Some(_)) => op == "+" && lhs_ty.is_integer()
         _ => false
       }
-      let left_value = if pointer_arith {
+      let pointer_compare = (
+          op == "==" ||
+          op == "!=" ||
+          op == "<" ||
+          op == "<=" ||
+          op == ">" ||
+          op == ">="
+        ) &&
+        (
+          self.pointer_element(lhs_ty) is Some(_) ||
+          self.pointer_element(rhs_ty) is Some(_)
+        )
+      let pointer_op = pointer_arith || pointer_compare
+      let left_value = if pointer_op {
         self.lower_mir_expr_with_array_decay(lhs, ctx)
       } else {
         self.lower_mir_expr(lhs, ctx)
       }
-      let right_value = if pointer_arith {
+      let right_value = if pointer_op {
         self.lower_mir_expr_with_array_decay(rhs, ctx)
       } else {
         self.lower_mir_expr(rhs, ctx)
