@@ -2731,8 +2731,9 @@ fn X64Codegen::generate_mir_only(
   for decl in codegen_func_decls {
     self.emit_mir_function_decl_directives(decl)
   }
+  let needed_inline = mir_codegen_needed_inline_bodies(mir_module)
   for decl in mir_module.decls {
-    if decl.has_body {
+    if mir_codegen_should_emit_body(decl, needed_inline) {
       match mir_module.bodies.get(decl.name) {
         Some(body) => self.gen_mir_func(decl, body)
         None => ()

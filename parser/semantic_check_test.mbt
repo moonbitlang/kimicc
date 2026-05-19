@@ -49,6 +49,19 @@ test "semantic validation accepts dereferenced function pointer call" {
 }
 
 ///|
+test "semantic validation keeps multi-declarator locals in enclosing scope" {
+  let source =
+    #|double exp(double);
+    #|int main(void) {
+    #|  int exp, e2;
+    #|  exp = 3;
+    #|  e2 = -exp;
+    #|  return e2;
+    #|}
+  expect_semantic_ok(source)
+}
+
+///|
 test "semantic validation rejects pointer plus pointer" {
   let source =
     #|int main(void) {
