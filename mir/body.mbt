@@ -632,7 +632,7 @@ fn Program::lower_mir_zero_init_stores(
 ///|
 fn mir_body_copy_dest_addr(value : MirValue) -> Bool {
   match value {
-    MirAddrGlobal(_, _) | MirFuncAddr(_, _) | MirStringAddr(_) => false
+    MirFuncAddr(_, _) | MirStringAddr(_) => false
     MirElemAddr(base, _, _) | MirOffsetAddr(base, _, _) =>
       mir_body_copy_dest_addr(base)
     _ => true
@@ -647,6 +647,69 @@ fn mir_body_copy_source_addr(value : MirValue) -> Bool {
       mir_body_copy_source_addr(base)
     _ => true
   }
+}
+
+///|
+fn mir_body_copy_addr_has_side_effect(value : MirValue) -> Bool {
+  match value {
+    MirConst(_, _)
+    | MirLocal(_)
+    | MirAddrLocal(_)
+    | MirAddrGlobal(_, _)
+    | MirFuncAddr(_, _)
+    | MirStringAddr(_) => false
+    MirElemAddr(base, index, _) =>
+      mir_body_copy_addr_has_side_effect(base) ||
+      mir_body_copy_addr_has_side_effect(index)
+    MirOffsetAddr(base, _, _) => mir_body_copy_addr_has_side_effect(base)
+    MirLoad(_, _) => true
+    MirUnary(_, value, _) | MirCast(_, value) =>
+      mir_body_copy_addr_has_side_effect(value)
+    MirBinary(_, left, right, _) =>
+      mir_body_copy_addr_has_side_effect(left) ||
+      mir_body_copy_addr_has_side_effect(right)
+    MirAggregateArg(value, _) => mir_body_copy_addr_has_side_effect(value)
+    MirVaArg(_, _) | MirVaArgAddr(_, _) => true
+    MirCall(_, _, _) | MirIndirectCall(_, _, _) => true
+    MirAssignLocal(_, _) | MirStore(_, _, _) => true
+    MirPostUpdateLocal(_, _, _, _)
+    | MirPreUpdateMemory(_, _, _, _)
+    | MirPostUpdateMemory(_, _, _, _) => true
+    MirTernary(cond, then_, else_, _) =>
+      mir_body_copy_addr_has_side_effect(cond) ||
+      mir_body_copy_addr_has_side_effect(then_) ||
+      mir_body_copy_addr_has_side_effect(else_)
+  }
+}
+
+///|
+fn lower_mir_stable_copy_addr(
+  value : MirValue,
+  ctx : BodyLowerContext,
+) -> (Array[MirStmt], MirValue) {
+  if !mir_body_copy_addr_has_side_effect(value) {
+    return ([], value)
+  }
+  let temp = ctx.declare_temp(value.ty())
+  ([MirExprStmt(MirAssignLocal(temp, value))], MirLocal(temp))
+}
+
+///|
+fn prepend_mir_stmts(
+  prefix : Array[MirStmt],
+  stmts : Array[MirStmt],
+) -> Array[MirStmt] {
+  if prefix.length() == 0 {
+    return stmts
+  }
+  let result : Array[MirStmt] = []
+  for stmt in prefix {
+    result.push(stmt)
+  }
+  for stmt in stmts {
+    result.push(stmt)
+  }
+  result
 }
 
 ///|
@@ -1992,16 +2055,21 @@ fn Program::lower_mir_ignored_aggregate_assign(
     Struct(_) | Union(_) => ()
     _ => return None
   }
-  let dest_addr = match self.lower_mir_object_addr(lhs, ctx) {
+  let dest_raw_addr = match self.lower_mir_object_addr(lhs, ctx) {
     Some(addr) => addr
     None => return None
   }
-  if !mir_body_copy_dest_addr(dest_addr) {
+  if !mir_body_copy_dest_addr(dest_raw_addr) {
     return None
   }
+  let (dest_prefix, dest_addr) = lower_mir_stable_copy_addr(dest_raw_addr, ctx)
   match self.lower_mir_va_arg_copy_init_stores(dest_addr, lhs_ty, rhs, ctx) {
     Some(stores) =>
-      return mir_body_sequence_exprs(stores, MirConst(0L, SInt), SInt)
+      return mir_body_sequence_exprs(
+        prepend_mir_stmts(dest_prefix, stores),
+        MirConst(0L, SInt),
+        SInt,
+      )
     None => ()
   }
   match rhs {
@@ -2035,9 +2103,9 @@ fn Program::lower_mir_ignored_aggregate_assign(
         else_addr,
         Pointer(lhs_ty),
       )
-      let stores : Array[MirStmt] = [
+      let stores = prepend_mir_stmts(dest_prefix, [
         MirExprStmt(MirAssignLocal(cond_temp, cond_value)),
-      ]
+      ])
       let copy_stores = match
         self.lower_mir_copy_init_stores(dest_addr, lhs_ty, src_addr, lhs_ty) {
         Some(stores) => stores
@@ -2055,7 +2123,9 @@ fn Program::lower_mir_ignored_aggregate_assign(
       if mir_body_aggregate_call_value(value) &&
         self.core_type(value.ty()) == self.core_type(lhs_ty) {
         return mir_body_sequence_exprs(
-          [MirExprStmt(MirStore(dest_addr, value, lhs_ty))],
+          prepend_mir_stmts(dest_prefix, [
+            MirExprStmt(MirStore(dest_addr, value, lhs_ty)),
+          ]),
           MirConst(0L, SInt),
           SInt,
         )
@@ -2069,11 +2139,12 @@ fn Program::lower_mir_ignored_aggregate_assign(
         return None
       }
       let temp = ctx.declare_temp(lhs_ty)
-      let stores = match
+      let init_stores = match
         self.lower_mir_struct_init_stores(MirAddrLocal(temp), lhs_ty, rhs, ctx) {
         Some(stores) => stores
         None => return None
       }
+      let stores = prepend_mir_stmts(dest_prefix, init_stores)
       let copy_stores = match
         self.lower_mir_copy_init_stores(
           dest_addr,
@@ -2098,6 +2169,7 @@ fn Program::lower_mir_ignored_aggregate_assign(
   if !mir_body_copy_source_addr(src_addr) {
     return None
   }
+  let (src_prefix, src_addr) = lower_mir_stable_copy_addr(src_addr, ctx)
   let stores = match
     self.lower_mir_copy_init_stores(
       dest_addr,
@@ -2108,7 +2180,11 @@ fn Program::lower_mir_ignored_aggregate_assign(
     Some(stores) => stores
     None => return None
   }
-  mir_body_sequence_exprs(stores, MirConst(0L, SInt), SInt)
+  mir_body_sequence_exprs(
+    prepend_mir_stmts(prepend_mir_stmts(dest_prefix, src_prefix), stores),
+    MirConst(0L, SInt),
+    SInt,
+  )
 }
 
 ///|

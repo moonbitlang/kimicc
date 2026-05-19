@@ -329,8 +329,9 @@ fn Program::lower_mir_global_init(
       Some(self.lower_mir_global_scalar_init_for_type(ty, expr))
     Some(Array(exprs)) => {
       if exprs.length() == 1 {
-        match exprs[0] {
-          String(s) => return Some(MirGlobalString(s))
+        match (self.core_type(ty), exprs[0]) {
+          (Array(SChar, _) | Array(UChar, _), String(s)) =>
+            return Some(MirGlobalString(s))
           _ => ()
         }
       }
@@ -394,7 +395,7 @@ fn Program::lower_mir_global_value_for_type(
       } else {
         self.lower_mir_global_value_for_type(ty, value)
       }
-    _ => self.lower_mir_global_scalar_init(expr)
+    _ => self.lower_mir_global_scalar_init_for_type(ty, expr)
   }
 }
 
@@ -622,11 +623,28 @@ fn Program::lower_mir_global_scalar_init(
 }
 
 ///|
+fn mir_global_string_literal(expr : @parser.Expr) -> String? {
+  match expr {
+    String(value) => Some(value)
+    Cast(_, inner) => mir_global_string_literal(inner)
+    _ => None
+  }
+}
+
+///|
 fn Program::lower_mir_global_scalar_init_for_type(
   self : Program,
   ty : @ctype.Type,
   expr : @parser.Expr,
 ) -> MirGlobalInit {
+  match self.core_type(ty) {
+    Pointer(_) | Array(SChar, _) | Array(UChar, _) =>
+      match mir_global_string_literal(expr) {
+        Some(value) => return MirGlobalString(value)
+        None => ()
+      }
+    _ => ()
+  }
   if ty.is_floating() {
     match self.fold_float_const(expr, Scope::empty()) {
       Some(value) => return MirGlobalScalarFloat(value)

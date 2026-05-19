@@ -990,6 +990,64 @@ test "strict MIR codegen executes global aggregate copies" {
 }
 
 ///|
+test "strict MIR codegen copies aggregate into global member from va_arg pointer" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|struct Pair { int a; int b; };
+    #|struct Config { struct Pair pair; };
+    #|struct Config cfg;
+    #|int set_pair(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  cfg.pair = *__builtin_va_arg(ap, struct Pair*);
+    #|  *__builtin_va_arg(ap, struct Pair*) = cfg.pair;
+    #|  __builtin_va_end(ap);
+    #|  return cfg.pair.b;
+    #|}
+    #|int main(void) {
+    #|  struct Pair input = { 7, 35 };
+    #|  struct Pair output = { 0, 0 };
+    #|  return set_pair(0, &input, &output) + output.a;
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
+test "strict MIR codegen executes global aggregate float array initializers" {
+  let source =
+    #|struct Xform {
+    #|  unsigned char nName;
+    #|  char zName[7];
+    #|  float rLimit;
+    #|  float rXform;
+    #|};
+    #|static const struct Xform xs[] = {
+    #|  { 6, "second", 4.5f, 4.5f },
+    #|  { 4, "hour", 20.0f, 3.0f },
+    #|};
+    #|int main(void) {
+    #|  return xs[1].nName + xs[0].zName[0] - 115
+    #|       + (int)xs[1].rLimit + (int)(xs[0].rXform * 4.0f);
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
+test "strict MIR codegen executes casted string pointer global array initializers" {
+  let source =
+    #|typedef unsigned char u8;
+    #|static unsigned char * const azOne[] = { (u8*)" " };
+    #|int read_ending(void) {
+    #|  static const char *azEndings[] = { "dylib" };
+    #|  return azEndings[0][0] - 58;
+    #|}
+    #|int main(void) {
+    #|  return azOne[0][0] + read_ending() - 32;
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
 test "strict MIR codegen executes aggregate ternary copies" {
   let source =
     #|struct Token { char *z; int n; };
