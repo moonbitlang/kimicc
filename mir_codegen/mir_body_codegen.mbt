@@ -759,7 +759,7 @@ fn mir_body_codegen_value_supported(
           !mir_body_codegen_floating_type(ty) &&
           mir_body_codegen_floating_type(inner.ty())
         } else {
-          (op == "+" || op == "-") &&
+          (op == "+" || op == "-" || op == "fabs") &&
           mir_body_codegen_floating_type(ty) &&
           mir_body_codegen_floating_type(inner.ty())
         }
@@ -3003,6 +3003,30 @@ fn Codegen::gen_mir_value(
           } else {
             self.emit("\tneg\tx9, x9")
           }
+        "fabs" =>
+          if mir_body_codegen_floating_type(ty) {
+            self.emit_numeric_conversion(inner.ty(), ty)
+            self.emit(
+              "\tfmov\t" +
+              mir_body_codegen_arm_fp_reg(ty, 9) +
+              ", " +
+              mir_body_codegen_arm_fp_bits_reg(ty, "x9"),
+            )
+            self.emit(
+              "\tfabs\t" +
+              mir_body_codegen_arm_fp_reg(ty, 9) +
+              ", " +
+              mir_body_codegen_arm_fp_reg(ty, 9),
+            )
+            self.emit(
+              "\tfmov\t" +
+              mir_body_codegen_arm_fp_bits_reg(ty, "x9") +
+              ", " +
+              mir_body_codegen_arm_fp_reg(ty, 9),
+            )
+          } else {
+            abort("unsupported MIR body fabs result type")
+          }
         "!" =>
           if mir_body_codegen_floating_type(inner.ty()) {
             let reg = mir_body_codegen_arm_fp_reg(inner.ty(), 9)
@@ -3019,6 +3043,16 @@ fn Codegen::gen_mir_value(
             self.emit("\tcset\tx9, eq")
           }
         "~" => self.emit("\tmvn\tx9, x9")
+        "clz32" => self.emit("\tclz\tw9, w9")
+        "clz64" => self.emit("\tclz\tx9, x9")
+        "ctz32" => {
+          self.emit("\trbit\tw9, w9")
+          self.emit("\tclz\tw9, w9")
+        }
+        "ctz64" => {
+          self.emit("\trbit\tx9, x9")
+          self.emit("\tclz\tx9, x9")
+        }
         _ => abort("unsupported MIR body unary operator")
       }
       self.emit_scalar_conversion_to(ty)
@@ -5677,6 +5711,24 @@ fn X64Codegen::gen_mir_value(
           } else {
             self.emit("\tneg\trax")
           }
+        "fabs" =>
+          if x64_is_fp_type(ty) {
+            self.emit_mir_numeric_conversion(inner.ty(), ty)
+            match x64_core_type(ty) {
+              Float => {
+                self.emit("\tmov\teax, 2147483647")
+                self.emit("\tmovd\txmm1, eax")
+                self.emit("\tandps\txmm0, xmm1")
+              }
+              _ => {
+                self.emit("\tmovabs\trax, 9223372036854775807")
+                self.emit("\tmovq\txmm1, rax")
+                self.emit("\tandpd\txmm0, xmm1")
+              }
+            }
+          } else {
+            abort("unsupported MIR body fabs result type")
+          }
         "!" =>
           if x64_is_fp_type(inner.ty()) {
             let suffix = x64_fp_suffix(inner.ty())
@@ -5691,6 +5743,24 @@ fn X64Codegen::gen_mir_value(
             self.emit_setcc("sete")
           }
         "~" => self.emit("\tnot\trax")
+        "clz32" => {
+          self.emit("\tbsr\tecx, eax")
+          self.emit("\tmov\teax, 31")
+          self.emit("\tsub\teax, ecx")
+        }
+        "clz64" => {
+          self.emit("\tbsr\trcx, rax")
+          self.emit("\tmov\teax, 63")
+          self.emit("\tsub\teax, ecx")
+        }
+        "ctz32" => {
+          self.emit("\tbsf\tecx, eax")
+          self.emit("\tmov\teax, ecx")
+        }
+        "ctz64" => {
+          self.emit("\tbsf\trcx, rax")
+          self.emit("\tmov\teax, ecx")
+        }
         _ => abort("unsupported MIR body unary operator")
       }
       self.emit_int_conversion_to(ty)

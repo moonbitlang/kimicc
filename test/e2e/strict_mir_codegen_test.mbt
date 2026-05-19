@@ -1740,6 +1740,246 @@ test "strict MIR codegen executes floating comma stores" {
 }
 
 ///|
+test "strict MIR codegen executes floating fabs and infinity builtins" {
+  let source =
+    #|int finitef(float x) {
+    #|  return x == x && __builtin_fabsf(x) != __builtin_inff();
+    #|}
+    #|int finited(double x) {
+    #|  return x == x && __builtin_fabs(x) != __builtin_inf();
+    #|}
+    #|int main(void) {
+    #|  return finitef(-3.5f) +
+    #|    2 * finitef(__builtin_inff()) +
+    #|    4 * finited(-4.5) +
+    #|    8 * finited(__builtin_inf());
+    #|}
+  assert_eq(run_source_strict_mir(source), 5)
+}
+
+///|
+test "strict MIR codegen executes long double fabs and infinity builtins" {
+  let source =
+    #|int finitel(long double x) {
+    #|  return x == x && __builtin_fabsl(x) != __builtin_infl();
+    #|}
+    #|int main(void) {
+    #|  return finitel(-5.5L) + 2 * finitel(__builtin_infl());
+    #|}
+  assert_eq(run_source_strict_mir(source), 1)
+}
+
+///|
+test "strict MIR codegen executes count zero builtins" {
+  let source =
+    #|typedef unsigned long long uint64_t;
+    #|static inline int clz32(unsigned int a) { return __builtin_clz(a); }
+    #|static inline int clz64(uint64_t a) { return __builtin_clzll(a); }
+    #|static inline int ctz32(unsigned int a) { return __builtin_ctz(a); }
+    #|static inline int ctz64(uint64_t a) { return __builtin_ctzll(a); }
+    #|int main(void) {
+    #|  return clz32(1u) + clz64(1ull) + ctz32(8u) + ctz64(16ull);
+    #|}
+  assert_eq(run_source_strict_mir(source), 101)
+}
+
+///|
+test "strict MIR codegen returns aggregate compound literals" {
+  let source =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|Value new_bool(int val) {
+    #|  return (Value){ (ValueUnion){ .int32 = (val != 0) }, 1 };
+    #|}
+    #|int main(void) {
+    #|  Value v = new_bool(42);
+    #|  return v.u.int32 + (int)v.tag * 10;
+    #|}
+  assert_eq(run_source_strict_mir(source), 11)
+}
+
+///|
+test "strict MIR codegen returns identity-cast aggregate arguments" {
+  let source =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|typedef struct Header {
+    #|  int ref_count;
+    #|} Header;
+    #|Value dup(Value v) {
+    #|  if ((unsigned)((int)(v).tag) >= (unsigned)-9) {
+    #|    Header *p = (Header *)((v).u.ptr);
+    #|    p->ref_count++;
+    #|  }
+    #|  return (Value)v;
+    #|}
+    #|int main(void) {
+    #|  Value v = (Value){ (ValueUnion){ .int32 = 7 }, 1 };
+    #|  Value out = dup(v);
+    #|  return out.u.int32;
+    #|}
+  assert_eq(run_source_strict_mir(source), 7)
+}
+
+///|
+test "strict MIR codegen executes typedef function pointer aggregate returns" {
+  let source =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|typedef Value JobFunc(int argc, Value *argv);
+    #|Value make(int argc, Value *argv) {
+    #|  return argv[argc - 1];
+    #|}
+    #|int main(void) {
+    #|  Value args[2];
+    #|  args[0] = (Value){ (ValueUnion){ .int32 = 3 }, 1 };
+    #|  args[1] = (Value){ (ValueUnion){ .int32 = 9 }, 1 };
+    #|  JobFunc *job_func = make;
+    #|  Value res = job_func(2, (Value *)args);
+    #|  return res.u.int32;
+    #|}
+  assert_eq(run_source_strict_mir(source), 9)
+}
+
+///|
+test "strict MIR codegen passes aggregate compound literal arguments" {
+  let source =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|int observe(Value v) {
+    #|  return v.u.int32 + (int)v.tag * 10;
+    #|}
+    #|int main(void) {
+    #|  return observe((Value){ (ValueUnion){ .int32 = 4 }, 2 });
+    #|}
+  assert_eq(run_source_strict_mir(source), 24)
+}
+
+///|
+test "strict MIR codegen executes bitfield post increment" {
+  let source =
+    #|struct S {
+    #|  unsigned int len : 31;
+    #|  unsigned char wide : 1;
+    #|  unsigned short data[8];
+    #|};
+    #|int main(void) {
+    #|  struct S s;
+    #|  struct S *p = &s;
+    #|  p->len = 2;
+    #|  p->data[p->len++] = 9;
+    #|  return p->len + p->data[2];
+    #|}
+  assert_eq(run_source_strict_mir(source), 12)
+}
+
+///|
+test "strict MIR codegen reads fields from aggregate call results" {
+  let source =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|Value make(int value) {
+    #|  return (Value){ (ValueUnion){ .int32 = value }, 3 };
+    #|}
+    #|int main(void) {
+    #|  return make(5).u.int32 + (int)make(2).tag;
+    #|}
+  assert_eq(run_source_strict_mir(source), 8)
+}
+
+///|
+test "strict MIR codegen returns aggregate members" {
+  let source =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|struct Desc {
+    #|  int flags;
+    #|  Value value;
+    #|};
+    #|Value pick(struct Desc *desc) {
+    #|  return desc->value;
+    #|}
+    #|int main(void) {
+    #|  struct Desc desc;
+    #|  desc.value = (Value){ (ValueUnion){ .int32 = 6 }, 4 };
+    #|  Value value = pick(&desc);
+    #|  return value.u.int32 + (int)value.tag;
+    #|}
+  assert_eq(run_source_strict_mir(source), 10)
+}
+
+///|
+test "strict MIR codegen passes identity-cast aggregate arguments" {
+  let source =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|int observe(Value value) {
+    #|  return value.u.int32 + (int)value.tag;
+    #|}
+    #|int main(void) {
+    #|  Value value = (Value){ (ValueUnion){ .int32 = 8 }, 5 };
+    #|  return observe((Value)value);
+    #|}
+  assert_eq(run_source_strict_mir(source), 13)
+}
+
+///|
 test "strict MIR codegen executes function typedef pointer calls" {
   let source =
     #|typedef int Callback(void *data, int value);

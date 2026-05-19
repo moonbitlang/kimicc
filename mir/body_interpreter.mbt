@@ -129,6 +129,41 @@ fn Program::runtime_body_double(
 }
 
 ///|
+fn mir_body_mask_int_width(value : Int64, width : Int) -> Int64 {
+  if width >= 64 {
+    value
+  } else {
+    value & ((1L << width) - 1L)
+  }
+}
+
+///|
+fn mir_body_count_leading_zero_bits(value : Int64, width : Int) -> Int64 {
+  let masked = mir_body_mask_int_width(value, width)
+  let mut count = 0
+  for i = width - 1; i >= 0; i = i - 1 {
+    if ((masked >> i) & 1L) != 0L {
+      return count.to_int64()
+    }
+    count += 1
+  }
+  width.to_int64()
+}
+
+///|
+fn mir_body_count_trailing_zero_bits(value : Int64, width : Int) -> Int64 {
+  let masked = mir_body_mask_int_width(value, width)
+  let mut count = 0
+  for i in 0..<width {
+    if ((masked >> i) & 1L) != 0L {
+      return count.to_int64()
+    }
+    count += 1
+  }
+  width.to_int64()
+}
+
+///|
 fn BodyInterpreter::eval_fp_compare_values(
   self : BodyInterpreter,
   op : String,
@@ -743,8 +778,19 @@ fn BodyInterpreter::eval_value(
       match op {
         "+" => self.program.runtime_cast_int(value, ty)
         "-" => self.program.runtime_cast_int(-value, ty)
+        "fabs" =>
+          if self.program.is_floating_type(ty) {
+            floating_abs(value.reinterpret_as_double()).reinterpret_as_int64()
+          } else {
+            self.fail("unsupported MIR body fabs result type")
+            0L
+          }
         "!" => if value == 0L { 1L } else { 0L }
         "~" => self.program.runtime_cast_int(value.lnot(), ty)
+        "clz32" => mir_body_count_leading_zero_bits(value, 32)
+        "clz64" => mir_body_count_leading_zero_bits(value, 64)
+        "ctz32" => mir_body_count_trailing_zero_bits(value, 32)
+        "ctz64" => mir_body_count_trailing_zero_bits(value, 64)
         _ => {
           self.fail("unsupported MIR body unary operator: " + op)
           0L
