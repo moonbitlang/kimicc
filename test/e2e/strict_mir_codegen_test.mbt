@@ -975,6 +975,41 @@ test "strict MIR codegen executes global aggregate copies" {
 }
 
 ///|
+test "strict MIR codegen executes aggregate ternary copies" {
+  let source =
+    #|struct Token { char *z; int n; };
+    #|union U { struct Token tok; int i; };
+    #|int main(void) {
+    #|  union U stack[2];
+    #|  union U *p = &stack[1];
+    #|  p[-1].tok.z = "left";
+    #|  p[-1].tok.n = 3;
+    #|  p[0].tok.z = "right";
+    #|  p[0].tok.n = 5;
+    #|  p[-1].tok = (p[0].tok.n == 0 ? p[-1].tok : p[0].tok);
+    #|  int first = p[-1].tok.n;
+    #|  p[-1].tok.n = 8;
+    #|  p[0].tok.n = 0;
+    #|  p[-1].tok = (p[0].tok.n == 0 ? p[0].tok : p[-1].tok);
+    #|  return first * 10 + p[-1].tok.n;
+    #|}
+  assert_eq(run_source_strict_mir(source), 50)
+}
+
+///|
+test "strict MIR codegen ignores aggregate void casts" {
+  let source =
+    #|struct Token { int n; };
+    #|int main(void) {
+    #|  struct Token t;
+    #|  t.n = 42;
+    #|  (void)t;
+    #|  return t.n;
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
 test "strict MIR codegen executes member array decay in pointer call args" {
   let source =
     #|struct Info { unsigned aReadMark[4]; };

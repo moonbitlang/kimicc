@@ -2000,6 +2000,52 @@ fn Program::lower_mir_ignored_aggregate_assign(
       return mir_body_sequence_exprs(stores, MirConst(0L, SInt), SInt)
     None => ()
   }
+  match rhs {
+    Ternary(cond, then_expr, else_expr) => {
+      if !mir_body_side_effect_free_expr(then_expr) ||
+        !mir_body_side_effect_free_expr(else_expr) {
+        return None
+      }
+      if self.core_type(self.expr_type(then_expr, ctx.scope())) !=
+        self.core_type(lhs_ty) ||
+        self.core_type(self.expr_type(else_expr, ctx.scope())) !=
+        self.core_type(lhs_ty) {
+        return None
+      }
+      let cond_value = match self.lower_mir_expr(cond, ctx) {
+        Some(value) => value
+        None => return None
+      }
+      let then_addr = match self.lower_mir_object_addr(then_expr, ctx) {
+        Some(addr) => addr
+        None => return None
+      }
+      let else_addr = match self.lower_mir_object_addr(else_expr, ctx) {
+        Some(addr) => addr
+        None => return None
+      }
+      let cond_temp = ctx.declare_temp(cond_value.ty())
+      let src_addr = MirTernary(
+        MirLocal(cond_temp),
+        then_addr,
+        else_addr,
+        Pointer(lhs_ty),
+      )
+      let stores : Array[MirStmt] = [
+        MirExprStmt(MirAssignLocal(cond_temp, cond_value)),
+      ]
+      let copy_stores = match
+        self.lower_mir_copy_init_stores(dest_addr, lhs_ty, src_addr, lhs_ty) {
+        Some(stores) => stores
+        None => return None
+      }
+      for store in copy_stores {
+        stores.push(store)
+      }
+      return mir_body_sequence_exprs(stores, MirConst(0L, SInt), SInt)
+    }
+    _ => ()
+  }
   match self.lower_mir_expr_for_target_type(lhs_ty, rhs, ctx) {
     Some(value) =>
       if mir_body_aggregate_call_value(value) &&
@@ -2068,6 +2114,14 @@ fn Program::lower_mir_ignored_expr(
   ctx : BodyLowerContext,
 ) -> MirValue? {
   match expr {
+    Cast(ty, inner) =>
+      if self.core_type(ty) is Void &&
+        !mir_body_scalar_type(self.expr_type(inner, ctx.scope())) &&
+        mir_body_side_effect_free_expr(inner) {
+        Some(MirConst(0L, SInt))
+      } else {
+        self.lower_mir_expr(expr, ctx)
+      }
     Assign(lhs, rhs) =>
       match self.lower_mir_ignored_aggregate_assign(lhs, rhs, ctx) {
         Some(value) => Some(value)
