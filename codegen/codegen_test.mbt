@@ -574,19 +574,19 @@ test "generate darwin arm64 strict MIR double underscore external scalar call" {
 }
 
 ///|
-test "strict MIR rejects implicit external scalar call arguments" {
+test "generate darwin arm64 strict MIR implicit external scalar call arguments" {
   let source =
     #|int main(void) {
     #|  return strcmp("kimicc", "kimicc");
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
-    Ok(_) => abort("expected strict MIR implicit call rejection")
-    Err(err) =>
-      inspect(
-        err.contains("unsupported MIR body codegen for main"),
-        content="true",
-      )
+    Ok(assembly) => {
+      inspect(assembly.contains("_main:"), content="true")
+      inspect(assembly.contains("kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tbl\t_strcmp"), content="true")
+    }
+    Err(err) => abort(err)
   }
 }
 
@@ -2449,6 +2449,27 @@ test "generate linux amd64 strict MIR double underscore external scalar call" {
       inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
       inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
       inspect(assembly.contains("\tcall\t__kimicc_external"), content="true")
+    }
+    Err(err) => abort(err)
+  }
+}
+
+///|
+test "generate linux amd64 strict MIR implicit external scalar call arguments" {
+  let source =
+    #|int main(void) {
+    #|  return strcmp("kimicc", "kimicc");
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let mir = @mir.lower(@parser.parse_for_target(source, target), target)
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(assembly) => {
+      inspect(assembly.contains("\t.intel_syntax noprefix"), content="true")
+      inspect(assembly.contains("\t# kimicc: mir-body"), content="true")
+      inspect(assembly.contains("\tcall\tstrcmp"), content="true")
     }
     Err(err) => abort(err)
   }
