@@ -848,6 +848,44 @@ test "mir body interpreter copies from global aggregates" {
 }
 
 ///|
+test "mir body interpreter copies aggregate ternary sources" {
+  let source =
+    #|struct Token { char *z; int n; };
+    #|int main(void) {
+    #|  struct Token a;
+    #|  struct Token b;
+    #|  struct Token c;
+    #|  a.z = "a";
+    #|  a.n = 1;
+    #|  b.z = "b";
+    #|  b.n = 7;
+    #|  c = (a.n == 0 ? a : b);
+    #|  int first = c.n;
+    #|  a.n = 0;
+    #|  c = (a.n == 0 ? a : b);
+    #|  return first * 10 + c.n;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 70L)
+}
+
+///|
+test "mir body interpreter ignores side effect free aggregate void casts" {
+  let source =
+    #|struct Token { int n; };
+    #|int main(void) {
+    #|  struct Token t;
+    #|  t.n = 42;
+    #|  (void)t;
+    #|  return t.n;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body interpreter handles fixed local string array initializers" {
   let source =
     #|int main(void) {
