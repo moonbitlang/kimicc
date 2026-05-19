@@ -825,6 +825,21 @@ test "strict MIR codegen executes globals arrays and structs" {
 }
 
 ///|
+test "strict MIR codegen executes static nested array access" {
+  let source =
+    #|int main(void) {
+    #|  static const unsigned char trans[2][3] = {
+    #|    { 1, 2, 3 },
+    #|    { 4, 5, 6 },
+    #|  };
+    #|  int i = 1;
+    #|  int j = 2;
+    #|  return trans[i][j];
+    #|}
+  assert_eq(run_source_strict_mir(source), 6)
+}
+
+///|
 test "strict MIR codegen executes array element aggregate fields" {
   let source =
     #|struct Item { int v; };

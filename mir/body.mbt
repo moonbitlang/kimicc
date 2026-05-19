@@ -227,6 +227,7 @@ fn mir_body_array_local_type(ty : @ctype.Type) -> Bool {
 ///|
 fn mir_body_array_element_addressable_type(ty : @ctype.Type) -> Bool {
   match ty {
+    Array(elem, _) => mir_body_array_element_addressable_type(elem)
     Struct(_) | Union(_) => true
     Aligned(inner, _) => mir_body_array_element_addressable_type(inner)
     _ => mir_body_scalar_type(ty)
@@ -1196,6 +1197,9 @@ fn Program::lower_mir_array_base_addr(
   base : @parser.Expr,
   ctx : BodyLowerContext,
 ) -> MirValue? {
+  if mir_body_array_local_type(self.expr_type(base, ctx.scope())) {
+    return self.lower_mir_object_addr(base, ctx)
+  }
   match base {
     MemberAccess(_, _) =>
       if mir_body_array_local_type(self.expr_type(base, ctx.scope())) {
@@ -1304,7 +1308,7 @@ fn Program::lower_mir_array_elem_addr(
   match
     (self.lower_mir_array_base_addr(base, ctx), self.lower_mir_expr(index, ctx)) {
     (Some(base_addr), Some(index_value)) =>
-      if mir_body_scalar_type(elem_ty) {
+      if mir_body_array_element_addressable_type(elem_ty) {
         Some(MirElemAddr(base_addr, index_value, elem_ty))
       } else {
         None
