@@ -1165,6 +1165,47 @@ test "strict MIR codegen executes member array decay in pointer call args" {
 }
 
 ///|
+test "strict MIR codegen executes anonymous union array member decay" {
+  let source =
+    #|typedef unsigned char uint8_t;
+    #|typedef unsigned long size_t;
+    #|typedef struct TinyAlloc {
+    #|  uint8_t *p;
+    #|  uint8_t *bufend;
+    #|  union {
+    #|    uint8_t buffer[1];
+    #|    size_t _aligner_;
+    #|  };
+    #|} TinyAlloc;
+    #|int main(void) {
+    #|  TinyAlloc al;
+    #|  al.p = al.buffer;
+    #|  al.bufend = al.buffer + 1;
+    #|  return (int)(al.bufend - al.p);
+    #|}
+  assert_eq(run_source_strict_mir(source), 1)
+}
+
+///|
+test "strict MIR codegen calls local extern function prototypes" {
+  let callee =
+    #|int read_external(void) {
+    #|  extern int *external_ptr(void);
+    #|  return *external_ptr();
+    #|}
+  let driver =
+    #|int value = 37;
+    #|int *external_ptr(void) {
+    #|  return &value;
+    #|}
+    #|int read_external(void);
+    #|int main(void) {
+    #|  return read_external();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 37)
+}
+
+///|
 test "strict MIR codegen executes local pointer updates" {
   let source =
     #|int main(void) {
@@ -1478,6 +1519,25 @@ test "strict MIR codegen executes stack-passed integer variadic libcalls" {
     #|  return n + (buf[0] == '1') + (buf[1] == '2') + (buf[2] == '3') + (buf[3] == '4') + (buf[4] == '5') + (buf[5] == '6');
     #|}
   assert_eq(run_source_strict_mir(source), 12)
+}
+
+///|
+test "strict MIR codegen executes checked vsnprintf va_list libcall" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|int write_fmt(char *buf, unsigned long size, const char *fmt, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, fmt);
+    #|  int n = __builtin___vsnprintf_chk(buf, size, 0, size, fmt, ap);
+    #|  __builtin_va_end(ap);
+    #|  return n;
+    #|}
+    #|int main(void) {
+    #|  char buf[16];
+    #|  int n = write_fmt(buf, 16, "%d-%s", 42, "ok");
+    #|  return n + (buf[0] == '4') + (buf[1] == '2') + (buf[2] == '-') + (buf[3] == 'o') + (buf[4] == 'k');
+    #|}
+  assert_eq(run_source_strict_mir(source), 10)
 }
 
 ///|

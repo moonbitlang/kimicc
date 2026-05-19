@@ -148,6 +148,7 @@ priv enum SQLiteObjectCompiler {
   Kimicc
   Clang
   DirectObject
+  StrictMir
 }
 
 ///|
@@ -156,6 +157,7 @@ fn SQLiteObjectCompiler::tag(self : SQLiteObjectCompiler) -> String {
     Kimicc => "kimicc"
     Clang => "clang"
     DirectObject => "direct"
+    StrictMir => "strict-mir"
   }
 }
 
@@ -431,6 +433,7 @@ async fn compile_sqlite_fixture_object_with(
     Kimicc => compile_sqlite_fixture_object()
     Clang => compile_clang_sqlite_fixture_object()
     DirectObject => compile_sqlite_fixture_direct_object()
+    StrictMir => compile_sqlite_fixture_strict_mir_object()
   }
 }
 
@@ -500,6 +503,16 @@ async fn compile_sqlite_fixture_testfixture_object_with(
       )
       compile_source_to_direct_object_path(
         source, "sqlite3_direct_testfixture_object",
+      )
+    }
+    StrictMir => {
+      let source = preprocess_c_file_with_flags(
+        "test/fixtures/sqlite/sqlite3.c",
+        sqlite_testfixture_flags(),
+        "sqlite3_strict_mir_testfixture_preprocessed",
+      )
+      compile_source_to_strict_mir_object_path(
+        source, "sqlite3_strict_mir_testfixture_object",
       )
     }
   }

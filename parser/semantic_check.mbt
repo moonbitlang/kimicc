@@ -92,6 +92,42 @@ fn semantic_pointer_element_type(ty : Type) -> Type? {
 }
 
 ///|
+fn semantic_is_anon_aggregate_type(ty : Type) -> Bool {
+  match semantic_core_type(ty) {
+    Struct(name) | Union(name) => name.has_prefix("__anon_")
+    _ => false
+  }
+}
+
+///|
+fn semantic_find_field_type_optional(
+  ctx : SemanticContext,
+  ty : Type,
+  field : String,
+) -> Result[Type?, String] {
+  let aggregate_name = match semantic_core_type(ty) {
+    Struct(name) | Union(name) => name
+    _ => return Ok(None)
+  }
+  if !ctx.structs.contains(aggregate_name) {
+    return Err("incomplete aggregate type: " + aggregate_name)
+  }
+  for param in ctx.structs[aggregate_name].fields {
+    if param.name == field {
+      return Ok(Some(param.ty))
+    }
+    if param.name == "" && semantic_is_anon_aggregate_type(param.ty) {
+      match semantic_find_field_type_optional(ctx, param.ty, field) {
+        Ok(Some(ty)) => return Ok(Some(ty))
+        Ok(None) => ()
+        Err(err) => return Err(err)
+      }
+    }
+  }
+  Ok(None)
+}
+
+///|
 fn semantic_find_field_type(
   ctx : SemanticContext,
   ty : Type,
@@ -101,15 +137,12 @@ fn semantic_find_field_type(
     Struct(name) | Union(name) => name
     _ => return Ok(SInt)
   }
-  if !ctx.structs.contains(aggregate_name) {
-    return Err("incomplete aggregate type: " + aggregate_name)
+  match semantic_find_field_type_optional(ctx, ty, field) {
+    Ok(Some(ty)) => Ok(ty)
+    Ok(None) =>
+      Err("unknown field '" + field + "' in aggregate " + aggregate_name)
+    Err(err) => Err(err)
   }
-  for param in ctx.structs[aggregate_name].fields {
-    if param.name == field {
-      return Ok(param.ty)
-    }
-  }
-  Err("unknown field '" + field + "' in aggregate " + aggregate_name)
 }
 
 ///|
