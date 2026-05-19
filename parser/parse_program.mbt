@@ -154,6 +154,16 @@ fn Parser::parse_program(self : Parser) -> Program {
       }
     }
   }
+  let known_decls : Map[String, Bool] = {}
+  for decl in decls {
+    known_decls[decl.name] = true
+  }
+  for decl in self.local_func_decls {
+    if decl.name != "" && !known_decls.contains(decl.name) {
+      decls.push(decl)
+      known_decls[decl.name] = true
+    }
+  }
   // Prepend anonymous structs
   let all_structs = self.anonymous_structs
   for s in structs {

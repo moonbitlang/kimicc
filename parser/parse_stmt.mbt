@@ -842,6 +842,48 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
   }
   // Local function prototype inside a function body: int foo(void);
   if decl.is_func_decl && self.token == Semicolon {
+    let params = decl.func_params.unwrap()
+    let (_, variadic) = function_param_info(params)
+    if variadic {
+      let _ = params.pop()
+    }
+    let filtered_params = []
+    for i = 0; i < params.length(); i = i + 1 {
+      if params[i].ty != Void {
+        filtered_params.push(params[i])
+      }
+    }
+    for i = 0; i < filtered_params.length(); i = i + 1 {
+      match filtered_params[i].ty {
+        Array(elem, _) =>
+          filtered_params[i] = {
+            ty: Pointer(elem),
+            name: filtered_params[i].name,
+            bit_width: None,
+          }
+        _ => ()
+      }
+    }
+    let ret_ty = match decl.func_ret_ty {
+      Some(rt) => rt
+      None => spec.base_type
+    }
+    self.local_func_decls.push({
+      ret: ret_ty,
+      name: decl.name,
+      params: filtered_params,
+      variadic,
+      is_static: spec.is_static,
+      is_inline: spec.is_inline,
+      is_weak: decl_is_weak,
+      visibility: decl_visibility,
+      symbol_alias: decl_alias,
+      section: decl_section,
+      is_constructor: spec.is_constructor || post_decl_attrs.is_constructor,
+      is_destructor: spec.is_destructor || post_decl_attrs.is_destructor,
+      body: None,
+    })
+    self.remember_value_type(decl.name, decl_ty)
     self.expect(Semicolon)
     return ExprStmt(Number(0))
   }

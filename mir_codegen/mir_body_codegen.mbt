@@ -1060,6 +1060,12 @@ fn mir_body_codegen_builtin_lib_call_arg_count(
       } else {
         None
       }
+    "__builtin___vsnprintf_chk" =>
+      if args.length() == 6 && ret.is_integer() {
+        Some(4)
+      } else {
+        None
+      }
     _ => None
   }
 }
@@ -1119,6 +1125,7 @@ fn mir_body_codegen_direct_call_symbol(name : String) -> String {
     "__builtin___snprintf_chk" => "snprintf"
     "__builtin___sprintf_chk" => "sprintf"
     "__builtin___printf_chk" => "printf"
+    "__builtin___vsnprintf_chk" => "vsnprintf"
     _ => name
   }
 }
@@ -1172,6 +1179,9 @@ fn mir_body_codegen_direct_call_source_indexes(
   match mir_body_codegen_checked_printf_source_indexes(name, args, SInt) {
     Some(indexes) => return indexes
     None => ()
+  }
+  if name == "__builtin___vsnprintf_chk" && args.length() == 6 {
+    return [0, 1, 4, 5]
   }
   let count = match name {
     "__builtin___memcpy_chk"
@@ -1293,6 +1303,13 @@ fn mir_body_codegen_lowered_builtin_arg_type(
         Some(Pointer(SChar))
       } else {
         None
+      }
+    "__builtin___vsnprintf_chk" =>
+      match index {
+        0 => Some(Pointer(SChar))
+        1 => Some(ULong)
+        2 => Some(Pointer(SChar))
+        _ => None
       }
     _ => None
   }

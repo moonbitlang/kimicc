@@ -105,6 +105,7 @@ pub struct Parser {
   typedefs : Map[String, @ctype.Type]
   anonymous_structs : Array[StructDecl]
   struct_decls : Map[String, StructDecl]
+  local_func_decls : Array[FuncDecl]
   mut anon_counter : Int
   enum_constants : Map[String, Int64]
   globals : Array[GlobalDecl]

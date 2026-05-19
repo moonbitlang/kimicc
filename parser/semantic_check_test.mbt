@@ -62,6 +62,38 @@ test "semantic validation keeps multi-declarator locals in enclosing scope" {
 }
 
 ///|
+test "semantic validation accepts anonymous aggregate member access" {
+  let source =
+    #|typedef unsigned char uint8_t;
+    #|typedef unsigned long size_t;
+    #|typedef struct TinyAlloc {
+    #|  uint8_t *p;
+    #|  uint8_t *bufend;
+    #|  union {
+    #|    uint8_t buffer[1];
+    #|    size_t _aligner_;
+    #|  };
+    #|} TinyAlloc;
+    #|int main(void) {
+    #|  TinyAlloc al;
+    #|  al.p = al.buffer;
+    #|  al.bufend = al.buffer + 1;
+    #|  return (int)(al.bufend - al.p);
+    #|}
+  expect_semantic_ok(source)
+}
+
+///|
+test "semantic validation accepts local extern function prototypes" {
+  let source =
+    #|int main(void) {
+    #|  extern int *external_ptr(void);
+    #|  return *external_ptr();
+    #|}
+  expect_semantic_ok(source)
+}
+
+///|
 test "semantic validation rejects pointer plus pointer" {
   let source =
     #|int main(void) {

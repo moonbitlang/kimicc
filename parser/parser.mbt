@@ -11,6 +11,7 @@ pub struct Parser {
   typedefs : Map[String, Type]
   anonymous_structs : Array[StructDecl]
   struct_decls : Map[String, StructDecl]
+  local_func_decls : Array[FuncDecl]
   mut anon_counter : Int
   enum_constants : Map[String, Int64]
   globals : Array[GlobalDecl]
@@ -40,6 +41,7 @@ pub fn Parser::new_for_target(lexer : Lexer, target : @target.Target) -> Parser 
     typedefs: {},
     anonymous_structs: [],
     struct_decls: {},
+    local_func_decls: [],
     anon_counter: 0,
     enum_constants: {},
     globals: [],
