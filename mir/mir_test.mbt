@@ -801,6 +801,24 @@ test "mir body interpreter decays member arrays in pointer differences" {
 }
 
 ///|
+test "mir body interpreter copies from global aggregates" {
+  let source =
+    #|struct Item { int x; int *p; };
+    #|static const struct Item zeroItem = {0};
+    #|int main(void) {
+    #|  struct Item item;
+    #|  struct Item *p = &item;
+    #|  p->x = 7;
+    #|  p->p = (int*)1;
+    #|  *p = zeroItem;
+    #|  return p->x + (p->p != 0);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 0L)
+}
+
+///|
 test "mir body interpreter handles fixed local string array initializers" {
   let source =
     #|int main(void) {
