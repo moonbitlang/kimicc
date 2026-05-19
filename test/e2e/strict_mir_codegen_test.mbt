@@ -106,6 +106,25 @@ test "strict MIR codegen executes stack-passed integer indirect calls" {
 }
 
 ///|
+test "strict MIR codegen executes indirect variadic function pointer calls" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|int read_variadic(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  int a = __builtin_va_arg(ap, int);
+    #|  double b = __builtin_va_arg(ap, double);
+    #|  __builtin_va_end(ap);
+    #|  return tag + a + (int)b;
+    #|}
+    #|int main(void) {
+    #|  int (*fp)(int, ...) = read_variadic;
+    #|  return fp(4, 10, 3.5);
+    #|}
+  assert_eq(run_source_strict_mir(source), 17)
+}
+
+///|
 test "strict MIR codegen executes aggregate member address function table" {
   let source =
     #|struct Methods { int (*init)(void); };
