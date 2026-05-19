@@ -441,7 +441,7 @@ fn mir_body_codegen_fp_update_supported(
 fn mir_body_codegen_local_type(ty : @ctype.Type) -> Bool {
   match ty {
     Aligned(_, _) => false
-    Array(elem, _) => mir_body_codegen_scalar_type(elem)
+    Array(elem, _) => mir_body_codegen_local_type(elem)
     Struct(_) | Union(_) => true
     _ => mir_body_codegen_scalar_type(ty)
   }
@@ -616,7 +616,7 @@ fn mir_body_codegen_value_supported(
       mir.funcs.contains(name) && mir_body_codegen_scalar_type(ty)
     MirStringAddr(_) => true
     MirElemAddr(base, index, elem_ty) =>
-      mir_body_codegen_scalar_type(elem_ty) &&
+      mir_body_codegen_local_type(elem_ty) &&
       mir_body_codegen_array_address_base(base, int_arg_limit, mir) &&
       mir_body_codegen_value_supported(index, int_arg_limit, mir)
     MirOffsetAddr(base, _, ty) =>
@@ -1306,12 +1306,9 @@ fn mir_body_codegen_call_supported(
     return mir_body_codegen_darwin_args_with_stack_supported(params, mir)
   }
   let sig = mir.funcs[name]
-  if (sig.defined && !mir.bodies.contains(name)) ||
-    (
-      !mir_body_codegen_abi_scalar_type(sig.ret) &&
-      !mir_body_codegen_register_aggregate_return_type(sig.ret, mir) &&
-      !mir_body_codegen_x64_memory_aggregate_return_type(sig.ret, mir)
-    ) {
+  if !mir_body_codegen_abi_scalar_type(sig.ret) &&
+    !mir_body_codegen_register_aggregate_return_type(sig.ret, mir) &&
+    !mir_body_codegen_x64_memory_aggregate_return_type(sig.ret, mir) {
     return false
   }
   if sig.variadic {
@@ -1379,13 +1376,25 @@ fn mir_body_codegen_indirect_call_supported(
       let sig_ret_supported = mir_body_codegen_abi_scalar_type(sig_ret) ||
         mir_body_codegen_register_aggregate_return_type(sig_ret, mir) ||
         mir_body_codegen_x64_memory_aggregate_return_type(sig_ret, mir)
-      if variadic || params.length() != args.length() || !sig_ret_supported {
+      if variadic || !sig_ret_supported {
+        return false
+      }
+      let call_params : Array[@ctype.Type] = []
+      if params.length() == args.length() {
+        for param in params {
+          call_params.push(param)
+        }
+      } else if params.length() == 0 {
+        for arg in args {
+          call_params.push(arg.ty())
+        }
+      } else {
         return false
       }
       if mir.target is LinuxAmd64 {
-        mir_body_codegen_x64_args_with_stack_supported(params)
+        mir_body_codegen_x64_args_with_stack_supported(call_params)
       } else {
-        mir_body_codegen_darwin_args_with_stack_supported(params, mir)
+        mir_body_codegen_darwin_args_with_stack_supported(call_params, mir)
       }
     }
     _ => false

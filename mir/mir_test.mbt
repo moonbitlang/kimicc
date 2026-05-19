@@ -1012,6 +1012,26 @@ test "mir body interpreter handles initialized scalar global arrays" {
 }
 
 ///|
+test "mir body lowering handles casted global array decay" {
+  let source =
+    #|int a[3] = {4, 5, 6};
+    #|int *get(int *pn) {
+    #|  *pn = sizeof(a) / sizeof(a[0]);
+    #|  return (int*)a;
+    #|}
+    #|int main(void) {
+    #|  int n = 0;
+    #|  int *p = get(&n);
+    #|  return p[1] + n;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("get"), content="true")
+  inspect(mir.bodies.contains("main"), content="true")
+  inspect(mir.bodies["get"].params.length(), content="1")
+  inspect(mir.bodies["get"].body.length(), content="2")
+}
+
+///|
 test "mir body interpreter handles sparse initialized scalar global arrays" {
   let source =
     #|int a[4] = { [2] = 9, [0] = 1 };
@@ -1405,6 +1425,27 @@ test "mir body interpreter handles nested global aggregate fields" {
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   inspect(mir.bodies.contains("main"), content="true")
   expect_body_interp(source, 24L)
+}
+
+///|
+test "mir body lowering handles array element aggregate fields" {
+  let source =
+    #|struct Item { int v; };
+    #|struct Db { struct Item a[2]; };
+    #|int get(struct Db *db, int i) {
+    #|  return db->a[i].v;
+    #|}
+    #|int main(void) {
+    #|  struct Db db;
+    #|  db.a[0].v = 4;
+    #|  db.a[1].v = 7;
+    #|  return get(&db, 1);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("get"), content="true")
+  inspect(mir.bodies.contains("main"), content="true")
+  inspect(mir.bodies["get"].params.length(), content="2")
+  inspect(mir.bodies["get"].body.length(), content="1")
 }
 
 ///|

@@ -760,6 +760,60 @@ test "strict MIR codegen executes globals arrays and structs" {
 }
 
 ///|
+test "strict MIR codegen executes array element aggregate fields" {
+  let source =
+    #|struct Item { int v; };
+    #|struct Db { struct Item a[2]; };
+    #|int get(struct Db *db, int i) {
+    #|  return db->a[i].v;
+    #|}
+    #|int main(void) {
+    #|  struct Db db;
+    #|  db.a[0].v = 4;
+    #|  db.a[1].v = 7;
+    #|  return get(&db, 1);
+    #|}
+  assert_eq(run_source_strict_mir(source), 7)
+}
+
+///|
+test "strict MIR codegen executes bitfield loads and stores" {
+  let source =
+    #|struct Flags {
+    #|  unsigned a : 1;
+    #|  unsigned b : 2;
+    #|  unsigned c : 3;
+    #|};
+    #|int main(void) {
+    #|  struct Flags flags;
+    #|  flags.a = 1;
+    #|  flags.b = 2;
+    #|  flags.c = 5;
+    #|  return flags.a + (flags.b << 1) + (flags.c << 3);
+    #|}
+  assert_eq(run_source_strict_mir(source), 45)
+}
+
+///|
+test "strict MIR codegen executes struct copies with bitfields" {
+  let source =
+    #|struct Flags {
+    #|  int x;
+    #|  unsigned a : 1;
+    #|  unsigned b : 2;
+    #|};
+    #|int main(void) {
+    #|  struct Flags flags;
+    #|  flags.x = 30;
+    #|  flags.a = 1;
+    #|  flags.b = 2;
+    #|  struct Flags copy = flags;
+    #|  return copy.x + copy.a + (copy.b << 1);
+    #|}
+  assert_eq(run_source_strict_mir(source), 35)
+}
+
+///|
 test "strict MIR codegen executes pointer arithmetic on local arrays" {
   let source =
     #|int main(void) {
@@ -783,6 +837,48 @@ test "strict MIR codegen executes direct array decay in pointer arithmetic" {
     #|  return *(a + 1);
     #|}
   assert_eq(run_source_strict_mir(source), 6)
+}
+
+///|
+test "strict MIR codegen executes local pointer updates" {
+  let source =
+    #|int main(void) {
+    #|  char buf[4];
+    #|  char *p = buf;
+    #|  p++;
+    #|  *p = 7;
+    #|  p += 1;
+    #|  *p = 9;
+    #|  return buf[1] + buf[2];
+    #|}
+  assert_eq(run_source_strict_mir(source), 16)
+}
+
+///|
+test "strict MIR codegen executes casted pointer dereference" {
+  let source =
+    #|int main(void) {
+    #|  char c = 37;
+    #|  char *p = &c;
+    #|  return *(unsigned char*)p;
+    #|}
+  assert_eq(run_source_strict_mir(source), 37)
+}
+
+///|
+test "strict MIR codegen executes casted global array decay" {
+  let source =
+    #|int a[3] = {4, 5, 6};
+    #|int *get(int *pn) {
+    #|  *pn = sizeof(a) / sizeof(a[0]);
+    #|  return (int*)a;
+    #|}
+    #|int main(void) {
+    #|  int n = 0;
+    #|  int *p = get(&n);
+    #|  return p[1] + n;
+    #|}
+  assert_eq(run_source_strict_mir(source), 8)
 }
 
 ///|
@@ -975,6 +1071,26 @@ test "strict MIR codegen executes floating indirect calls" {
 }
 
 ///|
+test "strict MIR codegen executes indirect calls returning function pointers" {
+  let source =
+    #|int global;
+    #|void target(int value) {
+    #|  global = value;
+    #|}
+    #|void (*pick(int tag))(int) {
+    #|  if (tag) return target;
+    #|  return target;
+    #|}
+    #|int main(void) {
+    #|  void (*(*fp)(int))(int) = pick;
+    #|  void (*fn)(int) = fp(1);
+    #|  fn(37);
+    #|  return global;
+    #|}
+  assert_eq(run_source_strict_mir(source), 37)
+}
+
+///|
 test "strict MIR codegen executes stack-passed floating indirect calls" {
   let source =
     #|double sum9d(double a, double b, double c, double d, double e, double f, double g, double h, double i) {
@@ -1040,6 +1156,24 @@ test "strict MIR codegen executes scalar va_arg reads" {
     #|}
     #|int main(void) {
     #|  return read_variadic(4, 10, 20LL, 3.5);
+    #|}
+  assert_eq(run_source_strict_mir(source), 37)
+}
+
+///|
+test "strict MIR codegen executes stores through va_arg pointers" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|void write_variadic(int value, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, value);
+    #|  *__builtin_va_arg(ap, int*) = value;
+    #|  __builtin_va_end(ap);
+    #|}
+    #|int main(void) {
+    #|  int x = 0;
+    #|  write_variadic(37, &x);
+    #|  return x;
     #|}
   assert_eq(run_source_strict_mir(source), 37)
 }

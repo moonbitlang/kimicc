@@ -218,9 +218,18 @@ fn mir_body_scalar_type(ty : @ctype.Type) -> Bool {
 ///|
 fn mir_body_array_local_type(ty : @ctype.Type) -> Bool {
   match ty {
-    Array(elem, _) => mir_body_scalar_type(elem)
+    Array(elem, _) => mir_body_array_element_addressable_type(elem)
     Aligned(inner, _) => mir_body_array_local_type(inner)
     _ => false
+  }
+}
+
+///|
+fn mir_body_array_element_addressable_type(ty : @ctype.Type) -> Bool {
+  match ty {
+    Struct(_) | Union(_) => true
+    Aligned(inner, _) => mir_body_array_element_addressable_type(inner)
+    _ => mir_body_scalar_type(ty)
   }
 }
 
@@ -244,6 +253,11 @@ fn lower_mir_local_update(
   match ctx.lookup_local(name) {
     Some(binding) =>
       if binding.ty.is_integer() ||
+        (
+          mir_body_pointer_type(binding.ty) &&
+          (op == "+" || op == "-") &&
+          rhs.ty().is_integer()
+        ) ||
         (binding.ty.is_floating() && mir_body_floating_update_op(op)) {
         Some(MirAssignLocal(binding, MirBinary(op, MirLocal(binding), rhs, ty)))
       } else {
@@ -271,10 +285,24 @@ fn lower_mir_post_update(
   ty : @ctype.Type,
 ) -> MirValue? {
   if binding.ty.is_integer() ||
+    (
+      mir_body_pointer_type(binding.ty) &&
+      (op == "+" || op == "-") &&
+      rhs.ty().is_integer()
+    ) ||
     (binding.ty.is_floating() && mir_body_floating_update_op(op)) {
     Some(MirPostUpdateLocal(binding, op, rhs, ty))
   } else {
     None
+  }
+}
+
+///|
+fn mir_body_pointer_type(ty : @ctype.Type) -> Bool {
+  match ty {
+    Pointer(_) => true
+    Atomic(inner) | Aligned(inner, _) => mir_body_pointer_type(inner)
+    _ => false
   }
 }
 
@@ -674,9 +702,6 @@ fn Program::lower_mir_copy_init_stores(
       }
       let stores : Array[MirStmt] = []
       for field in decl.fields {
-        if field.bit_width is Some(_) {
-          return None
-        }
         let dest_layout = match self.field_layout(dest_ty, field.name) {
           Some(layout) => layout
           None => return None
@@ -684,6 +709,29 @@ fn Program::lower_mir_copy_init_stores(
         let src_layout = match self.field_layout(src_ty, field.name) {
           Some(layout) => layout
           None => return None
+        }
+        if field.bit_width is Some(_) {
+          stores.push(
+            MirExprStmt(
+              MirStore(
+                mir_body_offset_addr_value(
+                  dest_base,
+                  dest_layout.offset,
+                  dest_layout.ty,
+                ),
+                MirLoad(
+                  mir_body_offset_addr_value(
+                    src_base,
+                    src_layout.offset,
+                    src_layout.ty,
+                  ),
+                  src_layout.ty,
+                ),
+                dest_layout.ty,
+              ),
+            ),
+          )
+          continue
         }
         let dest_addr = mir_body_offset_addr_value(
           dest_base,
@@ -1030,7 +1078,11 @@ fn Program::lower_mir_scalar_lvalue_addr(
         None
       }
     Deref(Var(name)) => self.lower_mir_expr(Var(name), ctx)
-    Deref(ptr) => self.lower_mir_known_object_ptr_expr(ptr, ctx)
+    Deref(ptr) =>
+      match self.lower_mir_known_object_ptr_expr(ptr, ctx) {
+        Some(addr) => Some(addr)
+        None => self.lower_mir_expr_with_array_decay(ptr, ctx)
+      }
     ArrayAccess(base, index) =>
       self.lower_mir_array_elem_addr(base, index, lhs_ty, ctx)
     MemberAccess(obj, field) => self.lower_mir_member_addr(obj, field, ctx)
@@ -1234,6 +1286,140 @@ fn Program::lower_mir_member_addr(
 }
 
 ///|
+fn mir_body_bitfield_mask(width : Int) -> Int64 {
+  if width >= 64 {
+    -1L
+  } else {
+    (1L << width) - 1L
+  }
+}
+
+///|
+fn Program::lower_mir_bitfield_storage(
+  self : Program,
+  obj : @parser.Expr,
+  field : String,
+  ctx : BodyLowerContext,
+) -> (MirValue, FieldLayout)? {
+  let obj_ty = self.expr_type(obj, ctx.scope())
+  match self.field_layout(obj_ty, field) {
+    Some(layout) =>
+      match layout.bit_width {
+        Some(_) =>
+          match self.lower_mir_object_addr(obj, ctx) {
+            Some(base) =>
+              Some(
+                (
+                  mir_body_offset_addr_value(base, layout.offset, layout.ty),
+                  layout,
+                ),
+              )
+            None => None
+          }
+        None => None
+      }
+    None => None
+  }
+}
+
+///|
+fn Program::lower_mir_bitfield_load(
+  self : Program,
+  obj : @parser.Expr,
+  field : String,
+  result_ty : @ctype.Type,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  let (addr, layout) = match self.lower_mir_bitfield_storage(obj, field, ctx) {
+    Some(value) => value
+    None => return None
+  }
+  let width = match layout.bit_width {
+    Some(value) => value
+    None => return None
+  }
+  let storage = MirLoad(addr, layout.ty)
+  let shifted = if layout.bit_offset == 0 {
+    storage
+  } else {
+    MirBinary(
+      ">>",
+      storage,
+      MirConst(layout.bit_offset.to_int64(), SInt),
+      layout.ty,
+    )
+  }
+  let masked = MirBinary(
+    "&",
+    shifted,
+    MirConst(mir_body_bitfield_mask(width), layout.ty),
+    layout.ty,
+  )
+  Some(MirCast(result_ty, masked))
+}
+
+///|
+fn Program::lower_mir_bitfield_store(
+  self : Program,
+  lhs : @parser.Expr,
+  rhs : @parser.Expr,
+  lhs_ty : @ctype.Type,
+  ctx : BodyLowerContext,
+) -> MirValue? {
+  let (obj, field) = match lhs {
+    MemberAccess(obj, field) => (obj, field)
+    _ => return None
+  }
+  let (addr, layout) = match self.lower_mir_bitfield_storage(obj, field, ctx) {
+    Some(value) => value
+    None => return None
+  }
+  let width = match layout.bit_width {
+    Some(value) => value
+    None => return None
+  }
+  let value = match self.lower_mir_expr_for_target_type(layout.ty, rhs, ctx) {
+    Some(value) => value
+    None => return None
+  }
+  let temp = ctx.declare_temp(layout.ty)
+  let mask = mir_body_bitfield_mask(width)
+  let shifted_mask = mask << layout.bit_offset
+  let temp_value = MirLocal(temp)
+  let masked_value = MirBinary(
+    "&",
+    temp_value,
+    MirConst(mask, layout.ty),
+    layout.ty,
+  )
+  let shifted_value = if layout.bit_offset == 0 {
+    masked_value
+  } else {
+    MirBinary(
+      "<<",
+      masked_value,
+      MirConst(layout.bit_offset.to_int64(), SInt),
+      layout.ty,
+    )
+  }
+  let cleared = MirBinary(
+    "&",
+    MirLoad(addr, layout.ty),
+    MirConst(shifted_mask.lnot(), layout.ty),
+    layout.ty,
+  )
+  let stored = MirBinary("|", cleared, shifted_value, layout.ty)
+  mir_body_sequence_exprs(
+    [
+      MirExprStmt(MirAssignLocal(temp, MirCast(layout.ty, value))),
+      MirExprStmt(MirStore(addr, stored, layout.ty)),
+    ],
+    MirCast(lhs_ty, temp_value),
+    lhs_ty,
+  )
+}
+
+///|
 fn mir_body_offset_addr_value(
   base : MirValue,
   offset : Int,
@@ -1323,6 +1509,22 @@ fn Program::lower_mir_object_addr(
         Some(addr) => Some(addr)
         None => self.lower_mir_expr_with_array_decay(ptr, ctx)
       }
+    ArrayAccess(base, index) => {
+      let elem_ty = self.expr_type(expr, ctx.scope())
+      match
+        (
+          self.lower_mir_array_base_addr(base, ctx),
+          self.lower_mir_expr(index, ctx),
+        ) {
+        (Some(base_addr), Some(index_value)) =>
+          if mir_body_array_element_addressable_type(elem_ty) {
+            Some(MirElemAddr(base_addr, index_value, elem_ty))
+          } else {
+            None
+          }
+        _ => None
+      }
+    }
     _ => None
   }
 }
@@ -1488,7 +1690,20 @@ fn Program::lower_mir_expr(
           } else {
             None
           }
-        None => None
+        None =>
+          match self.pointer_element(self.expr_type(ptr, scope)) {
+            Some(_) =>
+              match self.lower_mir_expr_with_array_decay(ptr, ctx) {
+                Some(addr) =>
+                  if mir_body_scalar_type(ty) {
+                    Some(MirLoad(addr, ty))
+                  } else {
+                    None
+                  }
+                None => None
+              }
+            None => None
+          }
       }
     ArrayAccess(base, index) =>
       match self.lower_mir_array_elem_addr(base, index, ty, ctx) {
@@ -1496,9 +1711,13 @@ fn Program::lower_mir_expr(
         None => None
       }
     MemberAccess(obj, field) =>
-      match self.lower_mir_member_addr(obj, field, ctx) {
-        Some(addr) => Some(MirLoad(addr, ty))
-        None => None
+      match self.lower_mir_bitfield_load(obj, field, ty, ctx) {
+        Some(value) => Some(value)
+        None =>
+          match self.lower_mir_member_addr(obj, field, ctx) {
+            Some(addr) => Some(MirLoad(addr, ty))
+            None => None
+          }
       }
     Binary(op, lhs, rhs) =>
       match (self.lower_mir_expr(lhs, ctx), self.lower_mir_expr(rhs, ctx)) {
@@ -1517,13 +1736,21 @@ fn Program::lower_mir_expr(
           None => ()
         }
       }
-      match self.lower_mir_expr(inner, ctx) {
+      let inner_value = match self.core_type(self.expr_type(inner, scope)) {
+        Array(_, _) => self.lower_mir_expr_with_array_decay(inner, ctx)
+        _ => self.lower_mir_expr(inner, ctx)
+      }
+      match inner_value {
         Some(value) => Some(MirCast(cast_ty, value))
         None => None
       }
     }
     Assign(lhs, rhs) => {
       let lhs_ty = self.expr_type(lhs, scope)
+      match self.lower_mir_bitfield_store(lhs, rhs, lhs_ty, ctx) {
+        Some(value) => return Some(value)
+        None => ()
+      }
       match
         (
           lower_mir_cancelled_local_lvalue(lhs, ctx),
