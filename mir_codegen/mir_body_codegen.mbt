@@ -1290,7 +1290,20 @@ fn mir_body_codegen_call_supported(
     return false
   }
   if !mir.funcs.contains(name) {
-    return args.length() == 0 && !mir.globals.contains(name)
+    if mir.globals.contains(name) || !mir_body_codegen_abi_scalar_type(ret) {
+      return false
+    }
+    let params : Array[@ctype.Type] = []
+    for arg in args {
+      if !mir_body_codegen_abi_scalar_type(arg.ty()) {
+        return false
+      }
+      params.push(arg.ty())
+    }
+    if mir.target is LinuxAmd64 {
+      return mir_body_codegen_x64_args_with_stack_supported(params)
+    }
+    return mir_body_codegen_darwin_args_with_stack_supported(params, mir)
   }
   let sig = mir.funcs[name]
   if (sig.defined && !mir.bodies.contains(name)) ||

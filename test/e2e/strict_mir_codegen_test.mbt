@@ -70,6 +70,17 @@ test "strict MIR codegen executes scalar control flow and calls" {
 }
 
 ///|
+test "strict MIR codegen executes implicit external scalar call arguments" {
+  let source =
+    #|int main(void) {
+    #|  if (strcmp("kimicc", "kimicc") != 0) return 1;
+    #|  if (strcmp("abc", "abd") >= 0) return 2;
+    #|  return 42;
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
 test "strict MIR codegen executes stack-passed integer direct calls" {
   let source =
     #|int sum9(int a, int b, int c, int d, int e, int f, int g, int h, int i) {
