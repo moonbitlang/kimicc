@@ -2040,6 +2040,7 @@ fn X64Codegen::mir_global_init_supported(
         MirGlobalString(_) => self.mir_global_string_supported(ty)
         MirGlobalSymbol(_) => self.mir_global_symbol_supported(ty)
         MirGlobalSymbolOffset(_, _) => self.mir_global_symbol_supported(ty)
+        MirGlobalLabelAddr(_) => self.mir_global_symbol_supported(ty)
         MirGlobalArraySparse(values) =>
           match x64_core_type(ty) {
             Array(elem_ty, n) => {
@@ -2225,6 +2226,7 @@ fn X64Codegen::emit_mir_global_init(
     MirGlobalSymbol(name) => self.emit("\t.quad\t" + name)
     MirGlobalSymbolOffset(name, offset) =>
       self.emit("\t.quad\t" + reloc_with_offset(name, offset))
+    MirGlobalLabelAddr(name) => self.emit("\t.quad\t" + self.label_ref(name))
     MirGlobalArraySparse(values) =>
       match x64_core_type(ty) {
         Array(elem_ty, n) => {
@@ -2468,6 +2470,8 @@ fn X64Codegen::try_emit_mir_global_init(
 fn X64Codegen::emit_mir_globals(
   self : X64Codegen,
   globals : Array[@mir.MirGlobalDecl],
+  func_decls : Array[CodegenFuncDecl],
+  func_label_maps : Map[String, Map[String, String]],
 ) -> Unit {
   let codegen_globals = codegen_global_decls_from_mir(globals)
   self.emit_global_decl_directives(codegen_globals)
@@ -2477,9 +2481,23 @@ fn X64Codegen::emit_mir_globals(
       self.emit_symbol_binding(g.name, g.is_static, g.is_weak, g.visibility)
       self.emit("\t.align\t" + self.type_align(g.ty).to_string())
       self.emit(g.name + ":")
+      let saved_func_name = self.func_name
+      let saved_emitted_labels = self.emitted_labels
+      match static_global_owner_name(g.name, func_decls) {
+        Some(owner) => {
+          self.func_name = owner
+          match func_label_maps.get(owner) {
+            Some(labels) => self.emitted_labels = labels
+            None => ()
+          }
+        }
+        None => ()
+      }
       if !self.try_emit_mir_global_init(g) {
         self.emit("\t.zero\t" + self.type_size(g.ty).to_string())
       }
+      self.func_name = saved_func_name
+      self.emitted_labels = saved_emitted_labels
     }
   }
   self.emit_global_bss_definitions(codegen_globals)
@@ -2732,15 +2750,23 @@ fn X64Codegen::generate_mir_only(
     self.emit_mir_function_decl_directives(decl)
   }
   let needed_inline = mir_codegen_needed_inline_bodies(mir_module)
+  let func_label_maps : Map[String, Map[String, String]] = {}
   for decl in mir_module.decls {
     if mir_codegen_should_emit_body(decl, needed_inline) {
       match mir_module.bodies.get(decl.name) {
-        Some(body) => self.gen_mir_func(decl, body)
+        Some(body) => {
+          self.gen_mir_func(decl, body)
+          func_label_maps[decl.name] = self.emitted_labels
+        }
         None => ()
       }
     }
   }
-  self.emit_mir_globals(@mir.merge_global_decls(mir_module.global_decls))
+  self.emit_mir_globals(
+    @mir.merge_global_decls(mir_module.global_decls),
+    codegen_func_decls,
+    func_label_maps,
+  )
   self.emit_lifecycle_array(".init_array", codegen_func_decls)
   self.emit_lifecycle_array(".fini_array", codegen_func_decls)
   self.emit_strings()

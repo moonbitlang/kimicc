@@ -70,6 +70,33 @@ test "strict MIR codegen executes scalar control flow and calls" {
 }
 
 ///|
+test "strict MIR codegen executes local computed goto" {
+  let source =
+    #|int main(void) {
+    #|  void *target = &&done;
+    #|  goto *target;
+    #|  return 1;
+    #|done:
+    #|  return 42;
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
+test "strict MIR codegen executes static computed goto table" {
+  let source =
+    #|int main(void) {
+    #|  static void *labels[] = { &&bad, &&good };
+    #|  goto *labels[1];
+    #|bad:
+    #|  return 1;
+    #|good:
+    #|  return 42;
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
 test "strict MIR codegen executes unsigned int128 limb multiply" {
   let source =
     #|typedef unsigned long js_limb_t;

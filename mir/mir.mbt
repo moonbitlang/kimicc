@@ -72,6 +72,7 @@ pub(all) enum MirGlobalInit {
   MirGlobalString(String)
   MirGlobalSymbol(String)
   MirGlobalSymbolOffset(String, Int)
+  MirGlobalLabelAddr(String)
   MirGlobalArray(Array[MirGlobalInit])
   MirGlobalArraySparse(Array[(Int, MirGlobalInit)])
   MirGlobalAggregateSparse(Array[(Int, MirGlobalInit)])
@@ -603,6 +604,7 @@ fn Program::lower_mir_global_scalar_init(
   match expr {
     Number(n) => MirGlobalScalarInt(n)
     String(s) => MirGlobalString(s)
+    LabelAddr(name) => MirGlobalLabelAddr(name)
     DesignatedField(_, _) | DesignatedIndex(_, _) | DesignatedRange(_, _, _) =>
       MirGlobalInitUnsupported
     _ =>

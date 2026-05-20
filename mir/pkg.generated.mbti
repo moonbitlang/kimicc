@@ -100,6 +100,7 @@ pub(all) enum MirGlobalInit {
   MirGlobalString(String)
   MirGlobalSymbol(String)
   MirGlobalSymbolOffset(String, Int)
+  MirGlobalLabelAddr(String)
   MirGlobalArray(Array[MirGlobalInit])
   MirGlobalArraySparse(Array[(Int, MirGlobalInit)])
   MirGlobalAggregateSparse(Array[(Int, MirGlobalInit)])
@@ -145,6 +146,7 @@ pub(all) enum MirStmt {
   MirSwitch(MirValue, Array[(Int64?, String)], Array[MirStmt])
   MirLabel(String)
   MirGoto(String)
+  MirComputedGoto(MirValue)
   MirBreak
   MirContinue
   MirBlock(Array[MirStmt])
@@ -156,6 +158,7 @@ pub(all) enum MirValue {
   MirAddrLocal(MirLocal)
   MirAddrGlobal(String, @ctype.Type)
   MirFuncAddr(String, @ctype.Type)
+  MirLabelAddr(String)
   MirStringAddr(String)
   MirElemAddr(MirValue, MirValue, @ctype.Type)
   MirOffsetAddr(MirValue, Int, @ctype.Type)

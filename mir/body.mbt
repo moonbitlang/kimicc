@@ -25,6 +25,7 @@ pub(all) enum MirValue {
   MirAddrLocal(MirLocal)
   MirAddrGlobal(String, @ctype.Type)
   MirFuncAddr(String, @ctype.Type)
+  MirLabelAddr(String)
   MirStringAddr(String)
   MirElemAddr(MirValue, MirValue, @ctype.Type)
   MirOffsetAddr(MirValue, Int, @ctype.Type)
@@ -58,6 +59,7 @@ pub(all) enum MirStmt {
   MirSwitch(MirValue, Array[(Int64?, String)], Array[MirStmt])
   MirLabel(String)
   MirGoto(String)
+  MirComputedGoto(MirValue)
   MirBreak
   MirContinue
   MirBlock(Array[MirStmt])
@@ -82,6 +84,7 @@ pub fn MirValue::ty(self : MirValue) -> @ctype.Type {
     MirAddrLocal(binding) => Pointer(binding.ty)
     MirAddrGlobal(_, ty) => Pointer(ty)
     MirFuncAddr(_, ty) => ty
+    MirLabelAddr(_) => Pointer(Void)
     MirStringAddr(_) => Pointer(SChar)
     MirElemAddr(_, _, elem_ty) => Pointer(elem_ty)
     MirOffsetAddr(_, _, ty) => Pointer(ty)
@@ -616,7 +619,7 @@ fn Program::lower_mir_zero_object_stores(
 ///|
 fn mir_body_copy_dest_addr(value : MirValue) -> Bool {
   match value {
-    MirFuncAddr(_, _) | MirStringAddr(_) => false
+    MirFuncAddr(_, _) | MirLabelAddr(_) | MirStringAddr(_) => false
     MirElemAddr(base, _, _) | MirOffsetAddr(base, _, _) =>
       mir_body_copy_dest_addr(base)
     _ => true
@@ -626,7 +629,7 @@ fn mir_body_copy_dest_addr(value : MirValue) -> Bool {
 ///|
 fn mir_body_copy_source_addr(value : MirValue) -> Bool {
   match value {
-    MirFuncAddr(_, _) | MirStringAddr(_) => false
+    MirFuncAddr(_, _) | MirLabelAddr(_) | MirStringAddr(_) => false
     MirElemAddr(base, _, _) | MirOffsetAddr(base, _, _) =>
       mir_body_copy_source_addr(base)
     _ => true
@@ -641,6 +644,7 @@ fn mir_body_copy_addr_has_side_effect(value : MirValue) -> Bool {
     | MirAddrLocal(_)
     | MirAddrGlobal(_, _)
     | MirFuncAddr(_, _)
+    | MirLabelAddr(_)
     | MirStringAddr(_) => false
     MirElemAddr(base, index, _) =>
       mir_body_copy_addr_has_side_effect(base) ||
@@ -1984,6 +1988,7 @@ fn Program::lower_mir_expr(
     Number(value) => Some(MirConst(value, ty))
     FloatLiteral(value) => Some(MirConst(value.reinterpret_as_int64(), ty))
     String(value) => Some(MirStringAddr(value))
+    LabelAddr(name) => Some(MirLabelAddr(name))
     Var(name) =>
       match ctx.lookup_local(name) {
         Some(binding) => Some(MirLocal(binding))
@@ -2662,6 +2667,11 @@ fn Program::lower_mir_stmt(
         None => None
       }
     Goto(name) => Some([MirGoto(name)])
+    ComputedGoto(expr) =>
+      match self.lower_mir_expr_with_array_decay(expr, ctx) {
+        Some(target) => Some([MirComputedGoto(target)])
+        None => None
+      }
     Break => Some([MirBreak])
     Continue => Some([MirContinue])
     Compound(stmts) => {
@@ -2746,7 +2756,6 @@ fn Program::lower_mir_stmt(
       let binding = ctx.declare_local(name, ty)
       Some([MirDeclare(binding, init_value)])
     }
-    _ => None
   }
 }
 

@@ -127,6 +127,23 @@ fn codegen_func_decls_from_mir(
 }
 
 ///|
+fn static_global_owner_name(
+  name : String,
+  decls : Array[CodegenFuncDecl],
+) -> String? {
+  let mut owner : String? = None
+  let mut owner_prefix_len = 0
+  for decl in decls {
+    let prefix = "_" + decl.name + "_"
+    if name.has_prefix(prefix) && prefix.length() > owner_prefix_len {
+      owner = Some(decl.name)
+      owner_prefix_len = prefix.length()
+    }
+  }
+  owner
+}
+
+///|
 fn mir_codegen_inline_decls(
   decls : Array[@mir.MirFuncDecl],
 ) -> Map[String, @mir.MirFuncDecl] {
@@ -174,6 +191,7 @@ fn mir_codegen_collect_value_inline_refs(
     | MirLocal(_)
     | MirAddrLocal(_)
     | MirAddrGlobal(_, _)
+    | MirLabelAddr(_)
     | MirStringAddr(_) => ()
     MirFuncAddr(name, _) =>
       mir_codegen_mark_needed_inline(name, inline_decls, bodies, needed)
@@ -250,6 +268,10 @@ fn mir_codegen_collect_stmt_inline_refs(
           value, inline_decls, bodies, needed,
         )
       MirReturn(None) | MirLabel(_) | MirGoto(_) | MirBreak | MirContinue => ()
+      MirComputedGoto(value) =>
+        mir_codegen_collect_value_inline_refs(
+          value, inline_decls, bodies, needed,
+        )
       MirIf(cond, then_, else_) => {
         mir_codegen_collect_value_inline_refs(
           cond, inline_decls, bodies, needed,
@@ -321,6 +343,7 @@ fn mir_codegen_collect_global_init_inline_refs(
     MirGlobalScalarInt(_)
     | MirGlobalScalarFloat(_)
     | MirGlobalString(_)
+    | MirGlobalLabelAddr(_)
     | MirGlobalInitUnsupported => ()
   }
 }
@@ -555,6 +578,7 @@ fn Codegen::mir_global_init_supported(
         MirGlobalString(_) => self.mir_global_string_supported(core)
         MirGlobalSymbol(_) => self.mir_global_symbol_supported(core)
         MirGlobalSymbolOffset(_, _) => self.mir_global_symbol_supported(core)
+        MirGlobalLabelAddr(_) => self.mir_global_symbol_supported(core)
         MirGlobalArraySparse(values) =>
           match core {
             Array(elem_ty, n) => {
@@ -723,6 +747,8 @@ fn Codegen::emit_mir_global_init(
         MirGlobalSymbol(name) => self.emit("\t.quad\t_" + name)
         MirGlobalSymbolOffset(name, offset) =>
           self.emit("\t.quad\t" + reloc_with_offset("_" + name, offset))
+        MirGlobalLabelAddr(name) =>
+          self.emit("\t.quad\t" + self.label_ref(name))
         MirGlobalArraySparse(values) =>
           match core {
             Array(elem_ty, n) => {
@@ -1007,11 +1033,16 @@ fn Codegen::generate_mir_only(
   self.register_mir_aggregate_layouts(mir_module)
   self.register_mir_function_decls(mir_module)
   self.register_mir_global_decls(mir_module)
+  let codegen_func_decls = codegen_func_decls_from_mir(mir_module.decls)
   let needed_inline = mir_codegen_needed_inline_bodies(mir_module)
+  let func_label_maps : Map[String, Map[String, String]] = {}
   for decl in mir_module.decls {
     if mir_codegen_should_emit_body(decl, needed_inline) {
       match mir_module.bodies.get(decl.name) {
-        Some(body) => self.gen_mir_func(decl, body)
+        Some(body) => {
+          self.gen_mir_func(decl, body)
+          func_label_maps[decl.name] = self.emitted_labels
+        }
         None => ()
       }
     }
@@ -1033,9 +1064,23 @@ fn Codegen::generate_mir_only(
       }
       self.emit_global_p2align(g.ty)
       self.emit("_" + g.name + ":")
+      let saved_func_name = self.func_name
+      let saved_emitted_labels = self.emitted_labels
+      match static_global_owner_name(g.name, codegen_func_decls) {
+        Some(owner) => {
+          self.func_name = owner
+          match func_label_maps.get(owner) {
+            Some(labels) => self.emitted_labels = labels
+            None => ()
+          }
+        }
+        None => ()
+      }
       if !self.try_emit_mir_global_init(g) {
         self.emit("\t.space\t" + self.type_size(g.ty).to_string())
       }
+      self.func_name = saved_func_name
+      self.emitted_labels = saved_emitted_labels
     }
   }
   let mut has_bss = false

@@ -1700,10 +1700,51 @@ test "mir body lowering handles array element aggregate fields" {
 }
 
 ///|
+test "mir body lowering handles computed goto labels" {
+  let source =
+    #|int main(void) {
+    #|  void *target = &&done;
+    #|  goto *target;
+    #|done:
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+}
+
+///|
+test "mir global lowering handles static label address table" {
+  let source =
+    #|int main(void) {
+    #|  static void *labels[] = { &&bad, &&good };
+    #|  goto *labels[1];
+    #|bad:
+    #|  return 1;
+    #|good:
+    #|  return 42;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  match mir.global_decls[0].init {
+    Some(
+      MirGlobalArray([MirGlobalLabelAddr("bad"), MirGlobalLabelAddr("good")])
+    ) => ()
+    _ => abort("expected label address table initializer")
+  }
+}
+
+///|
 test "mir body lowering refuses unsupported parser constructs" {
   let source =
     #|int main(void) {
-    #|  goto *0;
+    #|  int x = 1;
+    #|  switch (x) {
+    #|    if (x) {
+    #|    case 1:
+    #|      return 42;
+    #|    }
+    #|  }
+    #|  return 0;
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   inspect(mir.bodies.contains("main"), content="false")

@@ -4428,7 +4428,14 @@ test "generate linux amd64 MIR body uses MIR function metadata" {
 test "strict MIR assembly rejects parser body fallback" {
   let source =
     #|int main(void) {
-    #|  goto *0;
+    #|  int x = 1;
+    #|  switch (x) {
+    #|    if (x) {
+    #|    case 1:
+    #|      return 42;
+    #|    }
+    #|  }
+    #|  return 0;
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   inspect(mir.bodies.contains("main"), content="false")
@@ -4443,7 +4450,14 @@ test "strict MIR assembly rejects parser body fallback" {
 test "strict target assembly rejects parser body fallback" {
   let source =
     #|int main(void) {
-    #|  goto *0;
+    #|  int x = 1;
+    #|  switch (x) {
+    #|    if (x) {
+    #|    case 1:
+    #|      return 42;
+    #|    }
+    #|  }
+    #|  return 0;
     #|}
   let prog = @parser.parse(source)
   match
@@ -4460,10 +4474,14 @@ test "strict target assembly rejects parser body fallback" {
 ///|
 test "strict MIR assembly skips unused unsupported inline body" {
   let source =
-    #|inline int skipped(void) {
-    #|  goto *&&target;
-    #|target:
-    #|  return 1;
+    #|inline int skipped(int x) {
+    #|  switch (x) {
+    #|    if (x) {
+    #|    case 1:
+    #|      return 1;
+    #|    }
+    #|  }
+    #|  return 0;
     #|}
     #|int main(void) { return 42; }
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
@@ -4502,12 +4520,16 @@ test "strict MIR assembly skips unused lowered inline body" {
 ///|
 test "strict MIR assembly rejects calls to unsupported inline body" {
   let source =
-    #|inline int skipped(void) {
-    #|  goto *&&target;
-    #|target:
-    #|  return 1;
+    #|inline int skipped(int x) {
+    #|  switch (x) {
+    #|    if (x) {
+    #|    case 1:
+    #|      return 1;
+    #|    }
+    #|  }
+    #|  return 0;
     #|}
-    #|int main(void) { return skipped(); }
+    #|int main(void) { return skipped(1); }
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   inspect(mir.bodies.contains("skipped"), content="false")
   match @mir_codegen_compat.generate_assembly_from_mir_strict(mir) {
@@ -4520,11 +4542,15 @@ test "strict MIR assembly rejects calls to unsupported inline body" {
 ///|
 test "strict MIR assembly reports missing callee body after caller" {
   let source =
-    #|int main(void) { return callee(); }
-    #|int callee(void) {
-    #|  goto *&&target;
-    #|target:
-    #|  return 1;
+    #|int main(void) { return callee(1); }
+    #|int callee(int x) {
+    #|  switch (x) {
+    #|    if (x) {
+    #|    case 1:
+    #|      return 1;
+    #|    }
+    #|  }
+    #|  return 0;
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   inspect(mir.bodies.contains("main"), content="true")
@@ -4540,7 +4566,14 @@ test "strict MIR assembly reports missing callee body after caller" {
 test "parser AST codegen fallback is explicit" {
   let source =
     #|int main(void) {
-    #|  goto *0;
+    #|  int x = 1;
+    #|  switch (x) {
+    #|    if (x) {
+    #|    case 1:
+    #|      return 42;
+    #|    }
+    #|  }
+    #|  return 0;
     #|}
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   let assembly = @mir_codegen_compat.generate_assembly_from_mir_with_parser_fallback(

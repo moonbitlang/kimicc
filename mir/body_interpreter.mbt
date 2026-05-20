@@ -713,6 +713,10 @@ fn BodyInterpreter::eval_value(
           0L
         }
       }
+    MirLabelAddr(_) => {
+      self.fail("unsupported MIR body label address")
+      0L
+    }
     MirStringAddr(value) => self.string_literal_base(value)
     MirElemAddr(base, index, _) =>
       mir_body_elem_addr(
@@ -1413,6 +1417,10 @@ fn BodyInterpreter::exec_stmt(
       self.exec_switch(frame, control, cases, body)
     MirLabel(_) => BodyNormal
     MirGoto(name) => BodyJump(name)
+    MirComputedGoto(_) => {
+      self.fail("unsupported MIR body computed goto")
+      BodyNormal
+    }
     MirBreak => BodyBroke
     MirContinue => BodyContinued
     MirBlock(stmts) => self.exec_stmts(frame, stmts)

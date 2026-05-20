@@ -839,6 +839,7 @@ fn mir_body_codegen_value_supported(
     MirAddrGlobal(_, ty) => mir_body_codegen_local_type(ty)
     MirFuncAddr(name, ty) =>
       mir.funcs.contains(name) && mir_body_codegen_scalar_type(ty)
+    MirLabelAddr(_) => true
     MirStringAddr(_) => true
     MirElemAddr(base, index, elem_ty) =>
       mir_body_codegen_local_type(elem_ty) &&
@@ -1922,6 +1923,8 @@ fn mir_body_codegen_stmt_supported(
       mir_body_codegen_stmts_supported(body, ret, int_arg_limit, mir)
     MirLabel(_) => true
     MirGoto(_) => true
+    MirComputedGoto(value) =>
+      mir_body_codegen_value_supported(value, int_arg_limit, mir)
     MirBreak => true
     MirContinue => true
     MirBlock(stmts) =>
@@ -2094,6 +2097,7 @@ fn Codegen::collect_mir_sret_scratch_value(
     | MirAddrLocal(_)
     | MirAddrGlobal(_, _)
     | MirFuncAddr(_, _)
+    | MirLabelAddr(_)
     | MirStringAddr(_) => ()
     MirElemAddr(base, index, _) => {
       self.collect_mir_sret_scratch_value(base)
@@ -2209,6 +2213,7 @@ fn Codegen::collect_mir_sret_scratch_stmt(
       for nested in stmts {
         self.collect_mir_sret_scratch_stmt(nested)
       }
+    MirComputedGoto(value) => self.collect_mir_sret_scratch_value(value)
     MirLabel(_) | MirGoto(_) | MirBreak | MirContinue => ()
   }
 }
@@ -3083,6 +3088,7 @@ fn Codegen::gen_mir_value(
       self.emit("\tadrp\tx9, _" + name + "@GOTPAGE")
       self.emit("\tldr\tx9, [x9, _" + name + "@GOTPAGEOFF]")
     }
+    MirLabelAddr(name) => self.emit("\tadr\tx9, " + self.label_ref(name))
     MirStringAddr(value) => {
       let idx = self.strings.length()
       self.strings.push(value)
@@ -5104,6 +5110,10 @@ fn Codegen::gen_mir_stmt(
       self.defined_labels[name] = true
     }
     MirGoto(name) => self.emit("\tb\t" + self.label_ref(name))
+    MirComputedGoto(value) => {
+      self.gen_mir_value(value, offsets, frame_size)
+      self.emit("\tbr\tx9")
+    }
     MirBreak =>
       match self.break_label {
         Some(label) => self.emit("\tb\t" + label)
@@ -5677,6 +5687,7 @@ fn X64Codegen::collect_mir_va_list_storage_value(
     | MirAddrLocal(_)
     | MirAddrGlobal(_, _)
     | MirFuncAddr(_, _)
+    | MirLabelAddr(_)
     | MirStringAddr(_) => ()
     MirElemAddr(base, index, _) => {
       self.collect_mir_va_list_storage_value(base)
@@ -5811,6 +5822,7 @@ fn X64Codegen::collect_mir_va_list_storage_stmt(
       for nested in stmts {
         self.collect_mir_va_list_storage_stmt(nested)
       }
+    MirComputedGoto(value) => self.collect_mir_va_list_storage_value(value)
     MirLabel(_) | MirGoto(_) | MirBreak | MirContinue => ()
   }
 }
@@ -6229,6 +6241,8 @@ fn X64Codegen::gen_mir_value(
     MirAddrLocal(binding) => self.emit_local_addr(offsets[binding.id])
     MirAddrGlobal(name, _) => self.emit_symbol_addr(name)
     MirFuncAddr(name, _) => self.emit_symbol_addr(name)
+    MirLabelAddr(name) =>
+      self.emit("\tlea\trax, [rip + " + self.label_ref(name) + "]")
     MirStringAddr(value) => {
       let id = self.strings.length()
       self.strings.push(value)
@@ -8012,6 +8026,10 @@ fn X64Codegen::gen_mir_stmt(
       self.emit(label + ":")
     }
     MirGoto(name) => self.emit("\tjmp\t" + self.label_ref(name))
+    MirComputedGoto(value) => {
+      self.gen_mir_value(value, offsets)
+      self.emit("\tjmp\trax")
+    }
     MirBreak =>
       match self.break_label {
         Some(label) => self.emit("\tjmp\t" + label)
