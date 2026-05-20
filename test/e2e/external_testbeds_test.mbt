@@ -796,6 +796,16 @@ async fn compile_preprocessed_file_with_kimicc_direct_object_path(
 }
 
 ///|
+async fn compile_preprocessed_file_with_strict_mir_object_path(
+  path : String,
+  tag : String,
+) -> String {
+  require_external_path(path, "preprocessed C testbed")
+  let data = @fs.read_file(path)
+  compile_source_to_strict_mir_object_path(data.text(), tag)
+}
+
+///|
 fn tinycc_smoke_source() -> String {
   let source =
     #|int fib(int n) {
@@ -970,6 +980,20 @@ async fn compile_quickjs_direct_object(
 }
 
 ///|
+async fn compile_quickjs_strict_mir_object(
+  build_dir : String,
+  name : String,
+  objects : Array[String],
+) -> Unit {
+  objects.push(
+    compile_preprocessed_file_with_strict_mir_object_path(
+      build_dir + "/" + name + ".i",
+      "quickjs_strict_mir_external_" + name,
+    ),
+  )
+}
+
+///|
 async fn build_quickjs_qjs_external(tag : String) -> String {
   let build_dir = "/tmp/kimicc_quickjs_build"
   let objects : Array[String] = []
@@ -1008,6 +1032,25 @@ async fn build_quickjs_qjs_direct_external(tag : String) -> String {
 }
 
 ///|
+async fn build_quickjs_qjs_strict_mir_external(tag : String) -> String {
+  let build_dir = "/tmp/kimicc_quickjs_build"
+  let objects : Array[String] = []
+  for
+    name in [
+      "quickjs", "libregexp", "libunicode", "cutils", "quickjs-libc", "repl", "qjs",
+      "dtoa",
+    ] {
+    compile_quickjs_strict_mir_object(build_dir, name, objects)
+  }
+  let qjs_path = "/tmp/kimicc_quickjs_strict_mir_external_qjs_" + tag
+  run_command_checked(
+    "clang -o " + shell_quote(qjs_path) + " " + shell_join_quoted(objects),
+    "link strict MIR QuickJS qjs external " + tag,
+  )
+  qjs_path
+}
+
+///|
 async test "external QuickJS qjs builds and runs smoke when enabled" {
   if !external_testbed_enabled("quickjs") {
     return
@@ -1022,6 +1065,68 @@ async test "external QuickJS qjs builds and runs smoke when enabled" {
   if result.code != 0 || !result.output.contains("quickjs-smoke 499500") {
     abort(
       "QuickJS external smoke failed with code " +
+      result.code.to_string() +
+      ":\n" +
+      result.output,
+    )
+  }
+}
+
+///|
+async test "external QuickJS strict MIR qjs runs language matrix when enabled" {
+  if !external_testbed_enabled("quickjs") {
+    return
+  }
+  let qjs_path = build_quickjs_qjs_strict_mir_external("matrix")
+  let script =
+    #|function assert(cond, message) {
+    #|  if (!cond) throw new Error(message);
+    #|}
+    #|
+    #|class Box {
+    #|  constructor(value) { this.value = value; }
+    #|  inc(delta) {
+    #|    this.value += delta;
+    #|    return this.value;
+    #|  }
+    #|}
+    #|
+    #|function *range(n) {
+    #|  for (let i = 0; i < n; i++) yield i;
+    #|}
+    #|
+    #|let box = new Box(10);
+    #|let total = 0;
+    #|for (const n of range(5)) total += box.inc(n);
+    #|assert(total === 70, "generator/class total");
+    #|
+    #|let data = JSON.parse(JSON.stringify({ items: ["alpha", "beta"], total }));
+    #|assert(data.items.join(":") === "alpha:beta", "json roundtrip");
+    #|
+    #|let match = /([a-z]+)-(\d+)/.exec("ticket-42");
+    #|assert(match[1] === "ticket" && Number(match[2]) === 42, "regexp");
+    #|
+    #|let mapped = [1, 2, 3, 4]
+    #|  .map(x => x * x)
+    #|  .filter(x => x % 2 === 0)
+    #|  .reduce((a, b) => a + b, 0);
+    #|assert(mapped === 20, "array methods");
+    #|
+    #|let keys = Object.keys({ b: 1, a: 2 }).sort().join("");
+    #|assert(keys === "ab", "object keys");
+    #|
+    #|let big = typeof BigInt === "function" ? Number(BigInt(10) + BigInt(32)) : 42;
+    #|assert(big === 42, "bigint");
+    #|
+    #|console.log("quickjs-strict-mir-matrix", total + mapped + big);
+  let result = run_command_capture(
+    shell_quote(qjs_path) + " -e " + shell_quote(script),
+    "quickjs_strict_mir_external_matrix",
+  )
+  if result.code != 0 ||
+    !result.output.contains("quickjs-strict-mir-matrix 132") {
+    abort(
+      "QuickJS strict MIR external language matrix failed with code " +
       result.code.to_string() +
       ":\n" +
       result.output,
