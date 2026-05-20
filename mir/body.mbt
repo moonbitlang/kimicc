@@ -206,6 +206,8 @@ fn mir_body_scalar_type(ty : @ctype.Type) -> Bool {
     | ULong
     | SLongLong
     | ULongLong
+    | SInt128
+    | UInt128
     | Float
     | Double
     | LongDouble

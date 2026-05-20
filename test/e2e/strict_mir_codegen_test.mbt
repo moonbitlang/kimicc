@@ -70,6 +70,62 @@ test "strict MIR codegen executes scalar control flow and calls" {
 }
 
 ///|
+test "strict MIR codegen executes unsigned int128 limb multiply" {
+  let source =
+    #|typedef unsigned long js_limb_t;
+    #|typedef unsigned __int128 js_dlimb_t;
+    #|static js_limb_t mp_mul1(js_limb_t *tabr, const js_limb_t *taba, js_limb_t n,
+    #|                         js_limb_t b, js_limb_t l) {
+    #|  js_limb_t i;
+    #|  js_dlimb_t t;
+    #|  for (i = 0; i < n; i++) {
+    #|    t = (js_dlimb_t)taba[i] * (js_dlimb_t)b + l;
+    #|    tabr[i] = t;
+    #|    l = t >> 64;
+    #|  }
+    #|  return l;
+    #|}
+    #|int main(void) {
+    #|  js_limb_t in[2] = { ~0UL, 2 };
+    #|  js_limb_t out[2];
+    #|  js_limb_t carry = mp_mul1(out, in, 2, 2, 1);
+    #|  if (out[0] != ~0UL) return 10;
+    #|  if (out[1] != 5) return 20;
+    #|  if (carry != 0) return 30;
+    #|  return 42;
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
+test "strict MIR codegen executes unsigned int128 limb divide" {
+  let source =
+    #|typedef unsigned long js_limb_t;
+    #|typedef long js_slimb_t;
+    #|typedef unsigned __int128 js_dlimb_t;
+    #|static js_limb_t mp_div1(js_limb_t *tabr, const js_limb_t *taba, js_limb_t n,
+    #|                         js_limb_t b, js_limb_t r) {
+    #|  js_slimb_t i;
+    #|  js_dlimb_t a1;
+    #|  for (i = n - 1; i >= 0; i--) {
+    #|    a1 = ((js_dlimb_t)r << 64) | taba[i];
+    #|    tabr[i] = a1 / b;
+    #|    r = a1 % b;
+    #|  }
+    #|  return r;
+    #|}
+    #|int main(void) {
+    #|  js_limb_t in[1] = { 5 };
+    #|  js_limb_t out[1];
+    #|  js_limb_t rem = mp_div1(out, in, 1, 2, 1);
+    #|  if (out[0] != ((1UL << 63) + 2)) return 10;
+    #|  if (rem != 1) return 20;
+    #|  return 42;
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
 test "strict MIR codegen executes implicit external scalar call arguments" {
   let source =
     #|int main(void) {
