@@ -1371,6 +1371,42 @@ test "strict MIR codegen executes member array decay in pointer call args" {
 }
 
 ///|
+test "strict MIR codegen executes atomic read modify write builtins" {
+  let source =
+    #|int main(void) {
+    #|  _Atomic(unsigned char) b = 5;
+    #|  _Atomic(unsigned short) h = 10;
+    #|  _Atomic(unsigned int) x = 5;
+    #|  _Atomic(unsigned long) q = 40;
+    #|  unsigned int expected = 11;
+    #|  unsigned int y = 1;
+    #|  if (__c11_atomic_fetch_add(&x, 3, 5) != 5) return 1;
+    #|  if (x != 8) return 2;
+    #|  if (__c11_atomic_fetch_sub(&x, 1, 5) != 8) return 3;
+    #|  if (__c11_atomic_fetch_or(&x, 16, 5) != 7) return 4;
+    #|  if (__c11_atomic_fetch_and(&x, 23, 5) != 23) return 5;
+    #|  if (__c11_atomic_fetch_xor(&x, 3, 5) != 23) return 6;
+    #|  if (__c11_atomic_exchange(&x, 11, 5) != 20) return 7;
+    #|  if (!__c11_atomic_compare_exchange_strong(&x, &expected, 19, 5, 5)) return 8;
+    #|  if (x != 19) return 9;
+    #|  expected = 11;
+    #|  if (__c11_atomic_compare_exchange_weak(&x, &expected, 21, 5, 5)) return 10;
+    #|  if (expected != 19) return 11;
+    #|  if (__c11_atomic_load(&x, 5) != 19) return 12;
+    #|  if (__c11_atomic_fetch_add(&b, 1, 5) != 5) return 13;
+    #|  if (__c11_atomic_fetch_sub(&h, 3, 5) != 10) return 14;
+    #|  if (__c11_atomic_exchange(&q, 42, 5) != 40) return 15;
+    #|  if (__atomic_add_fetch(&y, 4, 5) != 5) return 16;
+    #|  if (__atomic_fetch_xor(&y, 1, 5) != 5) return 17;
+    #|  if (__atomic_exchange_n(&y, 8, 5) != 4) return 18;
+    #|  expected = 8;
+    #|  if (!__atomic_compare_exchange_n(&y, &expected, 9, 0, 5, 5)) return 19;
+    #|  return (int)(x + b + h + q + y);
+    #|}
+  assert_eq(run_source_strict_mir(source), 83)
+}
+
+///|
 test "strict MIR codegen executes anonymous union array member decay" {
   let source =
     #|typedef unsigned char uint8_t;

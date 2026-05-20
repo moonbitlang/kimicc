@@ -1107,6 +1107,79 @@ fn mir_body_codegen_atomic_store_call(
 }
 
 ///|
+fn mir_body_codegen_atomic_rmw_target_supported(
+  args : Array[@mir.MirValue],
+) -> Bool {
+  if args.length() == 0 {
+    return false
+  }
+  let elem_ty = mir_body_codegen_atomic_target_type(args[0].ty())
+  mir_body_codegen_abi_int_type(elem_ty) &&
+  !mir_body_codegen_int128_type(elem_ty)
+}
+
+///|
+fn mir_body_codegen_atomic_update_call_op(name : String) -> (String, Bool)? {
+  match name {
+    "__atomic_add_fetch" => Some(("+", true))
+    "__atomic_sub_fetch" => Some(("-", true))
+    "__atomic_and_fetch" => Some(("&", true))
+    "__atomic_or_fetch" => Some(("|", true))
+    "__atomic_xor_fetch" => Some(("^", true))
+    "__atomic_nand_fetch" => Some(("~&", true))
+    "__atomic_fetch_add" | "__c11_atomic_fetch_add" => Some(("+", false))
+    "__atomic_fetch_sub" | "__c11_atomic_fetch_sub" => Some(("-", false))
+    "__atomic_fetch_and" | "__c11_atomic_fetch_and" => Some(("&", false))
+    "__atomic_fetch_or" | "__c11_atomic_fetch_or" => Some(("|", false))
+    "__atomic_fetch_xor" | "__c11_atomic_fetch_xor" => Some(("^", false))
+    "__atomic_fetch_nand" => Some(("~&", false))
+    _ => None
+  }
+}
+
+///|
+fn mir_body_codegen_atomic_update_call(
+  name : String,
+  args : Array[@mir.MirValue],
+  ret : @ctype.Type,
+) -> Bool {
+  mir_body_codegen_atomic_update_call_op(name) is Some(_) &&
+  args.length() >= 2 &&
+  mir_body_codegen_abi_int_type(ret) &&
+  !mir_body_codegen_int128_type(ret) &&
+  mir_body_codegen_atomic_rmw_target_supported(args)
+}
+
+///|
+fn mir_body_codegen_atomic_exchange_call(
+  name : String,
+  args : Array[@mir.MirValue],
+  ret : @ctype.Type,
+) -> Bool {
+  (name == "__atomic_exchange_n" || name == "__c11_atomic_exchange") &&
+  args.length() >= 2 &&
+  mir_body_codegen_abi_int_type(ret) &&
+  !mir_body_codegen_int128_type(ret) &&
+  mir_body_codegen_atomic_rmw_target_supported(args)
+}
+
+///|
+fn mir_body_codegen_atomic_compare_exchange_call(
+  name : String,
+  args : Array[@mir.MirValue],
+  ret : @ctype.Type,
+) -> Bool {
+  (
+    name == "__atomic_compare_exchange_n" ||
+    name == "__c11_atomic_compare_exchange_strong" ||
+    name == "__c11_atomic_compare_exchange_weak"
+  ) &&
+  args.length() >= 3 &&
+  peel_aligned_type(ret) is Bool &&
+  mir_body_codegen_atomic_rmw_target_supported(args)
+}
+
+///|
 fn mir_body_codegen_trap_call(
   name : String,
   args : Array[@mir.MirValue],
@@ -1589,6 +1662,9 @@ fn mir_body_codegen_call_supported(
     mir_body_codegen_atomic_signal_fence_call(name, args, ret) ||
     mir_body_codegen_atomic_load_call(name, args, ret) ||
     mir_body_codegen_atomic_store_call(name, args, ret) ||
+    mir_body_codegen_atomic_update_call(name, args, ret) ||
+    mir_body_codegen_atomic_exchange_call(name, args, ret) ||
+    mir_body_codegen_atomic_compare_exchange_call(name, args, ret) ||
     mir_body_codegen_trap_call(name, args, ret) ||
     mir_body_codegen_alloca_call(name, args, ret) ||
     mir_body_codegen_frame_address_call(name, args, ret) ||
@@ -2264,6 +2340,199 @@ fn Codegen::emit_mir_atomic_store_builtin(
     }
   }
   self.emit("\tmov\tx9, #0")
+}
+
+///|
+fn Codegen::emit_mir_atomic_update_op(
+  self : Codegen,
+  op : String,
+  dst : String,
+  old : String,
+  value : String,
+) -> Unit {
+  match op {
+    "+" => self.emit("\tadd\t" + dst + ", " + old + ", " + value)
+    "-" => self.emit("\tsub\t" + dst + ", " + old + ", " + value)
+    "&" => self.emit("\tand\t" + dst + ", " + old + ", " + value)
+    "|" => self.emit("\torr\t" + dst + ", " + old + ", " + value)
+    "^" => self.emit("\teor\t" + dst + ", " + old + ", " + value)
+    "~&" => {
+      self.emit("\tand\t" + dst + ", " + old + ", " + value)
+      self.emit("\tmvn\t" + dst + ", " + dst)
+    }
+    _ => self.emit("\tmov\t" + dst + ", " + old)
+  }
+}
+
+///|
+fn Codegen::emit_mir_atomic_update_loop(
+  self : Codegen,
+  op : String,
+  elem_ty : @ctype.Type,
+  return_new : Bool,
+) -> Unit {
+  let loop_label = self.new_label()
+  let byte_width = self.type_size(elem_ty)
+  self.emit(loop_label + ":")
+  if byte_width == 1 {
+    self.emit("\tldaxrb\tw9, [x0]")
+    self.emit_mir_atomic_update_op(op, "w11", "w9", "w10")
+    self.emit("\tstlxrb\tw12, w11, [x0]")
+  } else if byte_width == 2 {
+    self.emit("\tldaxrh\tw9, [x0]")
+    self.emit_mir_atomic_update_op(op, "w11", "w9", "w10")
+    self.emit("\tstlxrh\tw12, w11, [x0]")
+  } else if byte_width == 4 {
+    self.emit("\tldaxr\tw9, [x0]")
+    self.emit_mir_atomic_update_op(op, "w11", "w9", "w10")
+    self.emit("\tstlxr\tw12, w11, [x0]")
+  } else {
+    self.emit("\tldaxr\tx9, [x0]")
+    self.emit_mir_atomic_update_op(op, "x11", "x9", "x10")
+    self.emit("\tstlxr\tw12, x11, [x0]")
+  }
+  self.emit("\tcbnz\tw12, " + loop_label)
+  if return_new {
+    if byte_width == 8 {
+      self.emit("\tmov\tx9, x11")
+    } else {
+      self.emit("\tmov\tw9, w11")
+    }
+  }
+  self.emit_scalar_conversion_to(elem_ty)
+}
+
+///|
+fn Codegen::emit_mir_atomic_update_builtin(
+  self : Codegen,
+  args : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+  frame_size : Int,
+  op : String,
+  return_new : Bool,
+) -> Unit {
+  if args.length() >= 2 {
+    let elem_ty = mir_body_codegen_atomic_target_type(args[0].ty())
+    self.gen_mir_value(args[0], offsets, frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_mir_value(args[1], offsets, frame_size)
+    self.emit_numeric_conversion(args[1].ty(), elem_ty)
+    self.emit_scalar_conversion_to(elem_ty)
+    if self.type_size(elem_ty) == 8 {
+      self.emit("\tmov\tx10, x9")
+    } else {
+      self.emit("\tmov\tw10, w9")
+    }
+    self.emit("\tldr\tx0, [sp], #16")
+    self.emit_mir_atomic_update_loop(op, elem_ty, return_new)
+  } else {
+    self.emit("\tmov\tx9, #0")
+  }
+}
+
+///|
+fn Codegen::emit_mir_atomic_exchange_builtin(
+  self : Codegen,
+  args : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+  frame_size : Int,
+) -> Unit {
+  if args.length() >= 2 {
+    let elem_ty = mir_body_codegen_atomic_target_type(args[0].ty())
+    let byte_width = self.type_size(elem_ty)
+    self.gen_mir_value(args[0], offsets, frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_mir_value(args[1], offsets, frame_size)
+    self.emit_numeric_conversion(args[1].ty(), elem_ty)
+    self.emit_scalar_conversion_to(elem_ty)
+    if byte_width == 8 {
+      self.emit("\tmov\tx10, x9")
+    } else {
+      self.emit("\tmov\tw10, w9")
+    }
+    self.emit("\tldr\tx0, [sp], #16")
+    let loop_label = self.new_label()
+    self.emit(loop_label + ":")
+    if byte_width == 1 {
+      self.emit("\tldaxrb\tw9, [x0]")
+      self.emit("\tstlxrb\tw12, w10, [x0]")
+    } else if byte_width == 2 {
+      self.emit("\tldaxrh\tw9, [x0]")
+      self.emit("\tstlxrh\tw12, w10, [x0]")
+    } else if byte_width == 4 {
+      self.emit("\tldaxr\tw9, [x0]")
+      self.emit("\tstlxr\tw12, w10, [x0]")
+    } else {
+      self.emit("\tldaxr\tx9, [x0]")
+      self.emit("\tstlxr\tw12, x10, [x0]")
+    }
+    self.emit("\tcbnz\tw12, " + loop_label)
+    self.emit_scalar_conversion_to(elem_ty)
+  } else {
+    self.emit("\tmov\tx9, #0")
+  }
+}
+
+///|
+fn Codegen::emit_mir_atomic_compare_exchange_builtin(
+  self : Codegen,
+  args : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+  frame_size : Int,
+) -> Unit {
+  if args.length() >= 3 {
+    let elem_ty = mir_body_codegen_atomic_target_type(args[0].ty())
+    let byte_width = self.type_size(elem_ty)
+    self.gen_mir_value(args[0], offsets, frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_mir_value(args[1], offsets, frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_mir_value(args[2], offsets, frame_size)
+    self.emit_numeric_conversion(args[2].ty(), elem_ty)
+    self.emit_scalar_conversion_to(elem_ty)
+    if byte_width == 8 {
+      self.emit("\tmov\tx10, x9")
+    } else {
+      self.emit("\tmov\tw10, w9")
+    }
+    self.emit("\tldr\tx1, [sp], #16")
+    self.emit("\tldr\tx0, [sp], #16")
+    self.emit_load_typed("x13", "x1", elem_ty)
+    let loop_label = self.new_label()
+    let fail_label = self.new_label()
+    let done_label = self.new_label()
+    self.emit(loop_label + ":")
+    if byte_width == 1 {
+      self.emit("\tldaxrb\tw9, [x0]")
+      self.emit("\tcmp\tw9, w13")
+      self.emit("\tb.ne\t" + fail_label)
+      self.emit("\tstlxrb\tw12, w10, [x0]")
+    } else if byte_width == 2 {
+      self.emit("\tldaxrh\tw9, [x0]")
+      self.emit("\tcmp\tw9, w13")
+      self.emit("\tb.ne\t" + fail_label)
+      self.emit("\tstlxrh\tw12, w10, [x0]")
+    } else if byte_width == 4 {
+      self.emit("\tldaxr\tw9, [x0]")
+      self.emit("\tcmp\tw9, w13")
+      self.emit("\tb.ne\t" + fail_label)
+      self.emit("\tstlxr\tw12, w10, [x0]")
+    } else {
+      self.emit("\tldaxr\tx9, [x0]")
+      self.emit("\tcmp\tx9, x13")
+      self.emit("\tb.ne\t" + fail_label)
+      self.emit("\tstlxr\tw12, x10, [x0]")
+    }
+    self.emit("\tcbnz\tw12, " + loop_label)
+    self.emit("\tmov\tx9, #1")
+    self.emit("\tb\t" + done_label)
+    self.emit(fail_label + ":")
+    self.emit_store_typed("x9", "x1", elem_ty)
+    self.emit("\tmov\tx9, #0")
+    self.emit(done_label + ":")
+  } else {
+    self.emit("\tmov\tx9, #0")
+  }
 }
 
 ///|
@@ -3489,6 +3758,21 @@ fn Codegen::gen_mir_value(
         return
       } else if mir_body_codegen_atomic_store_call(name, args, ty) {
         self.emit_mir_atomic_store_builtin(args, offsets, frame_size)
+        return
+      } else if mir_body_codegen_atomic_update_call(name, args, ty) {
+        match mir_body_codegen_atomic_update_call_op(name) {
+          Some((op, return_new)) =>
+            self.emit_mir_atomic_update_builtin(
+              args, offsets, frame_size, op, return_new,
+            )
+          None => self.emit("\tmov\tx9, #0")
+        }
+        return
+      } else if mir_body_codegen_atomic_exchange_call(name, args, ty) {
+        self.emit_mir_atomic_exchange_builtin(args, offsets, frame_size)
+        return
+      } else if mir_body_codegen_atomic_compare_exchange_call(name, args, ty) {
+        self.emit_mir_atomic_compare_exchange_builtin(args, offsets, frame_size)
         return
       } else if mir_body_codegen_trap_call(name, args, ty) {
         self.emit("\tbrk\t#0x1")
@@ -5631,6 +5915,103 @@ fn X64Codegen::emit_mir_atomic_store_builtin(
 }
 
 ///|
+fn X64Codegen::emit_mir_pop_to(self : X64Codegen, reg : String) -> Unit {
+  self.emit("\tmov\t" + reg + ", QWORD PTR [rsp]")
+  self.emit("\tadd\trsp, 16")
+}
+
+///|
+fn X64Codegen::emit_mir_atomic_update_builtin(
+  self : X64Codegen,
+  args : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+  op : String,
+  return_new : Bool,
+) -> Unit {
+  if args.length() >= 2 {
+    let elem_ty = mir_body_codegen_atomic_target_type(args[0].ty())
+    self.gen_mir_value(args[0], offsets)
+    self.emit_mir_push_rax()
+    self.gen_mir_value(args[1], offsets)
+    self.emit_mir_numeric_conversion(args[1].ty(), elem_ty)
+    self.emit_int_conversion_to(elem_ty)
+    self.emit("\tmov\tr10, rax")
+    self.emit_mir_pop_to("rdi")
+    self.emit_atomic_update_loop(op, elem_ty, return_new)
+  } else {
+    self.emit("\tmov\trax, 0")
+  }
+}
+
+///|
+fn X64Codegen::emit_mir_atomic_exchange_builtin(
+  self : X64Codegen,
+  args : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+) -> Unit {
+  if args.length() >= 2 {
+    let elem_ty = mir_body_codegen_atomic_target_type(args[0].ty())
+    let width = self.type_size(elem_ty)
+    self.gen_mir_value(args[0], offsets)
+    self.emit_mir_push_rax()
+    self.gen_mir_value(args[1], offsets)
+    self.emit_mir_numeric_conversion(args[1].ty(), elem_ty)
+    self.emit_int_conversion_to(elem_ty)
+    self.emit_mir_pop_to("r10")
+    self.emit(
+      "\txchg\t" +
+      x64_atomic_mem_operand("r10", width) +
+      ", " +
+      x64_atomic_rax_reg(width),
+    )
+    self.emit_atomic_clean_rax(elem_ty)
+    self.emit_int_conversion_to(elem_ty)
+  } else {
+    self.emit("\tmov\trax, 0")
+  }
+}
+
+///|
+fn X64Codegen::emit_mir_atomic_compare_exchange_builtin(
+  self : X64Codegen,
+  args : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+) -> Unit {
+  if args.length() >= 3 {
+    let elem_ty = mir_body_codegen_atomic_target_type(args[0].ty())
+    let width = self.type_size(elem_ty)
+    let fail_label = self.new_label()
+    let done_label = self.new_label()
+    self.gen_mir_value(args[0], offsets)
+    self.emit_mir_push_rax()
+    self.gen_mir_value(args[1], offsets)
+    self.emit_mir_push_rax()
+    self.gen_mir_value(args[2], offsets)
+    self.emit_mir_numeric_conversion(args[2].ty(), elem_ty)
+    self.emit_int_conversion_to(elem_ty)
+    self.emit("\tmov\tr11, rax")
+    self.emit_mir_pop_to("rsi")
+    self.emit_mir_pop_to("rdi")
+    self.emit_atomic_raw_load_to_rax("rsi", elem_ty)
+    self.emit(
+      "\tlock cmpxchg\t" +
+      x64_atomic_mem_operand("rdi", width) +
+      ", " +
+      x64_atomic_r11_reg(width),
+    )
+    self.emit("\tjne\t" + fail_label)
+    self.emit("\tmov\trax, 1")
+    self.emit("\tjmp\t" + done_label)
+    self.emit(fail_label + ":")
+    self.emit_atomic_raw_store_from_rax("rsi", elem_ty)
+    self.emit("\tmov\trax, 0")
+    self.emit(done_label + ":")
+  } else {
+    self.emit("\tmov\trax, 0")
+  }
+}
+
+///|
 fn X64Codegen::mir_pointer_update_scale(
   self : X64Codegen,
   ty : @ctype.Type,
@@ -6638,6 +7019,19 @@ fn X64Codegen::gen_mir_value(
         return
       } else if mir_body_codegen_atomic_store_call(name, args, ty) {
         self.emit_mir_atomic_store_builtin(args, offsets)
+        return
+      } else if mir_body_codegen_atomic_update_call(name, args, ty) {
+        match mir_body_codegen_atomic_update_call_op(name) {
+          Some((op, return_new)) =>
+            self.emit_mir_atomic_update_builtin(args, offsets, op, return_new)
+          None => self.emit("\tmov\trax, 0")
+        }
+        return
+      } else if mir_body_codegen_atomic_exchange_call(name, args, ty) {
+        self.emit_mir_atomic_exchange_builtin(args, offsets)
+        return
+      } else if mir_body_codegen_atomic_compare_exchange_call(name, args, ty) {
+        self.emit_mir_atomic_compare_exchange_builtin(args, offsets)
         return
       } else if mir_body_codegen_trap_call(name, args, ty) {
         self.emit("\tud2")
