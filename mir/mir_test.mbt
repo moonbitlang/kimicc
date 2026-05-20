@@ -931,6 +931,42 @@ test "mir body interpreter copies aggregate ternary sources" {
 }
 
 ///|
+test "mir body lowering handles aggregate ternary call arguments" {
+  let source =
+    #|struct Box { int a; int b; };
+    #|struct Desc { int flags; struct Box getter; struct Box setter; };
+    #|struct Box dup(struct Box v) { return v; }
+    #|int main(void) {
+    #|  struct Desc desc;
+    #|  desc.flags = 0;
+    #|  desc.getter.a = 1;
+    #|  desc.getter.b = 2;
+    #|  desc.setter.a = 20;
+    #|  desc.setter.b = 21;
+    #|  struct Box r = dup(desc.flags ? desc.getter : desc.setter);
+    #|  return r.a + r.b + 1;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("dup"), content="true")
+  inspect(mir.bodies.contains("main"), content="true")
+}
+
+///|
+test "mir body interpreter assigns aggregate compound literal ternaries" {
+  let source =
+    #|struct Box { int a; int b; };
+    #|int main(void) {
+    #|  struct Box rval;
+    #|  int found = 0;
+    #|  rval = !found ? (struct Box){ 1, 41 } : (struct Box){ 1, 2 };
+    #|  return rval.a + rval.b;
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 42L)
+}
+
+///|
 test "mir body interpreter ignores side effect free aggregate void casts" {
   let source =
     #|struct Token { int n; };

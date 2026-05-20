@@ -1434,6 +1434,37 @@ fn Program::lower_mir_call_arg(
                 None => return None
               }
             }
+            Ternary(cond, then_expr, else_expr) => {
+              if !mir_body_side_effect_free_expr(then_expr) ||
+                !mir_body_side_effect_free_expr(else_expr) {
+                return None
+              }
+              if self.core_type(self.expr_type(then_expr, ctx.scope())) !=
+                self.core_type(ty) ||
+                self.core_type(self.expr_type(else_expr, ctx.scope())) !=
+                self.core_type(ty) {
+                return None
+              }
+              let cond_value = match self.lower_mir_expr(cond, ctx) {
+                Some(value) => value
+                None => return None
+              }
+              let then_addr = match self.lower_mir_object_addr(then_expr, ctx) {
+                Some(addr) => addr
+                None => return None
+              }
+              let else_addr = match self.lower_mir_object_addr(else_expr, ctx) {
+                Some(addr) => addr
+                None => return None
+              }
+              let addr = MirTernary(
+                cond_value,
+                then_addr,
+                else_addr,
+                Pointer(ty),
+              )
+              return Some(MirAggregateArg(addr, ty))
+            }
             _ => ()
           }
           match self.lower_mir_expr_for_target_type(ty, arg, ctx) {
@@ -2543,12 +2574,108 @@ fn Program::lower_mir_aggregate_return(
 }
 
 ///|
+fn Program::lower_mir_aggregate_branch_copy_stores(
+  self : Program,
+  dest_addr : MirValue,
+  dest_ty : @ctype.Type,
+  expr : @parser.Expr,
+  ctx : BodyLowerContext,
+) -> Array[MirStmt]? {
+  match self.lower_mir_object_addr(expr, ctx) {
+    Some(src_addr) =>
+      self.lower_mir_copy_init_stores(
+        dest_addr,
+        dest_ty,
+        src_addr,
+        self.expr_type(expr, ctx.scope()),
+      )
+    None =>
+      match expr {
+        Number(_) | Array(_) | CompoundLiteral(_, _, _) =>
+          self.lower_mir_struct_init_stores(dest_addr, dest_ty, expr, ctx)
+        _ => None
+      }
+  }
+}
+
+///|
+fn Program::lower_mir_aggregate_assign_stmt(
+  self : Program,
+  lhs : @parser.Expr,
+  rhs : @parser.Expr,
+  ctx : BodyLowerContext,
+) -> Array[MirStmt]? {
+  let lhs_ty = self.expr_type(lhs, ctx.scope())
+  match self.core_type(lhs_ty) {
+    Struct(_) | Union(_) => ()
+    _ => return None
+  }
+  match rhs {
+    Ternary(cond, then_expr, else_expr) => {
+      if !mir_body_side_effect_free_expr(then_expr) ||
+        !mir_body_side_effect_free_expr(else_expr) {
+        return None
+      }
+      if self.core_type(self.expr_type(then_expr, ctx.scope())) !=
+        self.core_type(lhs_ty) ||
+        self.core_type(self.expr_type(else_expr, ctx.scope())) !=
+        self.core_type(lhs_ty) {
+        return None
+      }
+      let dest_raw_addr = match self.lower_mir_object_addr(lhs, ctx) {
+        Some(addr) => addr
+        None => return None
+      }
+      if !mir_body_copy_dest_addr(dest_raw_addr) {
+        return None
+      }
+      let (dest_prefix, dest_addr) = lower_mir_stable_copy_addr(
+        dest_raw_addr, ctx,
+      )
+      let cond_value = match self.lower_mir_expr(cond, ctx) {
+        Some(value) => value
+        None => return None
+      }
+      let then_stores = match
+        self.lower_mir_aggregate_branch_copy_stores(
+          dest_addr, lhs_ty, then_expr, ctx,
+        ) {
+        Some(stores) => stores
+        None => return None
+      }
+      let else_stores = match
+        self.lower_mir_aggregate_branch_copy_stores(
+          dest_addr, lhs_ty, else_expr, ctx,
+        ) {
+        Some(stores) => stores
+        None => return None
+      }
+      let cond_temp = ctx.declare_temp(cond_value.ty())
+      let stmts = dest_prefix
+      stmts.push(MirExprStmt(MirAssignLocal(cond_temp, cond_value)))
+      stmts.push(MirIf(MirLocal(cond_temp), then_stores, else_stores))
+      Some(stmts)
+    }
+    _ => None
+  }
+}
+
+///|
 fn Program::lower_mir_stmt(
   self : Program,
   stmt : @parser.Stmt,
   ctx : BodyLowerContext,
 ) -> Array[MirStmt]? {
   match stmt {
+    ExprStmt(Assign(lhs, rhs)) =>
+      match self.lower_mir_aggregate_assign_stmt(lhs, rhs, ctx) {
+        Some(stmts) => Some(stmts)
+        None =>
+          match self.lower_mir_ignored_expr(Assign(lhs, rhs), ctx) {
+            Some(value) => Some([MirExprStmt(value)])
+            None => None
+          }
+      }
     ExprStmt(expr) =>
       match self.lower_mir_ignored_expr(expr, ctx) {
         Some(value) => Some([MirExprStmt(value)])

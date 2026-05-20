@@ -1306,6 +1306,38 @@ test "strict MIR codegen executes aggregate ternary copies" {
 }
 
 ///|
+test "strict MIR codegen passes aggregate ternary call arguments" {
+  let source =
+    #|struct Box { int a; int b; };
+    #|struct Desc { int flags; struct Box getter; struct Box setter; };
+    #|struct Box dup(struct Box v) { return v; }
+    #|int main(void) {
+    #|  struct Desc desc;
+    #|  desc.flags = 0;
+    #|  desc.getter.a = 1;
+    #|  desc.getter.b = 2;
+    #|  desc.setter.a = 20;
+    #|  desc.setter.b = 21;
+    #|  struct Box r = dup(desc.flags ? desc.getter : desc.setter);
+    #|  return r.a + r.b + 1;
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
+test "strict MIR codegen assigns aggregate compound literal ternaries" {
+  let source =
+    #|struct Box { int a; int b; };
+    #|int main(void) {
+    #|  struct Box rval;
+    #|  int found = 0;
+    #|  rval = !found ? (struct Box){ 1, 41 } : (struct Box){ 1, 2 };
+    #|  return rval.a + rval.b;
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
 test "strict MIR codegen ignores aggregate void casts" {
   let source =
     #|struct Token { int n; };
