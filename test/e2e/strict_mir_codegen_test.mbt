@@ -126,6 +126,97 @@ test "strict MIR codegen executes unsigned int128 limb divide" {
 }
 
 ///|
+test "strict MIR codegen executes int128 direct call ABI" {
+  let source =
+    #|typedef __int128 i128;
+    #|typedef unsigned __int128 u128;
+    #|static i128 make_i128(long hi, unsigned long lo) {
+    #|  return ((i128)hi << 64) | lo;
+    #|}
+    #|static u128 make_u128(unsigned long hi, unsigned long lo) {
+    #|  return ((u128)hi << 64) | lo;
+    #|}
+    #|static long split_i128(long tag, i128 v) {
+    #|  return tag + (long)v + (long)(v >> 64);
+    #|}
+    #|static unsigned long split_u128(u128 v) {
+    #|  return (unsigned long)v + (unsigned long)(v >> 64);
+    #|}
+    #|int main(void) {
+    #|  i128 s = make_i128(5, 7);
+    #|  u128 u = make_u128(11, 13);
+    #|  return (int)(split_i128(30, s) + split_u128(u) - 24);
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
+test "strict MIR codegen executes stack-passed int128 direct calls" {
+  let source =
+    #|typedef __int128 i128;
+    #|static long split_stack(long a0, long a1, long a2, long a3, long a4,
+    #|                        long a5, long a6, long a7, long a8, i128 v) {
+    #|  return a8 + (long)v + (long)(v >> 64);
+    #|}
+    #|int main(void) {
+    #|  i128 v = ((i128)5 << 64) | 7;
+    #|  return (int)split_stack(0, 0, 0, 0, 0, 0, 0, 0, 30, v);
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
+test "strict MIR codegen receives int128 parameters from clang callers" {
+  let callee =
+    #|typedef __int128 i128;
+    #|long split_from_clang(i128 v) {
+    #|  return (long)v + (long)(v >> 64);
+    #|}
+  let driver =
+    #|typedef __int128 i128;
+    #|long split_from_clang(i128 v);
+    #|int main(void) {
+    #|  i128 v = ((i128)5 << 64) | 7;
+    #|  return (int)(split_from_clang(v) + 30);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen passes int128 parameters to clang callees" {
+  let caller =
+    #|typedef __int128 i128;
+    #|long split_to_clang(i128 v);
+    #|int main(void) {
+    #|  i128 v = ((i128)5 << 64) | 7;
+    #|  return (int)(split_to_clang(v) + 30);
+    #|}
+  let callee =
+    #|typedef __int128 i128;
+    #|long split_to_clang(i128 v) {
+    #|  return (long)v + (long)(v >> 64);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
+test "strict MIR codegen returns int128 values to clang callers" {
+  let callee =
+    #|typedef __int128 i128;
+    #|i128 make_for_clang(long hi, unsigned long lo) {
+    #|  return ((i128)hi << 64) | lo;
+    #|}
+  let driver =
+    #|typedef __int128 i128;
+    #|i128 make_for_clang(long hi, unsigned long lo);
+    #|int main(void) {
+    #|  i128 v = make_for_clang(5, 7);
+    #|  return (int)((long)v + (long)(v >> 64) + 30);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
 test "strict MIR codegen executes implicit external scalar call arguments" {
   let source =
     #|int main(void) {

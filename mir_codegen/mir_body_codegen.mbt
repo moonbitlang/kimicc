@@ -113,11 +113,36 @@ fn mir_body_codegen_abi_int_type(ty : @ctype.Type) -> Bool {
     | ULong
     | SLongLong
     | ULongLong
+    | SInt128
+    | UInt128
     | Pointer(_)
     | FuncPtr(_, _, _) => true
     Atomic(inner) => mir_body_codegen_abi_int_type(inner)
     _ => false
   }
+}
+
+///|
+fn mir_body_codegen_abi_int_slots(ty : @ctype.Type) -> Int {
+  match peel_aligned_type(ty) {
+    SInt128 | UInt128 => 2
+    Atomic(inner) => mir_body_codegen_abi_int_slots(inner)
+    _ => 1
+  }
+}
+
+///|
+fn mir_body_codegen_abi_int_stack_align_slots(ty : @ctype.Type) -> Int {
+  match peel_aligned_type(ty) {
+    SInt128 | UInt128 => 2
+    Atomic(inner) => mir_body_codegen_abi_int_stack_align_slots(inner)
+    _ => 1
+  }
+}
+
+///|
+fn mir_body_codegen_align_stack_slots(index : Int, align_slots : Int) -> Int {
+  (index + align_slots - 1) / align_slots * align_slots
 }
 
 ///|
@@ -228,7 +253,10 @@ fn mir_body_codegen_variadic_args_supported(
         return false
       }
     } else if mir_body_codegen_abi_int_type(param) {
-      int_count += 1
+      if mir_body_codegen_int128_type(param) {
+        return false
+      }
+      int_count += mir_body_codegen_abi_int_slots(param)
       if int_count > int_arg_limit && i < named_count {
         return false
       }
@@ -257,7 +285,10 @@ fn mir_body_codegen_darwin_variadic_args_supported(
         return false
       }
     } else if mir_body_codegen_abi_int_type(param) {
-      int_count += 1
+      if mir_body_codegen_int128_type(param) {
+        return false
+      }
+      int_count += mir_body_codegen_abi_int_slots(param)
       if int_count > int_arg_limit && i < named_count {
         return false
       }
@@ -327,7 +358,10 @@ fn mir_body_codegen_x64_variadic_args_supported(
         return false
       }
     } else if mir_body_codegen_abi_int_type(param) {
-      int_count += 1
+      if mir_body_codegen_int128_type(param) {
+        return false
+      }
+      int_count += mir_body_codegen_abi_int_slots(param)
       if int_count > int_arg_limit && i < named_count {
         return false
       }
@@ -3722,22 +3756,31 @@ fn Codegen::gen_mir_value(
             arg_is_hfa.push(false)
             arg_is_register_aggregate.push(false)
             arg_is_indirect_aggregate.push(false)
-            arg_slot_counts.push(1)
-            if int_arg_index < 8 {
+            let slots = mir_body_codegen_abi_int_slots(expected)
+            arg_slot_counts.push(slots)
+            if int_arg_index + slots <= 8 {
               int_arg_indexes.push(int_arg_index)
               stack_arg_indexes.push(-1)
             } else {
               int_arg_indexes.push(-1)
+              stack_arg_index = mir_body_codegen_align_stack_slots(
+                stack_arg_index,
+                mir_body_codegen_abi_int_stack_align_slots(expected),
+              )
               stack_arg_indexes.push(stack_arg_index)
-              stack_arg_index += 1
+              stack_arg_index += slots
             }
             fp_arg_indexes.push(-1)
-            int_arg_index += 1
+            int_arg_index += slots
             arg_raw_sizes.push(16)
             self.gen_mir_value(arg, offsets, frame_size)
             self.emit_numeric_conversion(arg.ty(), expected)
             self.emit_scalar_conversion_to(expected)
-            self.emit("\tstr\tx9, [sp, #-16]!")
+            if mir_body_codegen_int128_type(expected) {
+              self.emit("\tstp\tx9, x10, [sp, #-16]!")
+            } else {
+              self.emit("\tstr\tx9, [sp, #-16]!")
+            }
           }
         }
         let mut raw_area = 0
@@ -3802,11 +3845,39 @@ fn Codegen::gen_mir_value(
               )
             }
           } else if int_arg_indexes[i] >= 0 {
+            if mir_body_codegen_int128_type(expected_types[i]) {
+              self.emit(
+                "\tldr\tx" +
+                int_arg_indexes[i].to_string() +
+                ", [sp, #" +
+                raw_offset.to_string() +
+                "]",
+              )
+              self.emit(
+                "\tldr\tx" +
+                (int_arg_indexes[i] + 1).to_string() +
+                ", [sp, #" +
+                (raw_offset + 8).to_string() +
+                "]",
+              )
+            } else {
+              self.emit(
+                "\tldr\tx" +
+                int_arg_indexes[i].to_string() +
+                ", [sp, #" +
+                raw_offset.to_string() +
+                "]",
+              )
+            }
+          } else if mir_body_codegen_int128_type(expected_types[i]) {
+            self.emit("\tldr\tx9, [sp, #" + raw_offset.to_string() + "]")
+            self.emit("\tldr\tx10, [sp, #" + (raw_offset + 8).to_string() + "]")
             self.emit(
-              "\tldr\tx" +
-              int_arg_indexes[i].to_string() +
-              ", [sp, #" +
-              raw_offset.to_string() +
+              "\tstr\tx9, [sp, #" + (stack_arg_indexes[i] * 8).to_string() + "]",
+            )
+            self.emit(
+              "\tstr\tx10, [sp, #" +
+              ((stack_arg_indexes[i] + 1) * 8).to_string() +
               "]",
             )
           } else {
@@ -3828,6 +3899,9 @@ fn Codegen::gen_mir_value(
         ()
       } else if mir_body_codegen_abi_fp_type(ty) {
         self.emit_mir_fp_return_to_x9(ty)
+      } else if mir_body_codegen_int128_type(ty) {
+        self.emit("\tmov\tx9, x0")
+        self.emit("\tmov\tx10, x1")
       } else {
         self.emit("\tmov\tx9, x0")
         self.emit_mir_abi_int_return_conversion(ty)
@@ -4066,22 +4140,31 @@ fn Codegen::gen_mir_value(
           arg_is_hfa.push(false)
           arg_is_register_aggregate.push(false)
           arg_is_indirect_aggregate.push(false)
-          arg_slot_counts.push(1)
-          if int_arg_index < 8 {
+          let slots = mir_body_codegen_abi_int_slots(expected)
+          arg_slot_counts.push(slots)
+          if int_arg_index + slots <= 8 {
             int_arg_indexes.push(int_arg_index)
             stack_arg_indexes.push(-1)
           } else {
             int_arg_indexes.push(-1)
+            stack_arg_index = mir_body_codegen_align_stack_slots(
+              stack_arg_index,
+              mir_body_codegen_abi_int_stack_align_slots(expected),
+            )
             stack_arg_indexes.push(stack_arg_index)
-            stack_arg_index += 1
+            stack_arg_index += slots
           }
           fp_arg_indexes.push(-1)
-          int_arg_index += 1
+          int_arg_index += slots
           arg_raw_sizes.push(16)
           self.gen_mir_value(arg, offsets, frame_size)
           self.emit_numeric_conversion(arg.ty(), expected)
           self.emit_scalar_conversion_to(expected)
-          self.emit("\tstr\tx9, [sp, #-16]!")
+          if mir_body_codegen_int128_type(expected) {
+            self.emit("\tstp\tx9, x10, [sp, #-16]!")
+          } else {
+            self.emit("\tstr\tx9, [sp, #-16]!")
+          }
         }
       }
       let mut raw_args_area = 0
@@ -4145,11 +4228,39 @@ fn Codegen::gen_mir_value(
             )
           }
         } else if int_arg_indexes[i] >= 0 {
+          if mir_body_codegen_int128_type(expected_types[i]) {
+            self.emit(
+              "\tldr\tx" +
+              int_arg_indexes[i].to_string() +
+              ", [sp, #" +
+              raw_offset.to_string() +
+              "]",
+            )
+            self.emit(
+              "\tldr\tx" +
+              (int_arg_indexes[i] + 1).to_string() +
+              ", [sp, #" +
+              (raw_offset + 8).to_string() +
+              "]",
+            )
+          } else {
+            self.emit(
+              "\tldr\tx" +
+              int_arg_indexes[i].to_string() +
+              ", [sp, #" +
+              raw_offset.to_string() +
+              "]",
+            )
+          }
+        } else if mir_body_codegen_int128_type(expected_types[i]) {
+          self.emit("\tldr\tx9, [sp, #" + raw_offset.to_string() + "]")
+          self.emit("\tldr\tx10, [sp, #" + (raw_offset + 8).to_string() + "]")
           self.emit(
-            "\tldr\tx" +
-            int_arg_indexes[i].to_string() +
-            ", [sp, #" +
-            raw_offset.to_string() +
+            "\tstr\tx9, [sp, #" + (stack_arg_indexes[i] * 8).to_string() + "]",
+          )
+          self.emit(
+            "\tstr\tx10, [sp, #" +
+            ((stack_arg_indexes[i] + 1) * 8).to_string() +
             "]",
           )
         } else {
@@ -4173,6 +4284,9 @@ fn Codegen::gen_mir_value(
         ()
       } else if mir_body_codegen_abi_fp_type(ty) {
         self.emit_mir_fp_return_to_x9(ty)
+      } else if mir_body_codegen_int128_type(ty) {
+        self.emit("\tmov\tx9, x0")
+        self.emit("\tmov\tx10, x1")
       } else {
         self.emit("\tmov\tx9, x0")
         self.emit_mir_abi_int_return_conversion(ty)
@@ -4872,6 +4986,9 @@ fn Codegen::gen_mir_stmt(
             self.emit_scalar_conversion_to(ret_ty)
             if mir_body_codegen_abi_fp_type(ret_ty) {
               self.emit_mir_fp_return_from_x9(ret_ty)
+            } else if mir_body_codegen_int128_type(ret_ty) {
+              self.emit("\tmov\tx0, x9")
+              self.emit("\tmov\tx1, x10")
             } else {
               self.emit("\tmov\tx0, x9")
             }
@@ -5147,6 +5264,33 @@ fn Codegen::gen_mir_func(
         stack_arg_index += 1
       }
       int_arg_index += 1
+    } else if mir_body_codegen_int128_type(param.ty) {
+      if int_arg_index + 2 <= 8 {
+        self.emit_store_mir_local_scalar(
+          "x" + int_arg_index.to_string(),
+          offsets[param.id],
+          frame_size,
+          param.ty,
+        )
+      } else {
+        stack_arg_index = mir_body_codegen_align_stack_slots(stack_arg_index, 2)
+        self.emit(
+          "\tldr\tx9, [x29, #" + (16 + stack_arg_index * 8).to_string() + "]",
+        )
+        self.emit(
+          "\tldr\tx10, [x29, #" +
+          (16 + (stack_arg_index + 1) * 8).to_string() +
+          "]",
+        )
+        self.emit_store_mir_local_scalar(
+          "x9",
+          offsets[param.id],
+          frame_size,
+          param.ty,
+        )
+        stack_arg_index += 2
+      }
+      int_arg_index += 2
     } else {
       if int_arg_index < 8 {
         self.emit_store_local(
@@ -5260,6 +5404,8 @@ fn X64Codegen::emit_mir_spill_scalar(
 ) -> Unit {
   if x64_is_fp_type(ty) {
     self.emit_mir_push_xmm0(ty)
+  } else if x64_is_int128_type(ty) {
+    self.emit_push_int128()
   } else {
     self.emit_mir_push_rax()
   }
@@ -5277,6 +5423,36 @@ fn mir_body_codegen_raw_arg_offset(
     offset += raw_sizes[i]
   }
   offset
+}
+
+///|
+fn X64Codegen::emit_mir_copy_int128_arg_from_raw_to_stack(
+  self : X64Codegen,
+  raw_offset : Int,
+  stack_offset : Int,
+) -> Unit {
+  self.emit("\tmov\trax, QWORD PTR " + x64_rsp_ref(raw_offset))
+  self.emit("\tmov\tQWORD PTR " + x64_rsp_ref(stack_offset) + ", rax")
+  self.emit("\tmov\trax, QWORD PTR " + x64_rsp_ref(raw_offset + 8))
+  self.emit("\tmov\tQWORD PTR " + x64_rsp_ref(stack_offset + 8) + ", rax")
+}
+
+///|
+fn X64Codegen::emit_mir_load_int128_arg_from_raw_to_regs(
+  self : X64Codegen,
+  arg_regs : Array[String],
+  start_index : Int,
+  raw_offset : Int,
+) -> Unit {
+  self.emit(
+    "\tmov\t" + arg_regs[start_index] + ", QWORD PTR " + x64_rsp_ref(raw_offset),
+  )
+  self.emit(
+    "\tmov\t" +
+    arg_regs[start_index + 1] +
+    ", QWORD PTR " +
+    x64_rsp_ref(raw_offset + 8),
+  )
 }
 
 ///|
@@ -5390,6 +5566,8 @@ fn X64Codegen::emit_mir_restore_scalar(
 ) -> Unit {
   if x64_is_fp_type(ty) {
     self.emit_mir_pop_xmm0(ty)
+  } else if x64_is_int128_type(ty) {
+    self.emit_pop_int128()
   } else {
     self.emit_mir_pop_rax()
   }
@@ -6583,21 +6761,31 @@ fn X64Codegen::gen_mir_value(
           } else {
             arg_is_aggregate.push(false)
             arg_classes.push([])
-            arg_words.push(1)
+            let slots = mir_body_codegen_abi_int_slots(expected)
+            arg_words.push(slots)
             raw_sizes.push(16)
-            if int_arg_index < arg_regs.length() {
+            if int_arg_index + slots <= arg_regs.length() {
               int_arg_indexes.push(int_arg_index)
               stack_arg_indexes.push(-1)
             } else {
               int_arg_indexes.push(-1)
+              let (aligned_stack_arg_index, aligned_call_stack_align) = self.align_call_stack_arg(
+                stack_arg_index, call_stack_align, expected,
+              )
+              stack_arg_index = aligned_stack_arg_index
+              call_stack_align = aligned_call_stack_align
               stack_arg_indexes.push(stack_arg_index)
-              stack_arg_index += 1
+              stack_arg_index += slots
             }
             fp_arg_indexes.push(-1)
-            int_arg_index += 1
+            int_arg_index += slots
             self.gen_mir_value(arg, offsets)
             self.emit_mir_numeric_conversion(arg.ty(), expected)
-            self.emit_mir_push_rax()
+            if mir_body_codegen_int128_type(expected) {
+              self.emit_push_int128()
+            } else {
+              self.emit_mir_push_rax()
+            }
           }
         }
         let mut raw_area = 0
@@ -6652,12 +6840,17 @@ fn X64Codegen::gen_mir_value(
                 ", xmm0",
               )
             } else {
-              self.emit("\tmov\trax, QWORD PTR " + x64_rsp_ref(raw_offset))
-              self.emit(
-                "\tmov\tQWORD PTR " +
-                x64_rsp_ref(stack_arg_indexes[i] * 8) +
-                ", rax",
-              )
+              let stack_offset = stack_arg_indexes[i] * 8
+              if mir_body_codegen_int128_type(expected_types[i]) {
+                self.emit_mir_copy_int128_arg_from_raw_to_stack(
+                  raw_offset, stack_offset,
+                )
+              } else {
+                self.emit("\tmov\trax, QWORD PTR " + x64_rsp_ref(raw_offset))
+                self.emit(
+                  "\tmov\tQWORD PTR " + x64_rsp_ref(stack_offset) + ", rax",
+                )
+              }
             }
           }
         }
@@ -6707,12 +6900,20 @@ fn X64Codegen::gen_mir_value(
               }
             }
           } else if int_arg_indexes[i] >= 0 {
-            self.emit(
-              "\tmov\t" +
-              arg_regs[int_arg_indexes[i]] +
-              ", QWORD PTR " +
-              x64_rsp_ref(raw_offset),
-            )
+            if mir_body_codegen_int128_type(expected_types[i]) {
+              self.emit_mir_load_int128_arg_from_raw_to_regs(
+                arg_regs,
+                int_arg_indexes[i],
+                raw_offset,
+              )
+            } else {
+              self.emit(
+                "\tmov\t" +
+                arg_regs[int_arg_indexes[i]] +
+                ", QWORD PTR " +
+                x64_rsp_ref(raw_offset),
+              )
+            }
           }
         }
         let fp_reg_count = if fp_arg_index > 8 { 8 } else { fp_arg_index }
@@ -6799,21 +7000,31 @@ fn X64Codegen::gen_mir_value(
           } else {
             arg_is_aggregate.push(false)
             arg_classes.push([])
-            arg_words.push(1)
+            let slots = mir_body_codegen_abi_int_slots(expected)
+            arg_words.push(slots)
             raw_sizes.push(16)
-            if int_arg_index < arg_regs.length() {
+            if int_arg_index + slots <= arg_regs.length() {
               int_arg_indexes.push(int_arg_index)
               stack_arg_indexes.push(-1)
             } else {
               int_arg_indexes.push(-1)
+              let (aligned_stack_arg_index, aligned_call_stack_align) = self.align_call_stack_arg(
+                stack_arg_index, call_stack_align, expected,
+              )
+              stack_arg_index = aligned_stack_arg_index
+              call_stack_align = aligned_call_stack_align
               stack_arg_indexes.push(stack_arg_index)
-              stack_arg_index += 1
+              stack_arg_index += slots
             }
             fp_arg_indexes.push(-1)
-            int_arg_index += 1
+            int_arg_index += slots
             self.gen_mir_value(arg, offsets)
             self.emit_mir_numeric_conversion(arg.ty(), expected)
-            self.emit_mir_push_rax()
+            if mir_body_codegen_int128_type(expected) {
+              self.emit_push_int128()
+            } else {
+              self.emit_mir_push_rax()
+            }
           }
         }
         let mut raw_area = 0
@@ -6868,12 +7079,17 @@ fn X64Codegen::gen_mir_value(
                 ", xmm0",
               )
             } else {
-              self.emit("\tmov\trax, QWORD PTR " + x64_rsp_ref(raw_offset))
-              self.emit(
-                "\tmov\tQWORD PTR " +
-                x64_rsp_ref(stack_arg_indexes[i] * 8) +
-                ", rax",
-              )
+              let stack_offset = stack_arg_indexes[i] * 8
+              if mir_body_codegen_int128_type(expected_types[i]) {
+                self.emit_mir_copy_int128_arg_from_raw_to_stack(
+                  raw_offset, stack_offset,
+                )
+              } else {
+                self.emit("\tmov\trax, QWORD PTR " + x64_rsp_ref(raw_offset))
+                self.emit(
+                  "\tmov\tQWORD PTR " + x64_rsp_ref(stack_offset) + ", rax",
+                )
+              }
             }
           }
         }
@@ -6923,12 +7139,20 @@ fn X64Codegen::gen_mir_value(
               }
             }
           } else if int_arg_indexes[i] >= 0 {
-            self.emit(
-              "\tmov\t" +
-              arg_regs[int_arg_indexes[i]] +
-              ", QWORD PTR " +
-              x64_rsp_ref(raw_offset),
-            )
+            if mir_body_codegen_int128_type(expected_types[i]) {
+              self.emit_mir_load_int128_arg_from_raw_to_regs(
+                arg_regs,
+                int_arg_indexes[i],
+                raw_offset,
+              )
+            } else {
+              self.emit(
+                "\tmov\t" +
+                arg_regs[int_arg_indexes[i]] +
+                ", QWORD PTR " +
+                x64_rsp_ref(raw_offset),
+              )
+            }
           }
         }
       }
@@ -7032,21 +7256,31 @@ fn X64Codegen::gen_mir_value(
         } else {
           arg_is_aggregate.push(false)
           arg_classes.push([])
-          arg_words.push(1)
+          let slots = mir_body_codegen_abi_int_slots(expected)
+          arg_words.push(slots)
           raw_sizes.push(16)
-          if int_arg_index < arg_regs.length() {
+          if int_arg_index + slots <= arg_regs.length() {
             int_arg_indexes.push(int_arg_index)
             stack_arg_indexes.push(-1)
           } else {
             int_arg_indexes.push(-1)
+            let (aligned_stack_arg_index, aligned_call_stack_align) = self.align_call_stack_arg(
+              stack_arg_index, call_stack_align, expected,
+            )
+            stack_arg_index = aligned_stack_arg_index
+            call_stack_align = aligned_call_stack_align
             stack_arg_indexes.push(stack_arg_index)
-            stack_arg_index += 1
+            stack_arg_index += slots
           }
           fp_arg_indexes.push(-1)
-          int_arg_index += 1
+          int_arg_index += slots
           self.gen_mir_value(arg, offsets)
           self.emit_mir_numeric_conversion(arg.ty(), expected)
-          self.emit_mir_push_rax()
+          if mir_body_codegen_int128_type(expected) {
+            self.emit_push_int128()
+          } else {
+            self.emit_mir_push_rax()
+          }
         }
       }
       let mut raw_area = 16
@@ -7100,12 +7334,17 @@ fn X64Codegen::gen_mir_value(
               ", xmm0",
             )
           } else {
-            self.emit("\tmov\trax, QWORD PTR " + x64_rsp_ref(raw_offset))
-            self.emit(
-              "\tmov\tQWORD PTR " +
-              x64_rsp_ref(stack_arg_indexes[i] * 8) +
-              ", rax",
-            )
+            let stack_offset = stack_arg_indexes[i] * 8
+            if mir_body_codegen_int128_type(expected_types[i]) {
+              self.emit_mir_copy_int128_arg_from_raw_to_stack(
+                raw_offset, stack_offset,
+              )
+            } else {
+              self.emit("\tmov\trax, QWORD PTR " + x64_rsp_ref(raw_offset))
+              self.emit(
+                "\tmov\tQWORD PTR " + x64_rsp_ref(stack_offset) + ", rax",
+              )
+            }
           }
         }
       }
@@ -7155,12 +7394,20 @@ fn X64Codegen::gen_mir_value(
             }
           }
         } else if int_arg_indexes[i] >= 0 {
-          self.emit(
-            "\tmov\t" +
-            arg_regs[int_arg_indexes[i]] +
-            ", QWORD PTR " +
-            x64_rsp_ref(raw_offset),
-          )
+          if mir_body_codegen_int128_type(expected_types[i]) {
+            self.emit_mir_load_int128_arg_from_raw_to_regs(
+              arg_regs,
+              int_arg_indexes[i],
+              raw_offset,
+            )
+          } else {
+            self.emit(
+              "\tmov\t" +
+              arg_regs[int_arg_indexes[i]] +
+              ", QWORD PTR " +
+              x64_rsp_ref(raw_offset),
+            )
+          }
         }
       }
       if mir_indirect_call_variadic(callee.ty()) {
@@ -7938,6 +8185,33 @@ fn X64Codegen::gen_mir_func(
         )
         stack_arg_index += words
       }
+    } else if mir_body_codegen_int128_type(param.ty) {
+      if int_arg_index + 2 <= arg_regs.length() {
+        self.emit("\tmov\trax, " + arg_regs[int_arg_index])
+        self.emit("\tmov\trdx, " + arg_regs[int_arg_index + 1])
+        self.emit_store_local_from_rax(offsets[param.id], param.ty)
+      } else {
+        let (aligned_stack_arg_index, aligned_call_stack_align) = self.align_call_stack_arg(
+          stack_arg_index,
+          call_stack_align,
+          param.ty,
+        )
+        stack_arg_index = aligned_stack_arg_index
+        call_stack_align = aligned_call_stack_align
+        self.emit(
+          "\tmov\trax, QWORD PTR [rbp + " +
+          (16 + stack_arg_index * 8).to_string() +
+          "]",
+        )
+        self.emit(
+          "\tmov\trdx, QWORD PTR [rbp + " +
+          (16 + (stack_arg_index + 1) * 8).to_string() +
+          "]",
+        )
+        self.emit_store_local_from_rax(offsets[param.id], param.ty)
+        stack_arg_index += 2
+      }
+      int_arg_index += 2
     } else {
       if int_arg_index < arg_regs.length() {
         self.emit_store_int_reg_to_local(
