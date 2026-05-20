@@ -665,10 +665,18 @@ fn mir_body_codegen_fp_update_supported(
 ///|
 fn mir_body_codegen_local_type(ty : @ctype.Type) -> Bool {
   match ty {
-    Aligned(_, _) => false
+    Aligned(inner, align) => align <= 16 && mir_body_codegen_local_type(inner)
     Array(elem, _) => mir_body_codegen_local_type(elem)
     Struct(_) | Union(_) => true
     _ => mir_body_codegen_scalar_type(ty)
+  }
+}
+
+///|
+fn mir_body_codegen_addressed_object_type(ty : @ctype.Type) -> Bool {
+  match ty {
+    Aligned(inner, _) => mir_body_codegen_addressed_object_type(inner)
+    _ => mir_body_codegen_local_type(ty)
   }
 }
 
@@ -836,17 +844,17 @@ fn mir_body_codegen_value_supported(
     MirConst(_, ty) => mir_body_codegen_scalar_type(ty)
     MirLocal(binding) => mir_body_codegen_scalar_type(binding.ty)
     MirAddrLocal(binding) => mir_body_codegen_local_type(binding.ty)
-    MirAddrGlobal(_, ty) => mir_body_codegen_local_type(ty)
+    MirAddrGlobal(_, ty) => mir_body_codegen_addressed_object_type(ty)
     MirFuncAddr(name, ty) =>
       mir.funcs.contains(name) && mir_body_codegen_scalar_type(ty)
     MirLabelAddr(_) => true
     MirStringAddr(_) => true
     MirElemAddr(base, index, elem_ty) =>
-      mir_body_codegen_local_type(elem_ty) &&
+      mir_body_codegen_addressed_object_type(elem_ty) &&
       mir_body_codegen_array_address_base(base, int_arg_limit, mir) &&
       mir_body_codegen_value_supported(index, int_arg_limit, mir)
     MirOffsetAddr(base, _, ty) =>
-      mir_body_codegen_local_type(ty) &&
+      mir_body_codegen_addressed_object_type(ty) &&
       mir_body_codegen_value_supported(base, int_arg_limit, mir)
     MirLoad(ptr, ty) =>
       mir_body_codegen_scalar_type(ty) &&
@@ -1188,6 +1196,54 @@ fn mir_body_codegen_trap_call(
   (name == "__builtin_trap" || name == "__builtin_unreachable") &&
   args.length() == 0 &&
   peel_aligned_type(ret) is Void
+}
+
+///|
+fn mir_body_codegen_rotate_call_width(name : String, ret : @ctype.Type) -> Int? {
+  match name {
+    "__builtin_rotateleft32" | "__builtin_rotateright32" => Some(32)
+    "__builtin_rotateleft64" | "__builtin_rotateright64" => Some(64)
+    "__builtin_rotateleft" | "__builtin_rotateright" =>
+      if ret.is_integer() && !is_int128_type(ret) {
+        let width = peel_aligned_type(ret).size() * 8
+        if width <= 32 {
+          Some(32)
+        } else {
+          Some(64)
+        }
+      } else {
+        None
+      }
+    _ => None
+  }
+}
+
+///|
+fn mir_body_codegen_rotate_call_left(name : String) -> Bool? {
+  match name {
+    "__builtin_rotateleft"
+    | "__builtin_rotateleft32"
+    | "__builtin_rotateleft64" => Some(true)
+    "__builtin_rotateright"
+    | "__builtin_rotateright32"
+    | "__builtin_rotateright64" => Some(false)
+    _ => None
+  }
+}
+
+///|
+fn mir_body_codegen_rotate_call(
+  name : String,
+  args : Array[@mir.MirValue],
+  ret : @ctype.Type,
+) -> Bool {
+  args.length() == 2 &&
+  mir_body_codegen_rotate_call_left(name) is Some(_) &&
+  mir_body_codegen_rotate_call_width(name, ret) is Some(_) &&
+  args[0].ty().is_integer() &&
+  args[1].ty().is_integer() &&
+  !is_int128_type(args[0].ty()) &&
+  !is_int128_type(args[1].ty())
 }
 
 ///|
@@ -1666,6 +1722,7 @@ fn mir_body_codegen_call_supported(
     mir_body_codegen_atomic_exchange_call(name, args, ret) ||
     mir_body_codegen_atomic_compare_exchange_call(name, args, ret) ||
     mir_body_codegen_trap_call(name, args, ret) ||
+    mir_body_codegen_rotate_call(name, args, ret) ||
     mir_body_codegen_alloca_call(name, args, ret) ||
     mir_body_codegen_frame_address_call(name, args, ret) ||
     mir_body_codegen_return_address_call(name, args, ret) ||
@@ -3328,6 +3385,55 @@ fn Codegen::gen_mir_aggregate_return_addr(
 }
 
 ///|
+fn Codegen::emit_mir_rotate_builtin(
+  self : Codegen,
+  name : String,
+  args : Array[@mir.MirValue],
+  ty : @ctype.Type,
+  offsets : Map[Int, Int],
+  frame_size : Int,
+) -> Unit {
+  let width = match mir_body_codegen_rotate_call_width(name, ty) {
+    Some(width) => width
+    None => abort("unsupported MIR body rotate builtin width")
+  }
+  let left = match mir_body_codegen_rotate_call_left(name) {
+    Some(left) => left
+    None => abort("unsupported MIR body rotate builtin")
+  }
+  self.gen_mir_value(args[0], offsets, frame_size)
+  self.emit_numeric_conversion(args[0].ty(), ty)
+  self.emit_scalar_conversion_to(ty)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.gen_mir_value(args[1], offsets, frame_size)
+  self.emit_scalar_conversion_to(args[1].ty())
+  self.emit("\tmov\tx10, x9")
+  self.emit("\tldr\tx9, [sp], #16")
+  if width == 32 {
+    self.emit("\tneg\tw11, w10")
+    if left {
+      self.emit("\tlsl\tw12, w9, w10")
+      self.emit("\tlsr\tw11, w9, w11")
+    } else {
+      self.emit("\tlsr\tw12, w9, w10")
+      self.emit("\tlsl\tw11, w9, w11")
+    }
+    self.emit("\torr\tw9, w12, w11")
+  } else {
+    self.emit("\tneg\tx11, x10")
+    if left {
+      self.emit("\tlsl\tx12, x9, x10")
+      self.emit("\tlsr\tx11, x9, x11")
+    } else {
+      self.emit("\tlsr\tx12, x9, x10")
+      self.emit("\tlsl\tx11, x9, x11")
+    }
+    self.emit("\torr\tx9, x12, x11")
+  }
+  self.emit_scalar_conversion_to(ty)
+}
+
+///|
 fn Codegen::gen_mir_value(
   self : Codegen,
   value : @mir.MirValue,
@@ -3777,6 +3883,9 @@ fn Codegen::gen_mir_value(
       } else if mir_body_codegen_trap_call(name, args, ty) {
         self.emit("\tbrk\t#0x1")
         self.emit("\tmov\tx9, #0")
+        return
+      } else if mir_body_codegen_rotate_call(name, args, ty) {
+        self.emit_mir_rotate_builtin(name, args, ty, offsets, frame_size)
         return
       } else if mir_body_codegen_alloca_call(name, args, ty) {
         self.gen_mir_value(args[0], offsets, frame_size)
@@ -6590,6 +6699,40 @@ fn X64Codegen::emit_mir_overflow_arithmetic_builtin(
 }
 
 ///|
+fn X64Codegen::emit_mir_rotate_builtin(
+  self : X64Codegen,
+  name : String,
+  args : Array[@mir.MirValue],
+  ty : @ctype.Type,
+  offsets : Map[Int, Int],
+) -> Unit {
+  let width = match mir_body_codegen_rotate_call_width(name, ty) {
+    Some(width) => width
+    None => abort("unsupported x86-64 MIR body rotate builtin width")
+  }
+  let left = match mir_body_codegen_rotate_call_left(name) {
+    Some(left) => left
+    None => abort("unsupported x86-64 MIR body rotate builtin")
+  }
+  self.gen_mir_value(args[0], offsets)
+  self.emit_mir_numeric_conversion(args[0].ty(), ty)
+  self.emit_int_conversion_to(ty)
+  self.emit_mir_push_rax()
+  self.gen_mir_value(args[1], offsets)
+  self.emit_int_conversion_to(args[1].ty())
+  self.emit("\tmov\trcx, rax")
+  self.emit_mir_pop_rax()
+  let op = if left { "rol" } else { "ror" }
+  if width == 32 {
+    self.emit("\t" + op + "\teax, cl")
+    self.emit("\tmov\teax, eax")
+  } else {
+    self.emit("\t" + op + "\trax, cl")
+  }
+  self.emit_int_conversion_to(ty)
+}
+
+///|
 fn X64Codegen::gen_mir_value(
   self : X64Codegen,
   value : @mir.MirValue,
@@ -7036,6 +7179,9 @@ fn X64Codegen::gen_mir_value(
       } else if mir_body_codegen_trap_call(name, args, ty) {
         self.emit("\tud2")
         self.emit("\tmov\trax, 0")
+        return
+      } else if mir_body_codegen_rotate_call(name, args, ty) {
+        self.emit_mir_rotate_builtin(name, args, ty, offsets)
         return
       } else if mir_body_codegen_alloca_call(name, args, ty) {
         self.gen_mir_value(args[0], offsets)

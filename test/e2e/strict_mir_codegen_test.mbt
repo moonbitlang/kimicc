@@ -1490,6 +1490,56 @@ test "strict MIR codegen executes casted global array decay" {
 }
 
 ///|
+test "strict MIR codegen takes address of aligned global arrays" {
+  let source =
+    #|static unsigned char secret[16] __attribute__((aligned(64))) = {1, 2, 3, 4, 5, 6, 7, 8};
+    #|unsigned char *get(void) {
+    #|  return (unsigned char*)secret;
+    #|}
+    #|int main(void) {
+    #|  unsigned char *p = get();
+    #|  return p[0] + p[7] + (((unsigned long)p & 63) == 0 ? 33 : 0);
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
+test "strict MIR codegen executes aligned local array scratch state" {
+  let source =
+    #|static void mix(unsigned long long *acc, unsigned long long seed) {
+    #|  acc[0] += seed;
+    #|  acc[1] ^= seed;
+    #|}
+    #|int main(void) {
+    #|  _Alignas(8) unsigned long long acc[4] = {10ull, 20ull, 7ull, 2ull};
+    #|  mix(acc, 5ull);
+    #|  return acc[0] == 15ull && acc[1] == 17ull && acc[2] == 7ull && acc[3] == 2ull ? 42 : 1;
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
+test "strict MIR codegen writes over-aligned array fields through pointers" {
+  let source =
+    #|struct State {
+    #|  int pad;
+    #|  unsigned long long acc[2] __attribute__((aligned(64)));
+    #|  unsigned long len;
+    #|};
+    #|static struct State st;
+    #|static void reset(struct State *s) {
+    #|  s->acc[0] = 10ull;
+    #|  s->acc[1] = 32ull;
+    #|  s->len = s->acc[0] + s->acc[1];
+    #|}
+    #|int main(void) {
+    #|  reset(&st);
+    #|  return st.len == 42ul ? 42 : 1;
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
 test "strict MIR codegen returns implicit global array decay" {
   let source =
     #|char version[4] = "abc";
@@ -2023,6 +2073,26 @@ test "strict MIR codegen executes count zero builtins" {
     #|  return clz32(1u) + clz64(1ull) + ctz32(8u) + ctz64(16ull);
     #|}
   assert_eq(run_source_strict_mir(source), 101)
+}
+
+///|
+test "strict MIR codegen executes rotate builtins" {
+  let source =
+    #|static unsigned int rl32(unsigned int x, int s) { return __builtin_rotateleft32(x, s); }
+    #|static unsigned int rr32(unsigned int x, int s) { return __builtin_rotateright32(x, s); }
+    #|static unsigned long long rl64(unsigned long long x, int s) { return __builtin_rotateleft64(x, s); }
+    #|static unsigned long long rr64(unsigned long long x, int s) { return __builtin_rotateright64(x, s); }
+    #|int main(void) {
+    #|  int n = 8;
+    #|  if (rl32(0x12345678u, n) != 0x34567812u) return 1;
+    #|  if (rr32(0x12345678u, 12) != 0x67812345u) return 2;
+    #|  if (rl64(0x0123456789abcdefull, 16) != 0x456789abcdef0123ull) return 3;
+    #|  if (rr64(0x0123456789abcdefull, 16) != 0xcdef0123456789abull) return 4;
+    #|  if (__builtin_rotateleft((unsigned int)0x80000001u, 1) != 3u) return 5;
+    #|  if (__builtin_rotateright((unsigned long long)1ull, 1) != 0x8000000000000000ull) return 6;
+    #|  return 42;
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
 }
 
 ///|

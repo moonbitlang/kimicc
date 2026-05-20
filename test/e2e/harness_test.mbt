@@ -370,6 +370,16 @@ async fn compile_c_file_with_kimicc_direct_object_path(
 }
 
 ///|
+async fn compile_c_file_with_strict_mir_object_path(
+  path : String,
+  flags : String,
+  tag : String,
+) -> String {
+  let source = preprocess_c_file_with_flags(path, flags, tag)
+  compile_source_to_strict_mir_object_path(source, tag)
+}
+
+///|
 fn shell_join_quoted(values : Array[String]) -> String {
   let buf = StringBuilder::new()
   let mut first = true

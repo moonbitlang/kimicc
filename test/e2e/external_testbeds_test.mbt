@@ -1454,6 +1454,20 @@ async fn compile_xxhash_smoke_driver(
 }
 
 ///|
+async fn compile_xxhash_smoke_driver_strict_mir(
+  root : String,
+  tag : String,
+) -> String {
+  let path = "/tmp/kimicc_xxhash_" + tag + "_driver.c"
+  write_text_file(path, xxhash_smoke_source())
+  compile_c_file_with_strict_mir_object_path(
+    path,
+    xxhash_flags(root),
+    "xxhash_strict_mir_external_" + tag + "_driver",
+  )
+}
+
+///|
 async fn build_xxhash_with_kimicc(root : String, tag : String) -> String {
   let library_path = root + "/xxhash.c"
   require_external_path(library_path, "xxHash source")
@@ -1494,6 +1508,26 @@ async fn build_xxhash_with_direct_object(root : String, tag : String) -> String 
 }
 
 ///|
+async fn build_xxhash_with_strict_mir(root : String, tag : String) -> String {
+  let library_path = root + "/xxhash.c"
+  require_external_path(library_path, "xxHash source")
+  let objects = [
+    compile_c_file_with_strict_mir_object_path(
+      library_path,
+      xxhash_flags(root),
+      "xxhash_strict_mir_external_" + tag + "_library",
+    ),
+    compile_xxhash_smoke_driver_strict_mir(root, tag),
+  ]
+  let binary_path = "/tmp/kimicc_xxhash_strict_mir_external_" + tag
+  run_command_checked(
+    "clang -o " + shell_quote(binary_path) + " " + shell_join_quoted(objects),
+    "link strict MIR xxHash external " + tag,
+  )
+  binary_path
+}
+
+///|
 async fn assert_xxhash_smoke(binary_path : String, tag : String) -> Unit {
   let result = run_command_capture(
     shell_quote(binary_path),
@@ -1510,6 +1544,17 @@ async fn assert_xxhash_smoke(binary_path : String, tag : String) -> Unit {
       result.output,
     )
   }
+}
+
+///|
+async test "external xxHash strict MIR checksum matrix runs when enabled" {
+  if !external_testbed_enabled("xxhash") {
+    return
+  }
+  let root = "/tmp/kimicc_xxhash/xxHash-0.8.2"
+  require_external_path(root + "/xxhash.h", "xxHash source root")
+  let binary_path = build_xxhash_with_strict_mir(root, "checksum_matrix")
+  assert_xxhash_smoke(binary_path, "strict_mir_checksum_matrix")
 }
 
 ///|
@@ -1602,6 +1647,20 @@ async fn compile_cjson_smoke_driver(
 }
 
 ///|
+async fn compile_cjson_smoke_driver_strict_mir(
+  root : String,
+  tag : String,
+) -> String {
+  let path = "/tmp/kimicc_cjson_" + tag + "_driver.c"
+  write_text_file(path, cjson_smoke_source())
+  compile_c_file_with_strict_mir_object_path(
+    path,
+    cjson_flags(root),
+    "cjson_strict_mir_external_" + tag + "_driver",
+  )
+}
+
+///|
 async fn build_cjson_with_kimicc(root : String, tag : String) -> String {
   let library_path = root + "/cJSON.c"
   require_external_path(library_path, "cJSON source")
@@ -1642,6 +1701,26 @@ async fn build_cjson_with_direct_object(root : String, tag : String) -> String {
 }
 
 ///|
+async fn build_cjson_with_strict_mir(root : String, tag : String) -> String {
+  let library_path = root + "/cJSON.c"
+  require_external_path(library_path, "cJSON source")
+  let objects = [
+    compile_c_file_with_strict_mir_object_path(
+      library_path,
+      cjson_flags(root),
+      "cjson_strict_mir_external_" + tag + "_library",
+    ),
+    compile_cjson_smoke_driver_strict_mir(root, tag),
+  ]
+  let binary_path = "/tmp/kimicc_cjson_strict_mir_external_" + tag
+  run_command_checked(
+    "clang -o " + shell_quote(binary_path) + " " + shell_join_quoted(objects),
+    "link strict MIR cJSON external " + tag,
+  )
+  binary_path
+}
+
+///|
 async fn assert_cjson_smoke(binary_path : String, tag : String) -> Unit {
   let result = run_command_capture(
     shell_quote(binary_path),
@@ -1655,6 +1734,17 @@ async fn assert_cjson_smoke(binary_path : String, tag : String) -> Unit {
       result.output,
     )
   }
+}
+
+///|
+async test "external cJSON strict MIR parser roundtrip runs when enabled" {
+  if !external_testbed_enabled("cjson") {
+    return
+  }
+  let root = "/tmp/kimicc_cjson/cJSON-1.7.18"
+  require_external_path(root + "/cJSON.h", "cJSON source root")
+  let binary_path = build_cjson_with_strict_mir(root, "roundtrip")
+  assert_cjson_smoke(binary_path, "strict_mir_roundtrip")
 }
 
 ///|

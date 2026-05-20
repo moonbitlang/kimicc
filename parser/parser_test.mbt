@@ -868,6 +868,34 @@ test "parse GNU aligned attributes" {
 }
 
 ///|
+test "parse aligned local array initializer assignments" {
+  let source =
+    #|int main(void) {
+    #|  _Alignas(8) unsigned long long acc[4] = {10ull, 20ull};
+    #|  return 0;
+    #|}
+  let prog = @parser.parse(source)
+  match prog.decls[0].body {
+    Some(Compound([StmtList(inner), Return(Some(Number(0)))])) => {
+      inspect(inner.length(), content="3")
+      match inner[0] {
+        VarDecl(Aligned(Array(ULongLong, 4), 8), "acc", Some(Number(0))) => ()
+        _ => fail("Expected aligned local array zero declaration")
+      }
+      match inner[1] {
+        ExprStmt(Assign(ArrayAccess(Var("acc"), Number(0)), Number(10))) => ()
+        _ => fail("Expected aligned acc[0]=10")
+      }
+      match inner[2] {
+        ExprStmt(Assign(ArrayAccess(Var("acc"), Number(1)), Number(20))) => ()
+        _ => fail("Expected aligned acc[1]=20")
+      }
+    }
+    _ => fail("Expected lowered aligned local array initializer")
+  }
+}
+
+///|
 test "parse GNU weak attributes" {
   let source =
     #|__attribute__((weak)) int weak_fn(void) { return 1; }

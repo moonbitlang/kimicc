@@ -671,6 +671,34 @@ fn find_struct_init_field_index(fields : Array[Param], name : String) -> Int {
 }
 
 ///|
+fn local_init_core_type(ty : Type) -> Type {
+  match ty {
+    Atomic(inner) | Aligned(inner, _) => local_init_core_type(inner)
+    _ => ty
+  }
+}
+
+///|
+fn local_init_array_elem_type(ty : Type) -> Type? {
+  match ty {
+    Array(elem, _) => Some(elem)
+    Atomic(inner) | Aligned(inner, _) => local_init_array_elem_type(inner)
+    _ => None
+  }
+}
+
+///|
+fn local_init_infer_array_size(ty : Type, count : Int) -> Type {
+  match ty {
+    Array(elem, 0) => Array(elem, count)
+    Atomic(inner) => Atomic(local_init_infer_array_size(inner, count))
+    Aligned(inner, align) =>
+      Aligned(local_init_infer_array_size(inner, count), align)
+    _ => ty
+  }
+}
+
+///|
 fn Parser::push_struct_init_assignments(
   self : Parser,
   stmts : Array[Stmt],
@@ -678,7 +706,7 @@ fn Parser::push_struct_init_assignments(
   ty : Type,
   init_exprs : Array[Expr],
 ) -> Unit {
-  let struct_name = match ty {
+  let struct_name = match local_init_core_type(ty) {
     Struct(n) | Union(n) => n
     _ => return
   }
@@ -708,7 +736,7 @@ fn Parser::push_struct_init_assignments(
     }
     let field = fields[field_index]
     let field_target = Expr::MemberAccess(target, field.name)
-    match (field.ty, value) {
+    match (local_init_core_type(field.ty), value) {
       (Struct(_) | Union(_), Array(field_exprs)) =>
         self.push_struct_init_assignments(
           stmts,
@@ -745,9 +773,9 @@ fn Parser::push_array_init_assignments_at(
   ty : Type,
   init_exprs : Array[Expr],
 ) -> Unit {
-  let elem_ty = match ty {
-    Array(elem, _) => elem
-    _ => return
+  let elem_ty = match local_init_array_elem_type(ty) {
+    Some(elem) => elem
+    None => return
   }
   let mut cursor = 0
   for init_expr in init_exprs {
@@ -773,7 +801,7 @@ fn Parser::push_array_init_assignments_at(
     }
     for i = start; i <= end; i = i + 1 {
       let elem = Expr::ArrayAccess(target, Number(i.to_int64()))
-      match (elem_ty, value) {
+      match (local_init_core_type(elem_ty), value) {
         (Struct(_) | Union(_), Array(field_exprs)) =>
           self.push_struct_init_assignments(stmts, elem, elem_ty, field_exprs)
         (Struct(_) | Union(_), DesignatedField(_, _)) =>
@@ -989,7 +1017,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
     self.advance()
     if self.token == LBrace {
       // For struct/union types, lower brace initializers into field assignments.
-      let is_struct = match decl_ty {
+      let is_struct = match local_init_core_type(decl_ty) {
         Struct(_) | Union(_) => true
         _ => false
       }
@@ -1008,10 +1036,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
         let init_exprs = self.parse_brace_init_exprs()
         let init_count = initializer_element_count(init_exprs)
         // Update array type if size was inferred
-        let ty = match decl_ty {
-          Array(elem_ty, 0) => Type::Array(elem_ty, init_count)
-          other => other
-        }
+        let ty = local_init_infer_array_size(decl_ty, init_count)
         stmts.push(VarDecl(ty, decl.name, Some(Number(0))))
         self.push_array_init_assignments(stmts, decl.name, ty, init_exprs)
         ty
@@ -1070,7 +1095,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
     if self.token == Assign {
       self.advance()
       if self.token == LBrace {
-        let is_struct = match extra_decl_ty {
+        let is_struct = match local_init_core_type(extra_decl_ty) {
           Struct(_) | Union(_) => true
           _ => false
         }
@@ -1086,10 +1111,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
         } else {
           let init_exprs = self.parse_brace_init_exprs()
           let init_count = initializer_element_count(init_exprs)
-          let extra_ty = match extra_decl_ty {
-            Array(elem_ty, 0) => Type::Array(elem_ty, init_count)
-            other => other
-          }
+          let extra_ty = local_init_infer_array_size(extra_decl_ty, init_count)
           remembered_extra_ty = extra_ty
           stmts.push(VarDecl(extra_ty, extra_decl.name, Some(Number(0))))
           self.push_array_init_assignments(
