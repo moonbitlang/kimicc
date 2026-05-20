@@ -541,6 +541,22 @@ test "mir body interpreter executes indirect function pointer calls" {
 }
 
 ///|
+test "mir body interpreter executes dereferenced typedef function pointer calls" {
+  let source =
+    #|typedef int Callback(int value);
+    #|int add(int value) {
+    #|  return value + 5;
+    #|}
+    #|int main(void) {
+    #|  Callback *fp = add;
+    #|  return (*fp)(7);
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  inspect(mir.bodies.contains("main"), content="true")
+  expect_body_interp(source, 12L)
+}
+
+///|
 test "mir body interpreter executes returned function pointer calls" {
   let source =
     #|int hash(const void *p, int n) { return n + 40; }

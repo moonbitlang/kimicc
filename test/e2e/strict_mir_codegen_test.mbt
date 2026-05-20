@@ -2238,3 +2238,42 @@ test "strict MIR codegen executes function typedef pointer calls" {
     #|}
   assert_eq(run_source_strict_mir(source), 12)
 }
+
+///|
+test "strict MIR codegen executes dereferenced function typedef pointer calls" {
+  let source =
+    #|typedef int Callback(void *data, int value);
+    #|int add(void *data, int value) {
+    #|  return *(int*)data + value;
+    #|}
+    #|int main(void) {
+    #|  int base = 5;
+    #|  Callback *fp = add;
+    #|  return (*fp)(&base, 7);
+    #|}
+  assert_eq(run_source_strict_mir(source), 12)
+}
+
+///|
+test "strict MIR codegen evaluates aggregate return call sources once" {
+  let source =
+    #|struct Pair { long a; long b; };
+    #|int calls;
+    #|struct Pair make_pair(void) {
+    #|  calls++;
+    #|  struct Pair p;
+    #|  p.a = calls;
+    #|  p.b = calls * 10;
+    #|  return p;
+    #|}
+    #|struct Pair wrapper(void) {
+    #|  struct Pair (*fp)(void) = make_pair;
+    #|  return fp();
+    #|}
+    #|int main(void) {
+    #|  struct Pair p = wrapper();
+    #|  if (calls != 1) return 100 + calls;
+    #|  return (int)(p.a + p.b);
+    #|}
+  assert_eq(run_source_strict_mir(source), 11)
+}

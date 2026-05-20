@@ -979,12 +979,18 @@ fn Program::lower_mir_struct_init_stores(
       if !mir_body_copy_source_addr(src_addr) {
         return None
       }
-      return self.lower_mir_copy_init_stores(
-        base,
-        ty,
-        src_addr,
-        self.expr_type(init, ctx.scope()),
-      )
+      let (src_prefix, src_addr) = lower_mir_stable_copy_addr(src_addr, ctx)
+      let stores = match
+        self.lower_mir_copy_init_stores(
+          base,
+          ty,
+          src_addr,
+          self.expr_type(init, ctx.scope()),
+        ) {
+        Some(stores) => stores
+        None => return None
+      }
+      return Some(prepend_mir_stmts(src_prefix, stores))
     }
   }
   let items : Array[@parser.Expr] = match init {
@@ -1959,7 +1965,7 @@ fn Program::lower_mir_indirect_call(
   let normalized_callee = match callee {
     Deref(inner) =>
       match self.core_type(self.expr_type(inner, ctx.scope())) {
-        FuncPtr(_, _, _) => inner
+        FuncPtr(_, _, _) | Pointer(FuncPtr(_, _, _)) => inner
         _ => callee
       }
     _ => callee
