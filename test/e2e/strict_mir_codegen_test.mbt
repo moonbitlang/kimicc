@@ -9336,6 +9336,74 @@ test "strict MIR codegen passes aggregate compound literal arguments" {
 }
 
 ///|
+test "strict MIR codegen receives aggregate compound literal arguments from clang callers" {
+  let callee =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|int observe(Value v) {
+    #|  return v.u.int32 + (int)v.tag * 10;
+    #|}
+  let driver =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|int observe(Value v);
+    #|int main(void) {
+    #|  return observe((Value){ (ValueUnion){ .int32 = 4 }, 2 });
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 24)
+}
+
+///|
+test "strict MIR codegen passes aggregate compound literal arguments to clang callees" {
+  let caller =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|int observe(Value v);
+    #|int main(void) {
+    #|  return observe((Value){ (ValueUnion){ .int32 = 4 }, 2 });
+    #|}
+  let callee =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|int observe(Value v) {
+    #|  return v.u.int32 + (int)v.tag * 10;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 24)
+}
+
+///|
 fn strict_mir_bitfield_post_increment_source() -> String {
   let source =
     #|struct S {
