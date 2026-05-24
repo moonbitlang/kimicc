@@ -9467,6 +9467,100 @@ async test "strict MIR codegen matches parser codegen for integer unary builtins
 }
 
 ///|
+test "strict MIR codegen exposes integer unary builtins to clang callers" {
+  let callee =
+    #|int eval_integer_unary(void) {
+    #|  int neg = -7;
+    #|  int pos = 5;
+    #|  long lneg = -1234567890123L;
+    #|  long long llneg = -900000000000000000LL;
+    #|  unsigned int u8 = 8u;
+    #|  unsigned long ul16 = 16ul;
+    #|  unsigned long long ull32 = 32ull;
+    #|  unsigned int u0102 = 0x0102u;
+    #|  unsigned int u01020304 = 0x01020304u;
+    #|  unsigned long long ullswap = 0x0102030405060708ull;
+    #|  unsigned int upop = 0x00ff00ffu;
+    #|  unsigned long ulpop = 0x00000000fffffffful;
+    #|  unsigned long long ullpar = 0x8000000000000001ull;
+    #|  if (__builtin_abs(neg) != 7) return 1;
+    #|  if (__builtin_abs(pos) != 5) return 2;
+    #|  if (__builtin_labs(lneg) != 1234567890123L) return 3;
+    #|  if (__builtin_llabs(llneg) != 900000000000000000LL) return 4;
+    #|  if (__builtin_ffs(0u) != 0) return 5;
+    #|  if (__builtin_ffs(u8) != 4) return 6;
+    #|  if (__builtin_ffsl(ul16) != 5) return 7;
+    #|  if (__builtin_ffsll(ull32) != 6) return 8;
+    #|  if ((__builtin_bswap16(u0102) & 255) != 1) return 9;
+    #|  if ((__builtin_bswap32(u01020304) & 255) != 1) return 10;
+    #|  if ((__builtin_bswap64(ullswap) & 255) != 1) return 11;
+    #|  if ((__builtin_bswap(u01020304) & 255) != 1) return 12;
+    #|  if ((__builtin_bswap(ullswap) & 255) != 1) return 13;
+    #|  if (__builtin_popcount(upop) != 16) return 14;
+    #|  if (__builtin_popcountl(ulpop) != 32) return 15;
+    #|  if (__builtin_popcountll(ullswap) != 13) return 16;
+    #|  if (__builtin_popcountll(ullpar) != 2) return 17;
+    #|  if (__builtin_parity(upop) != 0) return 18;
+    #|  if (__builtin_parityl(ulpop) != 0) return 19;
+    #|  if (__builtin_parityll(ullpar) != 0) return 20;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_integer_unary(void);
+    #|int main(void) {
+    #|  return eval_integer_unary();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang integer unary builtins" {
+  let caller =
+    #|int eval_integer_unary(void);
+    #|int main(void) {
+    #|  return eval_integer_unary();
+    #|}
+  let callee =
+    #|int eval_integer_unary(void) {
+    #|  int neg = -7;
+    #|  int pos = 5;
+    #|  long lneg = -1234567890123L;
+    #|  long long llneg = -900000000000000000LL;
+    #|  unsigned int u8 = 8u;
+    #|  unsigned long ul16 = 16ul;
+    #|  unsigned long long ull32 = 32ull;
+    #|  unsigned int u0102 = 0x0102u;
+    #|  unsigned int u01020304 = 0x01020304u;
+    #|  unsigned long long ullswap = 0x0102030405060708ull;
+    #|  unsigned int upop = 0x00ff00ffu;
+    #|  unsigned long ulpop = 0x00000000fffffffful;
+    #|  unsigned long long ullpar = 0x8000000000000001ull;
+    #|  if (__builtin_abs(neg) != 7) return 1;
+    #|  if (__builtin_abs(pos) != 5) return 2;
+    #|  if (__builtin_labs(lneg) != 1234567890123L) return 3;
+    #|  if (__builtin_llabs(llneg) != 900000000000000000LL) return 4;
+    #|  if (__builtin_ffs(0u) != 0) return 5;
+    #|  if (__builtin_ffs(u8) != 4) return 6;
+    #|  if (__builtin_ffsl(ul16) != 5) return 7;
+    #|  if (__builtin_ffsll(ull32) != 6) return 8;
+    #|  if ((__builtin_bswap16(u0102) & 255) != 1) return 9;
+    #|  if ((__builtin_bswap32(u01020304) & 255) != 1) return 10;
+    #|  if ((__builtin_bswap64(ullswap) & 255) != 1) return 11;
+    #|  if ((__builtin_bswap32(u01020304) & 255) != 1) return 12;
+    #|  if ((__builtin_bswap64(ullswap) & 255) != 1) return 13;
+    #|  if (__builtin_popcount(upop) != 16) return 14;
+    #|  if (__builtin_popcountl(ulpop) != 32) return 15;
+    #|  if (__builtin_popcountll(ullswap) != 13) return 16;
+    #|  if (__builtin_popcountll(ullpar) != 2) return 17;
+    #|  if (__builtin_parity(upop) != 0) return 18;
+    #|  if (__builtin_parityl(ulpop) != 0) return 19;
+    #|  if (__builtin_parityll(ullpar) != 0) return 20;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_rotate_builtin_source() -> String {
   let source =
     #|static unsigned int rl32(unsigned int x, int s) { return __builtin_rotateleft32(x, s); }
