@@ -8587,6 +8587,96 @@ async test "strict MIR codegen matches parser codegen for plain vprintf builtins
 }
 
 ///|
+test "strict MIR codegen exposes plain vprintf builtins to clang callers" {
+  let callee =
+    #|typedef __builtin_va_list va_list;
+    #|int write_plain(char *dst, const char *fmt, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, fmt);
+    #|  int n = __builtin_vsnprintf(dst, 32, fmt, ap);
+    #|  __builtin_va_end(ap);
+    #|  return n;
+    #|}
+    #|int write_plain_sprintf(char *dst, const char *fmt, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, fmt);
+    #|  int n = __builtin_vsprintf(dst, fmt, ap);
+    #|  __builtin_va_end(ap);
+    #|  return n;
+    #|}
+    #|int count_plain(const char *fmt, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, fmt);
+    #|  int n = __builtin_vprintf(fmt, ap);
+    #|  __builtin_va_end(ap);
+    #|  return n;
+    #|}
+    #|int eval_plain_vprintf_builtin(void) {
+    #|  char dst[32];
+    #|  int n = write_plain(dst, "%s:%04d", "ok", 7);
+    #|  if (n != 7) return 1;
+    #|  if (__builtin_strcmp(dst, "ok:0007") != 0) return 2;
+    #|  int m = write_plain_sprintf(dst, "%#x", 42);
+    #|  if (m != 4) return 3;
+    #|  if (__builtin_strcmp(dst, "0x2a") != 0) return 4;
+    #|  int p = count_plain(":%d", 42);
+    #|  if (p != 3) return 5;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_plain_vprintf_builtin(void);
+    #|int main(void) {
+    #|  return eval_plain_vprintf_builtin();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang plain vprintf builtins" {
+  let caller =
+    #|int eval_plain_vprintf_builtin_from_clang(void);
+    #|int main(void) {
+    #|  return eval_plain_vprintf_builtin_from_clang();
+    #|}
+  let callee =
+    #|typedef __builtin_va_list va_list;
+    #|int write_plain_from_clang(char *dst, const char *fmt, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, fmt);
+    #|  int n = __builtin_vsnprintf(dst, 32, fmt, ap);
+    #|  __builtin_va_end(ap);
+    #|  return n;
+    #|}
+    #|int write_plain_sprintf_from_clang(char *dst, const char *fmt, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, fmt);
+    #|  int n = __builtin_vsprintf(dst, fmt, ap);
+    #|  __builtin_va_end(ap);
+    #|  return n;
+    #|}
+    #|int count_plain_from_clang(const char *fmt, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, fmt);
+    #|  int n = __builtin_vprintf(fmt, ap);
+    #|  __builtin_va_end(ap);
+    #|  return n;
+    #|}
+    #|int eval_plain_vprintf_builtin_from_clang(void) {
+    #|  char dst[32];
+    #|  int n = write_plain_from_clang(dst, "%s:%04d", "ok", 7);
+    #|  if (n != 7) return 1;
+    #|  if (__builtin_strcmp(dst, "ok:0007") != 0) return 2;
+    #|  int m = write_plain_sprintf_from_clang(dst, "%#x", 42);
+    #|  if (m != 4) return 3;
+    #|  if (__builtin_strcmp(dst, "0x2a") != 0) return 4;
+    #|  int p = count_plain_from_clang(":%d", 42);
+    #|  if (p != 3) return 5;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_checked_vsnprintf_va_list_source() -> String {
   let source =
     #|typedef __builtin_va_list va_list;
