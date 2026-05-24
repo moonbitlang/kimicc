@@ -3637,7 +3637,7 @@ test "strict MIR codegen returns memory aggregates to clang callers" {
 }
 
 ///|
-test "strict MIR codegen takes address of aggregate objects" {
+fn strict_mir_aggregate_object_address_source() -> String {
   let source =
     #|struct Pair { long a; long b; };
     #|struct Pair global_pair = { 5, 6 };
@@ -3649,7 +3649,22 @@ test "strict MIR codegen takes address of aggregate objects" {
     #|  __builtin_memcpy(&copy, &global_pair, sizeof(copy));
     #|  return (int)(copy.a + copy.b);
     #|}
+  source
+}
+
+///|
+test "strict MIR codegen takes address of aggregate objects" {
+  let source = strict_mir_aggregate_object_address_source()
   assert_eq(run_source_strict_mir(source), 11)
+}
+
+///|
+async test "strict MIR codegen matches parser codegen for aggregate object addresses" {
+  let result = run_source_strict_mir_against_parser_codegen(
+    strict_mir_aggregate_object_address_source(),
+    "strict_mir_aggregate_object_address_differential",
+  )
+  assert_eq(result.code, 11)
 }
 
 ///|
