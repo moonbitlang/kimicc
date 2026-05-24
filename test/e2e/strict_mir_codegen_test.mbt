@@ -7145,6 +7145,28 @@ async test "strict MIR codegen matches parser codegen for aggregate va_arg reads
 }
 
 ///|
+test "strict MIR codegen passes aggregate variadic args to clang callees" {
+  let caller =
+    #|struct Pair { long long a; long long b; };
+    #|int read_pair(int tag, ...);
+    #|int main(void) {
+    #|  struct Pair p = {10, 20};
+    #|  return read_pair(4, p);
+    #|}
+  let callee =
+    #|typedef __builtin_va_list va_list;
+    #|struct Pair { long long a; long long b; };
+    #|int read_pair(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  struct Pair p = __builtin_va_arg(ap, struct Pair);
+    #|  __builtin_va_end(ap);
+    #|  return tag + (int)p.a + (int)p.b;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 34)
+}
+
+///|
 fn strict_mir_large_aggregate_va_arg_source() -> String {
   let source =
     #|typedef __builtin_va_list va_list;
