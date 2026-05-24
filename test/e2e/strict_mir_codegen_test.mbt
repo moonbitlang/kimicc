@@ -60,7 +60,7 @@ fn run_strict_mir_with_clang_driver(
 }
 
 ///|
-test "strict MIR codegen executes scalar control flow and calls" {
+fn strict_mir_scalar_control_flow_source() -> String {
   let source =
     #|int add(int a, int b) { return a + b; }
     #|int main(void) {
@@ -73,7 +73,22 @@ test "strict MIR codegen executes scalar control flow and calls" {
     #|  if (s == 15) return s + 2;
     #|  return 1;
     #|}
+  source
+}
+
+///|
+test "strict MIR codegen executes scalar control flow and calls" {
+  let source = strict_mir_scalar_control_flow_source()
   assert_eq(run_source_strict_mir(source), 17)
+}
+
+///|
+async test "strict MIR codegen matches parser codegen for scalar control flow and calls" {
+  let result = run_source_strict_mir_against_parser_codegen(
+    strict_mir_scalar_control_flow_source(),
+    "strict_mir_scalar_control_flow_differential",
+  )
+  assert_eq(result.code, 17)
 }
 
 ///|
