@@ -4538,7 +4538,7 @@ async test "strict MIR codegen matches parser codegen for initialized global agg
 }
 
 ///|
-test "strict MIR codegen copies aggregate array fields" {
+fn strict_mir_aggregate_array_field_copy_source() -> String {
   let source =
     #|struct Item { int x; int y; };
     #|struct Db { struct Item items[2]; int tail; };
@@ -4553,7 +4553,22 @@ test "strict MIR codegen copies aggregate array fields" {
     #|  src.items[1].y = 0;
     #|  return copy.items[0].x + copy.items[1].y + copy.tail;
     #|}
+  source
+}
+
+///|
+test "strict MIR codegen copies aggregate array fields" {
+  let source = strict_mir_aggregate_array_field_copy_source()
   assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
+async test "strict MIR codegen matches parser codegen for aggregate array field copies" {
+  let result = run_source_strict_mir_against_parser_codegen(
+    strict_mir_aggregate_array_field_copy_source(),
+    "strict_mir_aggregate_array_field_copy_differential",
+  )
+  assert_eq(result.code, 42)
 }
 
 ///|
