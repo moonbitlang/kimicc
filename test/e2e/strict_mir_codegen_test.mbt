@@ -9366,6 +9366,96 @@ async test "strict MIR codegen matches parser codegen for runtime floating class
 }
 
 ///|
+test "strict MIR codegen exposes runtime floating classification builtins to clang callers" {
+  let callee =
+    #|int eval_floating_classification(void) {
+    #|  double zero = 0.0;
+    #|  double one = 1.0;
+    #|  double four = 4.0;
+    #|  double nanv = zero / zero;
+    #|  double inf = one / zero;
+    #|  double ninf = zero - inf;
+    #|  double neg = zero - four;
+    #|  float fzero = 0.0f;
+    #|  float fone = 1.0f;
+    #|  float ffour = 4.0f;
+    #|  float fnan = fzero / fzero;
+    #|  float finf = fone / fzero;
+    #|  float fneg = fzero - ffour;
+    #|  int side = 0;
+    #|  if (!__builtin_isnan(nanv)) return 1;
+    #|  if (__builtin_isnan(four)) return 2;
+    #|  if (!__builtin_isinf(inf)) return 3;
+    #|  if (!__builtin_isinf(ninf)) return 4;
+    #|  if (!__builtin_isfinite(four)) return 5;
+    #|  if (__builtin_isfinite(inf)) return 6;
+    #|  if (!__builtin_isnormal(four)) return 7;
+    #|  if (__builtin_isnormal(zero)) return 8;
+    #|  if (!__builtin_signbit(neg)) return 9;
+    #|  if (__builtin_signbit(four)) return 10;
+    #|  if (!__builtin_isnanf(fnan)) return 11;
+    #|  if (!__builtin_isinff(finf)) return 12;
+    #|  if (!__builtin_isfinitef(ffour)) return 13;
+    #|  if (!__builtin_isnormalf(ffour)) return 14;
+    #|  if (!__builtin_signbitf(fneg)) return 15;
+    #|  if (!__builtin_isfinite((side += 1, four))) return 16;
+    #|  if (side != 1) return 17;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_floating_classification(void);
+    #|int main(void) {
+    #|  return eval_floating_classification();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang runtime floating classification builtins" {
+  let caller =
+    #|int eval_floating_classification(void);
+    #|int main(void) {
+    #|  return eval_floating_classification();
+    #|}
+  let callee =
+    #|int eval_floating_classification(void) {
+    #|  double zero = 0.0;
+    #|  double one = 1.0;
+    #|  double four = 4.0;
+    #|  double nanv = zero / zero;
+    #|  double inf = one / zero;
+    #|  double ninf = zero - inf;
+    #|  double neg = zero - four;
+    #|  float fzero = 0.0f;
+    #|  float fone = 1.0f;
+    #|  float ffour = 4.0f;
+    #|  float fnan = fzero / fzero;
+    #|  float finf = fone / fzero;
+    #|  float fneg = fzero - ffour;
+    #|  int side = 0;
+    #|  if (!__builtin_isnan(nanv)) return 1;
+    #|  if (__builtin_isnan(four)) return 2;
+    #|  if (!__builtin_isinf(inf)) return 3;
+    #|  if (!__builtin_isinf(ninf)) return 4;
+    #|  if (!__builtin_isfinite(four)) return 5;
+    #|  if (__builtin_isfinite(inf)) return 6;
+    #|  if (!__builtin_isnormal(four)) return 7;
+    #|  if (__builtin_isnormal(zero)) return 8;
+    #|  if (!__builtin_signbit(neg)) return 9;
+    #|  if (__builtin_signbit(four)) return 10;
+    #|  if (!__builtin_isnan(fnan)) return 11;
+    #|  if (!__builtin_isinf(finf)) return 12;
+    #|  if (!__builtin_isfinite(ffour)) return 13;
+    #|  if (!__builtin_isnormal(ffour)) return 14;
+    #|  if (!__builtin_signbit(fneg)) return 15;
+    #|  if (!__builtin_isfinite((side += 1, four))) return 16;
+    #|  if (side != 1) return 17;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_floating_math_builtin_source() -> String {
   let source =
     #|int main(void) {
