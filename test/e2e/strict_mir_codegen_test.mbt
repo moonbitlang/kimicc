@@ -7728,6 +7728,36 @@ async test "strict MIR codegen matches parser codegen for floating direct calls"
 }
 
 ///|
+test "strict MIR codegen exposes floating direct calls to clang callers" {
+  let callee =
+    #|double add(double x, double y) { return x + y; }
+    #|double mix(int a, double b, int c) { return a + b + c; }
+    #|int eval_floating_direct_call(void) {
+    #|  return (int)add(2.25, 3.75) + (int)mix(2, 3.5, 4);
+    #|}
+  let driver =
+    #|int eval_floating_direct_call(void);
+    #|int main(void) {
+    #|  return eval_floating_direct_call();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 15)
+}
+
+///|
+test "strict MIR codegen calls clang floating direct calls" {
+  let caller =
+    #|double add_from_clang(double x, double y);
+    #|double mix_from_clang(int a, double b, int c);
+    #|int main(void) {
+    #|  return (int)add_from_clang(2.25, 3.75) + (int)mix_from_clang(2, 3.5, 4);
+    #|}
+  let callee =
+    #|double add_from_clang(double x, double y) { return x + y; }
+    #|double mix_from_clang(int a, double b, int c) { return a + b + c; }
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 15)
+}
+
+///|
 fn strict_mir_stack_floating_direct_call_source() -> String {
   let source =
     #|double sum9d(double a, double b, double c, double d, double e, double f, double g, double h, double i) {
