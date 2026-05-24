@@ -9249,6 +9249,68 @@ async test "strict MIR codegen matches parser codegen for runtime floating compa
 }
 
 ///|
+test "strict MIR codegen exposes runtime floating comparison builtins to clang callers" {
+  let callee =
+    #|int eval_floating_comparison(void) {
+    #|  double x = 3.0;
+    #|  double y = 2.0;
+    #|  double z = 3.0;
+    #|  double zero = 0.0;
+    #|  double nanv = zero / zero;
+    #|  int side = 0;
+    #|  if (!__builtin_isgreater(x, y)) return 1;
+    #|  if (!__builtin_isgreaterequal(x, z)) return 2;
+    #|  if (!__builtin_isless(y, x)) return 3;
+    #|  if (!__builtin_islessequal(z, x)) return 4;
+    #|  if (!__builtin_islessgreater(y, x)) return 5;
+    #|  if (__builtin_islessgreater(x, z)) return 6;
+    #|  if (__builtin_islessgreater(nanv, y)) return 7;
+    #|  if (!__builtin_isunordered(nanv, y)) return 8;
+    #|  if (__builtin_isunordered(x, y)) return 9;
+    #|  if (!__builtin_isless((side += 1, y), x)) return 10;
+    #|  if (side != 1) return 11;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_floating_comparison(void);
+    #|int main(void) {
+    #|  return eval_floating_comparison();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang runtime floating comparison builtins" {
+  let caller =
+    #|int eval_floating_comparison(void);
+    #|int main(void) {
+    #|  return eval_floating_comparison();
+    #|}
+  let callee =
+    #|int eval_floating_comparison(void) {
+    #|  double x = 3.0;
+    #|  double y = 2.0;
+    #|  double z = 3.0;
+    #|  double zero = 0.0;
+    #|  double nanv = zero / zero;
+    #|  int side = 0;
+    #|  if (!__builtin_isgreater(x, y)) return 1;
+    #|  if (!__builtin_isgreaterequal(x, z)) return 2;
+    #|  if (!__builtin_isless(y, x)) return 3;
+    #|  if (!__builtin_islessequal(z, x)) return 4;
+    #|  if (!__builtin_islessgreater(y, x)) return 5;
+    #|  if (__builtin_islessgreater(x, z)) return 6;
+    #|  if (__builtin_islessgreater(nanv, y)) return 7;
+    #|  if (!__builtin_isunordered(nanv, y)) return 8;
+    #|  if (__builtin_isunordered(x, y)) return 9;
+    #|  if (!__builtin_isless((side += 1, y), x)) return 10;
+    #|  if (side != 1) return 11;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_floating_classification_builtin_source() -> String {
   let source =
     #|int main(void) {
