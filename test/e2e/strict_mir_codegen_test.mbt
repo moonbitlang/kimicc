@@ -2033,6 +2033,72 @@ async test "strict MIR codegen matches parser codegen for unsigned int128 limb d
 }
 
 ///|
+test "strict MIR codegen exposes unsigned int128 limb divide to clang callers" {
+  let callee =
+    #|typedef unsigned long js_limb_t;
+    #|typedef long js_slimb_t;
+    #|typedef unsigned __int128 js_dlimb_t;
+    #|static js_limb_t mp_div1(js_limb_t *tabr, const js_limb_t *taba, js_limb_t n,
+    #|                         js_limb_t b, js_limb_t r) {
+    #|  js_slimb_t i;
+    #|  js_dlimb_t a1;
+    #|  for (i = n - 1; i >= 0; i--) {
+    #|    a1 = ((js_dlimb_t)r << 64) | taba[i];
+    #|    tabr[i] = a1 / b;
+    #|    r = a1 % b;
+    #|  }
+    #|  return r;
+    #|}
+    #|int eval_unsigned_int128_limb_divide(void) {
+    #|  js_limb_t in[1] = { 5 };
+    #|  js_limb_t out[1];
+    #|  js_limb_t rem = mp_div1(out, in, 1, 2, 1);
+    #|  if (out[0] != ((1UL << 63) + 2)) return 10;
+    #|  if (rem != 1) return 20;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_unsigned_int128_limb_divide(void);
+    #|int main(void) {
+    #|  return eval_unsigned_int128_limb_divide();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang unsigned int128 limb divide" {
+  let caller =
+    #|int eval_unsigned_int128_limb_divide(void);
+    #|int main(void) {
+    #|  return eval_unsigned_int128_limb_divide();
+    #|}
+  let callee =
+    #|typedef unsigned long js_limb_t;
+    #|typedef long js_slimb_t;
+    #|typedef unsigned __int128 js_dlimb_t;
+    #|static js_limb_t mp_div1(js_limb_t *tabr, const js_limb_t *taba, js_limb_t n,
+    #|                         js_limb_t b, js_limb_t r) {
+    #|  js_slimb_t i;
+    #|  js_dlimb_t a1;
+    #|  for (i = n - 1; i >= 0; i--) {
+    #|    a1 = ((js_dlimb_t)r << 64) | taba[i];
+    #|    tabr[i] = a1 / b;
+    #|    r = a1 % b;
+    #|  }
+    #|  return r;
+    #|}
+    #|int eval_unsigned_int128_limb_divide(void) {
+    #|  js_limb_t in[1] = { 5 };
+    #|  js_limb_t out[1];
+    #|  js_limb_t rem = mp_div1(out, in, 1, 2, 1);
+    #|  if (out[0] != ((1UL << 63) + 2)) return 10;
+    #|  if (rem != 1) return 20;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_int128_direct_call_source() -> String {
   let source =
     #|typedef __int128 i128;
