@@ -9776,6 +9776,42 @@ async test "strict MIR codegen matches parser codegen for Darwin long double sca
 }
 
 ///|
+test "strict MIR codegen exposes Darwin long double scalar ops to clang callers" {
+  let callee =
+    #|int eval_long_double_scalar(void) {
+    #|  long double a = 1.0L;
+    #|  long double b = 2.0L;
+    #|  long double d = 0 ? a : b;
+    #|  d = d + 40.0L;
+    #|  return (int)d;
+    #|}
+  let driver =
+    #|int eval_long_double_scalar(void);
+    #|int main(void) {
+    #|  return eval_long_double_scalar();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang Darwin long double scalar ops" {
+  let caller =
+    #|int eval_long_double_scalar_from_clang(void);
+    #|int main(void) {
+    #|  return eval_long_double_scalar_from_clang();
+    #|}
+  let callee =
+    #|int eval_long_double_scalar_from_clang(void) {
+    #|  long double a = 1.0L;
+    #|  long double b = 2.0L;
+    #|  long double d = 0 ? a : b;
+    #|  d = d + 40.0L;
+    #|  return (int)d;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_global_address_cancellation_load_source() -> String {
   let source =
     #|char buf[3] = {4, 5, 0};
