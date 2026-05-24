@@ -9378,6 +9378,38 @@ async test "strict MIR codegen matches parser codegen for count zero builtins" {
 }
 
 ///|
+test "strict MIR codegen exposes count zero builtins to clang callers" {
+  let callee =
+    #|typedef unsigned long long uint64_t;
+    #|int count_zeroes(unsigned int a, uint64_t b, unsigned int c, uint64_t d) {
+    #|  return __builtin_clz(a) + __builtin_clzll(b) + __builtin_ctz(c) + __builtin_ctzll(d);
+    #|}
+  let driver =
+    #|typedef unsigned long long uint64_t;
+    #|int count_zeroes(unsigned int a, uint64_t b, unsigned int c, uint64_t d);
+    #|int main(void) {
+    #|  return count_zeroes(1u, 1ull, 8u, 16ull);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 101)
+}
+
+///|
+test "strict MIR codegen calls clang count zero builtins" {
+  let caller =
+    #|typedef unsigned long long uint64_t;
+    #|int count_zeroes(unsigned int a, uint64_t b, unsigned int c, uint64_t d);
+    #|int main(void) {
+    #|  return count_zeroes(1u, 1ull, 8u, 16ull);
+    #|}
+  let callee =
+    #|typedef unsigned long long uint64_t;
+    #|int count_zeroes(unsigned int a, uint64_t b, unsigned int c, uint64_t d) {
+    #|  return __builtin_clz(a) + __builtin_clzll(b) + __builtin_ctz(c) + __builtin_ctzll(d);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 101)
+}
+
+///|
 fn strict_mir_integer_unary_builtin_source() -> String {
   let source =
     #|int main(void) {
