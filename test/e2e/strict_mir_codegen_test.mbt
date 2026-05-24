@@ -9139,6 +9139,76 @@ async test "strict MIR codegen matches parser codegen for aggregate compound lit
 }
 
 ///|
+test "strict MIR codegen returns aggregate compound literals to clang callers" {
+  let callee =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|Value new_bool(int val) {
+    #|  return (Value){ (ValueUnion){ .int32 = (val != 0) }, 1 };
+    #|}
+  let driver =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|Value new_bool(int val);
+    #|int main(void) {
+    #|  Value v = new_bool(42);
+    #|  return v.u.int32 + (int)v.tag * 10;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 11)
+}
+
+///|
+test "strict MIR codegen receives aggregate compound literal returns from clang callees" {
+  let caller =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|Value new_bool(int val);
+    #|int main(void) {
+    #|  Value v = new_bool(42);
+    #|  return v.u.int32 + (int)v.tag * 10;
+    #|}
+  let callee =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|Value new_bool(int val) {
+    #|  return (Value){ (ValueUnion){ .int32 = (val != 0) }, 1 };
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 11)
+}
+
+///|
 fn strict_mir_identity_cast_aggregate_return_source() -> String {
   let source =
     #|typedef union ValueUnion {
