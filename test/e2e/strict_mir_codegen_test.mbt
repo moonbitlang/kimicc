@@ -9228,6 +9228,86 @@ async test "strict MIR codegen matches parser codegen for typedef function point
 }
 
 ///|
+test "strict MIR codegen returns typedef function pointer aggregate values to clang callers" {
+  let callee =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|Value make(int argc, Value *argv) {
+    #|  return argv[argc - 1];
+    #|}
+  let driver =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|typedef Value JobFunc(int argc, Value *argv);
+    #|Value make(int argc, Value *argv);
+    #|int main(void) {
+    #|  Value args[2];
+    #|  args[0] = (Value){ (ValueUnion){ .int32 = 3 }, 1 };
+    #|  args[1] = (Value){ (ValueUnion){ .int32 = 9 }, 1 };
+    #|  JobFunc *job_func = make;
+    #|  Value res = job_func(2, (Value *)args);
+    #|  return res.u.int32;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 9)
+}
+
+///|
+test "strict MIR codegen receives typedef function pointer aggregate returns from clang callees" {
+  let caller =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|typedef Value JobFunc(int argc, Value *argv);
+    #|Value make(int argc, Value *argv);
+    #|int main(void) {
+    #|  Value args[2];
+    #|  args[0] = (Value){ (ValueUnion){ .int32 = 3 }, 1 };
+    #|  args[1] = (Value){ (ValueUnion){ .int32 = 9 }, 1 };
+    #|  JobFunc *job_func = make;
+    #|  Value res = job_func(2, (Value *)args);
+    #|  return res.u.int32;
+    #|}
+  let callee =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|Value make(int argc, Value *argv) {
+    #|  return argv[argc - 1];
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 9)
+}
+
+///|
 fn strict_mir_aggregate_compound_literal_argument_source() -> String {
   let source =
     #|typedef union ValueUnion {
