@@ -9255,6 +9255,92 @@ async test "strict MIR codegen matches parser codegen for identity-cast aggregat
 }
 
 ///|
+test "strict MIR codegen returns identity-cast aggregate values to clang callers" {
+  let callee =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|typedef struct Header {
+    #|  int ref_count;
+    #|} Header;
+    #|Value dup(Value v) {
+    #|  if ((unsigned)((int)(v).tag) >= (unsigned)-9) {
+    #|    Header *p = (Header *)((v).u.ptr);
+    #|    p->ref_count++;
+    #|  }
+    #|  return (Value)v;
+    #|}
+  let driver =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|Value dup(Value v);
+    #|int main(void) {
+    #|  Value v = (Value){ (ValueUnion){ .int32 = 7 }, 1 };
+    #|  Value out = dup(v);
+    #|  return out.u.int32;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 7)
+}
+
+///|
+test "strict MIR codegen receives identity-cast aggregate returns from clang callees" {
+  let caller =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|Value dup(Value v);
+    #|int main(void) {
+    #|  Value v = (Value){ (ValueUnion){ .int32 = 7 }, 1 };
+    #|  Value out = dup(v);
+    #|  return out.u.int32;
+    #|}
+  let callee =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|typedef struct Header {
+    #|  int ref_count;
+    #|} Header;
+    #|Value dup(Value v) {
+    #|  if ((unsigned)((int)(v).tag) >= (unsigned)-9) {
+    #|    Header *p = (Header *)((v).u.ptr);
+    #|    p->ref_count++;
+    #|  }
+    #|  return (Value)v;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 7)
+}
+
+///|
 fn strict_mir_typedef_function_pointer_aggregate_return_source() -> String {
   let source =
     #|typedef union ValueUnion {
