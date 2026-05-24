@@ -9139,6 +9139,48 @@ async test "strict MIR codegen matches parser codegen for floating fabs and infi
 }
 
 ///|
+test "strict MIR codegen exposes floating fabs and infinity builtins to clang callers" {
+  let callee =
+    #|int finitef(float x) {
+    #|  return x == x && __builtin_fabsf(x) != __builtin_inff();
+    #|}
+    #|int finited(double x) {
+    #|  return x == x && __builtin_fabs(x) != __builtin_inf();
+    #|}
+  let driver =
+    #|int finitef(float x);
+    #|int finited(double x);
+    #|int main(void) {
+    #|  return finitef(-3.5f) +
+    #|    2 * finitef(__builtin_inff()) +
+    #|    4 * finited(-4.5) +
+    #|    8 * finited(__builtin_inf());
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 5)
+}
+
+///|
+test "strict MIR codegen calls clang floating fabs and infinity builtins" {
+  let caller =
+    #|int finitef(float x);
+    #|int finited(double x);
+    #|int main(void) {
+    #|  return finitef(-3.5f) +
+    #|    2 * finitef(__builtin_inff()) +
+    #|    4 * finited(-4.5) +
+    #|    8 * finited(__builtin_inf());
+    #|}
+  let callee =
+    #|int finitef(float x) {
+    #|  return x == x && __builtin_fabsf(x) != __builtin_inff();
+    #|}
+    #|int finited(double x) {
+    #|  return x == x && __builtin_fabs(x) != __builtin_inf();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 5)
+}
+
+///|
 fn strict_mir_long_double_fabs_infinity_source() -> String {
   let source =
     #|int finitel(long double x) {
