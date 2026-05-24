@@ -658,6 +658,66 @@ async test "strict MIR codegen matches parser codegen for alloca aggregate call 
 }
 
 ///|
+test "strict MIR codegen receives alloca-shaped aggregate call args from clang callers" {
+  let callee =
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|int score(struct Pair p) {
+    #|  return p.a + (int)(p.b * 10.0) + p.tag;
+    #|}
+  let driver =
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|int score(struct Pair p);
+    #|int main(void) {
+    #|  struct Pair p;
+    #|  p.a = 7;
+    #|  p.b = 2.5;
+    #|  p.tag = 10;
+    #|  return score(p);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen passes alloca aggregate call args to clang callees" {
+  let caller =
+    #|typedef unsigned long size_t;
+    #|extern void *memset(void *, int, size_t);
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|int score(struct Pair p);
+    #|int main(void) {
+    #|  struct Pair *p = __builtin_alloca(sizeof(struct Pair));
+    #|  memset(p, 0, sizeof(struct Pair));
+    #|  p->a = 7;
+    #|  p->b = 2.5;
+    #|  p->tag = 10;
+    #|  if ((int)(p->b * 10.0) != 25) return 100;
+    #|  return score(*p);
+    #|}
+  let callee =
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|int score(struct Pair p) {
+    #|  return p.a + (int)(p.b * 10.0) + p.tag;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_alloca_aggregate_variadic_argument_source() -> String {
   let source =
     #|typedef unsigned long size_t;
