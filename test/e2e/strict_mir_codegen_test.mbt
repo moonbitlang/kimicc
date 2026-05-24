@@ -3507,6 +3507,48 @@ test "strict MIR codegen passes indirect register aggregate parameters to clang 
 }
 
 ///|
+test "strict MIR codegen receives indirect register aggregate parameters from clang callers" {
+  let callee =
+    #|struct Pair { long a; long b; };
+    #|struct Tiny { char a; short b; };
+    #|struct H { double a[2]; };
+    #|struct F { float a; float b; float c; };
+    #|long sum_pair(struct Pair p, long z) {
+    #|  return p.a + p.b + z;
+    #|}
+    #|int sum_tiny(struct Tiny t) {
+    #|  return t.a + t.b;
+    #|}
+    #|int sum_h(struct H h) {
+    #|  return (int)(h.a[0] + h.a[1]);
+    #|}
+    #|int sum_f(struct F f) {
+    #|  return (int)(f.a + f.b + f.c);
+    #|}
+    #|int run_indirect(struct Pair p, struct Tiny t, struct H h, struct F f) {
+    #|  long (*fp_pair)(struct Pair, long) = sum_pair;
+    #|  int (*fp_tiny)(struct Tiny) = sum_tiny;
+    #|  int (*fp_h)(struct H) = sum_h;
+    #|  int (*fp_f)(struct F) = sum_f;
+    #|  return (int)fp_pair(p, 5) + fp_tiny(t) + fp_h(h) + fp_f(f);
+    #|}
+  let driver =
+    #|struct Pair { long a; long b; };
+    #|struct Tiny { char a; short b; };
+    #|struct H { double a[2]; };
+    #|struct F { float a; float b; float c; };
+    #|int run_indirect(struct Pair p, struct Tiny t, struct H h, struct F f);
+    #|int main(void) {
+    #|  struct Pair p = {10, 20};
+    #|  struct Tiny t = {5, 30};
+    #|  struct H h = {{3.0, 4.0}};
+    #|  struct F f = {1.0f, 2.0f, 3.0f};
+    #|  return run_indirect(p, t, h, f);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 83)
+}
+
+///|
 fn strict_mir_indirect_stack_aggregate_parameter_source() -> String {
   let source =
     #|struct Pair { long a; long b; };
