@@ -9070,6 +9070,42 @@ async test "strict MIR codegen matches parser codegen for floating comma stores"
 }
 
 ///|
+test "strict MIR codegen exposes floating comma stores to clang callers" {
+  let callee =
+    #|union U { float f; unsigned u; };
+    #|int write_floats(union U *x1, union U *x2) {
+    #|  x1->f = 1.0f, x2->f = -0.0f;
+    #|  return (x1->u == 0x3f800000u) + (x2->u == 0x80000000u);
+    #|}
+  let driver =
+    #|union U { float f; unsigned u; };
+    #|int write_floats(union U *x1, union U *x2);
+    #|int main(void) {
+    #|  union U x1, x2;
+    #|  return write_floats(&x1, &x2);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 2)
+}
+
+///|
+test "strict MIR codegen passes floating comma store state to clang callees" {
+  let caller =
+    #|union U { float f; unsigned u; };
+    #|int write_floats(union U *x1, union U *x2);
+    #|int main(void) {
+    #|  union U x1, x2;
+    #|  return write_floats(&x1, &x2);
+    #|}
+  let callee =
+    #|union U { float f; unsigned u; };
+    #|int write_floats(union U *x1, union U *x2) {
+    #|  x1->f = 1.0f, x2->f = -0.0f;
+    #|  return (x1->u == 0x3f800000u) + (x2->u == 0x80000000u);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 2)
+}
+
+///|
 fn strict_mir_floating_fabs_infinity_source() -> String {
   let source =
     #|int finitef(float x) {
