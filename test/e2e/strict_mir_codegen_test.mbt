@@ -8200,6 +8200,38 @@ async test "strict MIR codegen matches parser codegen for stack-passed floating 
 }
 
 ///|
+test "strict MIR codegen exposes stack-passed floating variadic libcalls to clang callers" {
+  let callee =
+    #|int eval_stack_floating_variadic_libcall(void) {
+    #|  char buf[32];
+    #|  int n = __builtin___snprintf_chk(buf, 32, 0, 32, "%.0f%.0f%.0f%.0f%.0f%.0f%.0f%.0f%.0f", 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0);
+    #|  return n + (buf[0] == '1') + (buf[1] == '2') + (buf[2] == '3') + (buf[3] == '4') + (buf[4] == '5') + (buf[5] == '6') + (buf[6] == '7') + (buf[7] == '8') + (buf[8] == '9');
+    #|}
+  let driver =
+    #|int eval_stack_floating_variadic_libcall(void);
+    #|int main(void) {
+    #|  return eval_stack_floating_variadic_libcall();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 18)
+}
+
+///|
+test "strict MIR codegen calls clang stack-passed floating variadic libcalls" {
+  let caller =
+    #|int eval_stack_floating_variadic_libcall_from_clang(void);
+    #|int main(void) {
+    #|  return eval_stack_floating_variadic_libcall_from_clang();
+    #|}
+  let callee =
+    #|int eval_stack_floating_variadic_libcall_from_clang(void) {
+    #|  char buf[32];
+    #|  int n = __builtin___snprintf_chk(buf, 32, 0, 32, "%.0f%.0f%.0f%.0f%.0f%.0f%.0f%.0f%.0f", 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0);
+    #|  return n + (buf[0] == '1') + (buf[1] == '2') + (buf[2] == '3') + (buf[3] == '4') + (buf[4] == '5') + (buf[5] == '6') + (buf[6] == '7') + (buf[7] == '8') + (buf[8] == '9');
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 18)
+}
+
+///|
 fn strict_mir_stack_integer_variadic_libcall_source() -> String {
   let source =
     #|int main(void) {
