@@ -8707,6 +8707,40 @@ async test "strict MIR codegen matches parser codegen for aggregate assignment r
 }
 
 ///|
+test "strict MIR codegen exposes aggregate assignment rvalue member reads to clang callers" {
+  let callee =
+    #|struct S { int x; int y; };
+    #|int eval_assign(void) {
+    #|  struct S lhs = { 1, 2 };
+    #|  struct S rhs = { 19, 23 };
+    #|  return (lhs = rhs).y + lhs.x;
+    #|}
+  let driver =
+    #|int eval_assign(void);
+    #|int main(void) {
+    #|  return eval_assign();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang aggregate assignment rvalue member reads" {
+  let caller =
+    #|int eval_assign(void);
+    #|int main(void) {
+    #|  return eval_assign();
+    #|}
+  let callee =
+    #|struct S { int x; int y; };
+    #|int eval_assign(void) {
+    #|  struct S lhs = { 1, 2 };
+    #|  struct S rhs = { 19, 23 };
+    #|  return (lhs = rhs).y + lhs.x;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_local_aggregate_array_assignment_rvalue_source() -> String {
   let source =
     #|struct S { int x; int y; };
