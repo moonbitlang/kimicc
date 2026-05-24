@@ -9064,6 +9064,50 @@ async test "strict MIR codegen matches parser codegen for checked scientific pri
 }
 
 ///|
+test "strict MIR codegen exposes checked scientific printf formatting to clang callers" {
+  let callee =
+    #|int eval_checked_scientific_printf_formatting(void) {
+    #|  char buf[80];
+    #|  int n = __builtin___snprintf_chk(buf, 80, 0, 80, "%+.2e|% 8.1E|%05.0e", 123.0, 0.012, 9.9);
+    #|  if (n != 24) return 1;
+    #|  if (buf[0] != '+' || buf[1] != '1' || buf[2] != '.' || buf[3] != '2' || buf[4] != '3') return 2;
+    #|  if (buf[5] != 'e' || buf[6] != '+' || buf[7] != '0' || buf[8] != '2' || buf[9] != '|') return 3;
+    #|  if (buf[10] != ' ' || buf[11] != '1' || buf[12] != '.' || buf[13] != '2' || buf[14] != 'E') return 4;
+    #|  if (buf[15] != '-' || buf[16] != '0' || buf[17] != '2' || buf[18] != '|' || buf[19] != '1') return 5;
+    #|  if (buf[20] != 'e' || buf[21] != '+' || buf[22] != '0' || buf[23] != '1' || buf[24] != 0) return 6;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_checked_scientific_printf_formatting(void);
+    #|int main(void) {
+    #|  return eval_checked_scientific_printf_formatting();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang checked scientific printf formatting" {
+  let caller =
+    #|int eval_checked_scientific_printf_formatting_from_clang(void);
+    #|int main(void) {
+    #|  return eval_checked_scientific_printf_formatting_from_clang();
+    #|}
+  let callee =
+    #|int eval_checked_scientific_printf_formatting_from_clang(void) {
+    #|  char buf[80];
+    #|  int n = __builtin___snprintf_chk(buf, 80, 0, 80, "%+.2e|% 8.1E|%05.0e", 123.0, 0.012, 9.9);
+    #|  if (n != 24) return 1;
+    #|  if (buf[0] != '+' || buf[1] != '1' || buf[2] != '.' || buf[3] != '2' || buf[4] != '3') return 2;
+    #|  if (buf[5] != 'e' || buf[6] != '+' || buf[7] != '0' || buf[8] != '2' || buf[9] != '|') return 3;
+    #|  if (buf[10] != ' ' || buf[11] != '1' || buf[12] != '.' || buf[13] != '2' || buf[14] != 'E') return 4;
+    #|  if (buf[15] != '-' || buf[16] != '0' || buf[17] != '2' || buf[18] != '|' || buf[19] != '1') return 5;
+    #|  if (buf[20] != 'e' || buf[21] != '+' || buf[22] != '0' || buf[23] != '1' || buf[24] != 0) return 6;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_scalar_va_arg_source() -> String {
   let source =
     #|typedef __builtin_va_list va_list;
