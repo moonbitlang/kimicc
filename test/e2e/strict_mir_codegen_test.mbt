@@ -7964,6 +7964,50 @@ async test "strict MIR codegen matches parser codegen for aggregate va_arg membe
 }
 
 ///|
+test "strict MIR codegen reads aggregate va_arg members from clang caller" {
+  let callee =
+    #|typedef __builtin_va_list va_list;
+    #|struct Pair { int a; int b; };
+    #|int pick(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  int value = __builtin_va_arg(ap, struct Pair).b;
+    #|  __builtin_va_end(ap);
+    #|  return tag + value;
+    #|}
+  let driver =
+    #|struct Pair { int a; int b; };
+    #|int pick(int tag, ...);
+    #|int main(void) {
+    #|  struct Pair p = {10, 32};
+    #|  return pick(10, p);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen passes aggregate va_arg member args to clang callees" {
+  let caller =
+    #|struct Pair { int a; int b; };
+    #|int pick(int tag, ...);
+    #|int main(void) {
+    #|  struct Pair p = {10, 32};
+    #|  return pick(10, p);
+    #|}
+  let callee =
+    #|typedef __builtin_va_list va_list;
+    #|struct Pair { int a; int b; };
+    #|int pick(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  int value = __builtin_va_arg(ap, struct Pair).b;
+    #|  __builtin_va_end(ap);
+    #|  return tag + value;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_long_double_scalar_source() -> String {
   let source =
     #|int main(void) {
