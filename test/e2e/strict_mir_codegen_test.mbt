@@ -5295,7 +5295,7 @@ async test "strict MIR codegen matches parser codegen for aggregate compound lit
 }
 
 ///|
-test "strict MIR codegen ignores aggregate void casts" {
+fn strict_mir_aggregate_void_cast_source() -> String {
   let source =
     #|struct Token { int n; };
     #|int main(void) {
@@ -5304,7 +5304,22 @@ test "strict MIR codegen ignores aggregate void casts" {
     #|  (void)t;
     #|  return t.n;
     #|}
+  source
+}
+
+///|
+test "strict MIR codegen ignores aggregate void casts" {
+  let source = strict_mir_aggregate_void_cast_source()
   assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
+async test "strict MIR codegen matches parser codegen for aggregate void casts" {
+  let result = run_source_strict_mir_against_parser_codegen(
+    strict_mir_aggregate_void_cast_source(),
+    "strict_mir_aggregate_void_cast_differential",
+  )
+  assert_eq(result.code, 42)
 }
 
 ///|
