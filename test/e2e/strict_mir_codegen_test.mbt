@@ -2940,6 +2940,31 @@ test "strict MIR codegen returns small aggregates to clang callers" {
 }
 
 ///|
+test "strict MIR codegen receives small aggregates from clang callees" {
+  let caller =
+    #|struct Pair { long a; long b; };
+    #|struct Pair make_pair(long a, long b);
+    #|struct Pair forward_pair(long a, long b);
+    #|int main(void) {
+    #|  struct Pair p = make_pair(10, 20);
+    #|  struct Pair q = forward_pair(3, 4);
+    #|  return (int)(p.a + p.b + q.a + q.b);
+    #|}
+  let callee =
+    #|struct Pair { long a; long b; };
+    #|struct Pair make_pair(long a, long b) {
+    #|  struct Pair p;
+    #|  p.a = a;
+    #|  p.b = b;
+    #|  return p;
+    #|}
+    #|struct Pair forward_pair(long a, long b) {
+    #|  return make_pair(a + 1, b + 2);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 40)
+}
+
+///|
 fn strict_mir_hfa_aggregate_call_result_source() -> String {
   let source =
     #|struct H { double a[2]; };
