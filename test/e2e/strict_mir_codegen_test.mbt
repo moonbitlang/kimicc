@@ -707,6 +707,76 @@ async test "strict MIR codegen matches parser codegen for alloca aggregate varia
 }
 
 ///|
+test "strict MIR codegen receives alloca-shaped aggregate variadic args from clang callers" {
+  let callee =
+    #|typedef __builtin_va_list va_list;
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|int score(int seed, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, seed);
+    #|  struct Pair p = __builtin_va_arg(ap, struct Pair);
+    #|  __builtin_va_end(ap);
+    #|  return seed + p.a + (int)(p.b * 10.0) + p.tag;
+    #|}
+  let driver =
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|int score(int seed, ...);
+    #|int main(void) {
+    #|  struct Pair p;
+    #|  p.a = 5;
+    #|  p.b = 2.0;
+    #|  p.tag = 12;
+    #|  return score(5, p);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen passes alloca aggregate variadic args to clang callees" {
+  let caller =
+    #|typedef unsigned long size_t;
+    #|extern void *memset(void *, int, size_t);
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|int score(int seed, ...);
+    #|int main(void) {
+    #|  struct Pair *p = __builtin_alloca(sizeof(struct Pair));
+    #|  memset(p, 0, sizeof(struct Pair));
+    #|  p->a = 5;
+    #|  p->b = 2.0;
+    #|  p->tag = 12;
+    #|  if ((int)(p->b * 10.0) != 20) return 100;
+    #|  return score(5, *p);
+    #|}
+  let callee =
+    #|typedef __builtin_va_list va_list;
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|int score(int seed, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, seed);
+    #|  struct Pair p = __builtin_va_arg(ap, struct Pair);
+    #|  __builtin_va_end(ap);
+    #|  return seed + p.a + (int)(p.b * 10.0) + p.tag;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_alloca_aggregate_return_source() -> String {
   let source =
     #|typedef unsigned long size_t;
