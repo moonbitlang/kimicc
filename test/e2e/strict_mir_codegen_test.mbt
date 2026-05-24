@@ -9505,6 +9505,64 @@ async test "strict MIR codegen matches parser codegen for rotate builtins" {
 }
 
 ///|
+test "strict MIR codegen exposes rotate builtins to clang callers" {
+  let callee =
+    #|unsigned int rl32(unsigned int x, int s) { return __builtin_rotateleft32(x, s); }
+    #|unsigned int rr32(unsigned int x, int s) { return __builtin_rotateright32(x, s); }
+    #|unsigned long long rl64(unsigned long long x, int s) { return __builtin_rotateleft64(x, s); }
+    #|unsigned long long rr64(unsigned long long x, int s) { return __builtin_rotateright64(x, s); }
+    #|int eval_rotate(unsigned int x, unsigned long long y, int n) {
+    #|  int side = 0;
+    #|  if (rl32(x, n) != 0x34567812u) return 1;
+    #|  if (rr32(x, 12) != 0x67812345u) return 2;
+    #|  if (rl64(y, 16) != 0x456789abcdef0123ull) return 3;
+    #|  if (rr64(y, 16) != 0xcdef0123456789abull) return 4;
+    #|  if (__builtin_rotateleft((unsigned int)0x80000001u, 1) != 3u) return 5;
+    #|  if (__builtin_rotateright((unsigned long long)1ull, 1) != 0x8000000000000000ull) return 6;
+    #|  unsigned int sx = (side += 1, x);
+    #|  int sn = (side += 2, n);
+    #|  if (__builtin_rotateleft32(sx, sn) != 0x34567812u) return 7;
+    #|  if (side != 3) return 8;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_rotate(unsigned int x, unsigned long long y, int n);
+    #|int main(void) {
+    #|  return eval_rotate(0x12345678u, 0x0123456789abcdefull, 8);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang rotate builtins" {
+  let caller =
+    #|int eval_rotate(unsigned int x, unsigned long long y, int n);
+    #|int main(void) {
+    #|  return eval_rotate(0x12345678u, 0x0123456789abcdefull, 8);
+    #|}
+  let callee =
+    #|unsigned int rl32(unsigned int x, int s) { return __builtin_rotateleft32(x, s); }
+    #|unsigned int rr32(unsigned int x, int s) { return __builtin_rotateright32(x, s); }
+    #|unsigned long long rl64(unsigned long long x, int s) { return __builtin_rotateleft64(x, s); }
+    #|unsigned long long rr64(unsigned long long x, int s) { return __builtin_rotateright64(x, s); }
+    #|int eval_rotate(unsigned int x, unsigned long long y, int n) {
+    #|  int side = 0;
+    #|  if (rl32(x, n) != 0x34567812u) return 1;
+    #|  if (rr32(x, 12) != 0x67812345u) return 2;
+    #|  if (rl64(y, 16) != 0x456789abcdef0123ull) return 3;
+    #|  if (rr64(y, 16) != 0xcdef0123456789abull) return 4;
+    #|  if (rl32(0x80000001u, 1) != 3u) return 5;
+    #|  if (rr64(1ull, 1) != 0x8000000000000000ull) return 6;
+    #|  unsigned int sx = (side += 1, x);
+    #|  int sn = (side += 2, n);
+    #|  if (__builtin_rotateleft32(sx, sn) != 0x34567812u) return 7;
+    #|  if (side != 3) return 8;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_aggregate_compound_literal_return_source() -> String {
   let source =
     #|typedef union ValueUnion {
