@@ -3668,7 +3668,7 @@ async test "strict MIR codegen matches parser codegen for aggregate object addre
 }
 
 ///|
-test "strict MIR codegen accesses aggregate pointer members" {
+fn strict_mir_aggregate_pointer_member_source() -> String {
   let source =
     #|struct Pair { long a; long b; };
     #|int sum_pair(struct Pair *p) {
@@ -3682,7 +3682,22 @@ test "strict MIR codegen accesses aggregate pointer members" {
     #|  if (local_pair.a != 7) return 1;
     #|  return seen;
     #|}
+  source
+}
+
+///|
+test "strict MIR codegen accesses aggregate pointer members" {
+  let source = strict_mir_aggregate_pointer_member_source()
   assert_eq(run_source_strict_mir(source), 9)
+}
+
+///|
+async test "strict MIR codegen matches parser codegen for aggregate pointer members" {
+  let result = run_source_strict_mir_against_parser_codegen(
+    strict_mir_aggregate_pointer_member_source(),
+    "strict_mir_aggregate_pointer_member_differential",
+  )
+  assert_eq(result.code, 9)
 }
 
 ///|
