@@ -8860,6 +8860,58 @@ async test "strict MIR codegen matches parser codegen for declared printf format
 }
 
 ///|
+test "strict MIR codegen exposes declared printf formatting to clang callers" {
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern int snprintf(char *, size_t, const char *, ...);
+    #|extern int sprintf(char *, const char *, ...);
+    #|int eval_declared_printf_formatting(void) {
+    #|  char buf[64];
+    #|  int n = snprintf(buf, 64, "%s:%05d", "go", 7);
+    #|  if (n != 8) return 1;
+    #|  if (buf[0] != 'g' || buf[1] != 'o' || buf[2] != ':' || buf[3] != '0' || buf[7] != '7' || buf[8] != 0) return 2;
+    #|  int count = 0;
+    #|  int m = sprintf(buf, "%#x|%n%s", 42, &count, "ok");
+    #|  if (m != 7) return 3;
+    #|  if (count != 5) return 4;
+    #|  if (buf[0] != '0' || buf[1] != 'x' || buf[2] != '2' || buf[3] != 'a' || buf[4] != '|' || buf[5] != 'o' || buf[6] != 'k' || buf[7] != 0) return 5;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_declared_printf_formatting(void);
+    #|int main(void) {
+    #|  return eval_declared_printf_formatting();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang declared printf formatting" {
+  let caller =
+    #|int eval_declared_printf_formatting_from_clang(void);
+    #|int main(void) {
+    #|  return eval_declared_printf_formatting_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern int snprintf(char *, size_t, const char *, ...);
+    #|extern int sprintf(char *, const char *, ...);
+    #|int eval_declared_printf_formatting_from_clang(void) {
+    #|  char buf[64];
+    #|  int n = snprintf(buf, 64, "%s:%05d", "go", 7);
+    #|  if (n != 8) return 1;
+    #|  if (buf[0] != 'g' || buf[1] != 'o' || buf[2] != ':' || buf[3] != '0' || buf[7] != '7' || buf[8] != 0) return 2;
+    #|  int count = 0;
+    #|  int m = sprintf(buf, "%#x|%n%s", 42, &count, "ok");
+    #|  if (m != 7) return 3;
+    #|  if (count != 5) return 4;
+    #|  if (buf[0] != '0' || buf[1] != 'x' || buf[2] != '2' || buf[3] != 'a' || buf[4] != '|' || buf[5] != 'o' || buf[6] != 'k' || buf[7] != 0) return 5;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 async test "strict MIR codegen matches parser codegen for checked vprintf formatting" {
   let source =
     #|extern int printf(const char *, ...);
