@@ -9501,6 +9501,80 @@ async test "strict MIR codegen matches parser codegen for runtime floating math 
 }
 
 ///|
+test "strict MIR codegen exposes runtime floating math builtins to clang callers" {
+  let callee =
+    #|int eval_floating_math(void) {
+    #|  double zero = 0.0;
+    #|  double one = 1.0;
+    #|  double nine = 9.0;
+    #|  double mag = 5.0;
+    #|  double neg = zero - one;
+    #|  float fzero = 0.0f;
+    #|  float fone = 1.0f;
+    #|  float fnine = 9.0f;
+    #|  float fmag = 4.0f;
+    #|  float fneg = fzero - fone;
+    #|  int side = 0;
+    #|  if ((int)__builtin_sqrt(nine) != 3) return 1;
+    #|  if ((int)__builtin_sqrtf(fnine) != 3) return 2;
+    #|  if (!__builtin_isnan(__builtin_sqrt(neg))) return 3;
+    #|  if ((int)__builtin_copysign(mag, neg) != -5) return 4;
+    #|  if ((int)__builtin_copysign(zero - mag, one) != 5) return 5;
+    #|  if ((int)__builtin_copysignf(fmag, fneg) != -4) return 6;
+    #|  if ((int)__builtin_copysignf(fzero - fmag, fone) != 4) return 7;
+    #|  if ((int)__builtin_sqrt((side += 1, nine)) != 3) return 8;
+    #|  double smag = (side += 2, mag);
+    #|  double sneg = (side += 4, neg);
+    #|  if ((int)__builtin_copysign(smag, sneg) != -5) return 9;
+    #|  if (side != 7) return 10;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_floating_math(void);
+    #|int main(void) {
+    #|  return eval_floating_math();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang runtime floating math builtins" {
+  let caller =
+    #|int eval_floating_math(void);
+    #|int main(void) {
+    #|  return eval_floating_math();
+    #|}
+  let callee =
+    #|int eval_floating_math(void) {
+    #|  double zero = 0.0;
+    #|  double one = 1.0;
+    #|  double nine = 9.0;
+    #|  double mag = 5.0;
+    #|  double neg = zero - one;
+    #|  float fzero = 0.0f;
+    #|  float fone = 1.0f;
+    #|  float fnine = 9.0f;
+    #|  float fmag = 4.0f;
+    #|  float fneg = fzero - fone;
+    #|  int side = 0;
+    #|  if ((int)__builtin_sqrt(nine) != 3) return 1;
+    #|  if ((int)__builtin_sqrtf(fnine) != 3) return 2;
+    #|  if (!__builtin_isnan(__builtin_sqrt(neg))) return 3;
+    #|  if ((int)__builtin_copysign(mag, neg) != -5) return 4;
+    #|  if ((int)__builtin_copysign(zero - mag, one) != 5) return 5;
+    #|  if ((int)__builtin_copysignf(fmag, fneg) != -4) return 6;
+    #|  if ((int)__builtin_copysignf(fzero - fmag, fone) != 4) return 7;
+    #|  if ((int)__builtin_sqrt((side += 1, nine)) != 3) return 8;
+    #|  double smag = (side += 2, mag);
+    #|  double sneg = (side += 4, neg);
+    #|  if ((int)__builtin_copysign(smag, sneg) != -5) return 9;
+    #|  if (side != 7) return 10;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_count_zero_builtin_source() -> String {
   let source =
     #|typedef unsigned long long uint64_t;
