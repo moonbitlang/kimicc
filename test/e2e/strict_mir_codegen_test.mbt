@@ -8711,6 +8711,58 @@ async test "strict MIR codegen matches parser codegen for checked vsnprintf va_l
 }
 
 ///|
+test "strict MIR codegen exposes checked vsnprintf va_list libcall to clang callers" {
+  let callee =
+    #|typedef __builtin_va_list va_list;
+    #|int write_checked_fmt(char *buf, unsigned long size, const char *fmt, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, fmt);
+    #|  int n = __builtin___vsnprintf_chk(buf, size, 0, size, fmt, ap);
+    #|  __builtin_va_end(ap);
+    #|  return n;
+    #|}
+    #|int eval_checked_vsnprintf_va_list(void) {
+    #|  char buf[16];
+    #|  int n = write_checked_fmt(buf, 16, "%d-%s", 42, "ok");
+    #|  if (n != 5) return 1;
+    #|  if (buf[0] != '4' || buf[1] != '2' || buf[2] != '-' || buf[3] != 'o' || buf[4] != 'k' || buf[5] != 0) return 2;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_checked_vsnprintf_va_list(void);
+    #|int main(void) {
+    #|  return eval_checked_vsnprintf_va_list();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang checked vsnprintf va_list libcall" {
+  let caller =
+    #|int eval_checked_vsnprintf_va_list_from_clang(void);
+    #|int main(void) {
+    #|  return eval_checked_vsnprintf_va_list_from_clang();
+    #|}
+  let callee =
+    #|typedef __builtin_va_list va_list;
+    #|int write_checked_fmt_from_clang(char *buf, unsigned long size, const char *fmt, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, fmt);
+    #|  int n = __builtin___vsnprintf_chk(buf, size, 0, size, fmt, ap);
+    #|  __builtin_va_end(ap);
+    #|  return n;
+    #|}
+    #|int eval_checked_vsnprintf_va_list_from_clang(void) {
+    #|  char buf[16];
+    #|  int n = write_checked_fmt_from_clang(buf, 16, "%d-%s", 42, "ok");
+    #|  if (n != 5) return 1;
+    #|  if (buf[0] != '4' || buf[1] != '2' || buf[2] != '-' || buf[3] != 'o' || buf[4] != 'k' || buf[5] != 0) return 2;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 async test "strict MIR codegen matches parser codegen for checked printf formatting" {
   let source =
     #|extern int printf(const char *, ...);
