@@ -880,6 +880,72 @@ async test "strict MIR codegen matches parser codegen for alloca aggregate retur
 }
 
 ///|
+test "strict MIR codegen returns alloca aggregate values to clang callers" {
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *memset(void *, int, size_t);
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|struct Pair make_pair(void) {
+    #|  struct Pair *p = __builtin_alloca(sizeof(struct Pair));
+    #|  memset(p, 0, sizeof(struct Pair));
+    #|  p->a = 8;
+    #|  p->b = 2.5;
+    #|  p->tag = 9;
+    #|  return *p;
+    #|}
+  let driver =
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|struct Pair make_pair(void);
+    #|int main(void) {
+    #|  struct Pair p = make_pair();
+    #|  if ((int)(p.b * 10.0) != 25) return 100;
+    #|  return p.a + (int)(p.b * 10.0) + p.tag;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen receives alloca aggregate returns from clang callees" {
+  let caller =
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|struct Pair make_pair(void);
+    #|int main(void) {
+    #|  struct Pair p = make_pair();
+    #|  if ((int)(p.b * 10.0) != 25) return 100;
+    #|  return p.a + (int)(p.b * 10.0) + p.tag;
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *memset(void *, int, size_t);
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|struct Pair make_pair(void) {
+    #|  struct Pair *p = __builtin_alloca(sizeof(struct Pair));
+    #|  memset(p, 0, sizeof(struct Pair));
+    #|  p->a = 8;
+    #|  p->b = 2.5;
+    #|  p->tag = 9;
+    #|  return *p;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_malloc_memory_source() -> String {
   let source =
     #|typedef unsigned long size_t;
