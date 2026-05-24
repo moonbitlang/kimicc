@@ -8070,6 +8070,52 @@ async test "strict MIR codegen matches parser codegen for stack-passed floating 
 }
 
 ///|
+test "strict MIR codegen exposes stack-passed floating indirect calls to clang callers" {
+  let callee =
+    #|double sum9d_indirect_from_mir(double a, double b, double c, double d, double e, double f, double g, double h, double i) {
+    #|  return a + b + c + d + e + f + g + h + i;
+    #|}
+    #|float sum9f_indirect_from_mir(float a, float b, float c, float d, float e, float f, float g, float h, float i) {
+    #|  return a + b + c + d + e + f + g + h + i;
+    #|}
+  let driver =
+    #|typedef double (*sum9d_ptr)(double, double, double, double, double, double, double, double, double);
+    #|typedef float (*sum9f_ptr)(float, float, float, float, float, float, float, float, float);
+    #|double sum9d_indirect_from_mir(double a, double b, double c, double d, double e, double f, double g, double h, double i);
+    #|float sum9f_indirect_from_mir(float a, float b, float c, float d, float e, float f, float g, float h, float i);
+    #|int main(void) {
+    #|  sum9d_ptr dp = sum9d_indirect_from_mir;
+    #|  sum9f_ptr fp = sum9f_indirect_from_mir;
+    #|  return (int)dp(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0) +
+    #|    (int)fp((float)1.0, (float)2.0, (float)3.0, (float)4.0, (float)5.0, (float)6.0, (float)7.0, (float)8.0, (float)9.0);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 90)
+}
+
+///|
+test "strict MIR codegen calls clang stack-passed floating indirect calls" {
+  let caller =
+    #|typedef double (*sum9d_ptr)(double, double, double, double, double, double, double, double, double);
+    #|typedef float (*sum9f_ptr)(float, float, float, float, float, float, float, float, float);
+    #|double sum9d_indirect_from_clang(double a, double b, double c, double d, double e, double f, double g, double h, double i);
+    #|float sum9f_indirect_from_clang(float a, float b, float c, float d, float e, float f, float g, float h, float i);
+    #|int main(void) {
+    #|  sum9d_ptr dp = sum9d_indirect_from_clang;
+    #|  sum9f_ptr fp = sum9f_indirect_from_clang;
+    #|  return (int)dp(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0) +
+    #|    (int)fp((float)1.0, (float)2.0, (float)3.0, (float)4.0, (float)5.0, (float)6.0, (float)7.0, (float)8.0, (float)9.0);
+    #|}
+  let callee =
+    #|double sum9d_indirect_from_clang(double a, double b, double c, double d, double e, double f, double g, double h, double i) {
+    #|  return a + b + c + d + e + f + g + h + i;
+    #|}
+    #|float sum9f_indirect_from_clang(float a, float b, float c, float d, float e, float f, float g, float h, float i) {
+    #|  return a + b + c + d + e + f + g + h + i;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 90)
+}
+
+///|
 fn strict_mir_floating_variadic_libcall_source() -> String {
   let source =
     #|int main(void) {
