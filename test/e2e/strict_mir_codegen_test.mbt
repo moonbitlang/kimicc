@@ -7918,6 +7918,38 @@ async test "strict MIR codegen matches parser codegen for floating indirect call
 }
 
 ///|
+test "strict MIR codegen exposes floating indirect calls to clang callers" {
+  let callee =
+    #|double add_indirect_from_mir(double x, double y) { return x + y; }
+    #|double mix_indirect_from_mir(int a, double b, int c) { return a + b + c; }
+  let driver =
+    #|double add_indirect_from_mir(double x, double y);
+    #|double mix_indirect_from_mir(int a, double b, int c);
+    #|int main(void) {
+    #|  double (*fp)(double, double) = add_indirect_from_mir;
+    #|  double (*gp)(int, double, int) = mix_indirect_from_mir;
+    #|  return (int)fp(2.25, 3.75) + (int)gp(2, 3.5, 4);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 15)
+}
+
+///|
+test "strict MIR codegen calls clang floating indirect calls" {
+  let caller =
+    #|double add_indirect_from_clang(double x, double y);
+    #|double mix_indirect_from_clang(int a, double b, int c);
+    #|int main(void) {
+    #|  double (*fp)(double, double) = add_indirect_from_clang;
+    #|  double (*gp)(int, double, int) = mix_indirect_from_clang;
+    #|  return (int)fp(2.25, 3.75) + (int)gp(2, 3.5, 4);
+    #|}
+  let callee =
+    #|double add_indirect_from_clang(double x, double y) { return x + y; }
+    #|double mix_indirect_from_clang(int a, double b, int c) { return a + b + c; }
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 15)
+}
+
+///|
 fn strict_mir_indirect_calls_returning_function_pointers_source() -> String {
   let source =
     #|int global;
