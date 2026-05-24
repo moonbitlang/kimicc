@@ -1251,7 +1251,7 @@ test "strict MIR codegen sizes local pointer target in own initializer" {
 }
 
 ///|
-test "strict MIR codegen executes unsigned int128 limb multiply" {
+fn strict_mir_unsigned_int128_limb_multiply_source() -> String {
   let source =
     #|typedef unsigned long js_limb_t;
     #|typedef unsigned __int128 js_dlimb_t;
@@ -1275,7 +1275,22 @@ test "strict MIR codegen executes unsigned int128 limb multiply" {
     #|  if (carry != 0) return 30;
     #|  return 42;
     #|}
+  source
+}
+
+///|
+test "strict MIR codegen executes unsigned int128 limb multiply" {
+  let source = strict_mir_unsigned_int128_limb_multiply_source()
   assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
+async test "strict MIR codegen matches parser codegen for unsigned int128 limb multiply" {
+  let result = run_source_strict_mir_against_parser_codegen(
+    strict_mir_unsigned_int128_limb_multiply_source(),
+    "strict_mir_unsigned_int128_limb_multiply_differential",
+  )
+  assert_eq(result.code, 42)
 }
 
 ///|
