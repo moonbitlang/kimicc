@@ -796,6 +796,16 @@ async fn compile_preprocessed_file_with_kimicc_direct_object_path(
 }
 
 ///|
+async fn compile_preprocessed_file_with_strict_mir_object_path(
+  path : String,
+  tag : String,
+) -> String {
+  require_external_path(path, "preprocessed C testbed")
+  let data = @fs.read_file(path)
+  compile_source_to_strict_mir_object_path(data.text(), tag)
+}
+
+///|
 fn tinycc_smoke_source() -> String {
   let source =
     #|int fib(int n) {
@@ -806,6 +816,64 @@ fn tinycc_smoke_source() -> String {
     #|  return fib(10) == 55 ? 42 : 1;
     #|}
   source
+}
+
+///|
+async fn assert_tinycc_emits_smoke_object(
+  tcc_path : String,
+  tag : String,
+) -> Unit {
+  let version = run_command_capture(
+    shell_quote(tcc_path) + " -v",
+    "tinycc_" + tag + "_version",
+  )
+  if version.code != 0 || !version.output.contains("tcc version") {
+    abort(
+      "TinyCC " +
+      tag +
+      " version failed with code " +
+      version.code.to_string() +
+      ":\n" +
+      version.output,
+    )
+  }
+  let smoke_source_path = "/tmp/kimicc_tinycc_" + tag + "_smoke.c"
+  let smoke_object_path = "/tmp/kimicc_tinycc_" + tag + "_smoke.o"
+  let smoke_binary_path = "/tmp/kimicc_tinycc_" + tag + "_smoke"
+  write_text_file(smoke_source_path, tinycc_smoke_source())
+  run_command_checked(
+    "rm -f " +
+    shell_quote(smoke_object_path) +
+    " " +
+    shell_quote(smoke_binary_path),
+    "clean TinyCC " + tag + " smoke outputs",
+  )
+  run_command_checked(
+    shell_quote(tcc_path) +
+    " -c -o " +
+    shell_quote(smoke_object_path) +
+    " " +
+    shell_quote(smoke_source_path),
+    "TinyCC " + tag + " compile smoke object",
+  )
+  run_command_checked(
+    "test -s " + shell_quote(smoke_object_path),
+    "TinyCC " + tag + " smoke object exists",
+  )
+  let result = run_command_capture(
+    "file " + shell_quote(smoke_object_path),
+    "tinycc_" + tag + "_smoke_object",
+  )
+  if result.code != 0 || !result.output.contains("ELF 64-bit") {
+    abort(
+      "TinyCC " +
+      tag +
+      " smoke object check failed with code " +
+      result.code.to_string() +
+      ":\n" +
+      result.output,
+    )
+  }
 }
 
 ///|
@@ -825,54 +893,7 @@ async test "external TinyCC stripped compiler builds and emits smoke object when
     "clang -o " + shell_quote(tcc_path) + " " + shell_quote(object_path),
     "link TinyCC external compiler",
   )
-  let version = run_command_capture(
-    shell_quote(tcc_path) + " -v",
-    "tinycc_external_version",
-  )
-  if version.code != 0 || !version.output.contains("tcc version") {
-    abort(
-      "TinyCC external version failed with code " +
-      version.code.to_string() +
-      ":\n" +
-      version.output,
-    )
-  }
-  let smoke_source = tinycc_smoke_source()
-  let smoke_source_path = "/tmp/kimicc_tinycc_external_smoke.c"
-  let smoke_object_path = "/tmp/kimicc_tinycc_external_smoke.o"
-  let smoke_binary_path = "/tmp/kimicc_tinycc_external_smoke"
-  write_text_file(smoke_source_path, smoke_source)
-  run_command_checked(
-    "rm -f " +
-    shell_quote(smoke_object_path) +
-    " " +
-    shell_quote(smoke_binary_path),
-    "clean TinyCC smoke outputs",
-  )
-  run_command_checked(
-    shell_quote(tcc_path) +
-    " -c -o " +
-    shell_quote(smoke_object_path) +
-    " " +
-    shell_quote(smoke_source_path),
-    "TinyCC compile smoke object",
-  )
-  run_command_checked(
-    "test -s " + shell_quote(smoke_object_path),
-    "TinyCC smoke object exists",
-  )
-  let result = run_command_capture(
-    "file " + shell_quote(smoke_object_path),
-    "tinycc_external_smoke_object",
-  )
-  if result.code != 0 || !result.output.contains("ELF 64-bit") {
-    abort(
-      "TinyCC external smoke object check failed with code " +
-      result.code.to_string() +
-      ":\n" +
-      result.output,
-    )
-  }
+  assert_tinycc_emits_smoke_object(tcc_path, "external")
 }
 
 ///|
@@ -892,53 +913,25 @@ async test "external TinyCC stripped compiler direct object builds and emits smo
     "clang -o " + shell_quote(tcc_path) + " " + shell_quote(object_path),
     "link direct TinyCC external compiler",
   )
-  let version = run_command_capture(
-    shell_quote(tcc_path) + " -v",
-    "tinycc_direct_external_version",
-  )
-  if version.code != 0 || !version.output.contains("tcc version") {
-    abort(
-      "TinyCC direct external version failed with code " +
-      version.code.to_string() +
-      ":\n" +
-      version.output,
-    )
+  assert_tinycc_emits_smoke_object(tcc_path, "direct_external")
+}
+
+///|
+async test "external TinyCC stripped compiler strict MIR builds and emits smoke object when enabled" {
+  if !external_testbed_enabled("tinycc") {
+    return
   }
-  let smoke_source_path = "/tmp/kimicc_tinycc_direct_external_smoke.c"
-  let smoke_object_path = "/tmp/kimicc_tinycc_direct_external_smoke.o"
-  let smoke_binary_path = "/tmp/kimicc_tinycc_direct_external_smoke"
-  write_text_file(smoke_source_path, tinycc_smoke_source())
+  let source_path = "/tmp/tinycc_stripped.c"
+  require_external_path(source_path, "TinyCC stripped source")
+  let object_path = compile_preprocessed_file_with_strict_mir_object_path(
+    source_path, "tinycc_strict_mir_external_stripped",
+  )
+  let tcc_path = "/tmp/kimicc_tinycc_strict_mir_external"
   run_command_checked(
-    "rm -f " +
-    shell_quote(smoke_object_path) +
-    " " +
-    shell_quote(smoke_binary_path),
-    "clean direct TinyCC smoke outputs",
+    "clang -o " + shell_quote(tcc_path) + " " + shell_quote(object_path),
+    "link strict MIR TinyCC external compiler",
   )
-  run_command_checked(
-    shell_quote(tcc_path) +
-    " -c -o " +
-    shell_quote(smoke_object_path) +
-    " " +
-    shell_quote(smoke_source_path),
-    "direct TinyCC compile smoke object",
-  )
-  run_command_checked(
-    "test -s " + shell_quote(smoke_object_path),
-    "direct TinyCC smoke object exists",
-  )
-  let result = run_command_capture(
-    "file " + shell_quote(smoke_object_path),
-    "tinycc_direct_external_smoke_object",
-  )
-  if result.code != 0 || !result.output.contains("ELF 64-bit") {
-    abort(
-      "TinyCC direct external smoke object check failed with code " +
-      result.code.to_string() +
-      ":\n" +
-      result.output,
-    )
-  }
+  assert_tinycc_emits_smoke_object(tcc_path, "strict_mir_external")
 }
 
 ///|
@@ -965,6 +958,20 @@ async fn compile_quickjs_direct_object(
     compile_preprocessed_file_with_kimicc_direct_object_path(
       build_dir + "/" + name + ".i",
       "quickjs_direct_external_" + name,
+    ),
+  )
+}
+
+///|
+async fn compile_quickjs_strict_mir_object(
+  build_dir : String,
+  name : String,
+  objects : Array[String],
+) -> Unit {
+  objects.push(
+    compile_preprocessed_file_with_strict_mir_object_path(
+      build_dir + "/" + name + ".i",
+      "quickjs_strict_mir_external_" + name,
     ),
   )
 }
@@ -1008,6 +1015,25 @@ async fn build_quickjs_qjs_direct_external(tag : String) -> String {
 }
 
 ///|
+async fn build_quickjs_qjs_strict_mir_external(tag : String) -> String {
+  let build_dir = "/tmp/kimicc_quickjs_build"
+  let objects : Array[String] = []
+  for
+    name in [
+      "quickjs", "libregexp", "libunicode", "cutils", "quickjs-libc", "repl", "qjs",
+      "dtoa",
+    ] {
+    compile_quickjs_strict_mir_object(build_dir, name, objects)
+  }
+  let qjs_path = "/tmp/kimicc_quickjs_strict_mir_external_qjs_" + tag
+  run_command_checked(
+    "clang -o " + shell_quote(qjs_path) + " " + shell_join_quoted(objects),
+    "link strict MIR QuickJS qjs external " + tag,
+  )
+  qjs_path
+}
+
+///|
 async test "external QuickJS qjs builds and runs smoke when enabled" {
   if !external_testbed_enabled("quickjs") {
     return
@@ -1022,6 +1048,68 @@ async test "external QuickJS qjs builds and runs smoke when enabled" {
   if result.code != 0 || !result.output.contains("quickjs-smoke 499500") {
     abort(
       "QuickJS external smoke failed with code " +
+      result.code.to_string() +
+      ":\n" +
+      result.output,
+    )
+  }
+}
+
+///|
+async test "external QuickJS strict MIR qjs runs language matrix when enabled" {
+  if !external_testbed_enabled("quickjs") {
+    return
+  }
+  let qjs_path = build_quickjs_qjs_strict_mir_external("matrix")
+  let script =
+    #|function assert(cond, message) {
+    #|  if (!cond) throw new Error(message);
+    #|}
+    #|
+    #|class Box {
+    #|  constructor(value) { this.value = value; }
+    #|  inc(delta) {
+    #|    this.value += delta;
+    #|    return this.value;
+    #|  }
+    #|}
+    #|
+    #|function *range(n) {
+    #|  for (let i = 0; i < n; i++) yield i;
+    #|}
+    #|
+    #|let box = new Box(10);
+    #|let total = 0;
+    #|for (const n of range(5)) total += box.inc(n);
+    #|assert(total === 70, "generator/class total");
+    #|
+    #|let data = JSON.parse(JSON.stringify({ items: ["alpha", "beta"], total }));
+    #|assert(data.items.join(":") === "alpha:beta", "json roundtrip");
+    #|
+    #|let match = /([a-z]+)-(\d+)/.exec("ticket-42");
+    #|assert(match[1] === "ticket" && Number(match[2]) === 42, "regexp");
+    #|
+    #|let mapped = [1, 2, 3, 4]
+    #|  .map(x => x * x)
+    #|  .filter(x => x % 2 === 0)
+    #|  .reduce((a, b) => a + b, 0);
+    #|assert(mapped === 20, "array methods");
+    #|
+    #|let keys = Object.keys({ b: 1, a: 2 }).sort().join("");
+    #|assert(keys === "ab", "object keys");
+    #|
+    #|let big = typeof BigInt === "function" ? Number(BigInt(10) + BigInt(32)) : 42;
+    #|assert(big === 42, "bigint");
+    #|
+    #|console.log("quickjs-strict-mir-matrix", total + mapped + big);
+  let result = run_command_capture(
+    shell_quote(qjs_path) + " -e " + shell_quote(script),
+    "quickjs_strict_mir_external_matrix",
+  )
+  if result.code != 0 ||
+    !result.output.contains("quickjs-strict-mir-matrix 132") {
+    abort(
+      "QuickJS strict MIR external language matrix failed with code " +
       result.code.to_string() +
       ":\n" +
       result.output,
@@ -1349,6 +1437,20 @@ async fn compile_xxhash_smoke_driver(
 }
 
 ///|
+async fn compile_xxhash_smoke_driver_strict_mir(
+  root : String,
+  tag : String,
+) -> String {
+  let path = "/tmp/kimicc_xxhash_" + tag + "_driver.c"
+  write_text_file(path, xxhash_smoke_source())
+  compile_c_file_with_strict_mir_object_path(
+    path,
+    xxhash_flags(root),
+    "xxhash_strict_mir_external_" + tag + "_driver",
+  )
+}
+
+///|
 async fn build_xxhash_with_kimicc(root : String, tag : String) -> String {
   let library_path = root + "/xxhash.c"
   require_external_path(library_path, "xxHash source")
@@ -1389,6 +1491,26 @@ async fn build_xxhash_with_direct_object(root : String, tag : String) -> String 
 }
 
 ///|
+async fn build_xxhash_with_strict_mir(root : String, tag : String) -> String {
+  let library_path = root + "/xxhash.c"
+  require_external_path(library_path, "xxHash source")
+  let objects = [
+    compile_c_file_with_strict_mir_object_path(
+      library_path,
+      xxhash_flags(root),
+      "xxhash_strict_mir_external_" + tag + "_library",
+    ),
+    compile_xxhash_smoke_driver_strict_mir(root, tag),
+  ]
+  let binary_path = "/tmp/kimicc_xxhash_strict_mir_external_" + tag
+  run_command_checked(
+    "clang -o " + shell_quote(binary_path) + " " + shell_join_quoted(objects),
+    "link strict MIR xxHash external " + tag,
+  )
+  binary_path
+}
+
+///|
 async fn assert_xxhash_smoke(binary_path : String, tag : String) -> Unit {
   let result = run_command_capture(
     shell_quote(binary_path),
@@ -1405,6 +1527,17 @@ async fn assert_xxhash_smoke(binary_path : String, tag : String) -> Unit {
       result.output,
     )
   }
+}
+
+///|
+async test "external xxHash strict MIR checksum matrix runs when enabled" {
+  if !external_testbed_enabled("xxhash") {
+    return
+  }
+  let root = "/tmp/kimicc_xxhash/xxHash-0.8.2"
+  require_external_path(root + "/xxhash.h", "xxHash source root")
+  let binary_path = build_xxhash_with_strict_mir(root, "checksum_matrix")
+  assert_xxhash_smoke(binary_path, "strict_mir_checksum_matrix")
 }
 
 ///|
@@ -1497,6 +1630,20 @@ async fn compile_cjson_smoke_driver(
 }
 
 ///|
+async fn compile_cjson_smoke_driver_strict_mir(
+  root : String,
+  tag : String,
+) -> String {
+  let path = "/tmp/kimicc_cjson_" + tag + "_driver.c"
+  write_text_file(path, cjson_smoke_source())
+  compile_c_file_with_strict_mir_object_path(
+    path,
+    cjson_flags(root),
+    "cjson_strict_mir_external_" + tag + "_driver",
+  )
+}
+
+///|
 async fn build_cjson_with_kimicc(root : String, tag : String) -> String {
   let library_path = root + "/cJSON.c"
   require_external_path(library_path, "cJSON source")
@@ -1537,6 +1684,26 @@ async fn build_cjson_with_direct_object(root : String, tag : String) -> String {
 }
 
 ///|
+async fn build_cjson_with_strict_mir(root : String, tag : String) -> String {
+  let library_path = root + "/cJSON.c"
+  require_external_path(library_path, "cJSON source")
+  let objects = [
+    compile_c_file_with_strict_mir_object_path(
+      library_path,
+      cjson_flags(root),
+      "cjson_strict_mir_external_" + tag + "_library",
+    ),
+    compile_cjson_smoke_driver_strict_mir(root, tag),
+  ]
+  let binary_path = "/tmp/kimicc_cjson_strict_mir_external_" + tag
+  run_command_checked(
+    "clang -o " + shell_quote(binary_path) + " " + shell_join_quoted(objects),
+    "link strict MIR cJSON external " + tag,
+  )
+  binary_path
+}
+
+///|
 async fn assert_cjson_smoke(binary_path : String, tag : String) -> Unit {
   let result = run_command_capture(
     shell_quote(binary_path),
@@ -1550,6 +1717,17 @@ async fn assert_cjson_smoke(binary_path : String, tag : String) -> Unit {
       result.output,
     )
   }
+}
+
+///|
+async test "external cJSON strict MIR parser roundtrip runs when enabled" {
+  if !external_testbed_enabled("cjson") {
+    return
+  }
+  let root = "/tmp/kimicc_cjson/cJSON-1.7.18"
+  require_external_path(root + "/cJSON.h", "cJSON source root")
+  let binary_path = build_cjson_with_strict_mir(root, "roundtrip")
+  assert_cjson_smoke(binary_path, "strict_mir_roundtrip")
 }
 
 ///|

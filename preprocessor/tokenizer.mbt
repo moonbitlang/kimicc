@@ -272,6 +272,12 @@ fn pp_tokens_need_space(left : PpToken, right : PpToken) -> Bool {
   if left.text == "-" && right.text == "-" {
     return true
   }
+  if left.kind == PpNumber && right.text == "..." {
+    return true
+  }
+  if left.text == "..." && right.kind == PpNumber {
+    return true
+  }
   false
 }
 

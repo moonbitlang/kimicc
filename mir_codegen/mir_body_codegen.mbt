@@ -253,9 +253,6 @@ fn mir_body_codegen_variadic_args_supported(
         return false
       }
     } else if mir_body_codegen_abi_int_type(param) {
-      if mir_body_codegen_int128_type(param) {
-        return false
-      }
       int_count += mir_body_codegen_abi_int_slots(param)
       if int_count > int_arg_limit && i < named_count {
         return false
@@ -285,9 +282,6 @@ fn mir_body_codegen_darwin_variadic_args_supported(
         return false
       }
     } else if mir_body_codegen_abi_int_type(param) {
-      if mir_body_codegen_int128_type(param) {
-        return false
-      }
       int_count += mir_body_codegen_abi_int_slots(param)
       if int_count > int_arg_limit && i < named_count {
         return false
@@ -297,11 +291,8 @@ fn mir_body_codegen_darwin_variadic_args_supported(
         Struct(_) | Union(_) =>
           if i >= named_count {
             let size = mir.type_size(param)
-            if size == 8 || size == 16 {
-              int_count += size / 8
-            } else {
-              return false
-            }
+            let slots = if size > 16 { 1 } else if size > 8 { 2 } else { 1 }
+            int_count += slots
           } else {
             return false
           }
@@ -358,9 +349,6 @@ fn mir_body_codegen_x64_variadic_args_supported(
         return false
       }
     } else if mir_body_codegen_abi_int_type(param) {
-      if mir_body_codegen_int128_type(param) {
-        return false
-      }
       int_count += mir_body_codegen_abi_int_slots(param)
       if int_count > int_arg_limit && i < named_count {
         return false
@@ -442,6 +430,65 @@ fn mir_body_codegen_x64_unsupported_long_double_value(
     MirBinary(_, lhs, rhs, _) =>
       mir_body_codegen_x64_unsupported_long_double_value(lhs) ||
       mir_body_codegen_x64_unsupported_long_double_value(rhs)
+    MirOverflow(_, left, right, result_ptr) =>
+      mir_body_codegen_x64_unsupported_long_double_value(left) ||
+      mir_body_codegen_x64_unsupported_long_double_value(right) ||
+      mir_body_codegen_x64_unsupported_long_double_value(result_ptr)
+    MirBzero(dst, size) =>
+      mir_body_codegen_x64_unsupported_long_double_value(dst) ||
+      mir_body_codegen_x64_unsupported_long_double_value(size)
+    MirAtomicLoad(ptr, order, _) =>
+      mir_body_codegen_x64_unsupported_long_double_value(ptr) ||
+      mir_body_codegen_x64_unsupported_long_double_value(order)
+    MirAtomicStore(ptr, stored, order) =>
+      mir_body_codegen_x64_unsupported_long_double_value(ptr) ||
+      mir_body_codegen_x64_unsupported_long_double_value(stored) ||
+      mir_body_codegen_x64_unsupported_long_double_value(order)
+    MirAtomicUpdate(_, _, ptr, stored, extras, _) => {
+      if mir_body_codegen_x64_unsupported_long_double_value(ptr) ||
+        mir_body_codegen_x64_unsupported_long_double_value(stored) {
+        return true
+      }
+      for extra in extras {
+        if mir_body_codegen_x64_unsupported_long_double_value(extra) {
+          return true
+        }
+      }
+      false
+    }
+    MirAtomicExchange(ptr, stored, extras, _) => {
+      if mir_body_codegen_x64_unsupported_long_double_value(ptr) ||
+        mir_body_codegen_x64_unsupported_long_double_value(stored) {
+        return true
+      }
+      for extra in extras {
+        if mir_body_codegen_x64_unsupported_long_double_value(extra) {
+          return true
+        }
+      }
+      false
+    }
+    MirAtomicCompareExchange(ptr, expected, desired, extras) => {
+      if mir_body_codegen_x64_unsupported_long_double_value(ptr) ||
+        mir_body_codegen_x64_unsupported_long_double_value(expected) ||
+        mir_body_codegen_x64_unsupported_long_double_value(desired) {
+        return true
+      }
+      for extra in extras {
+        if mir_body_codegen_x64_unsupported_long_double_value(extra) {
+          return true
+        }
+      }
+      false
+    }
+    MirLibCall(_, args, _) => {
+      for arg in args {
+        if mir_body_codegen_x64_unsupported_long_double_value(arg) {
+          return true
+        }
+      }
+      false
+    }
     MirCall(_, args, _) | MirIndirectCall(_, args, _) => {
       for arg in args {
         if mir_body_codegen_x64_unsupported_long_double_value(arg) {
@@ -465,8 +512,11 @@ fn mir_body_codegen_x64_unsupported_long_double_value(
       mir_body_codegen_x64_unsupported_long_double_value(cond) ||
       mir_body_codegen_x64_unsupported_long_double_value(then_) ||
       mir_body_codegen_x64_unsupported_long_double_value(else_)
-    MirVaArg(ap, _) | MirVaArgAddr(ap, _) =>
+    MirVaStart(ap) | MirVaEnd(ap) | MirVaArg(ap, _) | MirVaArgAddr(ap, _) =>
       mir_body_codegen_x64_unsupported_long_double_value(ap)
+    MirVaCopy(target, source) =>
+      mir_body_codegen_x64_unsupported_long_double_value(target) ||
+      mir_body_codegen_x64_unsupported_long_double_value(source)
     _ => false
   }
 }
@@ -570,6 +620,93 @@ fn mir_body_codegen_arm_fp_bits_reg(ty : @ctype.Type, reg : String) -> String {
 }
 
 ///|
+fn Codegen::emit_mir_fp_class_constant(
+  self : Codegen,
+  reg : String,
+  ty : @ctype.Type,
+  kind : String,
+) -> Unit {
+  match peel_aligned_type(ty) {
+    Float =>
+      match kind {
+        "inf" => self.emit("\tmovz\t" + reg + ", #0x7F80, lsl #16")
+        "normal_min" => self.emit("\tmovz\t" + reg + ", #0x80, lsl #16")
+        _ => self.emit("\tmov\t" + reg + ", #0")
+      }
+    _ =>
+      match kind {
+        "inf" => {
+          self.emit("\tmovz\t" + reg + ", #0")
+          self.emit("\tmovk\t" + reg + ", #0, lsl #16")
+          self.emit("\tmovk\t" + reg + ", #0, lsl #32")
+          self.emit("\tmovk\t" + reg + ", #0x7FF0, lsl #48")
+        }
+        "normal_min" => {
+          self.emit("\tmovz\t" + reg + ", #0")
+          self.emit("\tmovk\t" + reg + ", #0, lsl #16")
+          self.emit("\tmovk\t" + reg + ", #0, lsl #32")
+          self.emit("\tmovk\t" + reg + ", #0x10, lsl #48")
+        }
+        _ => self.emit("\tmov\t" + reg + ", #0")
+      }
+  }
+}
+
+///|
+fn Codegen::emit_mir_fp_class_result(
+  self : Codegen,
+  op : String,
+  ty : @ctype.Type,
+) -> Unit {
+  if op == "fp_signbit" {
+    match peel_aligned_type(ty) {
+      Float => self.emit("\tlsr\tw9, w9, #31")
+      _ => self.emit("\tlsr\tx9, x9, #63")
+    }
+    return
+  }
+  let fp_reg = mir_body_codegen_arm_fp_reg(ty, 9)
+  let const_fp_reg = mir_body_codegen_arm_fp_reg(ty, 10)
+  let const_bits_reg = mir_body_codegen_arm_fp_bits_reg(ty, "x10")
+  self.emit(
+    "\tfmov\t" + fp_reg + ", " + mir_body_codegen_arm_fp_bits_reg(ty, "x9"),
+  )
+  match op {
+    "fp_isnan" => {
+      self.emit("\tfcmp\t" + fp_reg + ", " + fp_reg)
+      self.emit("\tcset\tx9, vs")
+    }
+    "fp_isinf" => {
+      self.emit("\tfabs\t" + fp_reg + ", " + fp_reg)
+      self.emit_mir_fp_class_constant(const_bits_reg, ty, "inf")
+      self.emit("\tfmov\t" + const_fp_reg + ", " + const_bits_reg)
+      self.emit("\tfcmp\t" + fp_reg + ", " + const_fp_reg)
+      self.emit("\tcset\tx9, eq")
+    }
+    "fp_isfinite" => {
+      self.emit("\tfabs\t" + fp_reg + ", " + fp_reg)
+      self.emit_mir_fp_class_constant(const_bits_reg, ty, "inf")
+      self.emit("\tfmov\t" + const_fp_reg + ", " + const_bits_reg)
+      self.emit("\tfcmp\t" + fp_reg + ", " + const_fp_reg)
+      self.emit("\tcset\tx9, mi")
+    }
+    "fp_isnormal" => {
+      self.emit("\tfabs\t" + fp_reg + ", " + fp_reg)
+      self.emit_mir_fp_class_constant(const_bits_reg, ty, "normal_min")
+      self.emit("\tfmov\t" + const_fp_reg + ", " + const_bits_reg)
+      self.emit("\tfcmp\t" + fp_reg + ", " + const_fp_reg)
+      self.emit("\tcset\tx11, ge")
+      self.emit_mir_fp_class_constant(const_bits_reg, ty, "inf")
+      self.emit("\tfmov\t" + const_fp_reg + ", " + const_bits_reg)
+      self.emit("\tfcmp\t" + fp_reg + ", " + const_fp_reg)
+      self.emit("\tcset\tx9, mi")
+      self.emit("\tand\tx9, x9, x11")
+    }
+    _ => self.emit("\tmov\tx9, #0")
+  }
+}
+
+///|
 fn Codegen::emit_mir_fp_arg_from_x9(
   self : Codegen,
   ty : @ctype.Type,
@@ -609,7 +746,7 @@ fn Codegen::emit_mir_fp_return_from_x9(
 ///|
 fn mir_body_compare_op(op : String) -> Bool {
   match op {
-    "==" | "!=" | "<" | ">" | "<=" | ">=" => true
+    "==" | "!=" | "<" | ">" | "<=" | ">=" | "<>" | "unordered" => true
     _ => false
   }
 }
@@ -618,6 +755,15 @@ fn mir_body_compare_op(op : String) -> Bool {
 fn mir_body_arith_op(op : String) -> Bool {
   match op {
     "+" | "-" | "*" | "/" => true
+    _ => false
+  }
+}
+
+///|
+fn mir_body_fp_class_op(op : String) -> Bool {
+  match op {
+    "fp_isnan" | "fp_isinf" | "fp_isfinite" | "fp_isnormal" | "fp_signbit" =>
+      true
     _ => false
   }
 }
@@ -651,6 +797,19 @@ fn mir_body_codegen_fp_arith_supported(
 }
 
 ///|
+fn mir_body_codegen_fp_copysign_supported(
+  op : String,
+  lhs : @ctype.Type,
+  rhs : @ctype.Type,
+  ty : @ctype.Type,
+) -> Bool {
+  op == "copysign" &&
+  mir_body_codegen_floating_type(ty) &&
+  mir_body_codegen_fp_operand_type(lhs) &&
+  mir_body_codegen_fp_operand_type(rhs)
+}
+
+///|
 fn mir_body_codegen_fp_update_supported(
   op : String,
   lhs : @ctype.Type,
@@ -665,10 +824,18 @@ fn mir_body_codegen_fp_update_supported(
 ///|
 fn mir_body_codegen_local_type(ty : @ctype.Type) -> Bool {
   match ty {
-    Aligned(_, _) => false
+    Aligned(inner, align) => align <= 16 && mir_body_codegen_local_type(inner)
     Array(elem, _) => mir_body_codegen_local_type(elem)
     Struct(_) | Union(_) => true
     _ => mir_body_codegen_scalar_type(ty)
+  }
+}
+
+///|
+fn mir_body_codegen_addressed_object_type(ty : @ctype.Type) -> Bool {
+  match ty {
+    Aligned(inner, _) => mir_body_codegen_addressed_object_type(inner)
+    _ => mir_body_codegen_local_type(ty)
   }
 }
 
@@ -836,16 +1003,17 @@ fn mir_body_codegen_value_supported(
     MirConst(_, ty) => mir_body_codegen_scalar_type(ty)
     MirLocal(binding) => mir_body_codegen_scalar_type(binding.ty)
     MirAddrLocal(binding) => mir_body_codegen_local_type(binding.ty)
-    MirAddrGlobal(_, ty) => mir_body_codegen_local_type(ty)
+    MirAddrGlobal(_, ty) => mir_body_codegen_addressed_object_type(ty)
     MirFuncAddr(name, ty) =>
       mir.funcs.contains(name) && mir_body_codegen_scalar_type(ty)
+    MirLabelAddr(_) => true
     MirStringAddr(_) => true
     MirElemAddr(base, index, elem_ty) =>
-      mir_body_codegen_local_type(elem_ty) &&
+      mir_body_codegen_addressed_object_type(elem_ty) &&
       mir_body_codegen_array_address_base(base, int_arg_limit, mir) &&
       mir_body_codegen_value_supported(index, int_arg_limit, mir)
     MirOffsetAddr(base, _, ty) =>
-      mir_body_codegen_local_type(ty) &&
+      mir_body_codegen_addressed_object_type(ty) &&
       mir_body_codegen_value_supported(base, int_arg_limit, mir)
     MirLoad(ptr, ty) =>
       mir_body_codegen_scalar_type(ty) &&
@@ -853,6 +1021,32 @@ fn mir_body_codegen_value_supported(
     MirUnary(op, inner, ty) => {
       if !mir_body_codegen_scalar_type(ty) {
         return false
+      }
+      if op == "alloca" {
+        return mir_body_codegen_return_pointer_type(ty) &&
+          mir_body_codegen_scalar_type(inner.ty()) &&
+          mir_body_codegen_value_supported(inner, int_arg_limit, mir)
+      }
+      if op == "frame_address" || op == "return_address" {
+        return mir_body_codegen_return_pointer_type(ty) &&
+          inner.ty().is_integer() &&
+          mir_body_codegen_value_supported(inner, int_arg_limit, mir)
+      }
+      if op == "sync_synchronize" ||
+        op == "atomic_thread_fence" ||
+        op == "atomic_signal_fence" {
+        return peel_aligned_type(ty) is Void &&
+          mir_body_codegen_scalar_type(inner.ty()) &&
+          mir_body_codegen_value_supported(inner, int_arg_limit, mir)
+      }
+      if op == "trap" {
+        return peel_aligned_type(ty) is Void &&
+          mir_body_codegen_value_supported(inner, int_arg_limit, mir)
+      }
+      if mir_body_fp_class_op(op) {
+        return !mir_body_codegen_floating_type(ty) &&
+          mir_body_codegen_floating_type(inner.ty()) &&
+          mir_body_codegen_value_supported(inner, int_arg_limit, mir)
       }
       if mir_body_codegen_int128_type(ty) ||
         mir_body_codegen_int128_type(inner.ty()) {
@@ -865,7 +1059,7 @@ fn mir_body_codegen_value_supported(
           !mir_body_codegen_floating_type(ty) &&
           mir_body_codegen_floating_type(inner.ty())
         } else {
-          (op == "+" || op == "-" || op == "fabs") &&
+          (op == "+" || op == "-" || op == "fabs" || op == "fsqrt") &&
           mir_body_codegen_floating_type(ty) &&
           mir_body_codegen_floating_type(inner.ty())
         }
@@ -878,6 +1072,13 @@ fn mir_body_codegen_value_supported(
       if !mir_body_codegen_scalar_type(ty) {
         return false
       }
+      if op == "alloca_align" {
+        return mir_body_codegen_return_pointer_type(ty) &&
+          mir_body_codegen_scalar_type(lhs.ty()) &&
+          mir_body_codegen_scalar_type(rhs.ty()) &&
+          mir_body_codegen_value_supported(lhs, int_arg_limit, mir) &&
+          mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
+      }
       if op == "&&" || op == "||" {
         return !mir_body_codegen_floating_type(ty) &&
           mir_body_codegen_value_supported(lhs, int_arg_limit, mir) &&
@@ -887,11 +1088,19 @@ fn mir_body_codegen_value_supported(
         return mir_body_codegen_value_supported(lhs, int_arg_limit, mir) &&
           mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
       }
+      if mir_body_codegen_rotate_op_supported(op, lhs.ty(), rhs.ty(), ty) {
+        return mir_body_codegen_value_supported(lhs, int_arg_limit, mir) &&
+          mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
+      }
       if mir_body_codegen_fp_compare_supported(op, lhs.ty(), rhs.ty(), ty) {
         return mir_body_codegen_value_supported(lhs, int_arg_limit, mir) &&
           mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
       }
       if mir_body_codegen_fp_arith_supported(op, lhs.ty(), rhs.ty(), ty) {
+        return mir_body_codegen_value_supported(lhs, int_arg_limit, mir) &&
+          mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
+      }
+      if mir_body_codegen_fp_copysign_supported(op, lhs.ty(), rhs.ty(), ty) {
         return mir_body_codegen_value_supported(lhs, int_arg_limit, mir) &&
           mir_body_codegen_value_supported(rhs, int_arg_limit, mir)
       }
@@ -992,6 +1201,55 @@ fn mir_body_codegen_value_supported(
       mir_body_codegen_value_supported(cond, int_arg_limit, mir) &&
       mir_body_codegen_value_supported(then_, int_arg_limit, mir) &&
       mir_body_codegen_value_supported(else_, int_arg_limit, mir)
+    MirOverflow(op, left, right, result_ptr) =>
+      mir_body_codegen_overflow_supported(
+        op, left, right, result_ptr, int_arg_limit, mir,
+      )
+    MirVaStart(target) =>
+      match target {
+        MirLocal(_) => true
+        _ => false
+      }
+    MirVaCopy(target, source) =>
+      (match target {
+        MirLocal(_) => true
+        _ => false
+      }) &&
+      mir_body_codegen_value_supported(source, int_arg_limit, mir)
+    MirVaEnd(target) =>
+      mir_body_codegen_value_supported(target, int_arg_limit, mir)
+    MirBzero(dst, size) =>
+      mir_body_codegen_value_supported(dst, int_arg_limit, mir) &&
+      mir_body_codegen_value_supported(size, int_arg_limit, mir)
+    MirAtomicLoad(ptr, order, ty) =>
+      mir_body_codegen_atomic_load_supported(ptr, order, ty, int_arg_limit, mir)
+    MirAtomicStore(ptr, value, order) =>
+      mir_body_codegen_atomic_store_supported(
+        ptr, value, order, int_arg_limit, mir,
+      )
+    MirAtomicUpdate(op, _, ptr, value, extras, ty) =>
+      mir_body_codegen_atomic_update_supported(
+        op, ptr, value, extras, ty, int_arg_limit, mir,
+      )
+    MirAtomicExchange(ptr, value, extras, ty) =>
+      mir_body_codegen_atomic_exchange_supported(
+        ptr, value, extras, ty, int_arg_limit, mir,
+      )
+    MirAtomicCompareExchange(ptr, expected, desired, extras) =>
+      mir_body_codegen_atomic_compare_exchange_supported(
+        ptr, expected, desired, extras, int_arg_limit, mir,
+      )
+    MirLibCall(name, args, ty) => {
+      if !mir_body_codegen_call_supported(name, args, ty, int_arg_limit, mir) {
+        return false
+      }
+      for arg in args {
+        if !mir_body_codegen_value_supported(arg, int_arg_limit, mir) {
+          return false
+        }
+      }
+      true
+    }
     MirCall(name, args, ty) => {
       if !mir_body_codegen_call_supported(name, args, ty, int_arg_limit, mir) {
         return false
@@ -1026,47 +1284,6 @@ fn mir_body_codegen_value_supported(
 }
 
 ///|
-fn mir_body_codegen_builtin_call_name(name : String) -> Bool {
-  name.has_prefix("__builtin_") ||
-  name.has_prefix("__sync_") ||
-  name.has_prefix("__atomic_") ||
-  name.has_prefix("__c11_atomic_")
-}
-
-///|
-fn mir_body_codegen_sync_synchronize_call(
-  name : String,
-  args : Array[@mir.MirValue],
-  ret : @ctype.Type,
-) -> Bool {
-  name == "__sync_synchronize" &&
-  args.length() == 0 &&
-  peel_aligned_type(ret) is Void
-}
-
-///|
-fn mir_body_codegen_atomic_thread_fence_call(
-  name : String,
-  args : Array[@mir.MirValue],
-  ret : @ctype.Type,
-) -> Bool {
-  (name == "__atomic_thread_fence" || name == "__c11_atomic_thread_fence") &&
-  args.length() == 1 &&
-  peel_aligned_type(ret) is Void
-}
-
-///|
-fn mir_body_codegen_atomic_signal_fence_call(
-  name : String,
-  args : Array[@mir.MirValue],
-  ret : @ctype.Type,
-) -> Bool {
-  (name == "__atomic_signal_fence" || name == "__c11_atomic_signal_fence") &&
-  args.length() == 1 &&
-  peel_aligned_type(ret) is Void
-}
-
-///|
 fn mir_body_codegen_atomic_target_type(ty : @ctype.Type) -> @ctype.Type {
   match ty {
     Pointer(Atomic(inner)) | Array(Atomic(inner), _) => inner
@@ -1078,42 +1295,150 @@ fn mir_body_codegen_atomic_target_type(ty : @ctype.Type) -> @ctype.Type {
 }
 
 ///|
-fn mir_body_codegen_atomic_load_call(
-  name : String,
-  args : Array[@mir.MirValue],
+fn mir_body_codegen_atomic_load_supported(
+  ptr : @mir.MirValue,
+  order : @mir.MirValue,
   ret : @ctype.Type,
+  int_arg_limit : Int,
+  mir : @mir.MirModule,
 ) -> Bool {
-  (name == "__atomic_load_n" || name == "__c11_atomic_load") &&
-  args.length() >= 2 &&
   mir_body_codegen_abi_scalar_type(ret) &&
   mir_body_codegen_abi_scalar_type(
-    mir_body_codegen_atomic_target_type(args[0].ty()),
-  )
+    mir_body_codegen_atomic_target_type(ptr.ty()),
+  ) &&
+  mir_body_codegen_value_supported(ptr, int_arg_limit, mir) &&
+  mir_body_codegen_value_supported(order, int_arg_limit, mir)
 }
 
 ///|
-fn mir_body_codegen_atomic_store_call(
-  name : String,
-  args : Array[@mir.MirValue],
-  ret : @ctype.Type,
+fn mir_body_codegen_atomic_store_supported(
+  ptr : @mir.MirValue,
+  value : @mir.MirValue,
+  order : @mir.MirValue,
+  int_arg_limit : Int,
+  mir : @mir.MirModule,
 ) -> Bool {
-  (name == "__atomic_store_n" || name == "__c11_atomic_store") &&
-  args.length() >= 2 &&
-  peel_aligned_type(ret) is Void &&
+  peel_aligned_type(value.ty()) != Void &&
   mir_body_codegen_abi_scalar_type(
-    mir_body_codegen_atomic_target_type(args[0].ty()),
-  )
+    mir_body_codegen_atomic_target_type(ptr.ty()),
+  ) &&
+  mir_body_codegen_value_supported(ptr, int_arg_limit, mir) &&
+  mir_body_codegen_value_supported(value, int_arg_limit, mir) &&
+  mir_body_codegen_value_supported(order, int_arg_limit, mir)
 }
 
 ///|
-fn mir_body_codegen_trap_call(
-  name : String,
-  args : Array[@mir.MirValue],
-  ret : @ctype.Type,
+fn mir_body_codegen_atomic_rmw_target_supported(ptr : @mir.MirValue) -> Bool {
+  let elem_ty = mir_body_codegen_atomic_target_type(ptr.ty())
+  mir_body_codegen_abi_int_type(elem_ty) &&
+  !mir_body_codegen_int128_type(elem_ty)
+}
+
+///|
+fn mir_body_codegen_atomic_update_op_supported(op : String) -> Bool {
+  op == "+" ||
+  op == "-" ||
+  op == "&" ||
+  op == "|" ||
+  op == "^" ||
+  op == "~&" ||
+  op == "max" ||
+  op == "min" ||
+  op == "umax" ||
+  op == "umin"
+}
+
+///|
+fn mir_body_codegen_atomic_extra_values_supported(
+  values : Array[@mir.MirValue],
+  int_arg_limit : Int,
+  mir : @mir.MirModule,
 ) -> Bool {
-  (name == "__builtin_trap" || name == "__builtin_unreachable") &&
-  args.length() == 0 &&
-  peel_aligned_type(ret) is Void
+  for value in values {
+    if !mir_body_codegen_value_supported(value, int_arg_limit, mir) {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn mir_body_codegen_atomic_update_supported(
+  op : String,
+  ptr : @mir.MirValue,
+  value : @mir.MirValue,
+  extras : Array[@mir.MirValue],
+  ret : @ctype.Type,
+  int_arg_limit : Int,
+  mir : @mir.MirModule,
+) -> Bool {
+  mir_body_codegen_atomic_update_op_supported(op) &&
+  mir_body_codegen_abi_int_type(ret) &&
+  !mir_body_codegen_int128_type(ret) &&
+  mir_body_codegen_atomic_rmw_target_supported(ptr) &&
+  mir_body_codegen_value_supported(ptr, int_arg_limit, mir) &&
+  mir_body_codegen_value_supported(value, int_arg_limit, mir) &&
+  mir_body_codegen_atomic_extra_values_supported(extras, int_arg_limit, mir)
+}
+
+///|
+fn mir_body_codegen_atomic_exchange_supported(
+  ptr : @mir.MirValue,
+  value : @mir.MirValue,
+  extras : Array[@mir.MirValue],
+  ret : @ctype.Type,
+  int_arg_limit : Int,
+  mir : @mir.MirModule,
+) -> Bool {
+  mir_body_codegen_abi_int_type(ret) &&
+  !mir_body_codegen_int128_type(ret) &&
+  mir_body_codegen_atomic_rmw_target_supported(ptr) &&
+  mir_body_codegen_value_supported(ptr, int_arg_limit, mir) &&
+  mir_body_codegen_value_supported(value, int_arg_limit, mir) &&
+  mir_body_codegen_atomic_extra_values_supported(extras, int_arg_limit, mir)
+}
+
+///|
+fn mir_body_codegen_atomic_compare_exchange_supported(
+  ptr : @mir.MirValue,
+  expected : @mir.MirValue,
+  desired : @mir.MirValue,
+  extras : Array[@mir.MirValue],
+  int_arg_limit : Int,
+  mir : @mir.MirModule,
+) -> Bool {
+  mir_body_codegen_atomic_rmw_target_supported(ptr) &&
+  mir_body_codegen_value_supported(ptr, int_arg_limit, mir) &&
+  mir_body_codegen_value_supported(expected, int_arg_limit, mir) &&
+  mir_body_codegen_value_supported(desired, int_arg_limit, mir) &&
+  mir_body_codegen_atomic_extra_values_supported(extras, int_arg_limit, mir)
+}
+
+///|
+fn mir_body_codegen_rotate_op(op : String) -> (Int, Bool)? {
+  match op {
+    "rotl32" => Some((32, true))
+    "rotr32" => Some((32, false))
+    "rotl64" => Some((64, true))
+    "rotr64" => Some((64, false))
+    _ => None
+  }
+}
+
+///|
+fn mir_body_codegen_rotate_op_supported(
+  op : String,
+  lhs : @ctype.Type,
+  rhs : @ctype.Type,
+  ty : @ctype.Type,
+) -> Bool {
+  mir_body_codegen_rotate_op(op) is Some(_) &&
+  ty.is_integer() &&
+  lhs.is_integer() &&
+  rhs.is_integer() &&
+  !is_int128_type(ty) &&
+  !is_int128_type(lhs) &&
+  !is_int128_type(rhs)
 }
 
 ///|
@@ -1122,211 +1447,38 @@ fn mir_body_codegen_return_pointer_type(ty : @ctype.Type) -> Bool {
 }
 
 ///|
-fn mir_body_codegen_alloca_call(
-  name : String,
-  args : Array[@mir.MirValue],
-  ret : @ctype.Type,
-) -> Bool {
-  name == "__builtin_alloca" &&
-  args.length() == 1 &&
-  mir_body_codegen_return_pointer_type(ret)
-}
-
-///|
-fn mir_body_codegen_const_builtin_level(args : Array[@mir.MirValue]) -> Int64? {
-  if args.length() == 0 {
-    return Some(0L)
-  }
-  if args.length() != 1 {
-    return None
-  }
-  match args[0] {
-    MirConst(value, _) => Some(value)
-    _ => None
-  }
-}
-
-///|
-fn mir_body_codegen_frame_address_call(
-  name : String,
-  args : Array[@mir.MirValue],
-  ret : @ctype.Type,
-) -> Bool {
-  name == "__builtin_frame_address" &&
-  mir_body_codegen_const_builtin_level(args) is Some(_) &&
-  mir_body_codegen_return_pointer_type(ret)
-}
-
-///|
-fn mir_body_codegen_return_address_call(
-  name : String,
-  args : Array[@mir.MirValue],
-  ret : @ctype.Type,
-) -> Bool {
-  name == "__builtin_return_address" &&
-  mir_body_codegen_const_builtin_level(args) is Some(_) &&
-  mir_body_codegen_return_pointer_type(ret)
-}
-
-///|
-fn mir_body_codegen_va_setup_call(
-  name : String,
-  args : Array[@mir.MirValue],
-  ret : @ctype.Type,
-) -> Bool {
-  if !(peel_aligned_type(ret) is Void) {
-    return false
-  }
-  match name {
-    "__builtin_va_start" | "__builtin_va_copy" =>
-      args.length() == 2 &&
-      (match args[0] {
-        MirLocal(_) => true
-        _ => false
-      })
-    "__builtin_va_end" => args.length() == 1
-    _ => false
-  }
-}
-
-///|
 fn mir_body_codegen_overflow_result_type(
-  args : Array[@mir.MirValue],
+  result_ptr : @mir.MirValue,
 ) -> @ctype.Type? {
-  if args.length() < 3 {
-    return None
-  }
-  match pointer_or_array_element_type(args[2].ty()) {
+  match pointer_or_array_element_type(result_ptr.ty()) {
     Some(ty) => Some(peel_aligned_type(ty))
     None => None
   }
 }
 
 ///|
-fn mir_body_codegen_overflow_call(
-  name : String,
-  args : Array[@mir.MirValue],
-  ret : @ctype.Type,
-) -> Bool {
-  if overflow_builtin_operator(name) is None ||
-    args.length() != 3 ||
-    !(peel_aligned_type(ret) is Bool) {
-    return false
-  }
-  match mir_body_codegen_overflow_result_type(args) {
-    Some(ty) => ty.is_integer() && !is_int128_type(ty)
-    None => false
-  }
+fn mir_body_codegen_overflow_op_supported(op : String) -> Bool {
+  op == "+" || op == "-" || op == "*"
 }
 
 ///|
-fn mir_body_codegen_builtin_lib_call_arg_count(
-  name : String,
-  args : Array[@mir.MirValue],
-  ret : @ctype.Type,
+fn mir_body_codegen_overflow_supported(
+  op : String,
+  left : @mir.MirValue,
+  right : @mir.MirValue,
+  result_ptr : @mir.MirValue,
   int_arg_limit : Int,
-) -> Int? {
-  match mir_body_codegen_checked_printf_source_indexes(name, args, ret) {
-    Some(indexes) =>
-      if indexes.length() <= int_arg_limit {
-        return Some(indexes.length())
-      } else {
-        return None
-      }
-    None => ()
+  mir : @mir.MirModule,
+) -> Bool {
+  if !mir_body_codegen_overflow_op_supported(op) ||
+    !mir_body_codegen_value_supported(left, int_arg_limit, mir) ||
+    !mir_body_codegen_value_supported(right, int_arg_limit, mir) ||
+    !mir_body_codegen_value_supported(result_ptr, int_arg_limit, mir) {
+    return false
   }
-  if mir_body_codegen_direct_call_source_indexes(name, args).length() >
-    int_arg_limit {
-    return None
-  }
-  match name {
-    "__builtin_bzero" =>
-      if args.length() == 2 && peel_aligned_type(ret) is Void {
-        Some(2)
-      } else {
-        None
-      }
-    "__builtin_strlen" =>
-      if args.length() == 1 && ret.is_integer() {
-        Some(1)
-      } else {
-        None
-      }
-    "__builtin_strcmp" =>
-      if args.length() == 2 && ret.is_integer() {
-        Some(2)
-      } else {
-        None
-      }
-    "__builtin_strncmp" | "__builtin_memcmp" =>
-      if args.length() == 3 && ret.is_integer() {
-        Some(3)
-      } else {
-        None
-      }
-    "__builtin_strchr" | "__builtin_strrchr" | "__builtin_strstr" =>
-      if args.length() == 2 && mir_body_codegen_return_pointer_type(ret) {
-        Some(2)
-      } else {
-        None
-      }
-    "__builtin_memchr" =>
-      if args.length() == 3 && mir_body_codegen_return_pointer_type(ret) {
-        Some(3)
-      } else {
-        None
-      }
-    "__builtin_memcpy" | "__builtin_memmove" | "__builtin_memset" =>
-      if args.length() == 3 && mir_body_codegen_return_pointer_type(ret) {
-        Some(3)
-      } else {
-        None
-      }
-    "__builtin___memcpy_chk"
-    | "__builtin___memmove_chk"
-    | "__builtin___memset_chk" =>
-      if args.length() == 4 && mir_body_codegen_return_pointer_type(ret) {
-        Some(3)
-      } else {
-        None
-      }
-    "__builtin_strcpy" | "__builtin_strcat" =>
-      if args.length() == 2 && mir_body_codegen_return_pointer_type(ret) {
-        Some(2)
-      } else {
-        None
-      }
-    "__builtin___strcpy_chk" | "__builtin___strcat_chk" =>
-      if args.length() == 3 && mir_body_codegen_return_pointer_type(ret) {
-        Some(2)
-      } else {
-        None
-      }
-    "__builtin_strncpy" | "__builtin_strncat" =>
-      if args.length() == 3 && mir_body_codegen_return_pointer_type(ret) {
-        Some(3)
-      } else {
-        None
-      }
-    "__builtin___strncpy_chk" | "__builtin___strncat_chk" =>
-      if args.length() == 4 && mir_body_codegen_return_pointer_type(ret) {
-        Some(3)
-      } else {
-        None
-      }
-    "__builtin___strlcpy_chk" | "__builtin___strlcat_chk" =>
-      if args.length() == 4 && ret.is_integer() {
-        Some(3)
-      } else {
-        None
-      }
-    "__builtin___vsnprintf_chk" =>
-      if args.length() == 6 && ret.is_integer() {
-        Some(4)
-      } else {
-        None
-      }
-    _ => None
+  match mir_body_codegen_overflow_result_type(result_ptr) {
+    Some(ty) => ty.is_integer() && !is_int128_type(ty)
+    None => false
   }
 }
 
@@ -1337,125 +1489,34 @@ fn mir_body_codegen_builtin_lib_call_supported(
   ret : @ctype.Type,
   int_arg_limit : Int,
 ) -> Bool {
-  match mir_body_codegen_checked_printf_source_indexes(name, args, ret) {
-    Some(indexes) => {
-      let params : Array[@ctype.Type] = []
-      for i in 0..<indexes.length() {
-        let actual = args[indexes[i]].ty()
-        params.push(
-          match mir_body_codegen_lowered_builtin_arg_type(name, i) {
-            Some(ty) => ty
-            None => actual
-          },
-        )
+  if mir_body_codegen_printf_libcall_variadic(name) && ret.is_integer() {
+    let params : Array[@ctype.Type] = []
+    for i in 0..<args.length() {
+      match mir_body_codegen_lowered_builtin_arg_type(name, i) {
+        Some(ty) => params.push(ty)
+        None => params.push(args[i].ty())
       }
-      return mir_body_codegen_variadic_args_supported(
-        params,
-        mir_body_codegen_direct_call_named_arg_count(name),
-        int_arg_limit,
-      )
     }
-    None => ()
+    return mir_body_codegen_variadic_args_supported(
+      params,
+      mir_body_codegen_direct_call_named_arg_count(name),
+      int_arg_limit,
+    )
   }
-  mir_body_codegen_builtin_lib_call_arg_count(name, args, ret, int_arg_limit)
-  is Some(_)
+  false
 }
 
 ///|
 fn mir_body_codegen_direct_call_symbol(name : String) -> String {
-  match name {
-    "__builtin_bzero" => "bzero"
-    "__builtin_strlen" => "strlen"
-    "__builtin_strcmp" => "strcmp"
-    "__builtin_strncmp" => "strncmp"
-    "__builtin_memcmp" => "memcmp"
-    "__builtin_strchr" => "strchr"
-    "__builtin_strrchr" => "strrchr"
-    "__builtin_memchr" => "memchr"
-    "__builtin_strstr" => "strstr"
-    "__builtin_memcpy" | "__builtin___memcpy_chk" => "memcpy"
-    "__builtin_memmove" | "__builtin___memmove_chk" => "memmove"
-    "__builtin_memset" | "__builtin___memset_chk" => "memset"
-    "__builtin_strcpy" | "__builtin___strcpy_chk" => "strcpy"
-    "__builtin_strcat" | "__builtin___strcat_chk" => "strcat"
-    "__builtin_strncpy" | "__builtin___strncpy_chk" => "strncpy"
-    "__builtin_strncat" | "__builtin___strncat_chk" => "strncat"
-    "__builtin___strlcpy_chk" => "strlcpy"
-    "__builtin___strlcat_chk" => "strlcat"
-    "__builtin___snprintf_chk" => "snprintf"
-    "__builtin___sprintf_chk" => "sprintf"
-    "__builtin___printf_chk" => "printf"
-    "__builtin___vsnprintf_chk" => "vsnprintf"
-    _ => name
-  }
-}
-
-///|
-fn mir_body_codegen_checked_printf_source_indexes(
-  name : String,
-  args : Array[@mir.MirValue],
-  ret : @ctype.Type,
-) -> Array[Int]? {
-  match name {
-    "__builtin___snprintf_chk" =>
-      if args.length() >= 5 && ret.is_integer() {
-        let indexes = [0, 1, 4]
-        for i in 5..<args.length() {
-          indexes.push(i)
-        }
-        Some(indexes)
-      } else {
-        None
-      }
-    "__builtin___sprintf_chk" =>
-      if args.length() >= 4 && ret.is_integer() {
-        let indexes = [0, 3]
-        for i in 4..<args.length() {
-          indexes.push(i)
-        }
-        Some(indexes)
-      } else {
-        None
-      }
-    "__builtin___printf_chk" =>
-      if args.length() >= 2 && ret.is_integer() {
-        let indexes = [1]
-        for i in 2..<args.length() {
-          indexes.push(i)
-        }
-        Some(indexes)
-      } else {
-        None
-      }
-    _ => None
-  }
+  name
 }
 
 ///|
 fn mir_body_codegen_direct_call_source_indexes(
-  name : String,
   args : Array[@mir.MirValue],
 ) -> Array[Int] {
-  match mir_body_codegen_checked_printf_source_indexes(name, args, SInt) {
-    Some(indexes) => return indexes
-    None => ()
-  }
-  if name == "__builtin___vsnprintf_chk" && args.length() == 6 {
-    return [0, 1, 4, 5]
-  }
-  let count = match name {
-    "__builtin___memcpy_chk"
-    | "__builtin___memmove_chk"
-    | "__builtin___memset_chk"
-    | "__builtin___strncpy_chk"
-    | "__builtin___strncat_chk"
-    | "__builtin___strlcpy_chk"
-    | "__builtin___strlcat_chk" => 3
-    "__builtin___strcpy_chk" | "__builtin___strcat_chk" => 2
-    _ => args.length()
-  }
   let indexes = []
-  for i in 0..<count {
+  for i in 0..<args.length() {
     indexes.push(i)
   }
   indexes
@@ -1463,10 +1524,16 @@ fn mir_body_codegen_direct_call_source_indexes(
 
 ///|
 fn mir_body_codegen_direct_call_variadic(name : String) -> Bool {
+  if mir_body_codegen_printf_libcall_variadic(name) {
+    return true
+  }
+  false
+}
+
+///|
+fn mir_body_codegen_printf_libcall_variadic(name : String) -> Bool {
   match name {
-    "__builtin___snprintf_chk"
-    | "__builtin___sprintf_chk"
-    | "__builtin___printf_chk" => true
+    "snprintf" | "sprintf" | "printf" | "fprintf" => true
     _ => false
   }
 }
@@ -1474,9 +1541,10 @@ fn mir_body_codegen_direct_call_variadic(name : String) -> Bool {
 ///|
 fn mir_body_codegen_direct_call_named_arg_count(name : String) -> Int {
   match name {
-    "__builtin___snprintf_chk" => 3
-    "__builtin___sprintf_chk" => 2
-    "__builtin___printf_chk" => 1
+    "snprintf" => 3
+    "sprintf" => 2
+    "printf" => 1
+    "fprintf" => 2
     _ => 0
   }
 }
@@ -1514,60 +1582,50 @@ fn mir_body_codegen_lowered_builtin_arg_type(
   index : Int,
 ) -> @ctype.Type? {
   match name {
-    "__builtin_strlen" => if index == 0 { Some(Pointer(SChar)) } else { None }
-    "__builtin_strcmp" | "__builtin_strstr" =>
-      match index {
-        0 | 1 => Some(Pointer(SChar))
-        _ => None
-      }
-    "__builtin_strncmp" =>
-      match index {
-        0 | 1 => Some(Pointer(SChar))
-        2 => Some(ULong)
-        _ => None
-      }
-    "__builtin_memcmp" =>
-      match index {
-        0 | 1 => Some(Pointer(Void))
-        2 => Some(ULong)
-        _ => None
-      }
-    "__builtin_strchr" | "__builtin_strrchr" =>
-      match index {
-        0 => Some(Pointer(SChar))
-        1 => Some(SInt)
-        _ => None
-      }
-    "__builtin_memchr" =>
-      match index {
-        0 => Some(Pointer(Void))
-        1 => Some(SInt)
-        2 => Some(ULong)
-        _ => None
-      }
-    "__builtin___snprintf_chk" =>
+    "snprintf" =>
       match index {
         0 => Some(Pointer(SChar))
         1 => Some(ULong)
         2 => Some(Pointer(SChar))
         _ => None
       }
-    "__builtin___sprintf_chk" =>
+    "sprintf" =>
       match index {
         0 => Some(Pointer(SChar))
         1 => Some(Pointer(SChar))
         _ => None
       }
-    "__builtin___printf_chk" =>
-      if index == 0 {
-        Some(Pointer(SChar))
-      } else {
-        None
+    "vsprintf" =>
+      match index {
+        0 => Some(Pointer(SChar))
+        1 => Some(Pointer(SChar))
+        2 => Some(Pointer(SChar))
+        _ => None
       }
-    "__builtin___vsnprintf_chk" =>
+    "printf" => if index == 0 { Some(Pointer(SChar)) } else { None }
+    "vprintf" =>
+      match index {
+        0 | 1 => Some(Pointer(SChar))
+        _ => None
+      }
+    "fprintf" =>
+      match index {
+        0 => Some(Pointer(Void))
+        1 => Some(Pointer(SChar))
+        _ => None
+      }
+    "vsnprintf" =>
       match index {
         0 => Some(Pointer(SChar))
         1 => Some(ULong)
+        2 => Some(Pointer(SChar))
+        3 => Some(Pointer(SChar))
+        _ => None
+      }
+    "vfprintf" =>
+      match index {
+        0 => Some(Pointer(Void))
+        1 => Some(Pointer(SChar))
         2 => Some(Pointer(SChar))
         _ => None
       }
@@ -1583,28 +1641,12 @@ fn mir_body_codegen_call_supported(
   int_arg_limit : Int,
   mir : @mir.MirModule,
 ) -> Bool {
-  if mir_body_codegen_sync_synchronize_call(name, args, ret) ||
-    mir_body_codegen_atomic_thread_fence_call(name, args, ret) ||
-    mir_body_codegen_atomic_signal_fence_call(name, args, ret) ||
-    mir_body_codegen_atomic_load_call(name, args, ret) ||
-    mir_body_codegen_atomic_store_call(name, args, ret) ||
-    mir_body_codegen_trap_call(name, args, ret) ||
-    mir_body_codegen_alloca_call(name, args, ret) ||
-    mir_body_codegen_frame_address_call(name, args, ret) ||
-    mir_body_codegen_return_address_call(name, args, ret) ||
-    mir_body_codegen_va_setup_call(name, args, ret) ||
-    mir_body_codegen_overflow_call(name, args, ret) {
-    return true
-  }
   if mir_body_codegen_builtin_lib_call_supported(name, args, ret, int_arg_limit) {
     return true
   }
-  if mir_body_codegen_builtin_call_name(name) ||
-    (
-      !mir_body_codegen_abi_scalar_type(ret) &&
-      !mir_body_codegen_register_aggregate_return_type(ret, mir) &&
-      !mir_body_codegen_x64_memory_aggregate_return_type(ret, mir)
-    ) {
+  if !mir_body_codegen_abi_scalar_type(ret) &&
+    !mir_body_codegen_register_aggregate_return_type(ret, mir) &&
+    !mir_body_codegen_x64_memory_aggregate_return_type(ret, mir) {
     return false
   }
   if !mir.funcs.contains(name) {
@@ -1922,6 +1964,8 @@ fn mir_body_codegen_stmt_supported(
       mir_body_codegen_stmts_supported(body, ret, int_arg_limit, mir)
     MirLabel(_) => true
     MirGoto(_) => true
+    MirComputedGoto(value) =>
+      mir_body_codegen_value_supported(value, int_arg_limit, mir)
     MirBreak => true
     MirContinue => true
     MirBlock(stmts) =>
@@ -2094,6 +2138,7 @@ fn Codegen::collect_mir_sret_scratch_value(
     | MirAddrLocal(_)
     | MirAddrGlobal(_, _)
     | MirFuncAddr(_, _)
+    | MirLabelAddr(_)
     | MirStringAddr(_) => ()
     MirElemAddr(base, index, _) => {
       self.collect_mir_sret_scratch_value(base)
@@ -2105,6 +2150,56 @@ fn Codegen::collect_mir_sret_scratch_value(
       self.collect_mir_sret_scratch_value(lhs)
       self.collect_mir_sret_scratch_value(rhs)
     }
+    MirOverflow(_, left, right, result_ptr) => {
+      self.collect_mir_sret_scratch_value(left)
+      self.collect_mir_sret_scratch_value(right)
+      self.collect_mir_sret_scratch_value(result_ptr)
+    }
+    MirVaStart(target) | MirVaEnd(target) =>
+      self.collect_mir_sret_scratch_value(target)
+    MirVaCopy(target, source) => {
+      self.collect_mir_sret_scratch_value(target)
+      self.collect_mir_sret_scratch_value(source)
+    }
+    MirBzero(dst, size) => {
+      self.collect_mir_sret_scratch_value(dst)
+      self.collect_mir_sret_scratch_value(size)
+    }
+    MirAtomicLoad(ptr, order, _) => {
+      self.collect_mir_sret_scratch_value(ptr)
+      self.collect_mir_sret_scratch_value(order)
+    }
+    MirAtomicStore(ptr, stored, order) => {
+      self.collect_mir_sret_scratch_value(ptr)
+      self.collect_mir_sret_scratch_value(stored)
+      self.collect_mir_sret_scratch_value(order)
+    }
+    MirAtomicUpdate(_, _, ptr, stored, extras, _) => {
+      self.collect_mir_sret_scratch_value(ptr)
+      self.collect_mir_sret_scratch_value(stored)
+      for extra in extras {
+        self.collect_mir_sret_scratch_value(extra)
+      }
+    }
+    MirAtomicExchange(ptr, stored, extras, _) => {
+      self.collect_mir_sret_scratch_value(ptr)
+      self.collect_mir_sret_scratch_value(stored)
+      for extra in extras {
+        self.collect_mir_sret_scratch_value(extra)
+      }
+    }
+    MirAtomicCompareExchange(ptr, expected, desired, extras) => {
+      self.collect_mir_sret_scratch_value(ptr)
+      self.collect_mir_sret_scratch_value(expected)
+      self.collect_mir_sret_scratch_value(desired)
+      for extra in extras {
+        self.collect_mir_sret_scratch_value(extra)
+      }
+    }
+    MirLibCall(_, args, _) =>
+      for arg in args {
+        self.collect_mir_sret_scratch_value(arg)
+      }
     MirCast(_, inner)
     | MirAggregateArg(inner, _)
     | MirVaArg(inner, _)
@@ -2209,23 +2304,24 @@ fn Codegen::collect_mir_sret_scratch_stmt(
       for nested in stmts {
         self.collect_mir_sret_scratch_stmt(nested)
       }
+    MirComputedGoto(value) => self.collect_mir_sret_scratch_value(value)
     MirLabel(_) | MirGoto(_) | MirBreak | MirContinue => ()
   }
 }
 
 ///|
-fn Codegen::emit_mir_atomic_load_builtin(
+fn Codegen::emit_mir_atomic_load(
   self : Codegen,
-  args : Array[@mir.MirValue],
+  ptr : @mir.MirValue,
+  order : @mir.MirValue,
   offsets : Map[Int, Int],
   frame_size : Int,
 ) -> Unit {
-  if args.length() < 1 {
-    self.emit("\tmov\tx9, #0")
-    return
-  }
-  let elem_ty = mir_body_codegen_atomic_target_type(args[0].ty())
-  self.gen_mir_value(args[0], offsets, frame_size)
+  let elem_ty = mir_body_codegen_atomic_target_type(ptr.ty())
+  self.gen_mir_value(ptr, offsets, frame_size)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.gen_mir_value(order, offsets, frame_size)
+  self.emit("\tldr\tx9, [sp], #16")
   self.emit("\tmov\tx0, x9")
   match peel_aligned_type(elem_ty) {
     Bool | SChar | UChar => self.emit("\tldarb\tw9, [x0]")
@@ -2237,28 +2333,264 @@ fn Codegen::emit_mir_atomic_load_builtin(
 }
 
 ///|
-fn Codegen::emit_mir_atomic_store_builtin(
+fn Codegen::emit_mir_atomic_store(
   self : Codegen,
-  args : Array[@mir.MirValue],
+  ptr : @mir.MirValue,
+  value : @mir.MirValue,
+  order : @mir.MirValue,
   offsets : Map[Int, Int],
   frame_size : Int,
 ) -> Unit {
-  if args.length() >= 2 {
-    let elem_ty = mir_body_codegen_atomic_target_type(args[0].ty())
-    self.gen_mir_value(args[0], offsets, frame_size)
-    self.emit("\tstr\tx9, [sp, #-16]!")
-    self.gen_mir_value(args[1], offsets, frame_size)
-    self.emit_numeric_conversion(args[1].ty(), elem_ty)
-    self.emit_scalar_conversion_to(elem_ty)
-    self.emit("\tldr\tx0, [sp], #16")
-    match peel_aligned_type(elem_ty) {
-      Bool | SChar | UChar => self.emit("\tstlrb\tw9, [x0]")
-      SShort | UShort => self.emit("\tstlrh\tw9, [x0]")
-      SInt | UInt | Float => self.emit("\tstlr\tw9, [x0]")
-      _ => self.emit("\tstlr\tx9, [x0]")
-    }
+  let elem_ty = mir_body_codegen_atomic_target_type(ptr.ty())
+  self.gen_mir_value(ptr, offsets, frame_size)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.gen_mir_value(order, offsets, frame_size)
+  self.gen_mir_value(value, offsets, frame_size)
+  self.emit_numeric_conversion(value.ty(), elem_ty)
+  self.emit_scalar_conversion_to(elem_ty)
+  self.emit("\tldr\tx0, [sp], #16")
+  match peel_aligned_type(elem_ty) {
+    Bool | SChar | UChar => self.emit("\tstlrb\tw9, [x0]")
+    SShort | UShort => self.emit("\tstlrh\tw9, [x0]")
+    SInt | UInt | Float => self.emit("\tstlr\tw9, [x0]")
+    _ => self.emit("\tstlr\tx9, [x0]")
   }
   self.emit("\tmov\tx9, #0")
+}
+
+///|
+fn Codegen::emit_mir_atomic_update_op(
+  self : Codegen,
+  op : String,
+  dst : String,
+  old : String,
+  value : String,
+) -> Unit {
+  match op {
+    "+" => self.emit("\tadd\t" + dst + ", " + old + ", " + value)
+    "-" => self.emit("\tsub\t" + dst + ", " + old + ", " + value)
+    "&" => self.emit("\tand\t" + dst + ", " + old + ", " + value)
+    "|" => self.emit("\torr\t" + dst + ", " + old + ", " + value)
+    "^" => self.emit("\teor\t" + dst + ", " + old + ", " + value)
+    "~&" => {
+      self.emit("\tand\t" + dst + ", " + old + ", " + value)
+      self.emit("\tmvn\t" + dst + ", " + dst)
+    }
+    "max" => {
+      let keep_label = self.new_label()
+      self.emit("\tmov\t" + dst + ", " + old)
+      self.emit("\tcmp\t" + old + ", " + value)
+      self.emit("\tb.ge\t" + keep_label)
+      self.emit("\tmov\t" + dst + ", " + value)
+      self.emit(keep_label + ":")
+    }
+    "min" => {
+      let keep_label = self.new_label()
+      self.emit("\tmov\t" + dst + ", " + old)
+      self.emit("\tcmp\t" + old + ", " + value)
+      self.emit("\tb.le\t" + keep_label)
+      self.emit("\tmov\t" + dst + ", " + value)
+      self.emit(keep_label + ":")
+    }
+    "umax" => {
+      let keep_label = self.new_label()
+      self.emit("\tmov\t" + dst + ", " + old)
+      self.emit("\tcmp\t" + old + ", " + value)
+      self.emit("\tb.hs\t" + keep_label)
+      self.emit("\tmov\t" + dst + ", " + value)
+      self.emit(keep_label + ":")
+    }
+    "umin" => {
+      let keep_label = self.new_label()
+      self.emit("\tmov\t" + dst + ", " + old)
+      self.emit("\tcmp\t" + old + ", " + value)
+      self.emit("\tb.ls\t" + keep_label)
+      self.emit("\tmov\t" + dst + ", " + value)
+      self.emit(keep_label + ":")
+    }
+    _ => self.emit("\tmov\t" + dst + ", " + old)
+  }
+}
+
+///|
+fn Codegen::emit_mir_atomic_update_loop(
+  self : Codegen,
+  op : String,
+  elem_ty : @ctype.Type,
+  return_new : Bool,
+) -> Unit {
+  let loop_label = self.new_label()
+  let byte_width = self.type_size(elem_ty)
+  self.emit(loop_label + ":")
+  if byte_width == 1 {
+    self.emit("\tldaxrb\tw9, [x0]")
+    self.emit_mir_atomic_update_op(op, "w11", "w9", "w10")
+    self.emit("\tstlxrb\tw12, w11, [x0]")
+  } else if byte_width == 2 {
+    self.emit("\tldaxrh\tw9, [x0]")
+    self.emit_mir_atomic_update_op(op, "w11", "w9", "w10")
+    self.emit("\tstlxrh\tw12, w11, [x0]")
+  } else if byte_width == 4 {
+    self.emit("\tldaxr\tw9, [x0]")
+    self.emit_mir_atomic_update_op(op, "w11", "w9", "w10")
+    self.emit("\tstlxr\tw12, w11, [x0]")
+  } else {
+    self.emit("\tldaxr\tx9, [x0]")
+    self.emit_mir_atomic_update_op(op, "x11", "x9", "x10")
+    self.emit("\tstlxr\tw12, x11, [x0]")
+  }
+  self.emit("\tcbnz\tw12, " + loop_label)
+  if return_new {
+    if byte_width == 8 {
+      self.emit("\tmov\tx9, x11")
+    } else {
+      self.emit("\tmov\tw9, w11")
+    }
+  }
+  self.emit_scalar_conversion_to(elem_ty)
+}
+
+///|
+fn Codegen::emit_mir_ignored_values(
+  self : Codegen,
+  values : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+  frame_size : Int,
+) -> Unit {
+  for value in values {
+    self.gen_mir_value(value, offsets, frame_size)
+  }
+}
+
+///|
+fn Codegen::emit_mir_atomic_update(
+  self : Codegen,
+  ptr : @mir.MirValue,
+  value : @mir.MirValue,
+  extras : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+  frame_size : Int,
+  op : String,
+  return_new : Bool,
+) -> Unit {
+  self.emit_mir_ignored_values(extras, offsets, frame_size)
+  let elem_ty = mir_body_codegen_atomic_target_type(ptr.ty())
+  self.gen_mir_value(ptr, offsets, frame_size)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.gen_mir_value(value, offsets, frame_size)
+  self.emit_numeric_conversion(value.ty(), elem_ty)
+  self.emit_scalar_conversion_to(elem_ty)
+  if self.type_size(elem_ty) == 8 {
+    self.emit("\tmov\tx10, x9")
+  } else {
+    self.emit("\tmov\tw10, w9")
+  }
+  self.emit("\tldr\tx0, [sp], #16")
+  self.emit_mir_atomic_update_loop(op, elem_ty, return_new)
+}
+
+///|
+fn Codegen::emit_mir_atomic_exchange(
+  self : Codegen,
+  ptr : @mir.MirValue,
+  value : @mir.MirValue,
+  extras : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+  frame_size : Int,
+) -> Unit {
+  self.emit_mir_ignored_values(extras, offsets, frame_size)
+  let elem_ty = mir_body_codegen_atomic_target_type(ptr.ty())
+  let byte_width = self.type_size(elem_ty)
+  self.gen_mir_value(ptr, offsets, frame_size)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.gen_mir_value(value, offsets, frame_size)
+  self.emit_numeric_conversion(value.ty(), elem_ty)
+  self.emit_scalar_conversion_to(elem_ty)
+  if byte_width == 8 {
+    self.emit("\tmov\tx10, x9")
+  } else {
+    self.emit("\tmov\tw10, w9")
+  }
+  self.emit("\tldr\tx0, [sp], #16")
+  let loop_label = self.new_label()
+  self.emit(loop_label + ":")
+  if byte_width == 1 {
+    self.emit("\tldaxrb\tw9, [x0]")
+    self.emit("\tstlxrb\tw12, w10, [x0]")
+  } else if byte_width == 2 {
+    self.emit("\tldaxrh\tw9, [x0]")
+    self.emit("\tstlxrh\tw12, w10, [x0]")
+  } else if byte_width == 4 {
+    self.emit("\tldaxr\tw9, [x0]")
+    self.emit("\tstlxr\tw12, w10, [x0]")
+  } else {
+    self.emit("\tldaxr\tx9, [x0]")
+    self.emit("\tstlxr\tw12, x10, [x0]")
+  }
+  self.emit("\tcbnz\tw12, " + loop_label)
+  self.emit_scalar_conversion_to(elem_ty)
+}
+
+///|
+fn Codegen::emit_mir_atomic_compare_exchange(
+  self : Codegen,
+  ptr : @mir.MirValue,
+  expected : @mir.MirValue,
+  desired : @mir.MirValue,
+  extras : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+  frame_size : Int,
+) -> Unit {
+  self.emit_mir_ignored_values(extras, offsets, frame_size)
+  let elem_ty = mir_body_codegen_atomic_target_type(ptr.ty())
+  let byte_width = self.type_size(elem_ty)
+  self.gen_mir_value(ptr, offsets, frame_size)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.gen_mir_value(expected, offsets, frame_size)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.gen_mir_value(desired, offsets, frame_size)
+  self.emit_numeric_conversion(desired.ty(), elem_ty)
+  self.emit_scalar_conversion_to(elem_ty)
+  if byte_width == 8 {
+    self.emit("\tmov\tx10, x9")
+  } else {
+    self.emit("\tmov\tw10, w9")
+  }
+  self.emit("\tldr\tx1, [sp], #16")
+  self.emit("\tldr\tx0, [sp], #16")
+  self.emit_load_typed("x13", "x1", elem_ty)
+  let loop_label = self.new_label()
+  let fail_label = self.new_label()
+  let done_label = self.new_label()
+  self.emit(loop_label + ":")
+  if byte_width == 1 {
+    self.emit("\tldaxrb\tw9, [x0]")
+    self.emit("\tcmp\tw9, w13")
+    self.emit("\tb.ne\t" + fail_label)
+    self.emit("\tstlxrb\tw12, w10, [x0]")
+  } else if byte_width == 2 {
+    self.emit("\tldaxrh\tw9, [x0]")
+    self.emit("\tcmp\tw9, w13")
+    self.emit("\tb.ne\t" + fail_label)
+    self.emit("\tstlxrh\tw12, w10, [x0]")
+  } else if byte_width == 4 {
+    self.emit("\tldaxr\tw9, [x0]")
+    self.emit("\tcmp\tw9, w13")
+    self.emit("\tb.ne\t" + fail_label)
+    self.emit("\tstlxr\tw12, w10, [x0]")
+  } else {
+    self.emit("\tldaxr\tx9, [x0]")
+    self.emit("\tcmp\tx9, x13")
+    self.emit("\tb.ne\t" + fail_label)
+    self.emit("\tstlxr\tw12, x10, [x0]")
+  }
+  self.emit("\tcbnz\tw12, " + loop_label)
+  self.emit("\tmov\tx9, #1")
+  self.emit("\tb\t" + done_label)
+  self.emit(fail_label + ":")
+  self.emit_store_typed("x9", "x1", elem_ty)
+  self.emit("\tmov\tx9, #0")
+  self.emit(done_label + ":")
 }
 
 ///|
@@ -2284,12 +2616,14 @@ fn Codegen::emit_mir_scale_update_rhs_for_pointer(
 ///|
 fn Codegen::emit_mir_overflow_arithmetic_builtin(
   self : Codegen,
-  args : Array[@mir.MirValue],
+  left : @mir.MirValue,
+  right : @mir.MirValue,
+  result_ptr : @mir.MirValue,
   offsets : Map[Int, Int],
   frame_size : Int,
   op : String,
 ) -> Unit {
-  let result_ty = match mir_body_codegen_overflow_result_type(args) {
+  let result_ty = match mir_body_codegen_overflow_result_type(result_ptr) {
     Some(ty) => ty
     None => {
       self.emit("\tmov\tx9, #0")
@@ -2302,14 +2636,14 @@ fn Codegen::emit_mir_overflow_arithmetic_builtin(
       result_ty.to_string(),
     )
   }
-  self.gen_mir_value(args[2], offsets, frame_size)
+  self.gen_mir_value(result_ptr, offsets, frame_size)
   self.emit("\tstr\tx9, [sp, #-16]!")
-  self.gen_mir_value(args[0], offsets, frame_size)
-  self.emit_numeric_conversion(args[0].ty(), result_ty)
+  self.gen_mir_value(left, offsets, frame_size)
+  self.emit_numeric_conversion(left.ty(), result_ty)
   self.emit_scalar_conversion_to(result_ty)
   self.emit("\tstr\tx9, [sp, #-16]!")
-  self.gen_mir_value(args[1], offsets, frame_size)
-  self.emit_numeric_conversion(args[1].ty(), result_ty)
+  self.gen_mir_value(right, offsets, frame_size)
+  self.emit_numeric_conversion(right.ty(), result_ty)
   self.emit_scalar_conversion_to(result_ty)
   self.emit("\tmov\tx10, x9")
   self.emit("\tldr\tx9, [sp], #16")
@@ -2333,14 +2667,32 @@ fn mir_body_codegen_va_slot_advance(size : Int) -> Int {
 }
 
 ///|
-fn Codegen::emit_mir_va_start(
+fn Codegen::emit_mir_bzero(
   self : Codegen,
-  args : Array[@mir.MirValue],
+  dst : @mir.MirValue,
+  size : @mir.MirValue,
   offsets : Map[Int, Int],
   frame_size : Int,
 ) -> Unit {
-  match args.get(0) {
-    Some(MirLocal(binding)) => {
+  self.gen_mir_value(dst, offsets, frame_size)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.gen_mir_value(size, offsets, frame_size)
+  self.emit_scalar_conversion_to(size.ty())
+  self.emit("\tmov\tx1, x9")
+  self.emit("\tldr\tx0, [sp], #16")
+  self.emit("\tbl\t_bzero")
+  self.emit("\tmov\tx9, #0")
+}
+
+///|
+fn Codegen::emit_mir_va_start(
+  self : Codegen,
+  target : @mir.MirValue,
+  offsets : Map[Int, Int],
+  frame_size : Int,
+) -> Unit {
+  match target {
+    MirLocal(binding) => {
       self.emit("\tadd\tx9, x29, #16")
       self.emit_store_local("x9", offsets[binding.id], frame_size)
     }
@@ -2352,17 +2704,14 @@ fn Codegen::emit_mir_va_start(
 ///|
 fn Codegen::emit_mir_va_copy(
   self : Codegen,
-  args : Array[@mir.MirValue],
+  target : @mir.MirValue,
+  source : @mir.MirValue,
   offsets : Map[Int, Int],
   frame_size : Int,
 ) -> Unit {
-  if args.length() < 2 {
-    self.emit("\tmov\tx9, #0")
-    return
-  }
-  match args[0] {
+  match target {
     MirLocal(binding) => {
-      self.gen_mir_value(args[1], offsets, frame_size)
+      self.gen_mir_value(source, offsets, frame_size)
       self.emit_store_local("x9", offsets[binding.id], frame_size)
     }
     _ => ()
@@ -2413,11 +2762,17 @@ fn Codegen::emit_mir_va_arg_addr(
   }
   self.gen_mir_value(ap, offsets, frame_size)
   self.emit("\tmov\tx11, x9")
-  self.emit_add_offset_to_x9(
-    mir_body_codegen_va_slot_advance(self.type_size(ty)),
-  )
-  self.emit_store_local("x9", offsets[binding.id], frame_size)
-  self.emit("\tmov\tx9, x11")
+  if self.type_size(ty) > 16 {
+    self.emit("\tadd\tx9, x11, #8")
+    self.emit_store_local("x9", offsets[binding.id], frame_size)
+    self.emit("\tldr\tx9, [x11]")
+  } else {
+    self.emit_add_offset_to_x9(
+      mir_body_codegen_va_slot_advance(self.type_size(ty)),
+    )
+    self.emit_store_local("x9", offsets[binding.id], frame_size)
+    self.emit("\tmov\tx9, x11")
+  }
 }
 
 ///|
@@ -2795,6 +3150,36 @@ fn Codegen::emit_copy_darwin_aggregate_arg_from_raw_to_stack(
 }
 
 ///|
+fn Codegen::emit_save_darwin_variadic_aggregate_arg_raw(
+  self : Codegen,
+  arg : @mir.MirValue,
+  ty : @ctype.Type,
+  offsets : Map[Int, Int],
+  frame_size : Int,
+) -> (Int, Int) {
+  let size = self.type_size(ty)
+  if size > 16 {
+    let copy_size = (size + 15) / 16 * 16
+    self.gen_mir_value(arg, offsets, frame_size)
+    self.emit("\tsub\tsp, sp, #" + copy_size.to_string())
+    self.emit("\tmov\tx11, x9")
+    self.emit("\tmov\tx10, sp")
+    self.emit_copy_memory_aggregate_from_x11_to_x10(ty)
+    self.emit("\tmov\tx9, sp")
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    (1, copy_size + 16)
+  } else {
+    let slots = if size > 8 { 2 } else { 1 }
+    self.gen_mir_value(arg, offsets, frame_size)
+    self.emit("\tsub\tsp, sp, #16")
+    self.emit("\tmov\tx11, x9")
+    self.emit("\tmov\tx10, sp")
+    self.emit_copy_memory_aggregate_from_x11_to_x10(ty)
+    (slots, 16)
+  }
+}
+
+///|
 fn Codegen::emit_pass_darwin_indirect_aggregate_arg_from_raw(
   self : Codegen,
   raw_offset : Int,
@@ -3054,6 +3439,52 @@ fn Codegen::gen_mir_aggregate_return_addr(
 }
 
 ///|
+fn Codegen::emit_mir_rotate_op(
+  self : Codegen,
+  op : String,
+  lhs : @mir.MirValue,
+  rhs : @mir.MirValue,
+  ty : @ctype.Type,
+  offsets : Map[Int, Int],
+  frame_size : Int,
+) -> Unit {
+  let (width, left) = match mir_body_codegen_rotate_op(op) {
+    Some(value) => value
+    None => abort("unsupported MIR body rotate operator")
+  }
+  self.gen_mir_value(lhs, offsets, frame_size)
+  self.emit_numeric_conversion(lhs.ty(), ty)
+  self.emit_scalar_conversion_to(ty)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.gen_mir_value(rhs, offsets, frame_size)
+  self.emit_scalar_conversion_to(rhs.ty())
+  self.emit("\tmov\tx10, x9")
+  self.emit("\tldr\tx9, [sp], #16")
+  if width == 32 {
+    self.emit("\tneg\tw11, w10")
+    if left {
+      self.emit("\tlsl\tw12, w9, w10")
+      self.emit("\tlsr\tw11, w9, w11")
+    } else {
+      self.emit("\tlsr\tw12, w9, w10")
+      self.emit("\tlsl\tw11, w9, w11")
+    }
+    self.emit("\torr\tw9, w12, w11")
+  } else {
+    self.emit("\tneg\tx11, x10")
+    if left {
+      self.emit("\tlsl\tx12, x9, x10")
+      self.emit("\tlsr\tx11, x9, x11")
+    } else {
+      self.emit("\tlsr\tx12, x9, x10")
+      self.emit("\tlsl\tx11, x9, x11")
+    }
+    self.emit("\torr\tx9, x12, x11")
+  }
+  self.emit_scalar_conversion_to(ty)
+}
+
+///|
 fn Codegen::gen_mir_value(
   self : Codegen,
   value : @mir.MirValue,
@@ -3083,6 +3514,7 @@ fn Codegen::gen_mir_value(
       self.emit("\tadrp\tx9, _" + name + "@GOTPAGE")
       self.emit("\tldr\tx9, [x9, _" + name + "@GOTPAGEOFF]")
     }
+    MirLabelAddr(name) => self.emit("\tadr\tx9, " + self.label_ref(name))
     MirStringAddr(value) => {
       let idx = self.strings.length()
       self.strings.push(value)
@@ -3112,6 +3544,61 @@ fn Codegen::gen_mir_value(
     MirUnary(op, inner, ty) => {
       self.gen_mir_value(inner, offsets, frame_size)
       match op {
+        "fp_isnan"
+        | "fp_isinf"
+        | "fp_isfinite"
+        | "fp_isnormal"
+        | "fp_signbit" =>
+          if mir_body_codegen_floating_type(inner.ty()) {
+            self.emit_mir_fp_class_result(op, inner.ty())
+            self.emit_scalar_conversion_to(ty)
+          } else {
+            abort("unsupported MIR body floating classification operand")
+          }
+        "alloca" => {
+          self.emit("\tadd\tx9, x9, #15")
+          self.emit("\tbic\tx9, x9, #0xF")
+          self.emit("\tsub\tsp, sp, x9")
+          self.emit("\tmov\tx9, sp")
+        }
+        "frame_address" =>
+          match inner {
+            MirConst(level, _) =>
+              if level == 0L {
+                self.emit("\tmov\tx9, x29")
+              } else {
+                self.emit("\tmov\tx9, #0")
+              }
+            _ => {
+              self.emit("\tcmp\tx9, #0")
+              self.emit("\tmov\tx10, #0")
+              self.emit("\tcsel\tx9, x29, x10, eq")
+            }
+          }
+        "return_address" =>
+          match inner {
+            MirConst(level, _) =>
+              if level == 0L {
+                self.emit("\tldr\tx9, [x29, #8]")
+              } else {
+                self.emit("\tmov\tx9, #0")
+              }
+            _ => {
+              self.emit("\tcmp\tx9, #0")
+              self.emit("\tldr\tx10, [x29, #8]")
+              self.emit("\tmov\tx11, #0")
+              self.emit("\tcsel\tx9, x10, x11, eq")
+            }
+          }
+        "sync_synchronize" | "atomic_thread_fence" => {
+          self.emit("\tdmb\tish")
+          self.emit("\tmov\tx9, #0")
+        }
+        "atomic_signal_fence" => self.emit("\tmov\tx9, #0")
+        "trap" => {
+          self.emit("\tbrk\t#0x1")
+          self.emit("\tmov\tx9, #0")
+        }
         "+" => ()
         "-" =>
           if mir_body_codegen_int128_type(ty) {
@@ -3165,6 +3652,30 @@ fn Codegen::gen_mir_value(
           } else {
             abort("unsupported MIR body fabs result type")
           }
+        "fsqrt" =>
+          if mir_body_codegen_floating_type(ty) {
+            self.emit_numeric_conversion(inner.ty(), ty)
+            self.emit(
+              "\tfmov\t" +
+              mir_body_codegen_arm_fp_reg(ty, 9) +
+              ", " +
+              mir_body_codegen_arm_fp_bits_reg(ty, "x9"),
+            )
+            self.emit(
+              "\tfsqrt\t" +
+              mir_body_codegen_arm_fp_reg(ty, 9) +
+              ", " +
+              mir_body_codegen_arm_fp_reg(ty, 9),
+            )
+            self.emit(
+              "\tfmov\t" +
+              mir_body_codegen_arm_fp_bits_reg(ty, "x9") +
+              ", " +
+              mir_body_codegen_arm_fp_reg(ty, 9),
+            )
+          } else {
+            abort("unsupported MIR body fsqrt result type")
+          }
         "!" =>
           if mir_body_codegen_int128_type(inner.ty()) {
             self.emit("\torr\tx9, x9, x10")
@@ -3192,6 +3703,22 @@ fn Codegen::gen_mir_value(
           } else {
             self.emit("\tmvn\tx9, x9")
           }
+        "abs32" => {
+          self.emit_numeric_conversion(inner.ty(), ty)
+          let done = self.new_label()
+          self.emit("\tcmp\tw9, #0")
+          self.emit("\tb.ge\t" + done)
+          self.emit("\tneg\tw9, w9")
+          self.emit(done + ":")
+        }
+        "abs64" => {
+          self.emit_numeric_conversion(inner.ty(), ty)
+          let done = self.new_label()
+          self.emit("\tcmp\tx9, #0")
+          self.emit("\tb.ge\t" + done)
+          self.emit("\tneg\tx9, x9")
+          self.emit(done + ":")
+        }
         "clz32" => self.emit("\tclz\tw9, w9")
         "clz64" => self.emit("\tclz\tx9, x9")
         "ctz32" => {
@@ -3201,6 +3728,65 @@ fn Codegen::gen_mir_value(
         "ctz64" => {
           self.emit("\trbit\tx9, x9")
           self.emit("\tclz\tx9, x9")
+        }
+        "ffs32" => {
+          let zero_label = self.new_label()
+          let done_label = self.new_label()
+          self.emit("\tcbz\tw9, " + zero_label)
+          self.emit("\trbit\tw9, w9")
+          self.emit("\tclz\tw9, w9")
+          self.emit("\tadd\tw9, w9, #1")
+          self.emit("\tb\t" + done_label)
+          self.emit(zero_label + ":")
+          self.emit("\tmov\tx9, #0")
+          self.emit(done_label + ":")
+        }
+        "ffs64" => {
+          let zero_label = self.new_label()
+          let done_label = self.new_label()
+          self.emit("\tcbz\tx9, " + zero_label)
+          self.emit("\trbit\tx9, x9")
+          self.emit("\tclz\tx9, x9")
+          self.emit("\tadd\tx9, x9, #1")
+          self.emit("\tb\t" + done_label)
+          self.emit(zero_label + ":")
+          self.emit("\tmov\tx9, #0")
+          self.emit(done_label + ":")
+        }
+        "bswap16" => {
+          self.emit("\trev\tw9, w9")
+          self.emit("\tlsr\tw9, w9, #16")
+        }
+        "bswap32" => self.emit("\trev\tw9, w9")
+        "bswap64" => self.emit("\trev\tx9, x9")
+        "popcount32" | "popcount64" | "parity32" | "parity64" => {
+          if op == "popcount32" || op == "parity32" {
+            self.emit("\tmov\tw9, w9")
+          }
+          self.emit("\tlsr\tx10, x9, #1")
+          self.emit_load_int("x11", 6148914691236517205L)
+          self.emit("\tand\tx10, x10, x11")
+          self.emit("\tsub\tx9, x9, x10")
+          self.emit_load_int("x11", 3689348814741910323L)
+          self.emit("\tand\tx10, x9, x11")
+          self.emit("\tlsr\tx12, x9, #2")
+          self.emit("\tand\tx12, x12, x11")
+          self.emit("\tadd\tx9, x10, x12")
+          self.emit("\tlsr\tx10, x9, #4")
+          self.emit("\tadd\tx9, x9, x10")
+          self.emit_load_int("x11", 1085102592571150095L)
+          self.emit("\tand\tx9, x9, x11")
+          self.emit("\tlsr\tx10, x9, #8")
+          self.emit("\tadd\tx9, x9, x10")
+          self.emit("\tlsr\tx10, x9, #16")
+          self.emit("\tadd\tx9, x9, x10")
+          self.emit("\tlsr\tx10, x9, #32")
+          self.emit("\tadd\tx9, x9, x10")
+          if op == "parity32" || op == "parity64" {
+            self.emit("\tand\tx9, x9, #1")
+          } else {
+            self.emit("\tand\tx9, x9, #127")
+          }
         }
         _ => abort("unsupported MIR body unary operator")
       }
@@ -3460,116 +4046,68 @@ fn Codegen::gen_mir_value(
       self.emit_scalar_conversion_to(ty)
       self.emit(end_label + ":")
     }
-    MirCall(name, args, ty) => {
-      if mir_body_codegen_sync_synchronize_call(name, args, ty) {
-        self.emit("\tdmb\tish")
-        self.emit("\tmov\tx9, #0")
-        return
-      } else if mir_body_codegen_atomic_thread_fence_call(name, args, ty) {
-        for arg in args {
-          self.gen_mir_value(arg, offsets, frame_size)
-        }
-        self.emit("\tdmb\tish")
-        self.emit("\tmov\tx9, #0")
-        return
-      } else if mir_body_codegen_atomic_signal_fence_call(name, args, ty) {
-        for arg in args {
-          self.gen_mir_value(arg, offsets, frame_size)
-        }
-        self.emit("\tmov\tx9, #0")
-        return
-      } else if mir_body_codegen_atomic_load_call(name, args, ty) {
-        self.emit_mir_atomic_load_builtin(args, offsets, frame_size)
-        return
-      } else if mir_body_codegen_atomic_store_call(name, args, ty) {
-        self.emit_mir_atomic_store_builtin(args, offsets, frame_size)
-        return
-      } else if mir_body_codegen_trap_call(name, args, ty) {
-        self.emit("\tbrk\t#0x1")
-        self.emit("\tmov\tx9, #0")
-        return
-      } else if mir_body_codegen_alloca_call(name, args, ty) {
-        self.gen_mir_value(args[0], offsets, frame_size)
-        self.emit("\tadd\tx9, x9, #15")
-        self.emit("\tbic\tx9, x9, #0xF")
-        self.emit("\tsub\tsp, sp, x9")
-        self.emit("\tmov\tx9, sp")
-        return
-      } else if mir_body_codegen_frame_address_call(name, args, ty) {
-        let level = match mir_body_codegen_const_builtin_level(args) {
-          Some(level) => level
-          None => 0L
-        }
-        if level == 0L {
-          self.emit("\tmov\tx9, x29")
-        } else {
-          self.emit("\tmov\tx9, #0")
-        }
-        return
-      } else if mir_body_codegen_return_address_call(name, args, ty) {
-        let level = match mir_body_codegen_const_builtin_level(args) {
-          Some(level) => level
-          None => 0L
-        }
-        if level == 0L {
-          self.emit("\tldr\tx9, [x29, #8]")
-        } else {
-          self.emit("\tmov\tx9, #0")
-        }
-        return
-      } else if mir_body_codegen_va_setup_call(name, args, ty) {
-        match name {
-          "__builtin_va_start" =>
-            self.emit_mir_va_start(args, offsets, frame_size)
-          "__builtin_va_copy" =>
-            self.emit_mir_va_copy(args, offsets, frame_size)
-          _ => self.emit("\tmov\tx9, #0")
-        }
-        return
-      }
-      match overflow_builtin_operator(name) {
-        Some(op) =>
-          if mir_body_codegen_overflow_call(name, args, ty) {
-            self.emit_mir_overflow_arithmetic_builtin(
-              args, offsets, frame_size, op,
-            )
-            return
-          }
-        None => ()
-      }
-      let source_indexes = mir_body_codegen_direct_call_source_indexes(
-        name, args,
+    MirOverflow(op, left, right, result_ptr) =>
+      self.emit_mir_overflow_arithmetic_builtin(
+        left, right, result_ptr, offsets, frame_size, op,
       )
+    MirVaStart(target) => self.emit_mir_va_start(target, offsets, frame_size)
+    MirVaCopy(target, source) =>
+      self.emit_mir_va_copy(target, source, offsets, frame_size)
+    MirVaEnd(_) => self.emit("\tmov\tx9, #0")
+    MirBzero(dst, size) => self.emit_mir_bzero(dst, size, offsets, frame_size)
+    MirAtomicLoad(ptr, order, _) =>
+      self.emit_mir_atomic_load(ptr, order, offsets, frame_size)
+    MirAtomicStore(ptr, value, order) =>
+      self.emit_mir_atomic_store(ptr, value, order, offsets, frame_size)
+    MirAtomicUpdate(op, return_new, ptr, value, extras, _) =>
+      self.emit_mir_atomic_update(
+        ptr, value, extras, offsets, frame_size, op, return_new,
+      )
+    MirAtomicExchange(ptr, value, extras, _) =>
+      self.emit_mir_atomic_exchange(ptr, value, extras, offsets, frame_size)
+    MirAtomicCompareExchange(ptr, expected, desired, extras) =>
+      self.emit_mir_atomic_compare_exchange(
+        ptr, expected, desired, extras, offsets, frame_size,
+      )
+    MirLibCall(name, args, ty) =>
+      self.gen_mir_value(MirCall(name, args, ty), offsets, frame_size)
+    MirCall(name, args, ty) => {
+      let source_indexes = mir_body_codegen_direct_call_source_indexes(args)
       if self.mir_direct_call_variadic(name) {
         let named_count = self.mir_direct_call_named_arg_count(name)
         let expected_types : Array[@ctype.Type] = []
         let arg_slot_counts : Array[Int] = []
+        let arg_raw_sizes : Array[Int] = []
         for i in 0..<source_indexes.length() {
           let arg = args[source_indexes[i]]
           let expected = self.mir_call_arg_type(name, i, arg.ty())
           expected_types.push(expected)
           match peel_aligned_type(expected) {
             Struct(_) | Union(_) => {
-              let size = self.type_size(expected)
-              let slots = if size > 8 { 2 } else { 1 }
+              let (slots, raw_size) = self.emit_save_darwin_variadic_aggregate_arg_raw(
+                arg, expected, offsets, frame_size,
+              )
               arg_slot_counts.push(slots)
-              self.gen_mir_value(arg, offsets, frame_size)
-              self.emit("\tsub\tsp, sp, #16")
-              self.emit("\tldr\tx10, [x9]")
-              self.emit("\tstr\tx10, [sp]")
-              if slots == 2 {
-                self.emit("\tldr\tx10, [x9, #8]")
-                self.emit("\tstr\tx10, [sp, #8]")
-              }
+              arg_raw_sizes.push(raw_size)
             }
             _ => {
-              arg_slot_counts.push(1)
+              let slots = mir_body_codegen_abi_int_slots(expected)
+              arg_slot_counts.push(slots)
+              arg_raw_sizes.push(16)
               self.gen_mir_value(arg, offsets, frame_size)
               self.emit_numeric_conversion(arg.ty(), expected)
               self.emit_scalar_conversion_to(expected)
-              self.emit("\tstr\tx9, [sp, #-16]!")
+              if mir_body_codegen_int128_type(expected) {
+                self.emit("\tstp\tx9, x10, [sp, #-16]!")
+              } else {
+                self.emit("\tstr\tx9, [sp, #-16]!")
+              }
             }
           }
+        }
+        let mut raw_args_area = 0
+        for raw_size in arg_raw_sizes {
+          raw_args_area += raw_size
         }
         let mut variadic_slots = 0
         for i in named_count..<arg_slot_counts.length() {
@@ -3583,9 +4121,10 @@ fn Codegen::gen_mir_value(
         self.emit("\tsub\tsp, sp, #" + variadic_area.to_string())
         let mut int_arg_index = 0
         let mut fp_arg_index = 0
+        let mut raw_offset_cursor = variadic_area + raw_args_area
         for i in 0..<source_indexes.length() {
-          let raw_offset = variadic_area +
-            (source_indexes.length() - 1 - i) * 16
+          raw_offset_cursor -= arg_raw_sizes[i]
+          let raw_offset = raw_offset_cursor
           if mir_body_codegen_abi_fp_type(expected_types[i]) {
             if fp_arg_index < 8 {
               self.emit("\tldr\tx9, [sp, #" + raw_offset.to_string() + "]")
@@ -3616,6 +4155,24 @@ fn Codegen::gen_mir_value(
               }
               int_arg_index += 1
             }
+          } else if mir_body_codegen_int128_type(expected_types[i]) {
+            if int_arg_index + 2 <= 8 {
+              self.emit(
+                "\tldr\tx" +
+                int_arg_index.to_string() +
+                ", [sp, #" +
+                raw_offset.to_string() +
+                "]",
+              )
+              self.emit(
+                "\tldr\tx" +
+                (int_arg_index + 1).to_string() +
+                ", [sp, #" +
+                (raw_offset + 8).to_string() +
+                "]",
+              )
+            }
+            int_arg_index += 2
           } else {
             if int_arg_index < 8 {
               self.emit(
@@ -3630,9 +4187,13 @@ fn Codegen::gen_mir_value(
           }
         }
         let mut dst_slot = 0
+        raw_offset_cursor = variadic_area + raw_args_area
         for i in named_count..<source_indexes.length() {
-          let raw_offset = variadic_area +
-            (source_indexes.length() - 1 - i) * 16
+          raw_offset_cursor = variadic_area + raw_args_area
+          for j in 0..<(i + 1) {
+            raw_offset_cursor -= arg_raw_sizes[j]
+          }
+          let raw_offset = raw_offset_cursor
           for j in 0..<arg_slot_counts[i] {
             self.emit(
               "\tldr\tx9, [sp, #" + (raw_offset + j * 8).to_string() + "]",
@@ -3646,8 +4207,7 @@ fn Codegen::gen_mir_value(
         self.emit_call_sret_addr(ty, frame_size)
         self.emit("\tbl\t_" + mir_body_codegen_direct_call_symbol(name))
         self.emit(
-          "\tadd\tsp, sp, #" +
-          (variadic_area + source_indexes.length() * 16).to_string(),
+          "\tadd\tsp, sp, #" + (variadic_area + raw_args_area).to_string(),
         )
       } else {
         let expected_types : Array[@ctype.Type] = []
@@ -3914,32 +4474,37 @@ fn Codegen::gen_mir_value(
         let named_count = mir_indirect_call_named_arg_count(callee.ty())
         let expected_types : Array[@ctype.Type] = []
         let arg_slot_counts : Array[Int] = []
+        let arg_raw_sizes : Array[Int] = []
         for i in 0..<args.length() {
           let arg = args[i]
           let expected = mir_indirect_call_arg_type(callee.ty(), i, arg.ty())
           expected_types.push(expected)
           match peel_aligned_type(expected) {
             Struct(_) | Union(_) => {
-              let size = self.type_size(expected)
-              let slots = if size > 8 { 2 } else { 1 }
+              let (slots, raw_size) = self.emit_save_darwin_variadic_aggregate_arg_raw(
+                arg, expected, offsets, frame_size,
+              )
               arg_slot_counts.push(slots)
-              self.gen_mir_value(arg, offsets, frame_size)
-              self.emit("\tsub\tsp, sp, #16")
-              self.emit("\tldr\tx10, [x9]")
-              self.emit("\tstr\tx10, [sp]")
-              if slots == 2 {
-                self.emit("\tldr\tx10, [x9, #8]")
-                self.emit("\tstr\tx10, [sp, #8]")
-              }
+              arg_raw_sizes.push(raw_size)
             }
             _ => {
-              arg_slot_counts.push(1)
+              let slots = mir_body_codegen_abi_int_slots(expected)
+              arg_slot_counts.push(slots)
+              arg_raw_sizes.push(16)
               self.gen_mir_value(arg, offsets, frame_size)
               self.emit_numeric_conversion(arg.ty(), expected)
               self.emit_scalar_conversion_to(expected)
-              self.emit("\tstr\tx9, [sp, #-16]!")
+              if mir_body_codegen_int128_type(expected) {
+                self.emit("\tstp\tx9, x10, [sp, #-16]!")
+              } else {
+                self.emit("\tstr\tx9, [sp, #-16]!")
+              }
             }
           }
+        }
+        let mut raw_args_area = 0
+        for raw_size in arg_raw_sizes {
+          raw_args_area += raw_size
         }
         let mut variadic_slots = 0
         for i in named_count..<arg_slot_counts.length() {
@@ -3953,8 +4518,10 @@ fn Codegen::gen_mir_value(
         self.emit("\tsub\tsp, sp, #" + variadic_area.to_string())
         let mut int_arg_index = 0
         let mut fp_arg_index = 0
+        let mut raw_offset_cursor = variadic_area + raw_args_area
         for i in 0..<args.length() {
-          let raw_offset = variadic_area + (args.length() - 1 - i) * 16
+          raw_offset_cursor -= arg_raw_sizes[i]
+          let raw_offset = raw_offset_cursor
           if mir_body_codegen_abi_fp_type(expected_types[i]) {
             if fp_arg_index < 8 {
               self.emit("\tldr\tx9, [sp, #" + raw_offset.to_string() + "]")
@@ -3985,6 +4552,24 @@ fn Codegen::gen_mir_value(
               }
               int_arg_index += 1
             }
+          } else if mir_body_codegen_int128_type(expected_types[i]) {
+            if int_arg_index + 2 <= 8 {
+              self.emit(
+                "\tldr\tx" +
+                int_arg_index.to_string() +
+                ", [sp, #" +
+                raw_offset.to_string() +
+                "]",
+              )
+              self.emit(
+                "\tldr\tx" +
+                (int_arg_index + 1).to_string() +
+                ", [sp, #" +
+                (raw_offset + 8).to_string() +
+                "]",
+              )
+            }
+            int_arg_index += 2
           } else {
             if int_arg_index < 8 {
               self.emit(
@@ -4000,7 +4585,11 @@ fn Codegen::gen_mir_value(
         }
         let mut dst_slot = 0
         for i in named_count..<args.length() {
-          let raw_offset = variadic_area + (args.length() - 1 - i) * 16
+          raw_offset_cursor = variadic_area + raw_args_area
+          for j in 0..<(i + 1) {
+            raw_offset_cursor -= arg_raw_sizes[j]
+          }
+          let raw_offset = raw_offset_cursor
           for j in 0..<arg_slot_counts[i] {
             self.emit(
               "\tldr\tx9, [sp, #" + (raw_offset + j * 8).to_string() + "]",
@@ -4013,14 +4602,13 @@ fn Codegen::gen_mir_value(
         }
         self.emit(
           "\tldr\tx15, [sp, #" +
-          (variadic_area + args.length() * 16).to_string() +
+          (variadic_area + raw_args_area).to_string() +
           "]",
         )
         self.emit_call_sret_addr(ty, frame_size)
         self.emit("\tblr\tx15")
         self.emit(
-          "\tadd\tsp, sp, #" +
-          (variadic_area + (args.length() + 1) * 16).to_string(),
+          "\tadd\tsp, sp, #" + (variadic_area + raw_args_area + 16).to_string(),
         )
         if self.is_memory_aggregate(ty) {
           self.emit_sret_result_addr(ty, frame_size)
@@ -4640,6 +5228,25 @@ fn Codegen::gen_mir_binary(
   frame_size : Int,
 ) -> Unit {
   match op {
+    "alloca_align" => {
+      self.gen_mir_value(lhs, offsets, frame_size)
+      self.emit("\tstr\tx9, [sp, #-16]!")
+      self.gen_mir_value(rhs, offsets, frame_size)
+      self.emit("\tmov\tx11, x9")
+      self.emit("\tldr\tx10, [sp], #16")
+      self.emit("\tlsr\tx11, x11, #3")
+      self.emit("\tmov\tx12, #16")
+      self.emit("\tcmp\tx11, #16")
+      self.emit("\tcsel\tx11, x11, x12, hs")
+      self.emit("\tadd\tx9, x10, #15")
+      self.emit("\tbic\tx9, x9, #0xF")
+      self.emit("\tsub\tsp, sp, x9")
+      self.emit("\tsub\tx11, x11, #1")
+      self.emit("\tmov\tx9, sp")
+      self.emit("\tbic\tx9, x9, x11")
+      self.emit("\tmov\tsp, x9")
+      return
+    }
     "&&" => {
       let false_label = self.new_label()
       let end_label = self.new_label()
@@ -4730,6 +5337,10 @@ fn Codegen::gen_mir_binary(
     self.emit_scalar_conversion_to(ty)
     return
   }
+  if mir_body_codegen_rotate_op_supported(op, lhs.ty(), rhs.ty(), ty) {
+    self.emit_mir_rotate_op(op, lhs, rhs, ty, offsets, frame_size)
+    return
+  }
   let left_ty = mir_body_binary_left_type(op, lhs.ty(), rhs.ty())
   let right_ty = mir_body_binary_right_type(op, lhs.ty(), rhs.ty())
   if mir_body_codegen_fp_compare_supported(op, lhs.ty(), rhs.ty(), ty) {
@@ -4758,15 +5369,58 @@ fn Codegen::gen_mir_binary(
       ", " +
       mir_body_codegen_arm_fp_reg(fp_ty, 10),
     )
+    if op == "<>" {
+      self.emit("\tcset\tx9, ne")
+      self.emit("\tcset\tx10, vc")
+      self.emit("\tand\tx9, x9, x10")
+      self.emit_scalar_conversion_to(ty)
+      return
+    }
     let cc = match op {
       "==" => "eq"
       "!=" => "ne"
       "<" => "mi"
       ">" => "gt"
       "<=" => "ls"
-      _ => "ge"
+      ">=" => "ge"
+      _ => "vs"
     }
     self.emit("\tcset\tx9, " + cc)
+    self.emit_scalar_conversion_to(ty)
+    return
+  }
+  if mir_body_codegen_fp_copysign_supported(op, lhs.ty(), rhs.ty(), ty) {
+    let fp_ty = mir_body_codegen_fp_binary_type(lhs.ty(), rhs.ty(), ty)
+    self.gen_mir_value(lhs, offsets, frame_size)
+    self.emit_numeric_conversion(lhs.ty(), fp_ty)
+    match peel_aligned_type(fp_ty) {
+      Float => {
+        self.emit("\tlsl\tw9, w9, #1")
+        self.emit("\tlsr\tw9, w9, #1")
+      }
+      _ => {
+        self.emit("\tlsl\tx9, x9, #1")
+        self.emit("\tlsr\tx9, x9, #1")
+      }
+    }
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_mir_value(rhs, offsets, frame_size)
+    self.emit_numeric_conversion(rhs.ty(), fp_ty)
+    match peel_aligned_type(fp_ty) {
+      Float => {
+        self.emit("\tlsr\tw9, w9, #31")
+        self.emit("\tlsl\tw9, w9, #31")
+        self.emit("\tldr\tx10, [sp], #16")
+        self.emit("\torr\tw9, w9, w10")
+      }
+      _ => {
+        self.emit("\tlsr\tx9, x9, #63")
+        self.emit("\tlsl\tx9, x9, #63")
+        self.emit("\tldr\tx10, [sp], #16")
+        self.emit("\torr\tx9, x9, x10")
+      }
+    }
+    self.emit_numeric_conversion(fp_ty, ty)
     self.emit_scalar_conversion_to(ty)
     return
   }
@@ -5104,6 +5758,10 @@ fn Codegen::gen_mir_stmt(
       self.defined_labels[name] = true
     }
     MirGoto(name) => self.emit("\tb\t" + self.label_ref(name))
+    MirComputedGoto(value) => {
+      self.gen_mir_value(value, offsets, frame_size)
+      self.emit("\tbr\tx9")
+    }
     MirBreak =>
       match self.break_label {
         Some(label) => self.emit("\tb\t" + label)
@@ -5141,7 +5799,6 @@ fn Codegen::gen_mir_func(
   self.stack_size = 0
   self.emitted_labels = {}
   self.defined_labels = {}
-  self.fp_literals = []
   self.func_name = decl.name
   self.sret_dest_offset = -1
   self.sret_scratch_offset = -1
@@ -5376,6 +6033,95 @@ fn X64Codegen::emit_mir_numeric_conversion(
 }
 
 ///|
+fn X64Codegen::emit_mir_fp_abs_bits_in_rax(
+  self : X64Codegen,
+  ty : @ctype.Type,
+) -> Unit {
+  match x64_core_type(ty) {
+    Float => {
+      self.emit("\tmovd\teax, xmm0")
+      self.emit("\tand\teax, 2147483647")
+    }
+    _ => {
+      self.emit("\tmovq\trax, xmm0")
+      self.emit("\tmovabs\tr10, 9223372036854775807")
+      self.emit("\tand\trax, r10")
+    }
+  }
+}
+
+///|
+fn X64Codegen::emit_mir_fp_class_result(
+  self : X64Codegen,
+  op : String,
+  ty : @ctype.Type,
+) -> Unit {
+  match op {
+    "fp_isnan" => {
+      self.emit("\tucomi" + x64_fp_suffix(ty) + "\txmm0, xmm0")
+      self.emit_setcc("setp")
+    }
+    "fp_isinf" => {
+      self.emit_mir_fp_abs_bits_in_rax(ty)
+      match x64_core_type(ty) {
+        Float => self.emit("\tcmp\teax, 2139095040")
+        _ => {
+          self.emit("\tmovabs\tr10, 9218868437227405312")
+          self.emit("\tcmp\trax, r10")
+        }
+      }
+      self.emit_setcc("sete")
+    }
+    "fp_isfinite" => {
+      self.emit_mir_fp_abs_bits_in_rax(ty)
+      match x64_core_type(ty) {
+        Float => self.emit("\tcmp\teax, 2139095040")
+        _ => {
+          self.emit("\tmovabs\tr10, 9218868437227405312")
+          self.emit("\tcmp\trax, r10")
+        }
+      }
+      self.emit_setcc("setb")
+    }
+    "fp_isnormal" => {
+      self.emit_mir_fp_abs_bits_in_rax(ty)
+      match x64_core_type(ty) {
+        Float => {
+          self.emit("\tmov\tr10d, eax")
+          self.emit("\tcmp\tr10d, 8388608")
+          self.emit("\tsetae\tal")
+          self.emit("\tcmp\tr10d, 2139095040")
+          self.emit("\tsetb\tr11b")
+        }
+        _ => {
+          self.emit("\tmov\tr10, rax")
+          self.emit("\tmovabs\tr11, 4503599627370496")
+          self.emit("\tcmp\tr10, r11")
+          self.emit("\tsetae\tal")
+          self.emit("\tmovabs\tr11, 9218868437227405312")
+          self.emit("\tcmp\tr10, r11")
+          self.emit("\tsetb\tr11b")
+        }
+      }
+      self.emit("\tand\tal, r11b")
+      self.emit("\tmovzx\trax, al")
+    }
+    "fp_signbit" =>
+      match x64_core_type(ty) {
+        Float => {
+          self.emit("\tmovd\teax, xmm0")
+          self.emit("\tshr\teax, 31")
+        }
+        _ => {
+          self.emit("\tmovq\trax, xmm0")
+          self.emit("\tshr\trax, 63")
+        }
+      }
+    _ => self.emit("\tmov\trax, 0")
+  }
+}
+
+///|
 fn X64Codegen::emit_mir_push_rax(self : X64Codegen) -> Unit {
   self.emit("\tsub\trsp, 16")
   self.emit("\tmov\tQWORD PTR [rsp], rax")
@@ -5574,50 +6320,157 @@ fn X64Codegen::emit_mir_restore_scalar(
 }
 
 ///|
-fn X64Codegen::emit_mir_atomic_load_builtin(
+fn X64Codegen::emit_mir_atomic_load(
   self : X64Codegen,
-  args : Array[@mir.MirValue],
+  ptr : @mir.MirValue,
+  order : @mir.MirValue,
   offsets : Map[Int, Int],
 ) -> Unit {
-  if args.length() < 1 {
-    self.emit("\tmov\trax, 0")
-    return
-  }
-  let elem_ty = mir_body_codegen_atomic_target_type(args[0].ty())
-  self.gen_mir_value(args[0], offsets)
+  let elem_ty = mir_body_codegen_atomic_target_type(ptr.ty())
+  self.gen_mir_value(ptr, offsets)
+  self.emit_mir_push_rax()
+  self.gen_mir_value(order, offsets)
+  self.emit_mir_pop_rax()
   self.emit_load_indirect(elem_ty)
 }
 
 ///|
-fn X64Codegen::emit_mir_atomic_store_builtin(
+fn X64Codegen::emit_mir_atomic_store(
   self : X64Codegen,
-  args : Array[@mir.MirValue],
+  ptr : @mir.MirValue,
+  value : @mir.MirValue,
+  order : @mir.MirValue,
   offsets : Map[Int, Int],
 ) -> Unit {
-  if args.length() >= 2 {
-    let elem_ty = mir_body_codegen_atomic_target_type(args[0].ty())
-    self.gen_mir_value(args[0], offsets)
-    self.emit_mir_push_rax()
-    self.gen_mir_value(args[1], offsets)
-    self.emit_mir_numeric_conversion(args[1].ty(), elem_ty)
-    if x64_is_fp_type(elem_ty) {
-      self.emit("\tmov\tr10, QWORD PTR [rsp]")
-      self.emit("\tadd\trsp, 16")
-      self.emit_store_indirect(elem_ty)
-    } else {
-      self.emit_int_conversion_to(elem_ty)
-      self.emit("\tmov\tr10, QWORD PTR [rsp]")
-      self.emit("\tadd\trsp, 16")
-      let width = self.type_size(elem_ty)
-      self.emit(
-        "\txchg\t" +
-        x64_atomic_mem_operand("r10", width) +
-        ", " +
-        x64_atomic_rax_reg(width),
-      )
-    }
+  let elem_ty = mir_body_codegen_atomic_target_type(ptr.ty())
+  self.gen_mir_value(ptr, offsets)
+  self.emit_mir_push_rax()
+  self.gen_mir_value(order, offsets)
+  self.gen_mir_value(value, offsets)
+  self.emit_mir_numeric_conversion(value.ty(), elem_ty)
+  if x64_is_fp_type(elem_ty) {
+    self.emit("\tmov\tr10, QWORD PTR [rsp]")
+    self.emit("\tadd\trsp, 16")
+    self.emit_store_indirect(elem_ty)
+  } else {
+    self.emit_int_conversion_to(elem_ty)
+    self.emit("\tmov\tr10, QWORD PTR [rsp]")
+    self.emit("\tadd\trsp, 16")
+    let width = self.type_size(elem_ty)
+    self.emit(
+      "\txchg\t" +
+      x64_atomic_mem_operand("r10", width) +
+      ", " +
+      x64_atomic_rax_reg(width),
+    )
   }
   self.emit("\tmov\trax, 0")
+}
+
+///|
+fn X64Codegen::emit_mir_pop_to(self : X64Codegen, reg : String) -> Unit {
+  self.emit("\tmov\t" + reg + ", QWORD PTR [rsp]")
+  self.emit("\tadd\trsp, 16")
+}
+
+///|
+fn X64Codegen::emit_mir_ignored_values(
+  self : X64Codegen,
+  values : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+) -> Unit {
+  for value in values {
+    self.gen_mir_value(value, offsets)
+  }
+}
+
+///|
+fn X64Codegen::emit_mir_atomic_update(
+  self : X64Codegen,
+  ptr : @mir.MirValue,
+  value : @mir.MirValue,
+  extras : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+  op : String,
+  return_new : Bool,
+) -> Unit {
+  self.emit_mir_ignored_values(extras, offsets)
+  let elem_ty = mir_body_codegen_atomic_target_type(ptr.ty())
+  self.gen_mir_value(ptr, offsets)
+  self.emit_mir_push_rax()
+  self.gen_mir_value(value, offsets)
+  self.emit_mir_numeric_conversion(value.ty(), elem_ty)
+  self.emit_int_conversion_to(elem_ty)
+  self.emit("\tmov\tr10, rax")
+  self.emit_mir_pop_to("rdi")
+  self.emit_atomic_update_loop(op, elem_ty, return_new)
+}
+
+///|
+fn X64Codegen::emit_mir_atomic_exchange(
+  self : X64Codegen,
+  ptr : @mir.MirValue,
+  value : @mir.MirValue,
+  extras : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+) -> Unit {
+  self.emit_mir_ignored_values(extras, offsets)
+  let elem_ty = mir_body_codegen_atomic_target_type(ptr.ty())
+  let width = self.type_size(elem_ty)
+  self.gen_mir_value(ptr, offsets)
+  self.emit_mir_push_rax()
+  self.gen_mir_value(value, offsets)
+  self.emit_mir_numeric_conversion(value.ty(), elem_ty)
+  self.emit_int_conversion_to(elem_ty)
+  self.emit_mir_pop_to("r10")
+  self.emit(
+    "\txchg\t" +
+    x64_atomic_mem_operand("r10", width) +
+    ", " +
+    x64_atomic_rax_reg(width),
+  )
+  self.emit_atomic_clean_rax(elem_ty)
+  self.emit_int_conversion_to(elem_ty)
+}
+
+///|
+fn X64Codegen::emit_mir_atomic_compare_exchange(
+  self : X64Codegen,
+  ptr : @mir.MirValue,
+  expected : @mir.MirValue,
+  desired : @mir.MirValue,
+  extras : Array[@mir.MirValue],
+  offsets : Map[Int, Int],
+) -> Unit {
+  self.emit_mir_ignored_values(extras, offsets)
+  let elem_ty = mir_body_codegen_atomic_target_type(ptr.ty())
+  let width = self.type_size(elem_ty)
+  let fail_label = self.new_label()
+  let done_label = self.new_label()
+  self.gen_mir_value(ptr, offsets)
+  self.emit_mir_push_rax()
+  self.gen_mir_value(expected, offsets)
+  self.emit_mir_push_rax()
+  self.gen_mir_value(desired, offsets)
+  self.emit_mir_numeric_conversion(desired.ty(), elem_ty)
+  self.emit_int_conversion_to(elem_ty)
+  self.emit("\tmov\tr11, rax")
+  self.emit_mir_pop_to("rsi")
+  self.emit_mir_pop_to("rdi")
+  self.emit_atomic_raw_load_to_rax("rsi", elem_ty)
+  self.emit(
+    "\tlock cmpxchg\t" +
+    x64_atomic_mem_operand("rdi", width) +
+    ", " +
+    x64_atomic_r11_reg(width),
+  )
+  self.emit("\tjne\t" + fail_label)
+  self.emit("\tmov\trax, 1")
+  self.emit("\tjmp\t" + done_label)
+  self.emit(fail_label + ":")
+  self.emit_atomic_raw_store_from_rax("rsi", elem_ty)
+  self.emit("\tmov\trax, 0")
+  self.emit(done_label + ":")
 }
 
 ///|
@@ -5677,6 +6530,7 @@ fn X64Codegen::collect_mir_va_list_storage_value(
     | MirAddrLocal(_)
     | MirAddrGlobal(_, _)
     | MirFuncAddr(_, _)
+    | MirLabelAddr(_)
     | MirStringAddr(_) => ()
     MirElemAddr(base, index, _) => {
       self.collect_mir_va_list_storage_value(base)
@@ -5688,6 +6542,70 @@ fn X64Codegen::collect_mir_va_list_storage_value(
       self.collect_mir_va_list_storage_value(lhs)
       self.collect_mir_va_list_storage_value(rhs)
     }
+    MirOverflow(_, left, right, result_ptr) => {
+      self.collect_mir_va_list_storage_value(left)
+      self.collect_mir_va_list_storage_value(right)
+      self.collect_mir_va_list_storage_value(result_ptr)
+    }
+    MirVaStart(target) => {
+      match target {
+        MirLocal(binding) => {
+          let _ = self.ensure_mir_va_list_storage(binding)
+        }
+        _ => ()
+      }
+      self.collect_mir_va_list_storage_value(target)
+    }
+    MirVaCopy(target, source) => {
+      match target {
+        MirLocal(binding) => {
+          let _ = self.ensure_mir_va_list_storage(binding)
+        }
+        _ => ()
+      }
+      self.collect_mir_va_list_storage_value(target)
+      self.collect_mir_va_list_storage_value(source)
+    }
+    MirVaEnd(target) => self.collect_mir_va_list_storage_value(target)
+    MirBzero(dst, size) => {
+      self.collect_mir_va_list_storage_value(dst)
+      self.collect_mir_va_list_storage_value(size)
+    }
+    MirAtomicLoad(ptr, order, _) => {
+      self.collect_mir_va_list_storage_value(ptr)
+      self.collect_mir_va_list_storage_value(order)
+    }
+    MirAtomicStore(ptr, stored, order) => {
+      self.collect_mir_va_list_storage_value(ptr)
+      self.collect_mir_va_list_storage_value(stored)
+      self.collect_mir_va_list_storage_value(order)
+    }
+    MirAtomicUpdate(_, _, ptr, stored, extras, _) => {
+      self.collect_mir_va_list_storage_value(ptr)
+      self.collect_mir_va_list_storage_value(stored)
+      for extra in extras {
+        self.collect_mir_va_list_storage_value(extra)
+      }
+    }
+    MirAtomicExchange(ptr, stored, extras, _) => {
+      self.collect_mir_va_list_storage_value(ptr)
+      self.collect_mir_va_list_storage_value(stored)
+      for extra in extras {
+        self.collect_mir_va_list_storage_value(extra)
+      }
+    }
+    MirAtomicCompareExchange(ptr, expected, desired, extras) => {
+      self.collect_mir_va_list_storage_value(ptr)
+      self.collect_mir_va_list_storage_value(expected)
+      self.collect_mir_va_list_storage_value(desired)
+      for extra in extras {
+        self.collect_mir_va_list_storage_value(extra)
+      }
+    }
+    MirLibCall(_, args, _) =>
+      for arg in args {
+        self.collect_mir_va_list_storage_value(arg)
+      }
     MirCast(_, inner) | MirAggregateArg(inner, _) | MirVaArg(inner, _) =>
       self.collect_mir_va_list_storage_value(inner)
     MirVaArgAddr(inner, ty) => {
@@ -5703,7 +6621,7 @@ fn X64Codegen::collect_mir_va_list_storage_value(
       }
       self.collect_mir_va_list_storage_value(inner)
     }
-    MirCall(name, args, _) => {
+    MirCall(_, args, _) => {
       if self.is_memory_aggregate(value.ty()) {
         let size = self.type_size(value.ty())
         if size > self.sret_scratch_size {
@@ -5712,14 +6630,6 @@ fn X64Codegen::collect_mir_va_list_storage_value(
         let align = self.type_align(value.ty())
         if align > self.sret_scratch_align {
           self.sret_scratch_align = align
-        }
-      }
-      if name == "__builtin_va_start" || name == "__builtin_va_copy" {
-        match args.get(0) {
-          Some(MirLocal(binding)) => {
-            let _ = self.ensure_mir_va_list_storage(binding)
-          }
-          _ => ()
         }
       }
       for arg in args {
@@ -5811,6 +6721,7 @@ fn X64Codegen::collect_mir_va_list_storage_stmt(
       for nested in stmts {
         self.collect_mir_va_list_storage_stmt(nested)
       }
+    MirComputedGoto(value) => self.collect_mir_va_list_storage_value(value)
     MirLabel(_) | MirGoto(_) | MirBreak | MirContinue => ()
   }
 }
@@ -5912,17 +6823,13 @@ fn X64Codegen::emit_mir_store_va_list_pointer(
 ///|
 fn X64Codegen::emit_mir_va_start(
   self : X64Codegen,
-  args : Array[@mir.MirValue],
+  target : @mir.MirValue,
   offsets : Map[Int, Int],
 ) -> Unit {
-  if args.length() == 0 {
-    self.emit("\tmov\trax, 0")
-    return
-  }
   if self.va_reg_save_offset < 0 {
-    abort("__builtin_va_start used in non-variadic x86-64 MIR function")
+    abort("MIR va_start used in non-variadic x86-64 function")
   }
-  match args[0] {
+  match target {
     MirLocal(binding) => {
       let state_offset = self.ensure_mir_va_list_storage(binding)
       self.emit(
@@ -5959,17 +6866,14 @@ fn X64Codegen::emit_mir_va_start(
 ///|
 fn X64Codegen::emit_mir_va_copy(
   self : X64Codegen,
-  args : Array[@mir.MirValue],
+  target : @mir.MirValue,
+  source : @mir.MirValue,
   offsets : Map[Int, Int],
 ) -> Unit {
-  if args.length() < 2 {
-    self.emit("\tmov\trax, 0")
-    return
-  }
-  match args[0] {
+  match target {
     MirLocal(binding) => {
       let dest_offset = self.ensure_mir_va_list_storage(binding)
-      self.gen_mir_value(args[1], offsets)
+      self.gen_mir_value(source, offsets)
       self.emit("\tmov\tr11, rax")
       self.emit("\tmov\trax, QWORD PTR [r11]")
       self.emit(
@@ -6017,18 +6921,24 @@ fn X64Codegen::emit_mir_va_arg(
     self.emit("\tmov\trax, r10")
     self.emit_load_indirect(ty)
   } else {
+    let gp_bytes = mir_body_codegen_abi_int_slots(ty) * 8
+    let gp_overflow_at = 56 - gp_bytes
     self.gen_mir_value(ap, offsets)
     self.emit("\tmov\tr11, rax")
     self.emit("\tmov\teax, DWORD PTR [r11]")
-    self.emit("\tcmp\teax, 48")
+    self.emit("\tcmp\teax, " + gp_overflow_at.to_string())
     self.emit("\tjae\t" + overflow_label)
     self.emit("\tmov\tr10, QWORD PTR [r11 + 16]")
     self.emit("\tadd\tr10, rax")
-    self.emit("\tadd\tDWORD PTR [r11], 8")
+    self.emit("\tadd\tDWORD PTR [r11], " + gp_bytes.to_string())
     self.emit("\tjmp\t" + load_label)
     self.emit(overflow_label + ":")
     self.emit("\tmov\tr10, QWORD PTR [r11 + 8]")
-    self.emit("\tlea\trax, [r10 + 8]")
+    if mir_body_codegen_int128_type(ty) {
+      self.emit("\tadd\tr10, 15")
+      self.emit("\tand\tr10, -16")
+    }
+    self.emit("\tlea\trax, [r10 + " + gp_bytes.to_string() + "]")
     self.emit("\tmov\tQWORD PTR [r11 + 8], rax")
     self.emit(load_label + ":")
     self.emit("\tmov\trax, r10")
@@ -6142,13 +7052,33 @@ fn X64Codegen::emit_mir_va_arg_aggregate_addr(
 }
 
 ///|
+fn X64Codegen::emit_mir_bzero(
+  self : X64Codegen,
+  dst : @mir.MirValue,
+  size : @mir.MirValue,
+  offsets : Map[Int, Int],
+) -> Unit {
+  self.gen_mir_value(dst, offsets)
+  self.emit_mir_push_rax()
+  self.gen_mir_value(size, offsets)
+  self.emit_int_conversion_to(size.ty())
+  self.emit("\tmov\trsi, rax")
+  self.emit("\tmov\trdi, QWORD PTR [rsp]")
+  self.emit("\tadd\trsp, 16")
+  self.emit("\tcall\tbzero")
+  self.emit("\tmov\trax, 0")
+}
+
+///|
 fn X64Codegen::emit_mir_overflow_arithmetic_builtin(
   self : X64Codegen,
-  args : Array[@mir.MirValue],
+  left : @mir.MirValue,
+  right : @mir.MirValue,
+  result_ptr : @mir.MirValue,
   offsets : Map[Int, Int],
   op : String,
 ) -> Unit {
-  let result_ty = match mir_body_codegen_overflow_result_type(args) {
+  let result_ty = match mir_body_codegen_overflow_result_type(result_ptr) {
     Some(ty) => ty
     None => {
       self.emit("\tmov\trax, 0")
@@ -6162,12 +7092,12 @@ fn X64Codegen::emit_mir_overflow_arithmetic_builtin(
     )
   }
   let width = self.type_size(result_ty)
-  self.gen_mir_value(args[2], offsets)
+  self.gen_mir_value(result_ptr, offsets)
   self.emit_mir_push_rax()
-  self.gen_mir_value(args[0], offsets)
+  self.gen_mir_value(left, offsets)
   self.emit_int_conversion_to(result_ty)
   self.emit_mir_push_rax()
-  self.gen_mir_value(args[1], offsets)
+  self.gen_mir_value(right, offsets)
   self.emit_int_conversion_to(result_ty)
   self.emit("\tmov\tr10, rax")
   self.emit_mir_pop_rax()
@@ -6194,6 +7124,37 @@ fn X64Codegen::emit_mir_overflow_arithmetic_builtin(
   self.emit("\tadd\trsp, 16")
   self.emit_store_indirect(result_ty)
   self.emit("\tmovzx\teax, r11b")
+}
+
+///|
+fn X64Codegen::emit_mir_rotate_op(
+  self : X64Codegen,
+  op : String,
+  lhs : @mir.MirValue,
+  rhs : @mir.MirValue,
+  ty : @ctype.Type,
+  offsets : Map[Int, Int],
+) -> Unit {
+  let (width, left) = match mir_body_codegen_rotate_op(op) {
+    Some(value) => value
+    None => abort("unsupported x86-64 MIR body rotate operator")
+  }
+  self.gen_mir_value(lhs, offsets)
+  self.emit_mir_numeric_conversion(lhs.ty(), ty)
+  self.emit_int_conversion_to(ty)
+  self.emit_mir_push_rax()
+  self.gen_mir_value(rhs, offsets)
+  self.emit_int_conversion_to(rhs.ty())
+  self.emit("\tmov\trcx, rax")
+  self.emit_mir_pop_rax()
+  let instr = if left { "rol" } else { "ror" }
+  if width == 32 {
+    self.emit("\t" + instr + "\teax, cl")
+    self.emit("\tmov\teax, eax")
+  } else {
+    self.emit("\t" + instr + "\trax, cl")
+  }
+  self.emit_int_conversion_to(ty)
 }
 
 ///|
@@ -6229,6 +7190,8 @@ fn X64Codegen::gen_mir_value(
     MirAddrLocal(binding) => self.emit_local_addr(offsets[binding.id])
     MirAddrGlobal(name, _) => self.emit_symbol_addr(name)
     MirFuncAddr(name, _) => self.emit_symbol_addr(name)
+    MirLabelAddr(name) =>
+      self.emit("\tlea\trax, [rip + " + self.label_ref(name) + "]")
     MirStringAddr(value) => {
       let id = self.strings.length()
       self.strings.push(value)
@@ -6259,6 +7222,62 @@ fn X64Codegen::gen_mir_value(
     MirUnary(op, inner, ty) => {
       self.gen_mir_value(inner, offsets)
       match op {
+        "fp_isnan"
+        | "fp_isinf"
+        | "fp_isfinite"
+        | "fp_isnormal"
+        | "fp_signbit" =>
+          if x64_is_fp_type(inner.ty()) {
+            self.emit_mir_fp_class_result(op, inner.ty())
+            self.emit_int_conversion_to(ty)
+          } else {
+            abort("unsupported MIR body floating classification operand")
+          }
+        "alloca" => {
+          self.emit("\tadd\trax, 15")
+          self.emit("\tand\trax, -16")
+          self.emit("\tsub\trsp, rax")
+          self.emit("\tmov\trax, rsp")
+        }
+        "frame_address" =>
+          match inner {
+            MirConst(level, _) =>
+              if level == 0L {
+                self.emit("\tmov\trax, rbp")
+              } else {
+                self.emit("\tmov\trax, 0")
+              }
+            _ => {
+              self.emit("\tcmp\trax, 0")
+              self.emit("\tmov\tr10, rbp")
+              self.emit("\tmov\trax, 0")
+              self.emit("\tcmove\trax, r10")
+            }
+          }
+        "return_address" =>
+          match inner {
+            MirConst(level, _) =>
+              if level == 0L {
+                self.emit("\tmov\trax, QWORD PTR [rbp + 8]")
+              } else {
+                self.emit("\tmov\trax, 0")
+              }
+            _ => {
+              self.emit("\tcmp\trax, 0")
+              self.emit("\tmov\tr10, QWORD PTR [rbp + 8]")
+              self.emit("\tmov\trax, 0")
+              self.emit("\tcmove\trax, r10")
+            }
+          }
+        "sync_synchronize" | "atomic_thread_fence" => {
+          self.emit("\tmfence")
+          self.emit("\tmov\trax, 0")
+        }
+        "atomic_signal_fence" => self.emit("\tmov\trax, 0")
+        "trap" => {
+          self.emit("\tud2")
+          self.emit("\tmov\trax, 0")
+        }
         "+" => ()
         "-" =>
           if mir_body_codegen_int128_type(ty) {
@@ -6301,6 +7320,14 @@ fn X64Codegen::gen_mir_value(
           } else {
             abort("unsupported MIR body fabs result type")
           }
+        "fsqrt" =>
+          if x64_is_fp_type(ty) {
+            self.emit_mir_numeric_conversion(inner.ty(), ty)
+            let suffix = x64_fp_suffix(ty)
+            self.emit("\tsqrt" + suffix + "\txmm0, xmm0")
+          } else {
+            abort("unsupported MIR body fsqrt result type")
+          }
         "!" =>
           if mir_body_codegen_int128_type(inner.ty()) {
             self.emit("\tor\trax, rdx")
@@ -6325,6 +7352,22 @@ fn X64Codegen::gen_mir_value(
           } else {
             self.emit("\tnot\trax")
           }
+        "abs32" => {
+          self.emit_mir_numeric_conversion(inner.ty(), ty)
+          let done = self.new_label()
+          self.emit("\tcmp\teax, 0")
+          self.emit("\tjge\t" + done)
+          self.emit("\tneg\teax")
+          self.emit(done + ":")
+        }
+        "abs64" => {
+          self.emit_mir_numeric_conversion(inner.ty(), ty)
+          let done = self.new_label()
+          self.emit("\tcmp\trax, 0")
+          self.emit("\tjge\t" + done)
+          self.emit("\tneg\trax")
+          self.emit(done + ":")
+        }
         "clz32" => {
           self.emit("\tbsr\tecx, eax")
           self.emit("\tmov\teax, 31")
@@ -6342,6 +7385,74 @@ fn X64Codegen::gen_mir_value(
         "ctz64" => {
           self.emit("\tbsf\trcx, rax")
           self.emit("\tmov\teax, ecx")
+        }
+        "ffs32" => {
+          let zero_label = self.new_label()
+          let done_label = self.new_label()
+          self.emit("\ttest\teax, eax")
+          self.emit("\tje\t" + zero_label)
+          self.emit("\tbsf\tecx, eax")
+          self.emit("\tlea\teax, [ecx + 1]")
+          self.emit("\tjmp\t" + done_label)
+          self.emit(zero_label + ":")
+          self.emit("\tmov\teax, 0")
+          self.emit(done_label + ":")
+        }
+        "ffs64" => {
+          let zero_label = self.new_label()
+          let done_label = self.new_label()
+          self.emit("\ttest\trax, rax")
+          self.emit("\tje\t" + zero_label)
+          self.emit("\tbsf\trcx, rax")
+          self.emit("\tlea\teax, [rcx + 1]")
+          self.emit("\tjmp\t" + done_label)
+          self.emit(zero_label + ":")
+          self.emit("\tmov\teax, 0")
+          self.emit(done_label + ":")
+        }
+        "bswap16" => {
+          self.emit("\trol\tax, 8")
+          self.emit("\tmovzx\trax, ax")
+        }
+        "bswap32" => {
+          self.emit("\tbswap\teax")
+          self.emit("\tmov\teax, eax")
+        }
+        "bswap64" => self.emit("\tbswap\trax")
+        "popcount32" | "popcount64" | "parity32" | "parity64" => {
+          if op == "popcount32" || op == "parity32" {
+            self.emit("\tmov\teax, eax")
+          }
+          self.emit("\tmov\tr10, rax")
+          self.emit("\tshr\tr10, 1")
+          self.emit("\tmovabs\tr11, 6148914691236517205")
+          self.emit("\tand\tr10, r11")
+          self.emit("\tsub\trax, r10")
+          self.emit("\tmov\tr10, rax")
+          self.emit("\tshr\tr10, 2")
+          self.emit("\tmovabs\tr11, 3689348814741910323")
+          self.emit("\tand\trax, r11")
+          self.emit("\tand\tr10, r11")
+          self.emit("\tadd\trax, r10")
+          self.emit("\tmov\tr10, rax")
+          self.emit("\tshr\tr10, 4")
+          self.emit("\tadd\trax, r10")
+          self.emit("\tmovabs\tr11, 1085102592571150095")
+          self.emit("\tand\trax, r11")
+          self.emit("\tmov\tr10, rax")
+          self.emit("\tshr\tr10, 8")
+          self.emit("\tadd\trax, r10")
+          self.emit("\tmov\tr10, rax")
+          self.emit("\tshr\tr10, 16")
+          self.emit("\tadd\trax, r10")
+          self.emit("\tmov\tr10, rax")
+          self.emit("\tshr\tr10, 32")
+          self.emit("\tadd\trax, r10")
+          if op == "parity32" || op == "parity64" {
+            self.emit("\tand\trax, 1")
+          } else {
+            self.emit("\tand\trax, 127")
+          }
         }
         _ => abort("unsupported MIR body unary operator")
       }
@@ -6601,82 +7712,30 @@ fn X64Codegen::gen_mir_value(
       self.emit_int_conversion_to(ty)
       self.emit(end_label + ":")
     }
-    MirCall(name, args, ty) => {
-      if mir_body_codegen_sync_synchronize_call(name, args, ty) {
-        self.emit("\tmfence")
-        self.emit("\tmov\trax, 0")
-        return
-      } else if mir_body_codegen_atomic_thread_fence_call(name, args, ty) {
-        for arg in args {
-          self.gen_mir_value(arg, offsets)
-        }
-        self.emit("\tmfence")
-        self.emit("\tmov\trax, 0")
-        return
-      } else if mir_body_codegen_atomic_signal_fence_call(name, args, ty) {
-        for arg in args {
-          self.gen_mir_value(arg, offsets)
-        }
-        self.emit("\tmov\trax, 0")
-        return
-      } else if mir_body_codegen_atomic_load_call(name, args, ty) {
-        self.emit_mir_atomic_load_builtin(args, offsets)
-        return
-      } else if mir_body_codegen_atomic_store_call(name, args, ty) {
-        self.emit_mir_atomic_store_builtin(args, offsets)
-        return
-      } else if mir_body_codegen_trap_call(name, args, ty) {
-        self.emit("\tud2")
-        self.emit("\tmov\trax, 0")
-        return
-      } else if mir_body_codegen_alloca_call(name, args, ty) {
-        self.gen_mir_value(args[0], offsets)
-        self.emit("\tadd\trax, 15")
-        self.emit("\tand\trax, -16")
-        self.emit("\tsub\trsp, rax")
-        self.emit("\tmov\trax, rsp")
-        return
-      } else if mir_body_codegen_frame_address_call(name, args, ty) {
-        let level = match mir_body_codegen_const_builtin_level(args) {
-          Some(level) => level
-          None => 0L
-        }
-        if level == 0L {
-          self.emit("\tmov\trax, rbp")
-        } else {
-          self.emit("\tmov\trax, 0")
-        }
-        return
-      } else if mir_body_codegen_return_address_call(name, args, ty) {
-        let level = match mir_body_codegen_const_builtin_level(args) {
-          Some(level) => level
-          None => 0L
-        }
-        if level == 0L {
-          self.emit("\tmov\trax, QWORD PTR [rbp + 8]")
-        } else {
-          self.emit("\tmov\trax, 0")
-        }
-        return
-      } else if mir_body_codegen_va_setup_call(name, args, ty) {
-        match name {
-          "__builtin_va_start" => self.emit_mir_va_start(args, offsets)
-          "__builtin_va_copy" => self.emit_mir_va_copy(args, offsets)
-          _ => self.emit("\tmov\trax, 0")
-        }
-        return
-      }
-      match overflow_builtin_operator(name) {
-        Some(op) =>
-          if mir_body_codegen_overflow_call(name, args, ty) {
-            self.emit_mir_overflow_arithmetic_builtin(args, offsets, op)
-            return
-          }
-        None => ()
-      }
-      let source_indexes = mir_body_codegen_direct_call_source_indexes(
-        name, args,
+    MirOverflow(op, left, right, result_ptr) =>
+      self.emit_mir_overflow_arithmetic_builtin(
+        left, right, result_ptr, offsets, op,
       )
+    MirVaStart(target) => self.emit_mir_va_start(target, offsets)
+    MirVaCopy(target, source) => self.emit_mir_va_copy(target, source, offsets)
+    MirVaEnd(_) => self.emit("\tmov\trax, 0")
+    MirBzero(dst, size) => self.emit_mir_bzero(dst, size, offsets)
+    MirAtomicLoad(ptr, order, _) =>
+      self.emit_mir_atomic_load(ptr, order, offsets)
+    MirAtomicStore(ptr, value, order) =>
+      self.emit_mir_atomic_store(ptr, value, order, offsets)
+    MirAtomicUpdate(op, return_new, ptr, value, extras, _) =>
+      self.emit_mir_atomic_update(ptr, value, extras, offsets, op, return_new)
+    MirAtomicExchange(ptr, value, extras, _) =>
+      self.emit_mir_atomic_exchange(ptr, value, extras, offsets)
+    MirAtomicCompareExchange(ptr, expected, desired, extras) =>
+      self.emit_mir_atomic_compare_exchange(
+        ptr, expected, desired, extras, offsets,
+      )
+    MirLibCall(name, args, ty) =>
+      self.gen_mir_value(MirCall(name, args, ty), offsets)
+    MirCall(name, args, ty) => {
+      let source_indexes = mir_body_codegen_direct_call_source_indexes(args)
       let has_sret = self.is_memory_aggregate(ty)
       let mut call_stack_cleanup = 0
       if self.mir_direct_call_variadic(name) {
@@ -7590,6 +8649,27 @@ fn X64Codegen::gen_mir_binary(
   offsets : Map[Int, Int],
 ) -> Unit {
   match op {
+    "alloca_align" => {
+      self.gen_mir_value(lhs, offsets)
+      self.emit_mir_push_rax()
+      self.gen_mir_value(rhs, offsets)
+      self.emit("\tmov\tr11, rax")
+      self.emit_mir_pop_rax()
+      self.emit("\tmov\tr10, rax")
+      self.emit("\tshr\tr11, 3")
+      self.emit("\tmov\trax, 16")
+      self.emit("\tcmp\tr11, rax")
+      self.emit("\tcmovb\tr11, rax")
+      self.emit("\tmov\trax, r10")
+      self.emit("\tadd\trax, 15")
+      self.emit("\tand\trax, -16")
+      self.emit("\tsub\trsp, rax")
+      self.emit("\tsub\tr11, 1")
+      self.emit("\tnot\tr11")
+      self.emit("\tand\trsp, r11")
+      self.emit("\tmov\trax, rsp")
+      return
+    }
     "&&" => {
       let false_label = self.new_label()
       let end_label = self.new_label()
@@ -7671,6 +8751,10 @@ fn X64Codegen::gen_mir_binary(
     self.emit_int_conversion_to(ty)
     return
   }
+  if mir_body_codegen_rotate_op_supported(op, lhs.ty(), rhs.ty(), ty) {
+    self.emit_mir_rotate_op(op, lhs, rhs, ty, offsets)
+    return
+  }
   let left_ty = mir_body_binary_left_type(op, lhs.ty(), rhs.ty())
   let right_ty = mir_body_binary_right_type(op, lhs.ty(), rhs.ty())
   if mir_body_codegen_int128_type(left_ty) ||
@@ -7694,6 +8778,46 @@ fn X64Codegen::gen_mir_binary(
     self.emit("\tadd\trsp, 16")
     self.emit("\tucomi" + suffix + "\txmm0, xmm1")
     self.emit_fp_compare_result(op)
+    self.emit_int_conversion_to(ty)
+    return
+  }
+  if mir_body_codegen_fp_copysign_supported(op, lhs.ty(), rhs.ty(), ty) {
+    let fp_ty = mir_body_codegen_fp_binary_type(lhs.ty(), rhs.ty(), ty)
+    self.gen_mir_value(lhs, offsets)
+    self.emit_mir_numeric_conversion(lhs.ty(), fp_ty)
+    match x64_core_type(fp_ty) {
+      Float => {
+        self.emit("\tmovd\tr11d, xmm0")
+        self.emit("\tand\tr11d, 2147483647")
+        self.emit("\tsub\trsp, 16")
+        self.emit("\tmov\tQWORD PTR [rsp], r11")
+        self.gen_mir_value(rhs, offsets)
+        self.emit_mir_numeric_conversion(rhs.ty(), fp_ty)
+        self.emit("\tmovd\teax, xmm0")
+        self.emit("\tand\teax, -2147483648")
+        self.emit("\tmov\tr11, QWORD PTR [rsp]")
+        self.emit("\tadd\trsp, 16")
+        self.emit("\tor\teax, r11d")
+        self.emit("\tmovd\txmm0, eax")
+      }
+      _ => {
+        self.emit("\tmovq\tr11, xmm0")
+        self.emit("\tmovabs\tr10, 9223372036854775807")
+        self.emit("\tand\tr11, r10")
+        self.emit("\tsub\trsp, 16")
+        self.emit("\tmov\tQWORD PTR [rsp], r11")
+        self.gen_mir_value(rhs, offsets)
+        self.emit_mir_numeric_conversion(rhs.ty(), fp_ty)
+        self.emit("\tmovq\trax, xmm0")
+        self.emit("\tmovabs\tr10, -9223372036854775808")
+        self.emit("\tand\trax, r10")
+        self.emit("\tmov\tr11, QWORD PTR [rsp]")
+        self.emit("\tadd\trsp, 16")
+        self.emit("\tor\trax, r11")
+        self.emit("\tmovq\txmm0, rax")
+      }
+    }
+    self.emit_mir_numeric_conversion(fp_ty, ty)
     self.emit_int_conversion_to(ty)
     return
   }
@@ -8012,6 +9136,10 @@ fn X64Codegen::gen_mir_stmt(
       self.emit(label + ":")
     }
     MirGoto(name) => self.emit("\tjmp\t" + self.label_ref(name))
+    MirComputedGoto(value) => {
+      self.gen_mir_value(value, offsets)
+      self.emit("\tjmp\trax")
+    }
     MirBreak =>
       match self.break_label {
         Some(label) => self.emit("\tjmp\t" + label)

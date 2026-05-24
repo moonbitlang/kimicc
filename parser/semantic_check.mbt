@@ -7,10 +7,7 @@ priv struct SemanticContext {
 
 ///|
 fn semantic_core_type(ty : Type) -> Type {
-  match ty {
-    Aligned(inner, _) | Atomic(inner) => semantic_core_type(inner)
-    _ => ty
-  }
+  ty.core_type()
 }
 
 ///|
@@ -93,10 +90,7 @@ fn semantic_pointer_element_type(ty : Type) -> Type? {
 
 ///|
 fn semantic_is_anon_aggregate_type(ty : Type) -> Bool {
-  match semantic_core_type(ty) {
-    Struct(name) | Union(name) => name.has_prefix("__anon_")
-    _ => false
-  }
+  ty.is_anonymous_aggregate()
 }
 
 ///|

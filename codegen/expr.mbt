@@ -1,52 +1,11 @@
 ///|
-fn peel_aligned_type(ty : @parser.Type) -> @parser.Type {
-  match ty {
-    Aligned(inner, _) => peel_aligned_type(inner)
-    _ => ty
-  }
-}
-
-///|
-fn array_element_type(ty : @parser.Type) -> @parser.Type? {
-  match peel_aligned_type(ty) {
-    Array(elem, _) => Some(elem)
-    _ => None
-  }
-}
-
-///|
-fn pointer_or_array_element_type(ty : @parser.Type) -> @parser.Type? {
-  match peel_aligned_type(ty) {
-    Pointer(elem) | Array(elem, _) => Some(elem)
-    _ => None
-  }
-}
-
-///|
-fn address_value_type(ty : @parser.Type) -> Bool {
-  match peel_aligned_type(ty) {
-    Array(_, _) | Struct(_) | Union(_) => true
-    _ => false
-  }
-}
-
-///|
-fn number_literal_type(value : Int64) -> @parser.Type {
-  if value < -2147483648L || value > 2147483647L {
-    SLongLong
-  } else {
-    SInt
-  }
-}
-
-///|
 fn Codegen::type_of(
   self : Codegen,
   expr : @parser.Expr,
   frame_size : Int,
 ) -> @parser.Type {
   match expr {
-    Number(value) => number_literal_type(value)
+    Number(value) => @ctype.integer_literal_type(value)
     FloatLiteral(_) => Double
     String(_) => Pointer(SChar)
     Var(name) =>
@@ -66,8 +25,8 @@ fn Codegen::type_of(
     Binary(op, lhs, rhs) => {
       let lhs_ty = self.type_of(lhs, frame_size)
       let rhs_ty = self.type_of(rhs, frame_size)
-      let lhs_core = peel_aligned_type(lhs_ty)
-      let rhs_core = peel_aligned_type(rhs_ty)
+      let lhs_core = lhs_ty.without_alignment()
+      let rhs_core = rhs_ty.without_alignment()
       // Pointer arithmetic
       match (lhs_core, rhs_core) {
         (Pointer(_), Pointer(_))
@@ -96,15 +55,22 @@ fn Codegen::type_of(
           }
         _ => ()
       }
-      binary_expr_result_type(op, lhs, lhs_ty, rhs, rhs_ty)
+      let force_wide_shift = if op == "<<" || op == ">>" {
+        match (lhs, rhs) {
+          (Number(_), Number(shift)) => shift >= 32L
+          _ => false
+        }
+      } else {
+        false
+      }
+      @ctype.binary_expr_result_type(op, lhs_ty, rhs_ty, force_wide_shift, true)
     }
     Unary("-", operand) =>
-      unary_numeric_result_type(self.type_of(operand, frame_size))
+      @ctype.unary_numeric_result_type(self.type_of(operand, frame_size), true)
     Unary("+", operand) =>
-      unary_numeric_result_type(self.type_of(operand, frame_size))
+      @ctype.unary_numeric_result_type(self.type_of(operand, frame_size), true)
     Unary("!", _) => SInt
-    Unary("~", operand) =>
-      unary_integer_result_type(self.type_of(operand, frame_size))
+    Unary("~", operand) => self.type_of(operand, frame_size).integer_promote()
     Call(func, args) => self.call_return_type(func, args, frame_size)
     Assign(_, rhs) => self.type_of(rhs, frame_size)
     CompoundAssign(_, lhs, _) => self.type_of(lhs, frame_size)
@@ -116,7 +82,7 @@ fn Codegen::type_of(
       }
     }
     Deref(ptr) =>
-      match peel_aligned_type(self.type_of(ptr, frame_size)) {
+      match self.type_of(ptr, frame_size).without_alignment() {
         Pointer(ty) => ty
         FuncPtr(ret, params, variadic) => FuncPtr(ret, params, variadic)
         Array(elem, _) => elem
@@ -124,7 +90,7 @@ fn Codegen::type_of(
       }
     AddrOf(e) => Pointer(self.type_of(e, frame_size))
     ArrayAccess(arr, _) =>
-      match pointer_or_array_element_type(self.type_of(arr, frame_size)) {
+      match self.type_of(arr, frame_size).pointer_or_array_element() {
         Some(elem) => elem
         None => SInt
       }
@@ -137,9 +103,10 @@ fn Codegen::type_of(
     PostfixInc(e) => self.type_of(e, frame_size)
     PostfixDec(e) => self.type_of(e, frame_size)
     Ternary(_, then_, else_) =>
-      ternary_result_type(
+      @ctype.ternary_result_type(
         self.type_of(then_, frame_size),
         self.type_of(else_, frame_size),
+        true,
       )
     LabelAddr(_) => Pointer(Void)
     VaArg(_, ty) => ty
@@ -147,55 +114,12 @@ fn Codegen::type_of(
     // CommaExpr is not in the AST, comma expressions are flattened into nested Binary(",", ...)
     Cast(ty, _) => ty
     Array(_) => SInt
-    CompoundLiteral(ty, _, _) => ty
+    CompoundLiteral(ty, exprs, _) =>
+      codegen_file_scope_compound_literal_type(ty, exprs)
     DesignatedField(_, e) => self.type_of(e, frame_size)
     DesignatedIndex(_, e) => self.type_of(e, frame_size)
     DesignatedRange(_, _, e) => self.type_of(e, frame_size)
     _ => SInt
-  }
-}
-
-///|
-fn ternary_result_type(
-  then_ty : @parser.Type,
-  else_ty : @parser.Type,
-) -> @parser.Type {
-  match (peel_aligned_type(then_ty), peel_aligned_type(else_ty)) {
-    (Array(elem, _), _) => Pointer(elem)
-    (_, Array(elem, _)) => Pointer(elem)
-    (Pointer(elem), _) => Pointer(elem)
-    (_, Pointer(elem)) => Pointer(elem)
-    (FuncPtr(ret, params, variadic), _) => FuncPtr(ret, params, variadic)
-    (_, FuncPtr(ret, params, variadic)) => FuncPtr(ret, params, variadic)
-    _ =>
-      if then_ty.is_floating() || else_ty.is_floating() {
-        if peel_aligned_type(then_ty) == Double ||
-          peel_aligned_type(else_ty) == Double {
-          Double
-        } else {
-          Float
-        }
-      } else if then_ty.is_integer() && else_ty.is_integer() {
-        integer_common_type(then_ty, else_ty)
-      } else {
-        then_ty
-      }
-  }
-}
-
-///|
-fn is_unsigned_integer_type(ty : @parser.Type) -> Bool {
-  match ty {
-    UChar | UShort | UInt | ULong | ULongLong | UInt128 => true
-    _ => false
-  }
-}
-
-///|
-fn is_int128_type(ty : @parser.Type) -> Bool {
-  match ty {
-    SInt128 | UInt128 => true
-    _ => false
   }
 }
 
@@ -206,7 +130,7 @@ fn needs_int128_integer_op(
 ) -> Bool {
   lhs_ty.is_integer() &&
   rhs_ty.is_integer() &&
-  is_int128_type(integer_common_type(lhs_ty, rhs_ty))
+  @ctype.integer_common_type(lhs_ty, rhs_ty).is_int128()
 }
 
 ///|
@@ -219,10 +143,10 @@ fn Codegen::emit_numeric_conversion(
     return
   }
   match (src, dst) {
-    (src, Bool) => if is_int128_type(src) { self.emit("\torr\tx9, x9, x10") }
+    (src, Bool) => if src.is_int128() { self.emit("\torr\tx9, x9, x10") }
     (src, Double) | (src, LongDouble) =>
       if src.is_integer() {
-        if is_unsigned_integer_type(src) {
+        if src.is_unsigned_integer() {
           self.emit("\tucvtf\td9, x9")
         } else {
           self.emit("\tscvtf\td9, x9")
@@ -235,7 +159,7 @@ fn Codegen::emit_numeric_conversion(
       }
     (src, Float) =>
       if src.is_integer() {
-        if is_unsigned_integer_type(src) {
+        if src.is_unsigned_integer() {
           self.emit("\tucvtf\ts9, x9")
         } else {
           self.emit("\tscvtf\ts9, x9")
@@ -265,7 +189,7 @@ fn Codegen::emit_numeric_conversion(
         }
       }
     (src, SInt128) | (src, UInt128) =>
-      if src.is_integer() && !is_int128_type(src) {
+      if src.is_integer() && !src.is_int128() {
         if src.is_signed() {
           self.emit("\tasr\tx10, x9, #63")
         } else {
@@ -296,17 +220,6 @@ fn Codegen::emit_scalar_conversion_to(
     Atomic(inner) => self.emit_scalar_conversion_to(inner)
     Aligned(inner, _) => self.emit_scalar_conversion_to(inner)
     _ => ()
-  }
-}
-
-///|
-fn atomic_target_type(ty : @parser.Type) -> @parser.Type {
-  match ty {
-    Pointer(Atomic(inner)) | Array(Atomic(inner), _) => inner
-    Pointer(Aligned(inner, _)) | Array(Aligned(inner, _), _) => inner
-    Pointer(inner) | Array(inner, _) => inner
-    Atomic(inner) | Aligned(inner, _) => inner
-    _ => SLongLong
   }
 }
 
@@ -362,6 +275,26 @@ fn Codegen::emit_atomic_update_op(
     "&" => self.emit("\tand\t" + dst + ", " + old + ", " + value)
     "|" => self.emit("\torr\t" + dst + ", " + old + ", " + value)
     "^" => self.emit("\teor\t" + dst + ", " + old + ", " + value)
+    "~&" => {
+      self.emit("\tand\t" + dst + ", " + old + ", " + value)
+      self.emit("\tmvn\t" + dst + ", " + dst)
+    }
+    "max" => {
+      self.emit("\tcmp\t" + old + ", " + value)
+      self.emit("\tcsel\t" + dst + ", " + old + ", " + value + ", ge")
+    }
+    "min" => {
+      self.emit("\tcmp\t" + old + ", " + value)
+      self.emit("\tcsel\t" + dst + ", " + old + ", " + value + ", le")
+    }
+    "umax" => {
+      self.emit("\tcmp\t" + old + ", " + value)
+      self.emit("\tcsel\t" + dst + ", " + old + ", " + value + ", hs")
+    }
+    "umin" => {
+      self.emit("\tcmp\t" + old + ", " + value)
+      self.emit("\tcsel\t" + dst + ", " + old + ", " + value + ", ls")
+    }
     _ => self.emit("\tmov\t" + dst + ", " + old)
   }
 }
@@ -373,9 +306,10 @@ fn Codegen::emit_atomic_update(
   frame_size : Int,
   op : String,
   return_new : Bool,
+  extra_start : Int,
 ) -> Unit {
   if args.length() >= 2 {
-    let elem_ty = atomic_target_type(self.type_of(args[0], frame_size))
+    let elem_ty = self.type_of(args[0], frame_size).atomic_target()
     self.gen_expr(args[0], frame_size)
     self.emit("\tstr\tx9, [sp, #-16]!")
     self.gen_expr(args[1], frame_size)
@@ -385,6 +319,13 @@ fn Codegen::emit_atomic_update(
       self.emit("\tmov\tx10, x9")
     } else {
       self.emit("\tmov\tw10, w9")
+    }
+    if args.length() > extra_start {
+      self.emit("\tstr\tx10, [sp, #-16]!")
+      for i in extra_start..<args.length() {
+        self.gen_ignored_expr_side_effects(args[i], frame_size)
+      }
+      self.emit("\tldr\tx10, [sp], #16")
     }
     self.emit("\tldr\tx0, [sp], #16")
     self.emit_atomic_update_loop(op, elem_ty, return_new)
@@ -398,9 +339,10 @@ fn Codegen::emit_atomic_exchange(
   self : Codegen,
   args : Array[@parser.Expr],
   frame_size : Int,
+  extra_start : Int,
 ) -> Unit {
   if args.length() >= 2 {
-    let elem_ty = atomic_target_type(self.type_of(args[0], frame_size))
+    let elem_ty = self.type_of(args[0], frame_size).atomic_target()
     let byte_width = self.type_size(elem_ty)
     self.gen_expr(args[0], frame_size)
     self.emit("\tstr\tx9, [sp, #-16]!")
@@ -411,6 +353,13 @@ fn Codegen::emit_atomic_exchange(
       self.emit("\tmov\tx10, x9")
     } else {
       self.emit("\tmov\tw10, w9")
+    }
+    if args.length() > extra_start {
+      self.emit("\tstr\tx10, [sp, #-16]!")
+      for i in extra_start..<args.length() {
+        self.gen_ignored_expr_side_effects(args[i], frame_size)
+      }
+      self.emit("\tldr\tx10, [sp], #16")
     }
     self.emit("\tldr\tx0, [sp], #16")
     let loop_label = self.new_label()
@@ -440,9 +389,10 @@ fn Codegen::emit_atomic_compare_exchange(
   self : Codegen,
   args : Array[@parser.Expr],
   frame_size : Int,
+  extra_start : Int,
 ) -> Unit {
   if args.length() >= 3 {
-    let elem_ty = atomic_target_type(self.type_of(args[0], frame_size))
+    let elem_ty = self.type_of(args[0], frame_size).atomic_target()
     let byte_width = self.type_size(elem_ty)
     self.gen_expr(args[0], frame_size)
     self.emit("\tstr\tx9, [sp, #-16]!")
@@ -455,6 +405,13 @@ fn Codegen::emit_atomic_compare_exchange(
       self.emit("\tmov\tx10, x9")
     } else {
       self.emit("\tmov\tw10, w9")
+    }
+    if args.length() > extra_start {
+      self.emit("\tstr\tx10, [sp, #-16]!")
+      for i in extra_start..<args.length() {
+        self.gen_ignored_expr_side_effects(args[i], frame_size)
+      }
+      self.emit("\tldr\tx10, [sp], #16")
     }
     self.emit("\tldr\tx1, [sp], #16")
     self.emit("\tldr\tx0, [sp], #16")
@@ -491,6 +448,388 @@ fn Codegen::emit_atomic_compare_exchange(
     self.emit_store_typed("x9", "x1", elem_ty)
     self.emit("\tmov\tx9, #0")
     self.emit(done_label + ":")
+  } else {
+    self.emit("\tmov\tx9, #0")
+  }
+}
+
+///|
+fn Codegen::emit_sync_compare_exchange(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+  extra_start : Int,
+  return_old : Bool,
+) -> Unit {
+  if args.length() >= 3 {
+    let elem_ty = self.type_of(args[0], frame_size).atomic_target()
+    self.gen_expr(args[0], frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_expr(args[1], frame_size)
+    self.emit_numeric_conversion(self.type_of(args[1], frame_size), elem_ty)
+    self.emit_scalar_conversion_to(elem_ty)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_expr(args[2], frame_size)
+    self.emit_numeric_conversion(self.type_of(args[2], frame_size), elem_ty)
+    self.emit_scalar_conversion_to(elem_ty)
+    if self.type_size(elem_ty) == 8 {
+      self.emit("\tmov\tx10, x9")
+    } else {
+      self.emit("\tmov\tw10, w9")
+    }
+    if args.length() > extra_start {
+      self.emit("\tstr\tx10, [sp, #-16]!")
+      for i in extra_start..<args.length() {
+        self.gen_ignored_expr_side_effects(args[i], frame_size)
+      }
+      self.emit("\tldr\tx10, [sp], #16")
+    }
+    self.emit("\tldr\tx13, [sp], #16")
+    self.emit("\tldr\tx0, [sp], #16")
+    if return_old {
+      self.emit_sync_compare_exchange_value_raw(elem_ty)
+    } else {
+      self.emit_sync_compare_exchange_bool_raw(elem_ty)
+    }
+  } else {
+    self.emit("\tmov\tx9, #0")
+  }
+}
+
+///|
+fn Codegen::emit_atomic_raw_load_to_x9(
+  self : Codegen,
+  ptr_reg : String,
+  elem_ty : @parser.Type,
+) -> Unit {
+  match self.type_size(elem_ty) {
+    1 => self.emit("\tldarb\tw9, [" + ptr_reg + "]")
+    2 => self.emit("\tldarh\tw9, [" + ptr_reg + "]")
+    4 => self.emit("\tldar\tw9, [" + ptr_reg + "]")
+    _ => self.emit("\tldar\tx9, [" + ptr_reg + "]")
+  }
+}
+
+///|
+fn Codegen::emit_atomic_raw_store_from_reg(
+  self : Codegen,
+  value_reg : String,
+  ptr_reg : String,
+  elem_ty : @parser.Type,
+) -> Unit {
+  match self.type_size(elem_ty) {
+    1 => self.emit("\tstlrb\t" + w_reg(value_reg) + ", [" + ptr_reg + "]")
+    2 => self.emit("\tstlrh\t" + w_reg(value_reg) + ", [" + ptr_reg + "]")
+    4 => self.emit("\tstlr\t" + w_reg(value_reg) + ", [" + ptr_reg + "]")
+    _ => self.emit("\tstlr\t" + value_reg + ", [" + ptr_reg + "]")
+  }
+}
+
+///|
+fn Codegen::emit_atomic_exchange_raw_loop(
+  self : Codegen,
+  elem_ty : @parser.Type,
+) -> Unit {
+  let byte_width = self.type_size(elem_ty)
+  let loop_label = self.new_label()
+  self.emit(loop_label + ":")
+  if byte_width == 1 {
+    self.emit("\tldaxrb\tw9, [x0]")
+    self.emit("\tstlxrb\tw12, w10, [x0]")
+  } else if byte_width == 2 {
+    self.emit("\tldaxrh\tw9, [x0]")
+    self.emit("\tstlxrh\tw12, w10, [x0]")
+  } else if byte_width == 4 {
+    self.emit("\tldaxr\tw9, [x0]")
+    self.emit("\tstlxr\tw12, w10, [x0]")
+  } else {
+    self.emit("\tldaxr\tx9, [x0]")
+    self.emit("\tstlxr\tw12, x10, [x0]")
+  }
+  self.emit("\tcbnz\tw12, " + loop_label)
+}
+
+///|
+fn Codegen::emit_atomic_compare_exchange_raw(
+  self : Codegen,
+  elem_ty : @parser.Type,
+) -> Unit {
+  let byte_width = self.type_size(elem_ty)
+  let loop_label = self.new_label()
+  let fail_label = self.new_label()
+  let done_label = self.new_label()
+  self.emit_load_typed("x13", "x1", elem_ty)
+  self.emit(loop_label + ":")
+  if byte_width == 1 {
+    self.emit("\tldaxrb\tw9, [x0]")
+    self.emit("\tcmp\tw9, w13")
+    self.emit("\tb.ne\t" + fail_label)
+    self.emit("\tstlxrb\tw12, w10, [x0]")
+  } else if byte_width == 2 {
+    self.emit("\tldaxrh\tw9, [x0]")
+    self.emit("\tcmp\tw9, w13")
+    self.emit("\tb.ne\t" + fail_label)
+    self.emit("\tstlxrh\tw12, w10, [x0]")
+  } else if byte_width == 4 {
+    self.emit("\tldaxr\tw9, [x0]")
+    self.emit("\tcmp\tw9, w13")
+    self.emit("\tb.ne\t" + fail_label)
+    self.emit("\tstlxr\tw12, w10, [x0]")
+  } else {
+    self.emit("\tldaxr\tx9, [x0]")
+    self.emit("\tcmp\tx9, x13")
+    self.emit("\tb.ne\t" + fail_label)
+    self.emit("\tstlxr\tw12, x10, [x0]")
+  }
+  self.emit("\tcbnz\tw12, " + loop_label)
+  self.emit("\tmov\tx9, #1")
+  self.emit("\tb\t" + done_label)
+  self.emit(fail_label + ":")
+  self.emit_store_typed("x9", "x1", elem_ty)
+  self.emit("\tmov\tx9, #0")
+  self.emit(done_label + ":")
+}
+
+///|
+fn Codegen::emit_sync_compare_exchange_bool_raw(
+  self : Codegen,
+  elem_ty : @parser.Type,
+) -> Unit {
+  let byte_width = self.type_size(elem_ty)
+  let loop_label = self.new_label()
+  let fail_label = self.new_label()
+  let done_label = self.new_label()
+  self.emit(loop_label + ":")
+  if byte_width == 1 {
+    self.emit("\tldaxrb\tw9, [x0]")
+    self.emit("\tcmp\tw9, w13")
+    self.emit("\tb.ne\t" + fail_label)
+    self.emit("\tstlxrb\tw12, w10, [x0]")
+  } else if byte_width == 2 {
+    self.emit("\tldaxrh\tw9, [x0]")
+    self.emit("\tcmp\tw9, w13")
+    self.emit("\tb.ne\t" + fail_label)
+    self.emit("\tstlxrh\tw12, w10, [x0]")
+  } else if byte_width == 4 {
+    self.emit("\tldaxr\tw9, [x0]")
+    self.emit("\tcmp\tw9, w13")
+    self.emit("\tb.ne\t" + fail_label)
+    self.emit("\tstlxr\tw12, w10, [x0]")
+  } else {
+    self.emit("\tldaxr\tx9, [x0]")
+    self.emit("\tcmp\tx9, x13")
+    self.emit("\tb.ne\t" + fail_label)
+    self.emit("\tstlxr\tw12, x10, [x0]")
+  }
+  self.emit("\tcbnz\tw12, " + loop_label)
+  self.emit("\tmov\tx9, #1")
+  self.emit("\tb\t" + done_label)
+  self.emit(fail_label + ":")
+  self.emit("\tmov\tx9, #0")
+  self.emit(done_label + ":")
+}
+
+///|
+fn Codegen::emit_sync_compare_exchange_value_raw(
+  self : Codegen,
+  elem_ty : @parser.Type,
+) -> Unit {
+  let byte_width = self.type_size(elem_ty)
+  let loop_label = self.new_label()
+  let done_label = self.new_label()
+  self.emit(loop_label + ":")
+  if byte_width == 1 {
+    self.emit("\tldaxrb\tw9, [x0]")
+    self.emit("\tcmp\tw9, w13")
+    self.emit("\tb.ne\t" + done_label)
+    self.emit("\tstlxrb\tw12, w10, [x0]")
+  } else if byte_width == 2 {
+    self.emit("\tldaxrh\tw9, [x0]")
+    self.emit("\tcmp\tw9, w13")
+    self.emit("\tb.ne\t" + done_label)
+    self.emit("\tstlxrh\tw12, w10, [x0]")
+  } else if byte_width == 4 {
+    self.emit("\tldaxr\tw9, [x0]")
+    self.emit("\tcmp\tw9, w13")
+    self.emit("\tb.ne\t" + done_label)
+    self.emit("\tstlxr\tw12, w10, [x0]")
+  } else {
+    self.emit("\tldaxr\tx9, [x0]")
+    self.emit("\tcmp\tx9, x13")
+    self.emit("\tb.ne\t" + done_label)
+    self.emit("\tstlxr\tw12, x10, [x0]")
+  }
+  self.emit("\tcbnz\tw12, " + loop_label)
+  self.emit(done_label + ":")
+  self.emit_scalar_conversion_to(elem_ty)
+}
+
+///|
+fn Codegen::emit_atomic_load_ptr_builtin(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Unit {
+  if args.length() >= 3 {
+    let elem_ty = self.type_of(args[0], frame_size).atomic_target()
+    self.gen_expr(args[0], frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_expr(args[1], frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_ignored_expr_side_effects(args[2], frame_size)
+    self.emit("\tldr\tx1, [sp], #16")
+    self.emit("\tldr\tx0, [sp], #16")
+    self.emit_atomic_raw_load_to_x9("x0", elem_ty)
+    self.emit_store_typed("x9", "x1", elem_ty)
+  }
+  self.emit("\tmov\tx9, #0")
+}
+
+///|
+fn Codegen::emit_atomic_store_ptr_builtin(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Unit {
+  if args.length() >= 3 {
+    let elem_ty = self.type_of(args[0], frame_size).atomic_target()
+    self.gen_expr(args[0], frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_expr(args[1], frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_ignored_expr_side_effects(args[2], frame_size)
+    self.emit("\tldr\tx1, [sp], #16")
+    self.emit("\tldr\tx0, [sp], #16")
+    self.emit_load_typed("x9", "x1", elem_ty)
+    self.emit_atomic_raw_store_from_reg("x9", "x0", elem_ty)
+  }
+  self.emit("\tmov\tx9, #0")
+}
+
+///|
+fn Codegen::emit_atomic_zero_store_builtin(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+  evaluate_order : Bool,
+) -> Unit {
+  if args.length() >= 1 {
+    let elem_ty = self.type_of(args[0], frame_size).atomic_target()
+    self.gen_expr(args[0], frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    if evaluate_order && args.length() >= 2 {
+      self.gen_ignored_expr_side_effects(args[1], frame_size)
+    }
+    self.emit("\tldr\tx0, [sp], #16")
+    self.emit("\tmov\tx9, #0")
+    self.emit_atomic_raw_store_from_reg("x9", "x0", elem_ty)
+  }
+  self.emit("\tmov\tx9, #0")
+}
+
+///|
+fn Codegen::emit_atomic_test_and_set_builtin(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+  extra_start : Int,
+) -> Unit {
+  if args.length() >= 1 {
+    let elem_ty = self.type_of(args[0], frame_size).atomic_target()
+    self.gen_expr(args[0], frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    for i in extra_start..<args.length() {
+      self.gen_ignored_expr_side_effects(args[i], frame_size)
+    }
+    self.emit("\tmov\tx10, #1")
+    self.emit("\tldr\tx0, [sp], #16")
+    self.emit_atomic_exchange_raw_loop(elem_ty)
+    self.emit("\tcmp\tx9, #0")
+    self.emit("\tcset\tx9, ne")
+  } else {
+    self.emit("\tmov\tx9, #0")
+  }
+}
+
+///|
+fn Codegen::emit_atomic_exchange_ptr_builtin(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Unit {
+  if args.length() >= 4 {
+    let elem_ty = self.type_of(args[0], frame_size).atomic_target()
+    self.gen_expr(args[0], frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_expr(args[1], frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_expr(args[2], frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    for i in 3..<args.length() {
+      self.gen_ignored_expr_side_effects(args[i], frame_size)
+    }
+    self.emit("\tldr\tx1, [sp], #16")
+    self.emit("\tldr\tx2, [sp], #16")
+    self.emit("\tldr\tx0, [sp], #16")
+    self.emit_load_typed("x10", "x2", elem_ty)
+    self.emit_atomic_exchange_raw_loop(elem_ty)
+    self.emit_store_typed("x9", "x1", elem_ty)
+  }
+  self.emit("\tmov\tx9, #0")
+}
+
+///|
+fn Codegen::emit_atomic_compare_exchange_ptr_builtin(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Unit {
+  if args.length() >= 6 {
+    let elem_ty = self.type_of(args[0], frame_size).atomic_target()
+    self.gen_expr(args[0], frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_expr(args[1], frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_expr(args[2], frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    for i in 3..<args.length() {
+      self.gen_ignored_expr_side_effects(args[i], frame_size)
+    }
+    self.emit("\tldr\tx2, [sp], #16")
+    self.emit("\tldr\tx1, [sp], #16")
+    self.emit("\tldr\tx0, [sp], #16")
+    self.emit_load_typed("x10", "x2", elem_ty)
+    self.emit_atomic_compare_exchange_raw(elem_ty)
+  } else {
+    self.emit("\tmov\tx9, #0")
+  }
+}
+
+///|
+fn Codegen::emit_atomic_lock_free_builtin(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+  evaluate_pointer : Bool,
+) -> Unit {
+  if args.length() > 0 {
+    self.gen_expr(args[0], frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    if evaluate_pointer && args.length() > 1 {
+      self.gen_ignored_expr_side_effects(args[1], frame_size)
+    }
+    self.emit("\tldr\tx10, [sp], #16")
+    self.emit("\tcmp\tx10, #1")
+    self.emit("\tcset\tx9, eq")
+    self.emit("\tcmp\tx10, #2")
+    self.emit("\tcset\tx11, eq")
+    self.emit("\torr\tx9, x9, x11")
+    self.emit("\tcmp\tx10, #4")
+    self.emit("\tcset\tx11, eq")
+    self.emit("\torr\tx9, x9, x11")
+    self.emit("\tcmp\tx10, #8")
+    self.emit("\tcset\tx11, eq")
+    self.emit("\torr\tx9, x9, x11")
   } else {
     self.emit("\tmov\tx9, #0")
   }
@@ -647,6 +986,48 @@ fn Codegen::emit_call_sret_addr(
 }
 
 ///|
+fn Codegen::emit_va_arg_aggregate_addr(
+  self : Codegen,
+  ap_expr : @parser.Expr,
+  ty : @parser.Type,
+  frame_size : Int,
+) -> Unit {
+  let size = self.type_size(ty)
+  if size > 16 {
+    self.gen_expr(ap_expr, frame_size)
+    self.emit("\tmov\tx11, x9")
+    self.emit("\tldr\tx12, [x11]")
+    self.emit("\tadd\tx11, x11, #8")
+    self.emit("\tstr\tx12, [sp, #-16]!")
+    self.emit("\tstr\tx11, [sp, #-16]!")
+    self.gen_addr(ap_expr, frame_size)
+    self.emit("\tmov\tx13, x9")
+    self.emit("\tldr\tx11, [sp], #16")
+    self.emit("\tstr\tx11, [x13]")
+    self.emit("\tldr\tx9, [sp], #16")
+  } else {
+    if self.sret_scratch_offset < 0 {
+      abort("Darwin ARM64 backend missing aggregate va_arg scratch storage")
+    }
+    self.emit_local_addr(self.sret_scratch_offset, frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_expr(ap_expr, frame_size)
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.emit_copy_aggregate_from_addr_on_stack(ty)
+    let advance = if size > 8 { 16 } else { 8 }
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_expr(ap_expr, frame_size)
+    self.emit("\tadd\tx9, x9, #" + advance.to_string())
+    self.emit("\tstr\tx9, [sp, #-16]!")
+    self.gen_addr(ap_expr, frame_size)
+    self.emit("\tmov\tx10, x9")
+    self.emit("\tldr\tx9, [sp], #16")
+    self.emit("\tstr\tx9, [x10]")
+    self.emit("\tldr\tx9, [sp], #16")
+  }
+}
+
+///|
 fn Codegen::declared_call_arg_type(
   self : Codegen,
   func : @parser.Expr,
@@ -702,6 +1083,29 @@ fn Codegen::emit_call_arg_conversion(
 }
 
 ///|
+fn Codegen::builtin_return_type(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> @parser.Type? {
+  let arg_types : Array[@parser.Type] = []
+  for arg in args {
+    arg_types.push(self.type_of(arg, frame_size))
+  }
+  let choose_cond = match @ctype.builtin_return_condition_arg_index(name) {
+    Some(index) =>
+      if index < args.length() {
+        self.fold_const(args[index])
+      } else {
+        None
+      }
+    None => None
+  }
+  @ctype.builtin_return_type(name, arg_types, choose_cond)
+}
+
+///|
 fn Codegen::call_return_type(
   self : Codegen,
   func : @parser.Expr,
@@ -713,237 +1117,9 @@ fn Codegen::call_return_type(
     _ =>
       match func {
         Var(name) =>
-          match name {
-            "__builtin_fabsf"
-            | "__builtin_copysignf"
-            | "__builtin_sqrtf"
-            | "__builtin_nanf"
-            | "__builtin_huge_valf"
-            | "__builtin_inff" => Float
-            "__builtin_fabs"
-            | "__builtin_copysign"
-            | "__builtin_sqrt"
-            | "__builtin_nan"
-            | "__builtin_huge_val"
-            | "__builtin_inf" => Double
-            "__builtin_fabsl"
-            | "__builtin_copysignl"
-            | "__builtin_sqrtl"
-            | "__builtin_nanl"
-            | "__builtin_huge_vall"
-            | "__builtin_infl" => LongDouble
-            "__builtin_rotateleft32" | "__builtin_rotateright32" => UInt
-            "__builtin_rotateleft64" | "__builtin_rotateright64" => ULongLong
-            "__builtin_bswap"
-            | "__builtin_rotateleft"
-            | "__builtin_rotateright" =>
-              if args.length() > 0 {
-                self.type_of(args[0], frame_size)
-              } else {
-                UInt
-              }
-            "__builtin_bswap16" => UShort
-            "__builtin_bswap32" => UInt
-            "__builtin_bswap64" => ULongLong
-            "__builtin_object_size" | "__builtin_dynamic_object_size" => ULong
-            "__builtin_expect"
-            | "__builtin_expect_with_probability"
-            | "__builtin_unpredictable" =>
-              if args.length() > 0 {
-                self.type_of(args[0], frame_size)
-              } else {
-                SInt
-              }
-            "__builtin_assume_aligned" =>
-              if args.length() > 0 {
-                self.type_of(args[0], frame_size)
-              } else {
-                Pointer(Void)
-              }
-            "__builtin_is_aligned" => Bool
-            "__builtin_align_up" | "__builtin_align_down" =>
-              if args.length() > 0 {
-                self.type_of(args[0], frame_size)
-              } else {
-                ULong
-              }
-            "__builtin_unreachable"
-            | "__builtin_trap"
-            | "__builtin_assume"
-            | "__builtin_prefetch"
-            | "__builtin_bzero"
-            | "__builtin_va_start"
-            | "__builtin_va_end"
-            | "__builtin_va_copy" => Void
-            "__builtin_add_overflow"
-            | "__builtin_sub_overflow"
-            | "__builtin_mul_overflow"
-            | "__builtin_sadd_overflow"
-            | "__builtin_saddl_overflow"
-            | "__builtin_saddll_overflow"
-            | "__builtin_uadd_overflow"
-            | "__builtin_uaddl_overflow"
-            | "__builtin_uaddll_overflow"
-            | "__builtin_ssub_overflow"
-            | "__builtin_ssubl_overflow"
-            | "__builtin_ssubll_overflow"
-            | "__builtin_usub_overflow"
-            | "__builtin_usubl_overflow"
-            | "__builtin_usubll_overflow"
-            | "__builtin_smul_overflow"
-            | "__builtin_smull_overflow"
-            | "__builtin_smulll_overflow"
-            | "__builtin_umul_overflow"
-            | "__builtin_umull_overflow"
-            | "__builtin_umulll_overflow" => Bool
-            "__builtin_constant_p"
-            | "__builtin_flt_rounds"
-            | "__builtin_clz"
-            | "__builtin_clzl"
-            | "__builtin_clzll"
-            | "__builtin_ctz"
-            | "__builtin_ctzl"
-            | "__builtin_ctzll"
-            | "__builtin_ffs"
-            | "__builtin_ffsl"
-            | "__builtin_ffsll"
-            | "__builtin_popcount"
-            | "__builtin_popcountl"
-            | "__builtin_popcountll"
-            | "__builtin_parity"
-            | "__builtin_parityl"
-            | "__builtin_parityll" => SInt
-            "__atomic_load_n"
-            | "__c11_atomic_load"
-            | "__atomic_add_fetch"
-            | "__atomic_sub_fetch"
-            | "__atomic_and_fetch"
-            | "__atomic_or_fetch"
-            | "__atomic_xor_fetch"
-            | "__atomic_nand_fetch"
-            | "__atomic_fetch_add"
-            | "__atomic_fetch_sub"
-            | "__atomic_fetch_and"
-            | "__atomic_fetch_or"
-            | "__atomic_fetch_xor"
-            | "__atomic_fetch_nand"
-            | "__atomic_exchange_n"
-            | "__c11_atomic_fetch_add"
-            | "__c11_atomic_fetch_sub"
-            | "__c11_atomic_fetch_and"
-            | "__c11_atomic_fetch_or"
-            | "__c11_atomic_fetch_xor"
-            | "__c11_atomic_exchange"
-            | "__sync_val_compare_and_swap"
-            | "__sync_fetch_and_add"
-            | "__sync_fetch_and_sub"
-            | "__sync_fetch_and_and"
-            | "__sync_fetch_and_or"
-            | "__sync_fetch_and_xor"
-            | "__sync_fetch_and_nand"
-            | "__sync_fetch_and_max"
-            | "__sync_fetch_and_min"
-            | "__sync_fetch_and_umax"
-            | "__sync_fetch_and_umin"
-            | "__sync_add_and_fetch"
-            | "__sync_sub_and_fetch"
-            | "__sync_and_and_fetch"
-            | "__sync_or_and_fetch"
-            | "__sync_xor_and_fetch"
-            | "__sync_nand_and_fetch"
-            | "__sync_swap"
-            | "__sync_lock_test_and_set" =>
-              if args.length() > 0 {
-                atomic_target_type(self.type_of(args[0], frame_size))
-              } else {
-                SLongLong
-              }
-            "__atomic_test_and_set"
-            | "__atomic_compare_exchange"
-            | "__atomic_compare_exchange_n"
-            | "__c11_atomic_compare_exchange_strong"
-            | "__c11_atomic_compare_exchange_weak"
-            | "__sync_bool_compare_and_swap"
-            | "__atomic_always_lock_free"
-            | "__atomic_is_lock_free"
-            | "__c11_atomic_is_lock_free" => Bool
-            "__atomic_clear"
-            | "__atomic_exchange"
-            | "__atomic_load"
-            | "__atomic_store"
-            | "__atomic_store_n"
-            | "__atomic_thread_fence"
-            | "__atomic_signal_fence"
-            | "__c11_atomic_store"
-            | "__c11_atomic_thread_fence"
-            | "__c11_atomic_signal_fence"
-            | "__sync_synchronize"
-            | "__sync_lock_release" => Void
-            "__builtin_isgreater"
-            | "__builtin_isgreaterequal"
-            | "__builtin_isless"
-            | "__builtin_islessequal"
-            | "__builtin_islessgreater"
-            | "__builtin_isunordered"
-            | "__builtin_isnan"
-            | "__builtin_isnanf"
-            | "__builtin_isnanl"
-            | "__builtin_isinf"
-            | "__builtin_isinff"
-            | "__builtin_isinfl"
-            | "__builtin_isfinite"
-            | "__builtin_isfinitef"
-            | "__builtin_isfinitel"
-            | "__builtin_isnormal"
-            | "__builtin_isnormalf"
-            | "__builtin_isnormall"
-            | "__builtin_signbit"
-            | "__builtin_signbitf"
-            | "__builtin_signbitl" => SInt
-            "__builtin_abs" => SInt
-            "__builtin_labs" => SLong
-            "__builtin_llabs" => SLongLong
-            "__builtin_alloca" => Pointer(Void)
-            "__builtin_memcpy"
-            | "__builtin___memcpy_chk"
-            | "__builtin_mempcpy"
-            | "__builtin___mempcpy_chk"
-            | "__builtin_memmove"
-            | "__builtin___memmove_chk"
-            | "__builtin_memset"
-            | "__builtin___memset_chk"
-            | "__builtin_memchr" => Pointer(Void)
-            "__builtin_strlen" => ULong
-            "__builtin_memcmp" | "__builtin_strcmp" | "__builtin_strncmp" =>
-              SInt
-            "__builtin_strcpy"
-            | "__builtin___strcpy_chk"
-            | "__builtin_strcat"
-            | "__builtin___strcat_chk"
-            | "__builtin_stpcpy"
-            | "__builtin___stpcpy_chk"
-            | "__builtin_strncpy"
-            | "__builtin___strncpy_chk"
-            | "__builtin_stpncpy"
-            | "__builtin___stpncpy_chk"
-            | "__builtin_strncat"
-            | "__builtin___strncat_chk"
-            | "__builtin_strchr"
-            | "__builtin_strrchr"
-            | "__builtin_strstr" => Pointer(SChar)
-            "__builtin___strlcpy_chk" | "__builtin___strlcat_chk" => ULong
-            "__builtin___snprintf_chk"
-            | "__builtin___vsnprintf_chk"
-            | "__builtin___sprintf_chk"
-            | "__builtin___vsprintf_chk"
-            | "__builtin___printf_chk"
-            | "__builtin___fprintf_chk"
-            | "__builtin___vfprintf_chk" => SInt
-            "__builtin_frame_address"
-            | "__builtin_return_address"
-            | "__builtin_extract_return_addr"
-            | "__builtin_frob_return_addr" => Pointer(Void)
-            _ => self.func_rets.get_or_default(name, SInt)
+          match self.builtin_return_type(name, args, frame_size) {
+            Some(ty) => ty
+            None => self.func_rets.get_or_default(name, SInt)
           }
         _ => SInt
       }
@@ -964,115 +1140,11 @@ fn Codegen::emit_call_result(self : Codegen, ret_ty : @parser.Type) -> Unit {
 }
 
 ///|
-fn unary_integer_result_type(ty : @parser.Type) -> @parser.Type {
-  match ty {
-    Bool | SChar | UChar | SShort | UShort => SInt
-    _ => ty
-  }
-}
-
-///|
-fn unary_numeric_result_type(ty : @parser.Type) -> @parser.Type {
-  if ty.is_floating() {
-    ty
-  } else {
-    unary_integer_result_type(ty)
-  }
-}
-
-///|
-fn integer_rank(ty : @parser.Type) -> Int {
-  match ty {
-    Bool | SChar | UChar => 1
-    SShort | UShort => 2
-    SInt | UInt => 3
-    SLong | ULong => 4
-    SLongLong | ULongLong => 5
-    SInt128 | UInt128 => 6
-    _ => 0
-  }
-}
-
-///|
-fn unsigned_type_for_rank(rank : Int) -> @parser.Type {
-  if rank >= 6 {
-    UInt128
-  } else if rank == 5 {
-    ULongLong
-  } else if rank == 4 {
-    ULong
-  } else {
-    UInt
-  }
-}
-
-///|
-fn signed_type_for_rank(rank : Int) -> @parser.Type {
-  if rank >= 6 {
-    SInt128
-  } else if rank == 5 {
-    SLongLong
-  } else if rank == 4 {
-    SLong
-  } else {
-    SInt
-  }
-}
-
-///|
-fn integer_width_bits(ty : @parser.Type) -> Int {
-  match ty {
-    Bool | SChar | UChar => 8
-    SShort | UShort => 16
-    SInt | UInt => 32
-    SLong | ULong | SLongLong | ULongLong => 64
-    SInt128 | UInt128 => 128
-    _ => 0
-  }
-}
-
-///|
 fn bitfield_mask(width : Int) -> Int64 {
   if width >= 64 {
     -1L
   } else {
     (1L << width) - 1L
-  }
-}
-
-///|
-fn integer_common_type(
-  lhs_ty : @parser.Type,
-  rhs_ty : @parser.Type,
-) -> @parser.Type {
-  let lhs_ty = unary_integer_result_type(lhs_ty)
-  let rhs_ty = unary_integer_result_type(rhs_ty)
-  if lhs_ty == rhs_ty {
-    return lhs_ty
-  }
-  let lhs_unsigned = is_unsigned_integer_type(lhs_ty)
-  let rhs_unsigned = is_unsigned_integer_type(rhs_ty)
-  let lhs_rank = integer_rank(lhs_ty)
-  let rhs_rank = integer_rank(rhs_ty)
-  if lhs_unsigned == rhs_unsigned {
-    let rank = if lhs_rank > rhs_rank { lhs_rank } else { rhs_rank }
-    if lhs_unsigned {
-      unsigned_type_for_rank(rank)
-    } else {
-      signed_type_for_rank(rank)
-    }
-  } else {
-    let unsigned_ty = if lhs_unsigned { lhs_ty } else { rhs_ty }
-    let signed_ty = if lhs_unsigned { rhs_ty } else { lhs_ty }
-    let unsigned_rank = integer_rank(unsigned_ty)
-    let signed_rank = integer_rank(signed_ty)
-    if unsigned_rank >= signed_rank {
-      unsigned_ty
-    } else if integer_width_bits(signed_ty) > integer_width_bits(unsigned_ty) {
-      signed_ty
-    } else {
-      unsigned_type_for_rank(signed_rank)
-    }
   }
 }
 
@@ -1083,7 +1155,7 @@ fn uses_unsigned_integer_op(
 ) -> Bool {
   lhs_ty.is_integer() &&
   rhs_ty.is_integer() &&
-  is_unsigned_integer_type(integer_common_type(lhs_ty, rhs_ty))
+  @ctype.integer_common_type(lhs_ty, rhs_ty).is_unsigned_integer()
 }
 
 ///|
@@ -1096,53 +1168,11 @@ fn Codegen::emit_integer_compare(
   if !is_ptr_diff &&
     lhs_ty.is_integer() &&
     rhs_ty.is_integer() &&
-    self.type_size(integer_common_type(lhs_ty, rhs_ty)) <= 4 {
+    self.type_size(@ctype.integer_common_type(lhs_ty, rhs_ty)) <= 4 {
     self.emit("\tcmp\tw9, w10")
   } else {
     self.emit("\tcmp\tx9, x10")
   }
-}
-
-///|
-fn binary_result_type(
-  op : String,
-  lhs_ty : @parser.Type,
-  rhs_ty : @parser.Type,
-) -> @parser.Type {
-  match op {
-    "==" | "!=" | "<" | ">" | "<=" | ">=" | "&&" | "||" => SInt
-    "," => rhs_ty
-    "<<" | ">>" => unary_integer_result_type(lhs_ty)
-    _ =>
-      if lhs_ty.is_floating() || rhs_ty.is_floating() {
-        if lhs_ty == Double || rhs_ty == Double {
-          Double
-        } else {
-          Float
-        }
-      } else if lhs_ty.is_integer() && rhs_ty.is_integer() {
-        integer_common_type(lhs_ty, rhs_ty)
-      } else {
-        SInt
-      }
-  }
-}
-
-///|
-fn binary_expr_result_type(
-  op : String,
-  lhs : @parser.Expr,
-  lhs_ty : @parser.Type,
-  rhs : @parser.Expr,
-  rhs_ty : @parser.Type,
-) -> @parser.Type {
-  if op == "<<" || op == ">>" {
-    match (lhs, rhs) {
-      (Number(_), Number(shift)) => if shift >= 32L { return ULongLong }
-      _ => ()
-    }
-  }
-  binary_result_type(op, lhs_ty, rhs_ty)
 }
 
 ///|
@@ -1170,8 +1200,8 @@ fn Codegen::gen_compound_assign(
   }
   let lhs_ty = self.type_of(lhs, frame_size)
   let rhs_ty = self.type_of(rhs, frame_size)
-  let lhs_core = peel_aligned_type(lhs_ty)
-  let rhs_core = peel_aligned_type(rhs_ty)
+  let lhs_core = lhs_ty.without_alignment()
+  let rhs_core = rhs_ty.without_alignment()
   let ptr_scale = match (lhs_core, rhs_core) {
     (Pointer(elem), _) => self.type_size(elem)
     (Array(elem, _), _) => self.type_size(elem)
@@ -1191,9 +1221,9 @@ fn Codegen::gen_compound_assign(
   let is_fp = !has_ptr_operand && (lhs_ty.is_floating() || rhs_ty.is_floating())
   let is_double = is_fp && (lhs_ty == Double || rhs_ty == Double)
   let fp_ty : @parser.Type = if is_double { Double } else { Float }
-  let result_ty = binary_result_type(op, lhs_ty, rhs_ty)
+  let result_ty = @ctype.binary_result_type(op, lhs_ty, rhs_ty, true)
   let is_unsigned_int = match op {
-    "<<" | ">>" => is_unsigned_integer_type(result_ty)
+    "<<" | ">>" => result_ty.is_unsigned_integer()
     _ => uses_unsigned_integer_op(lhs_ty, rhs_ty)
   }
 
@@ -1346,7 +1376,7 @@ fn Codegen::gen_bitfield_compound_assign(
   let lhs_ty = info.ty
   let rhs_ty = self.type_of(rhs, frame_size)
   let is_unsigned_int = match op {
-    "<<" | ">>" => is_unsigned_integer_type(lhs_ty)
+    "<<" | ">>" => lhs_ty.is_unsigned_integer()
     _ => uses_unsigned_integer_op(lhs_ty, rhs_ty)
   }
   let mask = bitfield_mask(info.bit_width)
@@ -1434,6 +1464,116 @@ fn Codegen::gen_bitfield_compound_assign(
 }
 
 ///|
+fn Codegen::emit_floating_step_bits(
+  self : Codegen,
+  ty : @parser.Type,
+  old_reg : String,
+  new_reg : String,
+  delta : Int,
+) -> Bool {
+  match ty.without_alignment() {
+    Float => {
+      self.emit("\tfmov\ts9, " + w_reg(old_reg))
+      self.emit_load_int(new_reg, 1065353216L)
+      self.emit("\tfmov\ts10, " + w_reg(new_reg))
+      if delta >= 0 {
+        self.emit("\tfadd\ts9, s9, s10")
+      } else {
+        self.emit("\tfsub\ts9, s9, s10")
+      }
+      self.emit("\tfmov\t" + w_reg(new_reg) + ", s9")
+      true
+    }
+    Double => {
+      self.emit("\tfmov\td9, " + old_reg)
+      self.emit_load_int(new_reg, 4607182418800017408L)
+      self.emit("\tfmov\td10, " + new_reg)
+      if delta >= 0 {
+        self.emit("\tfadd\td9, d9, d10")
+      } else {
+        self.emit("\tfsub\td9, d9, d10")
+      }
+      self.emit("\tfmov\t" + new_reg + ", d9")
+      true
+    }
+    _ => false
+  }
+}
+
+///|
+fn Codegen::gen_bitfield_inc_dec(
+  self : Codegen,
+  expr : @parser.Expr,
+  delta : Int,
+  postfix : Bool,
+  frame_size : Int,
+) -> Bool {
+  match self.find_bitfield_member(expr, frame_size) {
+    Some(info) => {
+      let mask = bitfield_mask(info.bit_width)
+      self.gen_addr(expr, frame_size)
+      self.emit("\tmov\tx13, x9")
+      match info.size {
+        1 => self.emit("\tldrb\tw9, [x13]")
+        2 => self.emit("\tldrh\tw9, [x13]")
+        4 => self.emit("\tldr\tw9, [x13]")
+        _ => self.emit("\tldr\tx9, [x13]")
+      }
+      self.emit("\tlsr\tx9, x9, #" + info.bit_offset.to_string())
+      self.emit_load_int("x10", mask)
+      self.emit("\tand\tx9, x9, x10")
+      if info.ty.is_signed() {
+        let shift = 64 - info.bit_width
+        self.emit("\tlsl\tx9, x9, #" + shift.to_string())
+        self.emit("\tasr\tx9, x9, #" + shift.to_string())
+      }
+      if postfix {
+        self.emit("\tstr\tx9, [sp, #-16]!")
+      }
+      if delta > 0 {
+        self.emit("\tadd\tx9, x9, #" + delta.to_string())
+      } else {
+        self.emit("\tsub\tx9, x9, #" + (-delta).to_string())
+      }
+      self.emit_scalar_conversion_to(info.ty)
+      self.emit_load_int("x10", mask)
+      self.emit("\tand\tx9, x9, x10")
+      self.emit("\tmov\tx12, x9")
+      match info.size {
+        1 => self.emit("\tldrb\tw11, [x13]")
+        2 => self.emit("\tldrh\tw11, [x13]")
+        4 => self.emit("\tldr\tw11, [x13]")
+        _ => self.emit("\tldr\tx11, [x13]")
+      }
+      self.emit_load_int("x10", mask)
+      self.emit("\tlsl\tx10, x10, #" + info.bit_offset.to_string())
+      self.emit("\tmvn\tx10, x10")
+      self.emit("\tand\tx11, x11, x10")
+      self.emit("\tlsl\tx9, x12, #" + info.bit_offset.to_string())
+      self.emit("\torr\tx11, x11, x9")
+      match info.size {
+        1 => self.emit("\tstrb\tw11, [x13]")
+        2 => self.emit("\tstrh\tw11, [x13]")
+        4 => self.emit("\tstr\tw11, [x13]")
+        _ => self.emit("\tstr\tx11, [x13]")
+      }
+      if postfix {
+        self.emit("\tldr\tx9, [sp], #16")
+      } else {
+        self.emit("\tmov\tx9, x12")
+        if info.ty.is_signed() {
+          let shift = 64 - info.bit_width
+          self.emit("\tlsl\tx9, x9, #" + shift.to_string())
+          self.emit("\tasr\tx9, x9, #" + shift.to_string())
+        }
+      }
+      true
+    }
+    None => false
+  }
+}
+
+///|
 fn Codegen::gen_callee_addr(
   self : Codegen,
   func : @parser.Expr,
@@ -1480,6 +1620,9 @@ fn Codegen::emit_builtin_lib_call(
     self.gen_expr(args[i], frame_size)
     self.emit("\tstr\tx9, [sp, #" + (i * 8).to_string() + "]")
   }
+  for i = arg_count; i < args.length(); i = i + 1 {
+    self.gen_ignored_expr_side_effects(args[i], frame_size)
+  }
   for i = 0; i < arg_count; i = i + 1 {
     self.emit(
       "\tldr\tx" + i.to_string() + ", [sp, #" + (i * 8).to_string() + "]",
@@ -1492,24 +1635,138 @@ fn Codegen::emit_builtin_lib_call(
 }
 
 ///|
-fn Codegen::emit_lowered_builtin_call(
+fn Codegen::emit_ctype_libcall_result(
+  self : Codegen,
+  symbol : String,
+  args : Array[@parser.Expr],
+  arg_count : Int,
+  frame_size : Int,
+) -> Bool {
+  self.emit_builtin_lib_call("_" + symbol, args, arg_count, frame_size)
+  self.emit("\tmov\tx9, x0")
+  true
+}
+
+///|
+fn Codegen::emit_ctype_indexed_builtin_call(
   self : Codegen,
   target : String,
   args : Array[@parser.Expr],
-  fixed_indexes : Array[Int],
-  rest_start : Int,
+  source_indexes : Array[Int],
   frame_size : Int,
 ) -> Unit {
-  let lowered_args = []
-  for index in fixed_indexes {
+  let lowered_args : Array[@parser.Expr] = []
+  for i = 0; i < args.length(); i = i + 1 {
+    if !@ctype.builtin_printf_source_index_used(source_indexes, i) {
+      self.gen_ignored_expr_side_effects(args[i], frame_size)
+    }
+  }
+  for index in source_indexes {
     if index < args.length() {
       lowered_args.push(args[index])
     }
   }
-  for i = rest_start; i < args.length(); i = i + 1 {
-    lowered_args.push(args[i])
-  }
   self.gen_expr(Call(Var(target), lowered_args), frame_size)
+}
+
+///|
+fn Codegen::emit_ctype_printf_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Bool {
+  match
+    (
+      @ctype.builtin_printf_libcall_symbol(name, args.length()),
+      @ctype.builtin_printf_source_indexes(name, args.length()),
+    ) {
+    (Some(symbol), Some(source_indexes)) => {
+      self.emit_ctype_indexed_builtin_call(
+        symbol, args, source_indexes, frame_size,
+      )
+      true
+    }
+    _ => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_heap_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Bool {
+  match @ctype.builtin_heap_libcall_info(name, args.length()) {
+    Some((symbol, call_arg_count)) => {
+      self.emit_builtin_lib_call("_" + symbol, args, call_arg_count, frame_size)
+      match @ctype.builtin_return_type(name, [], None) {
+        Some(Void) => self.emit("\tmov\tx9, #0")
+        _ => self.emit("\tmov\tx9, x0")
+      }
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_libcall_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Bool {
+  if self.emit_ctype_heap_builtin_call(name, args, frame_size) {
+    return true
+  }
+  match @ctype.builtin_length_libcall_info(name, args.length()) {
+    Some((symbol, call_arg_count)) =>
+      return self.emit_ctype_libcall_result(
+        symbol, args, call_arg_count, frame_size,
+      )
+    None => ()
+  }
+  match @ctype.builtin_memory_libcall_info(name, args.length()) {
+    Some((symbol, call_arg_count)) =>
+      return self.emit_ctype_libcall_result(
+        symbol, args, call_arg_count, frame_size,
+      )
+    None => ()
+  }
+  match @ctype.builtin_compare_libcall_info(name, args.length()) {
+    Some((symbol, call_arg_count)) =>
+      return self.emit_ctype_libcall_result(
+        symbol, args, call_arg_count, frame_size,
+      )
+    None => ()
+  }
+  match @ctype.builtin_search_libcall_info(name, args.length()) {
+    Some((symbol, call_arg_count)) =>
+      return self.emit_ctype_libcall_result(
+        symbol, args, call_arg_count, frame_size,
+      )
+    None => ()
+  }
+  match @ctype.builtin_span_libcall_info(name, args.length()) {
+    Some((symbol, call_arg_count)) =>
+      return self.emit_ctype_libcall_result(
+        symbol, args, call_arg_count, frame_size,
+      )
+    None => ()
+  }
+  match @ctype.builtin_strl_libcall_info(name, args.length()) {
+    Some((symbol, call_arg_count)) =>
+      return self.emit_ctype_libcall_result(
+        symbol, args, call_arg_count, frame_size,
+      )
+    None => ()
+  }
+  if self.emit_ctype_printf_builtin_call(name, args, frame_size) {
+    return true
+  }
+  false
 }
 
 ///|
@@ -1549,26 +1806,6 @@ fn Codegen::emit_builtin_rotate(
       self.emit("\tlsl\tx11, x9, x11")
     }
     self.emit("\torr\tx9, x12, x11")
-  }
-}
-
-///|
-fn Codegen::generic_builtin_bit_width(
-  self : Codegen,
-  args : Array[@parser.Expr],
-  frame_size : Int,
-) -> Int {
-  if args.length() == 0 {
-    return 32
-  }
-  let width = self.type_size(
-      peel_aligned_type(self.type_of(args[0], frame_size)),
-    ) *
-    8
-  if width <= 32 {
-    32
-  } else {
-    64
   }
 }
 
@@ -1653,15 +1890,6 @@ fn codegen_literal_string_arg(expr : @parser.Expr) -> String? {
 }
 
 ///|
-fn codegen_unknown_object_size(mode : Int64) -> Int64 {
-  if (mode & 2L) != 0L {
-    0L
-  } else {
-    -1L
-  }
-}
-
-///|
 fn Codegen::object_size_var_type(
   self : Codegen,
   name : String,
@@ -1684,7 +1912,7 @@ fn Codegen::object_size_lvalue_type(
     Var(name) => self.object_size_var_type(name)
     ArrayAccess(base, _) =>
       match self.object_size_lvalue_type(base) {
-        Some(base_ty) => pointer_or_array_element_type(base_ty)
+        Some(base_ty) => base_ty.pointer_or_array_element()
         None => None
       }
     MemberAccess(obj, field) =>
@@ -1701,40 +1929,10 @@ fn Codegen::object_size_lvalue_type(
 }
 
 ///|
-priv struct CodegenObjectSizeFact {
-  whole : Int
-  subobject : Int
-}
-
-///|
-fn codegen_object_size_fact_value(
-  fact : CodegenObjectSizeFact,
-  mode : Int64,
-) -> Int {
-  if (mode & 1L) != 0L {
-    fact.subobject
-  } else {
-    fact.whole
-  }
-}
-
-///|
-fn codegen_object_size_subtract_offset(
-  fact : CodegenObjectSizeFact,
-  offset : Int,
-) -> CodegenObjectSizeFact? {
-  if offset < 0 || offset > fact.whole || offset > fact.subobject {
-    None
-  } else {
-    Some({ whole: fact.whole - offset, subobject: fact.subobject - offset })
-  }
-}
-
-///|
 fn Codegen::object_size_var_fact(
   self : Codegen,
   name : String,
-) -> CodegenObjectSizeFact? {
+) -> @ctype.ObjectSizeFact? {
   match self.object_size_var_type(name) {
     Some(ty) => {
       let size = self.type_size(ty)
@@ -1749,23 +1947,13 @@ fn Codegen::object_size_array_element_fact(
   self : Codegen,
   base_ty : @parser.Type,
   index : @parser.Expr,
-  base_fact : CodegenObjectSizeFact,
-) -> CodegenObjectSizeFact? {
-  match peel_aligned_type(base_ty) {
+  base_fact : @ctype.ObjectSizeFact,
+) -> @ctype.ObjectSizeFact? {
+  match base_ty.without_alignment() {
     Array(elem, n) =>
       match self.fold_const(index) {
         Some(raw_index) =>
-          if raw_index < 0L {
-            None
-          } else {
-            let index = raw_index.to_int()
-            if index > n {
-              None
-            } else {
-              let elem_size = self.type_size(elem)
-              codegen_object_size_subtract_offset(base_fact, index * elem_size)
-            }
-          }
+          base_fact.array_element(n, self.type_size(elem), raw_index)
         None => None
       }
     _ => None
@@ -1776,7 +1964,7 @@ fn Codegen::object_size_array_element_fact(
 fn Codegen::object_size_lvalue_fact(
   self : Codegen,
   expr : @parser.Expr,
-) -> CodegenObjectSizeFact? {
+) -> @ctype.ObjectSizeFact? {
   match expr {
     Var(name) => self.object_size_var_fact(name)
     ArrayAccess(base, index) =>
@@ -1792,14 +1980,7 @@ fn Codegen::object_size_lvalue_fact(
         (Some(obj_ty), Some(obj_fact)) =>
           match self.find_field_layout_for_type(obj_ty, field) {
             Some((_, field_ty, offset, _, _, _)) =>
-              match codegen_object_size_subtract_offset(obj_fact, offset) {
-                Some(fact) =>
-                  Some({
-                    whole: fact.whole,
-                    subobject: self.type_size(field_ty),
-                  })
-                None => None
-              }
+              obj_fact.member_field(offset, self.type_size(field_ty))
             None => None
           }
         _ => None
@@ -1813,21 +1994,18 @@ fn Codegen::object_size_offset_expr_fact(
   self : Codegen,
   base : @parser.Expr,
   offset_expr : @parser.Expr,
-) -> CodegenObjectSizeFact? {
+) -> @ctype.ObjectSizeFact? {
   match
     (
       self.object_size_expr_fact(base),
       self.fold_const(offset_expr),
-      pointer_or_array_element_type(self.type_of(base, 0)),
+      self.type_of(base, 0).pointer_or_array_element(),
     ) {
     (Some(fact), Some(index), Some(elem)) =>
       if index < 0L {
         None
       } else {
-        codegen_object_size_subtract_offset(
-          fact,
-          index.to_int() * self.type_size(elem),
-        )
+        fact.subtract_offset(index.to_int() * self.type_size(elem))
       }
     _ => None
   }
@@ -1837,7 +2015,7 @@ fn Codegen::object_size_offset_expr_fact(
 fn Codegen::object_size_expr_fact(
   self : Codegen,
   expr : @parser.Expr,
-) -> CodegenObjectSizeFact? {
+) -> @ctype.ObjectSizeFact? {
   match expr {
     Cast(_, inner) => self.object_size_expr_fact(inner)
     AddrOf(inner) => self.object_size_lvalue_fact(inner)
@@ -1849,7 +2027,7 @@ fn Codegen::object_size_expr_fact(
     Var(name) =>
       match self.object_size_var_type(name) {
         Some(ty) =>
-          match peel_aligned_type(ty) {
+          match ty.without_alignment() {
             Array(_, _) => self.object_size_var_fact(name)
             _ => None
           }
@@ -1858,7 +2036,7 @@ fn Codegen::object_size_expr_fact(
     MemberAccess(_, _) =>
       match self.object_size_lvalue_type(expr) {
         Some(ty) =>
-          match peel_aligned_type(ty) {
+          match ty.without_alignment() {
             Array(_, _) => self.object_size_lvalue_fact(expr)
             _ => None
           }
@@ -1875,7 +2053,7 @@ fn Codegen::builtin_object_size_value(
 ) -> Int64 {
   if args.length() > 0 {
     match codegen_literal_string_arg(args[0]) {
-      Some(value) => return (value.length() + 1).to_int64()
+      Some(value) => return @ctype.string_literal_object_size(value)
       None => ()
     }
     let mode = if args.length() > 1 {
@@ -1886,10 +2064,10 @@ fn Codegen::builtin_object_size_value(
     } else {
       0L
     }
-    match self.object_size_expr_fact(args[0]) {
-      Some(fact) => return codegen_object_size_fact_value(fact, mode).to_int64()
-      None => ()
-    }
+    return @ctype.object_size_fact_result(
+      self.object_size_expr_fact(args[0]),
+      mode,
+    )
   }
   let mode = if args.length() > 1 {
     match self.fold_const(args[1]) {
@@ -1899,35 +2077,7 @@ fn Codegen::builtin_object_size_value(
   } else {
     0L
   }
-  codegen_unknown_object_size(mode)
-}
-
-///|
-fn overflow_builtin_operator(name : String) -> String? {
-  match name {
-    "__builtin_add_overflow"
-    | "__builtin_sadd_overflow"
-    | "__builtin_saddl_overflow"
-    | "__builtin_saddll_overflow"
-    | "__builtin_uadd_overflow"
-    | "__builtin_uaddl_overflow"
-    | "__builtin_uaddll_overflow" => Some("+")
-    "__builtin_sub_overflow"
-    | "__builtin_ssub_overflow"
-    | "__builtin_ssubl_overflow"
-    | "__builtin_ssubll_overflow"
-    | "__builtin_usub_overflow"
-    | "__builtin_usubl_overflow"
-    | "__builtin_usubll_overflow" => Some("-")
-    "__builtin_mul_overflow"
-    | "__builtin_smul_overflow"
-    | "__builtin_smull_overflow"
-    | "__builtin_smulll_overflow"
-    | "__builtin_umul_overflow"
-    | "__builtin_umull_overflow"
-    | "__builtin_umulll_overflow" => Some("*")
-    _ => None
-  }
+  @ctype.object_size_unknown(mode)
 }
 
 ///|
@@ -1937,8 +2087,8 @@ fn Codegen::overflow_result_type(
   frame_size : Int,
 ) -> @parser.Type {
   if args.length() >= 3 {
-    match pointer_or_array_element_type(self.type_of(args[2], frame_size)) {
-      Some(ty) => peel_aligned_type(ty)
+    match self.type_of(args[2], frame_size).pointer_or_array_element() {
+      Some(ty) => ty.without_alignment()
       None => SLongLong
     }
   } else {
@@ -1948,7 +2098,7 @@ fn Codegen::overflow_result_type(
 
 ///|
 fn overflow_small_int_range(ty : @parser.Type) -> (Int64, Int64)? {
-  match peel_aligned_type(ty) {
+  match ty.without_alignment() {
     SChar => Some((-128L, 127L))
     UChar => Some((0L, 255L))
     SShort => Some((-32768L, 32767L))
@@ -1966,7 +2116,7 @@ fn Codegen::emit_overflow_range_check(
 ) -> Unit {
   match overflow_small_int_range(result_ty) {
     Some((min_value, max_value)) =>
-      if is_unsigned_integer_type(result_ty) {
+      if result_ty.is_unsigned_integer() {
         self.emit_load_int("x12", max_value)
         self.emit("\tcmp\tx9, x12")
         self.emit("\tcset\tx11, hi")
@@ -1994,7 +2144,7 @@ fn Codegen::emit_small_overflow_arithmetic(
     "-" => self.emit("\tsub\tx9, x9, x10")
     "*" =>
       if self.type_size(result_ty) == 4 {
-        if is_unsigned_integer_type(result_ty) {
+        if result_ty.is_unsigned_integer() {
           self.emit("\tumull\tx9, w9, w10")
         } else {
           self.emit("\tsmull\tx9, w9, w10")
@@ -2013,7 +2163,7 @@ fn Codegen::emit_i64_overflow_arithmetic(
   result_ty : @parser.Type,
   op : String,
 ) -> Unit {
-  let unsigned = is_unsigned_integer_type(result_ty)
+  let unsigned = result_ty.is_unsigned_integer()
   match op {
     "+" => {
       self.emit("\tadds\tx9, x9, x10")
@@ -2055,7 +2205,7 @@ fn Codegen::emit_overflow_arithmetic_builtin(
     return
   }
   let result_ty = self.overflow_result_type(args, frame_size)
-  if !result_ty.is_integer() || is_int128_type(result_ty) {
+  if !result_ty.is_integer() || result_ty.is_int128() {
     abort(
       "unsupported Darwin ARM64 overflow builtin result type: " +
       result_ty.to_string(),
@@ -2136,28 +2286,6 @@ fn Codegen::emit_builtin_bswap(
 }
 
 ///|
-fn Codegen::generic_builtin_bswap_width(
-  self : Codegen,
-  args : Array[@parser.Expr],
-  frame_size : Int,
-) -> Int {
-  if args.length() == 0 {
-    return 32
-  }
-  let width = self.type_size(
-      peel_aligned_type(self.type_of(args[0], frame_size)),
-    ) *
-    8
-  if width <= 16 {
-    16
-  } else if width <= 32 {
-    32
-  } else {
-    64
-  }
-}
-
-///|
 fn Codegen::emit_builtin_popcount(
   self : Codegen,
   args : Array[@parser.Expr],
@@ -2206,6 +2334,684 @@ fn Codegen::emit_builtin_parity(
 }
 
 ///|
+fn Codegen::emit_ctype_integer_count_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Bool {
+  match @ctype.integer_count_builtin_info(name) {
+    Some((kind, width)) => {
+      match kind {
+        "clz" =>
+          if args.length() > 0 {
+            self.gen_expr(args[0], frame_size)
+            if width == 32 {
+              self.emit("\tclz\tw9, w9")
+            } else {
+              self.emit("\tclz\tx9, x9")
+            }
+          } else {
+            self.emit("\tmov\tx9, #0")
+          }
+        "ctz" =>
+          if args.length() > 0 {
+            self.gen_expr(args[0], frame_size)
+            if width == 32 {
+              self.emit("\trbit\tw9, w9")
+              self.emit("\tclz\tw9, w9")
+            } else {
+              self.emit("\trbit\tx9, x9")
+              self.emit("\tclz\tx9, x9")
+            }
+          } else {
+            self.emit("\tmov\tx9, #0")
+          }
+        "ffs" => self.emit_builtin_ffs(args, frame_size, width)
+        "popcount" => self.emit_builtin_popcount(args, frame_size, width)
+        "parity" => self.emit_builtin_parity(args, frame_size, width)
+        _ => return false
+      }
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_integer_abs_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Bool {
+  match @ctype.integer_abs_builtin_type(name) {
+    Some(ty) => {
+      self.emit_builtin_abs(
+        args,
+        frame_size,
+        if self.type_size(ty) <= 4 {
+          32
+        } else {
+          64
+        },
+      )
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_integer_bswap_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Bool {
+  let first_ty = if args.length() == 0 {
+    @ctype.Type::UInt
+  } else {
+    self.type_of(args[0], frame_size)
+  }
+  match @ctype.integer_bswap_builtin_info(name, first_ty) {
+    Some((_, width)) => {
+      self.emit_builtin_bswap(args, frame_size, width)
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_integer_rotate_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Bool {
+  let first_ty = if args.length() == 0 {
+    @ctype.Type::UInt
+  } else {
+    self.type_of(args[0], frame_size)
+  }
+  match @ctype.integer_rotate_builtin_info(name, first_ty) {
+    Some((_, width, left)) => {
+      self.emit_builtin_rotate(args, frame_size, width, left)
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_integer_alignment_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Bool {
+  let first_ty = if args.length() == 0 {
+    @ctype.Type::ULong
+  } else {
+    self.type_of(args[0], frame_size)
+  }
+  match @ctype.integer_alignment_builtin_info(name, first_ty) {
+    Some((kind, _)) => {
+      match kind {
+        "is_aligned" => self.emit_builtin_is_aligned(args, frame_size)
+        "align_up" => self.emit_builtin_align_value(args, frame_size, true)
+        "align_down" => self.emit_builtin_align_value(args, frame_size, false)
+        _ => return false
+      }
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_identity_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Bool {
+  match @ctype.builtin_identity_call_info(name) {
+    Some((_, side_effect_arg)) => {
+      if args.length() > 0 {
+        self.gen_expr(args[0], frame_size)
+      } else {
+        self.emit("\tmov\tx9, #0")
+      }
+      if side_effect_arg >= 0 && side_effect_arg < args.length() {
+        self.emit("\tstr\tx9, [sp, #-16]!")
+        self.gen_ignored_expr_side_effects(args[side_effect_arg], frame_size)
+        self.emit("\tldr\tx9, [sp], #16")
+      }
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_noop_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Bool {
+  match @ctype.builtin_noop_call_info(name) {
+    Some(kind) => {
+      match kind {
+        "eval_first" =>
+          if args.length() > 0 {
+            self.gen_expr(args[0], frame_size)
+          }
+        "eval_all" =>
+          for arg in args {
+            self.gen_ignored_expr_side_effects(arg, frame_size)
+          }
+        "ignore_all" => ()
+        _ => return false
+      }
+      self.emit("\tmov\tx9, #0")
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn Codegen::emit_builtin_address_query(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+  kind : String,
+) -> Bool {
+  match kind {
+    "frame_address" => {
+      if args.length() > 0 {
+        match args[0] {
+          Number(0L) => self.emit("\tmov\tx9, x29")
+          Number(_) => self.emit("\tmov\tx9, #0")
+          _ => {
+            self.gen_expr(args[0], frame_size)
+            self.emit("\tcmp\tx9, #0")
+            self.emit("\tmov\tx10, #0")
+            self.emit("\tcsel\tx9, x29, x10, eq")
+          }
+        }
+      } else {
+        self.emit("\tmov\tx9, x29")
+      }
+      true
+    }
+    "return_address" => {
+      if args.length() > 0 {
+        match args[0] {
+          Number(0L) => self.emit("\tldr\tx9, [x29, #8]")
+          Number(_) => self.emit("\tmov\tx9, #0")
+          _ => {
+            self.gen_expr(args[0], frame_size)
+            self.emit("\tcmp\tx9, #0")
+            self.emit("\tldr\tx10, [x29, #8]")
+            self.emit("\tmov\tx11, #0")
+            self.emit("\tcsel\tx9, x10, x11, eq")
+          }
+        }
+      } else {
+        self.emit("\tldr\tx9, [x29, #8]")
+      }
+      true
+    }
+    _ => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_address_query_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Bool {
+  match @ctype.builtin_address_query_info(name) {
+    Some(kind) => self.emit_builtin_address_query(args, frame_size, kind)
+    None => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_trap_builtin_call(self : Codegen, name : String) -> Bool {
+  match @ctype.builtin_trap_call_info(name) {
+    Some("trap") => {
+      self.emit("\tbrk\t#0x1")
+      true
+    }
+    Some(_) | None => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_fence_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Bool {
+  match @ctype.builtin_fence_call_info(name) {
+    Some(("sync_synchronize", _)) => {
+      self.emit("\tdmb\tish")
+      self.emit("\tmov\tx9, #0")
+      true
+    }
+    Some(("atomic_thread_fence", _)) => {
+      for arg in args {
+        self.gen_ignored_expr_side_effects(arg, frame_size)
+      }
+      self.emit("\tdmb\tish")
+      self.emit("\tmov\tx9, #0")
+      true
+    }
+    Some(("atomic_signal_fence", _)) => {
+      for arg in args {
+        self.gen_ignored_expr_side_effects(arg, frame_size)
+      }
+      self.emit("\tmov\tx9, #0")
+      true
+    }
+    Some(_) | None => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_fixed_int_constant_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_fixed_int_constant_call_info(name) {
+    Some((value, expected_arg_count)) =>
+      if args.length() == expected_arg_count {
+        self.emit_load_int("x9", value)
+        true
+      } else {
+        false
+      }
+    None => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_stack_alloc_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Bool {
+  match @ctype.builtin_stack_alloc_call_info(name) {
+    Some(("alloca", expected_arg_count)) =>
+      if args.length() == expected_arg_count {
+        self.gen_expr(args[0], frame_size)
+        // Round up to 16-byte alignment: size = (size + 15) & ~15
+        self.emit("\tadd\tx9, x9, #15")
+        self.emit("\tbic\tx9, x9, #0xF")
+        self.emit("\tsub\tsp, sp, x9")
+        self.emit("\tmov\tx9, sp")
+        true
+      } else {
+        false
+      }
+    Some(("alloca_align", expected_arg_count)) =>
+      if args.length() == expected_arg_count {
+        self.gen_expr(args[0], frame_size)
+        self.emit("\tstr\tx9, [sp, #-16]!")
+        self.gen_expr(args[1], frame_size)
+        self.emit("\tmov\tx11, x9")
+        self.emit("\tldr\tx10, [sp], #16")
+        self.emit("\tlsr\tx11, x11, #3")
+        self.emit("\tmov\tx12, #16")
+        self.emit("\tcmp\tx11, #16")
+        self.emit("\tcsel\tx11, x11, x12, hs")
+        self.emit("\tadd\tx9, x10, #15")
+        self.emit("\tbic\tx9, x9, #0xF")
+        self.emit("\tsub\tsp, sp, x9")
+        self.emit("\tsub\tx11, x11, #1")
+        self.emit("\tmov\tx9, sp")
+        self.emit("\tbic\tx9, x9, x11")
+        self.emit("\tmov\tsp, x9")
+        self.emit("\tmov\tx9, sp")
+        true
+      } else {
+        false
+      }
+    Some(_) | None => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_va_setup_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Bool {
+  match @ctype.builtin_va_setup_call_info(name) {
+    Some(("va_start", _)) => {
+      // On macOS ARM64, va_list is char* and va_start always sets ap = FP + 16
+      // (caller SP), which points to the first variadic arg in the save area.
+      // The caller stores variadic register args starting at [sp, #0].
+      if args.length() >= 1 {
+        match args[0] {
+          Var(ap_name) =>
+            if self.local_offsets.contains(ap_name) {
+              let offset = self.local_offsets[ap_name]
+              self.emit("\tadd\tx9, x29, #16")
+              self.emit_store_local("x9", offset, frame_size)
+            } else {
+
+            }
+          _ => {
+            self.gen_addr(args[0], frame_size)
+            self.emit("\tmov\tx10, x9")
+            self.emit("\tadd\tx9, x29, #16")
+            self.emit("\tstr\tx9, [x10]")
+          }
+        }
+      }
+      true
+    }
+    Some(("va_end", _)) => {
+      self.emit("\tmov\tx9, #0")
+      true
+    }
+    Some(("va_copy", _)) => {
+      if args.length() >= 2 {
+        self.gen_expr(args[1], frame_size)
+        self.emit("\tstr\tx9, [sp, #-16]!")
+        self.gen_addr(args[0], frame_size)
+        self.emit("\tmov\tx10, x9")
+        self.emit("\tldr\tx9, [sp], #16")
+        self.emit("\tstr\tx9, [x10]")
+      }
+      true
+    }
+    Some(_) | None => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_zero_memory_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Bool {
+  match @ctype.builtin_zero_memory_call_info(name) {
+    Some(("bzero", expected_arg_count)) =>
+      if args.length() == expected_arg_count {
+        self.emit_builtin_lib_call(
+          "_bzero", args, expected_arg_count, frame_size,
+        )
+        self.emit("\tmov\tx9, #0")
+        true
+      } else {
+        false
+      }
+    Some(_) | None => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_object_size_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_object_size_call_info(name) {
+    Some(_) => {
+      self.emit_load_int("x9", self.builtin_object_size_value(args))
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_constant_query_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_constant_query_call_info(name) {
+    Some(kind) =>
+      match
+        @ctype.builtin_constant_query_result(
+          kind,
+          args.length() > 0 && self.fold_const(args[0]) is Some(_),
+        ) {
+        Some(value) => {
+          self.emit_load_int("x9", value)
+          true
+        }
+        None => false
+      }
+    None => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_atomic_lock_free_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Bool {
+  match @ctype.builtin_atomic_lock_free_call_info(name) {
+    Some((_, evaluate_pointer)) => {
+      self.emit_atomic_lock_free_builtin(args, frame_size, evaluate_pointer)
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_atomic_load_store_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Bool {
+  match @ctype.builtin_atomic_load_store_call_info(name) {
+    Some(("load_ptr", _)) => {
+      self.emit_atomic_load_ptr_builtin(args, frame_size)
+      true
+    }
+    Some(("load_value", _)) => {
+      if args.length() >= 2 {
+        self.gen_expr(args[0], frame_size)
+        let elem_ty = self.type_of(args[0], frame_size).atomic_target()
+        self.emit("\tstr\tx9, [sp, #-16]!")
+        self.gen_ignored_expr_side_effects(args[1], frame_size)
+        self.emit("\tldr\tx0, [sp], #16")
+        match elem_ty {
+          Bool | SChar | UChar => self.emit("\tldarb\tw9, [x0]")
+          SShort | UShort => self.emit("\tldarh\tw9, [x0]")
+          SInt | UInt | Float => self.emit("\tldar\tw9, [x0]")
+          _ => self.emit("\tldar\tx9, [x0]")
+        }
+      } else {
+        self.emit("\tmov\tx9, #0")
+      }
+      true
+    }
+    Some(("store_ptr", _)) => {
+      self.emit_atomic_store_ptr_builtin(args, frame_size)
+      true
+    }
+    Some(("store_value", _)) => {
+      if args.length() >= 2 {
+        let elem_ty = self.type_of(args[0], frame_size).atomic_target()
+        self.gen_expr(args[0], frame_size)
+        self.emit("\tstr\tx9, [sp, #-16]!")
+        self.gen_expr(args[1], frame_size)
+        self.emit_numeric_conversion(self.type_of(args[1], frame_size), elem_ty)
+        self.emit_scalar_conversion_to(elem_ty)
+        if args.length() >= 3 {
+          self.emit("\tstr\tx9, [sp, #-16]!")
+          self.gen_ignored_expr_side_effects(args[2], frame_size)
+          self.emit("\tldr\tx9, [sp], #16")
+        }
+        self.emit("\tldr\tx0, [sp], #16")
+        match elem_ty {
+          Bool | SChar | UChar => self.emit("\tstlrb\tw9, [x0]")
+          SShort | UShort => self.emit("\tstlrh\tw9, [x0]")
+          SInt | UInt | Float => self.emit("\tstlr\tw9, [x0]")
+          _ => self.emit("\tstlr\tx9, [x0]")
+        }
+      }
+      self.emit("\tmov\tx9, #0")
+      true
+    }
+    Some(_) | None => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_atomic_zero_store_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Bool {
+  match @ctype.builtin_atomic_zero_store_call_info(name) {
+    Some(("clear", _)) => {
+      self.emit_atomic_zero_store_builtin(args, frame_size, true)
+      true
+    }
+    Some(("release", _)) => {
+      self.emit_atomic_zero_store_builtin(args, frame_size, false)
+      true
+    }
+    Some(_) | None => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_atomic_exchange_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Bool {
+  match @ctype.builtin_atomic_exchange_call_info(name) {
+    Some(("exchange_ptr", _, _)) => {
+      self.emit_atomic_exchange_ptr_builtin(args, frame_size)
+      true
+    }
+    Some(("test_and_set", _, extra_start)) => {
+      self.emit_atomic_test_and_set_builtin(args, frame_size, extra_start)
+      true
+    }
+    Some(("exchange_value", _, extra_start))
+    | Some(("sync_exchange_value", _, extra_start)) => {
+      self.emit_atomic_exchange(args, frame_size, extra_start)
+      true
+    }
+    Some(_) | None => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_atomic_compare_exchange_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Bool {
+  match @ctype.builtin_atomic_compare_exchange_call_info(name) {
+    Some(("compare_exchange_ptr", _, _)) => {
+      self.emit_atomic_compare_exchange_ptr_builtin(args, frame_size)
+      true
+    }
+    Some(("compare_exchange_value", _, extra_start)) => {
+      self.emit_atomic_compare_exchange(args, frame_size, extra_start)
+      true
+    }
+    Some(("sync_compare_exchange_bool", _, extra_start)) => {
+      self.emit_sync_compare_exchange(args, frame_size, extra_start, false)
+      true
+    }
+    Some(("sync_compare_exchange_value", _, extra_start)) => {
+      self.emit_sync_compare_exchange(args, frame_size, extra_start, true)
+      true
+    }
+    Some(_) | None => false
+  }
+}
+
+///|
+fn Codegen::emit_ctype_darwin_fd_helper_builtin_call(
+  self : Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> Bool {
+  match @ctype.builtin_darwin_fd_helper_call_info(name) {
+    Some((op, _)) => {
+      self.emit_darwin_fd_helper(args, frame_size, op)
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn Codegen::emit_builtin_fp_bits(
+  self : Codegen,
+  bits : Int64,
+  ty : @parser.Type,
+) -> Unit {
+  match ty {
+    Float => {
+      let part0 = (bits & 0xFFFFL).to_int()
+      let part1 = ((bits >> 16) & 0xFFFFL).to_int()
+      if part0 == 0 && part1 != 0 {
+        let imm = match part1 {
+          32704 => "0x7FC0"
+          32640 => "0x7F80"
+          _ => part1.to_string()
+        }
+        self.emit("\tmovz\tw9, #" + imm + ", lsl #16")
+      } else {
+        self.emit("\tmovz\tw9, #" + part0.to_string())
+        if part1 != 0 {
+          self.emit("\tmovk\tw9, #" + part1.to_string() + ", lsl #16")
+        }
+      }
+    }
+    _ => self.emit_load_int("x9", bits)
+  }
+}
+
+///|
+fn Codegen::emit_ctype_floating_constant_builtin_call(
+  self : Codegen,
+  name : String,
+) -> Bool {
+  match @ctype.floating_builtin_constant_bits_info(name) {
+    Some((bits, ty)) => {
+      self.emit_builtin_fp_bits(bits, ty)
+      true
+    }
+    None => false
+  }
+}
+
+///|
 fn Codegen::emit_builtin_unary_fp(
   self : Codegen,
   args : Array[@parser.Expr],
@@ -2250,8 +3056,10 @@ fn Codegen::emit_builtin_copysign(
     Float => {
       self.emit("\tlsl\tw10, w9, #1")
       self.emit("\tlsr\tw10, w10, #1")
+      self.emit("\tstr\tx10, [sp, #-16]!")
       self.gen_expr(args[1], frame_size)
       self.emit_numeric_conversion(self.type_of(args[1], frame_size), ty)
+      self.emit("\tldr\tx10, [sp], #16")
       self.emit("\tlsr\tw9, w9, #31")
       self.emit("\tlsl\tw9, w9, #31")
       self.emit("\torr\tw9, w9, w10")
@@ -2259,13 +3067,85 @@ fn Codegen::emit_builtin_copysign(
     _ => {
       self.emit("\tlsl\tx10, x9, #1")
       self.emit("\tlsr\tx10, x10, #1")
+      self.emit("\tstr\tx10, [sp, #-16]!")
       self.gen_expr(args[1], frame_size)
       self.emit_numeric_conversion(self.type_of(args[1], frame_size), ty)
+      self.emit("\tldr\tx10, [sp], #16")
       self.emit("\tlsr\tx9, x9, #63")
       self.emit("\tlsl\tx9, x9, #63")
       self.emit("\torr\tx9, x9, x10")
     }
   }
+}
+
+///|
+fn Codegen::binary_fp_builtin_type(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+) -> @parser.Type {
+  if args.length() >= 2 {
+    let lhs_ty = self.type_of(args[0], frame_size).without_alignment()
+    let rhs_ty = self.type_of(args[1], frame_size).without_alignment()
+    if lhs_ty == Double ||
+      rhs_ty == Double ||
+      lhs_ty == LongDouble ||
+      rhs_ty == LongDouble {
+      return Double
+    }
+  }
+  Float
+}
+
+///|
+fn Codegen::emit_builtin_fp_compare_result(self : Codegen, op : String) -> Unit {
+  match op {
+    ">" => self.emit("\tcset\tx9, gt")
+    ">=" => self.emit("\tcset\tx9, ge")
+    "<" => self.emit("\tcset\tx9, mi")
+    "<=" => self.emit("\tcset\tx9, ls")
+    "<>" => {
+      self.emit("\tcset\tx9, ne")
+      self.emit("\tcset\tx10, vc")
+      self.emit("\tand\tx9, x9, x10")
+    }
+    "unordered" => self.emit("\tcset\tx9, vs")
+    _ => self.emit("\tmov\tx9, #0")
+  }
+}
+
+///|
+fn Codegen::emit_builtin_fp_compare(
+  self : Codegen,
+  args : Array[@parser.Expr],
+  frame_size : Int,
+  op : String,
+) -> Unit {
+  if args.length() < 2 {
+    self.emit("\tmov\tx9, #0")
+    return
+  }
+  let cmp_ty = self.binary_fp_builtin_type(args, frame_size)
+  self.gen_expr(args[0], frame_size)
+  self.emit_numeric_conversion(self.type_of(args[0], frame_size), cmp_ty)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.gen_expr(args[1], frame_size)
+  self.emit_numeric_conversion(self.type_of(args[1], frame_size), cmp_ty)
+  match cmp_ty {
+    Float => {
+      self.emit("\tfmov\ts10, w9")
+      self.emit("\tldr\tx9, [sp], #16")
+      self.emit("\tfmov\ts9, w9")
+      self.emit("\tfcmp\ts9, s10")
+    }
+    _ => {
+      self.emit("\tfmov\td10, x9")
+      self.emit("\tldr\tx9, [sp], #16")
+      self.emit("\tfmov\td9, x9")
+      self.emit("\tfcmp\td9, d10")
+    }
+  }
+  self.emit_builtin_fp_compare_result(op)
 }
 
 ///|
@@ -2466,818 +3346,139 @@ fn Codegen::emit_builtin_call(
   args : Array[@parser.Expr],
   frame_size : Int,
 ) -> Bool {
-  match overflow_builtin_operator(name) {
+  match @ctype.builtin_overflow_op(name) {
     Some(op) => {
       self.emit_overflow_arithmetic_builtin(args, frame_size, op)
       return true
     }
     None => ()
   }
-  match name {
-    "__builtin_expect" | "__builtin_expect_with_probability" => {
-      // Prediction hints return their value operand.
-      if args.length() > 0 {
-        self.gen_expr(args[0], frame_size)
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
-      if args.length() > 1 {
-        self.emit("\tstr\tx9, [sp, #-16]!")
-        self.gen_ignored_expr_side_effects(args[1], frame_size)
-        self.emit("\tldr\tx9, [sp], #16")
-      }
-      true
-    }
-    "__builtin_unpredictable" => {
-      if args.length() > 0 {
-        self.gen_expr(args[0], frame_size)
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
-      true
-    }
-    "__builtin_assume_aligned" => {
-      if args.length() > 0 {
-        self.gen_expr(args[0], frame_size)
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
-      if args.length() > 2 {
-        self.emit("\tstr\tx9, [sp, #-16]!")
-        self.gen_ignored_expr_side_effects(args[2], frame_size)
-        self.emit("\tldr\tx9, [sp], #16")
-      }
-      true
-    }
-    "__builtin_extract_return_addr" | "__builtin_frob_return_addr" => {
-      if args.length() > 0 {
-        self.gen_expr(args[0], frame_size)
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
-      true
-    }
-    "__builtin_unreachable" => {
-      self.emit("\tbrk\t#0x1")
-      true
-    }
-    "__builtin_trap" => {
-      self.emit("\tbrk\t#0x1")
-      true
-    }
-    "__builtin_frame_address" => {
-      if args.length() > 0 {
-        match args[0] {
-          Number(0L) => self.emit("\tmov\tx9, x29")
-          _ => self.emit("\tmov\tx9, #0")
-        }
-      } else {
-        self.emit("\tmov\tx9, x29")
-      }
-      true
-    }
-    "__builtin_return_address" => {
-      if args.length() > 0 {
-        match args[0] {
-          Number(0L) => self.emit("\tldr\tx9, [x29, #8]")
-          _ => self.emit("\tmov\tx9, #0")
-        }
-      } else {
-        self.emit("\tldr\tx9, [x29, #8]")
-      }
-      true
-    }
-    "__builtin_assume" => {
-      // No-op
-      self.emit("\tmov\tx9, #0")
-      true
-    }
-    "__builtin_prefetch" => {
-      if args.length() > 0 {
-        self.gen_expr(args[0], frame_size)
-      }
-      self.emit("\tmov\tx9, #0")
-      true
-    }
-    "__builtin_abs" => {
-      self.emit_builtin_abs(args, frame_size, 32)
-      true
-    }
-    "__builtin_labs" | "__builtin_llabs" => {
-      self.emit_builtin_abs(args, frame_size, 64)
-      true
-    }
-    "__builtin_is_aligned" => {
-      self.emit_builtin_is_aligned(args, frame_size)
-      true
-    }
-    "__builtin_align_up" => {
-      self.emit_builtin_align_value(args, frame_size, true)
-      true
-    }
-    "__builtin_align_down" => {
-      self.emit_builtin_align_value(args, frame_size, false)
-      true
-    }
-    "__builtin_clz" => {
-      if args.length() > 0 {
-        self.gen_expr(args[0], frame_size)
-        self.emit("\tclz\tw9, w9")
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
-      true
-    }
-    "__builtin_clzl" | "__builtin_clzll" => {
-      if args.length() > 0 {
-        self.gen_expr(args[0], frame_size)
-        self.emit("\tclz\tx9, x9")
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
-      true
-    }
-    "__builtin_ctz" => {
-      if args.length() > 0 {
-        self.gen_expr(args[0], frame_size)
-        self.emit("\trbit\tw9, w9")
-        self.emit("\tclz\tw9, w9")
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
-      true
-    }
-    "__builtin_ctzl" | "__builtin_ctzll" => {
-      if args.length() > 0 {
-        self.gen_expr(args[0], frame_size)
-        self.emit("\trbit\tx9, x9")
-        self.emit("\tclz\tx9, x9")
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
-      true
-    }
-    "__builtin_bswap16" => {
-      self.emit_builtin_bswap(args, frame_size, 16)
-      true
-    }
-    "__builtin_bswap32" => {
-      self.emit_builtin_bswap(args, frame_size, 32)
-      true
-    }
-    "__builtin_bswap64" => {
-      self.emit_builtin_bswap(args, frame_size, 64)
-      true
-    }
-    "__builtin_rotateleft" => {
-      self.emit_builtin_rotate(
-        args,
-        frame_size,
-        self.generic_builtin_bit_width(args, frame_size),
-        true,
-      )
-      true
-    }
-    "__builtin_rotateright" => {
-      self.emit_builtin_rotate(
-        args,
-        frame_size,
-        self.generic_builtin_bit_width(args, frame_size),
-        false,
-      )
-      true
-    }
-    "__builtin_rotateleft32" => {
-      self.emit_builtin_rotate(args, frame_size, 32, true)
-      true
-    }
-    "__builtin_rotateright32" => {
-      self.emit_builtin_rotate(args, frame_size, 32, false)
-      true
-    }
-    "__builtin_rotateleft64" => {
-      self.emit_builtin_rotate(args, frame_size, 64, true)
-      true
-    }
-    "__builtin_rotateright64" => {
-      self.emit_builtin_rotate(args, frame_size, 64, false)
-      true
-    }
-    "__builtin_ffs" => {
-      self.emit_builtin_ffs(args, frame_size, 32)
-      true
-    }
-    "__builtin_ffsl" | "__builtin_ffsll" => {
-      self.emit_builtin_ffs(args, frame_size, 64)
-      true
-    }
-    "__builtin_popcount" => {
-      self.emit_builtin_popcount(args, frame_size, 32)
-      true
-    }
-    "__builtin_popcountl" | "__builtin_popcountll" => {
-      self.emit_builtin_popcount(args, frame_size, 64)
-      true
-    }
-    "__builtin_parity" => {
-      self.emit_builtin_parity(args, frame_size, 32)
-      true
-    }
-    "__builtin_parityl" | "__builtin_parityll" => {
-      self.emit_builtin_parity(args, frame_size, 64)
-      true
-    }
-    "__builtin_memcpy" => {
-      if args.length() >= 3 {
-        self.emit_builtin_lib_call("_memcpy", args, 3, frame_size)
-      }
-      self.emit("\tmov\tx9, x0")
-      true
-    }
-    "__builtin_memset" => {
-      if args.length() >= 3 {
-        self.emit_builtin_lib_call("_memset", args, 3, frame_size)
-      }
-      self.emit("\tmov\tx9, x0")
-      true
-    }
-    "__builtin_bzero" => {
-      if args.length() >= 2 {
-        self.emit_builtin_lib_call("_bzero", args, 2, frame_size)
-      }
-      self.emit("\tmov\tx9, #0")
-      true
-    }
-    "__builtin_memmove" => {
-      if args.length() >= 3 {
-        self.emit_builtin_lib_call("_memmove", args, 3, frame_size)
-      }
-      self.emit("\tmov\tx9, x0")
-      true
-    }
-    "__builtin_memcmp" => {
-      if args.length() >= 3 {
-        self.emit_builtin_lib_call("_memcmp", args, 3, frame_size)
-      }
-      self.emit("\tmov\tx9, x0")
-      true
-    }
-    "__builtin_memchr" => {
-      if args.length() >= 3 {
-        self.emit_builtin_lib_call("_memchr", args, 3, frame_size)
-      }
-      self.emit("\tmov\tx9, x0")
-      true
-    }
-    "__builtin_strlen" => {
-      if args.length() > 0 {
-        self.gen_expr(args[0], frame_size)
-        self.emit("\tmov\tx0, x9")
-        self.emit("\tbl\t_strlen")
-      }
-      self.emit("\tmov\tx9, x0")
-      true
-    }
-    "__builtin_strcmp" => {
-      if args.length() >= 2 {
-        self.emit_builtin_lib_call("_strcmp", args, 2, frame_size)
-      }
-      self.emit("\tmov\tx9, x0")
-      true
-    }
-    "__builtin_strncmp" => {
-      if args.length() >= 3 {
-        self.emit_builtin_lib_call("_strncmp", args, 3, frame_size)
-      }
-      self.emit("\tmov\tx9, x0")
-      true
-    }
-    "__builtin_strchr" => {
-      if args.length() >= 2 {
-        self.emit_builtin_lib_call("_strchr", args, 2, frame_size)
-      }
-      self.emit("\tmov\tx9, x0")
-      true
-    }
-    "__builtin_strrchr" => {
-      if args.length() >= 2 {
-        self.emit_builtin_lib_call("_strrchr", args, 2, frame_size)
-      }
-      self.emit("\tmov\tx9, x0")
-      true
-    }
-    "__builtin_strstr" => {
-      if args.length() >= 2 {
-        self.emit_builtin_lib_call("_strstr", args, 2, frame_size)
-      }
-      self.emit("\tmov\tx9, x0")
-      true
-    }
-    "__builtin_strcpy" => {
-      if args.length() >= 2 {
-        self.emit_builtin_lib_call("_strcpy", args, 2, frame_size)
-      }
-      self.emit("\tmov\tx9, x0")
-      true
-    }
-    "__builtin_alloca" => {
-      if args.length() > 0 {
-        self.gen_expr(args[0], frame_size)
-        // Round up to 16-byte alignment: size = (size + 15) & ~15
-        self.emit("\tadd\tx9, x9, #15")
-        self.emit("\tbic\tx9, x9, #0xF")
-        self.emit("\tsub\tsp, sp, x9")
-      }
-      self.emit("\tmov\tx9, sp")
-      true
-    }
-    "__builtin_constant_p" => {
-      let value = if args.length() > 0 && self.fold_const(args[0]) is Some(_) {
-        1L
-      } else {
-        0L
-      }
-      self.emit_load_int("x9", value)
-      true
-    }
-    "__builtin_flt_rounds" => {
-      self.emit("\tmov\tx9, #1")
-      true
-    }
-    "__builtin_object_size" | "__builtin_dynamic_object_size" => {
-      self.emit_load_int("x9", self.builtin_object_size_value(args))
-      true
-    }
-    // Fortified function stubs: fall back to unchecked versions
-    "__builtin___memcpy_chk" => {
-      if args.length() >= 3 {
-        self.emit_builtin_lib_call("_memcpy", args, 3, frame_size)
-      }
-      self.emit("\tmov\tx9, x0")
-      true
-    }
-    "__builtin___memset_chk" => {
-      if args.length() >= 3 {
-        self.emit_builtin_lib_call("_memset", args, 3, frame_size)
-      }
-      self.emit("\tmov\tx9, x0")
-      true
-    }
-    "__builtin___memmove_chk" => {
-      if args.length() >= 3 {
-        self.emit_builtin_lib_call("_memmove", args, 3, frame_size)
-      }
-      self.emit("\tmov\tx9, x0")
-      true
-    }
-    "__builtin___strcpy_chk" => {
-      if args.length() >= 2 {
-        self.emit_builtin_lib_call("_strcpy", args, 2, frame_size)
-      }
-      self.emit("\tmov\tx9, x0")
-      true
-    }
-    "__builtin___strcat_chk" => {
-      if args.length() >= 2 {
-        self.emit_builtin_lib_call("_strcat", args, 2, frame_size)
-      }
-      self.emit("\tmov\tx9, x0")
-      true
-    }
-    "__builtin___strncpy_chk" => {
-      self.emit_lowered_builtin_call(
-        "strncpy",
-        args,
-        [0, 1, 2],
-        args.length(),
-        frame_size,
-      )
-      true
-    }
-    "__builtin___strncat_chk" => {
-      self.emit_lowered_builtin_call(
-        "strncat",
-        args,
-        [0, 1, 2],
-        args.length(),
-        frame_size,
-      )
-      true
-    }
-    "__builtin___snprintf_chk" => {
-      self.emit_lowered_builtin_call("snprintf", args, [0, 1, 4], 5, frame_size)
-      true
-    }
-    "__builtin___vsnprintf_chk" => {
-      self.emit_lowered_builtin_call(
-        "vsnprintf",
-        args,
-        [0, 1, 4, 5],
-        args.length(),
-        frame_size,
-      )
-      true
-    }
-    "__builtin___sprintf_chk" => {
-      self.emit_lowered_builtin_call("sprintf", args, [0, 3], 4, frame_size)
-      true
-    }
-    "__builtin___vsprintf_chk" => {
-      self.emit_lowered_builtin_call(
-        "vsprintf",
-        args,
-        [0, 3, 4],
-        args.length(),
-        frame_size,
-      )
-      true
-    }
-    "__builtin___printf_chk" => {
-      self.emit_lowered_builtin_call("printf", args, [1], 2, frame_size)
-      true
-    }
-    "__builtin___fprintf_chk" => {
-      self.emit_lowered_builtin_call("fprintf", args, [0, 2], 3, frame_size)
-      true
-    }
-    "__builtin___vfprintf_chk" => {
-      self.emit_lowered_builtin_call(
-        "vfprintf",
-        args,
-        [0, 2, 3],
-        args.length(),
-        frame_size,
-      )
-      true
-    }
-    "__builtin_fabs" => {
-      self.emit_builtin_unary_fp(args, frame_size, Double, "fabs")
-      true
-    }
-    "__builtin_fabsf" => {
-      self.emit_builtin_unary_fp(args, frame_size, Float, "fabs")
-      true
-    }
-    "__builtin_copysign" | "__builtin_copysignl" => {
-      self.emit_builtin_copysign(args, frame_size, Double)
-      true
-    }
-    "__builtin_copysignf" => {
-      self.emit_builtin_copysign(args, frame_size, Float)
-      true
-    }
-    "__builtin_sqrt" | "__builtin_sqrtl" => {
-      self.emit_builtin_unary_fp(args, frame_size, Double, "fsqrt")
-      true
-    }
-    "__builtin_sqrtf" => {
-      self.emit_builtin_unary_fp(args, frame_size, Float, "fsqrt")
-      true
-    }
-    "__builtin_nan" | "__builtin_nanf" | "__builtin_nanl" => {
-      // Ignore string argument, return canonical NaN
-      if name == "__builtin_nanf" {
-        // float NaN: 0x7FC00000
-        self.emit("\tmovz\tw9, #0x7FC0, lsl #16")
-      } else {
-        // double NaN: 0x7FF8000000000000
-        self.emit("\tmovz\tx9, #0")
-        self.emit("\tmovk\tx9, #0, lsl #16")
-        self.emit("\tmovk\tx9, #0xF800, lsl #32")
-        self.emit("\tmovk\tx9, #0x7FF8, lsl #48")
-      }
-      true
-    }
-    "__builtin_huge_val" | "__builtin_huge_vall" | "__builtin_inf" => {
-      // double +inf: 0x7FF0000000000000
-      self.emit("\tmovz\tx9, #0")
-      self.emit("\tmovk\tx9, #0, lsl #16")
-      self.emit("\tmovk\tx9, #0, lsl #32")
-      self.emit("\tmovk\tx9, #0x7FF0, lsl #48")
-      true
-    }
-    "__builtin_huge_valf" | "__builtin_inff" => {
-      // float +inf: 0x7F800000
-      self.emit("\tmovz\tw9, #0x7F80, lsl #16")
-      true
-    }
-    "__builtin_fabsl" => {
-      // long double is same as double on macOS ARM64
-      self.emit_builtin_unary_fp(args, frame_size, Double, "fabs")
-      true
-    }
-    "__builtin_infl" => {
-      // long double +inf: same as double
-      self.emit("\tmovz\tx9, #0")
-      self.emit("\tmovk\tx9, #0, lsl #16")
-      self.emit("\tmovk\tx9, #0, lsl #32")
-      self.emit("\tmovk\tx9, #0x7FF0, lsl #48")
-      true
-    }
-    "__builtin_va_start" => {
-      // __builtin_va_start(ap, last) - set ap to FP + 16
-      // On macOS ARM64, va_list is char* and va_start always sets ap = FP + 16
-      // (caller SP), which points to the first variadic arg in the save area.
-      // The caller stores variadic register args starting at [sp, #0].
-      if args.length() >= 1 {
-        match args[0] {
-          Var(ap_name) =>
-            if self.local_offsets.contains(ap_name) {
-              let offset = self.local_offsets[ap_name]
-              self.emit("\tadd\tx9, x29, #16")
-              self.emit_store_local("x9", offset, frame_size)
-            } else {
-
-            }
-          _ => {
-            self.gen_addr(args[0], frame_size)
-            self.emit("\tmov\tx10, x9")
-            self.emit("\tadd\tx9, x29, #16")
-            self.emit("\tstr\tx9, [x10]")
-          }
-        }
-      }
-      true
-    }
-    "__builtin_va_end" => {
-      // No-op for now
-      self.emit("\tmov\tx9, #0")
-      true
-    }
-    "__builtin_va_copy" => {
-      // __builtin_va_copy(dest, src) - copy va_list pointer
-      if args.length() >= 2 {
-        self.gen_expr(args[1], frame_size)
-        self.emit("\tstr\tx9, [sp, #-16]!")
-        self.gen_addr(args[0], frame_size)
-        self.emit("\tmov\tx10, x9")
-        self.emit("\tldr\tx9, [sp], #16")
-        self.emit("\tstr\tx9, [x10]")
-      }
-      true
-    }
-    "__atomic_load_n" | "__c11_atomic_load" => {
-      // __atomic_load_n(ptr, memorder)
-      if args.length() >= 2 {
-        self.gen_expr(args[0], frame_size)
-        self.emit("\tmov\tx0, x9")
-        let elem_ty = atomic_target_type(self.type_of(args[0], frame_size))
-        match elem_ty {
-          Bool | SChar | UChar => self.emit("\tldarb\tw9, [x0]")
-          SShort | UShort => self.emit("\tldarh\tw9, [x0]")
-          SInt | UInt | Float => self.emit("\tldar\tw9, [x0]")
-          _ => self.emit("\tldar\tx9, [x0]")
-        }
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
-      true
-    }
-    "__atomic_store_n" | "__c11_atomic_store" => {
-      // __atomic_store_n(ptr, val, memorder)
-      if args.length() >= 2 {
-        let elem_ty = atomic_target_type(self.type_of(args[0], frame_size))
-        self.gen_expr(args[0], frame_size)
-        self.emit("\tstr\tx9, [sp, #-16]!")
-        self.gen_expr(args[1], frame_size)
-        self.emit_numeric_conversion(self.type_of(args[1], frame_size), elem_ty)
-        self.emit_scalar_conversion_to(elem_ty)
-        self.emit("\tldr\tx0, [sp], #16")
-        match elem_ty {
-          Bool | SChar | UChar => self.emit("\tstlrb\tw9, [x0]")
-          SShort | UShort => self.emit("\tstlrh\tw9, [x0]")
-          SInt | UInt | Float => self.emit("\tstlr\tw9, [x0]")
-          _ => self.emit("\tstlr\tx9, [x0]")
-        }
-      }
-      self.emit("\tmov\tx9, #0")
-      true
-    }
-    "__atomic_add_fetch" => {
-      self.emit_atomic_update(args, frame_size, "+", true)
-      true
-    }
-    "__atomic_sub_fetch" => {
-      self.emit_atomic_update(args, frame_size, "-", true)
-      true
-    }
-    "__c11_atomic_fetch_add" => {
-      self.emit_atomic_update(args, frame_size, "+", false)
-      true
-    }
-    "__c11_atomic_fetch_sub" => {
-      self.emit_atomic_update(args, frame_size, "-", false)
-      true
-    }
-    "__c11_atomic_fetch_and" => {
-      self.emit_atomic_update(args, frame_size, "&", false)
-      true
-    }
-    "__c11_atomic_fetch_or" => {
-      self.emit_atomic_update(args, frame_size, "|", false)
-      true
-    }
-    "__c11_atomic_fetch_xor" => {
-      self.emit_atomic_update(args, frame_size, "^", false)
-      true
-    }
-    "__c11_atomic_exchange" => {
-      self.emit_atomic_exchange(args, frame_size)
-      true
-    }
-    "__c11_atomic_compare_exchange_strong" => {
-      self.emit_atomic_compare_exchange(args, frame_size)
-      true
-    }
-    "__darwin_fd_set" => {
-      self.emit_darwin_fd_helper(args, frame_size, "set")
-      true
-    }
-    "__darwin_fd_clr" => {
-      self.emit_darwin_fd_helper(args, frame_size, "clr")
-      true
-    }
-    "__darwin_fd_isset" => {
-      self.emit_darwin_fd_helper(args, frame_size, "isset")
-      true
-    }
-    "__sync_synchronize" => {
-      // Full memory barrier
-      self.emit("\tdmb\tish")
-      self.emit("\tmov\tx9, #0")
-      true
-    }
-    "__builtin___strlcpy_chk" => {
-      // __builtin___strlcpy_chk(dst, src, len, objsize) -> strlcpy(dst, src, len)
-      if args.length() >= 3 {
-        self.emit_builtin_lib_call("_strlcpy", args, 3, frame_size)
-      }
-      self.emit("\tmov\tx9, x0")
-      true
-    }
-    "__builtin___strlcat_chk" => {
-      // __builtin___strlcat_chk(dst, src, len, objsize) -> strlcat(dst, src, len)
-      if args.length() >= 3 {
-        self.emit_builtin_lib_call("_strlcat", args, 3, frame_size)
-      }
-      self.emit("\tmov\tx9, x0")
-      true
-    }
-    "__builtin_bswap" => {
-      self.emit_builtin_bswap(
-        args,
-        frame_size,
-        self.generic_builtin_bswap_width(args, frame_size),
-      )
-      true
-    }
-    "__builtin_isgreater" => {
-      if args.length() >= 2 {
-        self.gen_expr(args[0], frame_size)
-        self.emit("\tfmov\td9, x9")
-        self.gen_expr(args[1], frame_size)
-        self.emit("\tfmov\td10, x9")
-        self.emit("\tfcmp\td9, d10")
-        self.emit("\tcset\tx9, gt")
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
-      true
-    }
-    "__builtin_isgreaterequal" => {
-      if args.length() >= 2 {
-        self.gen_expr(args[0], frame_size)
-        self.emit("\tfmov\td9, x9")
-        self.gen_expr(args[1], frame_size)
-        self.emit("\tfmov\td10, x9")
-        self.emit("\tfcmp\td9, d10")
-        self.emit("\tcset\tx9, ge")
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
-      true
-    }
-    "__builtin_isless" => {
-      if args.length() >= 2 {
-        self.gen_expr(args[0], frame_size)
-        self.emit("\tfmov\td9, x9")
-        self.gen_expr(args[1], frame_size)
-        self.emit("\tfmov\td10, x9")
-        self.emit("\tfcmp\td9, d10")
-        self.emit("\tcset\tx9, mi")
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
-      true
-    }
-    "__builtin_islessequal" => {
-      if args.length() >= 2 {
-        self.gen_expr(args[0], frame_size)
-        self.emit("\tfmov\td9, x9")
-        self.gen_expr(args[1], frame_size)
-        self.emit("\tfmov\td10, x9")
-        self.emit("\tfcmp\td9, d10")
-        self.emit("\tcset\tx9, ls")
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
-      true
-    }
-    "__builtin_islessgreater" => {
-      if args.length() >= 2 {
-        self.gen_expr(args[0], frame_size)
-        self.emit("\tfmov\td9, x9")
-        self.gen_expr(args[1], frame_size)
-        self.emit("\tfmov\td10, x9")
-        self.emit("\tfcmp\td9, d10")
-        // lessgreater = (less || greater) = !equal && !unordered
-        // We use the condition codes: NE (not equal) excludes both eq and unordered
-        // Actually, fcmp sets NE if neither EQ nor UNO
-        self.emit("\tcset\tx9, ne")
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
-      true
-    }
-    "__builtin_isunordered" => {
-      if args.length() >= 2 {
-        self.gen_expr(args[0], frame_size)
-        self.emit("\tfmov\td9, x9")
-        self.gen_expr(args[1], frame_size)
-        self.emit("\tfmov\td10, x9")
-        self.emit("\tfcmp\td9, d10")
-        self.emit("\tcset\tx9, vs")
-      } else {
-        self.emit("\tmov\tx9, #0")
-      }
-      true
-    }
-    "__builtin_isnan" | "__builtin_isnanl" => {
-      self.emit_builtin_fp_class(args, frame_size, Double, "isnan")
-      true
-    }
-    "__builtin_isnanf" => {
-      self.emit_builtin_fp_class(args, frame_size, Float, "isnan")
-      true
-    }
-    "__builtin_isinf" | "__builtin_isinfl" => {
-      self.emit_builtin_fp_class(args, frame_size, Double, "isinf")
-      true
-    }
-    "__builtin_isinff" => {
-      self.emit_builtin_fp_class(args, frame_size, Float, "isinf")
-      true
-    }
-    "__builtin_isfinite" | "__builtin_isfinitel" => {
-      self.emit_builtin_fp_class(args, frame_size, Double, "isfinite")
-      true
-    }
-    "__builtin_isfinitef" => {
-      self.emit_builtin_fp_class(args, frame_size, Float, "isfinite")
-      true
-    }
-    "__builtin_isnormal" | "__builtin_isnormall" => {
-      self.emit_builtin_fp_class(args, frame_size, Double, "isnormal")
-      true
-    }
-    "__builtin_isnormalf" => {
-      self.emit_builtin_fp_class(args, frame_size, Float, "isnormal")
-      true
-    }
-    "__builtin_signbit" | "__builtin_signbitl" => {
-      self.emit_builtin_fp_class(args, frame_size, Double, "signbit")
-      true
-    }
-    "__builtin_signbitf" => {
-      self.emit_builtin_fp_class(args, frame_size, Float, "signbit")
-      true
-    }
-    _ => false
+  match @ctype.builtin_atomic_update_call_info(name) {
+    Some((op, return_new, _, extra_start)) => {
+      self.emit_atomic_update(args, frame_size, op, return_new, extra_start)
+      return true
+    }
+    None => ()
   }
+  if self.emit_ctype_integer_count_builtin_call(name, args, frame_size) {
+    return true
+  }
+  if self.emit_ctype_integer_abs_builtin_call(name, args, frame_size) {
+    return true
+  }
+  if self.emit_ctype_integer_bswap_builtin_call(name, args, frame_size) {
+    return true
+  }
+  if self.emit_ctype_integer_rotate_builtin_call(name, args, frame_size) {
+    return true
+  }
+  if self.emit_ctype_integer_alignment_builtin_call(name, args, frame_size) {
+    return true
+  }
+  if self.emit_ctype_identity_builtin_call(name, args, frame_size) {
+    return true
+  }
+  if self.emit_ctype_noop_builtin_call(name, args, frame_size) {
+    return true
+  }
+  if self.emit_ctype_address_query_builtin_call(name, args, frame_size) {
+    return true
+  }
+  if self.emit_ctype_trap_builtin_call(name) {
+    return true
+  }
+  if self.emit_ctype_fence_builtin_call(name, args, frame_size) {
+    return true
+  }
+  if self.emit_ctype_fixed_int_constant_builtin_call(name, args) {
+    return true
+  }
+  match @ctype.floating_builtin_compare_op(name) {
+    Some(op) => {
+      self.emit_builtin_fp_compare(args, frame_size, op)
+      return true
+    }
+    None => ()
+  }
+  match @ctype.floating_builtin_runtime_class_info(name) {
+    Some((kind, ty)) => {
+      self.emit_builtin_fp_class(args, frame_size, ty, kind)
+      return true
+    }
+    None => ()
+  }
+  match @ctype.floating_builtin_runtime_math_info(name) {
+    Some(("fabs", ty, _)) => {
+      self.emit_builtin_unary_fp(args, frame_size, ty, "fabs")
+      return true
+    }
+    Some(("sqrt", ty, _)) => {
+      self.emit_builtin_unary_fp(args, frame_size, ty, "fsqrt")
+      return true
+    }
+    Some(("copysign", ty, _)) => {
+      self.emit_builtin_copysign(args, frame_size, ty)
+      return true
+    }
+    Some(_) | None => ()
+  }
+  if self.emit_ctype_floating_constant_builtin_call(name) {
+    return true
+  }
+  if self.emit_ctype_libcall_builtin_call(name, args, frame_size) {
+    return true
+  }
+  if self.emit_ctype_zero_memory_builtin_call(name, args, frame_size) {
+    return true
+  }
+  if self.emit_ctype_stack_alloc_builtin_call(name, args, frame_size) {
+    return true
+  }
+  if self.emit_ctype_va_setup_builtin_call(name, args, frame_size) {
+    return true
+  }
+  if self.emit_ctype_constant_query_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_object_size_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_atomic_lock_free_builtin_call(name, args, frame_size) {
+    return true
+  }
+  if self.emit_ctype_atomic_load_store_builtin_call(name, args, frame_size) {
+    return true
+  }
+  if self.emit_ctype_atomic_zero_store_builtin_call(name, args, frame_size) {
+    return true
+  }
+  if self.emit_ctype_atomic_exchange_builtin_call(name, args, frame_size) {
+    return true
+  }
+  if self.emit_ctype_atomic_compare_exchange_builtin_call(
+      name, args, frame_size,
+    ) {
+    return true
+  }
+  if self.emit_ctype_darwin_fd_helper_builtin_call(name, args, frame_size) {
+    return true
+  }
+  false
 }
 
 ///|
 fn is_aggregate_type(ty : @parser.Type) -> Bool {
-  match peel_aligned_type(ty) {
-    Struct(_) | Union(_) | Array(_, _) => true
-    _ => false
-  }
+  ty.is_object_aggregate()
 }
 
 ///|
 fn Codegen::is_register_aggregate(self : Codegen, ty : @parser.Type) -> Bool {
-  match peel_aligned_type(ty) {
-    Struct(_) | Union(_) => self.type_size(ty) <= 16
-    _ => false
-  }
+  ty.is_aggregate() && self.type_size(ty) <= 16
 }
 
 ///|
 fn Codegen::is_indirect_aggregate(self : Codegen, ty : @parser.Type) -> Bool {
-  match peel_aligned_type(ty) {
-    Struct(_) | Union(_) => self.type_size(ty) > 16
-    _ => false
-  }
+  ty.is_aggregate() && self.type_size(ty) > 16
 }
 
 ///|
@@ -3344,8 +3545,20 @@ fn Codegen::emit_member_base_addr(
       self.gen_aggregate_addr(obj, frame_size)
       0
     }
+    VaArg(_, _) if is_aggregate_type(obj_ty) => {
+      self.gen_aggregate_addr(obj, frame_size)
+      0
+    }
+    Assign(_, _) | CompoundAssign(_, _, _) if is_aggregate_type(obj_ty) => {
+      self.gen_aggregate_addr(obj, frame_size)
+      0
+    }
     Cast(ty, inner) if is_aggregate_type(ty) =>
       self.emit_member_base_addr(inner, frame_size)
+    Ternary(_, _, _) if is_aggregate_type(obj_ty) => {
+      self.gen_aggregate_addr(obj, frame_size)
+      0
+    }
     Binary(",", left, right) => {
       self.gen_expr(left, frame_size)
       self.emit_member_base_addr(right, frame_size)
@@ -3420,6 +3633,63 @@ fn Codegen::emit_copy_aggregate_from_addr_on_stack(
 }
 
 ///|
+fn Codegen::emit_copy_aggregate_addr_to_scratch(
+  self : Codegen,
+  ty : @parser.Type,
+  frame_size : Int,
+) -> Unit {
+  if self.sret_scratch_offset < 0 {
+    abort("Darwin ARM64 backend missing aggregate expression scratch storage")
+  }
+  self.emit("\tmov\tx11, x9")
+  self.emit_local_addr(self.sret_scratch_offset, frame_size)
+  self.emit("\tstr\tx9, [sp, #-16]!")
+  self.emit("\tstr\tx11, [sp, #-16]!")
+  self.emit_copy_aggregate_from_addr_on_stack(ty)
+}
+
+///|
+fn Codegen::emit_aggregate_expr_addr_in_scratch(
+  self : Codegen,
+  ty : @parser.Type,
+  expr : @parser.Expr,
+  frame_size : Int,
+) -> Unit {
+  if self.sret_scratch_offset < 0 {
+    abort("Darwin ARM64 backend missing aggregate expression scratch storage")
+  }
+  match expr {
+    Binary(",", left, right) => {
+      self.gen_expr(left, frame_size)
+      self.emit_aggregate_expr_addr_in_scratch(ty, right, frame_size)
+    }
+    Cast(cast_ty, inner) if is_aggregate_type(cast_ty) =>
+      self.emit_aggregate_expr_addr_in_scratch(ty, inner, frame_size)
+    Ternary(_, _, _) => self.gen_aggregate_addr(expr, frame_size)
+    Call(_, _) if self.is_register_aggregate(self.type_of(expr, frame_size)) => {
+      self.gen_expr(expr, frame_size)
+      self.emit_save_register_aggregate(ty)
+      self.emit_local_addr(self.sret_scratch_offset, frame_size)
+      self.emit_store_saved_register_aggregate_at_x9(ty)
+      self.emit_local_addr(self.sret_scratch_offset, frame_size)
+    }
+    Call(_, _) if self.is_indirect_aggregate(self.type_of(expr, frame_size)) => {
+      let saved_pending = self.pending_sret_offset
+      self.pending_sret_offset = self.sret_scratch_offset
+      self.gen_expr(expr, frame_size)
+      self.pending_sret_offset = saved_pending
+      self.emit_local_addr(self.sret_scratch_offset, frame_size)
+    }
+    VaArg(_, va_ty) if is_aggregate_type(va_ty) && self.type_size(va_ty) <= 16 =>
+      self.gen_aggregate_addr(expr, frame_size)
+    _ => {
+      self.gen_aggregate_addr(expr, frame_size)
+      self.emit_copy_aggregate_addr_to_scratch(ty, frame_size)
+    }
+  }
+}
+
+///|
 fn Codegen::emit_init_scalar_at_addr(
   self : Codegen,
   ty : @parser.Type,
@@ -3453,7 +3723,12 @@ fn Codegen::emit_init_value_at_addr(
       | DesignatedIndex(_, e)
       | DesignatedRange(_, _, e) => {
         if self.designator_matches_type(ty, init_expr) {
-          self.emit_init_aggregate_at_addr(ty, [init_expr], frame_size)
+          self.emit_init_aggregate_at_addr_with_zero(
+            ty,
+            [init_expr],
+            frame_size,
+            false,
+          )
         } else {
           self.emit_init_value_at_addr(ty, e, frame_size)
         }
@@ -3575,12 +3850,25 @@ fn Codegen::emit_init_aggregate_at_addr(
   init_exprs : Array[@parser.Expr],
   frame_size : Int,
 ) -> Unit {
+  self.emit_init_aggregate_at_addr_with_zero(ty, init_exprs, frame_size, true)
+}
+
+///|
+fn Codegen::emit_init_aggregate_at_addr_with_zero(
+  self : Codegen,
+  ty : @parser.Type,
+  init_exprs : Array[@parser.Expr],
+  frame_size : Int,
+  zero_first : Bool,
+) -> Unit {
   self.emit("\tstr\tx9, [sp, #-16]!")
-  self.emit("\tldr\tx0, [sp]")
-  self.emit("\tmov\tx1, #0")
-  let size = self.type_size(ty)
-  self.emit_load_int("x2", size.to_int64())
-  self.emit("\tbl\t_memset")
+  if zero_first {
+    self.emit("\tldr\tx0, [sp]")
+    self.emit("\tmov\tx1, #0")
+    let size = self.type_size(ty)
+    self.emit_load_int("x2", size.to_int64())
+    self.emit("\tbl\t_memset")
+  }
   match ty {
     Struct(name) => {
       let layout = if self.struct_layouts.contains(name) {
@@ -3833,18 +4121,18 @@ fn Codegen::gen_int128_binary(
   frame_size : Int,
 ) -> Unit {
   let result_ty = if op == "<<" || op == ">>" {
-    unary_integer_result_type(left_ty)
+    left_ty.integer_promote()
   } else {
-    integer_common_type(left_ty, right_ty)
+    @ctype.integer_common_type(left_ty, right_ty)
   }
-  let is_unsigned = is_unsigned_integer_type(result_ty)
+  let is_unsigned = result_ty.is_unsigned_integer()
   self.gen_expr(left, frame_size)
   self.emit_numeric_conversion(left_ty, result_ty)
   self.emit("\tstr\tx9, [sp, #-16]!")
   self.emit("\tstr\tx10, [sp, #8]")
   self.gen_expr(right, frame_size)
   if op == "<<" || op == ">>" {
-    self.emit_numeric_conversion(right_ty, unary_integer_result_type(right_ty))
+    self.emit_numeric_conversion(right_ty, right_ty.integer_promote())
   } else {
     self.emit_numeric_conversion(right_ty, result_ty)
   }
@@ -3941,7 +4229,7 @@ fn Codegen::gen_expr(
       if self.local_offsets.contains(name) {
         let ty = self.var_types[name]
         let offset = self.local_offsets[name]
-        if address_value_type(ty) {
+        if ty.is_object_aggregate() {
           self.emit_local_addr(offset, frame_size)
         } else {
           self.emit_local_addr(offset, frame_size)
@@ -3952,7 +4240,7 @@ fn Codegen::gen_expr(
         // Use GOT for globals to handle undefined externals on macOS
         self.emit("\tadrp\tx9, _" + name + "@GOTPAGE")
         self.emit("\tldr\tx9, [x9, _" + name + "@GOTPAGEOFF]")
-        if !address_value_type(ty) {
+        if !ty.is_object_aggregate() {
           self.emit_load_typed("x9", "x9", ty)
         }
       } else if self.func_rets.contains(name) {
@@ -4029,7 +4317,7 @@ fn Codegen::gen_expr(
         }
       } else {
         let lhs_ty = self.type_of(lhs, frame_size)
-        match peel_aligned_type(lhs_ty) {
+        match lhs_ty.without_alignment() {
           Struct(_) | Union(_) =>
             // Struct/union assignment: use memcpy via addresses
             match rhs {
@@ -4057,7 +4345,7 @@ fn Codegen::gen_expr(
             self.gen_expr(rhs, frame_size)
             self.emit_numeric_conversion(self.type_of(rhs, frame_size), lhs_ty)
             self.emit_scalar_conversion_to(lhs_ty)
-            if is_int128_type(lhs_ty) {
+            if lhs_ty.is_int128() {
               self.emit("\tstr\tx9, [sp, #-16]!")
               self.emit("\tstr\tx10, [sp, #8]")
               self.gen_addr(lhs, frame_size)
@@ -4106,8 +4394,8 @@ fn Codegen::gen_expr(
     Binary(op, left, right) => {
       let left_ty = self.type_of(left, frame_size)
       let right_ty = self.type_of(right, frame_size)
-      let left_core = peel_aligned_type(left_ty)
-      let right_core = peel_aligned_type(right_ty)
+      let left_core = left_ty.without_alignment()
+      let right_core = right_ty.without_alignment()
       if needs_int128_integer_op(left_ty, right_ty) {
         self.gen_int128_binary(op, left, right, left_ty, right_ty, frame_size)
         return
@@ -4149,11 +4437,19 @@ fn Codegen::gen_expr(
         (left_ty.is_floating() || right_ty.is_floating())
       let is_double = is_fp && (left_ty == Double || right_ty == Double)
       let fp_ty : @parser.Type = if is_double { Double } else { Float }
-      let result_ty = binary_expr_result_type(
-        op, left, left_ty, right, right_ty,
+      let force_wide_shift = if op == "<<" || op == ">>" {
+        match (left, right) {
+          (Number(_), Number(shift)) => shift >= 32L
+          _ => false
+        }
+      } else {
+        false
+      }
+      let result_ty = @ctype.binary_expr_result_type(
+        op, left_ty, right_ty, force_wide_shift, true,
       )
       let is_unsigned_int = match op {
-        "<<" | ">>" => is_unsigned_integer_type(result_ty)
+        "<<" | ">>" => result_ty.is_unsigned_integer()
         _ => uses_unsigned_integer_op(left_ty, right_ty)
       }
       let is_unsigned_cmp = is_unsigned_int || is_ptr_diff
@@ -4397,7 +4693,7 @@ fn Codegen::gen_expr(
           self.emit("\tfneg\ts9, s9")
           self.emit("\tfmov\tw9, s9")
         }
-      } else if is_int128_type(op_ty) {
+      } else if op_ty.is_int128() {
         self.emit("\tnegs\tx9, x9")
         self.emit("\tngc\tx10, x10")
       } else {
@@ -4406,7 +4702,7 @@ fn Codegen::gen_expr(
     }
     Unary("~", operand) => {
       self.gen_expr(operand, frame_size)
-      if is_int128_type(self.type_of(operand, frame_size)) {
+      if self.type_of(operand, frame_size).is_int128() {
         self.emit("\tmvn\tx9, x9")
         self.emit("\tmvn\tx10, x10")
       } else {
@@ -4415,7 +4711,7 @@ fn Codegen::gen_expr(
     }
     Unary("!", operand) => {
       self.gen_expr(operand, frame_size)
-      if is_int128_type(self.type_of(operand, frame_size)) {
+      if self.type_of(operand, frame_size).is_int128() {
         self.emit("\torr\tx9, x9, x10")
       }
       self.emit("\tcmp\tx9, #0")
@@ -4511,7 +4807,7 @@ fn Codegen::gen_expr(
             actual_arg_types.push(actual_ty)
             arg_types.push(arg_ty)
             arg_copy_offsets.push(-1)
-            match peel_aligned_type(arg_ty) {
+            match arg_ty.without_alignment() {
               Float | Double | LongDouble => {
                 total_slots += 1
                 fp_idx += 1
@@ -4570,7 +4866,7 @@ fn Codegen::gen_expr(
           // Evaluate all args first; nested calls can clobber argument registers.
           let mut slot_idx = 0
           for i = 0; i < args.length(); i = i + 1 {
-            match peel_aligned_type(arg_types[i]) {
+            match arg_types[i].without_alignment() {
               Struct(_) | Union(_) => {
                 let size = self.type_size(arg_types[i])
                 if size <= 16 {
@@ -4603,7 +4899,7 @@ fn Codegen::gen_expr(
               _ => {
                 self.gen_expr(args[i], frame_size)
                 self.emit_call_arg_conversion(actual_arg_types[i], arg_types[i])
-                if is_int128_type(arg_types[i]) {
+                if arg_types[i].is_int128() {
                   self.emit(
                     "\tstr\tx9, [sp, #" +
                     (backup_offset + slot_idx * 8).to_string() +
@@ -4635,7 +4931,7 @@ fn Codegen::gen_expr(
           fp_idx = 0
           slot_idx = 0
           for i = 0; i < args.length(); i = i + 1 {
-            match peel_aligned_type(arg_types[i]) {
+            match arg_types[i].without_alignment() {
               Float => {
                 let reg = "s" + fp_idx.to_string()
                 self.emit(
@@ -4778,7 +5074,7 @@ fn Codegen::gen_expr(
             actual_arg_types.push(actual_ty)
             arg_types.push(arg_ty)
             arg_copy_offsets.push(-1)
-            match peel_aligned_type(arg_ty) {
+            match arg_ty.without_alignment() {
               Float | Double | LongDouble => {
                 if fp_idx >= 8 {
                   stack_count += 1
@@ -4845,7 +5141,7 @@ fn Codegen::gen_expr(
           // Evaluate all args and save to temporary stack slots
           let mut slot_idx = 0
           for i = 0; i < args.length(); i = i + 1 {
-            match peel_aligned_type(arg_types[i]) {
+            match arg_types[i].without_alignment() {
               Struct(_) | Union(_) => {
                 let size = self.type_size(arg_types[i])
                 if size <= 16 {
@@ -4876,7 +5172,7 @@ fn Codegen::gen_expr(
               _ => {
                 self.gen_expr(args[i], frame_size)
                 self.emit_call_arg_conversion(actual_arg_types[i], arg_types[i])
-                if is_int128_type(arg_types[i]) {
+                if arg_types[i].is_int128() {
                   self.emit(
                     "\tstr\tx9, [sp, #" + (slot_idx * 8).to_string() + "]",
                   )
@@ -4905,7 +5201,7 @@ fn Codegen::gen_expr(
           let mut stack_idx = 0
           slot_idx = 0
           for i = 0; i < args.length(); i = i + 1 {
-            match peel_aligned_type(arg_types[i]) {
+            match arg_types[i].without_alignment() {
               Float => {
                 if fp_idx < 8 {
                   self.emit(
@@ -5110,7 +5406,7 @@ fn Codegen::gen_expr(
       match self.emit_member_addr(expr, frame_size) {
         None => {
           self.gen_addr(expr, frame_size)
-          if !address_value_type(self.type_of(expr, frame_size)) {
+          if !self.type_of(expr, frame_size).is_object_aggregate() {
             self.emit("\tldr\tx9, [x9]")
           }
         }
@@ -5126,7 +5422,7 @@ fn Codegen::gen_expr(
               4 => self.emit("\tldr\tw9, [x9]")
               _ => self.emit("\tldr\tx9, [x9]")
             }
-          } else if !address_value_type(ty) {
+          } else if !ty.is_object_aggregate() {
             match size {
               1 => self.emit("\tldrb\tw9, [x9]")
               2 => self.emit("\tldrh\tw9, [x9]")
@@ -5163,12 +5459,12 @@ fn Codegen::gen_expr(
       }
     Deref(ptr) => {
       self.gen_expr(ptr, frame_size)
-      let deref_ty = match peel_aligned_type(self.type_of(ptr, frame_size)) {
+      let deref_ty = match self.type_of(ptr, frame_size).without_alignment() {
         Pointer(ty) => ty
         Array(elem, _) => elem
         _ => SInt
       }
-      if !address_value_type(deref_ty) {
+      if !deref_ty.is_object_aggregate() {
         self.emit_load_typed("x9", "x9", deref_ty)
       }
     }
@@ -5176,7 +5472,7 @@ fn Codegen::gen_expr(
     ArrayAccess(_, _) => {
       self.gen_addr(expr, frame_size)
       let elem_ty = self.type_of(expr, frame_size)
-      if !address_value_type(elem_ty) {
+      if !elem_ty.is_object_aggregate() {
         self.emit_load_typed("x9", "x9", elem_ty)
       }
     }
@@ -5186,7 +5482,7 @@ fn Codegen::gen_expr(
     }
     SizeofExpr(expr) => {
       let size = match expr {
-        String(s) => s.length() + 1
+        String(s) => @ctype.string_literal_array_length(s)
         _ => self.type_size(self.type_of(expr, frame_size))
       }
       self.emit_load_int("x9", size.to_int64())
@@ -5197,7 +5493,8 @@ fn Codegen::gen_expr(
     }
     AlignofExpr(expr) => {
       let align = match expr {
-        String(s) => self.type_align(Array(SChar, s.length() + 1))
+        String(s) =>
+          self.type_align(Array(SChar, @ctype.string_literal_array_length(s)))
         _ => self.type_align(self.type_of(expr, frame_size))
       }
       self.emit_load_int("x9", align.to_int64())
@@ -5215,7 +5512,7 @@ fn Codegen::gen_expr(
       self.gen_expr(cond, frame_size)
       self.emit("\tcbz\tx9, " + else_label)
       self.gen_expr(then_expr, frame_size)
-      if !address_value_type(result_ty) {
+      if !result_ty.is_object_aggregate() {
         self.emit_numeric_conversion(
           self.type_of(then_expr, frame_size),
           result_ty,
@@ -5225,7 +5522,7 @@ fn Codegen::gen_expr(
       self.emit("\tb\t" + end_label)
       self.emit(else_label + ":")
       self.gen_expr(else_expr, frame_size)
-      if !address_value_type(result_ty) {
+      if !result_ty.is_object_aggregate() {
         self.emit_numeric_conversion(
           self.type_of(else_expr, frame_size),
           result_ty,
@@ -5235,6 +5532,9 @@ fn Codegen::gen_expr(
       self.emit(end_label + ":")
     }
     PrefixInc(expr) => {
+      if self.gen_bitfield_inc_dec(expr, 1, false, frame_size) {
+        return
+      }
       self.gen_addr(expr, frame_size)
       let ty = self.type_of(expr, frame_size)
       let ptr_scale = match ty {
@@ -5242,7 +5542,9 @@ fn Codegen::gen_expr(
         _ => 1
       }
       self.emit_load_typed("x10", "x9", ty)
-      if ptr_scale > 1 {
+      if self.emit_floating_step_bits(ty, "x10", "x11", 1) {
+        ()
+      } else if ptr_scale > 1 {
         self.emit("\tadd\tx11, x10, #" + ptr_scale.to_string())
       } else {
         self.emit("\tadd\tx11, x10, #1")
@@ -5252,6 +5554,9 @@ fn Codegen::gen_expr(
       self.emit_scalar_conversion_to(ty)
     }
     PrefixDec(expr) => {
+      if self.gen_bitfield_inc_dec(expr, -1, false, frame_size) {
+        return
+      }
       self.gen_addr(expr, frame_size)
       let ty = self.type_of(expr, frame_size)
       let ptr_scale = match ty {
@@ -5259,7 +5564,9 @@ fn Codegen::gen_expr(
         _ => 1
       }
       self.emit_load_typed("x10", "x9", ty)
-      if ptr_scale > 1 {
+      if self.emit_floating_step_bits(ty, "x10", "x11", -1) {
+        ()
+      } else if ptr_scale > 1 {
         self.emit("\tsub\tx11, x10, #" + ptr_scale.to_string())
       } else {
         self.emit("\tsub\tx11, x10, #1")
@@ -5269,6 +5576,9 @@ fn Codegen::gen_expr(
       self.emit_scalar_conversion_to(ty)
     }
     PostfixInc(expr) => {
+      if self.gen_bitfield_inc_dec(expr, 1, true, frame_size) {
+        return
+      }
       self.gen_addr(expr, frame_size)
       let ty = self.type_of(expr, frame_size)
       let ptr_scale = match ty {
@@ -5276,7 +5586,9 @@ fn Codegen::gen_expr(
         _ => 1
       }
       self.emit_load_typed("x10", "x9", ty)
-      if ptr_scale > 1 {
+      if self.emit_floating_step_bits(ty, "x10", "x11", 1) {
+        ()
+      } else if ptr_scale > 1 {
         self.emit("\tadd\tx11, x10, #" + ptr_scale.to_string())
       } else {
         self.emit("\tadd\tx11, x10, #1")
@@ -5290,6 +5602,9 @@ fn Codegen::gen_expr(
       }
     }
     PostfixDec(expr) => {
+      if self.gen_bitfield_inc_dec(expr, -1, true, frame_size) {
+        return
+      }
       self.gen_addr(expr, frame_size)
       let ty = self.type_of(expr, frame_size)
       let ptr_scale = match ty {
@@ -5297,7 +5612,9 @@ fn Codegen::gen_expr(
         _ => 1
       }
       self.emit_load_typed("x10", "x9", ty)
-      if ptr_scale > 1 {
+      if self.emit_floating_step_bits(ty, "x10", "x11", -1) {
+        ()
+      } else if ptr_scale > 1 {
         self.emit("\tsub\tx11, x10, #" + ptr_scale.to_string())
       } else {
         self.emit("\tsub\tx11, x10, #1")
@@ -5321,6 +5638,20 @@ fn Codegen::gen_expr(
       // Load the value from [x9] into the result register
       let ty_size = self.type_size(ty)
       match ty {
+        SInt128 | UInt128 => {
+          self.emit("\tmov\tx11, x9")
+          self.emit_load_typed("x9", "x11", ty)
+          self.emit("\tstr\tx9, [sp, #-16]!") // save low half
+          self.emit("\tstr\tx10, [sp, #-16]!") // save high half
+          self.emit("\tadd\tx11, x11, #16")
+          self.emit("\tstr\tx11, [sp, #-16]!") // save advanced ap
+          self.gen_addr(ap_expr, frame_size)
+          self.emit("\tmov\tx12, x9")
+          self.emit("\tldr\tx11, [sp], #16") // restore advanced ap
+          self.emit("\tstr\tx11, [x12]")
+          self.emit("\tldr\tx10, [sp], #16") // restore high half
+          self.emit("\tldr\tx9, [sp], #16") // restore low half
+        }
         Float => {
           self.emit("\tldr\tw9, [x9]")
           // Advance ap by align_up(4, 8) = 8
@@ -5401,7 +5732,13 @@ fn Codegen::gen_expr(
     }
     CompoundLiteral(ty, init_exprs, id) =>
       if is_aggregate_type(ty) {
-        self.gen_aggregate_addr(CompoundLiteral(ty, init_exprs, id), frame_size)
+        let completed_ty = codegen_file_scope_compound_literal_type(
+          ty, init_exprs,
+        )
+        self.gen_aggregate_addr(
+          CompoundLiteral(completed_ty, init_exprs, id),
+          frame_size,
+        )
       } else if init_exprs.length() > 0 {
         self.gen_expr(init_exprs[0], frame_size)
         self.emit_numeric_conversion(
@@ -5429,13 +5766,29 @@ fn Codegen::gen_aggregate_addr(
     Ternary(cond, then_expr, else_expr) => {
       let else_label = self.new_label()
       let end_label = self.new_label()
-      self.gen_expr(cond, frame_size)
-      self.emit("\tcbz\tx9, " + else_label)
-      self.gen_aggregate_addr(then_expr, frame_size)
-      self.emit("\tb\t" + end_label)
-      self.emit(else_label + ":")
-      self.gen_aggregate_addr(else_expr, frame_size)
-      self.emit(end_label + ":")
+      let result_ty = self.type_of(expr, frame_size)
+      if is_aggregate_type(result_ty) && self.sret_scratch_offset >= 0 {
+        self.gen_expr(cond, frame_size)
+        self.emit("\tcbz\tx9, " + else_label)
+        self.emit_aggregate_expr_addr_in_scratch(
+          result_ty, then_expr, frame_size,
+        )
+        self.emit("\tb\t" + end_label)
+        self.emit(else_label + ":")
+        self.emit_aggregate_expr_addr_in_scratch(
+          result_ty, else_expr, frame_size,
+        )
+        self.emit(end_label + ":")
+        self.emit_local_addr(self.sret_scratch_offset, frame_size)
+      } else {
+        self.gen_expr(cond, frame_size)
+        self.emit("\tcbz\tx9, " + else_label)
+        self.gen_aggregate_addr(then_expr, frame_size)
+        self.emit("\tb\t" + end_label)
+        self.emit(else_label + ":")
+        self.gen_aggregate_addr(else_expr, frame_size)
+        self.emit(end_label + ":")
+      }
     }
     Binary(",", left, right) => {
       self.gen_expr(left, frame_size)
@@ -5451,7 +5804,10 @@ fn Codegen::gen_aggregate_addr(
       self.pending_sret_offset = saved_pending
       self.emit_local_addr(self.sret_scratch_offset, frame_size)
     }
+    VaArg(ap_expr, ty) if is_aggregate_type(ty) =>
+      self.emit_va_arg_aggregate_addr(ap_expr, ty, frame_size)
     CompoundLiteral(ty, init_exprs, id) => {
+      let ty = codegen_file_scope_compound_literal_type(ty, init_exprs)
       let name = compound_literal_local_name(id)
       let offset = if self.local_offsets.contains(name) {
         self.local_offsets[name]
@@ -5493,8 +5849,12 @@ fn Codegen::gen_addr(
 
       }
     MemberAccess(obj, field) => {
-      self.gen_addr(obj, frame_size)
       let obj_ty = self.type_of(obj, frame_size)
+      if is_aggregate_type(obj_ty) {
+        self.gen_aggregate_addr(obj, frame_size)
+      } else {
+        self.gen_addr(obj, frame_size)
+      }
       match self.find_field_layout_for_type(obj_ty, field) {
         Some((_, _, field_offset, _, _, _)) =>
           if field_offset != 0 {
@@ -5507,7 +5867,7 @@ fn Codegen::gen_addr(
     AddrOf(e) => self.gen_addr(e, frame_size)
     ArrayAccess(arr, index) => {
       // Array decay: if arr is an array type, use its address; if pointer, use its value
-      match array_element_type(self.type_of(arr, frame_size)) {
+      match self.type_of(arr, frame_size).array_element() {
         Some(_) => self.gen_addr(arr, frame_size)
         None => self.gen_expr(arr, frame_size)
       }

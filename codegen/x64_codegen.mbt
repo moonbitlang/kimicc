@@ -146,35 +146,11 @@ fn x64_align_to(value : Int, align : Int) -> Int {
 }
 
 ///|
-fn x64_core_type(ty : @parser.Type) -> @parser.Type {
-  match ty {
-    Atomic(inner) | Aligned(inner, _) => x64_core_type(inner)
-    _ => ty
-  }
-}
-
-///|
-fn x64_is_pointer_like(ty : @parser.Type) -> Bool {
-  match x64_core_type(ty) {
-    Pointer(_) | Array(_, _) => true
-    _ => false
-  }
-}
-
-///|
-fn x64_pointer_element(ty : @parser.Type) -> @parser.Type? {
-  match x64_core_type(ty) {
-    Pointer(elem) | Array(elem, _) => Some(elem)
-    _ => None
-  }
-}
-
-///|
 fn X64Codegen::pointer_element_size(
   self : X64Codegen,
   elem_ty : @parser.Type,
 ) -> Int {
-  match x64_core_type(elem_ty) {
+  match elem_ty.core_type() {
     Void => 1
     _ => self.type_size(elem_ty)
   }
@@ -182,23 +158,12 @@ fn X64Codegen::pointer_element_size(
 
 ///|
 fn x64_is_fp_type(ty : @parser.Type) -> Bool {
-  match x64_core_type(ty) {
-    Float | Double => true
-    _ => false
-  }
-}
-
-///|
-fn x64_is_int128_type(ty : @parser.Type) -> Bool {
-  match x64_core_type(ty) {
-    SInt128 | UInt128 => true
-    _ => false
-  }
+  ty.is_float_or_double()
 }
 
 ///|
 fn x64_reject_unsupported_scalar(ty : @parser.Type) -> Unit {
-  match x64_core_type(ty) {
+  match ty.core_type() {
     Float16 => abort("_Float16 ABI lowering is not supported")
     Float128 => abort("__float128 ABI lowering is not supported")
     LongDouble => abort("long double x87 ABI lowering is not supported")
@@ -206,33 +171,6 @@ fn x64_reject_unsupported_scalar(ty : @parser.Type) -> Unit {
     Array(elem, _) | Atomic(elem) | Aligned(elem, _) =>
       x64_reject_unsupported_scalar(elem)
     _ => ()
-  }
-}
-
-///|
-fn x64_is_aggregate_type(ty : @parser.Type) -> Bool {
-  match x64_core_type(ty) {
-    Struct(_) | Union(_) => true
-    _ => false
-  }
-}
-
-///|
-fn x64_is_object_aggregate_type(ty : @parser.Type) -> Bool {
-  match x64_core_type(ty) {
-    Array(_, _) | Struct(_) | Union(_) => true
-    _ => false
-  }
-}
-
-///|
-fn x64_atomic_target_type(ty : @parser.Type) -> @parser.Type {
-  match ty {
-    Pointer(Atomic(inner)) | Array(Atomic(inner), _) => inner
-    Pointer(Aligned(inner, _)) | Array(Aligned(inner, _), _) => inner
-    Pointer(inner) | Array(inner, _) => inner
-    Atomic(inner) | Aligned(inner, _) => inner
-    _ => SLongLong
   }
 }
 
@@ -292,7 +230,7 @@ priv struct X64BitfieldInfo {
 
 ///|
 fn x64_fp_suffix(ty : @parser.Type) -> String {
-  match x64_core_type(ty) {
+  match ty.core_type() {
     Float => "ss"
     _ => "sd"
   }
@@ -318,7 +256,7 @@ fn X64Codegen::type_size(self : X64Codegen, ty : @parser.Type) -> Int {
   match ty {
     Atomic(inner) | Aligned(inner, _) => self.type_size(inner)
     _ =>
-      match x64_core_type(ty) {
+      match ty.core_type() {
         Void => 0
         Bool | SChar | UChar => 1
         SShort | UShort | Float16 => 2
@@ -393,7 +331,7 @@ fn X64Codegen::type_align(self : X64Codegen, ty : @parser.Type) -> Int {
       }
     }
     _ =>
-      match x64_core_type(ty) {
+      match ty.core_type() {
         Void => 1
         Bool | SChar | UChar => 1
         SShort | UShort | Float16 => 2
@@ -602,7 +540,7 @@ fn X64Codegen::emit_pop_rax(self : X64Codegen) -> Unit {
 
 ///|
 fn X64Codegen::emit_load_indirect(self : X64Codegen, ty : @parser.Type) -> Unit {
-  match x64_core_type(ty) {
+  match ty.core_type() {
     Float => self.emit("\tmovss\txmm0, DWORD PTR [rax]")
     Float16 => abort("_Float16 load is not supported")
     Float128 => abort("__float128 load is not supported")
@@ -631,7 +569,7 @@ fn X64Codegen::emit_store_indirect(
   self : X64Codegen,
   ty : @parser.Type,
 ) -> Unit {
-  match x64_core_type(ty) {
+  match ty.core_type() {
     Float => self.emit("\tmovss\tDWORD PTR [r10], xmm0")
     Float16 => abort("_Float16 store is not supported")
     Float128 => abort("__float128 store is not supported")
@@ -657,7 +595,7 @@ fn X64Codegen::emit_store_local_from_rax(
   offset : Int,
   ty : @parser.Type,
 ) -> Unit {
-  match x64_core_type(ty) {
+  match ty.core_type() {
     Float =>
       self.emit("\tmovss\tDWORD PTR " + self.local_ref(offset) + ", xmm0")
     Double =>
@@ -692,7 +630,7 @@ fn X64Codegen::emit_store_fp_reg_to_local(
   offset : Int,
   ty : @parser.Type,
 ) -> Unit {
-  match x64_core_type(ty) {
+  match ty.core_type() {
     Float =>
       self.emit("\tmovss\tDWORD PTR " + self.local_ref(offset) + ", " + reg)
     _ => self.emit("\tmovsd\tQWORD PTR " + self.local_ref(offset) + ", " + reg)
@@ -713,7 +651,7 @@ fn x64_merge_aggregate_class(
 
 ///|
 fn x64_scalar_aggregate_class(ty : @parser.Type) -> X64AggregateClass? {
-  match x64_core_type(ty) {
+  match ty.core_type() {
     Float | Double => Some(SseClass)
     Float128 | LongDouble | Void | Array(_, _) | Struct(_) | Union(_) => None
     _ => Some(IntClass)
@@ -748,7 +686,7 @@ fn X64Codegen::classify_aggregate_field(
   offset : Int,
   classes : Array[X64AggregateClass],
 ) -> Bool {
-  match x64_core_type(ty) {
+  match ty.core_type() {
     Array(elem, n) => {
       let elem_size = self.type_size(elem)
       for i in 0..<n {
@@ -815,7 +753,7 @@ fn X64Codegen::aggregate_has_unaligned_field(
         self.aggregate_has_unaligned_field(inner, offset)
       }
     _ =>
-      match x64_core_type(ty) {
+      match ty.core_type() {
         Array(elem, n) => {
           let elem_size = self.type_size(elem)
           for i in 0..<n {
@@ -853,7 +791,7 @@ fn X64Codegen::aggregate_classes(
   self : X64Codegen,
   ty : @parser.Type,
 ) -> Array[X64AggregateClass]? {
-  if !x64_is_aggregate_type(ty) {
+  if !ty.is_aggregate() {
     return None
   }
   let size = self.type_size(ty)
@@ -901,7 +839,7 @@ fn X64Codegen::is_memory_aggregate(
   self : X64Codegen,
   ty : @parser.Type,
 ) -> Bool {
-  x64_is_aggregate_type(ty) && self.aggregate_classes(ty) is None
+  ty.is_aggregate() && self.aggregate_classes(ty) is None
 }
 
 ///|
@@ -918,7 +856,7 @@ fn X64Codegen::stack_arg_align_slots(
   ty : @parser.Type,
 ) -> Int {
   let align = self.type_align(ty)
-  if x64_is_int128_type(ty) || align > 8 {
+  if ty.is_int128() || align > 8 {
     x64_align_to(align, 8) / 8
   } else {
     1
@@ -1467,13 +1405,13 @@ fn X64Codegen::emit_init_value_at_addr(
   init_expr : @parser.Expr,
 ) -> Unit {
   let value = x64_initializer_value(init_expr)
-  if x64_is_object_aggregate_type(ty) {
+  if ty.is_object_aggregate() {
     match init_expr {
       DesignatedField(_, inner)
       | DesignatedIndex(_, inner)
       | DesignatedRange(_, _, inner) => {
         if self.designator_matches_type(ty, init_expr) {
-          self.emit_init_aggregate_at_addr(ty, [init_expr])
+          self.emit_init_aggregate_at_addr_with_zero(ty, [init_expr], false)
         } else {
           self.emit_init_value_at_addr(ty, inner)
         }
@@ -1485,8 +1423,7 @@ fn X64Codegen::emit_init_value_at_addr(
       Array(init_exprs) | CompoundLiteral(_, init_exprs, _) =>
         self.emit_init_aggregate_at_addr(ty, init_exprs)
       Number(0) => self.emit_zero_memory_at_rax(ty)
-      Call(_, _) if x64_is_aggregate_type(ty) &&
-        self.is_supported_small_aggregate(ty) => {
+      Call(_, _) if ty.is_aggregate() && self.is_supported_small_aggregate(ty) => {
         self.emit_push_rax()
         self.gen_expr(value)
         self.emit_store_aggregate_call_result_to_pushed_addr(ty)
@@ -1511,9 +1448,21 @@ fn X64Codegen::emit_init_aggregate_at_addr(
   ty : @parser.Type,
   init_exprs : Array[@parser.Expr],
 ) -> Unit {
+  self.emit_init_aggregate_at_addr_with_zero(ty, init_exprs, true)
+}
+
+///|
+fn X64Codegen::emit_init_aggregate_at_addr_with_zero(
+  self : X64Codegen,
+  ty : @parser.Type,
+  init_exprs : Array[@parser.Expr],
+  zero_first : Bool,
+) -> Unit {
   self.emit_push_rax()
-  self.emit_zero_memory_at_rax(ty)
-  match x64_core_type(ty) {
+  if zero_first {
+    self.emit_zero_memory_at_rax(ty)
+  }
+  match ty.core_type() {
     Struct(name) => {
       self.ensure_struct_layout(name)
       let layout = self.struct_layouts[name]
@@ -1652,6 +1601,56 @@ fn X64Codegen::emit_store_aggregate_call_result_to_pushed_addr(
 }
 
 ///|
+fn X64Codegen::emit_copy_aggregate_addr_to_scratch(
+  self : X64Codegen,
+  ty : @parser.Type,
+) -> Unit {
+  if self.sret_scratch_offset < 0 {
+    abort("x86-64 backend missing aggregate expression scratch storage")
+  }
+  self.emit("\tmov\tr11, rax")
+  self.emit_local_addr(self.sret_scratch_offset)
+  self.emit("\tmov\tr10, rax")
+  self.emit_copy_aggregate_from_addr(ty)
+  self.emit_local_addr(self.sret_scratch_offset)
+}
+
+///|
+fn X64Codegen::emit_aggregate_expr_addr_in_scratch(
+  self : X64Codegen,
+  ty : @parser.Type,
+  expr : @parser.Expr,
+) -> Unit {
+  if self.sret_scratch_offset < 0 {
+    abort("x86-64 backend missing aggregate expression scratch storage")
+  }
+  match expr {
+    Binary(",", lhs, rhs) => {
+      self.gen_expr(lhs)
+      self.emit_aggregate_expr_addr_in_scratch(ty, rhs)
+    }
+    Cast(cast_ty, inner) if cast_ty.is_aggregate() =>
+      self.emit_aggregate_expr_addr_in_scratch(ty, inner)
+    Ternary(_, _, _) => self.gen_aggregate_addr(expr)
+    Call(_, _) if self.is_supported_small_aggregate(self.type_of(expr)) => {
+      self.gen_expr(expr)
+      self.emit_local_addr(self.sret_scratch_offset)
+      self.emit("\tmov\tr10, rax")
+      self.emit_store_small_aggregate_return(ty)
+      self.emit_local_addr(self.sret_scratch_offset)
+    }
+    Call(_, _) if self.is_memory_aggregate(self.type_of(expr)) => {
+      self.gen_expr(expr)
+      self.emit_local_addr(self.sret_scratch_offset)
+    }
+    _ => {
+      self.gen_aggregate_addr(expr)
+      self.emit_copy_aggregate_addr_to_scratch(ty)
+    }
+  }
+}
+
+///|
 fn X64Codegen::emit_call_sret_addr(
   self : X64Codegen,
   ret_ty : @parser.Type,
@@ -1675,7 +1674,7 @@ fn X64Codegen::compute_va_initial_offsets(
   let mut fp_idx = 0
   let mut stack_idx = 0
   for param in params {
-    if x64_is_aggregate_type(param.ty) {
+    if param.ty.is_aggregate() {
       let classes = match self.aggregate_classes(param.ty) {
         Some(classes) => classes
         None => {
@@ -1700,7 +1699,7 @@ fn X64Codegen::compute_va_initial_offsets(
         stack_idx = self.align_stack_arg_index(stack_idx, param.ty)
         stack_idx += 1
       }
-    } else if x64_is_int128_type(param.ty) {
+    } else if param.ty.is_int128() {
       if int_idx + 2 <= 6 {
         int_idx += 2
       } else {
@@ -1877,46 +1876,288 @@ fn X64Codegen::emit_builtin_lib_call(
   self.func_variadic[name] = false
   self.func_param_counts[name] = param_types.length()
   self.func_param_types[name] = param_types
+  for i = count; i < args.length(); i = i + 1 {
+    self.gen_ignored_expr_side_effects(args[i])
+  }
   self.gen_call(Var(name), x64_first_call_args(args, count))
 }
 
 ///|
-fn x64_selected_call_args(
+fn x64_ctype_builtin_return_type(
+  name : String,
+  fallback : @parser.Type,
+) -> @parser.Type {
+  match @ctype.builtin_return_type(name, [], None) {
+    Some(ty) => ty
+    None => fallback
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_length_builtin_call(
+  self : X64Codegen,
+  name : String,
   args : Array[@parser.Expr],
-  fixed_indexes : Array[Int],
-  rest_start : Int,
+) -> Bool {
+  match @ctype.builtin_length_libcall_info(name, args.length()) {
+    Some((symbol, call_arg_count)) => {
+      let param_types : Array[@parser.Type] = []
+      for i in 0..<call_arg_count {
+        param_types.push(@ctype.builtin_length_libcall_arg_type(i))
+      }
+      self.emit_builtin_lib_call(
+        symbol,
+        args,
+        call_arg_count,
+        ULong,
+        param_types,
+      )
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_memory_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_memory_libcall_info(name, args.length()) {
+    Some((symbol, call_arg_count)) => {
+      let param_types : Array[@parser.Type] = []
+      for i in 0..<call_arg_count {
+        param_types.push(@ctype.builtin_memory_libcall_arg_type(symbol, i))
+      }
+      self.emit_builtin_lib_call(
+        symbol,
+        args,
+        call_arg_count,
+        x64_ctype_builtin_return_type(name, Pointer(Void)),
+        param_types,
+      )
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_heap_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_heap_libcall_info(name, args.length()) {
+    Some((symbol, call_arg_count)) => {
+      let param_types : Array[@parser.Type] = []
+      for i in 0..<call_arg_count {
+        param_types.push(@ctype.builtin_heap_libcall_arg_type(symbol, i))
+      }
+      self.emit_builtin_lib_call(
+        symbol,
+        args,
+        call_arg_count,
+        x64_ctype_builtin_return_type(name, Pointer(Void)),
+        param_types,
+      )
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_compare_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_compare_libcall_info(name, args.length()) {
+    Some((symbol, call_arg_count)) => {
+      let param_types : Array[@parser.Type] = []
+      for i in 0..<call_arg_count {
+        param_types.push(@ctype.builtin_compare_libcall_arg_type(symbol, i))
+      }
+      self.emit_builtin_lib_call(
+        symbol,
+        args,
+        call_arg_count,
+        x64_ctype_builtin_return_type(name, SInt),
+        param_types,
+      )
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_search_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_search_libcall_info(name, args.length()) {
+    Some((symbol, call_arg_count)) => {
+      let param_types : Array[@parser.Type] = []
+      for i in 0..<call_arg_count {
+        param_types.push(@ctype.builtin_search_libcall_arg_type(symbol, i))
+      }
+      self.emit_builtin_lib_call(
+        symbol,
+        args,
+        call_arg_count,
+        x64_ctype_builtin_return_type(name, Pointer(Void)),
+        param_types,
+      )
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_span_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_span_libcall_info(name, args.length()) {
+    Some((symbol, call_arg_count)) => {
+      let param_types : Array[@parser.Type] = []
+      for _ in 0..<call_arg_count {
+        param_types.push(Pointer(SChar))
+      }
+      self.emit_builtin_lib_call(
+        symbol,
+        args,
+        call_arg_count,
+        x64_ctype_builtin_return_type(name, ULong),
+        param_types,
+      )
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_strl_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_strl_libcall_info(name, args.length()) {
+    Some((symbol, call_arg_count)) => {
+      let param_types : Array[@parser.Type] = []
+      for i in 0..<call_arg_count {
+        param_types.push(@ctype.builtin_strl_libcall_arg_type(i))
+      }
+      self.emit_builtin_lib_call(
+        symbol,
+        args,
+        call_arg_count,
+        x64_ctype_builtin_return_type(name, ULong),
+        param_types,
+      )
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn x64_indexed_call_args(
+  args : Array[@parser.Expr],
+  source_indexes : Array[Int],
 ) -> Array[@parser.Expr] {
   let selected : Array[@parser.Expr] = []
-  for index in fixed_indexes {
+  for index in source_indexes {
     if index < args.length() {
       selected.push(args[index])
     }
-  }
-  for i = rest_start; i < args.length(); i = i + 1 {
-    selected.push(args[i])
   }
   selected
 }
 
 ///|
-fn X64Codegen::emit_lowered_builtin_call(
+fn x64_printf_param_types(symbol : String) -> Array[@parser.Type] {
+  let param_types : Array[@parser.Type] = []
+  let mut i = 0
+  let mut done = false
+  while !done {
+    match @ctype.builtin_printf_libcall_arg_type(symbol, i) {
+      Some(ty) => {
+        param_types.push(ty)
+        i += 1
+      }
+      None => done = true
+    }
+  }
+  param_types
+}
+
+///|
+fn X64Codegen::emit_ctype_printf_builtin_call(
   self : X64Codegen,
   name : String,
   args : Array[@parser.Expr],
-  fixed_indexes : Array[Int],
-  rest_start : Int,
-  ret_ty : @parser.Type,
-  variadic : Bool,
-  param_types : Array[@parser.Type],
-) -> Unit {
-  self.func_rets[name] = ret_ty
-  self.func_variadic[name] = variadic
-  self.func_param_counts[name] = param_types.length()
-  self.func_param_types[name] = param_types
-  self.gen_call(
-    Var(name),
-    x64_selected_call_args(args, fixed_indexes, rest_start),
-  )
+) -> Bool {
+  match
+    (
+      @ctype.builtin_printf_libcall_symbol(name, args.length()),
+      @ctype.builtin_printf_source_indexes(name, args.length()),
+    ) {
+    (Some(symbol), Some(source_indexes)) => {
+      let param_types = x64_printf_param_types(symbol)
+      self.func_rets[symbol] = SInt
+      self.func_variadic[symbol] = @ctype.builtin_printf_libcall_variadic(
+        symbol,
+      )
+      self.func_param_counts[symbol] = param_types.length()
+      self.func_param_types[symbol] = param_types
+      for i = 0; i < args.length(); i = i + 1 {
+        if !@ctype.builtin_printf_source_index_used(source_indexes, i) {
+          self.gen_ignored_expr_side_effects(args[i])
+        }
+      }
+      self.gen_call(Var(symbol), x64_indexed_call_args(args, source_indexes))
+      true
+    }
+    _ => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_libcall_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  if self.emit_ctype_length_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_heap_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_memory_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_compare_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_search_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_span_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_strl_builtin_call(name, args) {
+    return true
+  }
+  self.emit_ctype_printf_builtin_call(name, args)
 }
 
 ///|
@@ -2042,40 +2283,6 @@ fn X64Codegen::emit_builtin_rotate(
 }
 
 ///|
-fn X64Codegen::generic_builtin_bit_width(
-  self : X64Codegen,
-  args : Array[@parser.Expr],
-) -> Int {
-  if args.length() == 0 {
-    return 32
-  }
-  let width = self.type_size(x64_core_type(self.type_of(args[0]))) * 8
-  if width <= 32 {
-    32
-  } else {
-    64
-  }
-}
-
-///|
-fn X64Codegen::generic_builtin_bswap_width(
-  self : X64Codegen,
-  args : Array[@parser.Expr],
-) -> Int {
-  if args.length() == 0 {
-    return 32
-  }
-  let width = self.type_size(x64_core_type(self.type_of(args[0]))) * 8
-  if width <= 16 {
-    16
-  } else if width <= 32 {
-    32
-  } else {
-    64
-  }
-}
-
-///|
 fn X64Codegen::emit_builtin_popcount(
   self : X64Codegen,
   args : Array[@parser.Expr],
@@ -2126,6 +2333,512 @@ fn X64Codegen::emit_builtin_parity(
 }
 
 ///|
+fn X64Codegen::emit_ctype_integer_count_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.integer_count_builtin_info(name) {
+    Some((kind, width)) => {
+      match kind {
+        "clz" => self.emit_builtin_clz(args, width)
+        "ctz" => self.emit_builtin_ctz(args, width)
+        "ffs" => self.emit_builtin_ffs(args, width)
+        "popcount" => self.emit_builtin_popcount(args, width)
+        "parity" => self.emit_builtin_parity(args, width)
+        _ => return false
+      }
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_integer_abs_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.integer_abs_builtin_type(name) {
+    Some(ty) => {
+      self.emit_builtin_abs(args, ty)
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_integer_bswap_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  let first_ty = if args.length() == 0 {
+    @ctype.Type::UInt
+  } else {
+    self.type_of(args[0])
+  }
+  match @ctype.integer_bswap_builtin_info(name, first_ty) {
+    Some((_, width)) => {
+      self.emit_builtin_bswap(args, width)
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_integer_rotate_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  let first_ty = if args.length() == 0 {
+    @ctype.Type::UInt
+  } else {
+    self.type_of(args[0])
+  }
+  match @ctype.integer_rotate_builtin_info(name, first_ty) {
+    Some((_, width, left)) => {
+      self.emit_builtin_rotate(args, width, left)
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_integer_alignment_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  let first_ty = if args.length() == 0 {
+    @ctype.Type::ULong
+  } else {
+    self.type_of(args[0])
+  }
+  match @ctype.integer_alignment_builtin_info(name, first_ty) {
+    Some((kind, _)) => {
+      match kind {
+        "is_aligned" => self.emit_builtin_is_aligned(args)
+        "align_up" => self.emit_builtin_align_value(args, true)
+        "align_down" => self.emit_builtin_align_value(args, false)
+        _ => return false
+      }
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_identity_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_identity_call_info(name) {
+    Some((_, side_effect_arg)) => {
+      if args.length() > 0 {
+        self.gen_expr(args[0])
+      } else {
+        self.emit("\tmov\trax, 0")
+      }
+      if side_effect_arg >= 0 && side_effect_arg < args.length() {
+        self.emit_push_rax()
+        self.gen_ignored_expr_side_effects(args[side_effect_arg])
+        self.emit_pop_rax()
+      }
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_noop_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_noop_call_info(name) {
+    Some(kind) => {
+      match kind {
+        "eval_first" => if args.length() > 0 { self.gen_expr(args[0]) }
+        "eval_all" =>
+          for arg in args {
+            self.gen_ignored_expr_side_effects(arg)
+          }
+        "ignore_all" => ()
+        _ => return false
+      }
+      self.emit("\tmov\trax, 0")
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_builtin_address_query(
+  self : X64Codegen,
+  args : Array[@parser.Expr],
+  kind : String,
+) -> Bool {
+  match kind {
+    "frame_address" => {
+      if args.length() > 0 {
+        match args[0] {
+          Number(0L) => self.emit("\tmov\trax, rbp")
+          Number(_) => self.emit("\tmov\trax, 0")
+          _ => {
+            self.gen_expr(args[0])
+            self.emit("\tcmp\trax, 0")
+            self.emit("\tmov\tr10, rbp")
+            self.emit("\tmov\trax, 0")
+            self.emit("\tcmove\trax, r10")
+          }
+        }
+      } else {
+        self.emit("\tmov\trax, rbp")
+      }
+      true
+    }
+    "return_address" => {
+      if args.length() > 0 {
+        match args[0] {
+          Number(0L) => self.emit("\tmov\trax, QWORD PTR [rbp + 8]")
+          Number(_) => self.emit("\tmov\trax, 0")
+          _ => {
+            self.gen_expr(args[0])
+            self.emit("\tcmp\trax, 0")
+            self.emit("\tmov\tr10, QWORD PTR [rbp + 8]")
+            self.emit("\tmov\trax, 0")
+            self.emit("\tcmove\trax, r10")
+          }
+        }
+      } else {
+        self.emit("\tmov\trax, QWORD PTR [rbp + 8]")
+      }
+      true
+    }
+    _ => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_address_query_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_address_query_info(name) {
+    Some(kind) => self.emit_builtin_address_query(args, kind)
+    None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_trap_builtin_call(
+  self : X64Codegen,
+  name : String,
+) -> Bool {
+  match @ctype.builtin_trap_call_info(name) {
+    Some("trap") => {
+      self.emit("\tud2")
+      true
+    }
+    Some(_) | None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_fence_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_fence_call_info(name) {
+    Some(("sync_synchronize", _)) => {
+      self.emit("\tmfence")
+      self.emit("\tmov\trax, 0")
+      true
+    }
+    Some(("atomic_thread_fence", _)) => {
+      for arg in args {
+        self.gen_ignored_expr_side_effects(arg)
+      }
+      self.emit("\tmfence")
+      self.emit("\tmov\trax, 0")
+      true
+    }
+    Some(("atomic_signal_fence", _)) => {
+      for arg in args {
+        self.gen_ignored_expr_side_effects(arg)
+      }
+      self.emit("\tmov\trax, 0")
+      true
+    }
+    Some(_) | None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_fixed_int_constant_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_fixed_int_constant_call_info(name) {
+    Some((value, expected_arg_count)) =>
+      if args.length() == expected_arg_count {
+        self.emit("\tmov\trax, " + value.to_string())
+        true
+      } else {
+        false
+      }
+    None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_stack_alloc_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_stack_alloc_call_info(name) {
+    Some(("alloca", expected_arg_count)) =>
+      if args.length() == expected_arg_count {
+        self.emit_builtin_alloca(args)
+        true
+      } else {
+        false
+      }
+    Some(("alloca_align", expected_arg_count)) =>
+      if args.length() == expected_arg_count {
+        self.emit_builtin_alloca_with_align(args)
+        true
+      } else {
+        false
+      }
+    Some(_) | None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_va_setup_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_va_setup_call_info(name) {
+    Some(("va_start", _)) => {
+      self.emit_va_start(args)
+      true
+    }
+    Some(("va_end", _)) => {
+      self.emit("\tmov\trax, 0")
+      true
+    }
+    Some(("va_copy", _)) => {
+      self.emit_va_copy(args)
+      true
+    }
+    Some(_) | None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_zero_memory_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_zero_memory_call_info(name) {
+    Some(("bzero", expected_arg_count)) =>
+      if args.length() == expected_arg_count {
+        self.emit_builtin_lib_call("bzero", args, expected_arg_count, Void, [
+          Pointer(Void),
+          ULong,
+        ])
+        true
+      } else {
+        false
+      }
+    Some(_) | None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_object_size_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_object_size_call_info(name) {
+    Some(_) => {
+      self.emit(
+        "\tmov\trax, " + self.builtin_object_size_value(args).to_string(),
+      )
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_constant_query_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_constant_query_call_info(name) {
+    Some(kind) =>
+      match
+        @ctype.builtin_constant_query_result(
+          kind,
+          args.length() > 0 && self.fold_const(args[0]) is Some(_),
+        ) {
+        Some(value) => {
+          self.emit("\tmov\trax, " + value.to_string())
+          true
+        }
+        None => false
+      }
+    None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_atomic_lock_free_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_atomic_lock_free_call_info(name) {
+    Some((_, evaluate_pointer)) => {
+      self.emit_atomic_lock_free_builtin(args, evaluate_pointer)
+      true
+    }
+    None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_atomic_load_store_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_atomic_load_store_call_info(name) {
+    Some(("load_ptr", _)) => {
+      self.emit_atomic_load_ptr_builtin(args)
+      true
+    }
+    Some(("load_value", _)) => {
+      self.emit_atomic_load_builtin(args)
+      true
+    }
+    Some(("store_ptr", _)) => {
+      self.emit_atomic_store_ptr_builtin(args)
+      true
+    }
+    Some(("store_value", _)) => {
+      self.emit_atomic_store_builtin(args)
+      true
+    }
+    Some(_) | None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_atomic_zero_store_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_atomic_zero_store_call_info(name) {
+    Some(("clear", _)) => {
+      self.emit_atomic_clear_builtin(args)
+      true
+    }
+    Some(("release", _)) => {
+      self.emit_sync_lock_release_builtin(args)
+      true
+    }
+    Some(_) | None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_atomic_exchange_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_atomic_exchange_call_info(name) {
+    Some(("exchange_ptr", _, _)) => {
+      self.emit_atomic_exchange_ptr_builtin(args)
+      true
+    }
+    Some(("test_and_set", _, _)) => {
+      self.emit_atomic_test_and_set_builtin(args)
+      true
+    }
+    Some(("exchange_value", _, _)) | Some(("sync_exchange_value", _, _)) => {
+      self.emit_atomic_exchange_builtin(args)
+      true
+    }
+    Some(_) | None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_atomic_compare_exchange_builtin_call(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Bool {
+  match @ctype.builtin_atomic_compare_exchange_call_info(name) {
+    Some(("compare_exchange_ptr", _, _)) => {
+      self.emit_atomic_compare_exchange_ptr_builtin(args)
+      true
+    }
+    Some(("compare_exchange_value", _, _)) => {
+      self.emit_atomic_compare_exchange_builtin(args)
+      true
+    }
+    Some(("sync_compare_exchange_bool", _, _)) => {
+      self.emit_sync_compare_and_swap_builtin(args, false)
+      true
+    }
+    Some(("sync_compare_exchange_value", _, _)) => {
+      self.emit_sync_compare_and_swap_builtin(args, true)
+      true
+    }
+    Some(_) | None => false
+  }
+}
+
+///|
+fn X64Codegen::emit_ctype_floating_constant_builtin_call(
+  self : X64Codegen,
+  name : String,
+) -> Bool {
+  match @ctype.floating_builtin_constant_bits_info(name) {
+    Some((bits, ty)) => {
+      self.emit_builtin_fp_bits(bits, ty)
+      true
+    }
+    None => false
+  }
+}
+
+///|
 fn X64Codegen::emit_builtin_alloca(
   self : X64Codegen,
   args : Array[@parser.Expr],
@@ -2135,6 +2848,33 @@ fn X64Codegen::emit_builtin_alloca(
     self.emit("\tadd\trax, 15")
     self.emit("\tand\trax, -16")
     self.emit("\tsub\trsp, rax")
+  }
+  self.emit("\tmov\trax, rsp")
+}
+
+///|
+fn X64Codegen::emit_builtin_alloca_with_align(
+  self : X64Codegen,
+  args : Array[@parser.Expr],
+) -> Unit {
+  if args.length() >= 2 {
+    self.gen_expr(args[0])
+    self.emit_push_rax()
+    self.gen_expr(args[1])
+    self.emit("\tmov\tr11, rax")
+    self.emit_pop_rax()
+    self.emit("\tmov\tr10, rax")
+    self.emit("\tshr\tr11, 3")
+    self.emit("\tmov\trax, 16")
+    self.emit("\tcmp\tr11, rax")
+    self.emit("\tcmovb\tr11, rax")
+    self.emit("\tmov\trax, r10")
+    self.emit("\tadd\trax, 15")
+    self.emit("\tand\trax, -16")
+    self.emit("\tsub\trsp, rax")
+    self.emit("\tsub\tr11, 1")
+    self.emit("\tnot\tr11")
+    self.emit("\tand\trsp, r11")
   }
   self.emit("\tmov\trax, rsp")
 }
@@ -2195,7 +2935,7 @@ fn X64Codegen::builtin_object_size_value(
 ) -> Int64 {
   if args.length() > 0 {
     match codegen_literal_string_arg(args[0]) {
-      Some(value) => return (value.length() + 1).to_int64()
+      Some(value) => return @ctype.string_literal_object_size(value)
       None => ()
     }
     let mode = if args.length() > 1 {
@@ -2206,10 +2946,10 @@ fn X64Codegen::builtin_object_size_value(
     } else {
       0L
     }
-    match self.object_size_expr_fact(args[0]) {
-      Some(fact) => return x64_object_size_fact_value(fact, mode).to_int64()
-      None => ()
-    }
+    return @ctype.object_size_fact_result(
+      self.object_size_expr_fact(args[0]),
+      mode,
+    )
   }
   let mode = if args.length() > 1 {
     match self.fold_const(args[1]) {
@@ -2219,7 +2959,7 @@ fn X64Codegen::builtin_object_size_value(
   } else {
     0L
   }
-  codegen_unknown_object_size(mode)
+  @ctype.object_size_unknown(mode)
 }
 
 ///|
@@ -2245,7 +2985,7 @@ fn X64Codegen::object_size_lvalue_type(
     Var(name) => self.object_size_var_type(name)
     ArrayAccess(base, _) =>
       match self.object_size_lvalue_type(base) {
-        Some(base_ty) => x64_pointer_element(base_ty)
+        Some(base_ty) => base_ty.pointer_or_array_element()
         None => None
       }
     MemberAccess(obj, field) =>
@@ -2262,37 +3002,10 @@ fn X64Codegen::object_size_lvalue_type(
 }
 
 ///|
-priv struct X64ObjectSizeFact {
-  whole : Int
-  subobject : Int
-}
-
-///|
-fn x64_object_size_fact_value(fact : X64ObjectSizeFact, mode : Int64) -> Int {
-  if (mode & 1L) != 0L {
-    fact.subobject
-  } else {
-    fact.whole
-  }
-}
-
-///|
-fn x64_object_size_subtract_offset(
-  fact : X64ObjectSizeFact,
-  offset : Int,
-) -> X64ObjectSizeFact? {
-  if offset < 0 || offset > fact.whole || offset > fact.subobject {
-    None
-  } else {
-    Some({ whole: fact.whole - offset, subobject: fact.subobject - offset })
-  }
-}
-
-///|
 fn X64Codegen::object_size_var_fact(
   self : X64Codegen,
   name : String,
-) -> X64ObjectSizeFact? {
+) -> @ctype.ObjectSizeFact? {
   match self.object_size_var_type(name) {
     Some(ty) => {
       let size = self.type_size(ty)
@@ -2307,23 +3020,13 @@ fn X64Codegen::object_size_array_element_fact(
   self : X64Codegen,
   base_ty : @parser.Type,
   index : @parser.Expr,
-  base_fact : X64ObjectSizeFact,
-) -> X64ObjectSizeFact? {
-  match x64_core_type(base_ty) {
+  base_fact : @ctype.ObjectSizeFact,
+) -> @ctype.ObjectSizeFact? {
+  match base_ty.core_type() {
     Array(elem, n) =>
       match self.fold_const(index) {
         Some(raw_index) =>
-          if raw_index < 0L {
-            None
-          } else {
-            let index = raw_index.to_int()
-            if index > n {
-              None
-            } else {
-              let elem_size = self.type_size(elem)
-              x64_object_size_subtract_offset(base_fact, index * elem_size)
-            }
-          }
+          base_fact.array_element(n, self.type_size(elem), raw_index)
         None => None
       }
     _ => None
@@ -2334,7 +3037,7 @@ fn X64Codegen::object_size_array_element_fact(
 fn X64Codegen::object_size_lvalue_fact(
   self : X64Codegen,
   expr : @parser.Expr,
-) -> X64ObjectSizeFact? {
+) -> @ctype.ObjectSizeFact? {
   match expr {
     Var(name) => self.object_size_var_fact(name)
     ArrayAccess(base, index) =>
@@ -2350,14 +3053,7 @@ fn X64Codegen::object_size_lvalue_fact(
         (Some(obj_ty), Some(obj_fact)) =>
           match self.field_layout(obj_ty, field) {
             Some((_, field_ty, offset, _, _, _)) =>
-              match x64_object_size_subtract_offset(obj_fact, offset) {
-                Some(fact) =>
-                  Some({
-                    whole: fact.whole,
-                    subobject: self.type_size(field_ty),
-                  })
-                None => None
-              }
+              obj_fact.member_field(offset, self.type_size(field_ty))
             None => None
           }
         _ => None
@@ -2371,21 +3067,18 @@ fn X64Codegen::object_size_offset_expr_fact(
   self : X64Codegen,
   base : @parser.Expr,
   offset_expr : @parser.Expr,
-) -> X64ObjectSizeFact? {
+) -> @ctype.ObjectSizeFact? {
   match
     (
       self.object_size_expr_fact(base),
       self.fold_const(offset_expr),
-      x64_pointer_element(self.type_of(base)),
+      self.type_of(base).pointer_or_array_element(),
     ) {
     (Some(fact), Some(index), Some(elem)) =>
       if index < 0L {
         None
       } else {
-        x64_object_size_subtract_offset(
-          fact,
-          index.to_int() * self.type_size(elem),
-        )
+        fact.subtract_offset(index.to_int() * self.type_size(elem))
       }
     _ => None
   }
@@ -2395,7 +3088,7 @@ fn X64Codegen::object_size_offset_expr_fact(
 fn X64Codegen::object_size_expr_fact(
   self : X64Codegen,
   expr : @parser.Expr,
-) -> X64ObjectSizeFact? {
+) -> @ctype.ObjectSizeFact? {
   match expr {
     Cast(_, inner) => self.object_size_expr_fact(inner)
     AddrOf(inner) => self.object_size_lvalue_fact(inner)
@@ -2407,7 +3100,7 @@ fn X64Codegen::object_size_expr_fact(
     Var(name) =>
       match self.object_size_var_type(name) {
         Some(ty) =>
-          match x64_core_type(ty) {
+          match ty.core_type() {
             Array(_, _) => self.object_size_var_fact(name)
             _ => None
           }
@@ -2416,7 +3109,7 @@ fn X64Codegen::object_size_expr_fact(
     MemberAccess(_, _) =>
       match self.object_size_lvalue_type(expr) {
         Some(ty) =>
-          match x64_core_type(ty) {
+          match ty.core_type() {
             Array(_, _) => self.object_size_lvalue_fact(expr)
             _ => None
           }
@@ -2551,8 +3244,13 @@ fn X64Codegen::emit_atomic_load_builtin(
   args : Array[@parser.Expr],
 ) -> Unit {
   if args.length() > 0 {
-    let elem_ty = x64_atomic_target_type(self.type_of(args[0]))
+    let elem_ty = self.type_of(args[0]).atomic_target()
     self.gen_expr(args[0])
+    self.emit_push_rax()
+    if args.length() >= 2 {
+      self.gen_ignored_expr_side_effects(args[1])
+    }
+    self.emit_pop_rax()
     self.emit_load_indirect(elem_ty)
   } else {
     self.emit("\tmov\trax, 0")
@@ -2565,12 +3263,18 @@ fn X64Codegen::emit_atomic_load_ptr_builtin(
   args : Array[@parser.Expr],
 ) -> Unit {
   if args.length() >= 2 {
-    let elem_ty = x64_atomic_target_type(self.type_of(args[0]))
+    let elem_ty = self.type_of(args[0]).atomic_target()
     self.gen_expr(args[0])
     self.emit_push_rax()
     self.gen_expr(args[1])
+    self.emit_push_rax()
+    if args.length() >= 3 {
+      self.gen_ignored_expr_side_effects(args[2])
+    }
+    self.emit_pop_rax()
     self.emit("\tmov\tr10, rax")
-    self.emit("\tpop\trdi")
+    self.emit_pop_rax()
+    self.emit("\tmov\trdi, rax")
     self.emit_atomic_raw_load_to_rax("rdi", elem_ty)
     self.emit_atomic_raw_store_from_rax("r10", elem_ty)
   }
@@ -2583,10 +3287,15 @@ fn X64Codegen::emit_atomic_store_builtin(
   args : Array[@parser.Expr],
 ) -> Unit {
   if args.length() >= 2 {
-    let elem_ty = x64_atomic_target_type(self.type_of(args[0]))
+    let elem_ty = self.type_of(args[0]).atomic_target()
     self.gen_expr(args[0])
     self.emit_push_rax()
     self.gen_expr_as_scalar(args[1], elem_ty)
+    self.emit_push_rax()
+    if args.length() >= 3 {
+      self.gen_ignored_expr_side_effects(args[2])
+    }
+    self.emit_pop_rax()
     self.emit("\tpop\tr10")
     if x64_is_fp_type(elem_ty) {
       self.emit_store_indirect(elem_ty)
@@ -2609,12 +3318,17 @@ fn X64Codegen::emit_atomic_store_ptr_builtin(
   args : Array[@parser.Expr],
 ) -> Unit {
   if args.length() >= 2 {
-    let elem_ty = x64_atomic_target_type(self.type_of(args[0]))
+    let elem_ty = self.type_of(args[0]).atomic_target()
     let width = self.type_size(elem_ty)
     self.gen_expr(args[0])
     self.emit_push_rax()
     self.gen_expr(args[1])
     self.emit_atomic_raw_load_to_rax("rax", elem_ty)
+    self.emit_push_rax()
+    if args.length() >= 3 {
+      self.gen_ignored_expr_side_effects(args[2])
+    }
+    self.emit_pop_rax()
     self.emit("\tpop\tr10")
     self.emit(
       "\txchg\t" +
@@ -2665,7 +3379,7 @@ fn X64Codegen::emit_atomic_update_builtin(
   return_new : Bool,
 ) -> Unit {
   if args.length() >= 2 {
-    let elem_ty = x64_atomic_target_type(self.type_of(args[0]))
+    let elem_ty = self.type_of(args[0]).atomic_target()
     self.gen_expr(args[0])
     self.emit_push_rax()
     self.gen_expr_as_scalar(args[1], elem_ty)
@@ -2683,14 +3397,14 @@ fn X64Codegen::emit_atomic_exchange_builtin(
   args : Array[@parser.Expr],
 ) -> Unit {
   if args.length() >= 2 {
-    let elem_ty = x64_atomic_target_type(self.type_of(args[0]))
+    let elem_ty = self.type_of(args[0]).atomic_target()
     self.gen_expr(args[0])
     self.emit_push_rax()
     self.gen_expr_as_scalar(args[1], elem_ty)
     self.emit("\tpop\tr10")
     if x64_is_fp_type(elem_ty) {
       self.emit("\tsub\trsp, 8")
-      match x64_core_type(elem_ty) {
+      match elem_ty.core_type() {
         Float => {
           self.emit("\tmovss\tDWORD PTR [rsp], xmm0")
           self.emit("\tmov\trax, r10")
@@ -2729,7 +3443,7 @@ fn X64Codegen::emit_atomic_exchange_ptr_builtin(
   args : Array[@parser.Expr],
 ) -> Unit {
   if args.length() >= 3 {
-    let elem_ty = x64_atomic_target_type(self.type_of(args[0]))
+    let elem_ty = self.type_of(args[0]).atomic_target()
     let width = self.type_size(elem_ty)
     self.gen_expr(args[0])
     self.emit_push_rax()
@@ -2757,7 +3471,7 @@ fn X64Codegen::emit_atomic_compare_exchange_builtin(
   args : Array[@parser.Expr],
 ) -> Unit {
   if args.length() >= 3 {
-    let elem_ty = x64_atomic_target_type(self.type_of(args[0]))
+    let elem_ty = self.type_of(args[0]).atomic_target()
     let width = self.type_size(elem_ty)
     let fail_label = self.new_label()
     let done_label = self.new_label()
@@ -2794,7 +3508,7 @@ fn X64Codegen::emit_atomic_compare_exchange_ptr_builtin(
   args : Array[@parser.Expr],
 ) -> Unit {
   if args.length() >= 3 {
-    let elem_ty = x64_atomic_target_type(self.type_of(args[0]))
+    let elem_ty = self.type_of(args[0]).atomic_target()
     let width = self.type_size(elem_ty)
     let fail_label = self.new_label()
     let done_label = self.new_label()
@@ -2833,7 +3547,7 @@ fn X64Codegen::emit_sync_compare_and_swap_builtin(
   return_old : Bool,
 ) -> Unit {
   if args.length() >= 3 {
-    let elem_ty = x64_atomic_target_type(self.type_of(args[0]))
+    let elem_ty = self.type_of(args[0]).atomic_target()
     let width = self.type_size(elem_ty)
     self.gen_expr(args[0])
     self.emit_push_rax()
@@ -2866,7 +3580,7 @@ fn X64Codegen::emit_sync_lock_release_builtin(
   args : Array[@parser.Expr],
 ) -> Unit {
   if args.length() > 0 {
-    let elem_ty = x64_atomic_target_type(self.type_of(args[0]))
+    let elem_ty = self.type_of(args[0]).atomic_target()
     self.gen_expr(args[0])
     self.emit("\tmov\tr10, rax")
     self.emit("\txor\teax, eax")
@@ -2879,10 +3593,16 @@ fn X64Codegen::emit_sync_lock_release_builtin(
 fn X64Codegen::emit_atomic_lock_free_builtin(
   self : X64Codegen,
   args : Array[@parser.Expr],
+  evaluate_pointer : Bool,
 ) -> Unit {
   if args.length() > 0 {
     self.gen_expr(args[0])
-    self.emit("\tmov\tr10, rax")
+    self.emit_push_rax()
+    if evaluate_pointer && args.length() > 1 {
+      self.gen_ignored_expr_side_effects(args[1])
+    }
+    self.emit("\tmov\tr10, QWORD PTR [rsp]")
+    self.emit("\tadd\trsp, 8")
     self.emit("\tcmp\tr10, 1")
     self.emit("\tsete\tal")
     self.emit("\tcmp\tr10, 2")
@@ -2906,8 +3626,8 @@ fn X64Codegen::overflow_result_type(
   args : Array[@parser.Expr],
 ) -> @parser.Type {
   if args.length() >= 3 {
-    match x64_pointer_element(self.type_of(args[2])) {
-      Some(ty) => x64_core_type(ty)
+    match self.type_of(args[2]).pointer_or_array_element() {
+      Some(ty) => ty.core_type()
       None => SLongLong
     }
   } else {
@@ -2926,7 +3646,7 @@ fn X64Codegen::emit_overflow_arithmetic_builtin(
     return
   }
   let result_ty = self.overflow_result_type(args)
-  if !result_ty.is_integer() || x64_is_int128_type(result_ty) {
+  if !result_ty.is_integer() || result_ty.is_int128() {
     abort(
       "unsupported x86-64 overflow builtin result type: " +
       result_ty.to_string(),
@@ -2946,14 +3666,14 @@ fn X64Codegen::emit_overflow_arithmetic_builtin(
     "+" => self.emit("\tadd\t" + lhs_reg + ", " + rhs_reg)
     "-" => self.emit("\tsub\t" + lhs_reg + ", " + rhs_reg)
     "*" =>
-      if is_unsigned_integer_type(result_ty) {
+      if result_ty.is_unsigned_integer() {
         self.emit("\tmul\t" + rhs_reg)
       } else {
         self.emit("\timul\t" + rhs_reg)
       }
     _ => abort("unsupported x86-64 overflow builtin operator: " + op)
   }
-  let cc = if is_unsigned_integer_type(result_ty) && (op == "+" || op == "-") {
+  let cc = if result_ty.is_unsigned_integer() && (op == "+" || op == "-") {
     "setb"
   } else {
     "seto"
@@ -2972,7 +3692,7 @@ fn X64Codegen::emit_builtin_fabs(
 ) -> Unit {
   if args.length() > 0 {
     self.gen_expr_as_fp(args[0], ty)
-    match x64_core_type(ty) {
+    match ty.core_type() {
       Float => {
         self.emit("\tmov\teax, 2147483647")
         self.emit("\tmovd\txmm1, eax")
@@ -3000,11 +3720,15 @@ fn X64Codegen::emit_builtin_copysign(
     return
   }
   self.gen_expr_as_fp(args[0], ty)
-  match x64_core_type(ty) {
+  match ty.core_type() {
     Float => {
       self.emit("\tmovd\tr11d, xmm0")
       self.emit("\tand\tr11d, 2147483647")
+      self.emit("\tsub\trsp, 16")
+      self.emit("\tmov\tQWORD PTR [rsp], r11")
       self.gen_expr_as_fp(args[1], ty)
+      self.emit("\tmov\tr11, QWORD PTR [rsp]")
+      self.emit("\tadd\trsp, 16")
       self.emit("\tmovd\teax, xmm0")
       self.emit("\tand\teax, -2147483648")
       self.emit("\tor\teax, r11d")
@@ -3014,7 +3738,11 @@ fn X64Codegen::emit_builtin_copysign(
       self.emit("\tmovq\tr11, xmm0")
       self.emit("\tmovabs\tr10, 9223372036854775807")
       self.emit("\tand\tr11, r10")
+      self.emit("\tsub\trsp, 16")
+      self.emit("\tmov\tQWORD PTR [rsp], r11")
       self.gen_expr_as_fp(args[1], ty)
+      self.emit("\tmov\tr11, QWORD PTR [rsp]")
+      self.emit("\tadd\trsp, 16")
       self.emit("\tmovq\trax, xmm0")
       self.emit("\tmovabs\tr10, -9223372036854775808")
       self.emit("\tand\trax, r10")
@@ -3065,7 +3793,7 @@ fn X64Codegen::emit_builtin_fp_bits(
   bits : Int64,
   ty : @parser.Type,
 ) -> Unit {
-  match x64_core_type(ty) {
+  match ty.core_type() {
     Float => {
       self.emit("\tmov\teax, " + bits.to_string())
       self.emit("\tmovd\txmm0, eax")
@@ -3089,14 +3817,14 @@ fn X64Codegen::emit_builtin_fp_compare(
   }
   let lhs_ty = self.type_of(args[0])
   let rhs_ty = self.type_of(args[1])
-  let cmp_ty : @parser.Type = if x64_core_type(lhs_ty) == Double ||
-    x64_core_type(rhs_ty) == Double {
+  let cmp_ty : @parser.Type = if lhs_ty.core_type() == Double ||
+    rhs_ty.core_type() == Double {
     Double
   } else {
     Float
   }
   let suffix = x64_fp_suffix(cmp_ty)
-  let spill = if x64_core_type(cmp_ty) == Float {
+  let spill = if cmp_ty.core_type() == Float {
     "DWORD PTR [rsp]"
   } else {
     "QWORD PTR [rsp]"
@@ -3110,18 +3838,6 @@ fn X64Codegen::emit_builtin_fp_compare(
   self.emit("\tadd\trsp, 8")
   self.emit("\tucomi" + suffix + "\txmm0, xmm1")
   self.emit_fp_compare_result(op)
-}
-
-///|
-fn X64Codegen::builtin_unary_fp_type(
-  self : X64Codegen,
-  args : Array[@parser.Expr],
-) -> @parser.Type {
-  if args.length() > 0 && x64_core_type(self.type_of(args[0])) == Float {
-    Float
-  } else {
-    Double
-  }
 }
 
 ///|
@@ -3143,7 +3859,7 @@ fn X64Codegen::emit_builtin_fp_class_as(
     }
     "isinf" => {
       self.emit_fp_abs_bits_in_rax(ty)
-      match x64_core_type(ty) {
+      match ty.core_type() {
         Float => self.emit("\tcmp\teax, 2139095040")
         _ => {
           self.emit("\tmovabs\tr10, 9218868437227405312")
@@ -3154,7 +3870,7 @@ fn X64Codegen::emit_builtin_fp_class_as(
     }
     "isfinite" => {
       self.emit_fp_abs_bits_in_rax(ty)
-      match x64_core_type(ty) {
+      match ty.core_type() {
         Float => self.emit("\tcmp\teax, 2139095040")
         _ => {
           self.emit("\tmovabs\tr10, 9218868437227405312")
@@ -3165,7 +3881,7 @@ fn X64Codegen::emit_builtin_fp_class_as(
     }
     "isnormal" => {
       self.emit_fp_abs_bits_in_rax(ty)
-      match x64_core_type(ty) {
+      match ty.core_type() {
         Float => {
           self.emit("\tmov\tr10d, eax")
           self.emit("\tcmp\tr10d, 8388608")
@@ -3187,7 +3903,7 @@ fn X64Codegen::emit_builtin_fp_class_as(
       self.emit("\tmovzx\trax, al")
     }
     "signbit" =>
-      match x64_core_type(ty) {
+      match ty.core_type() {
         Float => {
           self.emit("\tmovd\teax, xmm0")
           self.emit("\tshr\teax, 31")
@@ -3206,7 +3922,7 @@ fn X64Codegen::emit_fp_abs_bits_in_rax(
   self : X64Codegen,
   ty : @parser.Type,
 ) -> Unit {
-  match x64_core_type(ty) {
+  match ty.core_type() {
     Float => {
       self.emit("\tmovd\teax, xmm0")
       self.emit("\tand\teax, 2147483647")
@@ -3220,265 +3936,25 @@ fn X64Codegen::emit_fp_abs_bits_in_rax(
 }
 
 ///|
-fn X64Codegen::emit_builtin_fp_class(
-  self : X64Codegen,
-  args : Array[@parser.Expr],
-  op : String,
-) -> Unit {
-  self.emit_builtin_fp_class_as(args, op, self.builtin_unary_fp_type(args))
-}
-
-///|
 fn X64Codegen::builtin_return_type(
   self : X64Codegen,
   name : String,
   args : Array[@parser.Expr],
 ) -> @parser.Type? {
-  match name {
-    "__builtin_expect"
-    | "__builtin_expect_with_probability"
-    | "__builtin_unpredictable" =>
-      if args.length() > 0 {
-        Some(self.type_of(args[0]))
-      } else {
-        Some(SInt)
-      }
-    "__builtin_assume_aligned" =>
-      if args.length() > 0 {
-        Some(self.type_of(args[0]))
-      } else {
-        Some(Pointer(Void))
-      }
-    "__builtin_constant_p" => Some(SInt)
-    "__builtin_is_aligned" => Some(Bool)
-    "__builtin_align_up" | "__builtin_align_down" =>
-      if args.length() > 0 {
-        Some(self.type_of(args[0]))
-      } else {
-        Some(ULong)
-      }
-    "__builtin_object_size" | "__builtin_dynamic_object_size" => Some(ULong)
-    "__builtin_frame_address"
-    | "__builtin_return_address"
-    | "__builtin_extract_return_addr"
-    | "__builtin_frob_return_addr" => Some(Pointer(Void))
-    "__builtin_alloca" => Some(Pointer(Void))
-    "__builtin_flt_rounds" => Some(SInt)
-    "__builtin_fabsf"
-    | "__builtin_copysignf"
-    | "__builtin_sqrtf"
-    | "__builtin_nanf"
-    | "__builtin_huge_valf"
-    | "__builtin_inff" => Some(Float)
-    "__builtin_fabs"
-    | "__builtin_copysign"
-    | "__builtin_sqrt"
-    | "__builtin_nan"
-    | "__builtin_huge_val"
-    | "__builtin_inf" => Some(Double)
-    "__builtin_fabsl"
-    | "__builtin_copysignl"
-    | "__builtin_sqrtl"
-    | "__builtin_nanl"
-    | "__builtin_huge_vall"
-    | "__builtin_infl" => Some(LongDouble)
-    "__builtin_isgreater"
-    | "__builtin_isgreaterequal"
-    | "__builtin_isless"
-    | "__builtin_islessequal"
-    | "__builtin_islessgreater"
-    | "__builtin_isunordered"
-    | "__builtin_isnan"
-    | "__builtin_isnanf"
-    | "__builtin_isnanl"
-    | "__builtin_isinf"
-    | "__builtin_isinff"
-    | "__builtin_isinfl"
-    | "__builtin_isfinite"
-    | "__builtin_isfinitef"
-    | "__builtin_isfinitel"
-    | "__builtin_isnormal"
-    | "__builtin_isnormalf"
-    | "__builtin_isnormall"
-    | "__builtin_signbit"
-    | "__builtin_signbitf"
-    | "__builtin_signbitl" => Some(SInt)
-    "__builtin_abs" => Some(SInt)
-    "__builtin_labs" => Some(SLong)
-    "__builtin_llabs" => Some(SLongLong)
-    "__builtin_add_overflow"
-    | "__builtin_sub_overflow"
-    | "__builtin_mul_overflow"
-    | "__builtin_sadd_overflow"
-    | "__builtin_saddl_overflow"
-    | "__builtin_saddll_overflow"
-    | "__builtin_uadd_overflow"
-    | "__builtin_uaddl_overflow"
-    | "__builtin_uaddll_overflow"
-    | "__builtin_ssub_overflow"
-    | "__builtin_ssubl_overflow"
-    | "__builtin_ssubll_overflow"
-    | "__builtin_usub_overflow"
-    | "__builtin_usubl_overflow"
-    | "__builtin_usubll_overflow"
-    | "__builtin_smul_overflow"
-    | "__builtin_smull_overflow"
-    | "__builtin_smulll_overflow"
-    | "__builtin_umul_overflow"
-    | "__builtin_umull_overflow"
-    | "__builtin_umulll_overflow" => Some(Bool)
-    "__atomic_load_n" | "__c11_atomic_load" =>
-      if args.length() > 0 {
-        Some(x64_atomic_target_type(self.type_of(args[0])))
-      } else {
-        Some(SLongLong)
-      }
-    "__atomic_add_fetch"
-    | "__atomic_sub_fetch"
-    | "__atomic_and_fetch"
-    | "__atomic_or_fetch"
-    | "__atomic_xor_fetch"
-    | "__atomic_nand_fetch"
-    | "__atomic_fetch_add"
-    | "__atomic_fetch_sub"
-    | "__atomic_fetch_and"
-    | "__atomic_fetch_or"
-    | "__atomic_fetch_xor"
-    | "__atomic_fetch_nand"
-    | "__atomic_exchange_n"
-    | "__c11_atomic_fetch_add"
-    | "__c11_atomic_fetch_sub"
-    | "__c11_atomic_fetch_and"
-    | "__c11_atomic_fetch_or"
-    | "__c11_atomic_fetch_xor"
-    | "__c11_atomic_exchange" =>
-      if args.length() > 0 {
-        Some(x64_atomic_target_type(self.type_of(args[0])))
-      } else {
-        Some(SLongLong)
-      }
-    "__atomic_test_and_set" => Some(Bool)
-    "__atomic_compare_exchange"
-    | "__atomic_compare_exchange_n"
-    | "__c11_atomic_compare_exchange_strong"
-    | "__c11_atomic_compare_exchange_weak"
-    | "__sync_bool_compare_and_swap"
-    | "__atomic_always_lock_free"
-    | "__atomic_is_lock_free"
-    | "__c11_atomic_is_lock_free" => Some(Bool)
-    "__sync_val_compare_and_swap" =>
-      if args.length() > 0 {
-        Some(x64_atomic_target_type(self.type_of(args[0])))
-      } else {
-        Some(SLongLong)
-      }
-    "__sync_fetch_and_add"
-    | "__sync_fetch_and_sub"
-    | "__sync_fetch_and_and"
-    | "__sync_fetch_and_or"
-    | "__sync_fetch_and_xor"
-    | "__sync_fetch_and_nand"
-    | "__sync_fetch_and_max"
-    | "__sync_fetch_and_min"
-    | "__sync_fetch_and_umax"
-    | "__sync_fetch_and_umin"
-    | "__sync_add_and_fetch"
-    | "__sync_sub_and_fetch"
-    | "__sync_and_and_fetch"
-    | "__sync_or_and_fetch"
-    | "__sync_xor_and_fetch"
-    | "__sync_nand_and_fetch"
-    | "__sync_swap"
-    | "__sync_lock_test_and_set" =>
-      if args.length() > 0 {
-        Some(x64_atomic_target_type(self.type_of(args[0])))
-      } else {
-        Some(SLongLong)
-      }
-    "__sync_lock_release" => Some(Void)
-    "__builtin_clz"
-    | "__builtin_clzl"
-    | "__builtin_clzll"
-    | "__builtin_ctz"
-    | "__builtin_ctzl"
-    | "__builtin_ctzll"
-    | "__builtin_ffs"
-    | "__builtin_ffsl"
-    | "__builtin_ffsll"
-    | "__builtin_parity"
-    | "__builtin_parityl"
-    | "__builtin_parityll"
-    | "__builtin_popcount"
-    | "__builtin_popcountl"
-    | "__builtin_popcountll" => Some(SInt)
-    "__builtin_bswap" | "__builtin_rotateleft" | "__builtin_rotateright" =>
-      if args.length() > 0 {
-        Some(self.type_of(args[0]))
-      } else {
-        Some(UInt)
-      }
-    "__builtin_bswap16" => Some(UShort)
-    "__builtin_bswap32"
-    | "__builtin_rotateleft32"
-    | "__builtin_rotateright32" => Some(UInt)
-    "__builtin_bswap64"
-    | "__builtin_rotateleft64"
-    | "__builtin_rotateright64" => Some(ULongLong)
-    "__builtin_unreachable"
-    | "__builtin_trap"
-    | "__builtin_assume"
-    | "__builtin_prefetch"
-    | "__atomic_clear"
-    | "__atomic_exchange"
-    | "__atomic_load"
-    | "__atomic_store"
-    | "__atomic_store_n"
-    | "__atomic_thread_fence"
-    | "__atomic_signal_fence"
-    | "__c11_atomic_store"
-    | "__c11_atomic_thread_fence"
-    | "__c11_atomic_signal_fence"
-    | "__sync_synchronize"
-    | "__builtin_va_start"
-    | "__builtin_va_end"
-    | "__builtin_va_copy"
-    | "__builtin_bzero" => Some(Void)
-    "__builtin_memcpy"
-    | "__builtin___memcpy_chk"
-    | "__builtin_mempcpy"
-    | "__builtin___mempcpy_chk"
-    | "__builtin_memmove"
-    | "__builtin___memmove_chk"
-    | "__builtin_memset"
-    | "__builtin___memset_chk" => Some(Pointer(Void))
-    "__builtin_strlen" => Some(ULong)
-    "__builtin_memcmp" | "__builtin_strcmp" | "__builtin_strncmp" => Some(SInt)
-    "__builtin_memchr" => Some(Pointer(Void))
-    "__builtin_strcpy"
-    | "__builtin___strcpy_chk"
-    | "__builtin_strcat"
-    | "__builtin___strcat_chk"
-    | "__builtin_stpcpy"
-    | "__builtin___stpcpy_chk"
-    | "__builtin_strncpy"
-    | "__builtin___strncpy_chk"
-    | "__builtin_stpncpy"
-    | "__builtin___stpncpy_chk"
-    | "__builtin_strncat"
-    | "__builtin___strncat_chk"
-    | "__builtin_strchr"
-    | "__builtin_strrchr"
-    | "__builtin_strstr" => Some(Pointer(SChar))
-    "__builtin___strlcpy_chk" | "__builtin___strlcat_chk" => Some(ULong)
-    "__builtin___snprintf_chk"
-    | "__builtin___vsnprintf_chk"
-    | "__builtin___sprintf_chk"
-    | "__builtin___vsprintf_chk"
-    | "__builtin___printf_chk"
-    | "__builtin___fprintf_chk"
-    | "__builtin___vfprintf_chk" => Some(SInt)
-    _ => None
+  let arg_types : Array[@parser.Type] = []
+  for arg in args {
+    arg_types.push(self.type_of(arg))
   }
+  let choose_cond = match @ctype.builtin_return_condition_arg_index(name) {
+    Some(index) =>
+      if index < args.length() {
+        self.fold_const(args[index])
+      } else {
+        None
+      }
+    None => None
+  }
+  @ctype.builtin_return_type(name, arg_types, choose_cond)
 }
 
 ///|
@@ -3550,785 +4026,119 @@ fn X64Codegen::emit_builtin_call(
   name : String,
   args : Array[@parser.Expr],
 ) -> Bool {
+  match @ctype.builtin_atomic_update_call_info(name) {
+    Some((op, return_new, _, _)) => {
+      self.emit_atomic_update_builtin(args, op, return_new)
+      return true
+    }
+    None => ()
+  }
+  match @ctype.builtin_overflow_op(name) {
+    Some(op) => {
+      self.emit_overflow_arithmetic_builtin(args, op)
+      return true
+    }
+    None => ()
+  }
+  if self.emit_ctype_integer_count_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_integer_abs_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_integer_bswap_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_integer_rotate_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_integer_alignment_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_identity_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_noop_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_address_query_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_trap_builtin_call(name) {
+    return true
+  }
+  if self.emit_ctype_fence_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_fixed_int_constant_builtin_call(name, args) {
+    return true
+  }
+  match @ctype.floating_builtin_compare_op(name) {
+    Some(op) => {
+      self.emit_builtin_fp_compare(args, op)
+      return true
+    }
+    None => ()
+  }
+  match @ctype.floating_builtin_runtime_class_info(name) {
+    Some((kind, ty)) => {
+      self.emit_builtin_fp_class_as(args, kind, ty)
+      return true
+    }
+    None => ()
+  }
+  match @ctype.floating_builtin_runtime_math_info(name) {
+    Some(("fabs", ty, _)) => {
+      self.emit_builtin_fabs(args, ty)
+      return true
+    }
+    Some(("sqrt", ty, _)) => {
+      self.emit_builtin_sqrt(args, ty)
+      return true
+    }
+    Some(("copysign", ty, _)) => {
+      self.emit_builtin_copysign(args, ty)
+      return true
+    }
+    Some(_) | None => ()
+  }
+  if self.emit_ctype_floating_constant_builtin_call(name) {
+    return true
+  }
+  if self.emit_ctype_libcall_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_zero_memory_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_stack_alloc_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_va_setup_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_constant_query_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_object_size_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_atomic_lock_free_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_atomic_load_store_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_atomic_zero_store_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_atomic_exchange_builtin_call(name, args) {
+    return true
+  }
+  if self.emit_ctype_atomic_compare_exchange_builtin_call(name, args) {
+    return true
+  }
   match name {
-    "__builtin_expect" | "__builtin_expect_with_probability" => {
-      if args.length() > 0 {
-        self.gen_expr(args[0])
-      } else {
-        self.emit("\tmov\trax, 0")
-      }
-      if args.length() > 1 {
-        self.emit_push_rax()
-        self.gen_ignored_expr_side_effects(args[1])
-        self.emit_pop_rax()
-      }
-      true
-    }
-    "__builtin_unpredictable" => {
-      if args.length() > 0 {
-        self.gen_expr(args[0])
-      } else {
-        self.emit("\tmov\trax, 0")
-      }
-      true
-    }
-    "__builtin_assume_aligned" => {
-      if args.length() > 0 {
-        self.gen_expr(args[0])
-      } else {
-        self.emit("\tmov\trax, 0")
-      }
-      if args.length() > 2 {
-        self.emit_push_rax()
-        self.gen_ignored_expr_side_effects(args[2])
-        self.emit_pop_rax()
-      }
-      true
-    }
-    "__builtin_unreachable" | "__builtin_trap" => {
-      self.emit("\tud2")
-      true
-    }
-    "__builtin_frame_address" => {
-      if args.length() > 0 {
-        match args[0] {
-          Number(0L) => self.emit("\tmov\trax, rbp")
-          _ => self.emit("\tmov\trax, 0")
-        }
-      } else {
-        self.emit("\tmov\trax, rbp")
-      }
-      true
-    }
-    "__builtin_return_address" => {
-      if args.length() > 0 {
-        match args[0] {
-          Number(0L) => self.emit("\tmov\trax, QWORD PTR [rbp + 8]")
-          _ => self.emit("\tmov\trax, 0")
-        }
-      } else {
-        self.emit("\tmov\trax, QWORD PTR [rbp + 8]")
-      }
-      true
-    }
-    "__builtin_extract_return_addr" | "__builtin_frob_return_addr" => {
-      if args.length() > 0 {
-        self.gen_expr(args[0])
-      } else {
-        self.emit("\tmov\trax, 0")
-      }
-      true
-    }
-    "__builtin_assume" => {
-      self.emit("\tmov\trax, 0")
-      true
-    }
-    "__builtin_prefetch" => {
-      if args.length() > 0 {
-        self.gen_expr(args[0])
-      }
-      self.emit("\tmov\trax, 0")
-      true
-    }
-    "__builtin_constant_p" => {
-      let value = if args.length() > 0 && self.fold_const(args[0]) is Some(_) {
-        1L
-      } else {
-        0L
-      }
-      self.emit("\tmov\trax, " + value.to_string())
-      true
-    }
-    "__builtin_flt_rounds" => {
-      self.emit("\tmov\trax, 1")
-      true
-    }
-    "__builtin_is_aligned" => {
-      self.emit_builtin_is_aligned(args)
-      true
-    }
-    "__builtin_align_up" => {
-      self.emit_builtin_align_value(args, true)
-      true
-    }
-    "__builtin_align_down" => {
-      self.emit_builtin_align_value(args, false)
-      true
-    }
-    "__builtin_object_size" | "__builtin_dynamic_object_size" => {
-      self.emit(
-        "\tmov\trax, " + self.builtin_object_size_value(args).to_string(),
-      )
-      true
-    }
-    "__builtin_alloca" => {
-      self.emit_builtin_alloca(args)
-      true
-    }
-    "__atomic_load" => {
-      self.emit_atomic_load_ptr_builtin(args)
-      true
-    }
-    "__atomic_load_n" | "__c11_atomic_load" => {
-      self.emit_atomic_load_builtin(args)
-      true
-    }
-    "__atomic_store" => {
-      self.emit_atomic_store_ptr_builtin(args)
-      true
-    }
-    "__atomic_store_n" | "__c11_atomic_store" => {
-      self.emit_atomic_store_builtin(args)
-      true
-    }
-    "__atomic_test_and_set" => {
-      self.emit_atomic_test_and_set_builtin(args)
-      true
-    }
-    "__atomic_clear" => {
-      self.emit_atomic_clear_builtin(args)
-      true
-    }
-    "__atomic_add_fetch" => {
-      self.emit_atomic_update_builtin(args, "+", true)
-      true
-    }
-    "__atomic_sub_fetch" => {
-      self.emit_atomic_update_builtin(args, "-", true)
-      true
-    }
-    "__atomic_and_fetch" => {
-      self.emit_atomic_update_builtin(args, "&", true)
-      true
-    }
-    "__atomic_or_fetch" => {
-      self.emit_atomic_update_builtin(args, "|", true)
-      true
-    }
-    "__atomic_xor_fetch" => {
-      self.emit_atomic_update_builtin(args, "^", true)
-      true
-    }
-    "__atomic_nand_fetch" => {
-      self.emit_atomic_update_builtin(args, "~&", true)
-      true
-    }
-    "__atomic_fetch_add" | "__c11_atomic_fetch_add" => {
-      self.emit_atomic_update_builtin(args, "+", false)
-      true
-    }
-    "__atomic_fetch_sub" | "__c11_atomic_fetch_sub" => {
-      self.emit_atomic_update_builtin(args, "-", false)
-      true
-    }
-    "__atomic_fetch_and" | "__c11_atomic_fetch_and" => {
-      self.emit_atomic_update_builtin(args, "&", false)
-      true
-    }
-    "__atomic_fetch_or" | "__c11_atomic_fetch_or" => {
-      self.emit_atomic_update_builtin(args, "|", false)
-      true
-    }
-    "__atomic_fetch_xor" | "__c11_atomic_fetch_xor" => {
-      self.emit_atomic_update_builtin(args, "^", false)
-      true
-    }
-    "__atomic_fetch_nand" => {
-      self.emit_atomic_update_builtin(args, "~&", false)
-      true
-    }
-    "__atomic_exchange" => {
-      self.emit_atomic_exchange_ptr_builtin(args)
-      true
-    }
-    "__atomic_exchange_n" | "__c11_atomic_exchange" => {
-      self.emit_atomic_exchange_builtin(args)
-      true
-    }
-    "__atomic_compare_exchange" => {
-      self.emit_atomic_compare_exchange_ptr_builtin(args)
-      true
-    }
-    "__atomic_compare_exchange_n"
-    | "__c11_atomic_compare_exchange_strong"
-    | "__c11_atomic_compare_exchange_weak" => {
-      self.emit_atomic_compare_exchange_builtin(args)
-      true
-    }
-    "__atomic_thread_fence" | "__c11_atomic_thread_fence" => {
-      self.emit("\tmfence")
-      self.emit("\tmov\trax, 0")
-      true
-    }
-    "__atomic_signal_fence" | "__c11_atomic_signal_fence" => {
-      self.emit("\tmov\trax, 0")
-      true
-    }
-    "__atomic_always_lock_free"
-    | "__atomic_is_lock_free"
-    | "__c11_atomic_is_lock_free" => {
-      self.emit_atomic_lock_free_builtin(args)
-      true
-    }
-    "__sync_bool_compare_and_swap" => {
-      self.emit_sync_compare_and_swap_builtin(args, false)
-      true
-    }
-    "__sync_val_compare_and_swap" => {
-      self.emit_sync_compare_and_swap_builtin(args, true)
-      true
-    }
-    "__sync_fetch_and_add" => {
-      self.emit_atomic_update_builtin(args, "+", false)
-      true
-    }
-    "__sync_fetch_and_sub" => {
-      self.emit_atomic_update_builtin(args, "-", false)
-      true
-    }
-    "__sync_fetch_and_and" => {
-      self.emit_atomic_update_builtin(args, "&", false)
-      true
-    }
-    "__sync_fetch_and_or" => {
-      self.emit_atomic_update_builtin(args, "|", false)
-      true
-    }
-    "__sync_fetch_and_xor" => {
-      self.emit_atomic_update_builtin(args, "^", false)
-      true
-    }
-    "__sync_fetch_and_nand" => {
-      self.emit_atomic_update_builtin(args, "~&", false)
-      true
-    }
-    "__sync_fetch_and_max" => {
-      self.emit_atomic_update_builtin(args, "max", false)
-      true
-    }
-    "__sync_fetch_and_min" => {
-      self.emit_atomic_update_builtin(args, "min", false)
-      true
-    }
-    "__sync_fetch_and_umax" => {
-      self.emit_atomic_update_builtin(args, "umax", false)
-      true
-    }
-    "__sync_fetch_and_umin" => {
-      self.emit_atomic_update_builtin(args, "umin", false)
-      true
-    }
-    "__sync_add_and_fetch" => {
-      self.emit_atomic_update_builtin(args, "+", true)
-      true
-    }
-    "__sync_sub_and_fetch" => {
-      self.emit_atomic_update_builtin(args, "-", true)
-      true
-    }
-    "__sync_and_and_fetch" => {
-      self.emit_atomic_update_builtin(args, "&", true)
-      true
-    }
-    "__sync_or_and_fetch" => {
-      self.emit_atomic_update_builtin(args, "|", true)
-      true
-    }
-    "__sync_xor_and_fetch" => {
-      self.emit_atomic_update_builtin(args, "^", true)
-      true
-    }
-    "__sync_nand_and_fetch" => {
-      self.emit_atomic_update_builtin(args, "~&", true)
-      true
-    }
-    "__sync_swap" | "__sync_lock_test_and_set" => {
-      self.emit_atomic_exchange_builtin(args)
-      true
-    }
-    "__sync_lock_release" => {
-      self.emit_sync_lock_release_builtin(args)
-      true
-    }
-    "__builtin_add_overflow"
-    | "__builtin_sadd_overflow"
-    | "__builtin_saddl_overflow"
-    | "__builtin_saddll_overflow"
-    | "__builtin_uadd_overflow"
-    | "__builtin_uaddl_overflow"
-    | "__builtin_uaddll_overflow" => {
-      self.emit_overflow_arithmetic_builtin(args, "+")
-      true
-    }
-    "__builtin_sub_overflow"
-    | "__builtin_ssub_overflow"
-    | "__builtin_ssubl_overflow"
-    | "__builtin_ssubll_overflow"
-    | "__builtin_usub_overflow"
-    | "__builtin_usubl_overflow"
-    | "__builtin_usubll_overflow" => {
-      self.emit_overflow_arithmetic_builtin(args, "-")
-      true
-    }
-    "__builtin_mul_overflow"
-    | "__builtin_smul_overflow"
-    | "__builtin_smull_overflow"
-    | "__builtin_smulll_overflow"
-    | "__builtin_umul_overflow"
-    | "__builtin_umull_overflow"
-    | "__builtin_umulll_overflow" => {
-      self.emit_overflow_arithmetic_builtin(args, "*")
-      true
-    }
-    "__sync_synchronize" => {
-      self.emit("\tmfence")
-      self.emit("\tmov\trax, 0")
-      true
-    }
-    "__builtin_fabs" | "__builtin_fabsl" => {
-      self.emit_builtin_fabs(args, Double)
-      true
-    }
-    "__builtin_fabsf" => {
-      self.emit_builtin_fabs(args, Float)
-      true
-    }
-    "__builtin_copysign" | "__builtin_copysignl" => {
-      self.emit_builtin_copysign(args, Double)
-      true
-    }
-    "__builtin_copysignf" => {
-      self.emit_builtin_copysign(args, Float)
-      true
-    }
-    "__builtin_sqrt" | "__builtin_sqrtl" => {
-      self.emit_builtin_sqrt(args, Double)
-      true
-    }
-    "__builtin_sqrtf" => {
-      self.emit_builtin_sqrt(args, Float)
-      true
-    }
-    "__builtin_abs" => {
-      self.emit_builtin_abs(args, SInt)
-      true
-    }
-    "__builtin_labs" => {
-      self.emit_builtin_abs(args, SLong)
-      true
-    }
-    "__builtin_llabs" => {
-      self.emit_builtin_abs(args, SLongLong)
-      true
-    }
-    "__builtin_nan" | "__builtin_nanl" => {
-      self.emit_builtin_fp_bits(9221120237041090560L, Double)
-      true
-    }
-    "__builtin_nanf" => {
-      self.emit_builtin_fp_bits(2143289344L, Float)
-      true
-    }
-    "__builtin_huge_val"
-    | "__builtin_huge_vall"
-    | "__builtin_inf"
-    | "__builtin_infl" => {
-      self.emit_builtin_fp_bits(9218868437227405312L, Double)
-      true
-    }
-    "__builtin_huge_valf" | "__builtin_inff" => {
-      self.emit_builtin_fp_bits(2139095040L, Float)
-      true
-    }
-    "__builtin_isgreater" => {
-      self.emit_builtin_fp_compare(args, ">")
-      true
-    }
-    "__builtin_isgreaterequal" => {
-      self.emit_builtin_fp_compare(args, ">=")
-      true
-    }
-    "__builtin_isless" => {
-      self.emit_builtin_fp_compare(args, "<")
-      true
-    }
-    "__builtin_islessequal" => {
-      self.emit_builtin_fp_compare(args, "<=")
-      true
-    }
-    "__builtin_islessgreater" => {
-      self.emit_builtin_fp_compare(args, "<>")
-      true
-    }
-    "__builtin_isunordered" => {
-      self.emit_builtin_fp_compare(args, "unordered")
-      true
-    }
-    "__builtin_isnan" | "__builtin_isnanl" => {
-      self.emit_builtin_fp_class(args, "isnan")
-      true
-    }
-    "__builtin_isnanf" => {
-      self.emit_builtin_fp_class_as(args, "isnan", Float)
-      true
-    }
-    "__builtin_isinf" | "__builtin_isinfl" => {
-      self.emit_builtin_fp_class(args, "isinf")
-      true
-    }
-    "__builtin_isinff" => {
-      self.emit_builtin_fp_class_as(args, "isinf", Float)
-      true
-    }
-    "__builtin_isfinite" | "__builtin_isfinitel" => {
-      self.emit_builtin_fp_class(args, "isfinite")
-      true
-    }
-    "__builtin_isfinitef" => {
-      self.emit_builtin_fp_class_as(args, "isfinite", Float)
-      true
-    }
-    "__builtin_isnormal" | "__builtin_isnormall" => {
-      self.emit_builtin_fp_class(args, "isnormal")
-      true
-    }
-    "__builtin_isnormalf" => {
-      self.emit_builtin_fp_class_as(args, "isnormal", Float)
-      true
-    }
-    "__builtin_signbit" | "__builtin_signbitl" => {
-      self.emit_builtin_fp_class(args, "signbit")
-      true
-    }
-    "__builtin_signbitf" => {
-      self.emit_builtin_fp_class_as(args, "signbit", Float)
-      true
-    }
-    "__builtin_clz" => {
-      self.emit_builtin_clz(args, 32)
-      true
-    }
-    "__builtin_clzl" | "__builtin_clzll" => {
-      self.emit_builtin_clz(args, 64)
-      true
-    }
-    "__builtin_ctz" => {
-      self.emit_builtin_ctz(args, 32)
-      true
-    }
-    "__builtin_ctzl" | "__builtin_ctzll" => {
-      self.emit_builtin_ctz(args, 64)
-      true
-    }
-    "__builtin_ffs" => {
-      self.emit_builtin_ffs(args, 32)
-      true
-    }
-    "__builtin_ffsl" | "__builtin_ffsll" => {
-      self.emit_builtin_ffs(args, 64)
-      true
-    }
-    "__builtin_bswap16" => {
-      self.emit_builtin_bswap(args, 16)
-      true
-    }
-    "__builtin_bswap32" => {
-      self.emit_builtin_bswap(args, 32)
-      true
-    }
-    "__builtin_bswap64" => {
-      self.emit_builtin_bswap(args, 64)
-      true
-    }
-    "__builtin_bswap" => {
-      self.emit_builtin_bswap(args, self.generic_builtin_bswap_width(args))
-      true
-    }
-    "__builtin_rotateleft" => {
-      self.emit_builtin_rotate(args, self.generic_builtin_bit_width(args), true)
-      true
-    }
-    "__builtin_rotateright" => {
-      self.emit_builtin_rotate(
-        args,
-        self.generic_builtin_bit_width(args),
-        false,
-      )
-      true
-    }
-    "__builtin_rotateleft32" => {
-      self.emit_builtin_rotate(args, 32, true)
-      true
-    }
-    "__builtin_rotateright32" => {
-      self.emit_builtin_rotate(args, 32, false)
-      true
-    }
-    "__builtin_rotateleft64" => {
-      self.emit_builtin_rotate(args, 64, true)
-      true
-    }
-    "__builtin_rotateright64" => {
-      self.emit_builtin_rotate(args, 64, false)
-      true
-    }
-    "__builtin_popcount" => {
-      self.emit_builtin_popcount(args, 32)
-      true
-    }
-    "__builtin_popcountl" | "__builtin_popcountll" => {
-      self.emit_builtin_popcount(args, 64)
-      true
-    }
-    "__builtin_parity" => {
-      self.emit_builtin_parity(args, 32)
-      true
-    }
-    "__builtin_parityl" | "__builtin_parityll" => {
-      self.emit_builtin_parity(args, 64)
-      true
-    }
-    "__builtin_va_start" => {
-      self.emit_va_start(args)
-      true
-    }
-    "__builtin_va_end" => {
-      self.emit("\tmov\trax, 0")
-      true
-    }
-    "__builtin_va_copy" => {
-      self.emit_va_copy(args)
-      true
-    }
-    "__builtin_memcpy" | "__builtin___memcpy_chk" => {
-      self.emit_builtin_lib_call("memcpy", args, 3, Pointer(Void), [
-        Pointer(Void),
-        Pointer(Void),
-        ULong,
-      ])
-      true
-    }
-    "__builtin_mempcpy" | "__builtin___mempcpy_chk" => {
-      self.emit_builtin_lib_call("mempcpy", args, 3, Pointer(Void), [
-        Pointer(Void),
-        Pointer(Void),
-        ULong,
-      ])
-      true
-    }
-    "__builtin_memmove" | "__builtin___memmove_chk" => {
-      self.emit_builtin_lib_call("memmove", args, 3, Pointer(Void), [
-        Pointer(Void),
-        Pointer(Void),
-        ULong,
-      ])
-      true
-    }
-    "__builtin_memset" | "__builtin___memset_chk" => {
-      self.emit_builtin_lib_call("memset", args, 3, Pointer(Void), [
-        Pointer(Void),
-        SInt,
-        ULong,
-      ])
-      true
-    }
-    "__builtin_bzero" => {
-      self.emit_builtin_lib_call("bzero", args, 2, Void, [Pointer(Void), ULong])
-      true
-    }
-    "__builtin_memcmp" => {
-      self.emit_builtin_lib_call("memcmp", args, 3, SInt, [
-        Pointer(Void),
-        Pointer(Void),
-        ULong,
-      ])
-      true
-    }
-    "__builtin_memchr" => {
-      self.emit_builtin_lib_call("memchr", args, 3, Pointer(Void), [
-        Pointer(Void),
-        SInt,
-        ULong,
-      ])
-      true
-    }
-    "__builtin_strlen" => {
-      self.emit_builtin_lib_call("strlen", args, 1, ULong, [Pointer(SChar)])
-      true
-    }
-    "__builtin_strcmp" => {
-      self.emit_builtin_lib_call("strcmp", args, 2, SInt, [
-        Pointer(SChar),
-        Pointer(SChar),
-      ])
-      true
-    }
-    "__builtin_strncmp" => {
-      self.emit_builtin_lib_call("strncmp", args, 3, SInt, [
-        Pointer(SChar),
-        Pointer(SChar),
-        ULong,
-      ])
-      true
-    }
-    "__builtin_strchr" => {
-      self.emit_builtin_lib_call("strchr", args, 2, Pointer(SChar), [
-        Pointer(SChar),
-        SInt,
-      ])
-      true
-    }
-    "__builtin_strrchr" => {
-      self.emit_builtin_lib_call("strrchr", args, 2, Pointer(SChar), [
-        Pointer(SChar),
-        SInt,
-      ])
-      true
-    }
-    "__builtin_strstr" => {
-      self.emit_builtin_lib_call("strstr", args, 2, Pointer(SChar), [
-        Pointer(SChar),
-        Pointer(SChar),
-      ])
-      true
-    }
-    "__builtin_strcpy" | "__builtin___strcpy_chk" => {
-      self.emit_builtin_lib_call("strcpy", args, 2, Pointer(SChar), [
-        Pointer(SChar),
-        Pointer(SChar),
-      ])
-      true
-    }
-    "__builtin_strcat" | "__builtin___strcat_chk" => {
-      self.emit_builtin_lib_call("strcat", args, 2, Pointer(SChar), [
-        Pointer(SChar),
-        Pointer(SChar),
-      ])
-      true
-    }
-    "__builtin_stpcpy" | "__builtin___stpcpy_chk" => {
-      self.emit_builtin_lib_call("stpcpy", args, 2, Pointer(SChar), [
-        Pointer(SChar),
-        Pointer(SChar),
-      ])
-      true
-    }
-    "__builtin_strncpy" | "__builtin___strncpy_chk" => {
-      self.emit_builtin_lib_call("strncpy", args, 3, Pointer(SChar), [
-        Pointer(SChar),
-        Pointer(SChar),
-        ULong,
-      ])
-      true
-    }
-    "__builtin_stpncpy" | "__builtin___stpncpy_chk" => {
-      self.emit_builtin_lib_call("stpncpy", args, 3, Pointer(SChar), [
-        Pointer(SChar),
-        Pointer(SChar),
-        ULong,
-      ])
-      true
-    }
-    "__builtin_strncat" | "__builtin___strncat_chk" => {
-      self.emit_builtin_lib_call("strncat", args, 3, Pointer(SChar), [
-        Pointer(SChar),
-        Pointer(SChar),
-        ULong,
-      ])
-      true
-    }
-    "__builtin___strlcpy_chk" => {
-      self.emit_lowered_builtin_call(
-        "strlcpy",
-        args,
-        [0, 1, 2],
-        args.length(),
-        ULong,
-        false,
-        [Pointer(SChar), Pointer(SChar), ULong],
-      )
-      true
-    }
-    "__builtin___strlcat_chk" => {
-      self.emit_lowered_builtin_call(
-        "strlcat",
-        args,
-        [0, 1, 2],
-        args.length(),
-        ULong,
-        false,
-        [Pointer(SChar), Pointer(SChar), ULong],
-      )
-      true
-    }
-    "__builtin___snprintf_chk" => {
-      self.emit_lowered_builtin_call(
-        "snprintf",
-        args,
-        [0, 1, 4],
-        5,
-        SInt,
-        true,
-        [Pointer(SChar), ULong, Pointer(SChar)],
-      )
-      true
-    }
-    "__builtin___vsnprintf_chk" => {
-      self.emit_lowered_builtin_call(
-        "vsnprintf",
-        args,
-        [0, 1, 4, 5],
-        args.length(),
-        SInt,
-        false,
-        [Pointer(SChar), ULong, Pointer(SChar), Pointer(SChar)],
-      )
-      true
-    }
-    "__builtin___sprintf_chk" => {
-      self.emit_lowered_builtin_call("sprintf", args, [0, 3], 4, SInt, true, [
-        Pointer(SChar),
-        Pointer(SChar),
-      ])
-      true
-    }
-    "__builtin___vsprintf_chk" => {
-      self.emit_lowered_builtin_call(
-        "vsprintf",
-        args,
-        [0, 3, 4],
-        args.length(),
-        SInt,
-        false,
-        [Pointer(SChar), Pointer(SChar), Pointer(SChar)],
-      )
-      true
-    }
-    "__builtin___printf_chk" => {
-      self.emit_lowered_builtin_call("printf", args, [1], 2, SInt, true, [
-        Pointer(SChar),
-      ])
-      true
-    }
-    "__builtin___fprintf_chk" => {
-      self.emit_lowered_builtin_call("fprintf", args, [0, 2], 3, SInt, true, [
-        Pointer(Void),
-        Pointer(SChar),
-      ])
-      true
-    }
-    "__builtin___vfprintf_chk" => {
-      self.emit_lowered_builtin_call(
-        "vfprintf",
-        args,
-        [0, 2, 3],
-        args.length(),
-        SInt,
-        false,
-        [Pointer(Void), Pointer(SChar), Pointer(SChar)],
-      )
-      true
-    }
     _ => false
   }
 }
@@ -4347,17 +4157,7 @@ fn X64Codegen::field_info(
 
 ///|
 fn x64_field_receiver_type(ty : @parser.Type) -> @parser.Type? {
-  match x64_core_type(ty) {
-    Struct(name) => Some(Struct(name))
-    Union(name) => Some(Union(name))
-    Pointer(inner) =>
-      match x64_core_type(inner) {
-        Struct(name) => Some(Struct(name))
-        Union(name) => Some(Union(name))
-        _ => None
-      }
-    _ => None
-  }
+  ty.field_receiver()
 }
 
 ///|
@@ -4416,10 +4216,7 @@ fn X64Codegen::offset_of_path(
 
 ///|
 fn x64_offset_array_element_type(ty : @parser.Type) -> @parser.Type? {
-  match x64_core_type(ty) {
-    Array(elem, _) => Some(elem)
-    _ => None
-  }
+  ty.array_element()
 }
 
 ///|
@@ -4444,7 +4241,7 @@ fn X64Codegen::bitfield_info(
 
 ///|
 fn x64_bitfield_promoted_type(info : X64BitfieldInfo) -> @parser.Type {
-  match x64_core_type(info.ty) {
+  match info.ty.core_type() {
     Bool | SChar | UChar | SShort | UShort | SInt => SInt
     UInt => if info.bit_width <= 31 { SInt } else { UInt }
     _ => info.ty
@@ -4574,7 +4371,7 @@ fn X64Codegen::type_of(self : X64Codegen, expr : @parser.Expr) -> @parser.Type {
     _ => ()
   }
   match expr {
-    Number(value) => number_literal_type(value)
+    Number(value) => @ctype.integer_literal_type(value)
     FloatLiteral(_) => Double
     String(_) => Pointer(SChar)
     Var(name) =>
@@ -4600,17 +4397,19 @@ fn X64Codegen::type_of(self : X64Codegen, expr : @parser.Expr) -> @parser.Type {
           _ => ()
         }
       }
-      if op == "-" && x64_is_pointer_like(lhs_ty) && x64_is_pointer_like(rhs_ty) {
+      if op == "-" &&
+        lhs_ty.pointer_or_array_element() is Some(_) &&
+        rhs_ty.pointer_or_array_element() is Some(_) {
         return SLong
       }
-      match x64_pointer_element(lhs_ty) {
+      match lhs_ty.pointer_or_array_element() {
         Some(elem) =>
           if (op == "+" || op == "-") && rhs_ty.is_integer() {
             return Pointer(elem)
           }
         None => ()
       }
-      match x64_pointer_element(rhs_ty) {
+      match rhs_ty.pointer_or_array_element() {
         Some(elem) =>
           if op == "+" && lhs_ty.is_integer() {
             return Pointer(elem)
@@ -4619,7 +4418,7 @@ fn X64Codegen::type_of(self : X64Codegen, expr : @parser.Expr) -> @parser.Type {
       }
       match op {
         "==" | "!=" | "<" | "<=" | ">" | ">=" | "&&" | "||" => SInt
-        _ => binary_result_type(op, lhs_ty, rhs_ty)
+        _ => @ctype.binary_result_type(op, lhs_ty, rhs_ty, false)
       }
     }
     Unary("!", _) => SInt
@@ -4648,14 +4447,14 @@ fn X64Codegen::type_of(self : X64Codegen, expr : @parser.Expr) -> @parser.Type {
       field_ty
     }
     Deref(ptr) =>
-      match x64_core_type(self.type_of(ptr)) {
+      match self.type_of(ptr).core_type() {
         Pointer(ty) | Array(ty, _) => ty
         FuncPtr(ret, params, variadic) => FuncPtr(ret, params, variadic)
         _ => SInt
       }
     AddrOf(e) => Pointer(self.type_of(e))
     ArrayAccess(arr, _) =>
-      match x64_pointer_element(self.type_of(arr)) {
+      match self.type_of(arr).pointer_or_array_element() {
         Some(elem) => elem
         None => SInt
       }
@@ -4665,11 +4464,16 @@ fn X64Codegen::type_of(self : X64Codegen, expr : @parser.Expr) -> @parser.Type {
     PrefixInc(e) | PrefixDec(e) | PostfixInc(e) | PostfixDec(e) =>
       self.type_of(e)
     Ternary(_, then_, else_) =>
-      x64_ternary_result_type(self.type_of(then_), self.type_of(else_))
+      @ctype.ternary_result_type(
+        self.type_of(then_),
+        self.type_of(else_),
+        false,
+      )
     LabelAddr(_) => Pointer(Void)
     VaArg(_, ty) => ty
     Array(_) => SInt
-    CompoundLiteral(ty, _, _) => ty
+    CompoundLiteral(ty, exprs, _) =>
+      codegen_file_scope_compound_literal_type(ty, exprs)
     DesignatedField(_, e) | DesignatedIndex(_, e) | DesignatedRange(_, _, e) =>
       self.type_of(e)
   }
@@ -4681,9 +4485,9 @@ fn X64Codegen::global_expr_type(
   expr : @parser.Expr,
 ) -> @parser.Type {
   match expr {
-    Number(value) => number_literal_type(value)
+    Number(value) => @ctype.integer_literal_type(value)
     FloatLiteral(_) => Double
-    String(s) => Array(SChar, s.length() + 1)
+    String(s) => Array(SChar, @ctype.string_literal_array_length(s))
     Var(name) =>
       if self.globals.contains(name) {
         self.globals[name].ty
@@ -4701,12 +4505,12 @@ fn X64Codegen::global_expr_type(
     Cast(ty, _) => ty
     AddrOf(e) => Pointer(self.global_expr_type(e))
     Deref(e) =>
-      match peel_aligned_type(self.global_expr_type(e)) {
+      match self.global_expr_type(e).without_alignment() {
         Pointer(elem) | Array(elem, _) => elem
         _ => SInt
       }
     ArrayAccess(base, _) =>
-      match peel_aligned_type(self.global_expr_type(base)) {
+      match self.global_expr_type(base).without_alignment() {
         Array(elem, _) | Pointer(elem) => elem
         _ => SInt
       }
@@ -4718,7 +4522,8 @@ fn X64Codegen::global_expr_type(
         None => SInt
       }
     }
-    CompoundLiteral(ty, _, _) => ty
+    CompoundLiteral(ty, exprs, _) =>
+      codegen_file_scope_compound_literal_type(ty, exprs)
     _ => SInt
   }
 }
@@ -4735,7 +4540,7 @@ fn X64Codegen::gen_addr(self : X64Codegen, expr : @parser.Expr) -> Unit {
     Deref(ptr) => self.gen_expr(ptr)
     AddrOf(e) => self.gen_addr(e)
     MemberAccess(obj, field) => {
-      if x64_is_aggregate_type(self.type_of(obj)) {
+      if self.type_of(obj).is_aggregate() {
         self.gen_aggregate_addr(obj)
       } else {
         self.gen_addr(obj)
@@ -4746,13 +4551,13 @@ fn X64Codegen::gen_addr(self : X64Codegen, expr : @parser.Expr) -> Unit {
       }
     }
     ArrayAccess(arr, index) => {
-      match x64_core_type(self.type_of(arr)) {
+      match self.type_of(arr).core_type() {
         Array(_, _) => self.gen_addr(arr)
         _ => self.gen_expr(arr)
       }
       self.emit_push_rax()
       self.gen_expr(index)
-      let elem_ty = match x64_pointer_element(self.type_of(arr)) {
+      let elem_ty = match self.type_of(arr).pointer_or_array_element() {
         Some(ty) => ty
         None => SInt
       }
@@ -4766,8 +4571,12 @@ fn X64Codegen::gen_addr(self : X64Codegen, expr : @parser.Expr) -> Unit {
     }
     LabelAddr(name) =>
       self.emit("\tlea\trax, [rip + " + self.label_ref(name) + "]")
-    CompoundLiteral(ty, init_exprs, id) =>
-      self.gen_compound_literal_addr(ty, init_exprs, id)
+    CompoundLiteral(ty, init_exprs, id) => {
+      let completed_ty = codegen_file_scope_compound_literal_type(
+        ty, init_exprs,
+      )
+      self.gen_compound_literal_addr(completed_ty, init_exprs, id)
+    }
     _ => abort("expression is not addressable")
   }
 }
@@ -4779,6 +4588,7 @@ fn X64Codegen::gen_compound_literal_addr(
   init_exprs : Array[@parser.Expr],
   id : Int,
 ) -> Unit {
+  let ty = codegen_file_scope_compound_literal_type(ty, init_exprs)
   let name = compound_literal_local_name(id)
   let offset = if self.local_offsets.contains(name) {
     self.local_offsets[name]
@@ -4786,7 +4596,7 @@ fn X64Codegen::gen_compound_literal_addr(
     self.alloc_local(name, ty)
   }
   self.emit_local_addr(offset)
-  if x64_is_object_aggregate_type(ty) {
+  if ty.is_object_aggregate() {
     self.emit_init_aggregate_at_addr(ty, init_exprs)
   } else if init_exprs.length() > 0 {
     self.emit_init_value_at_addr(ty, init_exprs[0])
@@ -4805,26 +4615,40 @@ fn X64Codegen::gen_aggregate_addr(
     Ternary(cond, then_, else_) => {
       let else_label = self.new_label()
       let end_label = self.new_label()
-      self.gen_cond_jump_false(cond, else_label)
-      self.gen_aggregate_addr(then_)
-      self.emit("\tjmp\t" + end_label)
-      self.emit(else_label + ":")
-      self.gen_aggregate_addr(else_)
-      self.emit(end_label + ":")
+      let result_ty = self.type_of(expr)
+      if result_ty.is_aggregate() && self.sret_scratch_offset >= 0 {
+        self.gen_cond_jump_false(cond, else_label)
+        self.emit_aggregate_expr_addr_in_scratch(result_ty, then_)
+        self.emit("\tjmp\t" + end_label)
+        self.emit(else_label + ":")
+        self.emit_aggregate_expr_addr_in_scratch(result_ty, else_)
+        self.emit(end_label + ":")
+        self.emit_local_addr(self.sret_scratch_offset)
+      } else {
+        self.gen_cond_jump_false(cond, else_label)
+        self.gen_aggregate_addr(then_)
+        self.emit("\tjmp\t" + end_label)
+        self.emit(else_label + ":")
+        self.gen_aggregate_addr(else_)
+        self.emit(end_label + ":")
+      }
     }
     Binary(",", lhs, rhs) => {
       self.gen_expr(lhs)
       self.gen_aggregate_addr(rhs)
     }
-    Cast(ty, inner) if x64_is_aggregate_type(ty) =>
-      self.gen_aggregate_addr(inner)
+    Cast(ty, inner) if ty.is_aggregate() => self.gen_aggregate_addr(inner)
     Assign(_, _) | CompoundAssign(_, _, _) => self.gen_expr(expr)
-    VaArg(ap_expr, ty) if x64_is_aggregate_type(ty) =>
+    VaArg(ap_expr, ty) if ty.is_aggregate() =>
       self.emit_va_arg_aggregate_addr(ap_expr, ty)
     Call(_, _) if self.is_memory_aggregate(self.type_of(expr)) =>
       self.gen_expr(expr)
-    CompoundLiteral(ty, init_exprs, id) =>
-      self.gen_compound_literal_addr(ty, init_exprs, id)
+    CompoundLiteral(ty, init_exprs, id) => {
+      let completed_ty = codegen_file_scope_compound_literal_type(
+        ty, init_exprs,
+      )
+      self.gen_compound_literal_addr(completed_ty, init_exprs, id)
+    }
     _ => self.gen_addr(expr)
   }
 }
@@ -4840,7 +4664,7 @@ fn X64Codegen::emit_int_conversion_to(
   self : X64Codegen,
   ty : @parser.Type,
 ) -> Unit {
-  match x64_core_type(ty) {
+  match ty.core_type() {
     Bool => {
       self.emit("\tcmp\trax, 0")
       self.emit_setcc("setne")
@@ -4860,7 +4684,7 @@ fn X64Codegen::emit_extend_rax_to_int128(
   self : X64Codegen,
   src_ty : @parser.Type,
 ) -> Unit {
-  if x64_is_int128_type(src_ty) {
+  if src_ty.is_int128() {
     return
   }
   if src_ty.is_signed() {
@@ -4875,7 +4699,7 @@ fn X64Codegen::emit_abi_int_return_conversion(
   self : X64Codegen,
   ty : @parser.Type,
 ) -> Unit {
-  match x64_core_type(ty) {
+  match ty.core_type() {
     Bool | UChar => self.emit("\tmovzx\trax, al")
     SChar => self.emit("\tmovsx\trax, al")
     UShort => self.emit("\tmovzx\trax, ax")
@@ -4893,9 +4717,9 @@ fn x64_binary_int_type(
   rhs_ty : @parser.Type,
 ) -> @parser.Type {
   if op == "<<" || op == ">>" {
-    unary_integer_result_type(lhs_ty)
+    lhs_ty.integer_promote()
   } else {
-    integer_common_type(lhs_ty, rhs_ty)
+    @ctype.integer_common_type(lhs_ty, rhs_ty)
   }
 }
 
@@ -4906,9 +4730,9 @@ fn x64_binary_rhs_int_type(
   rhs_ty : @parser.Type,
 ) -> @parser.Type {
   if op == "<<" || op == ">>" {
-    unary_integer_result_type(rhs_ty)
+    rhs_ty.integer_promote()
   } else {
-    integer_common_type(lhs_ty, rhs_ty)
+    @ctype.integer_common_type(lhs_ty, rhs_ty)
   }
 }
 
@@ -4917,33 +4741,6 @@ fn x64_binary_converts_result(op : String) -> Bool {
   match op {
     "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" => true
     _ => false
-  }
-}
-
-///|
-fn x64_ternary_result_type(
-  then_ty : @parser.Type,
-  else_ty : @parser.Type,
-) -> @parser.Type {
-  match (x64_core_type(then_ty), x64_core_type(else_ty)) {
-    (Array(elem, _), _) => Pointer(elem)
-    (_, Array(elem, _)) => Pointer(elem)
-    (Pointer(elem), _) => Pointer(elem)
-    (_, Pointer(elem)) => Pointer(elem)
-    (FuncPtr(ret, params, variadic), _) => FuncPtr(ret, params, variadic)
-    (_, FuncPtr(ret, params, variadic)) => FuncPtr(ret, params, variadic)
-    _ =>
-      if x64_is_fp_type(then_ty) || x64_is_fp_type(else_ty) {
-        if x64_core_type(then_ty) == Double || x64_core_type(else_ty) == Double {
-          Double
-        } else {
-          Float
-        }
-      } else if then_ty.is_integer() && else_ty.is_integer() {
-        integer_common_type(then_ty, else_ty)
-      } else {
-        then_ty
-      }
   }
 }
 
@@ -5123,15 +4920,15 @@ fn X64Codegen::gen_int128_binary(
   rhs_ty : @parser.Type,
 ) -> Unit {
   let result_ty = if op == "<<" || op == ">>" {
-    unary_integer_result_type(lhs_ty)
+    lhs_ty.integer_promote()
   } else {
-    integer_common_type(lhs_ty, rhs_ty)
+    @ctype.integer_common_type(lhs_ty, rhs_ty)
   }
-  let is_unsigned = is_unsigned_integer_type(result_ty)
+  let is_unsigned = result_ty.is_unsigned_integer()
   self.gen_expr_as_scalar(lhs, result_ty)
   self.emit_push_int128()
   if op == "<<" || op == ">>" {
-    self.gen_expr_as_scalar(rhs, unary_integer_result_type(rhs_ty))
+    self.gen_expr_as_scalar(rhs, rhs_ty.integer_promote())
   } else {
     self.gen_expr_as_scalar(rhs, result_ty)
   }
@@ -5205,17 +5002,17 @@ fn X64Codegen::gen_int128_compound_assign(
   rhs_ty : @parser.Type,
 ) -> Unit {
   let result_ty = if op == "<<" || op == ">>" {
-    unary_integer_result_type(lhs_ty)
+    lhs_ty.integer_promote()
   } else {
-    integer_common_type(lhs_ty, rhs_ty)
+    @ctype.integer_common_type(lhs_ty, rhs_ty)
   }
-  let is_unsigned = is_unsigned_integer_type(result_ty)
+  let is_unsigned = result_ty.is_unsigned_integer()
   self.gen_addr(lhs)
   self.emit_push_rax()
   self.emit_load_indirect(lhs_ty)
   self.emit_push_int128()
   if op == "<<" || op == ">>" {
-    self.gen_expr_as_scalar(rhs, unary_integer_result_type(rhs_ty))
+    self.gen_expr_as_scalar(rhs, rhs_ty.integer_promote())
   } else {
     self.gen_expr_as_scalar(rhs, result_ty)
   }
@@ -5347,7 +5144,7 @@ fn X64Codegen::gen_expr_as_fp(
   let src_ty = self.type_of(expr)
   if x64_is_fp_type(src_ty) {
     self.gen_expr(expr)
-    match (x64_core_type(src_ty), x64_core_type(dst_ty)) {
+    match (src_ty.core_type(), dst_ty.core_type()) {
       (Float, Double) => self.emit("\tcvtss2sd\txmm0, xmm0")
       (Double, Float) => self.emit("\tcvtsd2ss\txmm0, xmm0")
       _ => ()
@@ -5364,9 +5161,9 @@ fn X64Codegen::emit_int_to_fp(
   src_ty : @parser.Type,
   dst_ty : @parser.Type,
 ) -> Unit {
-  if is_unsigned_integer_type(src_ty) && self.type_size(src_ty) == 8 {
+  if src_ty.is_unsigned_integer() && self.type_size(src_ty) == 8 {
     self.emit_uint64_to_fp(dst_ty)
-  } else if x64_core_type(dst_ty) == Float {
+  } else if dst_ty.core_type() == Float {
     self.emit("\tcvtsi2ss\txmm0, rax")
   } else {
     self.emit("\tcvtsi2sd\txmm0, rax")
@@ -5386,7 +5183,7 @@ fn X64Codegen::emit_uint64_to_fp(
   self.emit("\tand\trax, 1")
   self.emit("\tshr\tr10, 1")
   self.emit("\tor\trax, r10")
-  if x64_core_type(dst_ty) == Float {
+  if dst_ty.core_type() == Float {
     self.emit("\tcvtsi2ss\txmm0, rax")
     self.emit("\taddss\txmm0, xmm0")
   } else {
@@ -5395,7 +5192,7 @@ fn X64Codegen::emit_uint64_to_fp(
   }
   self.emit("\tjmp\t" + done)
   self.emit(non_negative + ":")
-  if x64_core_type(dst_ty) == Float {
+  if dst_ty.core_type() == Float {
     self.emit("\tcvtsi2ss\txmm0, rax")
   } else {
     self.emit("\tcvtsi2sd\txmm0, rax")
@@ -5410,7 +5207,7 @@ fn X64Codegen::emit_fp_to_uint64(
 ) -> Unit {
   let below_high_bit = self.new_label()
   let done = self.new_label()
-  if x64_core_type(src_ty) == Float {
+  if src_ty.core_type() == Float {
     self.emit("\tcvtss2sd\txmm0, xmm0")
   }
   self.emit_load_fp_literal_into("xmm1", 9223372036854775808.0)
@@ -5432,9 +5229,9 @@ fn X64Codegen::emit_fp_to_integer(
   src_ty : @parser.Type,
   dst_ty : @parser.Type,
 ) -> Unit {
-  if is_unsigned_integer_type(dst_ty) && self.type_size(dst_ty) == 8 {
+  if dst_ty.is_unsigned_integer() && self.type_size(dst_ty) == 8 {
     self.emit_fp_to_uint64(src_ty)
-  } else if x64_core_type(src_ty) == Float {
+  } else if src_ty.core_type() == Float {
     self.emit("\tcvttss2si\trax, xmm0")
   } else {
     self.emit("\tcvttsd2si\trax, xmm0")
@@ -5447,7 +5244,7 @@ fn X64Codegen::emit_fp_to_scalar(
   src_ty : @parser.Type,
   dst_ty : @parser.Type,
 ) -> Unit {
-  if x64_core_type(dst_ty) == Bool {
+  if dst_ty.core_type() == Bool {
     self.emit_fp_to_bool(src_ty)
   } else {
     self.emit_fp_to_integer(src_ty, dst_ty)
@@ -5486,16 +5283,16 @@ fn X64Codegen::gen_expr_as_scalar(
   let src_ty = self.type_of(expr)
   if x64_is_fp_type(dst_ty) {
     self.gen_expr_as_fp(expr, dst_ty)
-  } else if x64_core_type(dst_ty) == Bool {
+  } else if dst_ty.core_type() == Bool {
     self.gen_expr(expr)
     if x64_is_fp_type(src_ty) {
       self.emit_fp_to_bool(src_ty)
-    } else if x64_is_int128_type(src_ty) {
+    } else if src_ty.is_int128() {
       self.emit_int128_to_bool()
     } else {
       self.emit_int_conversion_to(dst_ty)
     }
-  } else if x64_is_int128_type(dst_ty) {
+  } else if dst_ty.is_int128() {
     self.gen_expr_as_int(expr)
     self.emit_extend_rax_to_int128(src_ty)
   } else {
@@ -5514,7 +5311,7 @@ fn X64Codegen::gen_cond_jump_false(
   self.gen_expr(expr)
   if x64_is_fp_type(ty) {
     self.emit_fp_cond_jump_false(ty, false_label)
-  } else if x64_is_int128_type(ty) {
+  } else if ty.is_int128() {
     self.emit("\tor\trax, rdx")
     self.emit("\tje\t" + false_label)
   } else {
@@ -5566,7 +5363,7 @@ fn X64Codegen::gen_pointer_arith(
 ) -> Bool {
   let lhs_ty = self.type_of(lhs)
   let rhs_ty = self.type_of(rhs)
-  match (x64_pointer_element(lhs_ty), x64_pointer_element(rhs_ty)) {
+  match (lhs_ty.pointer_or_array_element(), rhs_ty.pointer_or_array_element()) {
     (Some(elem_ty), None) =>
       if (op == "+" || op == "-") && rhs_ty.is_integer() {
         self.emit_scaled_integer(rhs, elem_ty)
@@ -5731,8 +5528,7 @@ fn X64Codegen::gen_binary(
     return
   }
   let is_integer_binary = lhs_ty.is_integer() && rhs_ty.is_integer()
-  if is_integer_binary &&
-    x64_is_int128_type(x64_binary_int_type(op, lhs_ty, rhs_ty)) {
+  if is_integer_binary && x64_binary_int_type(op, lhs_ty, rhs_ty).is_int128() {
     self.gen_int128_binary(op, lhs, rhs, lhs_ty, rhs_ty)
     return
   }
@@ -5747,7 +5543,7 @@ fn X64Codegen::gen_binary(
     rhs_ty
   }
   let unsigned_op = if is_integer_binary {
-    is_unsigned_integer_type(lhs_eval_ty)
+    lhs_eval_ty.is_unsigned_integer()
   } else {
     false
   }
@@ -5865,7 +5661,7 @@ fn X64Codegen::gen_assign(
     }
     None => ()
   }
-  if x64_is_aggregate_type(lhs_ty) {
+  if lhs_ty.is_aggregate() {
     self.gen_addr(lhs)
     self.emit_push_rax()
     match rhs {
@@ -5886,14 +5682,14 @@ fn X64Codegen::gen_assign(
     return
   }
   self.gen_expr_as_scalar(rhs, lhs_ty)
-  if x64_is_int128_type(lhs_ty) {
+  if lhs_ty.is_int128() {
     self.emit("\tpush\trdx")
   }
   self.emit_push_rax()
   self.gen_addr(lhs)
   self.emit("\tmov\tr10, rax")
   self.emit_pop_rax()
-  if x64_is_int128_type(lhs_ty) {
+  if lhs_ty.is_int128() {
     self.emit("\tpop\trdx")
   }
   self.emit_store_indirect(lhs_ty)
@@ -5908,7 +5704,7 @@ fn X64Codegen::gen_pointer_compound_assign(
   lhs_ty : @parser.Type,
   rhs_ty : @parser.Type,
 ) -> Bool {
-  match x64_core_type(lhs_ty) {
+  match lhs_ty.core_type() {
     Pointer(elem_ty) =>
       if (op == "+" || op == "-") && rhs_ty.is_integer() {
         self.gen_addr(lhs)
@@ -5945,27 +5741,25 @@ fn X64Codegen::gen_integer_fp_compound_assign(
   lhs_ty : @parser.Type,
   rhs_ty : @parser.Type,
 ) -> Bool {
-  if !lhs_ty.is_integer() ||
-    x64_is_int128_type(lhs_ty) ||
-    !x64_is_fp_type(rhs_ty) {
+  if !lhs_ty.is_integer() || lhs_ty.is_int128() || !x64_is_fp_type(rhs_ty) {
     return false
   }
   match op {
     "+" | "-" | "*" | "/" => ()
     _ => return false
   }
-  let result_ty : @parser.Type = if x64_core_type(rhs_ty) == Double {
+  let result_ty : @parser.Type = if rhs_ty.core_type() == Double {
     Double
   } else {
     Float
   }
   let suffix = x64_fp_suffix(result_ty)
-  let spill_store = if x64_core_type(result_ty) == Float {
+  let spill_store = if result_ty.core_type() == Float {
     "DWORD PTR [rsp], xmm0"
   } else {
     "QWORD PTR [rsp], xmm0"
   }
-  let spill_load = if x64_core_type(result_ty) == Float {
+  let spill_load = if result_ty.core_type() == Float {
     "DWORD PTR [rsp]"
   } else {
     "QWORD PTR [rsp]"
@@ -6012,18 +5806,18 @@ fn X64Codegen::gen_bitfield_fp_compound_assign(
     "+" | "-" | "*" | "/" => ()
     _ => return false
   }
-  let result_ty : @parser.Type = if x64_core_type(rhs_ty) == Double {
+  let result_ty : @parser.Type = if rhs_ty.core_type() == Double {
     Double
   } else {
     Float
   }
   let suffix = x64_fp_suffix(result_ty)
-  let spill_store = if x64_core_type(result_ty) == Float {
+  let spill_store = if result_ty.core_type() == Float {
     "DWORD PTR [rsp], xmm0"
   } else {
     "QWORD PTR [rsp], xmm0"
   }
-  let spill_load = if x64_core_type(result_ty) == Float {
+  let spill_load = if result_ty.core_type() == Float {
     "DWORD PTR [rsp]"
   } else {
     "QWORD PTR [rsp]"
@@ -6082,7 +5876,7 @@ fn X64Codegen::gen_compound_assign(
         rhs_ty
       }
       let unsigned_op = if is_integer_compound {
-        is_unsigned_integer_type(lhs_eval_ty)
+        lhs_eval_ty.is_unsigned_integer()
       } else {
         false
       }
@@ -6152,7 +5946,7 @@ fn X64Codegen::gen_compound_assign(
   if self.gen_pointer_compound_assign(op, lhs, rhs, lhs_ty, rhs_ty) {
     return
   }
-  if lhs_ty.is_integer() && rhs_ty.is_integer() && x64_is_int128_type(lhs_ty) {
+  if lhs_ty.is_integer() && rhs_ty.is_integer() && lhs_ty.is_int128() {
     self.gen_int128_compound_assign(op, lhs, rhs, lhs_ty, rhs_ty)
     return
   }
@@ -6205,7 +5999,7 @@ fn X64Codegen::gen_compound_assign(
     rhs_ty
   }
   let unsigned_op = if is_integer_compound {
-    is_unsigned_integer_type(lhs_eval_ty)
+    lhs_eval_ty.is_unsigned_integer()
   } else {
     false
   }
@@ -6304,14 +6098,14 @@ fn X64Codegen::gen_inc_dec(
     self.emit_load_indirect(expr_ty)
     if postfix {
       self.emit("\tsub\trsp, 8")
-      if x64_core_type(expr_ty) == Float {
+      if expr_ty.core_type() == Float {
         self.emit("\tmovss\tDWORD PTR [rsp], xmm0")
       } else {
         self.emit("\tmovsd\tQWORD PTR [rsp], xmm0")
       }
     }
     self.emit("\tmov\teax, 1")
-    if x64_core_type(expr_ty) == Float {
+    if expr_ty.core_type() == Float {
       self.emit("\tcvtsi2ss\txmm1, rax")
     } else {
       self.emit("\tcvtsi2sd\txmm1, rax")
@@ -6328,7 +6122,7 @@ fn X64Codegen::gen_inc_dec(
     }
     self.emit_store_indirect(expr_ty)
     if postfix {
-      if x64_core_type(expr_ty) == Float {
+      if expr_ty.core_type() == Float {
         self.emit("\tmovss\txmm0, DWORD PTR [rsp]")
       } else {
         self.emit("\tmovsd\txmm0, QWORD PTR [rsp]")
@@ -6343,7 +6137,7 @@ fn X64Codegen::gen_inc_dec(
   if postfix {
     self.emit_push_rax()
   }
-  let step = match x64_pointer_element(expr_ty) {
+  let step = match expr_ty.pointer_or_array_element() {
     Some(elem) => self.pointer_element_size(elem)
     None => 1
   }
@@ -6413,7 +6207,7 @@ fn X64Codegen::gen_callee_addr(self : X64Codegen, func : @parser.Expr) -> Unit {
 
 ///|
 fn x64_default_argument_promotion(ty : @parser.Type) -> @parser.Type {
-  match x64_core_type(ty) {
+  match ty.core_type() {
     Bool | SChar | UChar | SShort | UShort => SInt
     Float => Double
     _ => ty
@@ -6559,7 +6353,7 @@ fn X64Codegen::gen_call(
         arg_stack_index.push(stack_count)
         stack_count += 1
       }
-    } else if x64_is_aggregate_type(arg_ty) {
+    } else if arg_ty.is_aggregate() {
       let classes = match self.aggregate_classes(arg_ty) {
         Some(classes) => classes
         None => {
@@ -6609,7 +6403,7 @@ fn X64Codegen::gen_call(
         arg_stack_index.push(stack_count)
         stack_count += words
       }
-    } else if x64_is_int128_type(arg_ty) {
+    } else if arg_ty.is_int128() {
       arg_is_fp.push(false)
       arg_is_aggregate.push(false)
       arg_classes.push([])
@@ -6690,7 +6484,7 @@ fn X64Codegen::gen_call(
       }
     } else if x64_is_fp_type(arg_ty) {
       self.gen_expr_as_fp(args[i], arg_ty)
-      match x64_core_type(arg_ty) {
+      match arg_ty.core_type() {
         Float => {
           self.emit("\tmov\tQWORD PTR " + x64_rsp_ref(slot) + ", 0")
           self.emit("\tmovss\tDWORD PTR " + x64_rsp_ref(slot) + ", xmm0")
@@ -6700,7 +6494,7 @@ fn X64Codegen::gen_call(
     } else {
       self.gen_expr_as_scalar(args[i], arg_ty)
       self.emit("\tmov\tQWORD PTR " + x64_rsp_ref(slot) + ", rax")
-      if x64_is_int128_type(arg_ty) {
+      if arg_ty.is_int128() {
         self.emit("\tmov\tQWORD PTR " + x64_rsp_ref(slot + 8) + ", rdx")
       }
     }
@@ -6745,7 +6539,7 @@ fn X64Codegen::gen_call(
     let src_off = call_area + save_area + arg_temp_index[i] * 8
     if arg_is_fp[i] && fp_reg_index >= 0 {
       let arg_ty = arg_types[i]
-      match x64_core_type(arg_ty) {
+      match arg_ty.core_type() {
         Float =>
           self.emit(
             "\tmovss\t" +
@@ -6788,7 +6582,7 @@ fn X64Codegen::gen_call(
         }
       }
     } else if int_reg_index >= 0 {
-      if x64_is_int128_type(arg_types[i]) {
+      if arg_types[i].is_int128() {
         self.emit(
           "\tmov\t" +
           arg_regs[int_reg_index] +
@@ -6833,7 +6627,7 @@ fn X64Codegen::emit_va_arg(
   ty : @parser.Type,
 ) -> Unit {
   x64_reject_unsupported_scalar(ty)
-  if x64_is_aggregate_type(ty) {
+  if ty.is_aggregate() {
     self.emit_va_arg_aggregate_addr(ap_expr, ty)
     return
   }
@@ -6857,13 +6651,13 @@ fn X64Codegen::emit_va_arg(
     self.emit("\tmov\trax, r10")
     self.emit_load_indirect(ty)
   } else {
-    let gp_limit = if x64_is_int128_type(ty) { 32 } else { 48 }
-    let gp_step = if x64_is_int128_type(ty) { 16 } else { 8 }
+    let gp_limit = if ty.is_int128() { 32 } else { 48 }
+    let gp_step = if ty.is_int128() { 16 } else { 8 }
     self.gen_expr(ap_expr)
     self.emit("\tmov\tr11, rax")
     self.emit("\tmov\teax, DWORD PTR [r11]")
     self.emit("\tcmp\teax, " + gp_limit.to_string())
-    if x64_is_int128_type(ty) {
+    if ty.is_int128() {
       self.emit("\tja\t" + overflow_label)
     } else {
       self.emit("\tjae\t" + overflow_label)
@@ -6874,7 +6668,7 @@ fn X64Codegen::emit_va_arg(
     self.emit("\tjmp\t" + load_label)
     self.emit(overflow_label + ":")
     self.emit("\tmov\tr10, QWORD PTR [r11 + 8]")
-    if x64_is_int128_type(ty) {
+    if ty.is_int128() {
       self.emit("\tadd\tr10, 15")
       self.emit("\tand\tr10, -16")
     }
@@ -7007,7 +6801,7 @@ fn X64Codegen::gen_expr(self : X64Codegen, expr : @parser.Expr) -> Unit {
         self.emit_symbol_addr(name)
       } else {
         self.gen_addr(Var(name))
-        match x64_core_type(self.type_of(expr)) {
+        match self.type_of(expr).core_type() {
           Array(_, _) | Struct(_) | Union(_) => ()
           _ => self.emit_load_indirect(self.type_of(expr))
         }
@@ -7017,7 +6811,7 @@ fn X64Codegen::gen_expr(self : X64Codegen, expr : @parser.Expr) -> Unit {
       let ty = self.type_of(e)
       if x64_is_fp_type(ty) {
         self.gen_expr(e)
-        match x64_core_type(ty) {
+        match ty.core_type() {
           Float => {
             self.emit("\tmov\teax, -2147483648")
             self.emit("\tmovd\txmm1, eax")
@@ -7031,7 +6825,7 @@ fn X64Codegen::gen_expr(self : X64Codegen, expr : @parser.Expr) -> Unit {
         }
       } else {
         self.gen_expr(e)
-        if x64_is_int128_type(ty) {
+        if ty.is_int128() {
           self.emit("\tneg\trdx")
           self.emit("\tneg\trax")
           self.emit("\tsbb\trdx, 0")
@@ -7043,7 +6837,7 @@ fn X64Codegen::gen_expr(self : X64Codegen, expr : @parser.Expr) -> Unit {
     Unary("+", e) => self.gen_expr(e)
     Unary("~", e) => {
       self.gen_expr(e)
-      if x64_is_int128_type(self.type_of(e)) {
+      if self.type_of(e).is_int128() {
         self.emit("\tnot\trax")
         self.emit("\tnot\trdx")
       } else {
@@ -7057,7 +6851,7 @@ fn X64Codegen::gen_expr(self : X64Codegen, expr : @parser.Expr) -> Unit {
         self.emit_fp_to_bool(ty)
         self.emit("\tcmp\trax, 0")
         self.emit_setcc("sete")
-      } else if x64_is_int128_type(ty) {
+      } else if ty.is_int128() {
         self.emit("\tor\trax, rdx")
         self.emit_setcc("sete")
       } else {
@@ -7096,7 +6890,8 @@ fn X64Codegen::gen_expr(self : X64Codegen, expr : @parser.Expr) -> Unit {
     Sizeof(ty) => self.emit("\tmov\trax, " + self.type_size(ty).to_string())
     SizeofExpr(e) => {
       let size = match e {
-        String(s) => self.type_size(Array(SChar, s.length() + 1))
+        String(s) =>
+          self.type_size(Array(SChar, @ctype.string_literal_array_length(s)))
         _ => self.type_size(self.type_of(e))
       }
       self.emit("\tmov\trax, " + size.to_string())
@@ -7104,7 +6899,8 @@ fn X64Codegen::gen_expr(self : X64Codegen, expr : @parser.Expr) -> Unit {
     Alignof(ty) => self.emit("\tmov\trax, " + self.type_align(ty).to_string())
     AlignofExpr(e) => {
       let align = match e {
-        String(s) => self.type_align(Array(SChar, s.length() + 1))
+        String(s) =>
+          self.type_align(Array(SChar, @ctype.string_literal_array_length(s)))
         _ => self.type_align(self.type_of(e))
       }
       self.emit("\tmov\trax, " + align.to_string())
@@ -7121,7 +6917,7 @@ fn X64Codegen::gen_expr(self : X64Codegen, expr : @parser.Expr) -> Unit {
       self.gen_cond_jump_false(cond, else_label)
       if x64_is_fp_type(result_ty) {
         self.gen_expr_as_fp(then_, result_ty)
-      } else if x64_is_object_aggregate_type(result_ty) {
+      } else if result_ty.is_object_aggregate() {
         self.gen_expr(then_)
       } else {
         self.gen_expr_as_scalar(then_, result_ty)
@@ -7130,7 +6926,7 @@ fn X64Codegen::gen_expr(self : X64Codegen, expr : @parser.Expr) -> Unit {
       self.emit(else_label + ":")
       if x64_is_fp_type(result_ty) {
         self.gen_expr_as_fp(else_, result_ty)
-      } else if x64_is_object_aggregate_type(result_ty) {
+      } else if result_ty.is_object_aggregate() {
         self.gen_expr(else_)
       } else {
         self.gen_expr_as_scalar(else_, result_ty)
@@ -7150,7 +6946,7 @@ fn X64Codegen::gen_expr(self : X64Codegen, expr : @parser.Expr) -> Unit {
     Array(_) => abort("x86-64 backend does not support array expressions yet")
     CompoundLiteral(ty, init_exprs, id) => {
       self.gen_compound_literal_addr(ty, init_exprs, id)
-      if !x64_is_object_aggregate_type(ty) {
+      if !ty.is_object_aggregate() {
         self.emit_load_indirect(ty)
       }
     }
@@ -7184,7 +6980,7 @@ fn X64Codegen::collect_expr_locals(
     | DesignatedRange(_, _, e) => self.collect_expr_locals(e)
     Call(func, args) => {
       let ret_ty = self.type_of(expr)
-      if self.is_memory_aggregate(ret_ty) {
+      if ret_ty.is_object_aggregate() {
         let size = self.type_size(ret_ty)
         if size > self.sret_scratch_size {
           self.sret_scratch_size = size
@@ -7195,11 +6991,15 @@ fn X64Codegen::collect_expr_locals(
         }
       }
       match func {
-        Var("__builtin_va_start") | Var("__builtin_va_copy") =>
-          match args.get(0) {
-            Some(Var(name)) => {
-              let _ = self.ensure_va_list_storage(name)
-            }
+        Var(name) =>
+          match @ctype.builtin_va_setup_call_info(name) {
+            Some(("va_start", _)) | Some(("va_copy", _)) =>
+              match args.get(0) {
+                Some(Var(name)) => {
+                  let _ = self.ensure_va_list_storage(name)
+                }
+                _ => ()
+              }
             _ => ()
           }
         _ => ()
@@ -7210,7 +7010,7 @@ fn X64Codegen::collect_expr_locals(
       }
     }
     VaArg(ap_expr, ty) => {
-      if x64_is_aggregate_type(ty) {
+      if ty.is_aggregate() {
         let size = self.type_size(ty)
         if size > self.va_arg_scratch_size {
           self.va_arg_scratch_size = size
@@ -7237,6 +7037,7 @@ fn X64Codegen::collect_expr_locals(
         self.collect_expr_locals(value)
       }
     CompoundLiteral(ty, values, id) => {
+      let ty = codegen_file_scope_compound_literal_type(ty, values)
       let _ = self.alloc_local(compound_literal_local_name(id), ty)
       for value in values {
         self.collect_expr_locals(value)
@@ -7347,7 +7148,7 @@ fn X64Codegen::gen_stmt(self : X64Codegen, stmt : @parser.Stmt) -> Unit {
             self.emit_load_small_aggregate_return(ret_ty)
           }
         }
-      } else if x64_is_aggregate_type(ret_ty) {
+      } else if ret_ty.is_aggregate() {
         self.gen_aggregate_addr(expr)
         self.emit("\tmov\tr11, rax")
         self.emit(
@@ -7366,7 +7167,7 @@ fn X64Codegen::gen_stmt(self : X64Codegen, stmt : @parser.Stmt) -> Unit {
       let offset = self.alloc_local(name, ty)
       match init {
         Some(expr) =>
-          if x64_is_object_aggregate_type(ty) {
+          if ty.is_object_aggregate() {
             self.emit_local_addr(offset)
             self.emit_init_value_at_addr(ty, expr)
           } else {
@@ -7624,7 +7425,7 @@ fn X64Codegen::emit_function(
       for i = 0; i < decl.params.length(); i = i + 1 {
         let param = decl.params[i]
         let offset = param_offsets[param.name]
-        if x64_is_aggregate_type(param.ty) {
+        if param.ty.is_aggregate() {
           let classes = match self.aggregate_classes(param.ty) {
             Some(classes) => classes
             None => {
@@ -7699,7 +7500,7 @@ fn X64Codegen::emit_function(
           } else {
             stack_idx = self.align_stack_arg_index(stack_idx, param.ty)
             let stack_off = 16 + stack_idx * 8
-            match x64_core_type(param.ty) {
+            match param.ty.core_type() {
               Float =>
                 self.emit(
                   "\tmovss\txmm0, DWORD PTR [rbp + " +
@@ -7716,7 +7517,7 @@ fn X64Codegen::emit_function(
             self.emit_store_local_from_rax(offset, param.ty)
             stack_idx += 1
           }
-        } else if x64_is_int128_type(param.ty) {
+        } else if param.ty.is_int128() {
           if int_idx + 2 <= arg_regs.length() {
             self.emit(
               "\tmov\tQWORD PTR " +
@@ -7791,391 +7592,131 @@ fn X64Codegen::emit_function(
 }
 
 ///|
-priv struct X64ConstIntValue {
-  bits : Int64
-  ty : @parser.Type
-}
-
-///|
-fn x64_const_int(bits : Int64, ty : @parser.Type) -> X64ConstIntValue {
-  { bits, ty }
-}
-
-///|
-fn x64_const_bool(value : Bool) -> X64ConstIntValue {
-  { bits: if value { 1L } else { 0L }, ty: SInt }
-}
-
-///|
-fn x64_const_type_is_unsigned(ty : @parser.Type) -> Bool {
-  match x64_core_type(ty) {
-    Bool | UChar | UShort | UInt | ULong | ULongLong | UInt128 => true
-    _ => false
-  }
-}
-
-///|
-fn x64_const_type_int_width(ty : @parser.Type) -> Int? {
-  match x64_core_type(ty) {
-    Bool => Some(1)
-    SChar | UChar => Some(8)
-    SShort | UShort => Some(16)
-    SInt | UInt => Some(32)
-    SLong | ULong | SLongLong | ULongLong | Pointer(_) | FuncPtr(_, _, _) =>
-      Some(64)
-    SInt128 | UInt128 => Some(128)
-    _ => None
-  }
-}
-
-///|
-fn x64_const_type_is_integer(ty : @parser.Type) -> Bool {
-  match x64_core_type(ty) {
-    Bool
-    | SChar
-    | UChar
-    | SShort
-    | UShort
-    | SInt
-    | UInt
-    | SLong
-    | ULong
-    | SLongLong
-    | ULongLong
-    | SInt128
-    | UInt128 => true
-    _ => false
-  }
-}
-
-///|
-fn x64_const_integer_promote(ty : @parser.Type) -> @parser.Type {
-  match x64_core_type(ty) {
-    Bool | SChar | UChar | SShort | UShort => SInt
-    other => other
-  }
-}
-
-///|
-fn x64_const_unsigned_type_for_rank(rank : Int) -> @parser.Type {
-  if rank >= 6 {
-    UInt128
-  } else if rank == 5 {
-    ULongLong
-  } else if rank == 4 {
-    ULong
-  } else {
-    UInt
-  }
-}
-
-///|
-fn x64_const_signed_type_for_rank(rank : Int) -> @parser.Type {
-  if rank >= 6 {
-    SInt128
-  } else if rank == 5 {
-    SLongLong
-  } else if rank == 4 {
-    SLong
-  } else {
-    SInt
-  }
-}
-
-///|
-fn x64_const_integer_common_type(
-  lhs_ty : @parser.Type,
-  rhs_ty : @parser.Type,
-) -> @parser.Type {
-  let lhs_ty = x64_const_integer_promote(lhs_ty)
-  let rhs_ty = x64_const_integer_promote(rhs_ty)
-  if lhs_ty == rhs_ty {
-    return lhs_ty
-  }
-  if !x64_const_type_is_integer(lhs_ty) || !x64_const_type_is_integer(rhs_ty) {
-    return lhs_ty
-  }
-  let lhs_unsigned = x64_const_type_is_unsigned(lhs_ty)
-  let rhs_unsigned = x64_const_type_is_unsigned(rhs_ty)
-  let lhs_rank = integer_rank(lhs_ty)
-  let rhs_rank = integer_rank(rhs_ty)
-  if lhs_unsigned == rhs_unsigned {
-    let rank = if lhs_rank > rhs_rank { lhs_rank } else { rhs_rank }
-    if lhs_unsigned {
-      x64_const_unsigned_type_for_rank(rank)
-    } else {
-      x64_const_signed_type_for_rank(rank)
-    }
-  } else {
-    let unsigned_ty = if lhs_unsigned { lhs_ty } else { rhs_ty }
-    let signed_ty = if lhs_unsigned { rhs_ty } else { lhs_ty }
-    let unsigned_rank = integer_rank(unsigned_ty)
-    let signed_rank = integer_rank(signed_ty)
-    let unsigned_width = x64_const_type_int_width(unsigned_ty).unwrap_or(0)
-    let signed_width = x64_const_type_int_width(signed_ty).unwrap_or(0)
-    if unsigned_rank >= signed_rank {
-      unsigned_ty
-    } else if signed_width > unsigned_width {
-      signed_ty
-    } else {
-      x64_const_unsigned_type_for_rank(signed_rank)
-    }
-  }
-}
-
-///|
-fn x64_const_cast_int(
-  value : X64ConstIntValue,
-  ty : @parser.Type,
-) -> X64ConstIntValue {
-  let core_ty = x64_core_type(ty)
-  let unsigned = x64_const_type_is_unsigned(core_ty)
-  match x64_const_type_int_width(core_ty) {
-    None => x64_const_int(value.bits, core_ty)
-    Some(1) => x64_const_int(if value.bits == 0L { 0L } else { 1L }, core_ty)
-    Some(width) =>
-      if width >= 64 {
-        x64_const_int(value.bits, core_ty)
-      } else {
-        let mask = (1L << width) - 1L
-        let bits = value.bits & mask
-        if unsigned {
-          x64_const_int(bits, core_ty)
-        } else {
-          let sign = 1L << (width - 1)
-          if (bits & sign) != 0L {
-            x64_const_int(bits | mask.lnot(), core_ty)
-          } else {
-            x64_const_int(bits, core_ty)
-          }
-        }
-      }
-  }
-}
-
-///|
-fn x64_const_apply_binary_type(
-  left : X64ConstIntValue,
-  right : X64ConstIntValue,
-) -> (X64ConstIntValue, X64ConstIntValue, @parser.Type) {
-  let ty = x64_const_integer_common_type(left.ty, right.ty)
-  (x64_const_cast_int(left, ty), x64_const_cast_int(right, ty), ty)
-}
-
-///|
-fn x64_const_binary_arith(
-  op : String,
-  left : X64ConstIntValue,
-  right : X64ConstIntValue,
-) -> X64ConstIntValue? {
-  let (x, y, ty) = x64_const_apply_binary_type(left, right)
-  let bits = match op {
-    "+" => x.bits + y.bits
-    "-" => x.bits - y.bits
-    "*" => x.bits * y.bits
-    "|" => x.bits | y.bits
-    "&" => x.bits & y.bits
-    "^" => x.bits ^ y.bits
-    _ => return None
-  }
-  Some(x64_const_cast_int(x64_const_int(bits, ty), ty))
-}
-
-///|
-fn x64_const_equal_compare(
-  left : X64ConstIntValue,
-  right : X64ConstIntValue,
-) -> Bool {
-  let (x, y, _) = x64_const_apply_binary_type(left, right)
-  x.bits == y.bits
-}
-
-///|
-fn x64_const_rel_compare(
-  op : String,
-  left : X64ConstIntValue,
-  right : X64ConstIntValue,
-) -> Bool {
-  let (left, right, ty) = x64_const_apply_binary_type(left, right)
-  if x64_const_type_is_unsigned(ty) {
-    let x = left.bits.reinterpret_as_uint64()
-    let y = right.bits.reinterpret_as_uint64()
-    match op {
-      "<" => x < y
-      ">" => x > y
-      "<=" => x <= y
-      ">=" => x >= y
-      _ => false
-    }
-  } else {
-    match op {
-      "<" => left.bits < right.bits
-      ">" => left.bits > right.bits
-      "<=" => left.bits <= right.bits
-      ">=" => left.bits >= right.bits
-      _ => false
-    }
-  }
-}
-
-///|
-fn x64_const_divide(
-  op : String,
-  left : X64ConstIntValue,
-  right : X64ConstIntValue,
-) -> X64ConstIntValue? {
-  let (left, right, ty) = x64_const_apply_binary_type(left, right)
-  if right.bits == 0L {
-    return None
-  }
-  if x64_const_type_is_unsigned(ty) {
-    let x = left.bits.reinterpret_as_uint64()
-    let y = right.bits.reinterpret_as_uint64()
-    let result = if op == "/" { x / y } else { x % y }
-    Some(
-      x64_const_cast_int(x64_const_int(result.reinterpret_as_int64(), ty), ty),
-    )
-  } else {
-    let result = if op == "/" {
-      left.bits / right.bits
-    } else {
-      left.bits % right.bits
-    }
-    Some(x64_const_cast_int(x64_const_int(result, ty), ty))
-  }
-}
-
-///|
-fn x64_const_shift(
-  op : String,
-  left : X64ConstIntValue,
-  right : X64ConstIntValue,
-) -> X64ConstIntValue? {
-  let lhs_ty = x64_const_integer_promote(left.ty)
-  let x = x64_const_cast_int(left, lhs_ty)
-  let y = x64_const_cast_int(right, x64_const_integer_promote(right.ty))
-  let shift = y.bits.to_int()
-  if op == "<<" {
-    Some(x64_const_cast_int(x64_const_int(x.bits << shift, lhs_ty), lhs_ty))
-  } else if x64_const_type_is_unsigned(lhs_ty) {
-    Some(
-      x64_const_cast_int(
-        x64_const_int(
-          (x.bits.reinterpret_as_uint64() >> shift).reinterpret_as_int64(),
-          lhs_ty,
-        ),
-        lhs_ty,
-      ),
-    )
-  } else {
-    Some(x64_const_cast_int(x64_const_int(x.bits >> shift, lhs_ty), lhs_ty))
-  }
-}
-
-///|
 fn X64Codegen::fold_const_int(
   self : X64Codegen,
   expr : @parser.Expr,
-) -> X64ConstIntValue? {
+) -> @ctype.IntegerConstant? {
   match expr {
-    Number(n) => {
-      let ty = number_literal_type(n)
-      Some(x64_const_cast_int(x64_const_int(n, ty), ty))
-    }
+    Number(n) =>
+      Some(@ctype.integer_constant(n, @ctype.integer_constant_token_type(n)))
     Binary("+", a, b) =>
       match (self.fold_const_int(a), self.fold_const_int(b)) {
-        (Some(x), Some(y)) => x64_const_binary_arith("+", x, y)
+        (Some(x), Some(y)) => @ctype.integer_constant_binary_arith("+", x, y)
         _ => None
       }
     Binary("-", a, b) =>
       match (self.fold_const_int(a), self.fold_const_int(b)) {
-        (Some(x), Some(y)) => x64_const_binary_arith("-", x, y)
+        (Some(x), Some(y)) => @ctype.integer_constant_binary_arith("-", x, y)
         _ => None
       }
     Binary("*", a, b) =>
       match (self.fold_const_int(a), self.fold_const_int(b)) {
-        (Some(x), Some(y)) => x64_const_binary_arith("*", x, y)
+        (Some(x), Some(y)) => @ctype.integer_constant_binary_arith("*", x, y)
         _ => None
       }
     Binary("/", a, b) =>
       match (self.fold_const_int(a), self.fold_const_int(b)) {
-        (Some(x), Some(y)) => x64_const_divide("/", x, y)
+        (Some(x), Some(y)) => @ctype.integer_constant_divide("/", x, y)
         _ => None
       }
     Binary("%", a, b) =>
       match (self.fold_const_int(a), self.fold_const_int(b)) {
-        (Some(x), Some(y)) => x64_const_divide("%", x, y)
+        (Some(x), Some(y)) => @ctype.integer_constant_divide("%", x, y)
         _ => None
       }
     Binary("|", a, b) =>
       match (self.fold_const_int(a), self.fold_const_int(b)) {
-        (Some(x), Some(y)) => x64_const_binary_arith("|", x, y)
+        (Some(x), Some(y)) => @ctype.integer_constant_binary_arith("|", x, y)
         _ => None
       }
     Binary("&", a, b) =>
       match (self.fold_const_int(a), self.fold_const_int(b)) {
-        (Some(x), Some(y)) => x64_const_binary_arith("&", x, y)
+        (Some(x), Some(y)) => @ctype.integer_constant_binary_arith("&", x, y)
         _ => None
       }
     Binary("^", a, b) =>
       match (self.fold_const_int(a), self.fold_const_int(b)) {
-        (Some(x), Some(y)) => x64_const_binary_arith("^", x, y)
+        (Some(x), Some(y)) => @ctype.integer_constant_binary_arith("^", x, y)
         _ => None
       }
     Binary("<<", a, b) =>
       match (self.fold_const_int(a), self.fold_const_int(b)) {
-        (Some(x), Some(y)) => x64_const_shift("<<", x, y)
+        (Some(x), Some(y)) => @ctype.integer_constant_shift("<<", x, y)
         _ => None
       }
     Binary(">>", a, b) =>
       match (self.fold_const_int(a), self.fold_const_int(b)) {
-        (Some(x), Some(y)) => x64_const_shift(">>", x, y)
+        (Some(x), Some(y)) => @ctype.integer_constant_shift(">>", x, y)
         _ => None
       }
     Binary("==", a, b) =>
       match (self.fold_const_int(a), self.fold_const_int(b)) {
         (Some(x), Some(y)) =>
-          Some(x64_const_bool(x64_const_equal_compare(x, y)))
+          Some(
+            @ctype.integer_constant_bool(
+              @ctype.integer_constant_equal_compare(x, y),
+            ),
+          )
         _ => None
       }
     Binary("!=", a, b) =>
       match (self.fold_const_int(a), self.fold_const_int(b)) {
         (Some(x), Some(y)) =>
-          Some(x64_const_bool(!x64_const_equal_compare(x, y)))
+          Some(
+            @ctype.integer_constant_bool(
+              !@ctype.integer_constant_equal_compare(x, y),
+            ),
+          )
         _ => None
       }
     Binary("<", a, b) =>
       match (self.fold_const_int(a), self.fold_const_int(b)) {
         (Some(x), Some(y)) =>
-          Some(x64_const_bool(x64_const_rel_compare("<", x, y)))
+          Some(
+            @ctype.integer_constant_bool(
+              @ctype.integer_constant_rel_compare("<", x, y),
+            ),
+          )
         _ => None
       }
     Binary(">", a, b) =>
       match (self.fold_const_int(a), self.fold_const_int(b)) {
         (Some(x), Some(y)) =>
-          Some(x64_const_bool(x64_const_rel_compare(">", x, y)))
+          Some(
+            @ctype.integer_constant_bool(
+              @ctype.integer_constant_rel_compare(">", x, y),
+            ),
+          )
         _ => None
       }
     Binary("<=", a, b) =>
       match (self.fold_const_int(a), self.fold_const_int(b)) {
         (Some(x), Some(y)) =>
-          Some(x64_const_bool(x64_const_rel_compare("<=", x, y)))
+          Some(
+            @ctype.integer_constant_bool(
+              @ctype.integer_constant_rel_compare("<=", x, y),
+            ),
+          )
         _ => None
       }
     Binary(">=", a, b) =>
       match (self.fold_const_int(a), self.fold_const_int(b)) {
         (Some(x), Some(y)) =>
-          Some(x64_const_bool(x64_const_rel_compare(">=", x, y)))
+          Some(
+            @ctype.integer_constant_bool(
+              @ctype.integer_constant_rel_compare(">=", x, y),
+            ),
+          )
         _ => None
       }
     Binary("&&", a, b) =>
       match (self.fold_const_int(a), self.fold_const_int(b)) {
-        (Some(x), Some(y)) => Some(x64_const_bool(x.bits != 0L && y.bits != 0L))
+        (Some(x), Some(y)) => @ctype.integer_constant_logical("&&", x, y)
         _ => None
       }
     Binary("||", a, b) =>
       match (self.fold_const_int(a), self.fold_const_int(b)) {
-        (Some(x), Some(y)) => Some(x64_const_bool(x.bits != 0L || y.bits != 0L))
+        (Some(x), Some(y)) => @ctype.integer_constant_logical("||", x, y)
         _ => None
       }
     Ternary(cond, a, b) =>
@@ -8186,31 +7727,22 @@ fn X64Codegen::fold_const_int(
       }
     Unary("-", e) =>
       match self.fold_const_int(e) {
-        Some(value) => {
-          let ty = x64_const_integer_promote(value.ty)
-          Some(x64_const_cast_int(x64_const_int(-value.bits, ty), ty))
-        }
+        Some(value) => @ctype.integer_constant_unary("-", value)
         None => None
       }
     Unary("+", e) =>
       match self.fold_const_int(e) {
-        Some(value) => {
-          let ty = x64_const_integer_promote(value.ty)
-          Some(x64_const_cast_int(value, ty))
-        }
+        Some(value) => @ctype.integer_constant_unary("+", value)
         None => None
       }
     Unary("~", e) =>
       match self.fold_const_int(e) {
-        Some(value) => {
-          let ty = x64_const_integer_promote(value.ty)
-          Some(x64_const_cast_int(x64_const_int(value.bits.lnot(), ty), ty))
-        }
+        Some(value) => @ctype.integer_constant_unary("~", value)
         None => None
       }
     Unary("!", e) =>
       match self.fold_const_int(e) {
-        Some(value) => Some(x64_const_bool(value.bits == 0L))
+        Some(value) => @ctype.integer_constant_unary("!", value)
         None => None
       }
     Cast(ty, e) =>
@@ -8218,20 +7750,14 @@ fn X64Codegen::fold_const_int(
         None
       } else if !x64_is_fp_type(ty) && x64_is_fp_type(self.type_of(e)) {
         match self.fold_float_const(e) {
-          Some(value) =>
-            Some(
-              x64_const_cast_int(
-                x64_const_int(value.to_int().to_int64(), ty),
-                ty,
-              ),
-            )
+          Some(value) => Some(@ctype.integer_constant_from_floating(value, ty))
           None => None
         }
       } else {
-        match x64_const_type_int_width(ty) {
+        match ty.const_int_width() {
           Some(_) =>
             match self.fold_const_int(e) {
-              Some(value) => Some(x64_const_cast_int(value, ty))
+              Some(value) => Some(value.cast(ty))
               None => None
             }
           None => None
@@ -8239,25 +7765,27 @@ fn X64Codegen::fold_const_int(
       }
     DesignatedField(_, e) | DesignatedIndex(_, e) | DesignatedRange(_, _, e) =>
       self.fold_const_int(e)
-    Sizeof(ty) => Some(x64_const_int(self.type_size(ty).to_int64(), ULong))
+    Sizeof(ty) =>
+      Some(@ctype.integer_constant(self.type_size(ty).to_int64(), ULong))
     SizeofExpr(e) =>
       Some(
-        x64_const_int(
+        @ctype.integer_constant(
           self.type_size(self.global_expr_type(e)).to_int64(),
           ULong,
         ),
       )
-    Alignof(ty) => Some(x64_const_int(self.type_align(ty).to_int64(), ULong))
+    Alignof(ty) =>
+      Some(@ctype.integer_constant(self.type_align(ty).to_int64(), ULong))
     AlignofExpr(e) =>
       Some(
-        x64_const_int(
+        @ctype.integer_constant(
           self.type_align(self.global_expr_type(e)).to_int64(),
           ULong,
         ),
       )
     OffsetOf(ty, path) =>
       match self.offset_of_path(ty, path) {
-        Some(offset) => Some(x64_const_int(offset.to_int64(), ULong))
+        Some(offset) => Some(@ctype.integer_constant(offset.to_int64(), ULong))
         None => None
       }
     Call(Var(name), args) => self.fold_const_builtin_int(name, args)
@@ -8270,57 +7798,40 @@ fn X64Codegen::fold_const_builtin_int(
   self : X64Codegen,
   name : String,
   args : Array[@parser.Expr],
-) -> X64ConstIntValue? {
-  match name {
-    "__builtin_constant_p" => {
-      let value = if args.length() > 0 && self.fold_const(args[0]) is Some(_) {
-        1L
-      } else {
-        0L
+) -> @ctype.IntegerConstant? {
+  match @ctype.builtin_constant_query_call_info(name) {
+    Some(kind) =>
+      match
+        @ctype.builtin_constant_query_result(
+          kind,
+          args.length() > 0 && self.fold_const(args[0]) is Some(_),
+        ) {
+        Some(value) => return Some(@ctype.integer_constant(value, SInt))
+        None => ()
       }
-      Some(x64_const_int(value, SInt))
-    }
-    "__builtin_object_size" | "__builtin_dynamic_object_size" =>
-      Some(x64_const_int(self.builtin_object_size_value(args), ULong))
-    "__builtin_bswap16" | "__builtin_bswap32" | "__builtin_bswap64" => {
-      if args.length() == 0 {
-        return None
-      }
-      let (width, ty) = match name {
-        "__builtin_bswap16" => (16, @parser.Type::UShort)
-        "__builtin_bswap32" => (32, @parser.Type::UInt)
-        _ => (64, @parser.Type::ULongLong)
-      }
-      match self.fold_const_int(args[0]) {
-        Some(arg) =>
-          Some(
-            x64_const_cast_int(
-              x64_const_int(codegen_const_byte_swap_bits(arg.bits, width), ty),
-              ty,
-            ),
-          )
-        None => None
-      }
-    }
-    "__builtin_bswap" => {
-      if args.length() == 0 {
-        return None
-      }
-      let ty = self.global_expr_type(args[0])
-      let width = x64_const_type_int_width(ty).unwrap_or(32)
-      match self.fold_const_int(args[0]) {
-        Some(arg) =>
-          Some(
-            x64_const_cast_int(
-              x64_const_int(codegen_const_byte_swap_bits(arg.bits, width), ty),
-              ty,
-            ),
-          )
-        None => None
-      }
-    }
-    _ => None
+    None => ()
   }
+  match @ctype.builtin_object_size_call_info(name) {
+    Some(_) =>
+      return Some(
+        @ctype.integer_constant(self.builtin_object_size_value(args), ULong),
+      )
+    None => ()
+  }
+  let arg0 = if args.length() > 0 { self.fold_const_int(args[0]) } else { None }
+  let arg1 = if args.length() > 1 { self.fold_const_int(args[1]) } else { None }
+  let first_ty = if args.length() > 0 {
+    self.global_expr_type(args[0])
+  } else {
+    SInt
+  }
+  @ctype.integer_scalar_builtin_constant_from_folded_args(
+    name,
+    args.length(),
+    arg0,
+    arg1,
+    first_ty,
+  )
 }
 
 ///|
@@ -8329,6 +7840,25 @@ fn X64Codegen::fold_const(self : X64Codegen, expr : @parser.Expr) -> Int64? {
     Some(value) => Some(value.bits)
     None => None
   }
+}
+
+///|
+fn X64Codegen::fold_float_builtin_const(
+  self : X64Codegen,
+  name : String,
+  args : Array[@parser.Expr],
+) -> Double? {
+  let arg0 = if args.length() > 0 {
+    self.fold_float_const(args[0])
+  } else {
+    None
+  }
+  let arg1 = if args.length() > 1 {
+    self.fold_float_const(args[1])
+  } else {
+    None
+  }
+  @ctype.floating_builtin_constant_from_folded_args(name, arg0, arg1)
 }
 
 ///|
@@ -8341,45 +7871,54 @@ fn X64Codegen::fold_float_const(
     match expr {
       Cast(_, e) if x64_is_fp_type(self.type_of(e)) =>
         match self.fold_float_const(e) {
-          Some(value) => Some(value.to_int().to_double())
+          Some(value) =>
+            Some(
+              @ctype.floating_constant_from_integer_bits(
+                @ctype.floating_constant_to_integer_bits(value),
+              ),
+            )
           None => None
         }
       _ =>
         match self.fold_const(expr) {
-          Some(value) => Some(value.to_double())
+          Some(value) => Some(@ctype.floating_constant_from_integer_bits(value))
           None => None
         }
     }
   } else {
     match expr {
       FloatLiteral(v) => Some(v)
-      Number(n) => Some(n.to_double())
+      Number(n) => Some(@ctype.floating_constant_from_integer_bits(n))
       Binary("+", a, b) =>
         match (self.fold_float_const(a), self.fold_float_const(b)) {
-          (Some(x), Some(y)) => Some(x + y)
+          (Some(x), Some(y)) => @ctype.floating_constant_binary_arith("+", x, y)
           _ => None
         }
       Binary("-", a, b) =>
         match (self.fold_float_const(a), self.fold_float_const(b)) {
-          (Some(x), Some(y)) => Some(x - y)
+          (Some(x), Some(y)) => @ctype.floating_constant_binary_arith("-", x, y)
           _ => None
         }
       Binary("*", a, b) =>
         match (self.fold_float_const(a), self.fold_float_const(b)) {
-          (Some(x), Some(y)) => Some(x * y)
+          (Some(x), Some(y)) => @ctype.floating_constant_binary_arith("*", x, y)
           _ => None
         }
       Binary("/", a, b) =>
         match (self.fold_float_const(a), self.fold_float_const(b)) {
-          (Some(x), Some(y)) => Some(x / y)
+          (Some(x), Some(y)) => @ctype.floating_constant_binary_arith("/", x, y)
           _ => None
         }
       Unary("-", e) =>
         match self.fold_float_const(e) {
-          Some(x) => Some(-x)
+          Some(x) => @ctype.floating_constant_unary("-", x)
           None => None
         }
-      Unary("+", e) => self.fold_float_const(e)
+      Unary("+", e) =>
+        match self.fold_float_const(e) {
+          Some(x) => @ctype.floating_constant_unary("+", x)
+          None => None
+        }
       Ternary(cond, a, b) =>
         match self.fold_const(cond) {
           Some(0L) => self.fold_float_const(b)
@@ -8390,18 +7929,7 @@ fn X64Codegen::fold_float_const(
       | DesignatedField(_, e)
       | DesignatedIndex(_, e)
       | DesignatedRange(_, _, e) => self.fold_float_const(e)
-      Call(Var(name), _) =>
-        match name {
-          "__builtin_nan" | "__builtin_nanf" | "__builtin_nanl" =>
-            Some(0.0 / 0.0)
-          "__builtin_huge_val"
-          | "__builtin_huge_valf"
-          | "__builtin_huge_vall"
-          | "__builtin_inf"
-          | "__builtin_inff"
-          | "__builtin_infl" => Some(1.0 / 0.0)
-          _ => None
-        }
+      Call(Var(name), args) => self.fold_float_builtin_const(name, args)
       _ => None
     }
   }
@@ -8414,6 +7942,8 @@ fn X64Codegen::global_lvalue_reloc(
 ) -> (String, Int)? {
   match expr {
     Var(name) => Some((name, 0))
+    CompoundLiteral(_, _, id) =>
+      Some((codegen_file_scope_compound_literal_name(id), 0))
     Cast(_, e) => self.global_lvalue_reloc(e)
     Unary("*", e) | Deref(e) => self.global_address_reloc_parts(e)
     ArrayAccess(base, index) =>
@@ -8421,7 +7951,8 @@ fn X64Codegen::global_lvalue_reloc(
         (self.global_lvalue_reloc(base), self.global_address_reloc_parts(base)) {
         (Some(parts), _) | (None, Some(parts)) => {
           let (label, base_offset) = parts
-          let elem_size = match peel_aligned_type(self.global_expr_type(base)) {
+          let elem_size = match
+            self.global_expr_type(base).without_alignment() {
             Array(elem, _) | Pointer(elem) => self.pointer_element_size(elem)
             _ => 1
           }
@@ -8455,6 +7986,8 @@ fn X64Codegen::global_address_reloc_parts(
 ) -> (String, Int)? {
   match expr {
     Var(name) => Some((name, 0))
+    CompoundLiteral(_, _, id) =>
+      Some((codegen_file_scope_compound_literal_name(id), 0))
     Cast(_, e) => self.global_address_reloc_parts(e)
     LabelAddr(name) => Some((self.label_ref(name), 0))
     AddrOf(e) => self.global_lvalue_reloc(e)
@@ -8507,7 +8040,7 @@ fn X64Codegen::global_offset_bytes(
   base : @parser.Expr,
   offset : Int64,
 ) -> Int {
-  match x64_pointer_element(self.global_expr_type(base)) {
+  match self.global_expr_type(base).pointer_or_array_element() {
     Some(elem_ty) => offset.to_int() * self.pointer_element_size(elem_ty)
     None => offset.to_int()
   }
@@ -8534,7 +8067,7 @@ fn X64Codegen::emit_global_float(
   value : Double,
 ) -> Unit {
   let literal = codegen_float_asm_literal(value)
-  match x64_core_type(ty) {
+  match ty.core_type() {
     Float => self.emit("\t.float\t" + literal)
     _ => self.emit("\t.double\t" + literal)
   }
@@ -8559,7 +8092,7 @@ fn X64Codegen::designator_matches_type(
   ty : @parser.Type,
   expr : @parser.Expr,
 ) -> Bool {
-  match (x64_core_type(ty), expr) {
+  match (ty.core_type(), expr) {
     (Struct(_), DesignatedField(field, _))
     | (Union(_), DesignatedField(field, _)) =>
       self.field_layout(ty, field) is Some(_)
@@ -8582,7 +8115,7 @@ fn X64Codegen::emit_global_scalar(
     }
     _ => ()
   }
-  match x64_core_type(ty) {
+  match ty.core_type() {
     Pointer(_) | FuncPtr(_, _, _) =>
       match self.global_address_reloc(expr) {
         Some(reloc) => {
@@ -8593,7 +8126,7 @@ fn X64Codegen::emit_global_scalar(
       }
     _ => ()
   }
-  match x64_core_type(ty) {
+  match ty.core_type() {
     Float | Double =>
       match self.fold_float_const(expr) {
         Some(value) => {
@@ -8604,15 +8137,12 @@ fn X64Codegen::emit_global_scalar(
       }
     _ => ()
   }
-  match x64_const_type_int_width(ty) {
+  match ty.const_int_width() {
     Some(_) =>
       if x64_is_fp_type(self.type_of(expr)) {
         match self.fold_float_const(expr) {
           Some(value) => {
-            let converted = x64_const_cast_int(
-              x64_const_int(value.to_int().to_int64(), ty),
-              ty,
-            )
+            let converted = @ctype.integer_constant_from_floating(value, ty)
             self.emit_global_scalar(ty, Number(converted.bits))
             return
           }
@@ -8625,8 +8155,7 @@ fn X64Codegen::emit_global_scalar(
     DesignatedField(_, inner)
     | DesignatedIndex(_, inner)
     | DesignatedRange(_, _, inner) => {
-      if x64_is_object_aggregate_type(ty) &&
-        self.designator_matches_type(ty, expr) {
+      if ty.is_object_aggregate() && self.designator_matches_type(ty, expr) {
         self.emit_global_array(ty, [expr])
       } else {
         self.emit_global_scalar(ty, inner)
@@ -8641,7 +8170,7 @@ fn X64Codegen::emit_global_scalar(
   }
   match folded_expr {
     Number(value) =>
-      match x64_core_type(ty) {
+      match ty.core_type() {
         Bool | SChar | UChar => self.emit_global_int_by_size(1, value)
         SShort | UShort => self.emit_global_int_by_size(2, value)
         SInt | UInt => self.emit_global_int_by_size(4, value)
@@ -8653,7 +8182,11 @@ fn X64Codegen::emit_global_scalar(
           self.emit_global_int_by_size(8, value)
           self.emit_global_int_by_size(8, 0L)
         }
-        Float | Double => self.emit_global_float(ty, value.to_double())
+        Float | Double =>
+          self.emit_global_float(
+            ty,
+            @ctype.floating_constant_from_integer_bits(value),
+          )
         Float128 => abort("__float128 global initializer is not supported")
         LongDouble => abort("long double global initializer is not supported")
         Struct(_) | Union(_) | Array(_, _) =>
@@ -8661,20 +8194,23 @@ fn X64Codegen::emit_global_scalar(
         _ => self.emit_global_int_by_size(8, value)
       }
     FloatLiteral(value) =>
-      if x64_core_type(ty) == Float128 {
+      if ty.core_type() == Float128 {
         abort("__float128 global initializer is not supported")
-      } else if x64_core_type(ty) == LongDouble {
+      } else if ty.core_type() == LongDouble {
         abort("long double global initializer is not supported")
       } else if x64_is_fp_type(ty) {
         self.emit_global_float(ty, value)
       } else {
-        self.emit_global_scalar(ty, Number(value.to_int().to_int64()))
+        self.emit_global_scalar(
+          ty,
+          Number(@ctype.floating_constant_to_integer_bits(value)),
+        )
       }
     String(value) =>
-      match x64_core_type(ty) {
+      match ty.core_type() {
         Array(SChar, n) | Array(UChar, n) => {
-          self.emit("\t.asciz\t\"" + escape_string(value) + "\"")
-          let pad = n - value.length() - 1
+          self.emit(global_char_array_string_directive(value, n))
+          let pad = global_char_array_string_padding(value, n)
           if pad > 0 {
             self.emit("\t.zero\t" + pad.to_string())
           }
@@ -8686,8 +8222,22 @@ fn X64Codegen::emit_global_scalar(
         }
       }
     Cast(_, inner) => self.emit_global_scalar(ty, inner)
-    CompoundLiteral(_, exprs, _) | Array(exprs) =>
-      self.emit_global_array(ty, exprs)
+    CompoundLiteral(_, exprs, _) =>
+      if ty.is_object_aggregate() {
+        self.emit_global_array(ty, exprs)
+      } else if exprs.length() > 0 {
+        self.emit_global_scalar(ty, exprs[0])
+      } else {
+        self.emit_global_scalar(ty, Number(0))
+      }
+    Array(exprs) =>
+      if ty.is_object_aggregate() {
+        self.emit_global_array(ty, exprs)
+      } else if exprs.length() > 0 {
+        self.emit_global_scalar(ty, exprs[0])
+      } else {
+        self.emit_global_scalar(ty, Number(0))
+      }
     Var(name) => self.emit("\t.quad\t" + name)
     _ => self.emit("\t.zero\t" + self.type_size(ty).to_string())
   }
@@ -8706,7 +8256,7 @@ fn X64Codegen::emit_global_array(
     }
     _ => ()
   }
-  match x64_core_type(ty) {
+  match ty.core_type() {
     Array(elem_ty, n) => {
       let elem_size = self.type_size(elem_ty)
       let slots : Array[@parser.Expr?] = Array::make(n, None)
@@ -9131,7 +8681,9 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
     self.compute_struct_layout(sdecl)
   }
   self.register_parser_function_decls(prog.decls)
-  let parser_globals = merge_global_decls(prog.globals)
+  let parser_globals = merge_global_decls(
+    append_codegen_file_scope_compound_literal_globals(prog.globals),
+  )
   let parser_global_fallbacks : Map[String, @parser.GlobalDecl] = {}
   for g in parser_globals {
     parser_global_fallbacks[g.name] = g

@@ -168,7 +168,8 @@ the target split real and testable without claiming full C ABI coverage yet.
 - Common scalar hint/query builtins lower without external calls:
   `__builtin_expect`, `__builtin_expect_with_probability`,
   `__builtin_unpredictable`, `__builtin_assume`,
-  `__builtin_assume_aligned`, `__builtin_prefetch`, `__builtin_constant_p`,
+  `__builtin_assume_aligned`, `__builtin_prefetch`,
+  `__builtin___clear_cache`, `__builtin_clear_cache`, `__builtin_constant_p`,
   `__builtin_object_size`, `__builtin_is_aligned`, `__builtin_align_up`,
   `__builtin_align_down`,
   `__builtin_dynamic_object_size`,
@@ -188,8 +189,10 @@ the target split real and testable without claiming full C ABI coverage yet.
   `__builtin_bswap*`, `__builtin_rotateleft*`, `__builtin_rotateright*`,
   `__builtin_popcount*`, and `__builtin_parity*`, including the covered
   unsuffixed `bswap`/`rotate` spellings.
-- `__builtin_alloca` lowers to a 16-byte-aligned dynamic stack allocation that
-  is released by the normal function epilogue.
+- `__builtin_alloca` and `__builtin_alloca_with_align` lower to dynamic stack
+  allocations released by the normal function epilogue. Plain alloca keeps the
+  SysV 16-byte stack alignment; the aligned form interprets the alignment
+  operand in bits and honors at least 16-byte alignment.
 - Common floating builtins lower without external calls:
   `__builtin_fabs*`, `__builtin_copysign*`, `__builtin_sqrt*`, `__builtin_nan*`,
   `__builtin_huge_val*`, `__builtin_inf*`, and ordered/unordered comparison

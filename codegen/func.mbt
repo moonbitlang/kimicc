@@ -364,7 +364,7 @@ fn Codegen::collect_expr_locals(self : Codegen, expr : @parser.Expr) -> Unit {
     | DesignatedField(_, e) => self.collect_expr_locals(e)
     Call(func, args) => {
       let ret_ty = self.call_return_type(func, args, 0)
-      if self.is_indirect_aggregate(ret_ty) {
+      if ret_ty.is_object_aggregate() {
         let size = self.type_size(ret_ty)
         if size > self.sret_scratch_size {
           self.sret_scratch_size = size
@@ -385,12 +385,21 @@ fn Codegen::collect_expr_locals(self : Codegen, expr : @parser.Expr) -> Unit {
       self.collect_expr_locals(then_expr)
       self.collect_expr_locals(else_expr)
     }
-    VaArg(ap, _) => self.collect_expr_locals(ap)
+    VaArg(ap, ty) => {
+      if is_aggregate_type(ty) {
+        let size = self.type_size(ty)
+        if size <= 16 && size > self.sret_scratch_size {
+          self.sret_scratch_size = size
+        }
+      }
+      self.collect_expr_locals(ap)
+    }
     Array(exprs) =>
       for e in exprs {
         self.collect_expr_locals(e)
       }
     CompoundLiteral(ty, exprs, id) => {
+      let ty = codegen_file_scope_compound_literal_type(ty, exprs)
       let _ = self.alloc_local(compound_literal_local_name(id), ty)
       for e in exprs {
         self.collect_expr_locals(e)

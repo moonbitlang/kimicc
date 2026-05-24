@@ -2,6 +2,7 @@ import {
   "moonbitlang/core/buffer",
   "moonbitlang/core/string",
   "bobzhang/kimicc/target",
+  "bobzhang/kimicc/ctype",
   "bobzhang/kimicc/parser",
 }
 

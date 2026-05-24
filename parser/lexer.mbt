@@ -94,7 +94,7 @@ pub(all) enum Token {
 } derive(Eq)
 
 ///|
-impl Show for Token with to_string(self) {
+impl Show for Token with fn to_string(self) {
   match self {
     EOF => "EOF"
     Ident(s) => "Ident(" + s + ")"

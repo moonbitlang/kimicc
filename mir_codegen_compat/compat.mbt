@@ -10,8 +10,7 @@ pub fn generate_assembly_for_target_strict(
 }
 
 ///|
-/// Transitional wrapper for callers that still hold MIR programs with parser
-/// fallback source attached.
+/// Transitional wrapper for callers that still hold MIR programs.
 pub fn generate_assembly_from_mir_strict(
   mir : @mir.Program,
 ) -> Result[String, String] {
@@ -24,22 +23,14 @@ pub fn generate_assembly_from_mir(mir : @mir.Program) -> String {
 }
 
 ///|
-/// Explicit parser fallback path for tests and migration-only callers.
-pub fn generate_assembly_from_mir_with_parser_fallback(
-  mir : @mir.Program,
-) -> String {
-  match generate_assembly_from_mir_strict(mir) {
-    Ok(assembly) => assembly
-    Err(_) => @codegen.generate_assembly_for_target(mir.source, mir.target)
-  }
-}
-
-///|
 pub fn generate_assembly_for_target_with_parser_fallback(
   prog : @parser.Program,
   target : @target.Target,
 ) -> String {
-  generate_assembly_from_mir_with_parser_fallback(@mir.lower(prog, target))
+  match generate_assembly_from_mir_strict(@mir.lower(prog, target)) {
+    Ok(assembly) => assembly
+    Err(_) => @codegen.generate_assembly_for_target(prog, target)
+  }
 }
 
 ///|

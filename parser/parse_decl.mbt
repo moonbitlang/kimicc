@@ -229,18 +229,18 @@ fn Parser::parse_global_var_tail(
     self.advance()
     if self.token == LBrace {
       let init_exprs = self.parse_brace_init_exprs()
-      let init_count = initializer_element_count(init_exprs)
-      ty = match ty {
-        Array(elem_ty, 0) => Array(elem_ty, init_count)
-        other => other
-      }
-      init = Some(Array(init_exprs))
+      let (final_ty, brace_init) = global_brace_initializer_for_type(
+        ty, init_exprs,
+      )
+      ty = final_ty
+      init = brace_init
     } else {
       let expr = self.parse_assign()
       match (ty, expr) {
         (Array(elem_ty, 0), String(s)) => {
-          ty = Array(elem_ty, s.length() + 1)
-          let char_exprs = Array::make(s.length() + 1, Expr::Number(0))
+          let array_length = @ctype.string_literal_array_length(s)
+          ty = Array(elem_ty, array_length)
+          let char_exprs = Array::make(array_length, Expr::Number(0))
           for i = 0; i < s.length(); i = i + 1 {
             char_exprs[i] = Number(s[i].to_int().to_int64())
           }
@@ -278,18 +278,18 @@ fn Parser::parse_global_var_tail(
       self.advance()
       if self.token == LBrace {
         let init_exprs = self.parse_brace_init_exprs()
-        let init_count = initializer_element_count(init_exprs)
-        extra_ty = match extra_ty {
-          Array(elem_ty, 0) => Array(elem_ty, init_count)
-          other => other
-        }
-        extra_init = Some(Array(init_exprs))
+        let (final_extra_ty, brace_init) = global_brace_initializer_for_type(
+          extra_ty, init_exprs,
+        )
+        extra_ty = final_extra_ty
+        extra_init = brace_init
       } else {
         let expr = self.parse_assign()
         match (extra_ty, expr) {
           (Array(elem_ty, 0), String(s)) => {
-            extra_ty = Array(elem_ty, s.length() + 1)
-            let char_exprs = Array::make(s.length() + 1, Expr::Number(0))
+            let array_length = @ctype.string_literal_array_length(s)
+            extra_ty = Array(elem_ty, array_length)
+            let char_exprs = Array::make(array_length, Expr::Number(0))
             for i = 0; i < s.length(); i = i + 1 {
               char_exprs[i] = Number(s[i].to_int().to_int64())
             }

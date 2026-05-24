@@ -72,6 +72,7 @@ pub(all) enum MirGlobalInit {
   MirGlobalString(String)
   MirGlobalSymbol(String)
   MirGlobalSymbolOffset(String, Int)
+  MirGlobalLabelAddr(String)
   MirGlobalArray(Array[MirGlobalInit])
   MirGlobalArraySparse(Array[(Int, MirGlobalInit)])
   MirGlobalAggregateSparse(Array[(Int, MirGlobalInit)])
@@ -132,7 +133,7 @@ pub(all) struct AggregateLayout {
 /// Target-sensitive C semantic facts derived from the parser AST.
 pub(all) struct Program {
   target : @target.Target
-  source : @parser.Program
+  priv source : @parser.Program
   decls : Array[MirFuncDecl]
   global_decls : Array[MirGlobalDecl]
   aggregate_decls : Array[MirAggregateDecl]
@@ -318,6 +319,58 @@ fn MirGlobalDecl::from_parser(g : @parser.GlobalDecl) -> MirGlobalDecl {
 }
 
 ///|
+fn mir_file_scope_compound_literal_name(id : Int) -> String {
+  "__kimicc_file_scope_compound_literal_" + id.to_string()
+}
+
+///|
+fn mir_compound_literal_array_length(exprs : Array[@parser.Expr]) -> Int {
+  let mut cursor = 0
+  let mut length = 0
+  for expr in exprs {
+    match expr {
+      DesignatedIndex(index, _) => {
+        cursor = index.to_int() + 1
+        if cursor > length {
+          length = cursor
+        }
+      }
+      DesignatedRange(_, last, _) => {
+        cursor = last.to_int() + 1
+        if cursor > length {
+          length = cursor
+        }
+      }
+      _ => {
+        cursor += 1
+        if cursor > length {
+          length = cursor
+        }
+      }
+    }
+  }
+  length
+}
+
+///|
+fn mir_file_scope_compound_literal_type(
+  ty : @ctype.Type,
+  exprs : Array[@parser.Expr],
+) -> @ctype.Type {
+  match ty {
+    Array(elem, n) =>
+      if n <= 0 {
+        Array(elem, mir_compound_literal_array_length(exprs))
+      } else {
+        ty
+      }
+    Aligned(inner, align) =>
+      Aligned(mir_file_scope_compound_literal_type(inner, exprs), align)
+    _ => ty
+  }
+}
+
+///|
 fn Program::lower_mir_global_init(
   self : Program,
   ty : @ctype.Type,
@@ -335,7 +388,11 @@ fn Program::lower_mir_global_init(
           _ => ()
         }
       }
-      Some(self.lower_mir_global_array_init_for_type(ty, exprs))
+      match self.core_type(ty) {
+        Struct(_) | Union(_) | Array(_, _) =>
+          Some(self.lower_mir_global_array_init_for_type(ty, exprs))
+        _ => Some(self.lower_mir_global_braced_scalar_init_for_type(ty, exprs))
+      }
     }
   }
 }
@@ -386,7 +443,18 @@ fn Program::lower_mir_global_value_for_type(
   expr : @parser.Expr,
 ) -> MirGlobalInit {
   match expr {
-    Array(exprs) => self.lower_mir_global_array_init_for_type(ty, exprs)
+    Array(exprs) =>
+      match self.core_type(ty) {
+        Struct(_) | Union(_) | Array(_, _) =>
+          self.lower_mir_global_array_init_for_type(ty, exprs)
+        _ => self.lower_mir_global_braced_scalar_init_for_type(ty, exprs)
+      }
+    CompoundLiteral(lit_ty, exprs, id) =>
+      if self.mir_global_compound_literal_decays_to_pointer(ty, lit_ty) {
+        MirGlobalSymbol(mir_file_scope_compound_literal_name(id))
+      } else {
+        self.lower_mir_global_compound_literal_init_for_type(ty, exprs)
+      }
     DesignatedField(_, value)
     | DesignatedIndex(_, value)
     | DesignatedRange(_, _, value) =>
@@ -396,6 +464,56 @@ fn Program::lower_mir_global_value_for_type(
         self.lower_mir_global_value_for_type(ty, value)
       }
     _ => self.lower_mir_global_scalar_init_for_type(ty, expr)
+  }
+}
+
+///|
+fn Program::mir_global_compound_literal_decays_to_pointer(
+  self : Program,
+  target_ty : @ctype.Type,
+  literal_ty : @ctype.Type,
+) -> Bool {
+  match (self.core_type(target_ty), self.core_type(literal_ty)) {
+    (Pointer(_), Array(_, _)) => true
+    _ => false
+  }
+}
+
+///|
+fn Program::lower_mir_global_compound_literal_init_for_type(
+  self : Program,
+  ty : @ctype.Type,
+  exprs : Array[@parser.Expr],
+) -> MirGlobalInit {
+  match self.core_type(ty) {
+    Struct(_) | Union(_) | Array(_, _) =>
+      self.lower_mir_global_array_init_for_type(ty, exprs)
+    _ =>
+      if exprs.length() > 0 {
+        self.lower_mir_global_value_for_type(ty, exprs[0])
+      } else {
+        MirGlobalScalarInt(0)
+      }
+  }
+}
+
+///|
+fn Program::lower_mir_global_braced_scalar_init_for_type(
+  self : Program,
+  ty : @ctype.Type,
+  exprs : Array[@parser.Expr],
+) -> MirGlobalInit {
+  if exprs.length() == 0 {
+    return self.lower_mir_global_scalar_init_for_type(ty, Number(0))
+  }
+  match exprs[0] {
+    Array(nested) =>
+      self.lower_mir_global_braced_scalar_init_for_type(ty, nested)
+    DesignatedField(_, value)
+    | DesignatedIndex(_, value)
+    | DesignatedRange(_, _, value) =>
+      self.lower_mir_global_braced_scalar_init_for_type(ty, [value])
+    value => self.lower_mir_global_value_for_type(ty, value)
   }
 }
 
@@ -603,6 +721,7 @@ fn Program::lower_mir_global_scalar_init(
   match expr {
     Number(n) => MirGlobalScalarInt(n)
     String(s) => MirGlobalString(s)
+    LabelAddr(name) => MirGlobalLabelAddr(name)
     DesignatedField(_, _) | DesignatedIndex(_, _) | DesignatedRange(_, _, _) =>
       MirGlobalInitUnsupported
     _ =>
@@ -623,6 +742,155 @@ fn Program::lower_mir_global_scalar_init(
 }
 
 ///|
+fn Program::lower_mir_file_scope_compound_literal_global(
+  self : Program,
+  ty : @ctype.Type,
+  exprs : Array[@parser.Expr],
+  id : Int,
+) -> MirGlobalDecl {
+  let completed_ty = mir_file_scope_compound_literal_type(ty, exprs)
+  {
+    ty: completed_ty,
+    name: mir_file_scope_compound_literal_name(id),
+    init: Some(
+      self.lower_mir_global_compound_literal_init_for_type(completed_ty, exprs),
+    ),
+    has_init: true,
+    is_static: true,
+    is_extern: false,
+    is_weak: false,
+    visibility: None,
+    symbol_alias: None,
+    section: None,
+  }
+}
+
+///|
+fn Program::collect_mir_file_scope_compound_literal_globals_expr(
+  self : Program,
+  expr : @parser.Expr,
+  seen : Map[Int, Bool],
+  globals : Array[MirGlobalDecl],
+) -> Unit {
+  match expr {
+    CompoundLiteral(ty, exprs, id) => {
+      if !seen.contains(id) {
+        seen[id] = true
+        globals.push(
+          self.lower_mir_file_scope_compound_literal_global(ty, exprs, id),
+        )
+      }
+      for item in exprs {
+        self.collect_mir_file_scope_compound_literal_globals_expr(
+          item, seen, globals,
+        )
+      }
+    }
+    Binary(_, lhs, rhs) | Assign(lhs, rhs) | CompoundAssign(_, lhs, rhs) => {
+      self.collect_mir_file_scope_compound_literal_globals_expr(
+        lhs, seen, globals,
+      )
+      self.collect_mir_file_scope_compound_literal_globals_expr(
+        rhs, seen, globals,
+      )
+    }
+    Unary(_, value)
+    | Deref(value)
+    | AddrOf(value)
+    | Cast(_, value)
+    | PrefixInc(value)
+    | PrefixDec(value)
+    | PostfixInc(value)
+    | PostfixDec(value)
+    | DesignatedField(_, value)
+    | DesignatedIndex(_, value)
+    | DesignatedRange(_, _, value) =>
+      self.collect_mir_file_scope_compound_literal_globals_expr(
+        value, seen, globals,
+      )
+    Call(func, args) => {
+      self.collect_mir_file_scope_compound_literal_globals_expr(
+        func, seen, globals,
+      )
+      for arg in args {
+        self.collect_mir_file_scope_compound_literal_globals_expr(
+          arg, seen, globals,
+        )
+      }
+    }
+    MemberAccess(obj, _) =>
+      self.collect_mir_file_scope_compound_literal_globals_expr(
+        obj, seen, globals,
+      )
+    ArrayAccess(base, index) => {
+      self.collect_mir_file_scope_compound_literal_globals_expr(
+        base, seen, globals,
+      )
+      self.collect_mir_file_scope_compound_literal_globals_expr(
+        index, seen, globals,
+      )
+    }
+    Ternary(cond, then_, else_) => {
+      self.collect_mir_file_scope_compound_literal_globals_expr(
+        cond, seen, globals,
+      )
+      self.collect_mir_file_scope_compound_literal_globals_expr(
+        then_, seen, globals,
+      )
+      self.collect_mir_file_scope_compound_literal_globals_expr(
+        else_, seen, globals,
+      )
+    }
+    VaArg(ap, _) =>
+      self.collect_mir_file_scope_compound_literal_globals_expr(
+        ap, seen, globals,
+      )
+    Array(values) =>
+      for value in values {
+        self.collect_mir_file_scope_compound_literal_globals_expr(
+          value, seen, globals,
+        )
+      }
+    SizeofExpr(_) | AlignofExpr(_) => ()
+    Number(_)
+    | FloatLiteral(_)
+    | String(_)
+    | Var(_)
+    | Sizeof(_)
+    | Alignof(_)
+    | LabelAddr(_)
+    | OffsetOf(_, _) => ()
+  }
+}
+
+///|
+fn Program::append_mir_file_scope_compound_literal_globals(
+  self : Program,
+  source_globals : Array[@parser.GlobalDecl],
+) -> Unit {
+  let seen : Map[Int, Bool] = {}
+  let generated : Array[MirGlobalDecl] = []
+  for global in source_globals {
+    match global.init {
+      Some(Scalar(expr)) =>
+        self.collect_mir_file_scope_compound_literal_globals_expr(
+          expr, seen, generated,
+        )
+      Some(Array(exprs)) =>
+        for expr in exprs {
+          self.collect_mir_file_scope_compound_literal_globals_expr(
+            expr, seen, generated,
+          )
+        }
+      None => ()
+    }
+  }
+  for global in generated {
+    self.global_decls.push(global)
+  }
+}
+
+///|
 fn mir_global_string_literal(expr : @parser.Expr) -> String? {
   match expr {
     String(value) => Some(value)
@@ -637,6 +905,15 @@ fn Program::lower_mir_global_scalar_init_for_type(
   ty : @ctype.Type,
   expr : @parser.Expr,
 ) -> MirGlobalInit {
+  match expr {
+    CompoundLiteral(lit_ty, exprs, id) =>
+      if self.mir_global_compound_literal_decays_to_pointer(ty, lit_ty) {
+        return MirGlobalSymbol(mir_file_scope_compound_literal_name(id))
+      } else {
+        return self.lower_mir_global_compound_literal_init_for_type(ty, exprs)
+      }
+    _ => ()
+  }
   match self.core_type(ty) {
     Pointer(_) | Array(SChar, _) | Array(UChar, _) =>
       match mir_global_string_literal(expr) {
@@ -653,7 +930,10 @@ fn Program::lower_mir_global_scalar_init_for_type(
   } else if ty.is_integer() &&
     self.expr_type(expr, Scope::empty()).is_floating() {
     match self.fold_float_const(expr, Scope::empty()) {
-      Some(value) => return MirGlobalScalarInt(value.to_int().to_int64())
+      Some(value) =>
+        return MirGlobalScalarInt(
+          @ctype.floating_constant_to_integer_bits(value),
+        )
       None => ()
     }
   }
@@ -691,6 +971,8 @@ fn Program::lower_mir_global_lvalue_reloc_parts(
 ) -> (String, Int)? {
   match expr {
     Var(name) => Some((name, 0))
+    CompoundLiteral(_, _, id) =>
+      Some((mir_file_scope_compound_literal_name(id), 0))
     Cast(_, inner) => self.lower_mir_global_lvalue_reloc_parts(inner)
     Deref(inner) => self.lower_mir_global_address_reloc_parts(inner)
     ArrayAccess(base, index) =>
@@ -733,6 +1015,8 @@ fn Program::lower_mir_global_address_reloc_parts(
 ) -> (String, Int)? {
   match expr {
     Var(name) => Some((name, 0))
+    CompoundLiteral(_, _, id) =>
+      Some((mir_file_scope_compound_literal_name(id), 0))
     Cast(_, inner) => self.lower_mir_global_address_reloc_parts(inner)
     AddrOf(inner) => self.lower_mir_global_lvalue_reloc_parts(inner)
     Binary("+", base, offset_expr) =>
@@ -862,6 +1146,7 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
       program.lower_mir_global_init(g.ty, g.init),
     )
   }
+  program.append_mir_file_scope_compound_literal_globals(source.globals)
   for g in merge_global_decls(program.global_decls) {
     program.globals[g.name] = g
   }
@@ -884,29 +1169,14 @@ pub fn lower_to_module(
 
 ///|
 fn Program::core_type(self : Program, ty : @ctype.Type) -> @ctype.Type {
-  match ty {
-    Atomic(inner) | Aligned(inner, _) => self.core_type(inner)
-    _ => ty
-  }
+  ignore(self)
+  ty.core_type()
 }
 
 ///|
 fn Program::pointer_element(self : Program, ty : @ctype.Type) -> @ctype.Type? {
-  match self.core_type(ty) {
-    Pointer(elem) | Array(elem, _) => Some(elem)
-    _ => None
-  }
-}
-
-///|
-fn atomic_target_type(ty : @ctype.Type) -> @ctype.Type {
-  match ty {
-    Pointer(Atomic(inner)) | Array(Atomic(inner), _) => inner
-    Pointer(Aligned(inner, _)) | Array(Aligned(inner, _), _) => inner
-    Pointer(inner) | Array(inner, _) => inner
-    Atomic(inner) | Aligned(inner, _) => inner
-    _ => SLongLong
-  }
+  ignore(self)
+  ty.pointer_or_array_element()
 }
 
 ///|
@@ -914,77 +1184,8 @@ fn Program::offset_array_element(
   self : Program,
   ty : @ctype.Type,
 ) -> @ctype.Type? {
-  match self.core_type(ty) {
-    Array(elem, _) => Some(elem)
-    _ => None
-  }
-}
-
-///|
-fn is_unsigned_integer_type(ty : @ctype.Type) -> Bool {
-  match ty {
-    UChar | UShort | UInt | ULong | ULongLong | UInt128 => true
-    _ => false
-  }
-}
-
-///|
-fn integer_rank(ty : @ctype.Type) -> Int {
-  match ty {
-    Bool | SChar | UChar => 1
-    SShort | UShort => 2
-    SInt | UInt => 3
-    SLong | ULong => 4
-    SLongLong | ULongLong => 5
-    SInt128 | UInt128 => 6
-    _ => 0
-  }
-}
-
-///|
-fn integer_width_bits(ty : @ctype.Type) -> Int {
-  match ty {
-    Bool | SChar | UChar => 8
-    SShort | UShort => 16
-    SInt | UInt => 32
-    SLong | ULong | SLongLong | ULongLong | Pointer(_) | FuncPtr(_, _, _) => 64
-    SInt128 | UInt128 => 128
-    _ => 0
-  }
-}
-
-///|
-fn unsigned_type_for_rank(rank : Int) -> @ctype.Type {
-  if rank >= 6 {
-    UInt128
-  } else if rank == 5 {
-    ULongLong
-  } else if rank == 4 {
-    ULong
-  } else {
-    UInt
-  }
-}
-
-///|
-fn signed_type_for_rank(rank : Int) -> @ctype.Type {
-  if rank >= 6 {
-    SInt128
-  } else if rank == 5 {
-    SLongLong
-  } else if rank == 4 {
-    SLong
-  } else {
-    SInt
-  }
-}
-
-///|
-fn unary_integer_result_type(ty : @ctype.Type) -> @ctype.Type {
-  match ty {
-    Bool | SChar | UChar | SShort | UShort => SInt
-    _ => ty
-  }
+  ignore(self)
+  ty.array_element()
 }
 
 ///|
@@ -1009,77 +1210,7 @@ fn Program::unary_numeric_result_type(
   self : Program,
   ty : @ctype.Type,
 ) -> @ctype.Type {
-  if self.is_floating_type(ty) {
-    ty
-  } else {
-    unary_integer_result_type(ty)
-  }
-}
-
-///|
-fn integer_common_type(
-  lhs_ty : @ctype.Type,
-  rhs_ty : @ctype.Type,
-) -> @ctype.Type {
-  let lhs_ty = unary_integer_result_type(lhs_ty)
-  let rhs_ty = unary_integer_result_type(rhs_ty)
-  if lhs_ty == rhs_ty {
-    return lhs_ty
-  }
-  let lhs_unsigned = is_unsigned_integer_type(lhs_ty)
-  let rhs_unsigned = is_unsigned_integer_type(rhs_ty)
-  let lhs_rank = integer_rank(lhs_ty)
-  let rhs_rank = integer_rank(rhs_ty)
-  if lhs_unsigned == rhs_unsigned {
-    let rank = if lhs_rank > rhs_rank { lhs_rank } else { rhs_rank }
-    if lhs_unsigned {
-      unsigned_type_for_rank(rank)
-    } else {
-      signed_type_for_rank(rank)
-    }
-  } else {
-    let unsigned_ty = if lhs_unsigned { lhs_ty } else { rhs_ty }
-    let signed_ty = if lhs_unsigned { rhs_ty } else { lhs_ty }
-    let unsigned_rank = integer_rank(unsigned_ty)
-    let signed_rank = integer_rank(signed_ty)
-    if unsigned_rank >= signed_rank {
-      unsigned_ty
-    } else if integer_width_bits(signed_ty) > integer_width_bits(unsigned_ty) {
-      signed_ty
-    } else {
-      unsigned_type_for_rank(signed_rank)
-    }
-  }
-}
-
-///|
-fn Program::binary_result_type(
-  self : Program,
-  op : String,
-  lhs_ty : @ctype.Type,
-  rhs_ty : @ctype.Type,
-) -> @ctype.Type {
-  match op {
-    "==" | "!=" | "<" | ">" | "<=" | ">=" | "&&" | "||" => SInt
-    "," => rhs_ty
-    "<<" | ">>" => unary_integer_result_type(lhs_ty)
-    _ =>
-      if self.is_floating_type(lhs_ty) || self.is_floating_type(rhs_ty) {
-        if self.core_type(lhs_ty) == LongDouble ||
-          self.core_type(rhs_ty) == LongDouble {
-          LongDouble
-        } else if self.core_type(lhs_ty) == Double ||
-          self.core_type(rhs_ty) == Double {
-          Double
-        } else {
-          Float
-        }
-      } else if lhs_ty.is_integer() && rhs_ty.is_integer() {
-        integer_common_type(lhs_ty, rhs_ty)
-      } else {
-        SInt
-      }
-  }
+  @ctype.unary_numeric_result_type(ty, self.target is DarwinArm64)
 }
 
 ///|
@@ -1088,37 +1219,12 @@ fn Program::ternary_result_type(
   then_ty : @ctype.Type,
   else_ty : @ctype.Type,
 ) -> @ctype.Type {
-  match (self.core_type(then_ty), self.core_type(else_ty)) {
-    (Array(elem, _), _) | (_, Array(elem, _)) => Pointer(elem)
-    (Pointer(elem), _) | (_, Pointer(elem)) => Pointer(elem)
-    (FuncPtr(ret, params, variadic), _) | (_, FuncPtr(ret, params, variadic)) =>
-      FuncPtr(ret, params, variadic)
-    _ =>
-      if self.is_floating_type(then_ty) || self.is_floating_type(else_ty) {
-        if self.core_type(then_ty) == LongDouble ||
-          self.core_type(else_ty) == LongDouble {
-          LongDouble
-        } else if self.core_type(then_ty) == Double ||
-          self.core_type(else_ty) == Double {
-          Double
-        } else {
-          Float
-        }
-      } else if then_ty.is_integer() && else_ty.is_integer() {
-        integer_common_type(then_ty, else_ty)
-      } else {
-        then_ty
-      }
-  }
+  @ctype.ternary_result_type(then_ty, else_ty, self.target is DarwinArm64)
 }
 
 ///|
 fn number_literal_type(value : Int64) -> @ctype.Type {
-  if value < -2147483648L || value > 2147483647L {
-    SLongLong
-  } else {
-    SInt
-  }
+  @ctype.integer_literal_type(value)
 }
 
 ///|
@@ -1224,14 +1330,6 @@ fn align_to(value : Int, align : Int) -> Int {
 }
 
 ///|
-fn is_anon_type(ty : @ctype.Type) -> Bool {
-  match ty {
-    Struct(name) | Union(name) => name.has_prefix("__anon_")
-    _ => false
-  }
-}
-
-///|
 fn Program::flatten_anon_fields(
   self : Program,
   ty : @ctype.Type,
@@ -1244,7 +1342,7 @@ fn Program::flatten_anon_fields(
   let layout = self.aggregate_layout_by_name(name)
   let fields : Array[FieldLayout] = []
   for field in layout.fields {
-    if field.name == "" && is_anon_type(field.ty) {
+    if field.name == "" && field.ty.is_anonymous_aggregate() {
       for
         inner in self.flatten_anon_fields(field.ty, base_offset + field.offset) {
         fields.push(inner)
@@ -1273,7 +1371,7 @@ fn Program::compute_struct_layout(
   let mut in_bitfield_run = false
   let mut current_bit_offset = 0
   for field in decl.fields {
-    if field.name == "" && is_anon_type(field.ty) {
+    if field.name == "" && field.ty.is_anonymous_aggregate() {
       let align = if decl.is_packed { 1 } else { self.type_align(field.ty) }
       offset = align_to(offset, align)
       for inner in self.flatten_anon_fields(field.ty, offset) {
@@ -1384,7 +1482,7 @@ fn Program::compute_union_layout(
   let mut max_size = 0
   let mut max_align = 1
   for field in decl.fields {
-    if field.name == "" && is_anon_type(field.ty) {
+    if field.name == "" && field.ty.is_anonymous_aggregate() {
       for inner in self.flatten_anon_fields(field.ty, 0) {
         fields.push(inner)
       }
@@ -1526,10 +1624,8 @@ pub fn Program::offset_of_path(
 
 ///|
 fn MirModule::core_type(self : MirModule, ty : @ctype.Type) -> @ctype.Type {
-  match ty {
-    Atomic(inner) | Aligned(inner, _) => self.core_type(inner)
-    _ => ty
-  }
+  ignore(self)
+  ty.core_type()
 }
 
 ///|
@@ -1537,21 +1633,8 @@ fn MirModule::offset_array_element(
   self : MirModule,
   ty : @ctype.Type,
 ) -> @ctype.Type? {
-  match self.core_type(ty) {
-    Array(elem, _) => Some(elem)
-    _ => None
-  }
-}
-
-///|
-fn MirModule::pointer_element(
-  self : MirModule,
-  ty : @ctype.Type,
-) -> @ctype.Type? {
-  match self.core_type(ty) {
-    Pointer(elem) | Array(elem, _) => Some(elem)
-    _ => None
-  }
+  ignore(self)
+  ty.array_element()
 }
 
 ///|
@@ -1704,49 +1787,54 @@ pub fn MirModule::offset_of_path(
 }
 
 ///|
-pub fn MirModule::global_expr_type(
+pub fn MirModule::object_size_fact_for_type(
   self : MirModule,
-  expr : @parser.Expr,
-) -> @ctype.Type {
-  match expr {
-    Number(value) => number_literal_type(value)
-    FloatLiteral(_) => Double
-    Var(name) =>
-      if self.globals.contains(name) {
-        self.globals[name].ty
-      } else if self.funcs.contains(name) {
-        let sig = self.funcs[name]
-        FuncPtr(sig.ret, sig.params, sig.variadic)
-      } else {
-        Pointer(Void)
-      }
-    String(value) => Array(SChar, value.length() + 1)
-    CompoundLiteral(ty, _, _) => ty
-    DesignatedField(_, e) | DesignatedIndex(_, e) | DesignatedRange(_, _, e) =>
-      self.global_expr_type(e)
-    Cast(ty, _) => ty
-    AddrOf(e) => Pointer(self.global_expr_type(e))
-    Deref(e) =>
-      match self.core_type(self.global_expr_type(e)) {
-        Pointer(elem) | Array(elem, _) => elem
-        _ => SInt
-      }
-    ArrayAccess(base, _) =>
-      match self.pointer_element(self.global_expr_type(base)) {
-        Some(elem) => elem
-        None => SInt
-      }
-    MemberAccess(obj, field) =>
-      match self.field_layout(self.global_expr_type(obj), field) {
-        Some(layout) => layout.ty
-        None => SInt
-      }
-    _ => SInt
-  }
+  ty : @ctype.Type,
+) -> @ctype.ObjectSizeFact {
+  let size = self.type_size(ty)
+  { whole: size, subobject: size }
 }
 
 ///|
-pub fn Program::global_expr_type(
+pub fn MirModule::object_size_path_fact(
+  self : MirModule,
+  ty : @ctype.Type,
+  path : Array[@ctype.OffsetDesignator],
+) -> @ctype.ObjectSizeFact? {
+  let mut current_ty = ty
+  let mut fact = self.object_size_fact_for_type(ty)
+  for designator in path {
+    match designator {
+      OffsetField(field) =>
+        match self.field_layout(current_ty, field) {
+          Some(layout) => {
+            fact = match
+              fact.member_field(layout.offset, self.type_size(layout.ty)) {
+              Some(member_fact) => member_fact
+              None => return None
+            }
+            current_ty = layout.ty
+          }
+          None => return None
+        }
+      OffsetIndex(index) =>
+        match self.core_type(current_ty) {
+          Array(elem, n) => {
+            fact = match fact.array_element(n, self.type_size(elem), index) {
+              Some(element_fact) => element_fact
+              None => return None
+            }
+            current_ty = elem
+          }
+          _ => return None
+        }
+    }
+  }
+  Some(fact)
+}
+
+///|
+fn Program::global_expr_type(
   self : Program,
   expr : @parser.Expr,
 ) -> @ctype.Type {
@@ -1762,7 +1850,7 @@ pub fn Program::global_expr_type(
       } else {
         Pointer(Void)
       }
-    String(value) => Array(SChar, value.length() + 1)
+    String(value) => Array(SChar, @ctype.string_literal_array_length(value))
     CompoundLiteral(ty, _, _) => ty
     DesignatedField(_, e) | DesignatedIndex(_, e) | DesignatedRange(_, _, e) =>
       self.global_expr_type(e)
@@ -1794,257 +1882,24 @@ fn Program::builtin_return_type(
   args : Array[@parser.Expr],
   scope : Scope,
 ) -> @ctype.Type? {
-  match name {
-    "__builtin_object_size" | "__builtin_dynamic_object_size" => Some(ULong)
-    "__builtin_return_address"
-    | "__builtin_frame_address"
-    | "__builtin_extract_return_addr"
-    | "__builtin_frob_return_addr" => Some(Pointer(Void))
-    "__builtin_alloca" => Some(Pointer(Void))
-    "__builtin_memcpy"
-    | "__builtin___memcpy_chk"
-    | "__builtin_mempcpy"
-    | "__builtin___mempcpy_chk"
-    | "__builtin_memmove"
-    | "__builtin___memmove_chk"
-    | "__builtin_memset"
-    | "__builtin___memset_chk"
-    | "__builtin_memchr" => Some(Pointer(Void))
-    "__builtin_strlen" => Some(ULong)
-    "__builtin_memcmp" | "__builtin_strcmp" | "__builtin_strncmp" => Some(SInt)
-    "__builtin_strcpy"
-    | "__builtin___strcpy_chk"
-    | "__builtin_strcat"
-    | "__builtin___strcat_chk"
-    | "__builtin_stpcpy"
-    | "__builtin___stpcpy_chk"
-    | "__builtin_strncpy"
-    | "__builtin___strncpy_chk"
-    | "__builtin_stpncpy"
-    | "__builtin___stpncpy_chk"
-    | "__builtin_strncat"
-    | "__builtin___strncat_chk"
-    | "__builtin_strchr"
-    | "__builtin_strrchr"
-    | "__builtin_strstr" => Some(Pointer(SChar))
-    "__builtin___strlcpy_chk" | "__builtin___strlcat_chk" => Some(ULong)
-    "__builtin___snprintf_chk"
-    | "__builtin___vsnprintf_chk"
-    | "__builtin___sprintf_chk"
-    | "__builtin___vsprintf_chk"
-    | "__builtin___printf_chk"
-    | "__builtin___fprintf_chk"
-    | "__builtin___vfprintf_chk" => Some(SInt)
-    "__builtin_fabsf"
-    | "__builtin_copysignf"
-    | "__builtin_sqrtf"
-    | "__builtin_nanf"
-    | "__builtin_huge_valf"
-    | "__builtin_inff" => Some(Float)
-    "__builtin_fabs"
-    | "__builtin_copysign"
-    | "__builtin_sqrt"
-    | "__builtin_nan"
-    | "__builtin_huge_val"
-    | "__builtin_inf" => Some(Double)
-    "__builtin_fabsl"
-    | "__builtin_copysignl"
-    | "__builtin_sqrtl"
-    | "__builtin_nanl"
-    | "__builtin_huge_vall"
-    | "__builtin_infl" => Some(LongDouble)
-    "__atomic_load_n"
-    | "__c11_atomic_load"
-    | "__atomic_add_fetch"
-    | "__atomic_sub_fetch"
-    | "__atomic_and_fetch"
-    | "__atomic_or_fetch"
-    | "__atomic_xor_fetch"
-    | "__atomic_nand_fetch"
-    | "__atomic_fetch_add"
-    | "__atomic_fetch_sub"
-    | "__atomic_fetch_and"
-    | "__atomic_fetch_or"
-    | "__atomic_fetch_xor"
-    | "__atomic_fetch_nand"
-    | "__atomic_exchange_n"
-    | "__c11_atomic_fetch_add"
-    | "__c11_atomic_fetch_sub"
-    | "__c11_atomic_fetch_and"
-    | "__c11_atomic_fetch_or"
-    | "__c11_atomic_fetch_xor"
-    | "__c11_atomic_exchange"
-    | "__sync_val_compare_and_swap"
-    | "__sync_fetch_and_add"
-    | "__sync_fetch_and_sub"
-    | "__sync_fetch_and_and"
-    | "__sync_fetch_and_or"
-    | "__sync_fetch_and_xor"
-    | "__sync_fetch_and_nand"
-    | "__sync_fetch_and_max"
-    | "__sync_fetch_and_min"
-    | "__sync_fetch_and_umax"
-    | "__sync_fetch_and_umin"
-    | "__sync_add_and_fetch"
-    | "__sync_sub_and_fetch"
-    | "__sync_and_and_fetch"
-    | "__sync_or_and_fetch"
-    | "__sync_xor_and_fetch"
-    | "__sync_nand_and_fetch"
-    | "__sync_swap"
-    | "__sync_lock_test_and_set" =>
-      if args.length() > 0 {
-        Some(atomic_target_type(self.expr_type(args[0], scope)))
-      } else {
-        Some(SLongLong)
-      }
-    "__atomic_test_and_set"
-    | "__atomic_compare_exchange"
-    | "__atomic_compare_exchange_n"
-    | "__c11_atomic_compare_exchange_strong"
-    | "__c11_atomic_compare_exchange_weak"
-    | "__sync_bool_compare_and_swap"
-    | "__atomic_always_lock_free"
-    | "__atomic_is_lock_free"
-    | "__c11_atomic_is_lock_free" => Some(Bool)
-    "__atomic_clear"
-    | "__atomic_exchange"
-    | "__atomic_load"
-    | "__atomic_store"
-    | "__atomic_store_n"
-    | "__atomic_thread_fence"
-    | "__atomic_signal_fence"
-    | "__c11_atomic_store"
-    | "__c11_atomic_thread_fence"
-    | "__c11_atomic_signal_fence"
-    | "__sync_synchronize"
-    | "__sync_lock_release" => Some(Void)
-    "__builtin_constant_p"
-    | "__builtin_isgreater"
-    | "__builtin_isgreaterequal"
-    | "__builtin_isless"
-    | "__builtin_islessequal"
-    | "__builtin_islessgreater"
-    | "__builtin_isunordered"
-    | "__builtin_isnan"
-    | "__builtin_isnanf"
-    | "__builtin_isnanl"
-    | "__builtin_isinf"
-    | "__builtin_isinff"
-    | "__builtin_isinfl"
-    | "__builtin_isfinite"
-    | "__builtin_isfinitef"
-    | "__builtin_isfinitel"
-    | "__builtin_isnormal"
-    | "__builtin_isnormalf"
-    | "__builtin_isnormall"
-    | "__builtin_signbit"
-    | "__builtin_signbitf"
-    | "__builtin_signbitl"
-    | "__builtin_clz"
-    | "__builtin_clzl"
-    | "__builtin_clzll"
-    | "__builtin_ctz"
-    | "__builtin_ctzl"
-    | "__builtin_ctzll"
-    | "__builtin_ffs"
-    | "__builtin_ffsl"
-    | "__builtin_ffsll"
-    | "__builtin_popcount"
-    | "__builtin_popcountl"
-    | "__builtin_popcountll"
-    | "__builtin_parity"
-    | "__builtin_parityl"
-    | "__builtin_parityll"
-    | "__builtin_abs"
-    | "__builtin_flt_rounds" => Some(SInt)
-    "__builtin_labs" => Some(SLong)
-    "__builtin_llabs" => Some(SLongLong)
-    "__builtin_is_aligned" => Some(Bool)
-    "__builtin_align_up" | "__builtin_align_down" =>
-      if args.length() > 0 {
-        Some(self.expr_type(args[0], scope))
-      } else {
-        Some(ULong)
-      }
-    "__builtin_unreachable"
-    | "__builtin_trap"
-    | "__builtin_assume"
-    | "__builtin_prefetch"
-    | "__builtin_bzero"
-    | "__builtin_va_start"
-    | "__builtin_va_end"
-    | "__builtin_va_copy" => Some(Void)
-    "__builtin_add_overflow"
-    | "__builtin_sub_overflow"
-    | "__builtin_mul_overflow"
-    | "__builtin_sadd_overflow"
-    | "__builtin_saddl_overflow"
-    | "__builtin_saddll_overflow"
-    | "__builtin_uadd_overflow"
-    | "__builtin_uaddl_overflow"
-    | "__builtin_uaddll_overflow"
-    | "__builtin_ssub_overflow"
-    | "__builtin_ssubl_overflow"
-    | "__builtin_ssubll_overflow"
-    | "__builtin_usub_overflow"
-    | "__builtin_usubl_overflow"
-    | "__builtin_usubll_overflow"
-    | "__builtin_smul_overflow"
-    | "__builtin_smull_overflow"
-    | "__builtin_smulll_overflow"
-    | "__builtin_umul_overflow"
-    | "__builtin_umull_overflow"
-    | "__builtin_umulll_overflow" => Some(Bool)
-    "__builtin_bswap16" => Some(UShort)
-    "__builtin_bswap32"
-    | "__builtin_rotateleft32"
-    | "__builtin_rotateright32" => Some(UInt)
-    "__builtin_bswap64"
-    | "__builtin_rotateleft64"
-    | "__builtin_rotateright64" => Some(ULongLong)
-    "__builtin_bswap" =>
-      if args.length() > 0 {
-        Some(self.expr_type(args[0], scope))
-      } else {
-        Some(UInt)
-      }
-    "__builtin_rotateleft" | "__builtin_rotateright" =>
-      if args.length() > 0 {
-        Some(self.expr_type(args[0], scope))
-      } else {
-        Some(UInt)
-      }
-    "__builtin_assume_aligned" =>
-      if args.length() > 0 {
-        Some(self.expr_type(args[0], scope))
-      } else {
-        Some(Pointer(Void))
-      }
-    "__builtin_expect"
-    | "__builtin_expect_with_probability"
-    | "__builtin_unpredictable" =>
-      if args.length() > 0 {
-        Some(self.expr_type(args[0], scope))
-      } else {
-        Some(SLong)
-      }
-    "__builtin_choose_expr" =>
-      if args.length() >= 3 {
-        match self.fold_const(args[0], scope) {
-          Some(0L) => Some(self.expr_type(args[2], scope))
-          Some(_) => Some(self.expr_type(args[1], scope))
-          None => Some(self.expr_type(args[1], scope))
-        }
-      } else {
-        Some(SInt)
-      }
-    _ => None
+  let arg_types : Array[@ctype.Type] = []
+  for arg in args {
+    arg_types.push(self.expr_type(arg, scope))
   }
+  let choose_cond = match @ctype.builtin_return_condition_arg_index(name) {
+    Some(index) =>
+      if index < args.length() {
+        self.fold_const(args[index], scope)
+      } else {
+        None
+      }
+    None => None
+  }
+  @ctype.builtin_return_type(name, arg_types, choose_cond)
 }
 
 ///|
-pub fn Program::expr_type(
+fn Program::expr_type(
   self : Program,
   expr : @parser.Expr,
   scope : Scope,
@@ -2067,38 +1922,26 @@ pub fn Program::expr_type(
     Binary(op, lhs, rhs) => {
       let lhs_ty = self.expr_type(lhs, scope)
       let rhs_ty = self.expr_type(rhs, scope)
-      if op == "<<" || op == ">>" {
+      let force_wide_shift = if op == "<<" || op == ">>" {
         match (lhs, rhs) {
-          (Number(_), Number(shift)) => if shift >= 32L { return ULongLong }
-          _ => ()
+          (Number(_), Number(shift)) => shift >= 32L
+          _ => false
         }
+      } else {
+        false
       }
-      if op == "-" &&
-        self.pointer_element(lhs_ty) is Some(_) &&
-        self.pointer_element(rhs_ty) is Some(_) {
-        return SLong
-      }
-      match self.pointer_element(lhs_ty) {
-        Some(elem) =>
-          if (op == "+" || op == "-") && rhs_ty.is_integer() {
-            return Pointer(elem)
-          }
-        None => ()
-      }
-      match self.pointer_element(rhs_ty) {
-        Some(elem) =>
-          if op == "+" && lhs_ty.is_integer() {
-            return Pointer(elem)
-          }
-        None => ()
-      }
-      self.binary_result_type(op, lhs_ty, rhs_ty)
+      @ctype.binary_expr_result_type(
+        op,
+        lhs_ty,
+        rhs_ty,
+        force_wide_shift,
+        self.target is DarwinArm64,
+      )
     }
     Unary("-", operand) | Unary("+", operand) =>
       self.unary_numeric_result_type(self.expr_type(operand, scope))
     Unary("!", _) => SInt
-    Unary("~", operand) =>
-      unary_integer_result_type(self.expr_type(operand, scope))
+    Unary("~", operand) => self.expr_type(operand, scope).integer_promote()
     Unary(_, operand) => self.expr_type(operand, scope)
     Call(func, args) =>
       match func {
@@ -2163,212 +2006,6 @@ fn Program::call_expr_return_type(
 }
 
 ///|
-priv struct ConstIntValue {
-  bits : Int64
-  ty : @ctype.Type
-}
-
-///|
-fn Program::const_int(
-  self : Program,
-  bits : Int64,
-  ty : @ctype.Type,
-) -> ConstIntValue {
-  { bits, ty: self.core_type(ty) }
-}
-
-///|
-fn const_bool(value : Bool) -> ConstIntValue {
-  { bits: if value { 1L } else { 0L }, ty: SInt }
-}
-
-///|
-fn const_type_is_unsigned(ty : @ctype.Type) -> Bool {
-  match ty {
-    Bool | UChar | UShort | UInt | ULong | ULongLong | UInt128 => true
-    _ => false
-  }
-}
-
-///|
-fn const_type_int_width(ty : @ctype.Type) -> Int? {
-  match ty {
-    Bool => Some(1)
-    SChar | UChar => Some(8)
-    SShort | UShort => Some(16)
-    SInt | UInt => Some(32)
-    SLong | ULong | SLongLong | ULongLong | Pointer(_) | FuncPtr(_, _, _) =>
-      Some(64)
-    SInt128 | UInt128 => Some(128)
-    _ => None
-  }
-}
-
-///|
-fn Program::const_cast_int(
-  self : Program,
-  value : ConstIntValue,
-  ty : @ctype.Type,
-) -> ConstIntValue {
-  let core_ty = self.core_type(ty)
-  let unsigned = const_type_is_unsigned(core_ty)
-  match const_type_int_width(core_ty) {
-    None => self.const_int(value.bits, core_ty)
-    Some(1) => self.const_int(if value.bits == 0L { 0L } else { 1L }, core_ty)
-    Some(width) =>
-      if width >= 64 {
-        self.const_int(value.bits, core_ty)
-      } else {
-        let mask = (1L << width) - 1L
-        let bits = value.bits & mask
-        if unsigned {
-          self.const_int(bits, core_ty)
-        } else {
-          let sign = 1L << (width - 1)
-          if (bits & sign) != 0L {
-            self.const_int(bits | mask.lnot(), core_ty)
-          } else {
-            self.const_int(bits, core_ty)
-          }
-        }
-      }
-  }
-}
-
-///|
-fn const_integer_common_type(
-  lhs_ty : @ctype.Type,
-  rhs_ty : @ctype.Type,
-) -> @ctype.Type {
-  integer_common_type(lhs_ty, rhs_ty)
-}
-
-///|
-fn Program::const_apply_binary_type(
-  self : Program,
-  left : ConstIntValue,
-  right : ConstIntValue,
-) -> (ConstIntValue, ConstIntValue, @ctype.Type) {
-  let ty = const_integer_common_type(left.ty, right.ty)
-  (self.const_cast_int(left, ty), self.const_cast_int(right, ty), ty)
-}
-
-///|
-fn Program::const_binary_arith(
-  self : Program,
-  op : String,
-  left : ConstIntValue,
-  right : ConstIntValue,
-) -> ConstIntValue? {
-  let (x, y, ty) = self.const_apply_binary_type(left, right)
-  let bits = match op {
-    "+" => x.bits + y.bits
-    "-" => x.bits - y.bits
-    "*" => x.bits * y.bits
-    "|" => x.bits | y.bits
-    "&" => x.bits & y.bits
-    "^" => x.bits ^ y.bits
-    _ => return None
-  }
-  Some(self.const_cast_int(self.const_int(bits, ty), ty))
-}
-
-///|
-fn Program::const_equal_compare(
-  self : Program,
-  left : ConstIntValue,
-  right : ConstIntValue,
-) -> Bool {
-  let (x, y, _) = self.const_apply_binary_type(left, right)
-  x.bits == y.bits
-}
-
-///|
-fn Program::const_rel_compare(
-  self : Program,
-  op : String,
-  left : ConstIntValue,
-  right : ConstIntValue,
-) -> Bool {
-  let (left, right, ty) = self.const_apply_binary_type(left, right)
-  if const_type_is_unsigned(ty) {
-    let x = left.bits.reinterpret_as_uint64()
-    let y = right.bits.reinterpret_as_uint64()
-    match op {
-      "<" => x < y
-      ">" => x > y
-      "<=" => x <= y
-      ">=" => x >= y
-      _ => false
-    }
-  } else {
-    match op {
-      "<" => left.bits < right.bits
-      ">" => left.bits > right.bits
-      "<=" => left.bits <= right.bits
-      ">=" => left.bits >= right.bits
-      _ => false
-    }
-  }
-}
-
-///|
-fn Program::const_divide(
-  self : Program,
-  op : String,
-  left : ConstIntValue,
-  right : ConstIntValue,
-) -> ConstIntValue? {
-  let (left, right, ty) = self.const_apply_binary_type(left, right)
-  if right.bits == 0L {
-    return None
-  }
-  if const_type_is_unsigned(ty) {
-    let x = left.bits.reinterpret_as_uint64()
-    let y = right.bits.reinterpret_as_uint64()
-    let result = if op == "/" { x / y } else { x % y }
-    Some(
-      self.const_cast_int(self.const_int(result.reinterpret_as_int64(), ty), ty),
-    )
-  } else {
-    let result = if op == "/" {
-      left.bits / right.bits
-    } else {
-      left.bits % right.bits
-    }
-    Some(self.const_cast_int(self.const_int(result, ty), ty))
-  }
-}
-
-///|
-fn Program::const_shift(
-  self : Program,
-  op : String,
-  left : ConstIntValue,
-  right : ConstIntValue,
-) -> ConstIntValue? {
-  let lhs_ty = unary_integer_result_type(left.ty)
-  let x = self.const_cast_int(left, lhs_ty)
-  let y = self.const_cast_int(right, unary_integer_result_type(right.ty))
-  let shift = y.bits.to_int()
-  if op == "<<" {
-    Some(self.const_cast_int(self.const_int(x.bits << shift, lhs_ty), lhs_ty))
-  } else if const_type_is_unsigned(lhs_ty) {
-    Some(
-      self.const_cast_int(
-        self.const_int(
-          (x.bits.reinterpret_as_uint64() >> shift).reinterpret_as_int64(),
-          lhs_ty,
-        ),
-        lhs_ty,
-      ),
-    )
-  } else {
-    Some(self.const_cast_int(self.const_int(x.bits >> shift, lhs_ty), lhs_ty))
-  }
-}
-
-///|
 fn Program::object_size_var_type(
   self : Program,
   name : String,
@@ -2410,70 +2047,47 @@ fn Program::object_size_lvalue_type(
 }
 
 ///|
-priv struct ObjectSizeFact {
-  whole : Int
-  subobject : Int
-}
-
-///|
-fn object_size_fact_value(fact : ObjectSizeFact, mode : Int64) -> Int {
-  if (mode & 1L) != 0L {
-    fact.subobject
-  } else {
-    fact.whole
-  }
-}
-
-///|
-fn object_size_subtract_offset(
-  fact : ObjectSizeFact,
-  offset : Int,
-) -> ObjectSizeFact? {
-  if offset < 0 || offset > fact.whole || offset > fact.subobject {
-    None
-  } else {
-    Some({ whole: fact.whole - offset, subobject: fact.subobject - offset })
-  }
-}
-
-///|
 fn Program::object_size_var_fact(
   self : Program,
   name : String,
   scope : Scope,
-) -> ObjectSizeFact? {
+) -> @ctype.ObjectSizeFact? {
   match self.object_size_var_type(name, scope) {
-    Some(ty) => {
-      let size = self.type_size(ty)
-      Some({ whole: size, subobject: size })
-    }
+    Some(ty) => self.to_module().object_size_path_fact(ty, [])
     None => None
   }
 }
 
 ///|
-fn Program::object_size_array_element_fact(
+fn Program::object_size_lvalue_path(
   self : Program,
-  base_ty : @ctype.Type,
-  index : @parser.Expr,
+  expr : @parser.Expr,
   scope : Scope,
-  base_fact : ObjectSizeFact,
-) -> ObjectSizeFact? {
-  match self.core_type(base_ty) {
-    Array(elem, n) =>
+) -> (@ctype.Type, Array[@ctype.OffsetDesignator])? {
+  match expr {
+    Var(name) =>
+      match self.object_size_var_type(name, scope) {
+        Some(ty) => Some((ty, []))
+        None => None
+      }
+    ArrayAccess(base, index) =>
       match self.fold_const(index, scope) {
         Some(raw_index) =>
-          if raw_index < 0L {
-            None
-          } else {
-            let index = raw_index.to_int()
-            if index > n {
-              None
-            } else {
-              let elem_size = self.type_size(elem)
-              object_size_subtract_offset(base_fact, index * elem_size)
+          match self.object_size_lvalue_path(base, scope) {
+            Some((root_ty, path)) => {
+              path.push(OffsetIndex(raw_index))
+              Some((root_ty, path))
             }
+            None => None
           }
+        None => None
+      }
+    MemberAccess(obj, field) =>
+      match self.object_size_lvalue_path(obj, scope) {
+        Some((root_ty, path)) => {
+          path.push(OffsetField(field))
+          Some((root_ty, path))
+        }
         None => None
       }
     _ => None
@@ -2485,41 +2099,11 @@ fn Program::object_size_lvalue_fact(
   self : Program,
   expr : @parser.Expr,
   scope : Scope,
-) -> ObjectSizeFact? {
-  match expr {
-    Var(name) => self.object_size_var_fact(name, scope)
-    ArrayAccess(base, index) =>
-      match
-        (
-          self.object_size_lvalue_type(base, scope),
-          self.object_size_lvalue_fact(base, scope),
-        ) {
-        (Some(base_ty), Some(base_fact)) =>
-          self.object_size_array_element_fact(base_ty, index, scope, base_fact)
-        _ => None
-      }
-    MemberAccess(obj, field) =>
-      match
-        (
-          self.object_size_lvalue_type(obj, scope),
-          self.object_size_lvalue_fact(obj, scope),
-        ) {
-        (Some(obj_ty), Some(obj_fact)) =>
-          match self.field_layout(obj_ty, field) {
-            Some(layout) =>
-              match object_size_subtract_offset(obj_fact, layout.offset) {
-                Some(fact) =>
-                  Some({
-                    whole: fact.whole,
-                    subobject: self.type_size(layout.ty),
-                  })
-                None => None
-              }
-            None => None
-          }
-        _ => None
-      }
-    _ => None
+) -> @ctype.ObjectSizeFact? {
+  match self.object_size_lvalue_path(expr, scope) {
+    Some((root_ty, path)) =>
+      self.to_module().object_size_path_fact(root_ty, path)
+    None => None
   }
 }
 
@@ -2529,7 +2113,7 @@ fn Program::object_size_offset_expr_fact(
   base : @parser.Expr,
   offset_expr : @parser.Expr,
   scope : Scope,
-) -> ObjectSizeFact? {
+) -> @ctype.ObjectSizeFact? {
   match
     (
       self.object_size_expr_fact(base, scope),
@@ -2540,7 +2124,7 @@ fn Program::object_size_offset_expr_fact(
       if index < 0L {
         None
       } else {
-        object_size_subtract_offset(fact, index.to_int() * self.type_size(elem))
+        fact.subtract_offset(index.to_int() * self.type_size(elem))
       }
     _ => None
   }
@@ -2551,7 +2135,7 @@ fn Program::object_size_expr_fact(
   self : Program,
   expr : @parser.Expr,
   scope : Scope,
-) -> ObjectSizeFact? {
+) -> @ctype.ObjectSizeFact? {
   match expr {
     Cast(_, inner) => self.object_size_expr_fact(inner, scope)
     AddrOf(inner) => self.object_size_lvalue_fact(inner, scope)
@@ -2590,51 +2174,10 @@ fn Program::object_size_value(
   mode : Int64,
 ) -> Int64 {
   match literal_string_arg(expr) {
-    Some(literal) => return (literal.length() + 1).to_int64()
+    Some(literal) => return @ctype.string_literal_object_size(literal)
     None => ()
   }
-  match self.object_size_expr_fact(expr, scope) {
-    Some(fact) => object_size_fact_value(fact, mode).to_int64()
-    None => unknown_object_size(mode)
-  }
-}
-
-///|
-fn Program::generic_builtin_bswap_width_for_scope(
-  self : Program,
-  args : Array[@parser.Expr],
-  scope : Scope,
-) -> Int {
-  if args.length() == 0 {
-    return 32
-  }
-  let ty = self.core_type(self.expr_type(args[0], scope))
-  let width = const_type_int_width(ty).unwrap_or(64)
-  if width <= 16 {
-    16
-  } else if width <= 32 {
-    32
-  } else {
-    64
-  }
-}
-
-///|
-fn Program::generic_builtin_bit_width_for_scope(
-  self : Program,
-  args : Array[@parser.Expr],
-  scope : Scope,
-) -> Int {
-  if args.length() == 0 {
-    return 32
-  }
-  let ty = self.core_type(self.expr_type(args[0], scope))
-  let width = const_type_int_width(ty).unwrap_or(64)
-  if width <= 32 {
-    32
-  } else {
-    64
-  }
+  @ctype.object_size_fact_result(self.object_size_expr_fact(expr, scope), mode)
 }
 
 ///|
@@ -2643,230 +2186,29 @@ fn Program::fold_scalar_builtin_const(
   name : String,
   args : Array[@parser.Expr],
   scope : Scope,
-) -> ConstIntValue? {
+) -> @ctype.IntegerConstant? {
   let arg0 = if args.length() > 0 {
-    match self.fold_const_int(args[0], scope) {
-      Some(value) => value
-      None => return None
-    }
+    self.fold_const_int(args[0], scope)
   } else {
-    self.const_int(0L, SInt)
+    None
   }
-  match name {
-    "__builtin_flt_rounds" =>
-      if args.length() == 0 {
-        Some(self.const_int(1L, SInt))
-      } else {
-        None
-      }
-    "__builtin_abs" | "__builtin_labs" | "__builtin_llabs" =>
-      if args.length() > 0 {
-        let ty : @ctype.Type = match name {
-          "__builtin_labs" => SLong
-          "__builtin_llabs" => SLongLong
-          _ => SInt
-        }
-        let value = self.const_cast_int(arg0, ty).bits
-        Some(
-          self.const_cast_int(
-            self.const_int(if value < 0L { -value } else { value }, ty),
-            ty,
-          ),
-        )
-      } else {
-        None
-      }
-    "__builtin_is_aligned" =>
-      if args.length() >= 2 {
-        match self.fold_const_int(args[1], scope) {
-          Some(align) =>
-            if align.bits > 0L {
-              Some(const_bool((arg0.bits & (align.bits - 1L)) == 0L))
-            } else {
-              None
-            }
-          None => None
-        }
-      } else {
-        None
-      }
-    "__builtin_align_up" | "__builtin_align_down" =>
-      if args.length() >= 2 {
-        match self.fold_const_int(args[1], scope) {
-          Some(align) =>
-            if align.bits > 0L {
-              let ty = self.expr_type(args[0], scope)
-              let adjusted = if name == "__builtin_align_up" {
-                arg0.bits + align.bits - 1L
-              } else {
-                arg0.bits
-              }
-              Some(
-                self.const_cast_int(
-                  self.const_int(adjusted & -align.bits, ty),
-                  ty,
-                ),
-              )
-            } else {
-              None
-            }
-          None => None
-        }
-      } else {
-        None
-      }
-    "__builtin_clz" | "__builtin_clzl" | "__builtin_clzll" =>
-      if args.length() > 0 {
-        let width = if name == "__builtin_clz" { 32 } else { 64 }
-        if mask_int_width(arg0.bits, width) == 0L {
-          None
-        } else {
-          Some(self.const_int(count_leading_zero_bits(arg0.bits, width), SInt))
-        }
-      } else {
-        None
-      }
-    "__builtin_ctz" | "__builtin_ctzl" | "__builtin_ctzll" =>
-      if args.length() > 0 {
-        let width = if name == "__builtin_ctz" { 32 } else { 64 }
-        if mask_int_width(arg0.bits, width) == 0L {
-          None
-        } else {
-          Some(self.const_int(count_trailing_zero_bits(arg0.bits, width), SInt))
-        }
-      } else {
-        None
-      }
-    "__builtin_ffs" =>
-      if args.length() > 0 {
-        Some(self.const_int(first_set_bit(arg0.bits, 32), SInt))
-      } else {
-        None
-      }
-    "__builtin_ffsl" | "__builtin_ffsll" =>
-      if args.length() > 0 {
-        Some(self.const_int(first_set_bit(arg0.bits, 64), SInt))
-      } else {
-        None
-      }
-    "__builtin_popcount" =>
-      if args.length() > 0 {
-        Some(self.const_int(count_one_bits(arg0.bits, 32), SInt))
-      } else {
-        None
-      }
-    "__builtin_popcountl" | "__builtin_popcountll" =>
-      if args.length() > 0 {
-        Some(self.const_int(count_one_bits(arg0.bits, 64), SInt))
-      } else {
-        None
-      }
-    "__builtin_parity" =>
-      if args.length() > 0 {
-        Some(self.const_int(count_one_bits(arg0.bits, 32) & 1L, SInt))
-      } else {
-        None
-      }
-    "__builtin_parityl" | "__builtin_parityll" =>
-      if args.length() > 0 {
-        Some(self.const_int(count_one_bits(arg0.bits, 64) & 1L, SInt))
-      } else {
-        None
-      }
-    "__builtin_bswap16" =>
-      if args.length() > 0 {
-        Some(
-          self.const_cast_int(
-            self.const_int(byte_swap_bits(arg0.bits, 16), UShort),
-            UShort,
-          ),
-        )
-      } else {
-        None
-      }
-    "__builtin_bswap32" =>
-      if args.length() > 0 {
-        Some(
-          self.const_cast_int(
-            self.const_int(byte_swap_bits(arg0.bits, 32), UInt),
-            UInt,
-          ),
-        )
-      } else {
-        None
-      }
-    "__builtin_bswap64" =>
-      if args.length() > 0 {
-        Some(
-          self.const_cast_int(
-            self.const_int(byte_swap_bits(arg0.bits, 64), ULongLong),
-            ULongLong,
-          ),
-        )
-      } else {
-        None
-      }
-    "__builtin_bswap" =>
-      if args.length() > 0 {
-        let ty = self.expr_type(args[0], scope)
-        Some(
-          self.const_cast_int(
-            self.const_int(
-              byte_swap_bits(
-                arg0.bits,
-                self.generic_builtin_bswap_width_for_scope(args, scope),
-              ),
-              ty,
-            ),
-            ty,
-          ),
-        )
-      } else {
-        None
-      }
-    "__builtin_rotateleft"
-    | "__builtin_rotateright"
-    | "__builtin_rotateleft32"
-    | "__builtin_rotateright32"
-    | "__builtin_rotateleft64"
-    | "__builtin_rotateright64" =>
-      if args.length() >= 2 {
-        match self.fold_const_int(args[1], scope) {
-          Some(shift) => {
-            let width = match name {
-              "__builtin_rotateleft32" | "__builtin_rotateright32" => 32
-              "__builtin_rotateleft64" | "__builtin_rotateright64" => 64
-              _ => self.generic_builtin_bit_width_for_scope(args, scope)
-            }
-            let ty : @ctype.Type = match name {
-              "__builtin_rotateleft32" | "__builtin_rotateright32" => UInt
-              "__builtin_rotateleft64" | "__builtin_rotateright64" => ULongLong
-              _ => self.expr_type(args[0], scope)
-            }
-            Some(
-              self.const_cast_int(
-                self.const_int(
-                  rotate_bits(
-                    arg0.bits,
-                    shift.bits,
-                    width,
-                    name == "__builtin_rotateleft" ||
-                    name == "__builtin_rotateleft32" ||
-                    name == "__builtin_rotateleft64",
-                  ),
-                  ty,
-                ),
-                ty,
-              ),
-            )
-          }
-          None => None
-        }
-      } else {
-        None
-      }
-    _ => None
+  let arg1 = if args.length() > 1 {
+    self.fold_const_int(args[1], scope)
+  } else {
+    None
   }
+  let first_ty = if args.length() > 0 {
+    self.expr_type(args[0], scope)
+  } else {
+    SInt
+  }
+  @ctype.integer_scalar_builtin_constant_from_folded_args(
+    name,
+    args.length(),
+    arg0,
+    arg1,
+    first_ty,
+  )
 }
 
 ///|
@@ -2875,84 +2217,42 @@ fn Program::fold_float_builtin_int_const(
   name : String,
   args : Array[@parser.Expr],
   scope : Scope,
-) -> ConstIntValue? {
-  match name {
-    "__builtin_isgreater"
-    | "__builtin_isgreaterequal"
-    | "__builtin_isless"
-    | "__builtin_islessequal"
-    | "__builtin_islessgreater"
-    | "__builtin_isunordered" =>
+) -> @ctype.IntegerConstant? {
+  match @ctype.floating_builtin_compare_op(name) {
+    Some(_) =>
       if args.length() >= 2 {
         match
           (
             self.fold_float_const(args[0], scope),
             self.fold_float_const(args[1], scope),
           ) {
-          (Some(left), Some(right)) => {
-            let unordered = left != left || right != right
-            let result = match name {
-              "__builtin_isgreater" => !unordered && left > right
-              "__builtin_isgreaterequal" => !unordered && left >= right
-              "__builtin_isless" => !unordered && left < right
-              "__builtin_islessequal" => !unordered && left <= right
-              "__builtin_islessgreater" => !unordered && left != right
-              "__builtin_isunordered" => unordered
-              _ => false
+          (Some(left), Some(right)) =>
+            match @ctype.floating_builtin_compare(name, left, right) {
+              Some(result) => Some(@ctype.integer_constant_bool(result))
+              None => None
             }
-            Some(const_bool(result))
-          }
           _ => None
         }
       } else {
         None
       }
-    "__builtin_isnan"
-    | "__builtin_isnanf"
-    | "__builtin_isnanl"
-    | "__builtin_isinf"
-    | "__builtin_isinff"
-    | "__builtin_isinfl"
-    | "__builtin_isfinite"
-    | "__builtin_isfinitef"
-    | "__builtin_isfinitel"
-    | "__builtin_isnormal"
-    | "__builtin_isnormalf"
-    | "__builtin_isnormall"
-    | "__builtin_signbit"
-    | "__builtin_signbitf"
-    | "__builtin_signbitl" =>
-      if args.length() >= 1 {
-        match self.fold_float_const(args[0], scope) {
-          Some(value) => {
-            let nan = value != value
-            let pos_inf = 1.0 / 0.0
-            let neg_inf = -pos_inf
-            let inf = !nan && (value == pos_inf || value == neg_inf)
-            let finite = !nan && !inf
-            let result = match name {
-              "__builtin_isnan" | "__builtin_isnanf" | "__builtin_isnanl" => nan
-              "__builtin_isinf" | "__builtin_isinff" | "__builtin_isinfl" => inf
-              "__builtin_isfinite"
-              | "__builtin_isfinitef"
-              | "__builtin_isfinitel" => finite
-              "__builtin_isnormal"
-              | "__builtin_isnormalf"
-              | "__builtin_isnormall" =>
-                finite && floating_abs(value) >= fp_class_normal_min(name)
-              "__builtin_signbit"
-              | "__builtin_signbitf"
-              | "__builtin_signbitl" => floating_signbit(value)
-              _ => false
+    None =>
+      match @ctype.floating_builtin_runtime_class_info(name) {
+        Some(_) =>
+          if args.length() >= 1 {
+            match self.fold_float_const(args[0], scope) {
+              Some(value) =>
+                match @ctype.floating_builtin_classify(name, value) {
+                  Some(result) => Some(@ctype.integer_constant_bool(result))
+                  None => None
+                }
+              None => None
             }
-            Some(const_bool(result))
+          } else {
+            None
           }
-          None => None
-        }
-      } else {
-        None
+        None => None
       }
-    _ => None
   }
 }
 
@@ -2961,104 +2261,128 @@ fn Program::fold_const_int(
   self : Program,
   expr : @parser.Expr,
   scope : Scope,
-) -> ConstIntValue? {
+) -> @ctype.IntegerConstant? {
   match expr {
-    Number(n) => {
-      let ty = number_literal_type(n)
-      Some(self.const_cast_int(self.const_int(n, ty), ty))
-    }
+    Number(n) =>
+      Some(@ctype.integer_constant(n, @ctype.integer_constant_token_type(n)))
     Binary("+", a, b) =>
       match (self.fold_const_int(a, scope), self.fold_const_int(b, scope)) {
-        (Some(x), Some(y)) => self.const_binary_arith("+", x, y)
+        (Some(x), Some(y)) => @ctype.integer_constant_binary_arith("+", x, y)
         _ => None
       }
     Binary("-", a, b) =>
       match (self.fold_const_int(a, scope), self.fold_const_int(b, scope)) {
-        (Some(x), Some(y)) => self.const_binary_arith("-", x, y)
+        (Some(x), Some(y)) => @ctype.integer_constant_binary_arith("-", x, y)
         _ => None
       }
     Binary("*", a, b) =>
       match (self.fold_const_int(a, scope), self.fold_const_int(b, scope)) {
-        (Some(x), Some(y)) => self.const_binary_arith("*", x, y)
+        (Some(x), Some(y)) => @ctype.integer_constant_binary_arith("*", x, y)
         _ => None
       }
     Binary("/", a, b) =>
       match (self.fold_const_int(a, scope), self.fold_const_int(b, scope)) {
-        (Some(x), Some(y)) => self.const_divide("/", x, y)
+        (Some(x), Some(y)) => @ctype.integer_constant_divide("/", x, y)
         _ => None
       }
     Binary("%", a, b) =>
       match (self.fold_const_int(a, scope), self.fold_const_int(b, scope)) {
-        (Some(x), Some(y)) => self.const_divide("%", x, y)
+        (Some(x), Some(y)) => @ctype.integer_constant_divide("%", x, y)
         _ => None
       }
     Binary("|", a, b) =>
       match (self.fold_const_int(a, scope), self.fold_const_int(b, scope)) {
-        (Some(x), Some(y)) => self.const_binary_arith("|", x, y)
+        (Some(x), Some(y)) => @ctype.integer_constant_binary_arith("|", x, y)
         _ => None
       }
     Binary("&", a, b) =>
       match (self.fold_const_int(a, scope), self.fold_const_int(b, scope)) {
-        (Some(x), Some(y)) => self.const_binary_arith("&", x, y)
+        (Some(x), Some(y)) => @ctype.integer_constant_binary_arith("&", x, y)
         _ => None
       }
     Binary("^", a, b) =>
       match (self.fold_const_int(a, scope), self.fold_const_int(b, scope)) {
-        (Some(x), Some(y)) => self.const_binary_arith("^", x, y)
+        (Some(x), Some(y)) => @ctype.integer_constant_binary_arith("^", x, y)
         _ => None
       }
     Binary("<<", a, b) =>
       match (self.fold_const_int(a, scope), self.fold_const_int(b, scope)) {
-        (Some(x), Some(y)) => self.const_shift("<<", x, y)
+        (Some(x), Some(y)) => @ctype.integer_constant_shift("<<", x, y)
         _ => None
       }
     Binary(">>", a, b) =>
       match (self.fold_const_int(a, scope), self.fold_const_int(b, scope)) {
-        (Some(x), Some(y)) => self.const_shift(">>", x, y)
+        (Some(x), Some(y)) => @ctype.integer_constant_shift(">>", x, y)
         _ => None
       }
     Binary("==", a, b) =>
       match (self.fold_const_int(a, scope), self.fold_const_int(b, scope)) {
-        (Some(x), Some(y)) => Some(const_bool(self.const_equal_compare(x, y)))
+        (Some(x), Some(y)) =>
+          Some(
+            @ctype.integer_constant_bool(
+              @ctype.integer_constant_equal_compare(x, y),
+            ),
+          )
         _ => None
       }
     Binary("!=", a, b) =>
       match (self.fold_const_int(a, scope), self.fold_const_int(b, scope)) {
-        (Some(x), Some(y)) => Some(const_bool(!self.const_equal_compare(x, y)))
+        (Some(x), Some(y)) =>
+          Some(
+            @ctype.integer_constant_bool(
+              !@ctype.integer_constant_equal_compare(x, y),
+            ),
+          )
         _ => None
       }
     Binary("<", a, b) =>
       match (self.fold_const_int(a, scope), self.fold_const_int(b, scope)) {
         (Some(x), Some(y)) =>
-          Some(const_bool(self.const_rel_compare("<", x, y)))
+          Some(
+            @ctype.integer_constant_bool(
+              @ctype.integer_constant_rel_compare("<", x, y),
+            ),
+          )
         _ => None
       }
     Binary(">", a, b) =>
       match (self.fold_const_int(a, scope), self.fold_const_int(b, scope)) {
         (Some(x), Some(y)) =>
-          Some(const_bool(self.const_rel_compare(">", x, y)))
+          Some(
+            @ctype.integer_constant_bool(
+              @ctype.integer_constant_rel_compare(">", x, y),
+            ),
+          )
         _ => None
       }
     Binary("<=", a, b) =>
       match (self.fold_const_int(a, scope), self.fold_const_int(b, scope)) {
         (Some(x), Some(y)) =>
-          Some(const_bool(self.const_rel_compare("<=", x, y)))
+          Some(
+            @ctype.integer_constant_bool(
+              @ctype.integer_constant_rel_compare("<=", x, y),
+            ),
+          )
         _ => None
       }
     Binary(">=", a, b) =>
       match (self.fold_const_int(a, scope), self.fold_const_int(b, scope)) {
         (Some(x), Some(y)) =>
-          Some(const_bool(self.const_rel_compare(">=", x, y)))
+          Some(
+            @ctype.integer_constant_bool(
+              @ctype.integer_constant_rel_compare(">=", x, y),
+            ),
+          )
         _ => None
       }
     Binary("&&", a, b) =>
       match (self.fold_const_int(a, scope), self.fold_const_int(b, scope)) {
-        (Some(x), Some(y)) => Some(const_bool(x.bits != 0L && y.bits != 0L))
+        (Some(x), Some(y)) => @ctype.integer_constant_logical("&&", x, y)
         _ => None
       }
     Binary("||", a, b) =>
       match (self.fold_const_int(a, scope), self.fold_const_int(b, scope)) {
-        (Some(x), Some(y)) => Some(const_bool(x.bits != 0L || y.bits != 0L))
+        (Some(x), Some(y)) => @ctype.integer_constant_logical("||", x, y)
         _ => None
       }
     Ternary(cond, a, b) =>
@@ -3069,48 +2393,34 @@ fn Program::fold_const_int(
       }
     Unary("-", e) =>
       match self.fold_const_int(e, scope) {
-        Some(value) => {
-          let ty = unary_integer_result_type(value.ty)
-          Some(self.const_cast_int(self.const_int(-value.bits, ty), ty))
-        }
+        Some(value) => @ctype.integer_constant_unary("-", value)
         None => None
       }
     Unary("+", e) =>
       match self.fold_const_int(e, scope) {
-        Some(value) => {
-          let ty = unary_integer_result_type(value.ty)
-          Some(self.const_cast_int(value, ty))
-        }
+        Some(value) => @ctype.integer_constant_unary("+", value)
         None => None
       }
     Unary("~", e) =>
       match self.fold_const_int(e, scope) {
-        Some(value) => {
-          let ty = unary_integer_result_type(value.ty)
-          Some(self.const_cast_int(self.const_int(value.bits.lnot(), ty), ty))
-        }
+        Some(value) => @ctype.integer_constant_unary("~", value)
         None => None
       }
     Unary("!", e) =>
       match self.fold_const_int(e, scope) {
-        Some(value) => Some(const_bool(value.bits == 0L))
+        Some(value) => @ctype.integer_constant_unary("!", value)
         None => None
       }
     Cast(ty, e) =>
-      match const_type_int_width(self.core_type(ty)) {
+      match self.core_type(ty).const_int_width() {
         Some(_) =>
           match self.fold_const_int(e, scope) {
-            Some(value) => Some(self.const_cast_int(value, ty))
+            Some(value) => Some(value.cast(self.core_type(ty)))
             None =>
               if self.is_floating_const_type(self.expr_type(e, scope)) {
                 match self.fold_float_const(e, scope) {
                   Some(value) =>
-                    Some(
-                      self.const_cast_int(
-                        self.const_int(value.to_int().to_int64(), ty),
-                        ty,
-                      ),
-                    )
+                    Some(@ctype.integer_constant_from_floating(value, ty))
                   None => None
                 }
               } else {
@@ -3121,24 +2431,30 @@ fn Program::fold_const_int(
       }
     DesignatedField(_, e) | DesignatedIndex(_, e) | DesignatedRange(_, _, e) =>
       self.fold_const_int(e, scope)
-    Sizeof(ty) => Some(self.const_int(self.type_size(ty).to_int64(), ULong))
+    Sizeof(ty) =>
+      Some(@ctype.integer_constant(self.type_size(ty).to_int64(), ULong))
     SizeofExpr(e) =>
       Some(
-        self.const_int(
+        @ctype.integer_constant(
           match e {
-            String(value) => value.length().to_int64() + 1L
+            String(value) => @ctype.string_literal_object_size(value)
             _ => self.type_size(self.expr_type(e, scope)).to_int64()
           },
           ULong,
         ),
       )
-    Alignof(ty) => Some(self.const_int(self.type_align(ty).to_int64(), ULong))
+    Alignof(ty) =>
+      Some(@ctype.integer_constant(self.type_align(ty).to_int64(), ULong))
     AlignofExpr(e) =>
       Some(
-        self.const_int(
+        @ctype.integer_constant(
           match e {
             String(value) =>
-              self.type_align(Array(SChar, value.length() + 1)).to_int64()
+              self
+              .type_align(
+                Array(SChar, @ctype.string_literal_array_length(value)),
+              )
+              .to_int64()
             _ => self.type_align(self.expr_type(e, scope)).to_int64()
           },
           ULong,
@@ -3146,46 +2462,52 @@ fn Program::fold_const_int(
       )
     OffsetOf(ty, path) =>
       match self.offset_of_path(ty, path) {
-        Some(offset) => Some(self.const_int(offset.to_int64(), ULong))
+        Some(offset) => Some(@ctype.integer_constant(offset.to_int64(), ULong))
         None => None
       }
-    Call(Var("__builtin_object_size"), args)
-    | Call(Var("__builtin_dynamic_object_size"), args) => {
-      let mode = if args.length() > 1 {
-        match self.fold_const(args[1], scope) {
-          Some(value) => value
-          None => return None
-        }
-      } else {
-        0L
-      }
-      let value = if args.length() > 0 {
-        self.object_size_value(args[0], scope, mode)
-      } else {
-        unknown_object_size(mode)
-      }
-      Some(self.const_int(value, ULong))
-    }
-    Call(Var("__builtin_constant_p"), args) => {
-      let value = if args.length() > 0 &&
-        self.fold_const(args[0], scope) is Some(_) {
-        1L
-      } else {
-        0L
-      }
-      Some(self.const_int(value, SInt))
-    }
     Call(Var(name), args) =>
-      match self.fold_float_builtin_int_const(name, args, scope) {
-        Some(value) => Some(value)
-        None => self.fold_scalar_builtin_const(name, args, scope)
+      match @ctype.builtin_object_size_call_info(name) {
+        Some(_) => {
+          let mode = if args.length() > 1 {
+            match self.fold_const(args[1], scope) {
+              Some(value) => value
+              None => return None
+            }
+          } else {
+            0L
+          }
+          let value = if args.length() > 0 {
+            self.object_size_value(args[0], scope, mode)
+          } else {
+            @ctype.object_size_unknown(mode)
+          }
+          Some(@ctype.integer_constant(value, ULong))
+        }
+        None =>
+          match @ctype.builtin_constant_query_call_info(name) {
+            Some(kind) =>
+              match
+                @ctype.builtin_constant_query_result(
+                  kind,
+                  args.length() > 0 &&
+                  self.fold_const(args[0], scope) is Some(_),
+                ) {
+                Some(value) => Some(@ctype.integer_constant(value, SInt))
+                None => None
+              }
+            None =>
+              match self.fold_float_builtin_int_const(name, args, scope) {
+                Some(value) => Some(value)
+                None => self.fold_scalar_builtin_const(name, args, scope)
+              }
+          }
       }
     _ => None
   }
 }
 
 ///|
-pub fn Program::fold_const(
+fn Program::fold_const(
   self : Program,
   expr : @parser.Expr,
   scope : Scope,
@@ -3197,32 +2519,27 @@ pub fn Program::fold_const(
 }
 
 ///|
-fn floating_abs(value : Double) -> Double {
-  if value < 0.0 {
-    -value
+fn Program::fold_float_builtin_const_value(
+  self : Program,
+  name : String,
+  args : Array[@parser.Expr],
+  scope : Scope,
+) -> Double? {
+  let arg0 = if args.length() > 0 {
+    self.fold_float_const(args[0], scope)
   } else {
-    value
+    None
   }
-}
-
-///|
-fn floating_signbit(value : Double) -> Bool {
-  let neg_inf = -(1.0 / 0.0)
-  value < 0.0 || (value == 0.0 && 1.0 / value == neg_inf)
-}
-
-///|
-fn floating_copysign(magnitude : Double, sign : Double) -> Double {
-  let value = floating_abs(magnitude)
-  if floating_signbit(sign) {
-    -value
+  let arg1 = if args.length() > 1 {
+    self.fold_float_const(args[1], scope)
   } else {
-    value
+    None
   }
+  @ctype.floating_builtin_constant_from_folded_args(name, arg0, arg1)
 }
 
 ///|
-pub fn Program::fold_float_const(
+fn Program::fold_float_const(
   self : Program,
   expr : @parser.Expr,
   scope : Scope,
@@ -3232,49 +2549,58 @@ pub fn Program::fold_float_const(
     match expr {
       Cast(_, e) if self.is_floating_const_type(self.expr_type(e, scope)) =>
         match self.fold_float_const(e, scope) {
-          Some(value) => Some(value.to_int().to_double())
+          Some(value) =>
+            Some(
+              @ctype.floating_constant_from_integer_bits(
+                @ctype.floating_constant_to_integer_bits(value),
+              ),
+            )
           None => None
         }
       _ =>
         match self.fold_const(expr, scope) {
-          Some(value) => Some(value.to_double())
+          Some(value) => Some(@ctype.floating_constant_from_integer_bits(value))
           None => None
         }
     }
   } else {
     match expr {
       FloatLiteral(value) => Some(value)
-      Number(value) => Some(value.to_double())
+      Number(value) => Some(@ctype.floating_constant_from_integer_bits(value))
       Binary("+", a, b) =>
         match
           (self.fold_float_const(a, scope), self.fold_float_const(b, scope)) {
-          (Some(x), Some(y)) => Some(x + y)
+          (Some(x), Some(y)) => @ctype.floating_constant_binary_arith("+", x, y)
           _ => None
         }
       Binary("-", a, b) =>
         match
           (self.fold_float_const(a, scope), self.fold_float_const(b, scope)) {
-          (Some(x), Some(y)) => Some(x - y)
+          (Some(x), Some(y)) => @ctype.floating_constant_binary_arith("-", x, y)
           _ => None
         }
       Binary("*", a, b) =>
         match
           (self.fold_float_const(a, scope), self.fold_float_const(b, scope)) {
-          (Some(x), Some(y)) => Some(x * y)
+          (Some(x), Some(y)) => @ctype.floating_constant_binary_arith("*", x, y)
           _ => None
         }
       Binary("/", a, b) =>
         match
           (self.fold_float_const(a, scope), self.fold_float_const(b, scope)) {
-          (Some(x), Some(y)) => Some(x / y)
+          (Some(x), Some(y)) => @ctype.floating_constant_binary_arith("/", x, y)
           _ => None
         }
       Unary("-", e) =>
         match self.fold_float_const(e, scope) {
-          Some(value) => Some(-value)
+          Some(value) => @ctype.floating_constant_unary("-", value)
           None => None
         }
-      Unary("+", e) => self.fold_float_const(e, scope)
+      Unary("+", e) =>
+        match self.fold_float_const(e, scope) {
+          Some(value) => @ctype.floating_constant_unary("+", value)
+          None => None
+        }
       Ternary(cond, a, b) =>
         match self.fold_const(cond, scope) {
           Some(0L) => self.fold_float_const(b, scope)
@@ -3286,51 +2612,7 @@ pub fn Program::fold_float_const(
       | DesignatedIndex(_, e)
       | DesignatedRange(_, _, e) => self.fold_float_const(e, scope)
       Call(Var(name), args) =>
-        match name {
-          "__builtin_fabs" | "__builtin_fabsf" | "__builtin_fabsl" =>
-            if args.length() > 0 {
-              match self.fold_float_const(args[0], scope) {
-                Some(value) => Some(floating_abs(value))
-                None => None
-              }
-            } else {
-              None
-            }
-          "__builtin_copysign"
-          | "__builtin_copysignf"
-          | "__builtin_copysignl" =>
-            if args.length() > 1 {
-              match
-                (
-                  self.fold_float_const(args[0], scope),
-                  self.fold_float_const(args[1], scope),
-                ) {
-                (Some(magnitude), Some(sign)) =>
-                  Some(floating_copysign(magnitude, sign))
-                _ => None
-              }
-            } else {
-              None
-            }
-          "__builtin_sqrt" | "__builtin_sqrtf" | "__builtin_sqrtl" =>
-            if args.length() > 0 {
-              match self.fold_float_const(args[0], scope) {
-                Some(value) => Some(value.sqrt())
-                None => None
-              }
-            } else {
-              None
-            }
-          "__builtin_nan" | "__builtin_nanf" | "__builtin_nanl" =>
-            Some(0.0 / 0.0)
-          "__builtin_huge_val"
-          | "__builtin_huge_valf"
-          | "__builtin_huge_vall"
-          | "__builtin_inf"
-          | "__builtin_inff"
-          | "__builtin_infl" => Some(1.0 / 0.0)
-          _ => None
-        }
+        self.fold_float_builtin_const_value(name, args, scope)
       _ => None
     }
   }
