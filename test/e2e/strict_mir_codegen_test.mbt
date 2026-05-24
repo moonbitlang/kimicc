@@ -9969,3 +9969,59 @@ async test "strict MIR codegen matches parser codegen for aggregate return call 
   )
   assert_eq(result.code, 11)
 }
+
+///|
+test "strict MIR codegen evaluates aggregate return call sources once for clang callers" {
+  let callee =
+    #|struct Pair { long a; long b; };
+    #|int calls;
+    #|struct Pair make_pair(void) {
+    #|  calls++;
+    #|  struct Pair p;
+    #|  p.a = calls;
+    #|  p.b = calls * 10;
+    #|  return p;
+    #|}
+    #|struct Pair wrapper(void) {
+    #|  struct Pair (*fp)(void) = make_pair;
+    #|  return fp();
+    #|}
+  let driver =
+    #|struct Pair { long a; long b; };
+    #|extern int calls;
+    #|struct Pair wrapper(void);
+    #|int main(void) {
+    #|  struct Pair p = wrapper();
+    #|  if (calls != 1) return 100 + calls;
+    #|  return (int)(p.a + p.b);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 11)
+}
+
+///|
+test "strict MIR codegen receives aggregate return call sources once from clang callees" {
+  let caller =
+    #|struct Pair { long a; long b; };
+    #|extern int calls;
+    #|struct Pair wrapper(void);
+    #|int main(void) {
+    #|  struct Pair p = wrapper();
+    #|  if (calls != 1) return 100 + calls;
+    #|  return (int)(p.a + p.b);
+    #|}
+  let callee =
+    #|struct Pair { long a; long b; };
+    #|int calls;
+    #|struct Pair make_pair(void) {
+    #|  calls++;
+    #|  struct Pair p;
+    #|  p.a = calls;
+    #|  p.b = calls * 10;
+    #|  return p;
+    #|}
+    #|struct Pair wrapper(void) {
+    #|  struct Pair (*fp)(void) = make_pair;
+    #|  return fp();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 11)
+}
