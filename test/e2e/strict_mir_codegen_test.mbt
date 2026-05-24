@@ -6041,6 +6041,24 @@ test "strict MIR codegen calls local extern function prototypes" {
 }
 
 ///|
+test "strict MIR codegen exposes local extern prototype targets to clang callers" {
+  let callee =
+    #|int value = 37;
+    #|int *external_ptr(void) {
+    #|  return &value;
+    #|}
+  let driver =
+    #|int read_external(void) {
+    #|  extern int *external_ptr(void);
+    #|  return *external_ptr();
+    #|}
+    #|int main(void) {
+    #|  return read_external();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 37)
+}
+
+///|
 fn strict_mir_local_pointer_updates_source() -> String {
   let source =
     #|int main(void) {
