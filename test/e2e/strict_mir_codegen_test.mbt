@@ -3456,6 +3456,57 @@ async test "strict MIR codegen matches parser codegen for indirect register aggr
 }
 
 ///|
+test "strict MIR codegen passes indirect register aggregate parameters to clang callees" {
+  let caller =
+    #|struct Pair { long a; long b; };
+    #|struct Tiny { char a; short b; };
+    #|struct H { double a[2]; };
+    #|struct F { float a; float b; float c; };
+    #|long sum_pair(struct Pair p, long z);
+    #|int sum_tiny(struct Tiny t);
+    #|int sum_h(struct H h);
+    #|int sum_f(struct F f);
+    #|int main(void) {
+    #|  struct Pair p;
+    #|  struct Tiny t;
+    #|  struct H h;
+    #|  struct F f;
+    #|  long (*fp_pair)(struct Pair, long) = sum_pair;
+    #|  int (*fp_tiny)(struct Tiny) = sum_tiny;
+    #|  int (*fp_h)(struct H) = sum_h;
+    #|  int (*fp_f)(struct F) = sum_f;
+    #|  p.a = 10;
+    #|  p.b = 20;
+    #|  t.a = 5;
+    #|  t.b = 30;
+    #|  h.a[0] = 3.0;
+    #|  h.a[1] = 4.0;
+    #|  f.a = 1.0f;
+    #|  f.b = 2.0f;
+    #|  f.c = 3.0f;
+    #|  return (int)fp_pair(p, 5) + fp_tiny(t) + fp_h(h) + fp_f(f);
+    #|}
+  let callee =
+    #|struct Pair { long a; long b; };
+    #|struct Tiny { char a; short b; };
+    #|struct H { double a[2]; };
+    #|struct F { float a; float b; float c; };
+    #|long sum_pair(struct Pair p, long z) {
+    #|  return p.a + p.b + z;
+    #|}
+    #|int sum_tiny(struct Tiny t) {
+    #|  return t.a + t.b;
+    #|}
+    #|int sum_h(struct H h) {
+    #|  return (int)(h.a[0] + h.a[1]);
+    #|}
+    #|int sum_f(struct F f) {
+    #|  return (int)(f.a + f.b + f.c);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 83)
+}
+
+///|
 fn strict_mir_indirect_stack_aggregate_parameter_source() -> String {
   let source =
     #|struct Pair { long a; long b; };
