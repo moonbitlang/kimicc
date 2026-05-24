@@ -9909,6 +9909,112 @@ async test "strict MIR codegen matches parser codegen for TinyCC-style aggregate
 }
 
 ///|
+test "strict MIR codegen exposes TinyCC-style aggregate copies to clang callers" {
+  let callee =
+    #|typedef unsigned long long uint64_t;
+    #|typedef struct CType { int t; void *ref; } CType;
+    #|typedef union CValue {
+    #|  long double ld;
+    #|  double d;
+    #|  float f;
+    #|  uint64_t i;
+    #|  struct { char *data; int size; } str;
+    #|  int tab[((sizeof(long double)+3)/4)];
+    #|} CValue;
+    #|typedef struct SValue {
+    #|  CType type;
+    #|  unsigned short r;
+    #|  unsigned short r2;
+    #|  union { struct { int jtrue, jfalse; }; CValue c; };
+    #|  union { struct { unsigned short cmp_op, cmp_r; }; void *sym; };
+    #|} SValue;
+    #|SValue stack[2];
+    #|SValue *vtop = &stack[1];
+    #|void vsetc(CType *type, int r, CValue *vc) {
+    #|  vtop->type = *type;
+    #|  vtop->r = r;
+    #|  vtop->r2 = 0x0030;
+    #|  vtop->c = *vc;
+    #|  vtop->sym = (void*)0;
+    #|}
+    #|void vswap(void) {
+    #|  SValue tmp;
+    #|  tmp = vtop[0];
+    #|  vtop[0] = vtop[-1];
+    #|  vtop[-1] = tmp;
+    #|}
+    #|int eval_tinycc_style_aggregate_copy(void) {
+    #|  CType ty = {7, (void*)0};
+    #|  CValue value;
+    #|  value.str.data = (char*)0;
+    #|  value.str.size = 21;
+    #|  stack[0].c.i = 9;
+    #|  vsetc(&ty, 3, &value);
+    #|  vswap();
+    #|  return stack[0].c.str.size + (int)stack[1].c.i;
+    #|}
+  let driver =
+    #|int eval_tinycc_style_aggregate_copy(void);
+    #|int main(void) {
+    #|  return eval_tinycc_style_aggregate_copy();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 30)
+}
+
+///|
+test "strict MIR codegen calls clang TinyCC-style aggregate copies" {
+  let caller =
+    #|int eval_tinycc_style_aggregate_copy_from_clang(void);
+    #|int main(void) {
+    #|  return eval_tinycc_style_aggregate_copy_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long long uint64_t;
+    #|typedef struct CType { int t; void *ref; } CType;
+    #|typedef union CValue {
+    #|  long double ld;
+    #|  double d;
+    #|  float f;
+    #|  uint64_t i;
+    #|  struct { char *data; int size; } str;
+    #|  int tab[((sizeof(long double)+3)/4)];
+    #|} CValue;
+    #|typedef struct SValue {
+    #|  CType type;
+    #|  unsigned short r;
+    #|  unsigned short r2;
+    #|  union { struct { int jtrue, jfalse; }; CValue c; };
+    #|  union { struct { unsigned short cmp_op, cmp_r; }; void *sym; };
+    #|} SValue;
+    #|SValue stack[2];
+    #|SValue *vtop = &stack[1];
+    #|void vsetc(CType *type, int r, CValue *vc) {
+    #|  vtop->type = *type;
+    #|  vtop->r = r;
+    #|  vtop->r2 = 0x0030;
+    #|  vtop->c = *vc;
+    #|  vtop->sym = (void*)0;
+    #|}
+    #|void vswap(void) {
+    #|  SValue tmp;
+    #|  tmp = vtop[0];
+    #|  vtop[0] = vtop[-1];
+    #|  vtop[-1] = tmp;
+    #|}
+    #|int eval_tinycc_style_aggregate_copy_from_clang(void) {
+    #|  CType ty = {7, (void*)0};
+    #|  CValue value;
+    #|  value.str.data = (char*)0;
+    #|  value.str.size = 21;
+    #|  stack[0].c.i = 9;
+    #|  vsetc(&ty, 3, &value);
+    #|  vswap();
+    #|  return stack[0].c.str.size + (int)stack[1].c.i;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 30)
+}
+
+///|
 fn strict_mir_comma_aggregate_assignment_source() -> String {
   let source =
     #|struct S { int a; int b; };
