@@ -8509,6 +8509,44 @@ async test "strict MIR codegen matches parser codegen for global address cancell
 }
 
 ///|
+test "strict MIR codegen exposes global address cancellation loads to clang callers" {
+  let callee =
+    #|char buf[3] = {4, 5, 0};
+    #|char *macro_ptr = buf;
+    #|int tok;
+    #|int next_token(void) {
+    #|  int t = **(&macro_ptr);
+    #|  *(&tok) = t, ++*(&macro_ptr);
+    #|  return tok + **(&macro_ptr);
+    #|}
+  let driver =
+    #|int next_token(void);
+    #|int main(void) {
+    #|  return next_token();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 9)
+}
+
+///|
+test "strict MIR codegen calls clang global address cancellation loads" {
+  let caller =
+    #|int next_token(void);
+    #|int main(void) {
+    #|  return next_token();
+    #|}
+  let callee =
+    #|char buf[3] = {4, 5, 0};
+    #|char *macro_ptr = buf;
+    #|int tok;
+    #|int next_token(void) {
+    #|  int t = **(&macro_ptr);
+    #|  *(&tok) = t, ++*(&macro_ptr);
+    #|  return tok + **(&macro_ptr);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 9)
+}
+
+///|
 fn strict_mir_tinycc_style_aggregate_copy_source() -> String {
   let source =
     #|typedef unsigned long long uint64_t;
