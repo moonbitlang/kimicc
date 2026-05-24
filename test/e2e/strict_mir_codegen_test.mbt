@@ -1222,7 +1222,7 @@ async test "strict MIR codegen matches parser codegen for sync and atomic fence 
 }
 
 ///|
-test "strict MIR codegen sizes local pointer target in own initializer" {
+fn strict_mir_local_pointer_target_initializer_source() -> String {
   let source =
     #|typedef struct TokenString {
     #|  int *str;
@@ -1247,7 +1247,22 @@ test "strict MIR codegen sizes local pointer target in own initializer" {
     #|  TokenString *str = remember(sizeof *str);
     #|  return seen == 56 ? 42 : (int)seen;
     #|}
+  source
+}
+
+///|
+test "strict MIR codegen sizes local pointer target in own initializer" {
+  let source = strict_mir_local_pointer_target_initializer_source()
   assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
+async test "strict MIR codegen matches parser codegen for local pointer target initializer" {
+  let result = run_source_strict_mir_against_parser_codegen(
+    strict_mir_local_pointer_target_initializer_source(),
+    "strict_mir_local_pointer_target_initializer_differential",
+  )
+  assert_eq(result.code, 42)
 }
 
 ///|
