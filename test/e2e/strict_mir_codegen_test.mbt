@@ -2486,7 +2486,7 @@ async test "strict MIR codegen matches parser codegen for direct scalar byte mem
 }
 
 ///|
-test "strict MIR codegen executes string destination libcalls" {
+fn strict_mir_string_destination_libcalls_source() -> String {
   let source =
     #|int main(void) {
     #|  char dst[16];
@@ -2512,7 +2512,22 @@ test "strict MIR codegen executes string destination libcalls" {
     #|  if (n != 64) return 17;
     #|  return 42;
     #|}
+  source
+}
+
+///|
+test "strict MIR codegen executes string destination libcalls" {
+  let source = strict_mir_string_destination_libcalls_source()
   assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
+async test "strict MIR codegen matches parser codegen for string destination libcalls" {
+  let result = run_source_strict_mir_against_parser_codegen(
+    strict_mir_string_destination_libcalls_source(),
+    "strict_mir_string_destination_libcalls_differential",
+  )
+  assert_eq(result.code, 42)
 }
 
 ///|
