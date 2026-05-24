@@ -4572,7 +4572,7 @@ async test "strict MIR codegen matches parser codegen for aggregate array field 
 }
 
 ///|
-test "strict MIR codegen copies aggregate into global member from va_arg pointer" {
+fn strict_mir_va_arg_pointer_aggregate_copy_source() -> String {
   let source =
     #|typedef __builtin_va_list va_list;
     #|struct Pair { int a; int b; };
@@ -4591,7 +4591,22 @@ test "strict MIR codegen copies aggregate into global member from va_arg pointer
     #|  struct Pair output = { 0, 0 };
     #|  return set_pair(0, &input, &output) + output.a;
     #|}
+  source
+}
+
+///|
+test "strict MIR codegen copies aggregate into global member from va_arg pointer" {
+  let source = strict_mir_va_arg_pointer_aggregate_copy_source()
   assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
+async test "strict MIR codegen matches parser codegen for va_arg pointer aggregate copies" {
+  let result = run_source_strict_mir_against_parser_codegen(
+    strict_mir_va_arg_pointer_aggregate_copy_source(),
+    "strict_mir_va_arg_pointer_aggregate_copy_differential",
+  )
+  assert_eq(result.code, 42)
 }
 
 ///|
