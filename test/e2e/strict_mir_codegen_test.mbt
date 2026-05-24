@@ -8771,6 +8771,46 @@ async test "strict MIR codegen matches parser codegen for local aggregate array 
 }
 
 ///|
+test "strict MIR codegen exposes local aggregate array assignment rvalues to clang callers" {
+  let callee =
+    #|struct S { int x; int y; };
+    #|int eval_slots(void) {
+    #|  struct S slots[2];
+    #|  struct S rhs = { 19, 23 };
+    #|  int i = 0;
+    #|  int value = (slots[i++] = rhs).y;
+    #|  if (i != 1) return 1;
+    #|  return value + slots[0].x;
+    #|}
+  let driver =
+    #|int eval_slots(void);
+    #|int main(void) {
+    #|  return eval_slots();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang local aggregate array assignment rvalues" {
+  let caller =
+    #|int eval_slots(void);
+    #|int main(void) {
+    #|  return eval_slots();
+    #|}
+  let callee =
+    #|struct S { int x; int y; };
+    #|int eval_slots(void) {
+    #|  struct S slots[2];
+    #|  struct S rhs = { 19, 23 };
+    #|  int i = 0;
+    #|  int value = (slots[i++] = rhs).y;
+    #|  if (i != 1) return 1;
+    #|  return value + slots[0].x;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_aggregate_assignment_ternary_call_rvalue_source() -> String {
   let source =
     #|struct Box { int a; int b; };
