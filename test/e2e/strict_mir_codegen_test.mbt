@@ -7985,6 +7985,58 @@ async test "strict MIR codegen matches parser codegen for indirect calls returni
 }
 
 ///|
+test "strict MIR codegen exposes indirect function pointer returns to clang callers" {
+  let callee =
+    #|static int fnptr_return_global_from_mir;
+    #|void fnptr_return_store_from_mir(int value) {
+    #|  fnptr_return_global_from_mir = value;
+    #|}
+    #|void (*pick_fnptr_return_from_mir(int tag))(int) {
+    #|  if (tag) return fnptr_return_store_from_mir;
+    #|  return fnptr_return_store_from_mir;
+    #|}
+    #|int read_fnptr_return_from_mir(void) {
+    #|  return fnptr_return_global_from_mir;
+    #|}
+  let driver =
+    #|void (*pick_fnptr_return_from_mir(int tag))(int);
+    #|int read_fnptr_return_from_mir(void);
+    #|int main(void) {
+    #|  void (*(*fp)(int))(int) = pick_fnptr_return_from_mir;
+    #|  void (*fn)(int) = fp(1);
+    #|  fn(37);
+    #|  return read_fnptr_return_from_mir();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 37)
+}
+
+///|
+test "strict MIR codegen calls clang indirect function pointer returns" {
+  let caller =
+    #|void (*pick_fnptr_return_from_clang(int tag))(int);
+    #|int read_fnptr_return_from_clang(void);
+    #|int main(void) {
+    #|  void (*(*fp)(int))(int) = pick_fnptr_return_from_clang;
+    #|  void (*fn)(int) = fp(1);
+    #|  fn(37);
+    #|  return read_fnptr_return_from_clang();
+    #|}
+  let callee =
+    #|static int fnptr_return_global_from_clang;
+    #|void fnptr_return_store_from_clang(int value) {
+    #|  fnptr_return_global_from_clang = value;
+    #|}
+    #|void (*pick_fnptr_return_from_clang(int tag))(int) {
+    #|  if (tag) return fnptr_return_store_from_clang;
+    #|  return fnptr_return_store_from_clang;
+    #|}
+    #|int read_fnptr_return_from_clang(void) {
+    #|  return fnptr_return_global_from_clang;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 37)
+}
+
+///|
 fn strict_mir_stack_floating_indirect_call_source() -> String {
   let source =
     #|double sum9d(double a, double b, double c, double d, double e, double f, double g, double h, double i) {
