@@ -2169,6 +2169,46 @@ async test "strict MIR codegen matches parser codegen for stack-passed int128 di
 }
 
 ///|
+test "strict MIR codegen exposes stack-passed int128 direct calls to clang callers" {
+  let callee =
+    #|typedef __int128 i128;
+    #|static long split_stack(long a0, long a1, long a2, long a3, long a4,
+    #|                        long a5, long a6, long a7, long a8, i128 v) {
+    #|  return a8 + (long)v + (long)(v >> 64);
+    #|}
+    #|int eval_stack_int128_direct_call(void) {
+    #|  i128 v = ((i128)5 << 64) | 7;
+    #|  return (int)split_stack(0, 0, 0, 0, 0, 0, 0, 0, 30, v);
+    #|}
+  let driver =
+    #|int eval_stack_int128_direct_call(void);
+    #|int main(void) {
+    #|  return eval_stack_int128_direct_call();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang stack-passed int128 direct calls" {
+  let caller =
+    #|int eval_stack_int128_direct_call(void);
+    #|int main(void) {
+    #|  return eval_stack_int128_direct_call();
+    #|}
+  let callee =
+    #|typedef __int128 i128;
+    #|static long split_stack(long a0, long a1, long a2, long a3, long a4,
+    #|                        long a5, long a6, long a7, long a8, i128 v) {
+    #|  return a8 + (long)v + (long)(v >> 64);
+    #|}
+    #|int eval_stack_int128_direct_call(void) {
+    #|  i128 v = ((i128)5 << 64) | 7;
+    #|  return (int)split_stack(0, 0, 0, 0, 0, 0, 0, 0, 30, v);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 test "strict MIR codegen receives int128 parameters from clang callers" {
   let callee =
     #|typedef __int128 i128;
