@@ -1462,6 +1462,50 @@ async test "strict MIR codegen matches parser codegen for frame and return addre
 }
 
 ///|
+test "strict MIR codegen exposes frame and return address builtins to clang callers" {
+  let callee =
+    #|int eval_frame_return_address(void) {
+    #|  int level = 0;
+    #|  void *fa = __builtin_frame_address(level);
+    #|  void *ra = __builtin_return_address(level);
+    #|  if (fa == 0) return 1;
+    #|  if (ra == 0) return 2;
+    #|  level = level + 1;
+    #|  if (__builtin_frame_address(level) != 0) return 3;
+    #|  if (__builtin_return_address(level) != 0) return 4;
+    #|  if (__builtin_extract_return_addr(ra) != ra) return 5;
+    #|  if (__builtin_frob_return_addr(ra) != ra) return 6;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_frame_return_address(void);
+    #|int main(void) {
+    #|  return eval_frame_return_address();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang frame and return address builtins" {
+  let caller =
+    #|int eval_frame_return_address(void);
+    #|int main(void) {
+    #|  return eval_frame_return_address();
+    #|}
+  let callee =
+    #|int eval_frame_return_address(void) {
+    #|  void *fa = __builtin_frame_address(0);
+    #|  void *ra = __builtin_return_address(0);
+    #|  if (fa == 0) return 1;
+    #|  if (ra == 0) return 2;
+    #|  if (__builtin_extract_return_addr(ra) != ra) return 3;
+    #|  if (__builtin_frob_return_addr(ra) != ra) return 4;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_object_size_source() -> String {
   let source =
     #|struct S { int x; char buf[9]; };
@@ -1769,6 +1813,74 @@ async test "strict MIR codegen matches parser codegen for local pointer target i
 }
 
 ///|
+test "strict MIR codegen exposes local pointer target initializer to clang callers" {
+  let callee =
+    #|typedef struct TokenString {
+    #|  int *str;
+    #|  int len;
+    #|  int need_spc;
+    #|  int allocated_len;
+    #|  int last_line_num;
+    #|  int save_line_num;
+    #|  struct TokenString *prev;
+    #|  const int *prev_ptr;
+    #|  char alloc;
+    #|} TokenString;
+    #|
+    #|unsigned long seen;
+    #|
+    #|void *remember(unsigned long n) {
+    #|  seen = n;
+    #|  return (void *)0;
+    #|}
+    #|
+    #|int eval_local_pointer_target_initializer(void) {
+    #|  TokenString *str = remember(sizeof *str);
+    #|  return seen == 56 ? 42 : (int)seen;
+    #|}
+  let driver =
+    #|int eval_local_pointer_target_initializer(void);
+    #|int main(void) {
+    #|  return eval_local_pointer_target_initializer();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang local pointer target initializer" {
+  let caller =
+    #|int eval_local_pointer_target_initializer(void);
+    #|int main(void) {
+    #|  return eval_local_pointer_target_initializer();
+    #|}
+  let callee =
+    #|typedef struct TokenString {
+    #|  int *str;
+    #|  int len;
+    #|  int need_spc;
+    #|  int allocated_len;
+    #|  int last_line_num;
+    #|  int save_line_num;
+    #|  struct TokenString *prev;
+    #|  const int *prev_ptr;
+    #|  char alloc;
+    #|} TokenString;
+    #|
+    #|unsigned long seen;
+    #|
+    #|void *remember(unsigned long n) {
+    #|  seen = n;
+    #|  return (void *)0;
+    #|}
+    #|
+    #|int eval_local_pointer_target_initializer(void) {
+    #|  TokenString *str = remember(sizeof *str);
+    #|  return seen == 56 ? 42 : (int)seen;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_unsigned_int128_limb_multiply_source() -> String {
   let source =
     #|typedef unsigned long js_limb_t;
@@ -1812,6 +1924,72 @@ async test "strict MIR codegen matches parser codegen for unsigned int128 limb m
 }
 
 ///|
+test "strict MIR codegen exposes unsigned int128 limb multiply to clang callers" {
+  let callee =
+    #|typedef unsigned long js_limb_t;
+    #|typedef unsigned __int128 js_dlimb_t;
+    #|static js_limb_t mp_mul1(js_limb_t *tabr, const js_limb_t *taba, js_limb_t n,
+    #|                         js_limb_t b, js_limb_t l) {
+    #|  js_limb_t i;
+    #|  js_dlimb_t t;
+    #|  for (i = 0; i < n; i++) {
+    #|    t = (js_dlimb_t)taba[i] * (js_dlimb_t)b + l;
+    #|    tabr[i] = t;
+    #|    l = t >> 64;
+    #|  }
+    #|  return l;
+    #|}
+    #|int eval_unsigned_int128_limb_multiply(void) {
+    #|  js_limb_t in[2] = { ~0UL, 2 };
+    #|  js_limb_t out[2];
+    #|  js_limb_t carry = mp_mul1(out, in, 2, 2, 1);
+    #|  if (out[0] != ~0UL) return 10;
+    #|  if (out[1] != 5) return 20;
+    #|  if (carry != 0) return 30;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_unsigned_int128_limb_multiply(void);
+    #|int main(void) {
+    #|  return eval_unsigned_int128_limb_multiply();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang unsigned int128 limb multiply" {
+  let caller =
+    #|int eval_unsigned_int128_limb_multiply(void);
+    #|int main(void) {
+    #|  return eval_unsigned_int128_limb_multiply();
+    #|}
+  let callee =
+    #|typedef unsigned long js_limb_t;
+    #|typedef unsigned __int128 js_dlimb_t;
+    #|static js_limb_t mp_mul1(js_limb_t *tabr, const js_limb_t *taba, js_limb_t n,
+    #|                         js_limb_t b, js_limb_t l) {
+    #|  js_limb_t i;
+    #|  js_dlimb_t t;
+    #|  for (i = 0; i < n; i++) {
+    #|    t = (js_dlimb_t)taba[i] * (js_dlimb_t)b + l;
+    #|    tabr[i] = t;
+    #|    l = t >> 64;
+    #|  }
+    #|  return l;
+    #|}
+    #|int eval_unsigned_int128_limb_multiply(void) {
+    #|  js_limb_t in[2] = { ~0UL, 2 };
+    #|  js_limb_t out[2];
+    #|  js_limb_t carry = mp_mul1(out, in, 2, 2, 1);
+    #|  if (out[0] != ~0UL) return 10;
+    #|  if (out[1] != 5) return 20;
+    #|  if (carry != 0) return 30;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_unsigned_int128_limb_divide_source() -> String {
   let source =
     #|typedef unsigned long js_limb_t;
@@ -1852,6 +2030,72 @@ async test "strict MIR codegen matches parser codegen for unsigned int128 limb d
     "strict_mir_unsigned_int128_limb_divide_differential",
   )
   assert_eq(result.code, 42)
+}
+
+///|
+test "strict MIR codegen exposes unsigned int128 limb divide to clang callers" {
+  let callee =
+    #|typedef unsigned long js_limb_t;
+    #|typedef long js_slimb_t;
+    #|typedef unsigned __int128 js_dlimb_t;
+    #|static js_limb_t mp_div1(js_limb_t *tabr, const js_limb_t *taba, js_limb_t n,
+    #|                         js_limb_t b, js_limb_t r) {
+    #|  js_slimb_t i;
+    #|  js_dlimb_t a1;
+    #|  for (i = n - 1; i >= 0; i--) {
+    #|    a1 = ((js_dlimb_t)r << 64) | taba[i];
+    #|    tabr[i] = a1 / b;
+    #|    r = a1 % b;
+    #|  }
+    #|  return r;
+    #|}
+    #|int eval_unsigned_int128_limb_divide(void) {
+    #|  js_limb_t in[1] = { 5 };
+    #|  js_limb_t out[1];
+    #|  js_limb_t rem = mp_div1(out, in, 1, 2, 1);
+    #|  if (out[0] != ((1UL << 63) + 2)) return 10;
+    #|  if (rem != 1) return 20;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_unsigned_int128_limb_divide(void);
+    #|int main(void) {
+    #|  return eval_unsigned_int128_limb_divide();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang unsigned int128 limb divide" {
+  let caller =
+    #|int eval_unsigned_int128_limb_divide(void);
+    #|int main(void) {
+    #|  return eval_unsigned_int128_limb_divide();
+    #|}
+  let callee =
+    #|typedef unsigned long js_limb_t;
+    #|typedef long js_slimb_t;
+    #|typedef unsigned __int128 js_dlimb_t;
+    #|static js_limb_t mp_div1(js_limb_t *tabr, const js_limb_t *taba, js_limb_t n,
+    #|                         js_limb_t b, js_limb_t r) {
+    #|  js_slimb_t i;
+    #|  js_dlimb_t a1;
+    #|  for (i = n - 1; i >= 0; i--) {
+    #|    a1 = ((js_dlimb_t)r << 64) | taba[i];
+    #|    tabr[i] = a1 / b;
+    #|    r = a1 % b;
+    #|  }
+    #|  return r;
+    #|}
+    #|int eval_unsigned_int128_limb_divide(void) {
+    #|  js_limb_t in[1] = { 5 };
+    #|  js_limb_t out[1];
+    #|  js_limb_t rem = mp_div1(out, in, 1, 2, 1);
+    #|  if (out[0] != ((1UL << 63) + 2)) return 10;
+    #|  if (rem != 1) return 20;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
 }
 
 ///|
@@ -1922,6 +2166,46 @@ async test "strict MIR codegen matches parser codegen for stack-passed int128 di
     "strict_mir_stack_int128_direct_call_differential",
   )
   assert_eq(result.code, 42)
+}
+
+///|
+test "strict MIR codegen exposes stack-passed int128 direct calls to clang callers" {
+  let callee =
+    #|typedef __int128 i128;
+    #|static long split_stack(long a0, long a1, long a2, long a3, long a4,
+    #|                        long a5, long a6, long a7, long a8, i128 v) {
+    #|  return a8 + (long)v + (long)(v >> 64);
+    #|}
+    #|int eval_stack_int128_direct_call(void) {
+    #|  i128 v = ((i128)5 << 64) | 7;
+    #|  return (int)split_stack(0, 0, 0, 0, 0, 0, 0, 0, 30, v);
+    #|}
+  let driver =
+    #|int eval_stack_int128_direct_call(void);
+    #|int main(void) {
+    #|  return eval_stack_int128_direct_call();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang stack-passed int128 direct calls" {
+  let caller =
+    #|int eval_stack_int128_direct_call(void);
+    #|int main(void) {
+    #|  return eval_stack_int128_direct_call();
+    #|}
+  let callee =
+    #|typedef __int128 i128;
+    #|static long split_stack(long a0, long a1, long a2, long a3, long a4,
+    #|                        long a5, long a6, long a7, long a8, i128 v) {
+    #|  return a8 + (long)v + (long)(v >> 64);
+    #|}
+    #|int eval_stack_int128_direct_call(void) {
+    #|  i128 v = ((i128)5 << 64) | 7;
+    #|  return (int)split_stack(0, 0, 0, 0, 0, 0, 0, 0, 30, v);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
 }
 
 ///|
