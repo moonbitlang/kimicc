@@ -7930,6 +7930,55 @@ async test "strict MIR codegen matches parser codegen for indirect large aggrega
 }
 
 ///|
+test "strict MIR codegen executes indirect large aggregate va_arg reads from clang caller" {
+  let callee =
+    #|typedef __builtin_va_list va_list;
+    #|struct Big { long long a; long long b; long long c; };
+    #|int read_big(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  struct Big p = __builtin_va_arg(ap, struct Big);
+    #|  __builtin_va_end(ap);
+    #|  return tag + (int)p.a + (int)p.c;
+    #|}
+    #|int call_read_big(struct Big p) {
+    #|  int (*fp)(int, ...) = read_big;
+    #|  return fp(4, p);
+    #|}
+  let driver =
+    #|struct Big { long long a; long long b; long long c; };
+    #|int call_read_big(struct Big p);
+    #|int main(void) {
+    #|  struct Big p = {11, 20, 27};
+    #|  return call_read_big(p);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen passes indirect large aggregate variadic args to clang callees" {
+  let caller =
+    #|struct Big { long long a; long long b; long long c; };
+    #|int read_big(int tag, ...);
+    #|int main(void) {
+    #|  struct Big p = {11, 20, 27};
+    #|  int (*fp)(int, ...) = read_big;
+    #|  return fp(4, p);
+    #|}
+  let callee =
+    #|typedef __builtin_va_list va_list;
+    #|struct Big { long long a; long long b; long long c; };
+    #|int read_big(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  struct Big p = __builtin_va_arg(ap, struct Big);
+    #|  __builtin_va_end(ap);
+    #|  return tag + (int)p.a + (int)p.c;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_aggregate_va_arg_member_source() -> String {
   let source =
     #|typedef __builtin_va_list va_list;
