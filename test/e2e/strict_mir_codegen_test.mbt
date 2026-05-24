@@ -1509,6 +1509,80 @@ async test "strict MIR codegen matches parser codegen for object size builtins" 
 }
 
 ///|
+test "strict MIR codegen exposes object size builtins to clang callers" {
+  let callee =
+    #|struct S { int x; char buf[9]; };
+    #|char global_buf[16];
+    #|struct S global_s;
+    #|int eval_object_size(void) {
+    #|  int side = 0;
+    #|  int x;
+    #|  char buf[16];
+    #|  struct S local_s;
+    #|  if (__builtin_object_size("abc", 0) != 4) return 1;
+    #|  if (__builtin_dynamic_object_size((const void *)"hello", 3) != 6) return 2;
+    #|  if (__builtin_object_size((void *)1, 0) + 1 != 0) return 3;
+    #|  if (__builtin_object_size((void *)1, 2) != 0) return 4;
+    #|  if (__builtin_dynamic_object_size((void *)(long)(side += 1), side += 2) + 1 != 0) return 5;
+    #|  if (side != 0) return 6;
+    #|  if (__builtin_object_size(&x, 0) != sizeof(x)) return 7;
+    #|  if (__builtin_dynamic_object_size((void *)buf, 2) != sizeof(buf)) return 8;
+    #|  if (__builtin_object_size(&buf[3], 1) != sizeof(buf) - 3) return 9;
+    #|  if (__builtin_object_size(buf + 3, 0) != sizeof(buf) - 3) return 10;
+    #|  if (__builtin_object_size(&global_s.buf, 0) != sizeof(global_s) - __builtin_offsetof(struct S, buf)) return 11;
+    #|  if (__builtin_dynamic_object_size(global_s.buf, 3) != sizeof(global_s.buf)) return 12;
+    #|  if (__builtin_dynamic_object_size(&global_s.buf[4], 2) != sizeof(global_s) - __builtin_offsetof(struct S, buf) - 4) return 13;
+    #|  if (__builtin_object_size(&local_s.buf, 0) != sizeof(local_s) - __builtin_offsetof(struct S, buf)) return 14;
+    #|  if (__builtin_dynamic_object_size(local_s.buf, 3) != sizeof(local_s.buf)) return 15;
+    #|  if (__builtin_dynamic_object_size((void *)global_buf, 2) != sizeof(global_buf)) return 16;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_object_size(void);
+    #|int main(void) {
+    #|  return eval_object_size();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang object size builtins" {
+  let caller =
+    #|int eval_object_size(void);
+    #|int main(void) {
+    #|  return eval_object_size();
+    #|}
+  let callee =
+    #|struct S { int x; char buf[9]; };
+    #|char global_buf[16];
+    #|struct S global_s;
+    #|int eval_object_size(void) {
+    #|  int side = 0;
+    #|  int x;
+    #|  char buf[16];
+    #|  struct S local_s;
+    #|  if (__builtin_object_size("abc", 0) != 4) return 1;
+    #|  if (__builtin_dynamic_object_size((const void *)"hello", 3) != 6) return 2;
+    #|  if (__builtin_object_size((void *)1, 0) + 1 != 0) return 3;
+    #|  if (__builtin_object_size((void *)1, 2) != 0) return 4;
+    #|  if (__builtin_dynamic_object_size((void *)1, 0) + 1 != 0) return 5;
+    #|  if (side != 0) return 6;
+    #|  if (__builtin_object_size(&x, 0) != sizeof(x)) return 7;
+    #|  if (__builtin_dynamic_object_size((void *)buf, 2) != sizeof(buf)) return 8;
+    #|  if (__builtin_object_size(&buf[3], 1) != sizeof(buf) - 3) return 9;
+    #|  if (__builtin_object_size(buf + 3, 0) != sizeof(buf) - 3) return 10;
+    #|  if (__builtin_object_size(&global_s.buf, 0) != sizeof(global_s) - __builtin_offsetof(struct S, buf)) return 11;
+    #|  if (__builtin_dynamic_object_size(global_s.buf, 3) != sizeof(global_s.buf)) return 12;
+    #|  if (__builtin_dynamic_object_size(&global_s.buf[4], 2) != sizeof(global_s) - __builtin_offsetof(struct S, buf) - 4) return 13;
+    #|  if (__builtin_object_size(&local_s.buf, 0) != sizeof(local_s) - __builtin_offsetof(struct S, buf)) return 14;
+    #|  if (__builtin_dynamic_object_size(local_s.buf, 3) != sizeof(local_s.buf)) return 15;
+    #|  if (__builtin_dynamic_object_size((void *)global_buf, 2) != sizeof(global_buf)) return 16;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_constant_query_source() -> String {
   let source =
     #|int main(void) {
