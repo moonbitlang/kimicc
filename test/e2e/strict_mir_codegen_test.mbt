@@ -8142,6 +8142,38 @@ async test "strict MIR codegen matches parser codegen for floating variadic libc
 }
 
 ///|
+test "strict MIR codegen exposes floating variadic libcalls to clang callers" {
+  let callee =
+    #|int eval_floating_variadic_libcall(void) {
+    #|  char buf[64];
+    #|  int n = __builtin___snprintf_chk(buf, 64, 0, 64, "%.1f", 1.5);
+    #|  return n + (buf[0] == '1') + (buf[1] == '.') + (buf[2] == '5');
+    #|}
+  let driver =
+    #|int eval_floating_variadic_libcall(void);
+    #|int main(void) {
+    #|  return eval_floating_variadic_libcall();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 6)
+}
+
+///|
+test "strict MIR codegen calls clang floating variadic libcalls" {
+  let caller =
+    #|int eval_floating_variadic_libcall_from_clang(void);
+    #|int main(void) {
+    #|  return eval_floating_variadic_libcall_from_clang();
+    #|}
+  let callee =
+    #|int eval_floating_variadic_libcall_from_clang(void) {
+    #|  char buf[64];
+    #|  int n = __builtin___snprintf_chk(buf, 64, 0, 64, "%.1f", 1.5);
+    #|  return n + (buf[0] == '1') + (buf[1] == '.') + (buf[2] == '5');
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 6)
+}
+
+///|
 fn strict_mir_stack_floating_variadic_libcall_source() -> String {
   let source =
     #|int main(void) {
