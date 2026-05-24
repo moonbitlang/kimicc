@@ -689,6 +689,85 @@ async test "strict MIR codegen matches parser codegen for alloca aggregate indir
 }
 
 ///|
+test "strict MIR codegen updates aggregate pointer memory through indirect calls from clang callers" {
+  let callee =
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|void fill_pair(struct Pair *p) {
+    #|  p[0].a = 12;
+    #|  p[0].b = 1.5;
+    #|  p[0].tag = 6;
+    #|  p[1] = p[0];
+    #|}
+    #|int observe_pair(struct Pair *p) {
+    #|  if (p[0].a != 12 || (int)(p[0].b * 10.0) != 15 || p[0].tag != 6) return 1;
+    #|  if (p[1].a != 12 || (int)(p[1].b * 10.0) != 15 || p[1].tag != 6) return 2;
+    #|  return p[0].a + p[1].a + (int)(p[0].b * 6.0) + (int)(p[1].b * 6.0);
+    #|}
+    #|int call_indirect(struct Pair *p) {
+    #|  void (*fill)(struct Pair *) = fill_pair;
+    #|  int (*observe)(struct Pair *) = observe_pair;
+    #|  fill(p);
+    #|  return observe(p);
+    #|}
+  let driver =
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|int call_indirect(struct Pair *p);
+    #|int main(void) {
+    #|  struct Pair p[2] = {0};
+    #|  return call_indirect(p);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen passes alloca aggregate pointers through indirect calls to clang callees" {
+  let caller =
+    #|typedef unsigned long size_t;
+    #|extern void *memset(void *, int, size_t);
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|void fill_pair(struct Pair *p);
+    #|int observe_pair(struct Pair *p);
+    #|int main(void) {
+    #|  void (*fill)(struct Pair *) = fill_pair;
+    #|  int (*observe)(struct Pair *) = observe_pair;
+    #|  struct Pair *p = __builtin_alloca(sizeof(struct Pair) * 2);
+    #|  memset(p, 0, sizeof(struct Pair) * 2);
+    #|  fill(p);
+    #|  return observe(p);
+    #|}
+  let callee =
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|void fill_pair(struct Pair *p) {
+    #|  p[0].a = 12;
+    #|  p[0].b = 1.5;
+    #|  p[0].tag = 6;
+    #|  p[1] = p[0];
+    #|}
+    #|int observe_pair(struct Pair *p) {
+    #|  if (p[0].a != 12 || (int)(p[0].b * 10.0) != 15 || p[0].tag != 6) return 1;
+    #|  if (p[1].a != 12 || (int)(p[1].b * 10.0) != 15 || p[1].tag != 6) return 2;
+    #|  return p[0].a + p[1].a + (int)(p[0].b * 6.0) + (int)(p[1].b * 6.0);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_alloca_aggregate_call_argument_source() -> String {
   let source =
     #|typedef unsigned long size_t;
