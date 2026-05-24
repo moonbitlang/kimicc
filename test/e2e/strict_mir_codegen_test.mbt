@@ -7786,6 +7786,46 @@ async test "strict MIR codegen matches parser codegen for floating unary operato
 }
 
 ///|
+test "strict MIR codegen exposes floating unary operators to clang callers" {
+  let callee =
+    #|int eval_floating_unary_operators(void) {
+    #|  double d = 3.5;
+    #|  float f = (float)2.25;
+    #|  if ((int)(-d) != -3) return 1;
+    #|  if ((int)(-f) != -2) return 2;
+    #|  if ((int)(+d) != 3) return 3;
+    #|  if ((int)(+f) != 2) return 4;
+    #|  return 37;
+    #|}
+  let driver =
+    #|int eval_floating_unary_operators(void);
+    #|int main(void) {
+    #|  return eval_floating_unary_operators();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 37)
+}
+
+///|
+test "strict MIR codegen calls clang floating unary operators" {
+  let caller =
+    #|int eval_floating_unary_operators_from_clang(void);
+    #|int main(void) {
+    #|  return eval_floating_unary_operators_from_clang();
+    #|}
+  let callee =
+    #|int eval_floating_unary_operators_from_clang(void) {
+    #|  double d = 3.5;
+    #|  float f = (float)2.25;
+    #|  if ((int)(-d) != -3) return 1;
+    #|  if ((int)(-f) != -2) return 2;
+    #|  if ((int)(+d) != 3) return 3;
+    #|  if ((int)(+f) != 2) return 4;
+    #|  return 37;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 37)
+}
+
+///|
 fn strict_mir_floating_direct_call_source() -> String {
   let source =
     #|double add(double x, double y) { return x + y; }
