@@ -3707,6 +3707,32 @@ test "strict MIR codegen returns memory aggregates to clang callers" {
 }
 
 ///|
+test "strict MIR codegen receives memory aggregates from clang callees" {
+  let caller =
+    #|struct Big { long a; long b; long c; };
+    #|struct Big make_big(long a, long b, long c);
+    #|struct Big forward_big(long a, long b, long c);
+    #|int main(void) {
+    #|  struct Big p = make_big(10, 20, 30);
+    #|  struct Big q = forward_big(3, 4, 5);
+    #|  return (int)(p.a + p.b + p.c + q.a + q.b + q.c);
+    #|}
+  let callee =
+    #|struct Big { long a; long b; long c; };
+    #|struct Big make_big(long a, long b, long c) {
+    #|  struct Big p;
+    #|  p.a = a;
+    #|  p.b = b;
+    #|  p.c = c;
+    #|  return p;
+    #|}
+    #|struct Big forward_big(long a, long b, long c) {
+    #|  return make_big(a + 1, b + 2, c + 3);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 78)
+}
+
+///|
 fn strict_mir_aggregate_object_address_source() -> String {
   let source =
     #|struct Pair { long a; long b; };
