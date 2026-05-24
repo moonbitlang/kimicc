@@ -1685,6 +1685,46 @@ async test "strict MIR codegen matches parser codegen for sync and atomic fence 
 }
 
 ///|
+test "strict MIR codegen exposes sync and atomic fence builtins to clang callers" {
+  let callee =
+    #|int eval_fence(void) {
+    #|  int x = 0;
+    #|  __sync_synchronize();
+    #|  __atomic_thread_fence((x += 1, 5));
+    #|  __atomic_signal_fence((x += 1, 5));
+    #|  __c11_atomic_thread_fence((x += 1, 5));
+    #|  __c11_atomic_signal_fence((x += 1, 5));
+    #|  return x == 4 ? 42 : x;
+    #|}
+  let driver =
+    #|int eval_fence(void);
+    #|int main(void) {
+    #|  return eval_fence();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang sync and atomic fence builtins" {
+  let caller =
+    #|int eval_fence(void);
+    #|int main(void) {
+    #|  return eval_fence();
+    #|}
+  let callee =
+    #|int eval_fence(void) {
+    #|  int x = 0;
+    #|  __sync_synchronize();
+    #|  __atomic_thread_fence((x += 1, 5));
+    #|  __atomic_signal_fence((x += 1, 5));
+    #|  __c11_atomic_thread_fence((x += 1, 5));
+    #|  __c11_atomic_signal_fence((x += 1, 5));
+    #|  return x == 4 ? 42 : x;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_local_pointer_target_initializer_source() -> String {
   let source =
     #|typedef struct TokenString {
