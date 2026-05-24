@@ -8868,6 +8868,96 @@ async test "strict MIR codegen matches parser codegen for aggregate assignment t
 }
 
 ///|
+test "strict MIR codegen exposes aggregate assignment ternary call rvalues to clang callers" {
+  let callee =
+    #|struct Box { int a; int b; };
+    #|int side;
+    #|struct Box make(int tag) {
+    #|  struct Box box;
+    #|  box.a = tag;
+    #|  box.b = 42 - tag;
+    #|  side = side * 10 + tag;
+    #|  return box;
+    #|}
+    #|int pick_false(void) {
+    #|  struct Box slots[2];
+    #|  int i = 0;
+    #|  int cond = 0;
+    #|  side = 0;
+    #|  int value = (slots[i++] = cond ? make(1) : make(2)).a;
+    #|  if (i != 1) return 10 + i;
+    #|  if (side != 2) return side;
+    #|  if (slots[0].b != 40) return slots[0].b;
+    #|  return value + 40;
+    #|}
+    #|int pick_true(void) {
+    #|  struct Box slots[2];
+    #|  int i = 0;
+    #|  int cond = 1;
+    #|  side = 0;
+    #|  int value = (slots[i++] = cond ? make(3) : make(4)).a;
+    #|  if (i != 1) return 20 + i;
+    #|  if (side != 3) return side;
+    #|  if (slots[0].b != 39) return slots[0].b;
+    #|  return value + 39;
+    #|}
+  let driver =
+    #|int pick_false(void);
+    #|int pick_true(void);
+    #|int main(void) {
+    #|  if (pick_false() != 42) return 1;
+    #|  if (pick_true() != 42) return 2;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang aggregate assignment ternary call rvalues" {
+  let caller =
+    #|int pick_false(void);
+    #|int pick_true(void);
+    #|int main(void) {
+    #|  if (pick_false() != 42) return 1;
+    #|  if (pick_true() != 42) return 2;
+    #|  return 42;
+    #|}
+  let callee =
+    #|struct Box { int a; int b; };
+    #|int side;
+    #|struct Box make(int tag) {
+    #|  struct Box box;
+    #|  box.a = tag;
+    #|  box.b = 42 - tag;
+    #|  side = side * 10 + tag;
+    #|  return box;
+    #|}
+    #|int pick_false(void) {
+    #|  struct Box slots[2];
+    #|  int i = 0;
+    #|  int cond = 0;
+    #|  side = 0;
+    #|  int value = (slots[i++] = cond ? make(1) : make(2)).a;
+    #|  if (i != 1) return 10 + i;
+    #|  if (side != 2) return side;
+    #|  if (slots[0].b != 40) return slots[0].b;
+    #|  return value + 40;
+    #|}
+    #|int pick_true(void) {
+    #|  struct Box slots[2];
+    #|  int i = 0;
+    #|  int cond = 1;
+    #|  side = 0;
+    #|  int value = (slots[i++] = cond ? make(3) : make(4)).a;
+    #|  if (i != 1) return 20 + i;
+    #|  if (side != 3) return side;
+    #|  if (slots[0].b != 39) return slots[0].b;
+    #|  return value + 39;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_bitfield_compound_update_source() -> String {
   let source =
     #|struct SymAttr {
