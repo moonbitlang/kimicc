@@ -8523,6 +8523,52 @@ async test "strict MIR codegen matches parser codegen for plain printf builtins"
 }
 
 ///|
+test "strict MIR codegen exposes plain printf builtins to clang callers" {
+  let callee =
+    #|int eval_plain_printf_builtin(void) {
+    #|  char buf[64];
+    #|  int n = __builtin_snprintf(buf, 64, "%s:%05d", "go", 7);
+    #|  if (n != 8) return 1;
+    #|  if (__builtin_strcmp(buf, "go:00007") != 0) return 2;
+    #|  int count = 0;
+    #|  int m = __builtin_sprintf(buf, "%#x|%n%s", 42, &count, "ok");
+    #|  if (m != 7 || count != 5) return 3;
+    #|  int p = __builtin_printf("%s|%d|%d|%d\n", buf, n, count, m);
+    #|  if (p != 14) return 4;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_plain_printf_builtin(void);
+    #|int main(void) {
+    #|  return eval_plain_printf_builtin();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang plain printf builtins" {
+  let caller =
+    #|int eval_plain_printf_builtin_from_clang(void);
+    #|int main(void) {
+    #|  return eval_plain_printf_builtin_from_clang();
+    #|}
+  let callee =
+    #|int eval_plain_printf_builtin_from_clang(void) {
+    #|  char buf[64];
+    #|  int n = __builtin_snprintf(buf, 64, "%s:%05d", "go", 7);
+    #|  if (n != 8) return 1;
+    #|  if (__builtin_strcmp(buf, "go:00007") != 0) return 2;
+    #|  int count = 0;
+    #|  int m = __builtin_sprintf(buf, "%#x|%n%s", 42, &count, "ok");
+    #|  if (m != 7 || count != 5) return 3;
+    #|  int p = __builtin_printf("%s|%d|%d|%d\n", buf, n, count, m);
+    #|  if (p != 14) return 4;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 test "strict MIR codegen executes plain vprintf builtins" {
   assert_eq(
     run_source_strict_mir(strict_mir_plain_vprintf_builtin_source()),
