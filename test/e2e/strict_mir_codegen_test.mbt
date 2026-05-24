@@ -7728,6 +7728,36 @@ async test "strict MIR codegen matches parser codegen for floating direct calls"
 }
 
 ///|
+test "strict MIR codegen exposes floating direct calls to clang callers" {
+  let callee =
+    #|double add(double x, double y) { return x + y; }
+    #|double mix(int a, double b, int c) { return a + b + c; }
+    #|int eval_floating_direct_call(void) {
+    #|  return (int)add(2.25, 3.75) + (int)mix(2, 3.5, 4);
+    #|}
+  let driver =
+    #|int eval_floating_direct_call(void);
+    #|int main(void) {
+    #|  return eval_floating_direct_call();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 15)
+}
+
+///|
+test "strict MIR codegen calls clang floating direct calls" {
+  let caller =
+    #|double add_from_clang(double x, double y);
+    #|double mix_from_clang(int a, double b, int c);
+    #|int main(void) {
+    #|  return (int)add_from_clang(2.25, 3.75) + (int)mix_from_clang(2, 3.5, 4);
+    #|}
+  let callee =
+    #|double add_from_clang(double x, double y) { return x + y; }
+    #|double mix_from_clang(int a, double b, int c) { return a + b + c; }
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 15)
+}
+
+///|
 fn strict_mir_stack_floating_direct_call_source() -> String {
   let source =
     #|double sum9d(double a, double b, double c, double d, double e, double f, double g, double h, double i) {
@@ -7759,6 +7789,46 @@ async test "strict MIR codegen matches parser codegen for stack-passed floating 
 }
 
 ///|
+test "strict MIR codegen exposes stack-passed floating direct calls to clang callers" {
+  let callee =
+    #|double sum9d(double a, double b, double c, double d, double e, double f, double g, double h, double i) {
+    #|  return a + b + c + d + e + f + g + h + i;
+    #|}
+    #|float sum9f(float a, float b, float c, float d, float e, float f, float g, float h, float i) {
+    #|  return a + b + c + d + e + f + g + h + i;
+    #|}
+    #|int eval_stack_floating_direct_call(void) {
+    #|  return (int)sum9d(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0) +
+    #|    (int)sum9f((float)1.0, (float)2.0, (float)3.0, (float)4.0, (float)5.0, (float)6.0, (float)7.0, (float)8.0, (float)9.0);
+    #|}
+  let driver =
+    #|int eval_stack_floating_direct_call(void);
+    #|int main(void) {
+    #|  return eval_stack_floating_direct_call();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 90)
+}
+
+///|
+test "strict MIR codegen calls clang stack-passed floating direct calls" {
+  let caller =
+    #|double sum9d_from_clang(double a, double b, double c, double d, double e, double f, double g, double h, double i);
+    #|float sum9f_from_clang(float a, float b, float c, float d, float e, float f, float g, float h, float i);
+    #|int main(void) {
+    #|  return (int)sum9d_from_clang(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0) +
+    #|    (int)sum9f_from_clang((float)1.0, (float)2.0, (float)3.0, (float)4.0, (float)5.0, (float)6.0, (float)7.0, (float)8.0, (float)9.0);
+    #|}
+  let callee =
+    #|double sum9d_from_clang(double a, double b, double c, double d, double e, double f, double g, double h, double i) {
+    #|  return a + b + c + d + e + f + g + h + i;
+    #|}
+    #|float sum9f_from_clang(float a, float b, float c, float d, float e, float f, float g, float h, float i) {
+    #|  return a + b + c + d + e + f + g + h + i;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 90)
+}
+
+///|
 fn strict_mir_float_direct_and_indirect_call_source() -> String {
   let source =
     #|float addf(float x, float y) { return x + y; }
@@ -7783,6 +7853,40 @@ async test "strict MIR codegen matches parser codegen for float direct and indir
     "strict_mir_float_direct_and_indirect_call_differential",
   )
   assert_eq(result.code, 19)
+}
+
+///|
+test "strict MIR codegen exposes float direct and indirect calls to clang callers" {
+  let callee =
+    #|float addf_from_mir(float x, float y) { return x + y; }
+    #|float mixf_from_mir(int a, float b, int c) { return a + b + c; }
+  let driver =
+    #|float addf_from_mir(float x, float y);
+    #|float mixf_from_mir(int a, float b, int c);
+    #|int main(void) {
+    #|  float (*fp)(float, float) = addf_from_mir;
+    #|  return (int)addf_from_mir((float)2.25, (float)3.75) +
+    #|    (int)mixf_from_mir(2, (float)3.5, 4) +
+    #|    (int)fp((float)1.25, (float)2.75);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 19)
+}
+
+///|
+test "strict MIR codegen calls clang float direct and indirect calls" {
+  let caller =
+    #|float addf_from_clang(float x, float y);
+    #|float mixf_from_clang(int a, float b, int c);
+    #|int main(void) {
+    #|  float (*fp)(float, float) = addf_from_clang;
+    #|  return (int)addf_from_clang((float)2.25, (float)3.75) +
+    #|    (int)mixf_from_clang(2, (float)3.5, 4) +
+    #|    (int)fp((float)1.25, (float)2.75);
+    #|}
+  let callee =
+    #|float addf_from_clang(float x, float y) { return x + y; }
+    #|float mixf_from_clang(int a, float b, int c) { return a + b + c; }
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 19)
 }
 
 ///|
