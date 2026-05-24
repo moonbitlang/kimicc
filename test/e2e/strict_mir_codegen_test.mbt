@@ -8320,6 +8320,46 @@ async test "strict MIR codegen matches parser codegen for declared mixed variadi
 }
 
 ///|
+test "strict MIR codegen exposes declared mixed variadic snprintf to clang callers" {
+  let callee =
+    #|int snprintf(char *buf, unsigned long n, const char *fmt, ...);
+    #|int strcmp(const char *s1, const char *s2);
+    #|int eval_declared_mixed_variadic_snprintf(void) {
+    #|  char buf[64];
+    #|  int n = snprintf(buf, 64, "int=%d double=%.2f", 42, 3.14);
+    #|  if (n != 18) return 1;
+    #|  if (strcmp(buf, "int=42 double=3.14") != 0) return 2;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_declared_mixed_variadic_snprintf(void);
+    #|int main(void) {
+    #|  return eval_declared_mixed_variadic_snprintf();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang declared mixed variadic snprintf" {
+  let caller =
+    #|int eval_declared_mixed_variadic_snprintf_from_clang(void);
+    #|int main(void) {
+    #|  return eval_declared_mixed_variadic_snprintf_from_clang();
+    #|}
+  let callee =
+    #|int snprintf(char *buf, unsigned long n, const char *fmt, ...);
+    #|int strcmp(const char *s1, const char *s2);
+    #|int eval_declared_mixed_variadic_snprintf_from_clang(void) {
+    #|  char buf[64];
+    #|  int n = snprintf(buf, 64, "int=%d double=%.2f", 42, 3.14);
+    #|  if (n != 18) return 1;
+    #|  if (strcmp(buf, "int=42 double=3.14") != 0) return 2;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_checked_printf_side_effect_source() -> String {
   let source =
     #|int main(void) {
