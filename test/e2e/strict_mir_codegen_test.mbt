@@ -9897,6 +9897,41 @@ async test "strict MIR codegen matches parser codegen for dereferenced function 
 }
 
 ///|
+test "strict MIR codegen receives dereferenced function typedef pointer calls from clang callers" {
+  let callee =
+    #|typedef int Callback(void *data, int value);
+    #|int add(void *data, int value) {
+    #|  return *(int*)data + value;
+    #|}
+  let driver =
+    #|typedef int Callback(void *data, int value);
+    #|int add(void *data, int value);
+    #|int main(void) {
+    #|  int base = 5;
+    #|  Callback *fp = add;
+    #|  return (*fp)(&base, 7);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 12)
+}
+
+///|
+test "strict MIR codegen passes dereferenced function typedef pointer calls to clang callees" {
+  let caller =
+    #|typedef int Callback(void *data, int value);
+    #|int add(void *data, int value);
+    #|int main(void) {
+    #|  int base = 5;
+    #|  Callback *fp = add;
+    #|  return (*fp)(&base, 7);
+    #|}
+  let callee =
+    #|int add(void *data, int value) {
+    #|  return *(int*)data + value;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 12)
+}
+
+///|
 fn strict_mir_aggregate_return_call_source_once_source() -> String {
   let source =
     #|struct Pair { long a; long b; };
