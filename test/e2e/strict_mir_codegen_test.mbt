@@ -7446,6 +7446,50 @@ test "strict MIR codegen emits linux x64 int128 va_arg reads" {
 }
 
 ///|
+test "strict MIR codegen executes int128 va_arg reads from clang caller" {
+  let callee =
+    #|typedef __builtin_va_list va_list;
+    #|typedef __int128 i128;
+    #|long read128(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  i128 v = __builtin_va_arg(ap, i128);
+    #|  __builtin_va_end(ap);
+    #|  return tag + (long)v + (long)(v >> 64);
+    #|}
+  let driver =
+    #|typedef __int128 i128;
+    #|long read128(int tag, ...);
+    #|int main(void) {
+    #|  i128 v = ((i128)5 << 64) | 7;
+    #|  return (int)read128(30, v);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen passes int128 variadic args to clang callees" {
+  let caller =
+    #|typedef __int128 i128;
+    #|long read128(int tag, ...);
+    #|int main(void) {
+    #|  i128 v = ((i128)5 << 64) | 7;
+    #|  return (int)read128(30, v);
+    #|}
+  let callee =
+    #|typedef __builtin_va_list va_list;
+    #|typedef __int128 i128;
+    #|long read128(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  i128 v = __builtin_va_arg(ap, i128);
+    #|  __builtin_va_end(ap);
+    #|  return tag + (long)v + (long)(v >> 64);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_va_copy_source() -> String {
   let source =
     #|typedef __builtin_va_list va_list;
