@@ -9826,6 +9826,47 @@ async test "strict MIR codegen matches parser codegen for function typedef point
 }
 
 ///|
+test "strict MIR codegen receives function typedef pointer calls from clang callers" {
+  let callee =
+    #|typedef int Callback(void *data, int value);
+    #|int add(void *data, int value) {
+    #|  return *(int*)data + value;
+    #|}
+  let driver =
+    #|typedef int Callback(void *data, int value);
+    #|struct Hook { Callback *call; void *data; };
+    #|int add(void *data, int value);
+    #|int main(void) {
+    #|  int base = 5;
+    #|  struct Hook hook;
+    #|  hook.call = add;
+    #|  hook.data = &base;
+    #|  return hook.call(hook.data, 7);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 12)
+}
+
+///|
+test "strict MIR codegen passes function typedef pointer calls to clang callees" {
+  let caller =
+    #|typedef int Callback(void *data, int value);
+    #|struct Hook { Callback *call; void *data; };
+    #|int add(void *data, int value);
+    #|int main(void) {
+    #|  int base = 5;
+    #|  struct Hook hook;
+    #|  hook.call = add;
+    #|  hook.data = &base;
+    #|  return hook.call(hook.data, 7);
+    #|}
+  let callee =
+    #|int add(void *data, int value) {
+    #|  return *(int*)data + value;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 12)
+}
+
+///|
 fn strict_mir_dereferenced_function_typedef_pointer_call_source() -> String {
   let source =
     #|typedef int Callback(void *data, int value);
