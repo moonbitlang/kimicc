@@ -8936,6 +8936,62 @@ async test "strict MIR codegen matches parser codegen for checked vprintf format
 }
 
 ///|
+test "strict MIR codegen exposes checked vprintf formatting to clang callers" {
+  let callee =
+    #|typedef __builtin_va_list va_list;
+    #|int write_checked_vfmt(char *buf, unsigned long size, const char *fmt, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, fmt);
+    #|  int n = __builtin___vsnprintf_chk(buf, size, 0, size, fmt, ap);
+    #|  __builtin_va_end(ap);
+    #|  return n;
+    #|}
+    #|int eval_checked_vprintf_formatting(void) {
+    #|  char buf[80];
+    #|  int n = write_checked_vfmt(buf, 80, "%*.*s:%#x:%c:%d", 5, 3, "abcdef", 31, '!', -7);
+    #|  if (n != 15) return 1;
+    #|  if (buf[0] != ' ' || buf[1] != ' ' || buf[2] != 'a' || buf[3] != 'b' || buf[4] != 'c') return 2;
+    #|  if (buf[5] != ':' || buf[6] != '0' || buf[7] != 'x' || buf[8] != '1' || buf[9] != 'f') return 3;
+    #|  if (buf[10] != ':' || buf[11] != '!' || buf[12] != ':' || buf[13] != '-' || buf[14] != '7' || buf[15] != 0) return 4;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_checked_vprintf_formatting(void);
+    #|int main(void) {
+    #|  return eval_checked_vprintf_formatting();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang checked vprintf formatting" {
+  let caller =
+    #|int eval_checked_vprintf_formatting_from_clang(void);
+    #|int main(void) {
+    #|  return eval_checked_vprintf_formatting_from_clang();
+    #|}
+  let callee =
+    #|typedef __builtin_va_list va_list;
+    #|int write_checked_vfmt_from_clang(char *buf, unsigned long size, const char *fmt, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, fmt);
+    #|  int n = __builtin___vsnprintf_chk(buf, size, 0, size, fmt, ap);
+    #|  __builtin_va_end(ap);
+    #|  return n;
+    #|}
+    #|int eval_checked_vprintf_formatting_from_clang(void) {
+    #|  char buf[80];
+    #|  int n = write_checked_vfmt_from_clang(buf, 80, "%*.*s:%#x:%c:%d", 5, 3, "abcdef", 31, '!', -7);
+    #|  if (n != 15) return 1;
+    #|  if (buf[0] != ' ' || buf[1] != ' ' || buf[2] != 'a' || buf[3] != 'b' || buf[4] != 'c') return 2;
+    #|  if (buf[5] != ':' || buf[6] != '0' || buf[7] != 'x' || buf[8] != '1' || buf[9] != 'f') return 3;
+    #|  if (buf[10] != ':' || buf[11] != '!' || buf[12] != ':' || buf[13] != '-' || buf[14] != '7' || buf[15] != 0) return 4;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 async test "strict MIR codegen matches parser codegen for checked floating printf formatting" {
   let source =
     #|extern int printf(const char *, ...);
