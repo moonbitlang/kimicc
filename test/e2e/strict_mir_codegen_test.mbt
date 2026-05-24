@@ -1813,6 +1813,74 @@ async test "strict MIR codegen matches parser codegen for local pointer target i
 }
 
 ///|
+test "strict MIR codegen exposes local pointer target initializer to clang callers" {
+  let callee =
+    #|typedef struct TokenString {
+    #|  int *str;
+    #|  int len;
+    #|  int need_spc;
+    #|  int allocated_len;
+    #|  int last_line_num;
+    #|  int save_line_num;
+    #|  struct TokenString *prev;
+    #|  const int *prev_ptr;
+    #|  char alloc;
+    #|} TokenString;
+    #|
+    #|unsigned long seen;
+    #|
+    #|void *remember(unsigned long n) {
+    #|  seen = n;
+    #|  return (void *)0;
+    #|}
+    #|
+    #|int eval_local_pointer_target_initializer(void) {
+    #|  TokenString *str = remember(sizeof *str);
+    #|  return seen == 56 ? 42 : (int)seen;
+    #|}
+  let driver =
+    #|int eval_local_pointer_target_initializer(void);
+    #|int main(void) {
+    #|  return eval_local_pointer_target_initializer();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang local pointer target initializer" {
+  let caller =
+    #|int eval_local_pointer_target_initializer(void);
+    #|int main(void) {
+    #|  return eval_local_pointer_target_initializer();
+    #|}
+  let callee =
+    #|typedef struct TokenString {
+    #|  int *str;
+    #|  int len;
+    #|  int need_spc;
+    #|  int allocated_len;
+    #|  int last_line_num;
+    #|  int save_line_num;
+    #|  struct TokenString *prev;
+    #|  const int *prev_ptr;
+    #|  char alloc;
+    #|} TokenString;
+    #|
+    #|unsigned long seen;
+    #|
+    #|void *remember(unsigned long n) {
+    #|  seen = n;
+    #|  return (void *)0;
+    #|}
+    #|
+    #|int eval_local_pointer_target_initializer(void) {
+    #|  TokenString *str = remember(sizeof *str);
+    #|  return seen == 56 ? 42 : (int)seen;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_unsigned_int128_limb_multiply_source() -> String {
   let source =
     #|typedef unsigned long js_limb_t;
