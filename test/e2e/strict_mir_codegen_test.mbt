@@ -1294,7 +1294,7 @@ async test "strict MIR codegen matches parser codegen for unsigned int128 limb m
 }
 
 ///|
-test "strict MIR codegen executes unsigned int128 limb divide" {
+fn strict_mir_unsigned_int128_limb_divide_source() -> String {
   let source =
     #|typedef unsigned long js_limb_t;
     #|typedef long js_slimb_t;
@@ -1318,7 +1318,22 @@ test "strict MIR codegen executes unsigned int128 limb divide" {
     #|  if (rem != 1) return 20;
     #|  return 42;
     #|}
+  source
+}
+
+///|
+test "strict MIR codegen executes unsigned int128 limb divide" {
+  let source = strict_mir_unsigned_int128_limb_divide_source()
   assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
+async test "strict MIR codegen matches parser codegen for unsigned int128 limb divide" {
+  let result = run_source_strict_mir_against_parser_codegen(
+    strict_mir_unsigned_int128_limb_divide_source(),
+    "strict_mir_unsigned_int128_limb_divide_differential",
+  )
+  assert_eq(result.code, 42)
 }
 
 ///|
