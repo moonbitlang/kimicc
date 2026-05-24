@@ -3564,6 +3564,48 @@ test "strict MIR codegen passes indirect stack aggregate parameters to clang cal
 }
 
 ///|
+test "strict MIR codegen receives indirect stack aggregate parameters from clang callers" {
+  let callee =
+    #|struct Pair { long a; long b; };
+    #|struct Tiny { char a; short b; };
+    #|struct H { double a[2]; };
+    #|struct Hthree { double a[3]; };
+    #|long sum_pair_stack(long a0, long a1, long a2, long a3, long a4, long a5, long a6, struct Pair p, long z) {
+    #|  return a0 + a1 + a2 + a3 + a4 + a5 + a6 + p.a + p.b + z;
+    #|}
+    #|int sum_tiny_stack(long a0, long a1, long a2, long a3, long a4, long a5, long a6, long a7, struct Tiny t, long z) {
+    #|  return (int)(a0 + a1 + a2 + a3 + a4 + a5 + a6 + a7 + t.a + t.b + z);
+    #|}
+    #|int sum_h_stack(double d0, double d1, double d2, double d3, double d4, double d5, double d6, struct H h, double z) {
+    #|  return (int)(d0 + d1 + d2 + d3 + d4 + d5 + d6 + h.a[0] + h.a[1] + z);
+    #|}
+    #|int sum_h3_stack(double d0, double d1, double d2, double d3, double d4, double d5, struct Hthree h, double z) {
+    #|  return (int)(d0 + d1 + d2 + d3 + d4 + d5 + h.a[0] + h.a[1] + h.a[2] + z);
+    #|}
+    #|int run_indirect(struct Pair p, struct Tiny t, struct H h, struct Hthree hthree) {
+    #|  long (*fp_pair)(long, long, long, long, long, long, long, struct Pair, long) = sum_pair_stack;
+    #|  int (*fp_tiny)(long, long, long, long, long, long, long, long, struct Tiny, long) = sum_tiny_stack;
+    #|  int (*fp_h)(double, double, double, double, double, double, double, struct H, double) = sum_h_stack;
+    #|  int (*fp_hthree)(double, double, double, double, double, double, struct Hthree, double) = sum_h3_stack;
+    #|  return (int)fp_pair(1, 2, 3, 4, 5, 6, 7, p, 9) + fp_tiny(1, 2, 3, 4, 5, 6, 7, 8, t, 9) + fp_h(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, h, 9.0) + fp_hthree(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, hthree, 5.0);
+    #|}
+  let driver =
+    #|struct Pair { long a; long b; };
+    #|struct Tiny { char a; short b; };
+    #|struct H { double a[2]; };
+    #|struct Hthree { double a[3]; };
+    #|int run_indirect(struct Pair p, struct Tiny t, struct H h, struct Hthree hthree);
+    #|int main(void) {
+    #|  struct Pair p = {10, 20};
+    #|  struct Tiny t = {5, 30};
+    #|  struct H h = {{3.0, 4.0}};
+    #|  struct Hthree hthree = {{2.0, 3.0, 4.0}};
+    #|  return run_indirect(p, t, h, hthree);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 226)
+}
+
+///|
 fn strict_mir_large_aggregate_parameter_source() -> String {
   let source =
     #|struct BigArg { long a; long b; long c; long d; };
