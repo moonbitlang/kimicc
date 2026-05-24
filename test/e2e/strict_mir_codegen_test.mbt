@@ -9723,6 +9723,76 @@ async test "strict MIR codegen matches parser codegen for identity-cast aggregat
 }
 
 ///|
+test "strict MIR codegen receives identity-cast aggregate arguments from clang callers" {
+  let callee =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|int observe(Value value) {
+    #|  return value.u.int32 + (int)value.tag;
+    #|}
+  let driver =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|int observe(Value value);
+    #|int main(void) {
+    #|  Value value = (Value){ (ValueUnion){ .int32 = 8 }, 5 };
+    #|  return observe((Value)value);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 13)
+}
+
+///|
+test "strict MIR codegen passes identity-cast aggregate arguments to clang callees" {
+  let caller =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|int observe(Value value);
+    #|int main(void) {
+    #|  Value value = (Value){ (ValueUnion){ .int32 = 8 }, 5 };
+    #|  return observe((Value)value);
+    #|}
+  let callee =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|int observe(Value value) {
+    #|  return value.u.int32 + (int)value.tag;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 13)
+}
+
+///|
 fn strict_mir_function_typedef_pointer_call_source() -> String {
   let source =
     #|typedef int Callback(void *data, int value);
