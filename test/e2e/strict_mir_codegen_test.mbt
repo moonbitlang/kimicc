@@ -1462,6 +1462,50 @@ async test "strict MIR codegen matches parser codegen for frame and return addre
 }
 
 ///|
+test "strict MIR codegen exposes frame and return address builtins to clang callers" {
+  let callee =
+    #|int eval_frame_return_address(void) {
+    #|  int level = 0;
+    #|  void *fa = __builtin_frame_address(level);
+    #|  void *ra = __builtin_return_address(level);
+    #|  if (fa == 0) return 1;
+    #|  if (ra == 0) return 2;
+    #|  level = level + 1;
+    #|  if (__builtin_frame_address(level) != 0) return 3;
+    #|  if (__builtin_return_address(level) != 0) return 4;
+    #|  if (__builtin_extract_return_addr(ra) != ra) return 5;
+    #|  if (__builtin_frob_return_addr(ra) != ra) return 6;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_frame_return_address(void);
+    #|int main(void) {
+    #|  return eval_frame_return_address();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang frame and return address builtins" {
+  let caller =
+    #|int eval_frame_return_address(void);
+    #|int main(void) {
+    #|  return eval_frame_return_address();
+    #|}
+  let callee =
+    #|int eval_frame_return_address(void) {
+    #|  void *fa = __builtin_frame_address(0);
+    #|  void *ra = __builtin_return_address(0);
+    #|  if (fa == 0) return 1;
+    #|  if (ra == 0) return 2;
+    #|  if (__builtin_extract_return_addr(ra) != ra) return 3;
+    #|  if (__builtin_frob_return_addr(ra) != ra) return 4;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_object_size_source() -> String {
   let source =
     #|struct S { int x; char buf[9]; };
