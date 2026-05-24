@@ -7856,6 +7856,40 @@ async test "strict MIR codegen matches parser codegen for float direct and indir
 }
 
 ///|
+test "strict MIR codegen exposes float direct and indirect calls to clang callers" {
+  let callee =
+    #|float addf_from_mir(float x, float y) { return x + y; }
+    #|float mixf_from_mir(int a, float b, int c) { return a + b + c; }
+  let driver =
+    #|float addf_from_mir(float x, float y);
+    #|float mixf_from_mir(int a, float b, int c);
+    #|int main(void) {
+    #|  float (*fp)(float, float) = addf_from_mir;
+    #|  return (int)addf_from_mir((float)2.25, (float)3.75) +
+    #|    (int)mixf_from_mir(2, (float)3.5, 4) +
+    #|    (int)fp((float)1.25, (float)2.75);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 19)
+}
+
+///|
+test "strict MIR codegen calls clang float direct and indirect calls" {
+  let caller =
+    #|float addf_from_clang(float x, float y);
+    #|float mixf_from_clang(int a, float b, int c);
+    #|int main(void) {
+    #|  float (*fp)(float, float) = addf_from_clang;
+    #|  return (int)addf_from_clang((float)2.25, (float)3.75) +
+    #|    (int)mixf_from_clang(2, (float)3.5, 4) +
+    #|    (int)fp((float)1.25, (float)2.75);
+    #|}
+  let callee =
+    #|float addf_from_clang(float x, float y) { return x + y; }
+    #|float mixf_from_clang(int a, float b, int c) { return a + b + c; }
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 19)
+}
+
+///|
 fn strict_mir_floating_indirect_call_source() -> String {
   let source =
     #|double add(double x, double y) { return x + y; }
