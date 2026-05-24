@@ -1614,6 +1614,47 @@ async test "strict MIR codegen matches parser codegen for constant query builtin
 }
 
 ///|
+test "strict MIR codegen exposes constant query builtins to clang callers" {
+  let callee =
+    #|int eval_constant_query(void) {
+    #|  int side = 0;
+    #|  if (!__builtin_constant_p(1 + 2)) return 1;
+    #|  if (__builtin_constant_p(side)) return 2;
+    #|  if (__builtin_constant_p(side += 1)) return 3;
+    #|  if (side != 0) return 4;
+    #|  if (__builtin_constant_p(1 / 0)) return 5;
+    #|  if (__builtin_flt_rounds() != 1) return 6;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_constant_query(void);
+    #|int main(void) {
+    #|  return eval_constant_query();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang constant query builtins" {
+  let caller =
+    #|int eval_constant_query(void);
+    #|int main(void) {
+    #|  return eval_constant_query();
+    #|}
+  let callee =
+    #|int eval_constant_query(void) {
+    #|  int side = 0;
+    #|  if (!__builtin_constant_p(1 + 2)) return 1;
+    #|  if (__builtin_constant_p(side)) return 2;
+    #|  if (__builtin_constant_p(side += 1)) return 3;
+    #|  if (side != 0) return 4;
+    #|  if (__builtin_flt_rounds() != 1) return 5;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_sync_atomic_fence_source() -> String {
   let source =
     #|int main(void) {
