@@ -8640,6 +8640,46 @@ async test "strict MIR codegen matches parser codegen for comma aggregate assign
 }
 
 ///|
+test "strict MIR codegen exposes comma aggregate assignments to clang callers" {
+  let callee =
+    #|struct S { int a; int b; };
+    #|struct S values[2];
+    #|int swap_values(void) {
+    #|  struct S tmp;
+    #|  values[0].a = 1;
+    #|  values[1].a = 2;
+    #|  tmp = values[0], values[0] = values[1], values[1] = tmp;
+    #|  return values[0].a * 10 + values[1].a;
+    #|}
+  let driver =
+    #|int swap_values(void);
+    #|int main(void) {
+    #|  return swap_values();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 21)
+}
+
+///|
+test "strict MIR codegen calls clang comma aggregate assignments" {
+  let caller =
+    #|int swap_values(void);
+    #|int main(void) {
+    #|  return swap_values();
+    #|}
+  let callee =
+    #|struct S { int a; int b; };
+    #|struct S values[2];
+    #|int swap_values(void) {
+    #|  struct S tmp;
+    #|  values[0].a = 1;
+    #|  values[1].a = 2;
+    #|  tmp = values[0], values[0] = values[1], values[1] = tmp;
+    #|  return values[0].a * 10 + values[1].a;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 21)
+}
+
+///|
 fn strict_mir_aggregate_assignment_rvalue_member_read_source() -> String {
   let source =
     #|struct S { int x; int y; };
