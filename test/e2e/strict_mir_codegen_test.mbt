@@ -567,6 +567,79 @@ async test "strict MIR codegen matches parser codegen for alloca aggregate cross
 }
 
 ///|
+test "strict MIR codegen updates aggregate pointer memory from clang callers" {
+  let callee =
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|void fill_pair(struct Pair *p) {
+    #|  p[0].a = 11;
+    #|  p[0].b = 2.0;
+    #|  p[0].tag = 5;
+    #|  p[1] = p[0];
+    #|}
+    #|int observe_pair(struct Pair *p) {
+    #|  if (p[0].a != 11 || (int)(p[0].b * 10.0) != 20 || p[0].tag != 5) return 1;
+    #|  if (p[1].a != 11 || (int)(p[1].b * 10.0) != 20 || p[1].tag != 5) return 2;
+    #|  return p[0].a + p[1].a + (int)(p[0].b * 5.0) + (int)(p[1].b * 5.0);
+    #|}
+  let driver =
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|void fill_pair(struct Pair *p);
+    #|int observe_pair(struct Pair *p);
+    #|int main(void) {
+    #|  struct Pair p[2] = {0};
+    #|  fill_pair(p);
+    #|  return observe_pair(p);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen passes alloca aggregate pointers to clang callees" {
+  let caller =
+    #|typedef unsigned long size_t;
+    #|extern void *memset(void *, int, size_t);
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|void fill_pair(struct Pair *p);
+    #|int observe_pair(struct Pair *p);
+    #|int main(void) {
+    #|  struct Pair *p = __builtin_alloca(sizeof(struct Pair) * 2);
+    #|  memset(p, 0, sizeof(struct Pair) * 2);
+    #|  fill_pair(p);
+    #|  return observe_pair(p);
+    #|}
+  let callee =
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|void fill_pair(struct Pair *p) {
+    #|  p[0].a = 11;
+    #|  p[0].b = 2.0;
+    #|  p[0].tag = 5;
+    #|  p[1] = p[0];
+    #|}
+    #|int observe_pair(struct Pair *p) {
+    #|  if (p[0].a != 11 || (int)(p[0].b * 10.0) != 20 || p[0].tag != 5) return 1;
+    #|  if (p[1].a != 11 || (int)(p[1].b * 10.0) != 20 || p[1].tag != 5) return 2;
+    #|  return p[0].a + p[1].a + (int)(p[0].b * 5.0) + (int)(p[1].b * 5.0);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_alloca_aggregate_indirect_call_source() -> String {
   let source =
     #|typedef unsigned long size_t;
