@@ -1473,6 +1473,23 @@ test "strict MIR codegen returns int128 values to clang callers" {
 }
 
 ///|
+test "strict MIR codegen receives int128 return values from clang callees" {
+  let caller =
+    #|typedef __int128 i128;
+    #|i128 make_from_clang(long hi, unsigned long lo);
+    #|int main(void) {
+    #|  i128 v = make_from_clang(5, 7);
+    #|  return (int)((long)v + (long)(v >> 64) + 30);
+    #|}
+  let callee =
+    #|typedef __int128 i128;
+    #|i128 make_from_clang(long hi, unsigned long lo) {
+    #|  return ((i128)hi << 64) | lo;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_implicit_external_scalar_call_arguments_source() -> String {
   let source =
     #|int main(void) {
