@@ -7672,6 +7672,90 @@ async test "strict MIR codegen matches parser codegen for Darwin long double byt
 }
 
 ///|
+test "strict MIR codegen exposes Darwin long double byte memory to clang callers" {
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *memcpy(void *, const void *, size_t);
+    #|extern void *memmove(void *, const void *, size_t);
+    #|extern void *memset(void *, int, size_t);
+    #|struct LDBox { char tag; long double value; };
+    #|static long double global_ld = 8.5L;
+    #|static struct LDBox global_box;
+    #|int eval_long_double_byte_memory(void) {
+    #|  long double x = 1.25L;
+    #|  long double y = 0.0L;
+    #|  long double z = -4.5L;
+    #|  if (memcpy(&y, &x, sizeof(y)) != &y) return 1;
+    #|  if ((int)(y * 4.0L) != 5) return 2;
+    #|  if (memmove(&z, &global_ld, sizeof(z)) != &z) return 3;
+    #|  if ((int)(z * 2.0L) != 17) return 4;
+    #|  if (memset(&z, 0, sizeof(z)) != &z) return 5;
+    #|  if ((int)z != 0) return 6;
+    #|  long double src[2] = {2.5L, 3.5L};
+    #|  long double dst[2] = {0.0L, 0.0L};
+    #|  if (memcpy(dst, src, sizeof(src)) != dst) return 7;
+    #|  if ((int)(dst[0] * 10.0L) != 25) return 8;
+    #|  if ((int)(dst[1] * 10.0L) != 35) return 9;
+    #|  struct LDBox box;
+    #|  memset(&box, 0, sizeof(box));
+    #|  box.tag = 4;
+    #|  box.value = 4.75L;
+    #|  if (memcpy(&global_box, &box, sizeof(box)) != &global_box) return 10;
+    #|  if (global_box.tag != 4) return 11;
+    #|  if ((int)(global_box.value * 4.0L) != 19) return 12;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_long_double_byte_memory(void);
+    #|int main(void) {
+    #|  return eval_long_double_byte_memory();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang Darwin long double byte memory" {
+  let caller =
+    #|int eval_long_double_byte_memory_from_clang(void);
+    #|int main(void) {
+    #|  return eval_long_double_byte_memory_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *memcpy(void *, const void *, size_t);
+    #|extern void *memmove(void *, const void *, size_t);
+    #|extern void *memset(void *, int, size_t);
+    #|struct LDBox { char tag; long double value; };
+    #|static long double global_ld = 8.5L;
+    #|static struct LDBox global_box;
+    #|int eval_long_double_byte_memory_from_clang(void) {
+    #|  long double x = 1.25L;
+    #|  long double y = 0.0L;
+    #|  long double z = -4.5L;
+    #|  if (memcpy(&y, &x, sizeof(y)) != &y) return 1;
+    #|  if ((int)(y * 4.0L) != 5) return 2;
+    #|  if (memmove(&z, &global_ld, sizeof(z)) != &z) return 3;
+    #|  if ((int)(z * 2.0L) != 17) return 4;
+    #|  if (memset(&z, 0, sizeof(z)) != &z) return 5;
+    #|  if ((int)z != 0) return 6;
+    #|  long double src[2] = {2.5L, 3.5L};
+    #|  long double dst[2] = {0.0L, 0.0L};
+    #|  if (memcpy(dst, src, sizeof(src)) != dst) return 7;
+    #|  if ((int)(dst[0] * 10.0L) != 25) return 8;
+    #|  if ((int)(dst[1] * 10.0L) != 35) return 9;
+    #|  struct LDBox box;
+    #|  memset(&box, 0, sizeof(box));
+    #|  box.tag = 4;
+    #|  box.value = 4.75L;
+    #|  if (memcpy(&global_box, &box, sizeof(box)) != &global_box) return 10;
+    #|  if (global_box.tag != 4) return 11;
+    #|  if ((int)(global_box.value * 4.0L) != 19) return 12;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_floating_unary_operators_source() -> String {
   let source =
     #|int main(void) {
