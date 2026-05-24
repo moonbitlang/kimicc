@@ -7398,6 +7398,48 @@ async test "strict MIR codegen matches parser codegen for scalar va_arg reads" {
 }
 
 ///|
+test "strict MIR codegen executes scalar va_arg reads from clang caller" {
+  let callee =
+    #|typedef __builtin_va_list va_list;
+    #|int read_variadic(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  int a = __builtin_va_arg(ap, int);
+    #|  long long b = __builtin_va_arg(ap, long long);
+    #|  double c = __builtin_va_arg(ap, double);
+    #|  __builtin_va_end(ap);
+    #|  return tag + a + (int)b + (int)c;
+    #|}
+  let driver =
+    #|int read_variadic(int tag, ...);
+    #|int main(void) {
+    #|  return read_variadic(4, 10, 20LL, 3.5);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 37)
+}
+
+///|
+test "strict MIR codegen passes scalar variadic args to clang callees" {
+  let caller =
+    #|int read_variadic(int tag, ...);
+    #|int main(void) {
+    #|  return read_variadic(4, 10, 20LL, 3.5);
+    #|}
+  let callee =
+    #|typedef __builtin_va_list va_list;
+    #|int read_variadic(int tag, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, tag);
+    #|  int a = __builtin_va_arg(ap, int);
+    #|  long long b = __builtin_va_arg(ap, long long);
+    #|  double c = __builtin_va_arg(ap, double);
+    #|  __builtin_va_end(ap);
+    #|  return tag + a + (int)b + (int)c;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 37)
+}
+
+///|
 fn strict_mir_int128_va_arg_source() -> String {
   let source =
     #|typedef __builtin_va_list va_list;
