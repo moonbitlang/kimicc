@@ -8991,6 +8991,58 @@ async test "strict MIR codegen matches parser codegen for bitfield compound upda
 }
 
 ///|
+test "strict MIR codegen applies bitfield compound updates from clang callers" {
+  let callee =
+    #|struct SymAttr {
+    #|  unsigned short aligned : 5, packed : 1, weak : 1, visibility : 2;
+    #|};
+    #|int merge_attrs(struct SymAttr *a, struct SymAttr *b) {
+    #|  a->packed |= b->packed;
+    #|  a->weak |= b->weak;
+    #|  return a->packed + 2 * a->weak;
+    #|}
+  let driver =
+    #|struct SymAttr {
+    #|  unsigned short aligned : 5, packed : 1, weak : 1, visibility : 2;
+    #|};
+    #|int merge_attrs(struct SymAttr *a, struct SymAttr *b);
+    #|int main(void) {
+    #|  struct SymAttr a = {0};
+    #|  struct SymAttr b = {0};
+    #|  b.packed = 1;
+    #|  b.weak = 1;
+    #|  return merge_attrs(&a, &b);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 3)
+}
+
+///|
+test "strict MIR codegen passes bitfield compound update state to clang callees" {
+  let caller =
+    #|struct SymAttr {
+    #|  unsigned short aligned : 5, packed : 1, weak : 1, visibility : 2;
+    #|};
+    #|int merge_attrs(struct SymAttr *a, struct SymAttr *b);
+    #|int main(void) {
+    #|  struct SymAttr a = {0};
+    #|  struct SymAttr b = {0};
+    #|  b.packed = 1;
+    #|  b.weak = 1;
+    #|  return merge_attrs(&a, &b);
+    #|}
+  let callee =
+    #|struct SymAttr {
+    #|  unsigned short aligned : 5, packed : 1, weak : 1, visibility : 2;
+    #|};
+    #|int merge_attrs(struct SymAttr *a, struct SymAttr *b) {
+    #|  a->packed |= b->packed;
+    #|  a->weak |= b->weak;
+    #|  return a->packed + 2 * a->weak;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 3)
+}
+
+///|
 fn strict_mir_floating_comma_store_source() -> String {
   let source =
     #|union U { float f; unsigned u; };
