@@ -138,6 +138,54 @@ async fn run_source_direct_object_against_clang_baseline(
 }
 
 ///|
+async fn run_source_strict_mir_against_parser_codegen(
+  source : String,
+  tag : String,
+) -> CommandResult {
+  let parser_asm_path = temp_file_path(tag + "_parser_codegen", source, ".s")
+  let strict_asm_path = temp_file_path(tag + "_strict_mir", source, ".s")
+  let parser_bin = temp_file_path(tag + "_parser_codegen", source, "")
+  let strict_bin = temp_file_path(tag + "_strict_mir", source, "")
+  write_text_file(parser_asm_path, compile(source))
+  write_text_file(
+    strict_asm_path,
+    compile_source_to_strict_mir_assembly(source),
+  )
+  run_command_checked(
+    "clang -o " + shell_quote(parser_bin) + " " + shell_quote(parser_asm_path),
+    "link parser codegen differential " + tag,
+  )
+  run_command_checked(
+    "clang -o " + shell_quote(strict_bin) + " " + shell_quote(strict_asm_path),
+    "link strict MIR differential " + tag,
+  )
+  let parser_codegen = run_command_capture(
+    shell_quote(parser_bin),
+    tag + "_parser_codegen_run",
+  )
+  let strict_mir = run_command_capture(
+    shell_quote(strict_bin),
+    tag + "_strict_mir_run",
+  )
+  if parser_codegen.code != strict_mir.code ||
+    parser_codegen.output != strict_mir.output {
+    abort(
+      "Strict MIR/parser codegen differential mismatch for " +
+      tag +
+      ":\nparser codegen code=" +
+      parser_codegen.code.to_string() +
+      "\nparser codegen output:\n" +
+      parser_codegen.output +
+      "\nstrict MIR code=" +
+      strict_mir.code.to_string() +
+      "\nstrict MIR output:\n" +
+      strict_mir.output,
+    )
+  }
+  strict_mir
+}
+
+///|
 priv struct CommandResult {
   code : Int
   output : String

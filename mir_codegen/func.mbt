@@ -43,8 +43,3 @@ fn Codegen::alloc_local(self : Codegen, name : String, ty : @ctype.Type) -> Int 
   self.var_types[name] = ty
   offset
 }
-
-///|
-fn compound_literal_local_name(id : Int) -> String {
-  "__kimicc_compound_literal_" + id.to_string()
-}

@@ -633,12 +633,7 @@ fn Parser::parse_static_initializer(
     self.advance()
     if self.token == LBrace {
       let init_exprs = self.parse_brace_init_exprs()
-      let init_count = initializer_element_count(init_exprs)
-      let final_ty = match ty {
-        Array(elem_ty, 0) => Type::Array(elem_ty, init_count)
-        other => other
-      }
-      (final_ty, Some(Array(init_exprs)))
+      global_brace_initializer_for_type(ty, init_exprs)
     } else {
       let expr = self.parse_assign()
       match (ty, expr) {
@@ -661,6 +656,21 @@ fn Parser::parse_static_initializer(
 }
 
 ///|
+fn global_brace_initializer_for_type(
+  ty : Type,
+  init_exprs : Array[Expr],
+) -> (Type, GlobalInit?) {
+  match local_init_core_type(ty) {
+    Struct(_) | Union(_) | Array(_, _) => {
+      let init_count = initializer_element_count(init_exprs)
+      let final_ty = local_init_infer_array_size(ty, init_count)
+      (final_ty, Some(Array(init_exprs)))
+    }
+    _ => (ty, Some(Scalar(local_init_scalar_brace_expr(init_exprs))))
+  }
+}
+
+///|
 fn find_struct_init_field_index(fields : Array[Param], name : String) -> Int {
   for i = 0; i < fields.length(); i = i + 1 {
     if fields[i].name == name {
@@ -672,19 +682,12 @@ fn find_struct_init_field_index(fields : Array[Param], name : String) -> Int {
 
 ///|
 fn local_init_core_type(ty : Type) -> Type {
-  match ty {
-    Atomic(inner) | Aligned(inner, _) => local_init_core_type(inner)
-    _ => ty
-  }
+  ty.core_type()
 }
 
 ///|
 fn local_init_array_elem_type(ty : Type) -> Type? {
-  match ty {
-    Array(elem, _) => Some(elem)
-    Atomic(inner) | Aligned(inner, _) => local_init_array_elem_type(inner)
-    _ => None
-  }
+  ty.array_element()
 }
 
 ///|
@@ -695,6 +698,26 @@ fn local_init_infer_array_size(ty : Type, count : Int) -> Type {
     Aligned(inner, align) =>
       Aligned(local_init_infer_array_size(inner, count), align)
     _ => ty
+  }
+}
+
+///|
+fn local_init_scalar_expr(expr : Expr) -> Expr {
+  match expr {
+    Array(values) => local_init_scalar_brace_expr(values)
+    DesignatedField(_, value)
+    | DesignatedIndex(_, value)
+    | DesignatedRange(_, _, value) => local_init_scalar_expr(value)
+    _ => expr
+  }
+}
+
+///|
+fn local_init_scalar_brace_expr(init_exprs : Array[Expr]) -> Expr {
+  if init_exprs.length() == 0 {
+    Number(0)
+  } else {
+    local_init_scalar_expr(init_exprs[0])
   }
 }
 
@@ -760,7 +783,10 @@ fn Parser::push_struct_init_assignments(
         ])
       (Struct(_) | Union(_), Number(0)) => ()
       (Array(_, _), Number(0)) => ()
-      _ => stmts.push(ExprStmt(Assign(field_target, value)))
+      _ =>
+        stmts.push(
+          ExprStmt(Assign(field_target, local_init_scalar_expr(value))),
+        )
     }
   }
 }
@@ -813,7 +839,7 @@ fn Parser::push_array_init_assignments_at(
           self.push_array_init_assignments_at(stmts, elem, elem_ty, [value])
         (Struct(_) | Union(_), Number(0)) => ()
         (Array(_, _), Number(0)) => ()
-        _ => stmts.push(ExprStmt(Assign(elem, value)))
+        _ => stmts.push(ExprStmt(Assign(elem, local_init_scalar_expr(value))))
       }
     }
   }
@@ -1017,29 +1043,39 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
     self.advance()
     if self.token == LBrace {
       // For struct/union types, lower brace initializers into field assignments.
-      let is_struct = match local_init_core_type(decl_ty) {
-        Struct(_) | Union(_) => true
-        _ => false
-      }
-      if is_struct {
-        // Parse brace initializer expressions and create field assignments
-        let init_exprs = self.parse_brace_init_exprs()
-        stmts.push(VarDecl(decl_ty, decl.name, Some(Number(0))))
-        self.push_struct_init_assignments(
-          stmts,
-          Var(decl.name),
-          decl_ty,
-          init_exprs,
-        )
-        decl_ty
-      } else {
-        let init_exprs = self.parse_brace_init_exprs()
-        let init_count = initializer_element_count(init_exprs)
-        // Update array type if size was inferred
-        let ty = local_init_infer_array_size(decl_ty, init_count)
-        stmts.push(VarDecl(ty, decl.name, Some(Number(0))))
-        self.push_array_init_assignments(stmts, decl.name, ty, init_exprs)
-        ty
+      match local_init_core_type(decl_ty) {
+        Struct(_) | Union(_) => {
+          // Parse brace initializer expressions and create field assignments
+          let init_exprs = self.parse_brace_init_exprs()
+          stmts.push(VarDecl(decl_ty, decl.name, Some(Number(0))))
+          self.push_struct_init_assignments(
+            stmts,
+            Var(decl.name),
+            decl_ty,
+            init_exprs,
+          )
+          decl_ty
+        }
+        Array(_, _) => {
+          let init_exprs = self.parse_brace_init_exprs()
+          let init_count = initializer_element_count(init_exprs)
+          // Update array type if size was inferred
+          let ty = local_init_infer_array_size(decl_ty, init_count)
+          stmts.push(VarDecl(ty, decl.name, Some(Number(0))))
+          self.push_array_init_assignments(stmts, decl.name, ty, init_exprs)
+          ty
+        }
+        _ => {
+          let init_exprs = self.parse_brace_init_exprs()
+          stmts.push(
+            VarDecl(
+              decl_ty,
+              decl.name,
+              Some(local_init_scalar_brace_expr(init_exprs)),
+            ),
+          )
+          decl_ty
+        }
       }
     } else {
       let expr = self.parse_assign()
@@ -1095,31 +1131,42 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
     if self.token == Assign {
       self.advance()
       if self.token == LBrace {
-        let is_struct = match local_init_core_type(extra_decl_ty) {
-          Struct(_) | Union(_) => true
-          _ => false
-        }
-        if is_struct {
-          stmts.push(VarDecl(extra_decl_ty, extra_decl.name, Some(Number(0))))
-          let init_exprs = self.parse_brace_init_exprs()
-          self.push_struct_init_assignments(
-            stmts,
-            Var(extra_decl.name),
-            extra_decl_ty,
-            init_exprs,
-          )
-        } else {
-          let init_exprs = self.parse_brace_init_exprs()
-          let init_count = initializer_element_count(init_exprs)
-          let extra_ty = local_init_infer_array_size(extra_decl_ty, init_count)
-          remembered_extra_ty = extra_ty
-          stmts.push(VarDecl(extra_ty, extra_decl.name, Some(Number(0))))
-          self.push_array_init_assignments(
-            stmts,
-            extra_decl.name,
-            extra_ty,
-            init_exprs,
-          )
+        match local_init_core_type(extra_decl_ty) {
+          Struct(_) | Union(_) => {
+            stmts.push(VarDecl(extra_decl_ty, extra_decl.name, Some(Number(0))))
+            let init_exprs = self.parse_brace_init_exprs()
+            self.push_struct_init_assignments(
+              stmts,
+              Var(extra_decl.name),
+              extra_decl_ty,
+              init_exprs,
+            )
+          }
+          Array(_, _) => {
+            let init_exprs = self.parse_brace_init_exprs()
+            let init_count = initializer_element_count(init_exprs)
+            let extra_ty = local_init_infer_array_size(
+              extra_decl_ty, init_count,
+            )
+            remembered_extra_ty = extra_ty
+            stmts.push(VarDecl(extra_ty, extra_decl.name, Some(Number(0))))
+            self.push_array_init_assignments(
+              stmts,
+              extra_decl.name,
+              extra_ty,
+              init_exprs,
+            )
+          }
+          _ => {
+            let init_exprs = self.parse_brace_init_exprs()
+            stmts.push(
+              VarDecl(
+                extra_decl_ty,
+                extra_decl.name,
+                Some(local_init_scalar_brace_expr(init_exprs)),
+              ),
+            )
+          }
         }
       } else {
         let expr = self.parse_assign()

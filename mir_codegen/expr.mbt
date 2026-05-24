@@ -1,9 +1,6 @@
 ///|
 fn peel_aligned_type(ty : @ctype.Type) -> @ctype.Type {
-  match ty {
-    Aligned(inner, _) => peel_aligned_type(inner)
-    _ => ty
-  }
+  ty.without_alignment()
 }
 
 ///|
@@ -16,18 +13,12 @@ fn pointer_or_array_element_type(ty : @ctype.Type) -> @ctype.Type? {
 
 ///|
 fn is_unsigned_integer_type(ty : @ctype.Type) -> Bool {
-  match peel_aligned_type(ty) {
-    Bool | UChar | UShort | UInt | ULong | ULongLong | UInt128 => true
-    _ => false
-  }
+  ty.const_is_unsigned()
 }
 
 ///|
 fn is_int128_type(ty : @ctype.Type) -> Bool {
-  match peel_aligned_type(ty) {
-    SInt128 | UInt128 => true
-    _ => false
-  }
+  ty.is_int128()
 }
 
 ///|
@@ -119,61 +110,7 @@ fn Codegen::emit_scalar_conversion_to(self : Codegen, ty : @ctype.Type) -> Unit 
 
 ///|
 fn unary_integer_result_type(ty : @ctype.Type) -> @ctype.Type {
-  match peel_aligned_type(ty) {
-    Bool | SChar | UChar | SShort | UShort => SInt
-    core => core
-  }
-}
-
-///|
-fn integer_rank(ty : @ctype.Type) -> Int {
-  match peel_aligned_type(ty) {
-    Bool | SChar | UChar => 1
-    SShort | UShort => 2
-    SInt | UInt => 3
-    SLong | ULong => 4
-    SLongLong | ULongLong => 5
-    SInt128 | UInt128 => 6
-    _ => 0
-  }
-}
-
-///|
-fn unsigned_type_for_rank(rank : Int) -> @ctype.Type {
-  if rank >= 6 {
-    UInt128
-  } else if rank == 5 {
-    ULongLong
-  } else if rank == 4 {
-    ULong
-  } else {
-    UInt
-  }
-}
-
-///|
-fn signed_type_for_rank(rank : Int) -> @ctype.Type {
-  if rank >= 6 {
-    SInt128
-  } else if rank == 5 {
-    SLongLong
-  } else if rank == 4 {
-    SLong
-  } else {
-    SInt
-  }
-}
-
-///|
-fn integer_width_bits(ty : @ctype.Type) -> Int {
-  match peel_aligned_type(ty) {
-    Bool | SChar | UChar => 8
-    SShort | UShort => 16
-    SInt | UInt => 32
-    SLong | ULong | SLongLong | ULongLong => 64
-    SInt128 | UInt128 => 128
-    _ => 0
-  }
+  ty.integer_promote()
 }
 
 ///|
@@ -190,63 +127,7 @@ fn integer_common_type(
   lhs_ty : @ctype.Type,
   rhs_ty : @ctype.Type,
 ) -> @ctype.Type {
-  let lhs_ty = unary_integer_result_type(lhs_ty)
-  let rhs_ty = unary_integer_result_type(rhs_ty)
-  if lhs_ty == rhs_ty {
-    return lhs_ty
-  }
-  let lhs_unsigned = is_unsigned_integer_type(lhs_ty)
-  let rhs_unsigned = is_unsigned_integer_type(rhs_ty)
-  let lhs_rank = integer_rank(lhs_ty)
-  let rhs_rank = integer_rank(rhs_ty)
-  if lhs_unsigned == rhs_unsigned {
-    let rank = if lhs_rank > rhs_rank { lhs_rank } else { rhs_rank }
-    if lhs_unsigned {
-      unsigned_type_for_rank(rank)
-    } else {
-      signed_type_for_rank(rank)
-    }
-  } else {
-    let unsigned_ty = if lhs_unsigned { lhs_ty } else { rhs_ty }
-    let signed_ty = if lhs_unsigned { rhs_ty } else { lhs_ty }
-    let unsigned_rank = integer_rank(unsigned_ty)
-    let signed_rank = integer_rank(signed_ty)
-    if unsigned_rank >= signed_rank {
-      unsigned_ty
-    } else if integer_width_bits(signed_ty) > integer_width_bits(unsigned_ty) {
-      signed_ty
-    } else {
-      unsigned_type_for_rank(signed_rank)
-    }
-  }
-}
-
-///|
-fn overflow_builtin_operator(name : String) -> String? {
-  match name {
-    "__builtin_add_overflow"
-    | "__builtin_sadd_overflow"
-    | "__builtin_saddl_overflow"
-    | "__builtin_saddll_overflow"
-    | "__builtin_uadd_overflow"
-    | "__builtin_uaddl_overflow"
-    | "__builtin_uaddll_overflow" => Some("+")
-    "__builtin_sub_overflow"
-    | "__builtin_ssub_overflow"
-    | "__builtin_ssubl_overflow"
-    | "__builtin_ssubll_overflow"
-    | "__builtin_usub_overflow"
-    | "__builtin_usubl_overflow"
-    | "__builtin_usubll_overflow" => Some("-")
-    "__builtin_mul_overflow"
-    | "__builtin_smul_overflow"
-    | "__builtin_smull_overflow"
-    | "__builtin_smulll_overflow"
-    | "__builtin_umul_overflow"
-    | "__builtin_umull_overflow"
-    | "__builtin_umulll_overflow" => Some("*")
-    _ => None
-  }
+  @ctype.integer_common_type(lhs_ty, rhs_ty)
 }
 
 ///|

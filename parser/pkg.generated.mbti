@@ -7,8 +7,6 @@ import {
 }
 
 // Values
-pub fn fold_const(Expr) -> Int64?
-
 pub fn parse(String) -> Program
 
 pub fn parse_for_target(String, @target.Target) -> Program

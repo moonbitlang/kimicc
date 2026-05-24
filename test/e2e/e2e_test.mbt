@@ -115,9 +115,11 @@ async test "e2e MIR body no-op builtins" {
   let source =
     #|int main(void) {
     #|  int side = 0;
+    #|  char buf[16];
     #|  __builtin_prefetch((void *)(long)(side += 1), 0, 0);
+    #|  __builtin___clear_cache(buf + (side += 2), buf + (side += 4));
     #|  __builtin_assume(side += 10);
-    #|  return side + 41;
+    #|  return side + 35;
     #|}
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")
@@ -2820,6 +2822,21 @@ async test "__builtin_alloca with variable size" {
 }
 
 ///|
+async test "__builtin_alloca_with_align" {
+  let source =
+    #|int main() {
+    #|  int n = 5;
+    #|  char *p = __builtin_alloca_with_align(n += 3, 256);
+    #|  p[0] = 40;
+    #|  p[7] = 2;
+    #|  if ((((unsigned long)p) & 31ul) != 0) return 1;
+    #|  return p[0] + p[7] + (n == 8 ? 0 : 2);
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "__builtin_constant_p" {
   let source =
     #|int main() {
@@ -2827,6 +2844,10 @@ async test "__builtin_constant_p" {
     #|  if (__builtin_constant_p(x)) return 1;
     #|  if (!__builtin_constant_p(1 + 2)) return 2;
     #|  if (!__builtin_constant_p(__builtin_bswap32(0x01020304u))) return 3;
+    #|  if (!__builtin_constant_p(__builtin_align_up(33, 16))) return 4;
+    #|  if (!__builtin_constant_p(__builtin_rotateleft32(0x12345678u, 8))) return 5;
+    #|  if (!__builtin_constant_p(__builtin_abs(-7))) return 6;
+    #|  if (!__builtin_constant_p(__builtin_flt_rounds())) return 7;
     #|  return 0;
     #|}
   let exit_code = run_source_async(source)
@@ -2986,4 +3007,29 @@ async test "fp builtins compiles" {
     #|int main() { return 0; }
   let exit_code = run_source_async(source)
   inspect(exit_code, content="0")
+}
+
+///|
+async test "fp builtin comparisons and copysign preserve ordered semantics and side effects" {
+  let source =
+    #|int main(void) {
+    #|  double zero = 0.0;
+    #|  double one = 1.0;
+    #|  double two = 2.0;
+    #|  double nanv = zero / zero;
+    #|  int side = 0;
+    #|  if (__builtin_islessgreater(nanv, one)) return 1;
+    #|  if (!__builtin_islessgreater(one, two)) return 2;
+    #|  if (!__builtin_islessgreater((side += 1, one), (side += 2, two))) return 3;
+    #|  if (side != 3) return 4;
+    #|  if ((int)__builtin_copysign((side += 4, 5.0), (side += 8, zero - one)) != -5) return 5;
+    #|  if (side != 15) return 6;
+    #|  float fmag = 4.0f;
+    #|  float fneg = 0.0f - 1.0f;
+    #|  if ((int)__builtin_copysignf((side += 16, fmag), (side += 32, fneg)) != -4) return 7;
+    #|  if (side != 63) return 8;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
 }

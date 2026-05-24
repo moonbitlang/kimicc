@@ -4,3 +4,5 @@ _build/
 .moonagent/
 test/debug_ast.mbt
 testdir/
+-.s
+a.out

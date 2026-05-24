@@ -1219,6 +1219,42 @@ test "parse array initializer with expression element" {
 }
 
 ///|
+test "parse scalar brace initializer values" {
+  let source =
+    #|int g = {42};
+    #|int main() {
+    #|  int x = {19}, y = {{23}}, a[2] = {{5}, {37}};
+    #|  return g + x + y + a[0] + a[1];
+    #|}
+  let prog = @parser.parse(source)
+  match prog.globals[0].init {
+    Some(Scalar(Number(42))) => ()
+    _ => fail("Expected scalar global brace initializer")
+  }
+  match prog.decls[0].body {
+    Some(Compound([StmtList(inner), Return(Some(_))])) => {
+      match inner[0] {
+        VarDecl(SInt, "x", Some(Number(19))) => ()
+        _ => fail("Expected scalar local brace initializer")
+      }
+      match inner[1] {
+        VarDecl(SInt, "y", Some(Number(23))) => ()
+        _ => fail("Expected nested scalar local brace initializer")
+      }
+      match inner[3] {
+        ExprStmt(Assign(ArrayAccess(Var("a"), Number(0)), Number(5))) => ()
+        _ => fail("Expected scalar array element brace initializer")
+      }
+      match inner[4] {
+        ExprStmt(Assign(ArrayAccess(Var("a"), Number(1)), Number(37))) => ()
+        _ => fail("Expected nested scalar array element brace initializer")
+      }
+    }
+    _ => fail("Expected lowered scalar brace initializer body")
+  }
+}
+
+///|
 test "parse multiple vars one with array initializer" {
   let source = "int main() { int a = 1, b[] = {2}, c = 3; return 0; }"
   let prog = @parser.parse(source)

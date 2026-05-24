@@ -5,13 +5,20 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
   let decl = self.parse_declarator(base_ty)
   let post_decl_attrs = self.skip_attributes_info()
   if decl.name != "" {
-    let decl_ty = self.apply_decl_attrs(resolve_var_type(decl), post_decl_attrs)
+    let mut decl_ty = self.apply_decl_attrs(
+      resolve_var_type(decl),
+      post_decl_attrs,
+    )
     let mut init : GlobalInit? = None
     if self.token == Assign {
       self.advance()
       if self.token == LBrace {
         let init_exprs = self.parse_brace_init_exprs()
-        init = Some(Array(init_exprs))
+        let (final_ty, brace_init) = global_brace_initializer_for_type(
+          decl_ty, init_exprs,
+        )
+        decl_ty = final_ty
+        init = brace_init
       } else {
         init = Some(Scalar(self.parse_assign()))
       }
@@ -35,7 +42,7 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
     let extra = self.parse_declarator(base_ty)
     let extra_post_decl_attrs = self.skip_attributes_info()
     if extra.name != "" {
-      let extra_ty = self.apply_decl_attrs(
+      let mut extra_ty = self.apply_decl_attrs(
         resolve_var_type(extra),
         extra_post_decl_attrs,
       )
@@ -44,7 +51,11 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
         self.advance()
         if self.token == LBrace {
           let init_exprs = self.parse_brace_init_exprs()
-          extra_init = Some(Array(init_exprs))
+          let (final_extra_ty, brace_init) = global_brace_initializer_for_type(
+            extra_ty, init_exprs,
+          )
+          extra_ty = final_extra_ty
+          extra_init = brace_init
         } else {
           extra_init = Some(Scalar(self.parse_assign()))
         }

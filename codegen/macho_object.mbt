@@ -3314,7 +3314,7 @@ fn macho_object_from_assembled(obj : AssembledObject) -> Bytes {
   let nsyms = symbol_layout.entries.length()
   let stroff = symoff + nsyms * 16
   let strsize = symbol_string_size(symbol_layout.entries)
-  let buf = @buffer.new(size_hint=stroff + strsize)
+  let buf = Buffer(size_hint=stroff + strsize)
   write_macho_header(buf, sizeofcmds)
   write_segment_command(
     buf,
@@ -3341,7 +3341,7 @@ fn macho_object_from_assembled(obj : AssembledObject) -> Bytes {
 
 ///|
 fn section_bytes_to_bytes(values : Array[Int]) -> Bytes {
-  let buf = @buffer.new(size_hint=values.length())
+  let buf = Buffer(size_hint=values.length())
   for value in values {
     buf.write_byte(value.to_byte())
   }
@@ -3350,7 +3350,7 @@ fn section_bytes_to_bytes(values : Array[Int]) -> Bytes {
 
 ///|
 fn u32_offsets_to_bytes(values : Array[Int]) -> Bytes {
-  let buf = @buffer.new(size_hint=values.length() * 4)
+  let buf = Buffer(size_hint=values.length() * 4)
   for value in values {
     write_i32_le(buf, value)
   }
@@ -3365,7 +3365,7 @@ fn jit_external_relocations_to_bytes(
   for reloc in relocs {
     size_hint = size_hint + reloc.symbol.length()
   }
-  let buf = @buffer.new(size_hint~)
+  let buf = Buffer(size_hint~)
   for reloc in relocs {
     write_i32_le(buf, reloc.offset)
     write_i32_le(buf, reloc.symbol.length())

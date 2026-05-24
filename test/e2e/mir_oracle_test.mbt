@@ -125,6 +125,25 @@ async test "e2e MIR oracle checks ignored unsupported local initializer side eff
 }
 
 ///|
+async test "e2e MIR oracle checks ignored modeled byte writes" {
+  let source =
+    #|int main(void) {
+    #|  char s[4] = "abc";
+    #|  char *p = s;
+    #|  int side = 0;
+    #|  double d = (s[side += 1] = 'z');
+    #|  double e = (++s[2], s[2] += 1);
+    #|  double f = (*(p + 0) = 'A');
+    #|  if (side != 1) return 1;
+    #|  if (s[0] != 'A') return 2;
+    #|  if (s[1] != 'z') return 3;
+    #|  if (s[2] != 'e') return 4;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks scalar switch fallthrough" {
   let source =
     #|int main(void) {
@@ -231,7 +250,9 @@ async test "e2e MIR oracle checks prefetch address side effects" {
   let source =
     #|int main(void) {
     #|  int side = 0;
+    #|  char buf[16];
     #|  __builtin_prefetch((void *)(long)(side += 1), 0, 0);
+    #|  __builtin___clear_cache(buf + (side += 2), buf + (side += 4));
     #|  __builtin_assume(side += 10);
     #|  return side;
     #|}
@@ -378,6 +399,51 @@ async test "e2e MIR oracle checks global string array initializers" {
 }
 
 ///|
+async test "e2e MIR oracle checks zero-initialized global char arrays" {
+  let source =
+    #|char g[16];
+    #|int main(void) {
+    #|  if (g[0] != 0 || g[15] != 0) return 1;
+    #|  g[0] = 40;
+    #|  g[15] = 2;
+    #|  return g[0] + g[15];
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks designated char array initializers" {
+  let source =
+    #|char g[8] = { [2] = 40, [5 ... 6] = 1, 2 };
+    #|int main(void) {
+    #|  char local[8] = { [1] = 20, [4 ... 5] = 10, 2 };
+    #|  if (g[0] != 0 || g[1] != 0 || g[3] != 0 || g[4] != 0) return 1;
+    #|  if (g[2] != 40 || g[5] != 1 || g[6] != 1 || g[7] != 2) return 2;
+    #|  if (local[0] != 0 || local[2] != 0 || local[3] != 0) return 3;
+    #|  if (local[1] != 20 || local[4] != 10 || local[5] != 10 || local[6] != 2) return 4;
+    #|  return g[2] + g[5] + local[6] - 1;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks aligned char arrays" {
+  let source =
+    #|char global_buf[8] __attribute__((aligned(32))) = { [1] = 40, [4 ... 5] = 1, 2 };
+    #|char global_zero[4] __attribute__((aligned(16)));
+    #|int main(void) {
+    #|  char local[8] __attribute__((aligned(32))) = { [2] = 20, [5 ... 6] = 10, 2 };
+    #|  char local_zero[4] __attribute__((aligned(16))) = {0};
+    #|  if (global_zero[0] != 0 || global_zero[3] != 0) return 1;
+    #|  if (local_zero[0] != 0 || local_zero[3] != 0) return 2;
+    #|  if (global_buf[1] != 40 || global_buf[4] != 1 || global_buf[6] != 2) return 3;
+    #|  if (local[2] != 20 || local[5] != 10 || local[6] != 10 || local[7] != 2) return 4;
+    #|  return global_buf[1] + global_buf[4] + local[7] - 1;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
 async test "e2e MIR oracle checks local string array initializers" {
   let source =
     #|int main(void) {
@@ -417,6 +483,7 @@ async test "e2e MIR oracle checks embedded nul string literal lengths" {
     #|  if (sizeof("a\0bc") != 5) return 1;
     #|  if (__builtin_strlen("a\0bc") != 1) return 2;
     #|  if (__builtin___snprintf_chk((char *)0, 0, 0, 0, (const char *)"%s", "a\0bc") != 1) return 3;
+    #|  if (__builtin_strlen((const char *)"a\0bc" + 2) != 2) return 4;
     #|  return 42;
     #|}
   run_source_against_mir_oracle(source)
@@ -600,6 +667,7 @@ async test "e2e MIR oracle checks fortified builtin return sizes" {
     #|_Static_assert(sizeof(__builtin___sprintf_chk(0, 0, 0, 0)) == sizeof(int), "sprintf chk");
     #|_Static_assert(sizeof(__builtin___vsprintf_chk(0, 0, 0, 0, 0)) == sizeof(int), "vsprintf chk");
     #|_Static_assert(sizeof(__builtin___printf_chk(0, 0)) == sizeof(int), "printf chk");
+    #|_Static_assert(sizeof(__builtin___vprintf_chk(0, 0, 0)) == sizeof(int), "vprintf chk");
     #|_Static_assert(sizeof(__builtin___fprintf_chk(0, 0, 0)) == sizeof(int), "fprintf chk");
     #|_Static_assert(sizeof(__builtin___vfprintf_chk(0, 0, 0, 0)) == sizeof(int), "vfprintf chk");
     #|int main(void) {
@@ -617,6 +685,7 @@ async test "e2e MIR oracle checks fortified builtin return sizes" {
     #|    sizeof(__builtin___sprintf_chk(0, 0, 0, 0)) +
     #|    sizeof(__builtin___vsprintf_chk(0, 0, 0, 0, 0)) +
     #|    sizeof(__builtin___printf_chk(0, 0)) +
+    #|    sizeof(__builtin___vprintf_chk(0, 0, 0)) +
     #|    sizeof(__builtin___fprintf_chk(0, 0, 0)) +
     #|    sizeof(__builtin___vfprintf_chk(0, 0, 0, 0));
     #|}
@@ -915,6 +984,7 @@ async test "e2e MIR oracle checks void builtin return sizes" {
     #|_Static_assert(sizeof(__builtin_trap()) == 0, "trap");
     #|_Static_assert(sizeof(__builtin_assume(1)) == 0, "assume");
     #|_Static_assert(sizeof(__builtin_prefetch(ptr)) == 0, "prefetch");
+    #|_Static_assert(sizeof(__builtin___clear_cache((char *)ptr, (char *)ptr)) == 0, "clear cache");
     #|_Static_assert(sizeof(__builtin_bzero(ptr, 0)) == 0, "bzero");
     #|int variadic(int last, ...) {
     #|  va_list ap;
@@ -930,6 +1000,7 @@ async test "e2e MIR oracle checks void builtin return sizes" {
     #|    sizeof(__builtin_trap()) +
     #|    sizeof(__builtin_assume(1)) +
     #|    sizeof(__builtin_prefetch(ptr)) +
+    #|    sizeof(__builtin___clear_cache((char *)ptr, (char *)ptr)) +
     #|    sizeof(__builtin_bzero(ptr, 0)) +
     #|    variadic(0, 1);
     #|}
@@ -1399,6 +1470,8 @@ async test "e2e MIR oracle checks literal string comparison builtins" {
     #|  if (__builtin_memcmp("abc", "abd", 2) != 0) return 7;
     #|  if (__builtin_memcmp("abc", "abd", 3) >= 0) return 8;
     #|  if (__builtin_memcmp("abd", "abc", 3) <= 0) return 9;
+    #|  if (__builtin_bcmp("abc", "abc", 3) != 0) return 10;
+    #|  if (__builtin_bcmp("abc", "abd", 3) == 0) return 11;
     #|  return 42;
     #|}
   run_source_against_mir_oracle(source)
@@ -1417,6 +1490,29 @@ async test "e2e MIR oracle checks literal string search nullness" {
     #|  if (__builtin_strstr("abcde", "cd") == 0) return 7;
     #|  if (__builtin_strstr("abcde", "ce") != 0) return 8;
     #|  if (__builtin_strstr("abc", "") == 0) return 9;
+    #|  if (__builtin_memmem("a\0bc\0bc", 7, "\0bc", 3) == 0) return 10;
+    #|  if (__builtin_memmem("a\0bc\0bc", 1, "\0bc", 3) != 0) return 11;
+    #|  return 42;
+    #|}
+  run_source_against_mir_oracle(source)
+}
+
+///|
+async test "e2e MIR oracle checks literal string span builtins" {
+  let source =
+    #|int main(void) {
+    #|  const char *text = "abc123xyz";
+    #|  const char *reject = "2z";
+    #|  const char *accept = "xy";
+    #|  if (__builtin_strspn(text, "abc") != 3) return 1;
+    #|  if (__builtin_strspn(text + 3, "12345") != 3) return 2;
+    #|  if (__builtin_strspn(text, "") != 0) return 3;
+    #|  if (__builtin_strcspn(text, reject) != 4) return 4;
+    #|  if (__builtin_strcspn(text, "") != 9) return 5;
+    #|  if (__builtin_strpbrk(text, accept) != text + 6) return 6;
+    #|  if (__builtin_strpbrk(text, "31") != text + 3) return 7;
+    #|  if (__builtin_strpbrk(text, "") != 0) return 8;
+    #|  if (__builtin_strpbrk(text, "q") != 0) return 9;
     #|  return 42;
     #|}
   run_source_against_mir_oracle(source)
@@ -1479,11 +1575,18 @@ async test "e2e MIR oracle checks scalar abs builtins" {
 async test "e2e MIR oracle checks scalar alignment builtins" {
   let source =
     #|int main(void) {
-    #|  if (!__builtin_is_aligned(32, 16)) return 1;
-    #|  if (__builtin_is_aligned(34, 16)) return 2;
-    #|  if (__builtin_align_up(33, 16) != 48) return 3;
-    #|  if (__builtin_align_down(47, 16) != 32) return 4;
+    #|  unsigned long x = 33ul;
+    #|  unsigned long a = 16ul;
+    #|  int side = 0;
+    #|  if (!__builtin_is_aligned(x - 1ul, a)) return 1;
+    #|  if (__builtin_is_aligned(x + 1ul, a)) return 2;
+    #|  if (__builtin_align_up(x, a) != 48ul) return 3;
+    #|  if (__builtin_align_down(47ul, a) != 32ul) return 4;
     #|  if (__builtin_align_up(0x1234567890ull, 256) != 0x1234567900ull) return 5;
+    #|  if (__builtin_align_up((unsigned long)(side += 33), (unsigned long)(side += -17, a)) != 48ul) return 6;
+    #|  if (side != 16) return 7;
+    #|  if (__builtin_align_down((unsigned long)(side += 31), a) != 32ul) return 8;
+    #|  if (side != 47) return 9;
     #|  return 0;
     #|}
   run_source_against_mir_oracle(source)

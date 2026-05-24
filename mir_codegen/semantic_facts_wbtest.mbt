@@ -87,13 +87,18 @@ test "darwin MIR codegen uses parser-free module layout facts" {
   codegen.register_mir_aggregate_layouts(mir_module)
   assert_eq(codegen.type_size(@ctype.Type::Struct("Pair")), 12)
   assert_eq(codegen.type_align(@ctype.Type::Struct("Pair")), 4)
-  match
-    codegen.find_field_layout_for_type(@ctype.Type::Struct("Pair"), "tail") {
-    Some((_, @ctype.Type::Array(@ctype.Type::SInt, 2), 4, 8, 0, 0)) => ()
-    _ => abort("unexpected Darwin MIR field layout")
+  match mir_module.field_layout(@ctype.Type::Struct("Pair"), "tail") {
+    Some(field) => {
+      assert_eq(field.ty, @ctype.Type::Array(@ctype.Type::SInt, 2))
+      assert_eq(field.offset, 4)
+      assert_eq(field.size, 8)
+      assert_eq(field.bit_offset, 0)
+      assert_true(field.bit_width is None)
+    }
+    None => abort("unexpected Darwin MIR field layout")
   }
   match
-    codegen.offset_of_path(@ctype.Type::Struct("Pair"), [
+    mir_module.offset_of_path(@ctype.Type::Struct("Pair"), [
       @ctype.OffsetDesignator::OffsetField("tail"),
       @ctype.OffsetDesignator::OffsetIndex(1L),
     ]) {
@@ -117,12 +122,18 @@ test "linux x64 MIR codegen uses parser-free module layout facts" {
   codegen.register_mir_aggregate_layouts(mir_module)
   assert_eq(codegen.type_size(@ctype.Type::Struct("Pair")), 12)
   assert_eq(codegen.type_align(@ctype.Type::Struct("Pair")), 4)
-  match codegen.field_layout(@ctype.Type::Struct("Pair"), "tail") {
-    Some((_, @ctype.Type::Array(@ctype.Type::SInt, 2), 4, 8, 0, -1)) => ()
-    _ => abort("unexpected x86-64 MIR field layout")
+  match mir_module.field_layout(@ctype.Type::Struct("Pair"), "tail") {
+    Some(field) => {
+      assert_eq(field.ty, @ctype.Type::Array(@ctype.Type::SInt, 2))
+      assert_eq(field.offset, 4)
+      assert_eq(field.size, 8)
+      assert_eq(field.bit_offset, 0)
+      assert_true(field.bit_width is None)
+    }
+    None => abort("unexpected x86-64 MIR field layout")
   }
   match
-    codegen.offset_of_path(@ctype.Type::Struct("Pair"), [
+    mir_module.offset_of_path(@ctype.Type::Struct("Pair"), [
       @ctype.OffsetDesignator::OffsetField("tail"),
       @ctype.OffsetDesignator::OffsetIndex(1L),
     ]) {

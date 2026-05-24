@@ -152,37 +152,7 @@ fn x64_align_to(value : Int, align : Int) -> Int {
 
 ///|
 fn x64_core_type(ty : @ctype.Type) -> @ctype.Type {
-  match ty {
-    Atomic(inner) | Aligned(inner, _) => x64_core_type(inner)
-    _ => ty
-  }
-}
-
-///|
-fn x64_is_pointer_like(ty : @ctype.Type) -> Bool {
-  match x64_core_type(ty) {
-    Pointer(_) | Array(_, _) => true
-    _ => false
-  }
-}
-
-///|
-fn x64_pointer_element(ty : @ctype.Type) -> @ctype.Type? {
-  match x64_core_type(ty) {
-    Pointer(elem) | Array(elem, _) => Some(elem)
-    _ => None
-  }
-}
-
-///|
-fn X64Codegen::pointer_element_size(
-  self : X64Codegen,
-  elem_ty : @ctype.Type,
-) -> Int {
-  match x64_core_type(elem_ty) {
-    Void => 1
-    _ => self.type_size(elem_ty)
-  }
+  ty.core_type()
 }
 
 ///|
@@ -195,23 +165,7 @@ fn x64_is_fp_type(ty : @ctype.Type) -> Bool {
 
 ///|
 fn x64_is_int128_type(ty : @ctype.Type) -> Bool {
-  match x64_core_type(ty) {
-    SInt128 | UInt128 => true
-    _ => false
-  }
-}
-
-///|
-fn x64_reject_unsupported_scalar(ty : @ctype.Type) -> Unit {
-  match x64_core_type(ty) {
-    Float16 => abort("_Float16 ABI lowering is not supported")
-    Float128 => abort("__float128 ABI lowering is not supported")
-    LongDouble => abort("long double x87 ABI lowering is not supported")
-    Pointer(_) | FuncPtr(_, _, _) => ()
-    Array(elem, _) | Atomic(elem) | Aligned(elem, _) =>
-      x64_reject_unsupported_scalar(elem)
-    _ => ()
-  }
+  ty.is_int128()
 }
 
 ///|
@@ -219,25 +173,6 @@ fn x64_is_aggregate_type(ty : @ctype.Type) -> Bool {
   match x64_core_type(ty) {
     Struct(_) | Union(_) => true
     _ => false
-  }
-}
-
-///|
-fn x64_is_object_aggregate_type(ty : @ctype.Type) -> Bool {
-  match x64_core_type(ty) {
-    Array(_, _) | Struct(_) | Union(_) => true
-    _ => false
-  }
-}
-
-///|
-fn x64_atomic_target_type(ty : @ctype.Type) -> @ctype.Type {
-  match ty {
-    Pointer(Atomic(inner)) | Array(Atomic(inner), _) => inner
-    Pointer(Aligned(inner, _)) | Array(Aligned(inner, _), _) => inner
-    Pointer(inner) | Array(inner, _) => inner
-    Atomic(inner) | Aligned(inner, _) => inner
-    _ => SLongLong
   }
 }
 
@@ -286,14 +221,6 @@ priv enum X64AggregateClass {
   IntClass
   SseClass
 } derive(Eq)
-
-///|
-priv struct X64BitfieldInfo {
-  ty : @ctype.Type
-  size : Int
-  bit_offset : Int
-  bit_width : Int
-}
 
 ///|
 fn x64_fp_suffix(ty : @ctype.Type) -> String {
@@ -492,16 +419,6 @@ fn X64Codegen::local_neg_ref(
 ///|
 fn X64Codegen::emit_local_addr(self : X64Codegen, offset : Int) -> Unit {
   self.emit("\tlea\trax, " + self.local_ref(offset))
-}
-
-///|
-fn X64Codegen::emit_push_rax(self : X64Codegen) -> Unit {
-  self.emit("\tpush\trax")
-}
-
-///|
-fn X64Codegen::emit_pop_rax(self : X64Codegen) -> Unit {
-  self.emit("\tpop\trax")
 }
 
 ///|
@@ -1240,48 +1157,6 @@ fn X64Codegen::emit_copy_aggregate_from_addr(
 }
 
 ///|
-fn X64Codegen::emit_zero_memory_at_rax(
-  self : X64Codegen,
-  ty : @ctype.Type,
-) -> Unit {
-  let mut offset = 0
-  let mut remaining = self.type_size(ty)
-  while remaining >= 8 {
-    self.emit("\tmov\t" + x64_sized_mem_at_reg("rax", offset, 8) + ", 0")
-    offset += 8
-    remaining -= 8
-  }
-  if remaining >= 4 {
-    self.emit("\tmov\t" + x64_sized_mem_at_reg("rax", offset, 4) + ", 0")
-    offset += 4
-    remaining -= 4
-  }
-  if remaining >= 2 {
-    self.emit("\tmov\t" + x64_sized_mem_at_reg("rax", offset, 2) + ", 0")
-    offset += 2
-    remaining -= 2
-  }
-  if remaining > 0 {
-    self.emit("\tmov\t" + x64_sized_mem_at_reg("rax", offset, 1) + ", 0")
-  }
-}
-
-///|
-fn X64Codegen::emit_store_aggregate_call_result_to_pushed_addr(
-  self : X64Codegen,
-  ty : @ctype.Type,
-) -> Unit {
-  self.emit("\tsub\trsp, 16")
-  self.emit("\tmov\tr10, rsp")
-  self.emit_store_small_aggregate_return(ty)
-  self.emit("\tmov\tr10, QWORD PTR [rsp + 16]")
-  self.emit("\tmov\tr11, rsp")
-  self.emit_copy_aggregate_from_addr(ty)
-  self.emit("\tmov\trax, r10")
-  self.emit("\tadd\trsp, 24")
-}
-
-///|
 fn X64Codegen::emit_call_sret_addr(
   self : X64Codegen,
   ret_ty : @ctype.Type,
@@ -1426,138 +1301,6 @@ fn X64Codegen::emit_atomic_update_loop(
 }
 
 ///|
-fn X64Codegen::emit_builtin_fp_bits(
-  self : X64Codegen,
-  bits : Int64,
-  ty : @ctype.Type,
-) -> Unit {
-  match x64_core_type(ty) {
-    Float => {
-      self.emit("\tmov\teax, " + bits.to_string())
-      self.emit("\tmovd\txmm0, eax")
-    }
-    _ => {
-      self.emit("\tmovabs\trax, " + bits.to_string())
-      self.emit("\tmovq\txmm0, rax")
-    }
-  }
-}
-
-///|
-fn X64Codegen::field_info(
-  self : X64Codegen,
-  ty : @ctype.Type,
-  field_name : String,
-) -> (@ctype.Type, Int) {
-  match self.field_layout(ty, field_name) {
-    Some((_, field_ty, offset, _, _, _)) => (field_ty, offset)
-    None => abort("unknown field: " + field_name)
-  }
-}
-
-///|
-fn x64_field_receiver_type(ty : @ctype.Type) -> @ctype.Type? {
-  match x64_core_type(ty) {
-    Struct(name) => Some(Struct(name))
-    Union(name) => Some(Union(name))
-    Pointer(inner) =>
-      match x64_core_type(inner) {
-        Struct(name) => Some(Struct(name))
-        Union(name) => Some(Union(name))
-        _ => None
-      }
-    _ => None
-  }
-}
-
-///|
-fn X64Codegen::field_layout(
-  self : X64Codegen,
-  ty : @ctype.Type,
-  field_name : String,
-) -> (String, @ctype.Type, Int, Int, Int, Int)? {
-  let lookup_ty = match x64_field_receiver_type(ty) {
-    Some(lookup_ty) => lookup_ty
-    None => return None
-  }
-  match self.mir_module {
-    Some(mir) =>
-      return match mir.field_layout(lookup_ty, field_name) {
-        Some(field) =>
-          Some(
-            (
-              field.name,
-              field.ty,
-              field.offset,
-              field.size,
-              field.bit_offset,
-              match field.bit_width {
-                Some(width) => width
-                None => -1
-              },
-            ),
-          )
-        None => None
-      }
-    None => ()
-  }
-  let struct_name = match lookup_ty {
-    Struct(name) | Union(name) => name
-    _ => return None
-  }
-  self.ensure_struct_layout(struct_name)
-  for field in self.struct_layouts[struct_name] {
-    if field.0 == field_name {
-      return Some(field)
-    }
-  }
-  None
-}
-
-///|
-fn X64Codegen::offset_of_path(
-  self : X64Codegen,
-  ty : @ctype.Type,
-  path : Array[@ctype.OffsetDesignator],
-) -> Int? {
-  match self.mir_module {
-    Some(mir) => return mir.offset_of_path(ty, path)
-    None => ()
-  }
-  let mut current_ty = ty
-  let mut offset = 0
-  for designator in path {
-    match designator {
-      OffsetField(field) =>
-        match self.field_layout(current_ty, field) {
-          Some((_, field_ty, field_offset, _, _, _)) => {
-            offset += field_offset
-            current_ty = field_ty
-          }
-          None => return None
-        }
-      OffsetIndex(index) =>
-        match x64_offset_array_element_type(current_ty) {
-          Some(elem) => {
-            offset += index.to_int() * self.type_size(elem)
-            current_ty = elem
-          }
-          None => return None
-        }
-    }
-  }
-  Some(offset)
-}
-
-///|
-fn x64_offset_array_element_type(ty : @ctype.Type) -> @ctype.Type? {
-  match x64_core_type(ty) {
-    Array(elem, _) => Some(elem)
-    _ => None
-  }
-}
-
-///|
 fn X64Codegen::emit_setcc(self : X64Codegen, cc : String) -> Unit {
   self.emit("\t" + cc + "\tal")
   self.emit("\tmovzx\trax, al")
@@ -1611,67 +1354,6 @@ fn X64Codegen::emit_abi_int_return_conversion(
     UInt => self.emit("\tmov\teax, eax")
     SInt => self.emit("\tmovsxd\trax, eax")
     _ => ()
-  }
-}
-
-///|
-fn x64_binary_int_type(
-  op : String,
-  lhs_ty : @ctype.Type,
-  rhs_ty : @ctype.Type,
-) -> @ctype.Type {
-  if op == "<<" || op == ">>" {
-    unary_integer_result_type(lhs_ty)
-  } else {
-    integer_common_type(lhs_ty, rhs_ty)
-  }
-}
-
-///|
-fn x64_binary_rhs_int_type(
-  op : String,
-  lhs_ty : @ctype.Type,
-  rhs_ty : @ctype.Type,
-) -> @ctype.Type {
-  if op == "<<" || op == ">>" {
-    unary_integer_result_type(rhs_ty)
-  } else {
-    integer_common_type(lhs_ty, rhs_ty)
-  }
-}
-
-///|
-fn x64_binary_converts_result(op : String) -> Bool {
-  match op {
-    "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" => true
-    _ => false
-  }
-}
-
-///|
-fn x64_ternary_result_type(
-  then_ty : @ctype.Type,
-  else_ty : @ctype.Type,
-) -> @ctype.Type {
-  match (x64_core_type(then_ty), x64_core_type(else_ty)) {
-    (Array(elem, _), _) => Pointer(elem)
-    (_, Array(elem, _)) => Pointer(elem)
-    (Pointer(elem), _) => Pointer(elem)
-    (_, Pointer(elem)) => Pointer(elem)
-    (FuncPtr(ret, params, variadic), _) => FuncPtr(ret, params, variadic)
-    (_, FuncPtr(ret, params, variadic)) => FuncPtr(ret, params, variadic)
-    _ =>
-      if x64_is_fp_type(then_ty) || x64_is_fp_type(else_ty) {
-        if x64_core_type(then_ty) == Double || x64_core_type(else_ty) == Double {
-          Double
-        } else {
-          Float
-        }
-      } else if then_ty.is_integer() && else_ty.is_integer() {
-        integer_common_type(then_ty, else_ty)
-      } else {
-        then_ty
-      }
   }
 }
 
@@ -2192,8 +1874,8 @@ fn X64Codegen::emit_mir_global_string(
   }
   match x64_core_type(ty) {
     Array(SChar, n) | Array(UChar, n) => {
-      self.emit("\t.asciz\t\"" + escape_string(value) + "\"")
-      let pad = n - value.length() - 1
+      self.emit(global_char_array_string_directive(value, n))
+      let pad = global_char_array_string_padding(value, n)
       if pad > 0 {
         self.emit("\t.zero\t" + pad.to_string())
       }

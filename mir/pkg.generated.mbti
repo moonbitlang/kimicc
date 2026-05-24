@@ -125,7 +125,8 @@ pub(all) struct MirModule {
   bodies : Map[String, MirFuncBody]
 }
 pub fn MirModule::field_layout(Self, @ctype.Type, String) -> FieldLayout?
-pub fn MirModule::global_expr_type(Self, @parser.Expr) -> @ctype.Type
+pub fn MirModule::object_size_fact_for_type(Self, @ctype.Type) -> @ctype.ObjectSizeFact
+pub fn MirModule::object_size_path_fact(Self, @ctype.Type, Array[@ctype.OffsetDesignator]) -> @ctype.ObjectSizeFact?
 pub fn MirModule::offset_of_path(Self, @ctype.Type, Array[@ctype.OffsetDesignator]) -> Int?
 pub fn MirModule::type_align(Self, @ctype.Type) -> Int
 pub fn MirModule::type_size(Self, @ctype.Type) -> Int
@@ -169,6 +170,17 @@ pub(all) enum MirValue {
   MirAggregateArg(MirValue, @ctype.Type)
   MirVaArg(MirValue, @ctype.Type)
   MirVaArgAddr(MirValue, @ctype.Type)
+  MirVaStart(MirValue)
+  MirVaCopy(MirValue, MirValue)
+  MirVaEnd(MirValue)
+  MirOverflow(String, MirValue, MirValue, MirValue)
+  MirBzero(MirValue, MirValue)
+  MirAtomicLoad(MirValue, MirValue, @ctype.Type)
+  MirAtomicStore(MirValue, MirValue, MirValue)
+  MirAtomicUpdate(String, Bool, MirValue, MirValue, Array[MirValue], @ctype.Type)
+  MirAtomicExchange(MirValue, MirValue, Array[MirValue], @ctype.Type)
+  MirAtomicCompareExchange(MirValue, MirValue, MirValue, Array[MirValue])
+  MirLibCall(String, Array[MirValue], @ctype.Type)
   MirCall(String, Array[MirValue], @ctype.Type)
   MirIndirectCall(MirValue, Array[MirValue], @ctype.Type)
   MirAssignLocal(MirLocal, MirValue)
@@ -182,7 +194,6 @@ pub fn MirValue::ty(Self) -> @ctype.Type
 
 pub(all) struct Program {
   target : @target.Target
-  source : @parser.Program
   decls : Array[MirFuncDecl]
   global_decls : Array[MirGlobalDecl]
   aggregate_decls : Array[MirAggregateDecl]
@@ -191,12 +202,9 @@ pub(all) struct Program {
   aggregates : Map[String, MirAggregateDecl]
   layouts : Map[String, AggregateLayout]
   bodies : Map[String, MirFuncBody]
+  // private fields
 }
-pub fn Program::expr_type(Self, @parser.Expr, Scope) -> @ctype.Type
 pub fn Program::field_layout(Self, @ctype.Type, String) -> FieldLayout?
-pub fn Program::fold_const(Self, @parser.Expr, Scope) -> Int64?
-pub fn Program::fold_float_const(Self, @parser.Expr, Scope) -> Double?
-pub fn Program::global_expr_type(Self, @parser.Expr) -> @ctype.Type
 pub fn Program::interpret_body_i64(Self, String, Array[Int64]) -> Result[Int64, String]
 pub fn Program::interpret_i64(Self, String, Array[Int64]) -> Result[Int64, String]
 pub fn Program::offset_of_path(Self, @ctype.Type, Array[@ctype.OffsetDesignator]) -> Int?

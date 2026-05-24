@@ -320,17 +320,7 @@ fn Codegen::compute_union_layout(
 
 ///|
 fn darwin_field_receiver_type(ty : @parser.Type) -> @parser.Type? {
-  match peel_aligned_type(ty) {
-    Struct(name) => Some(Struct(name))
-    Union(name) => Some(Union(name))
-    Pointer(inner) =>
-      match peel_aligned_type(inner) {
-        Struct(name) => Some(Struct(name))
-        Union(name) => Some(Union(name))
-        _ => None
-      }
-    _ => None
-  }
+  ty.field_receiver()
 }
 
 ///|
@@ -399,8 +389,5 @@ fn Codegen::offset_of_path(
 
 ///|
 fn offset_array_element_type(ty : @parser.Type) -> @parser.Type? {
-  match peel_aligned_type(ty) {
-    Array(elem, _) => Some(elem)
-    _ => None
-  }
+  ty.array_element()
 }

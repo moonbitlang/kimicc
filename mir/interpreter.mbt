@@ -51,7 +51,7 @@ fn Program::switch_control_type(
 fn Program::runtime_int_type(self : Program, ty : @ctype.Type) -> Bool {
   match self.core_type(ty) {
     Pointer(_) | FuncPtr(_, _, _) => true
-    core => const_type_int_width(core) is Some(_)
+    core => core.const_int_width() is Some(_)
   }
 }
 
@@ -61,7 +61,7 @@ fn Program::runtime_cast_int(
   value : Int64,
   ty : @ctype.Type,
 ) -> Int64 {
-  self.const_cast_int(self.const_int(value, ty), ty).bits
+  @ctype.integer_constant(value, self.core_type(ty)).bits
 }
 
 ///|
@@ -237,9 +237,18 @@ fn Interpreter::eval_global_scalar_initializer(
 }
 
 ///|
+fn interpreter_char_core_type(ty : @ctype.Type) -> @ctype.Type {
+  ty.core_type()
+}
+
+///|
 fn global_char_array_length(ty : @ctype.Type) -> Int? {
-  match ty {
-    Array(SChar, length) | Array(UChar, length) => Some(length)
+  match interpreter_char_core_type(ty) {
+    Array(elem, length) =>
+      match interpreter_char_core_type(elem) {
+        SChar | UChar => Some(length)
+        _ => None
+      }
     _ => None
   }
 }
@@ -261,16 +270,52 @@ fn Interpreter::string_from_char_initializers(
   exprs : Array[@parser.Expr],
   length : Int,
 ) -> String? {
-  let buf = StringBuilder::new()
-  let limit = if exprs.length() < length { exprs.length() } else { length }
-  for i in 0..<limit {
-    match self.char_initializer_value(exprs[i]) {
-      Some(value) => buf.write_char(value.to_int().unsafe_to_char())
-      None => return None
+  let bytes : Array[Int64] = Array::make(length, 0L)
+  let mut cursor = 0
+  for expr in exprs {
+    match expr {
+      DesignatedIndex(index, value) => {
+        if index < 0L || index >= length.to_int64() {
+          return None
+        }
+        match self.char_initializer_value(value) {
+          Some(byte) => {
+            let slot = index.to_int()
+            bytes[slot] = byte
+            cursor = slot + 1
+          }
+          None => return None
+        }
+      }
+      DesignatedRange(first, last, value) => {
+        if first < 0L || last < first || last >= length.to_int64() {
+          return None
+        }
+        match self.char_initializer_value(value) {
+          Some(byte) => {
+            for i in first.to_int()..<=last.to_int() {
+              bytes[i] = byte
+            }
+            cursor = last.to_int() + 1
+          }
+          None => return None
+        }
+      }
+      _ =>
+        if cursor < length {
+          match self.char_initializer_value(expr) {
+            Some(byte) => {
+              bytes[cursor] = byte
+              cursor += 1
+            }
+            None => return None
+          }
+        }
     }
   }
-  for _ in limit..<length {
-    buf.write_char('\u0000')
+  let buf = StringBuilder::new()
+  for byte in bytes {
+    buf.write_char(byte.to_int().unsafe_to_char())
   }
   Some(buf.to_string())
 }
@@ -307,6 +352,10 @@ fn Interpreter::init_global_string_array(
   match global_char_array_length(ty) {
     Some(length) =>
       match init {
+        None =>
+          self.globals[name] = self.fresh_string_object_base(
+            zero_byte_string(length),
+          )
         Some(Scalar(String(value))) =>
           self.globals[name] = self.fresh_string_object_base(
             string_from_fixed_char_string(value, length),
@@ -618,51 +667,53 @@ fn Interpreter::eval_binary_values(
     Some(value) => return value
     None => ()
   }
-  let left_value = self.program.const_cast_int(
-    self.program.const_int(left, left_ty),
-    left_ty,
-  )
-  let right_value = self.program.const_cast_int(
-    self.program.const_int(right, right_ty),
-    right_ty,
-  )
+  let left_value = @ctype.integer_constant(left, left_ty)
+  let right_value = @ctype.integer_constant(right, right_ty)
   let result = match op {
-    "+" => self.program.const_binary_arith("+", left_value, right_value)
-    "-" => self.program.const_binary_arith("-", left_value, right_value)
-    "*" => self.program.const_binary_arith("*", left_value, right_value)
-    "/" => self.program.const_divide("/", left_value, right_value)
-    "%" => self.program.const_divide("%", left_value, right_value)
-    "|" => self.program.const_binary_arith("|", left_value, right_value)
-    "&" => self.program.const_binary_arith("&", left_value, right_value)
-    "^" => self.program.const_binary_arith("^", left_value, right_value)
-    "<<" => self.program.const_shift("<<", left_value, right_value)
-    ">>" => self.program.const_shift(">>", left_value, right_value)
+    "+" => @ctype.integer_constant_binary_arith("+", left_value, right_value)
+    "-" => @ctype.integer_constant_binary_arith("-", left_value, right_value)
+    "*" => @ctype.integer_constant_binary_arith("*", left_value, right_value)
+    "/" => @ctype.integer_constant_divide("/", left_value, right_value)
+    "%" => @ctype.integer_constant_divide("%", left_value, right_value)
+    "|" => @ctype.integer_constant_binary_arith("|", left_value, right_value)
+    "&" => @ctype.integer_constant_binary_arith("&", left_value, right_value)
+    "^" => @ctype.integer_constant_binary_arith("^", left_value, right_value)
+    "<<" => @ctype.integer_constant_shift("<<", left_value, right_value)
+    ">>" => @ctype.integer_constant_shift(">>", left_value, right_value)
     "==" =>
       Some(
-        const_bool(self.program.const_equal_compare(left_value, right_value)),
+        @ctype.integer_constant_bool(
+          @ctype.integer_constant_equal_compare(left_value, right_value),
+        ),
       )
     "!=" =>
       Some(
-        const_bool(!self.program.const_equal_compare(left_value, right_value)),
+        @ctype.integer_constant_bool(
+          !@ctype.integer_constant_equal_compare(left_value, right_value),
+        ),
       )
     "<" =>
       Some(
-        const_bool(self.program.const_rel_compare("<", left_value, right_value)),
+        @ctype.integer_constant_bool(
+          @ctype.integer_constant_rel_compare("<", left_value, right_value),
+        ),
       )
     ">" =>
       Some(
-        const_bool(self.program.const_rel_compare(">", left_value, right_value)),
+        @ctype.integer_constant_bool(
+          @ctype.integer_constant_rel_compare(">", left_value, right_value),
+        ),
       )
     "<=" =>
       Some(
-        const_bool(
-          self.program.const_rel_compare("<=", left_value, right_value),
+        @ctype.integer_constant_bool(
+          @ctype.integer_constant_rel_compare("<=", left_value, right_value),
         ),
       )
     ">=" =>
       Some(
-        const_bool(
-          self.program.const_rel_compare(">=", left_value, right_value),
+        @ctype.integer_constant_bool(
+          @ctype.integer_constant_rel_compare(">=", left_value, right_value),
         ),
       )
     _ => None
@@ -730,6 +781,90 @@ fn interpreter_can_write_lvalue(expr : @parser.Expr) -> Bool {
 }
 
 ///|
+fn Interpreter::literal_string_pointer_if_known(
+  self : Interpreter,
+  frame : InterpFrame,
+  expr : @parser.Expr,
+) -> LiteralStringPointer? {
+  match expr {
+    String(value) =>
+      Some({ value, base: self.string_literal_base(value), offset: 0L })
+    Cast(_, inner) => self.literal_string_pointer_if_known(frame, inner)
+    Var(name) =>
+      if frame.locals.contains(name) {
+        self.string_literal_pointer_at(frame.locals[name])
+      } else if self.globals.contains(name) {
+        self.string_literal_pointer_at(self.globals[name])
+      } else {
+        None
+      }
+    Binary("+", lhs, rhs) =>
+      match self.literal_string_pointer_if_known(frame, lhs) {
+        Some(ptr) =>
+          Some({
+            value: ptr.value,
+            base: ptr.base,
+            offset: ptr.offset + self.eval_expr(frame, rhs),
+          })
+        None =>
+          match self.literal_string_pointer_if_known(frame, rhs) {
+            Some(ptr) =>
+              Some({
+                value: ptr.value,
+                base: ptr.base,
+                offset: ptr.offset + self.eval_expr(frame, lhs),
+              })
+            None => None
+          }
+      }
+    Binary("-", lhs, rhs) =>
+      match self.literal_string_pointer_if_known(frame, lhs) {
+        Some(ptr) =>
+          Some({
+            value: ptr.value,
+            base: ptr.base,
+            offset: ptr.offset - self.eval_expr(frame, rhs),
+          })
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
+fn Interpreter::ignored_string_lvalue_address(
+  self : Interpreter,
+  frame : InterpFrame,
+  expr : @parser.Expr,
+) -> Int64? {
+  match expr {
+    Deref(AddrOf(target)) => self.ignored_string_lvalue_address(frame, target)
+    Deref(target) =>
+      match self.literal_string_pointer_if_known(frame, target) {
+        Some(ptr) => Some(ptr.base + ptr.offset)
+        None => None
+      }
+    ArrayAccess(base, index) =>
+      match self.literal_string_pointer_if_known(frame, base) {
+        Some(ptr) => Some(ptr.base + ptr.offset + self.eval_expr(frame, index))
+        None => None
+      }
+    _ => None
+  }
+}
+
+///|
+fn Interpreter::read_string_byte_address(
+  self : Interpreter,
+  address : Int64,
+) -> Int64? {
+  match self.string_literal_pointer_at(address) {
+    Some(ptr) => Some(string_literal_byte_at(ptr.value, ptr.offset))
+    None => None
+  }
+}
+
+///|
 fn Interpreter::eval_ignored_expr_side_effects(
   self : Interpreter,
   frame : InterpFrame,
@@ -737,27 +872,67 @@ fn Interpreter::eval_ignored_expr_side_effects(
 ) -> Unit {
   match expr {
     Assign(lhs, rhs) =>
-      if interpreter_can_write_lvalue(lhs) {
-        ignore(self.eval_expr(frame, expr))
-      } else {
-        self.eval_ignored_expr_side_effects(frame, lhs)
-        self.eval_ignored_expr_side_effects(frame, rhs)
+      match self.ignored_string_lvalue_address(frame, lhs) {
+        Some(address) => {
+          let value = self.eval_expr(frame, rhs)
+          ignore(self.write_string_byte(address, value))
+        }
+        None =>
+          if interpreter_can_write_lvalue(lhs) {
+            ignore(self.eval_expr(frame, expr))
+          } else {
+            self.eval_ignored_expr_side_effects(frame, lhs)
+            self.eval_ignored_expr_side_effects(frame, rhs)
+          }
       }
-    CompoundAssign(_, lhs, rhs) =>
-      if interpreter_can_write_lvalue(lhs) {
-        ignore(self.eval_expr(frame, expr))
-      } else {
-        self.eval_ignored_expr_side_effects(frame, lhs)
-        self.eval_ignored_expr_side_effects(frame, rhs)
+    CompoundAssign(op, lhs, rhs) =>
+      match self.ignored_string_lvalue_address(frame, lhs) {
+        Some(address) =>
+          match self.read_string_byte_address(address) {
+            Some(old) => {
+              let right = self.eval_expr(frame, rhs)
+              let value = self.eval_binary_values(
+                op,
+                old,
+                self.program.expr_type(lhs, frame.scope()),
+                right,
+                self.program.expr_type(rhs, frame.scope()),
+              )
+              ignore(self.write_string_byte(address, value))
+            }
+            None => self.eval_ignored_expr_side_effects(frame, rhs)
+          }
+        None =>
+          if interpreter_can_write_lvalue(lhs) {
+            ignore(self.eval_expr(frame, expr))
+          } else {
+            self.eval_ignored_expr_side_effects(frame, lhs)
+            self.eval_ignored_expr_side_effects(frame, rhs)
+          }
       }
     PrefixInc(target)
     | PrefixDec(target)
     | PostfixInc(target)
     | PostfixDec(target) =>
-      if interpreter_can_write_lvalue(target) {
-        ignore(self.eval_expr(frame, expr))
-      } else {
-        self.eval_ignored_expr_side_effects(frame, target)
+      match self.ignored_string_lvalue_address(frame, target) {
+        Some(address) =>
+          match self.read_string_byte_address(address) {
+            Some(old) => {
+              let value = match expr {
+                PrefixInc(_) | PostfixInc(_) => old + 1L
+                PrefixDec(_) | PostfixDec(_) => old - 1L
+                _ => old
+              }
+              ignore(self.write_string_byte(address, value))
+            }
+            None => ()
+          }
+        None =>
+          if interpreter_can_write_lvalue(target) {
+            ignore(self.eval_expr(frame, expr))
+          } else {
+            self.eval_ignored_expr_side_effects(frame, target)
+          }
       }
     Call(_, _) => ignore(self.eval_expr(frame, expr))
     Binary("&&", lhs, rhs) =>
@@ -815,7 +990,7 @@ fn Interpreter::eval_builtin_object_size(
     0L
   }
   if args.length() == 0 {
-    return unknown_object_size(mode)
+    return @ctype.object_size_unknown(mode)
   }
   self.program.object_size_value(args[0], frame.scope(), mode)
 }
@@ -844,20 +1019,9 @@ fn Interpreter::eval_builtin_fp_compare(
       return 0L
     }
   }
-  let unordered = left != left || right != right
-  let result = match name {
-    "__builtin_isgreater" => !unordered && left > right
-    "__builtin_isgreaterequal" => !unordered && left >= right
-    "__builtin_isless" => !unordered && left < right
-    "__builtin_islessequal" => !unordered && left <= right
-    "__builtin_islessgreater" => !unordered && left != right
-    "__builtin_isunordered" => unordered
-    _ => false
-  }
-  if result {
-    1L
-  } else {
-    0L
+  match @ctype.floating_builtin_compare(name, left, right) {
+    Some(result) => fp_class_bool(result)
+    None => 0L
   }
 }
 
@@ -867,14 +1031,6 @@ fn fp_class_bool(value : Bool) -> Int64 {
     1L
   } else {
     0L
-  }
-}
-
-///|
-fn fp_class_normal_min(name : String) -> Double {
-  match name {
-    "__builtin_isnormalf" => 1.1754943508222875e-38
-    _ => 2.2250738585072014e-308
   }
 }
 
@@ -895,23 +1051,10 @@ fn Interpreter::eval_builtin_fp_class(
       return 0L
     }
   }
-  let nan = value != value
-  let pos_inf = 1.0 / 0.0
-  let neg_inf = -pos_inf
-  let inf = !nan && (value == pos_inf || value == neg_inf)
-  let finite = !nan && !inf
-  let result = match name {
-    "__builtin_isnan" | "__builtin_isnanf" | "__builtin_isnanl" => nan
-    "__builtin_isinf" | "__builtin_isinff" | "__builtin_isinfl" => inf
-    "__builtin_isfinite" | "__builtin_isfinitef" | "__builtin_isfinitel" =>
-      finite
-    "__builtin_isnormal" | "__builtin_isnormalf" | "__builtin_isnormall" =>
-      finite && floating_abs(value) >= fp_class_normal_min(name)
-    "__builtin_signbit" | "__builtin_signbitf" | "__builtin_signbitl" =>
-      floating_signbit(value)
-    _ => false
+  match @ctype.floating_builtin_classify(name, value) {
+    Some(result) => fp_class_bool(result)
+    None => 0L
   }
-  fp_class_bool(result)
 }
 
 ///|
@@ -929,17 +1072,74 @@ fn Interpreter::eval_builtin_abs(
 }
 
 ///|
-fn Interpreter::eval_builtin_is_aligned(
+fn Interpreter::eval_builtin_alignment(
   self : Interpreter,
   frame : InterpFrame,
   args : Array[@parser.Expr],
+  kind : String,
 ) -> Int64 {
   if args.length() < 2 {
     return 0L
   }
   let value = self.eval_expr(frame, args[0])
   let align = self.eval_expr(frame, args[1])
-  if (value & (align - 1L)) == 0L {
+  match kind {
+    "is_aligned" => if (value & (align - 1L)) == 0L { 1L } else { 0L }
+    "align_up" => (value + align - 1L) & -align
+    "align_down" => value & -align
+    _ => 0L
+  }
+}
+
+///|
+fn Interpreter::eval_builtin_identity_call(
+  self : Interpreter,
+  frame : InterpFrame,
+  args : Array[@parser.Expr],
+  side_effect_arg : Int,
+) -> Int64 {
+  let result = self.eval_first_call_arg_or_zero(frame, args)
+  if side_effect_arg >= 0 && side_effect_arg < args.length() {
+    self.eval_ignored_expr_side_effects(frame, args[side_effect_arg])
+  }
+  result
+}
+
+///|
+fn Interpreter::eval_builtin_noop_call(
+  self : Interpreter,
+  frame : InterpFrame,
+  args : Array[@parser.Expr],
+  kind : String,
+) -> Int64 {
+  match kind {
+    "eval_first" =>
+      if args.length() > 0 {
+        ignore(self.eval_expr(frame, args[0]))
+      }
+    "eval_all" =>
+      for arg in args {
+        self.eval_ignored_expr_side_effects(frame, arg)
+      }
+    "ignore_all" => ()
+    _ => ()
+  }
+  0L
+}
+
+///|
+fn Interpreter::eval_builtin_address_query(
+  self : Interpreter,
+  frame : InterpFrame,
+  args : Array[@parser.Expr],
+) -> Int64 {
+  let level = if args.length() > 0 {
+    self.eval_expr(frame, args[0])
+  } else {
+    0L
+  }
+  // The MIR oracle models address nullness only, not exact machine PCs/FPs.
+  if level == 0L {
     1L
   } else {
     0L
@@ -947,46 +1147,464 @@ fn Interpreter::eval_builtin_is_aligned(
 }
 
 ///|
-fn Interpreter::eval_builtin_align_value(
+fn Interpreter::eval_builtin_stack_alloc_call(
   self : Interpreter,
   frame : InterpFrame,
   args : Array[@parser.Expr],
-  round_up : Bool,
+  op : String,
 ) -> Int64 {
-  if args.length() < 2 {
-    return 0L
+  let size = if args.length() > 0 { self.eval_expr(frame, args[0]) } else { 0L }
+  let align_bits = if op == "alloca_align" && args.length() > 1 {
+    self.eval_expr(frame, args[1])
+  } else {
+    128L
   }
-  let value = self.eval_expr(frame, args[0])
-  let align = self.eval_expr(frame, args[1])
-  let adjusted = if round_up { value + align - 1L } else { value }
-  adjusted & -align
+  let align_bytes = if align_bits > 128L { align_bits / 8L } else { 16L }
+  let ptr = if align_bytes > 1L {
+    (self.next_alloca + align_bytes - 1L) / align_bytes * align_bytes
+  } else {
+    self.next_alloca
+  }
+  let bump = if size <= 0L { 16L } else { (size + 15L) & -16L }
+  self.next_alloca = ptr + bump
+  ptr
 }
 
 ///|
-fn overflow_builtin_op(name : String) -> String? {
-  match name {
-    "__builtin_add_overflow"
-    | "__builtin_sadd_overflow"
-    | "__builtin_saddl_overflow"
-    | "__builtin_saddll_overflow"
-    | "__builtin_uadd_overflow"
-    | "__builtin_uaddl_overflow"
-    | "__builtin_uaddll_overflow" => Some("+")
-    "__builtin_sub_overflow"
-    | "__builtin_ssub_overflow"
-    | "__builtin_ssubl_overflow"
-    | "__builtin_ssubll_overflow"
-    | "__builtin_usub_overflow"
-    | "__builtin_usubl_overflow"
-    | "__builtin_usubll_overflow" => Some("-")
-    "__builtin_mul_overflow"
-    | "__builtin_smul_overflow"
-    | "__builtin_smull_overflow"
-    | "__builtin_smulll_overflow"
-    | "__builtin_umul_overflow"
-    | "__builtin_umull_overflow"
-    | "__builtin_umulll_overflow" => Some("*")
+fn Interpreter::eval_builtin_strlen_call(
+  self : Interpreter,
+  frame : InterpFrame,
+  args : Array[@parser.Expr],
+) -> Int64 {
+  if args.length() == 0 {
+    0L
+  } else {
+    match self.literal_string_pointer(frame, args[0]) {
+      Some(ptr) => string_literal_c_length_from(ptr.value, ptr.offset)
+      _ => {
+        self.fail("unsupported MIR interpreter strlen argument")
+        0L
+      }
+    }
+  }
+}
+
+///|
+fn Interpreter::eval_builtin_memory_libcall_return(
+  self : Interpreter,
+  frame : InterpFrame,
+  args : Array[@parser.Expr],
+  symbol : String,
+) -> Int64? {
+  match symbol {
+    "memcpy" | "memmove" | "memset" =>
+      Some(self.eval_return_first_call_arg(frame, args, 3))
+    "strcpy" | "strcat" | "strncpy" | "strncat" =>
+      Some(self.eval_return_first_call_arg(frame, args, args.length()))
+    "mempcpy" => {
+      let values = self.eval_call_args(frame, args)
+      if args.length() < 3 {
+        Some(0L)
+      } else if values[2] < 0L {
+        self.fail("unsupported MIR interpreter mempcpy length")
+        Some(0L)
+      } else {
+        Some(values[0] + values[2])
+      }
+    }
+    "stpcpy" => {
+      let values = self.eval_call_args(frame, args)
+      if args.length() < 2 {
+        Some(0L)
+      } else {
+        match literal_string_arg(args[1]) {
+          Some(value) =>
+            Some(values[0] + string_literal_c_length(value).to_int64())
+          None => {
+            self.fail("unsupported MIR interpreter stpcpy source argument")
+            Some(0L)
+          }
+        }
+      }
+    }
+    "stpncpy" => {
+      let values = self.eval_call_args(frame, args)
+      if args.length() < 3 {
+        Some(0L)
+      } else {
+        match literal_string_arg(args[1]) {
+          Some(value) =>
+            match
+              nonnegative_min(
+                string_literal_c_length(value).to_int64(),
+                values[2],
+              ) {
+              Some(offset) => Some(values[0] + offset)
+              None => {
+                self.fail("unsupported MIR interpreter stpncpy length")
+                Some(0L)
+              }
+            }
+          None => {
+            self.fail("unsupported MIR interpreter stpncpy source argument")
+            Some(0L)
+          }
+        }
+      }
+    }
     _ => None
+  }
+}
+
+///|
+fn Interpreter::eval_builtin_strl_libcall_return(
+  self : Interpreter,
+  frame : InterpFrame,
+  args : Array[@parser.Expr],
+  symbol : String,
+) -> Int64? {
+  match symbol {
+    "strlcpy" => {
+      ignore(self.eval_call_args(frame, args))
+      if args.length() < 2 {
+        Some(0L)
+      } else {
+        match literal_string_arg(args[1]) {
+          Some(value) => Some(string_literal_c_length(value).to_int64())
+          None => {
+            self.fail("unsupported MIR interpreter strlcpy source argument")
+            Some(0L)
+          }
+        }
+      }
+    }
+    "strlcat" => {
+      let values = self.eval_call_args(frame, args)
+      if args.length() < 3 {
+        Some(0L)
+      } else {
+        match literal_string_arg(args[1]) {
+          Some(value) =>
+            if values[2] == 0L {
+              Some(string_literal_c_length(value).to_int64())
+            } else {
+              self.fail(
+                "unsupported MIR interpreter strlcat destination length",
+              )
+              Some(0L)
+            }
+          None => {
+            self.fail("unsupported MIR interpreter strlcat source argument")
+            Some(0L)
+          }
+        }
+      }
+    }
+    _ => None
+  }
+}
+
+///|
+fn printf_format_source_position(symbol : String) -> Int? {
+  match symbol {
+    "snprintf" => Some(2)
+    "sprintf" => Some(1)
+    "printf" => Some(0)
+    _ => None
+  }
+}
+
+///|
+fn Interpreter::eval_builtin_printf_libcall_length(
+  self : Interpreter,
+  frame : InterpFrame,
+  name : String,
+  args : Array[@parser.Expr],
+  symbol : String,
+) -> Int64? {
+  let format_source_position = match printf_format_source_position(symbol) {
+    Some(position) => position
+    None => return None
+  }
+  let source_indexes = match
+    @ctype.builtin_printf_source_indexes(name, args.length()) {
+    Some(indexes) => indexes
+    None => return None
+  }
+  if source_indexes.length() <= format_source_position {
+    return Some(0L)
+  }
+  let format_index = source_indexes[format_source_position]
+  let first_value_index = if source_indexes.length() >
+    format_source_position + 1 {
+    source_indexes[format_source_position + 1]
+  } else {
+    args.length()
+  }
+  let values = self.eval_call_args(frame, args)
+  match
+    self.literal_printf_format_length(
+      args[format_index],
+      symbol,
+      args,
+      values,
+      first_value_index,
+    ) {
+    Some(value) => Some(value)
+    None => Some(0L)
+  }
+}
+
+///|
+fn Interpreter::eval_builtin_compare_libcall_return(
+  self : Interpreter,
+  frame : InterpFrame,
+  args : Array[@parser.Expr],
+  symbol : String,
+) -> Int64? {
+  match symbol {
+    "strcmp" =>
+      match
+        (
+          self.literal_string_pointer(frame, args[0]),
+          self.literal_string_pointer(frame, args[1]),
+        ) {
+        (Some(left), Some(right)) =>
+          Some(
+            compare_string_literal_bytes_from(
+              left.value,
+              left.offset,
+              right.value,
+              right.offset,
+              None,
+              true,
+            ),
+          )
+        _ => {
+          self.fail("unsupported MIR interpreter strcmp argument")
+          Some(0L)
+        }
+      }
+    "strncmp" =>
+      match
+        (
+          self.literal_string_pointer(frame, args[0]),
+          self.literal_string_pointer(frame, args[1]),
+        ) {
+        (Some(left), Some(right)) =>
+          Some(
+            compare_string_literal_bytes_from(
+              left.value,
+              left.offset,
+              right.value,
+              right.offset,
+              Some(self.eval_expr(frame, args[2])),
+              true,
+            ),
+          )
+        _ => {
+          self.fail("unsupported MIR interpreter strncmp argument")
+          Some(0L)
+        }
+      }
+    "memcmp" | "bcmp" =>
+      match
+        (
+          self.literal_string_pointer(frame, args[0]),
+          self.literal_string_pointer(frame, args[1]),
+        ) {
+        (Some(left), Some(right)) =>
+          Some(
+            compare_string_literal_bytes_from(
+              left.value,
+              left.offset,
+              right.value,
+              right.offset,
+              Some(self.eval_expr(frame, args[2])),
+              false,
+            ),
+          )
+        _ => {
+          self.fail("unsupported MIR interpreter " + symbol + " argument")
+          Some(0L)
+        }
+      }
+    _ => None
+  }
+}
+
+///|
+fn Interpreter::eval_builtin_search_libcall_return(
+  self : Interpreter,
+  frame : InterpFrame,
+  args : Array[@parser.Expr],
+  symbol : String,
+) -> Int64? {
+  match symbol {
+    "strchr" | "strrchr" =>
+      match self.literal_string_pointer(frame, args[0]) {
+        Some(ptr) => {
+          let offset = if symbol == "strrchr" {
+            string_literal_find_last_byte_from(
+              ptr.value,
+              ptr.offset,
+              self.eval_expr(frame, args[1]),
+            )
+          } else {
+            string_literal_find_byte_from(
+              ptr.value,
+              ptr.offset,
+              self.eval_expr(frame, args[1]),
+              None,
+              true,
+            )
+          }
+          match offset {
+            Some(index) => Some(ptr.base + index)
+            None => Some(0L)
+          }
+        }
+        None => {
+          self.fail("unsupported MIR interpreter string search argument")
+          Some(0L)
+        }
+      }
+    "memchr" =>
+      match self.literal_string_pointer(frame, args[0]) {
+        Some(ptr) => {
+          let limit = self.eval_expr(frame, args[2])
+          if limit < 0L {
+            self.fail("unsupported MIR interpreter memchr length")
+            Some(0L)
+          } else {
+            match
+              string_literal_find_byte_from(
+                ptr.value,
+                ptr.offset,
+                self.eval_expr(frame, args[1]),
+                Some(limit),
+                false,
+              ) {
+              Some(index) => Some(ptr.base + index)
+              None => Some(0L)
+            }
+          }
+        }
+        None => {
+          self.fail("unsupported MIR interpreter memchr argument")
+          Some(0L)
+        }
+      }
+    "strstr" =>
+      match
+        (
+          self.literal_string_pointer(frame, args[0]),
+          self.literal_string_pointer(frame, args[1]),
+        ) {
+        (Some(haystack), Some(needle)) =>
+          match
+            string_literal_find_string_from(
+              haystack.value,
+              haystack.offset,
+              needle.value,
+              needle.offset,
+            ) {
+            Some(index) => Some(haystack.base + index)
+            None => Some(0L)
+          }
+        _ => {
+          self.fail("unsupported MIR interpreter strstr argument")
+          Some(0L)
+        }
+      }
+    "memmem" =>
+      match
+        (
+          self.literal_string_pointer(frame, args[0]),
+          self.literal_string_pointer(frame, args[2]),
+        ) {
+        (Some(haystack), Some(needle)) => {
+          let haystack_length = self.eval_expr(frame, args[1])
+          let needle_length = self.eval_expr(frame, args[3])
+          if haystack_length < 0L || needle_length < 0L {
+            self.fail("unsupported MIR interpreter memmem length")
+            Some(0L)
+          } else {
+            match
+              string_literal_find_memory_from(
+                haystack.value,
+                haystack.offset,
+                haystack_length,
+                needle.value,
+                needle.offset,
+                needle_length,
+              ) {
+              Some(index) => Some(haystack.base + index)
+              None => Some(0L)
+            }
+          }
+        }
+        _ => {
+          self.fail("unsupported MIR interpreter memmem argument")
+          Some(0L)
+        }
+      }
+    _ => None
+  }
+}
+
+///|
+fn Interpreter::eval_builtin_span_libcall_return(
+  self : Interpreter,
+  frame : InterpFrame,
+  args : Array[@parser.Expr],
+  symbol : String,
+) -> Int64? {
+  match
+    (
+      self.literal_string_pointer(frame, args[0]),
+      self.literal_string_pointer(frame, args[1]),
+    ) {
+    (Some(value), Some(set)) =>
+      match symbol {
+        "strspn" =>
+          Some(
+            string_literal_span_from(
+              value.value,
+              value.offset,
+              set.value,
+              set.offset,
+              true,
+            ),
+          )
+        "strcspn" =>
+          Some(
+            string_literal_span_from(
+              value.value,
+              value.offset,
+              set.value,
+              set.offset,
+              false,
+            ),
+          )
+        "strpbrk" => {
+          let offset = string_literal_find_first_set_byte_from(
+            value.value,
+            value.offset,
+            set.value,
+            set.offset,
+          )
+          match offset {
+            Some(index) => Some(value.base + index)
+            None => Some(0L)
+          }
+        }
+        _ => None
+      }
+    _ => {
+      self.fail("unsupported MIR interpreter " + symbol + " argument")
+      Some(0L)
+    }
   }
 }
 
@@ -1064,10 +1682,10 @@ fn Program::overflow_arithmetic_result(
   right : Int64,
 ) -> (Int64, Bool)? {
   let core = self.core_type(ty)
-  match const_type_int_width(core) {
+  match core.const_int_width() {
     Some(width) if width <= 64 =>
       Some(
-        if const_type_is_unsigned(core) {
+        if core.const_is_unsigned() {
           unsigned_overflow_arithmetic(op, left, right, width)
         } else {
           signed_overflow_arithmetic(op, left, right, width)
@@ -1127,147 +1745,6 @@ fn Interpreter::eval_overflow_builtin(
 }
 
 ///|
-fn mask_int_width(value : Int64, width : Int) -> Int64 {
-  if width >= 64 {
-    value
-  } else {
-    value & ((1L << width) - 1L)
-  }
-}
-
-///|
-fn count_leading_zero_bits(value : Int64, width : Int) -> Int64 {
-  let value = mask_int_width(value, width)
-  for i in 0..<width {
-    let shift = width - 1 - i
-    if ((value >> shift) & 1L) != 0L {
-      return i.to_int64()
-    }
-  }
-  width.to_int64()
-}
-
-///|
-fn count_trailing_zero_bits(value : Int64, width : Int) -> Int64 {
-  let value = mask_int_width(value, width)
-  for i in 0..<width {
-    if ((value >> i) & 1L) != 0L {
-      return i.to_int64()
-    }
-  }
-  width.to_int64()
-}
-
-///|
-fn first_set_bit(value : Int64, width : Int) -> Int64 {
-  let value = mask_int_width(value, width)
-  if value == 0L {
-    0L
-  } else {
-    count_trailing_zero_bits(value, width) + 1L
-  }
-}
-
-///|
-fn count_one_bits(value : Int64, width : Int) -> Int64 {
-  let mut value = mask_int_width(value, width)
-  let mut count = 0L
-  for _ in 0..<width {
-    count += value & 1L
-    value = value >> 1
-  }
-  count
-}
-
-///|
-fn byte_swap_bits(value : Int64, width : Int) -> Int64 {
-  let value = mask_int_width(value, width)
-  let mut result = 0L
-  for i in 0..<(width / 8) {
-    result = (result << 8) | ((value >> (i * 8)) & 0xFFL)
-  }
-  result
-}
-
-///|
-fn Program::generic_builtin_bswap_width(
-  self : Program,
-  frame : InterpFrame,
-  args : Array[@parser.Expr],
-) -> Int {
-  if args.length() == 0 {
-    return 32
-  }
-  let ty = self.core_type(self.expr_type(args[0], frame.scope()))
-  let width = const_type_int_width(ty).unwrap_or(64)
-  if width <= 16 {
-    16
-  } else if width <= 32 {
-    32
-  } else {
-    64
-  }
-}
-
-///|
-fn Program::generic_builtin_bit_width(
-  self : Program,
-  frame : InterpFrame,
-  args : Array[@parser.Expr],
-) -> Int {
-  if args.length() == 0 {
-    return 32
-  }
-  let ty = self.core_type(self.expr_type(args[0], frame.scope()))
-  let width = const_type_int_width(ty).unwrap_or(64)
-  if width <= 32 {
-    32
-  } else {
-    64
-  }
-}
-
-///|
-fn normalized_bit_shift(shift : Int64, width : Int) -> Int {
-  let mut amount = (shift % width.to_int64()).to_int()
-  if amount < 0 {
-    amount += width
-  }
-  amount
-}
-
-///|
-fn logical_right_shift_bits(value : Int64, width : Int, shift : Int) -> Int64 {
-  if shift == 0 {
-    mask_int_width(value, width)
-  } else if width >= 64 {
-    (value.reinterpret_as_uint64() >> shift).reinterpret_as_int64()
-  } else {
-    mask_int_width(value, width) >> shift
-  }
-}
-
-///|
-fn rotate_bits(value : Int64, shift : Int64, width : Int, left : Bool) -> Int64 {
-  let amount = normalized_bit_shift(shift, width)
-  let value = mask_int_width(value, width)
-  if amount == 0 {
-    value
-  } else if left {
-    mask_int_width(
-      (value << amount) | logical_right_shift_bits(value, width, width - amount),
-      width,
-    )
-  } else {
-    mask_int_width(
-      logical_right_shift_bits(value, width, amount) |
-      (value << (width - amount)),
-      width,
-    )
-  }
-}
-
-///|
 fn string_literal_byte_at(value : String, index : Int64) -> Int64 {
   if index < 0L || index >= value.length().to_int64() {
     0L
@@ -1278,14 +1755,7 @@ fn string_literal_byte_at(value : String, index : Int64) -> Int64 {
 
 ///|
 fn string_literal_c_length_from(value : String, offset : Int64) -> Int64 {
-  let length = string_literal_c_length(value).to_int64()
-  if offset <= 0L {
-    length
-  } else if offset >= length {
-    0L
-  } else {
-    length - offset
-  }
+  @ctype.string_literal_c_length_from(value, offset)
 }
 
 ///|
@@ -1455,15 +1925,6 @@ fn nonnegative_min(left : Int64, right : Int64) -> Int64? {
     Some(left)
   } else {
     Some(right)
-  }
-}
-
-///|
-fn unknown_object_size(mode : Int64) -> Int64 {
-  if (mode & 2L) != 0L {
-    0L
-  } else {
-    -1L
   }
 }
 
@@ -1803,12 +2264,7 @@ fn string_literal_find_last_byte_from(
 
 ///|
 fn string_literal_c_length(value : String) -> Int {
-  for i in 0..<value.length() {
-    if value[i].to_int() == 0 {
-      return i
-    }
-  }
-  value.length()
+  @ctype.string_literal_c_length(value)
 }
 
 ///|
@@ -1847,527 +2303,281 @@ fn string_literal_find_string_from(
 }
 
 ///|
+fn string_literal_contains_c_byte_from(
+  value : String,
+  start_offset : Int64,
+  byte : Int64,
+) -> Bool {
+  let needle = byte & 0xFFL
+  let mut index = start_offset
+  while true {
+    let current = string_literal_byte_at(value, index)
+    if current == 0L {
+      return false
+    }
+    if current == needle {
+      return true
+    }
+    index += 1L
+  }
+  false
+}
+
+///|
+fn string_literal_span_from(
+  value : String,
+  start_offset : Int64,
+  set : String,
+  set_offset : Int64,
+  accept : Bool,
+) -> Int64 {
+  let mut index = 0L
+  while true {
+    let current = string_literal_byte_at(value, start_offset + index)
+    if current == 0L {
+      return index
+    }
+    let present = string_literal_contains_c_byte_from(set, set_offset, current)
+    if present != accept {
+      return index
+    }
+    index += 1L
+  }
+  0L
+}
+
+///|
+fn string_literal_find_first_set_byte_from(
+  value : String,
+  start_offset : Int64,
+  set : String,
+  set_offset : Int64,
+) -> Int64? {
+  let mut index = 0L
+  while true {
+    let current = string_literal_byte_at(value, start_offset + index)
+    if current == 0L {
+      return None
+    }
+    if string_literal_contains_c_byte_from(set, set_offset, current) {
+      return Some(start_offset + index)
+    }
+    index += 1L
+  }
+  None
+}
+
+///|
+fn string_literal_find_memory_from(
+  haystack : String,
+  start_offset : Int64,
+  haystack_length : Int64,
+  needle : String,
+  needle_offset : Int64,
+  needle_length : Int64,
+) -> Int64? {
+  if needle_length == 0L {
+    return Some(start_offset)
+  }
+  if haystack_length < needle_length {
+    return None
+  }
+  let mut start = 0L
+  while start <= haystack_length - needle_length {
+    let mut matched = true
+    let mut i = 0L
+    while i < needle_length {
+      if string_literal_byte_at(haystack, start_offset + start + i) !=
+        string_literal_byte_at(needle, needle_offset + i) {
+        matched = false
+      }
+      i += 1L
+    }
+    if matched {
+      return Some(start_offset + start)
+    }
+    start += 1L
+  }
+  None
+}
+
+///|
 fn Interpreter::eval_builtin_call(
   self : Interpreter,
   frame : InterpFrame,
   name : String,
   args : Array[@parser.Expr],
 ) -> Int64? {
-  match overflow_builtin_op(name) {
+  match @ctype.builtin_overflow_op(name) {
     Some(op) => return Some(self.eval_overflow_builtin(frame, op, args))
     None => ()
   }
+  match @ctype.integer_count_builtin_info(name) {
+    Some((kind, width)) => {
+      let value = self.eval_first_call_arg_or_zero(frame, args)
+      return match kind {
+        "clz" => Some(@ctype.count_leading_zero_bits(value, width))
+        "ctz" => Some(@ctype.count_trailing_zero_bits(value, width))
+        "ffs" => Some(@ctype.first_set_bit(value, width))
+        "popcount" => Some(@ctype.count_one_bits(value, width))
+        "parity" => Some(@ctype.count_one_bits(value, width) & 1L)
+        _ => None
+      }
+    }
+    None => ()
+  }
+  match @ctype.integer_abs_builtin_type(name) {
+    Some(ty) => return Some(self.eval_builtin_abs(frame, args, ty))
+    None => ()
+  }
+  let first_arg_ty = if args.length() == 0 {
+    @ctype.Type::UInt
+  } else {
+    self.program.expr_type(args[0], frame.scope())
+  }
+  match @ctype.integer_bswap_builtin_info(name, first_arg_ty) {
+    Some((_, width)) =>
+      return Some(
+        @ctype.byte_swap_bits(
+          self.eval_first_call_arg_or_zero(frame, args),
+          width,
+        ),
+      )
+    None => ()
+  }
+  match @ctype.integer_rotate_builtin_info(name, first_arg_ty) {
+    Some((_, width, left)) => {
+      if args.length() >= 2 {
+        return Some(
+          @ctype.rotate_bits(
+            self.eval_expr(frame, args[0]),
+            self.eval_expr(frame, args[1]),
+            width,
+            left,
+          ),
+        )
+      }
+      return Some(0L)
+    }
+    None => ()
+  }
+  match @ctype.integer_alignment_builtin_info(name, first_arg_ty) {
+    Some((kind, _)) =>
+      return Some(self.eval_builtin_alignment(frame, args, kind))
+    None => ()
+  }
+  match @ctype.builtin_identity_call_info(name) {
+    Some((_, side_effect_arg)) =>
+      return Some(self.eval_builtin_identity_call(frame, args, side_effect_arg))
+    None => ()
+  }
+  match @ctype.builtin_noop_call_info(name) {
+    Some(kind) => return Some(self.eval_builtin_noop_call(frame, args, kind))
+    None => ()
+  }
+  match @ctype.builtin_address_query_info(name) {
+    Some(_) => return Some(self.eval_builtin_address_query(frame, args))
+    None => ()
+  }
+  match @ctype.builtin_constant_query_call_info(name) {
+    Some(kind) =>
+      match
+        @ctype.builtin_constant_query_result(
+          kind,
+          args.length() > 0 &&
+          self.program.fold_const(args[0], frame.scope()) is Some(_),
+        ) {
+        Some(value) => return Some(value)
+        None => ()
+      }
+    None => ()
+  }
+  match @ctype.builtin_fixed_int_constant_call_info(name) {
+    Some((value, _)) => return Some(value)
+    None => ()
+  }
+  match @ctype.builtin_object_size_call_info(name) {
+    Some(_) => return Some(self.eval_builtin_object_size(frame, args))
+    None => ()
+  }
+  match @ctype.floating_builtin_compare_op(name) {
+    Some(_) => return Some(self.eval_builtin_fp_compare(frame, name, args))
+    None => ()
+  }
+  match @ctype.floating_builtin_runtime_class_info(name) {
+    Some(_) => return Some(self.eval_builtin_fp_class(frame, name, args))
+    None => ()
+  }
+  match @ctype.builtin_va_setup_call_info(name) {
+    Some(_) => return Some(0L)
+    None => ()
+  }
+  match @ctype.builtin_zero_memory_call_info(name) {
+    Some(_) => {
+      ignore(self.eval_call_args(frame, args))
+      return Some(0L)
+    }
+    None => ()
+  }
+  match @ctype.builtin_stack_alloc_call_info(name) {
+    Some((op, _)) =>
+      return Some(self.eval_builtin_stack_alloc_call(frame, args, op))
+    None => ()
+  }
+  match @ctype.builtin_length_libcall_info(name, 1) {
+    Some(("strlen", _)) =>
+      return Some(self.eval_builtin_strlen_call(frame, args))
+    _ => ()
+  }
+  match @ctype.builtin_memory_libcall_info(name, args.length()) {
+    Some((symbol, _)) =>
+      match self.eval_builtin_memory_libcall_return(frame, args, symbol) {
+        Some(value) => return Some(value)
+        None => ()
+      }
+    None => ()
+  }
+  match @ctype.builtin_strl_libcall_info(name, args.length()) {
+    Some((symbol, _)) =>
+      match self.eval_builtin_strl_libcall_return(frame, args, symbol) {
+        Some(value) => return Some(value)
+        None => ()
+      }
+    None => ()
+  }
+  match @ctype.builtin_printf_libcall_symbol(name, args.length()) {
+    Some(symbol) =>
+      match self.eval_builtin_printf_libcall_length(frame, name, args, symbol) {
+        Some(value) => return Some(value)
+        None => ()
+      }
+    None => ()
+  }
+  match @ctype.builtin_compare_libcall_info(name, args.length()) {
+    Some((symbol, _)) =>
+      match self.eval_builtin_compare_libcall_return(frame, args, symbol) {
+        Some(value) => return Some(value)
+        None => ()
+      }
+    None => ()
+  }
+  match @ctype.builtin_search_libcall_info(name, args.length()) {
+    Some((symbol, _)) =>
+      match self.eval_builtin_search_libcall_return(frame, args, symbol) {
+        Some(value) => return Some(value)
+        None => ()
+      }
+    None => ()
+  }
+  match @ctype.builtin_span_libcall_info(name, args.length()) {
+    Some((symbol, _)) =>
+      match self.eval_builtin_span_libcall_return(frame, args, symbol) {
+        Some(value) => return Some(value)
+        None => ()
+      }
+    None => ()
+  }
   match name {
-    "__builtin_expect" | "__builtin_expect_with_probability" => {
-      let result = self.eval_first_call_arg_or_zero(frame, args)
-      if args.length() > 1 {
-        self.eval_ignored_expr_side_effects(frame, args[1])
-      }
-      Some(result)
-    }
-    "__builtin_unpredictable"
-    | "__builtin_extract_return_addr"
-    | "__builtin_frob_return_addr" =>
-      Some(self.eval_first_call_arg_or_zero(frame, args))
-    "__builtin_assume_aligned" => {
-      let result = self.eval_first_call_arg_or_zero(frame, args)
-      if args.length() > 2 {
-        self.eval_ignored_expr_side_effects(frame, args[2])
-      }
-      Some(result)
-    }
-    "__builtin_constant_p" =>
-      if args.length() > 0 &&
-        self.program.fold_const(args[0], frame.scope()) is Some(_) {
-        Some(1L)
-      } else {
-        Some(0L)
-      }
-    "__builtin_flt_rounds" => Some(1L)
-    "__builtin_assume" => Some(0L)
-    "__builtin_prefetch" => {
-      if args.length() > 0 {
-        ignore(self.eval_expr(frame, args[0]))
-      }
-      Some(0L)
-    }
-    "__builtin_object_size" | "__builtin_dynamic_object_size" =>
-      Some(self.eval_builtin_object_size(frame, args))
-    "__builtin_isgreater"
-    | "__builtin_isgreaterequal"
-    | "__builtin_isless"
-    | "__builtin_islessequal"
-    | "__builtin_islessgreater"
-    | "__builtin_isunordered" =>
-      Some(self.eval_builtin_fp_compare(frame, name, args))
-    "__builtin_isnan"
-    | "__builtin_isnanf"
-    | "__builtin_isnanl"
-    | "__builtin_isinf"
-    | "__builtin_isinff"
-    | "__builtin_isinfl"
-    | "__builtin_isfinite"
-    | "__builtin_isfinitef"
-    | "__builtin_isfinitel"
-    | "__builtin_isnormal"
-    | "__builtin_isnormalf"
-    | "__builtin_isnormall"
-    | "__builtin_signbit"
-    | "__builtin_signbitf"
-    | "__builtin_signbitl" =>
-      Some(self.eval_builtin_fp_class(frame, name, args))
-    "__builtin_va_start" | "__builtin_va_end" | "__builtin_va_copy" => Some(0L)
-    "__builtin_bzero" => {
-      ignore(self.eval_call_args(frame, args))
-      Some(0L)
-    }
-    "__builtin_memcpy"
-    | "__builtin___memcpy_chk"
-    | "__builtin_memmove"
-    | "__builtin___memmove_chk"
-    | "__builtin_memset"
-    | "__builtin___memset_chk" =>
-      Some(self.eval_return_first_call_arg(frame, args, 3))
-    "__builtin_mempcpy" | "__builtin___mempcpy_chk" => {
-      let values = self.eval_call_args(frame, args)
-      if args.length() < 3 {
-        Some(0L)
-      } else if values[2] < 0L {
-        self.fail("unsupported MIR interpreter mempcpy length")
-        Some(0L)
-      } else {
-        Some(values[0] + values[2])
-      }
-    }
-    "__builtin_strcpy"
-    | "__builtin___strcpy_chk"
-    | "__builtin_strcat"
-    | "__builtin___strcat_chk"
-    | "__builtin_strncpy"
-    | "__builtin___strncpy_chk"
-    | "__builtin_strncat"
-    | "__builtin___strncat_chk" =>
-      Some(self.eval_return_first_call_arg(frame, args, args.length()))
-    "__builtin_stpcpy" | "__builtin___stpcpy_chk" => {
-      let values = self.eval_call_args(frame, args)
-      if args.length() < 2 {
-        Some(0L)
-      } else {
-        match literal_string_arg(args[1]) {
-          Some(value) =>
-            Some(values[0] + string_literal_c_length(value).to_int64())
-          None => {
-            self.fail("unsupported MIR interpreter stpcpy source argument")
-            Some(0L)
-          }
-        }
-      }
-    }
-    "__builtin_stpncpy" | "__builtin___stpncpy_chk" => {
-      let values = self.eval_call_args(frame, args)
-      if args.length() < 3 {
-        Some(0L)
-      } else {
-        match literal_string_arg(args[1]) {
-          Some(value) =>
-            match
-              nonnegative_min(
-                string_literal_c_length(value).to_int64(),
-                values[2],
-              ) {
-              Some(offset) => Some(values[0] + offset)
-              None => {
-                self.fail("unsupported MIR interpreter stpncpy length")
-                Some(0L)
-              }
-            }
-          None => {
-            self.fail("unsupported MIR interpreter stpncpy source argument")
-            Some(0L)
-          }
-        }
-      }
-    }
-    "__builtin___strlcpy_chk" => {
-      ignore(self.eval_call_args(frame, args))
-      if args.length() < 2 {
-        Some(0L)
-      } else {
-        match literal_string_arg(args[1]) {
-          Some(value) => Some(string_literal_c_length(value).to_int64())
-          None => {
-            self.fail("unsupported MIR interpreter strlcpy source argument")
-            Some(0L)
-          }
-        }
-      }
-    }
-    "__builtin___strlcat_chk" => {
-      let values = self.eval_call_args(frame, args)
-      if args.length() < 3 {
-        Some(0L)
-      } else {
-        match literal_string_arg(args[1]) {
-          Some(value) =>
-            if values[2] == 0L {
-              Some(string_literal_c_length(value).to_int64())
-            } else {
-              self.fail(
-                "unsupported MIR interpreter strlcat destination length",
-              )
-              Some(0L)
-            }
-          None => {
-            self.fail("unsupported MIR interpreter strlcat source argument")
-            Some(0L)
-          }
-        }
-      }
-    }
-    "__builtin___snprintf_chk" => {
-      let values = self.eval_call_args(frame, args)
-      if args.length() < 5 {
-        Some(0L)
-      } else {
-        match
-          self.literal_printf_format_length(
-            args[4],
-            "snprintf",
-            args,
-            values,
-            5,
-          ) {
-          Some(value) => Some(value)
-          None => Some(0L)
-        }
-      }
-    }
-    "__builtin___sprintf_chk" => {
-      let values = self.eval_call_args(frame, args)
-      if args.length() < 4 {
-        Some(0L)
-      } else {
-        match
-          self.literal_printf_format_length(args[3], "sprintf", args, values, 4) {
-          Some(value) => Some(value)
-          None => Some(0L)
-        }
-      }
-    }
-    "__builtin___printf_chk" => {
-      let values = self.eval_call_args(frame, args)
-      if args.length() < 2 {
-        Some(0L)
-      } else {
-        match
-          self.literal_printf_format_length(args[1], "printf", args, values, 2) {
-          Some(value) => Some(value)
-          None => Some(0L)
-        }
-      }
-    }
-    "__builtin_alloca" => {
-      let size = if args.length() > 0 {
-        self.eval_expr(frame, args[0])
-      } else {
-        0L
-      }
-      let ptr = self.next_alloca
-      let bump = if size <= 0L { 16L } else { (size + 15L) & -16L }
-      self.next_alloca += bump
-      Some(ptr)
-    }
-    "__builtin_frame_address" | "__builtin_return_address" => {
-      let level = if args.length() > 0 {
-        self.eval_expr(frame, args[0])
-      } else {
-        0L
-      }
-      // The MIR oracle models address nullness only, not exact machine PCs/FPs.
-      Some(if level == 0L { 1L } else { 0L })
-    }
-    "__builtin_abs" => Some(self.eval_builtin_abs(frame, args, SInt))
-    "__builtin_labs" => Some(self.eval_builtin_abs(frame, args, SLong))
-    "__builtin_llabs" => Some(self.eval_builtin_abs(frame, args, SLongLong))
-    "__builtin_is_aligned" => Some(self.eval_builtin_is_aligned(frame, args))
-    "__builtin_align_up" =>
-      Some(self.eval_builtin_align_value(frame, args, true))
-    "__builtin_align_down" =>
-      Some(self.eval_builtin_align_value(frame, args, false))
-    "__builtin_clz" =>
-      Some(
-        count_leading_zero_bits(
-          self.eval_first_call_arg_or_zero(frame, args),
-          32,
-        ),
-      )
-    "__builtin_clzl" | "__builtin_clzll" =>
-      Some(
-        count_leading_zero_bits(
-          self.eval_first_call_arg_or_zero(frame, args),
-          64,
-        ),
-      )
-    "__builtin_ctz" =>
-      Some(
-        count_trailing_zero_bits(
-          self.eval_first_call_arg_or_zero(frame, args),
-          32,
-        ),
-      )
-    "__builtin_ctzl" | "__builtin_ctzll" =>
-      Some(
-        count_trailing_zero_bits(
-          self.eval_first_call_arg_or_zero(frame, args),
-          64,
-        ),
-      )
-    "__builtin_ffs" =>
-      Some(first_set_bit(self.eval_first_call_arg_or_zero(frame, args), 32))
-    "__builtin_ffsl" | "__builtin_ffsll" =>
-      Some(first_set_bit(self.eval_first_call_arg_or_zero(frame, args), 64))
-    "__builtin_bswap16" =>
-      Some(byte_swap_bits(self.eval_first_call_arg_or_zero(frame, args), 16))
-    "__builtin_bswap32" =>
-      Some(byte_swap_bits(self.eval_first_call_arg_or_zero(frame, args), 32))
-    "__builtin_bswap64" =>
-      Some(byte_swap_bits(self.eval_first_call_arg_or_zero(frame, args), 64))
-    "__builtin_bswap" =>
-      Some(
-        byte_swap_bits(
-          self.eval_first_call_arg_or_zero(frame, args),
-          self.program.generic_builtin_bswap_width(frame, args),
-        ),
-      )
-    "__builtin_popcount" =>
-      Some(count_one_bits(self.eval_first_call_arg_or_zero(frame, args), 32))
-    "__builtin_popcountl" | "__builtin_popcountll" =>
-      Some(count_one_bits(self.eval_first_call_arg_or_zero(frame, args), 64))
-    "__builtin_parity" =>
-      Some(
-        count_one_bits(self.eval_first_call_arg_or_zero(frame, args), 32) & 1L,
-      )
-    "__builtin_parityl" | "__builtin_parityll" =>
-      Some(
-        count_one_bits(self.eval_first_call_arg_or_zero(frame, args), 64) & 1L,
-      )
-    "__builtin_rotateleft" | "__builtin_rotateright" =>
-      if args.length() >= 2 {
-        Some(
-          rotate_bits(
-            self.eval_expr(frame, args[0]),
-            self.eval_expr(frame, args[1]),
-            self.program.generic_builtin_bit_width(frame, args),
-            name == "__builtin_rotateleft",
-          ),
-        )
-      } else {
-        Some(0L)
-      }
-    "__builtin_rotateleft32" | "__builtin_rotateright32" =>
-      if args.length() >= 2 {
-        Some(
-          rotate_bits(
-            self.eval_expr(frame, args[0]),
-            self.eval_expr(frame, args[1]),
-            32,
-            name == "__builtin_rotateleft32",
-          ),
-        )
-      } else {
-        Some(0L)
-      }
-    "__builtin_rotateleft64" | "__builtin_rotateright64" =>
-      if args.length() >= 2 {
-        Some(
-          rotate_bits(
-            self.eval_expr(frame, args[0]),
-            self.eval_expr(frame, args[1]),
-            64,
-            name == "__builtin_rotateleft64",
-          ),
-        )
-      } else {
-        Some(0L)
-      }
-    "__builtin_strlen" =>
-      if args.length() == 0 {
-        Some(0L)
-      } else {
-        match self.literal_string_pointer(frame, args[0]) {
-          Some(ptr) => Some(string_literal_c_length_from(ptr.value, ptr.offset))
-          _ => {
-            self.fail("unsupported MIR interpreter strlen argument")
-            Some(0L)
-          }
-        }
-      }
-    "__builtin_strcmp" =>
-      if args.length() < 2 {
-        Some(0L)
-      } else {
-        match
-          (
-            self.literal_string_pointer(frame, args[0]),
-            self.literal_string_pointer(frame, args[1]),
-          ) {
-          (Some(left), Some(right)) =>
-            Some(
-              compare_string_literal_bytes_from(
-                left.value,
-                left.offset,
-                right.value,
-                right.offset,
-                None,
-                true,
-              ),
-            )
-          _ => {
-            self.fail("unsupported MIR interpreter strcmp argument")
-            Some(0L)
-          }
-        }
-      }
-    "__builtin_strncmp" =>
-      if args.length() < 3 {
-        Some(0L)
-      } else {
-        match
-          (
-            self.literal_string_pointer(frame, args[0]),
-            self.literal_string_pointer(frame, args[1]),
-          ) {
-          (Some(left), Some(right)) =>
-            Some(
-              compare_string_literal_bytes_from(
-                left.value,
-                left.offset,
-                right.value,
-                right.offset,
-                Some(self.eval_expr(frame, args[2])),
-                true,
-              ),
-            )
-          _ => {
-            self.fail("unsupported MIR interpreter strncmp argument")
-            Some(0L)
-          }
-        }
-      }
-    "__builtin_memcmp" =>
-      if args.length() < 3 {
-        Some(0L)
-      } else {
-        match
-          (
-            self.literal_string_pointer(frame, args[0]),
-            self.literal_string_pointer(frame, args[1]),
-          ) {
-          (Some(left), Some(right)) =>
-            Some(
-              compare_string_literal_bytes_from(
-                left.value,
-                left.offset,
-                right.value,
-                right.offset,
-                Some(self.eval_expr(frame, args[2])),
-                false,
-              ),
-            )
-          _ => {
-            self.fail("unsupported MIR interpreter memcmp argument")
-            Some(0L)
-          }
-        }
-      }
-    "__builtin_strchr" | "__builtin_strrchr" =>
-      if args.length() < 2 {
-        Some(0L)
-      } else {
-        match self.literal_string_pointer(frame, args[0]) {
-          Some(ptr) => {
-            let offset = if name == "__builtin_strrchr" {
-              string_literal_find_last_byte_from(
-                ptr.value,
-                ptr.offset,
-                self.eval_expr(frame, args[1]),
-              )
-            } else {
-              string_literal_find_byte_from(
-                ptr.value,
-                ptr.offset,
-                self.eval_expr(frame, args[1]),
-                None,
-                true,
-              )
-            }
-            match offset {
-              Some(index) => Some(ptr.base + index)
-              None => Some(0L)
-            }
-          }
-          None => {
-            self.fail("unsupported MIR interpreter string search argument")
-            Some(0L)
-          }
-        }
-      }
-    "__builtin_memchr" =>
-      if args.length() < 3 {
-        Some(0L)
-      } else {
-        match self.literal_string_pointer(frame, args[0]) {
-          Some(ptr) => {
-            let limit = self.eval_expr(frame, args[2])
-            if limit < 0L {
-              self.fail("unsupported MIR interpreter memchr length")
-              Some(0L)
-            } else {
-              match
-                string_literal_find_byte_from(
-                  ptr.value,
-                  ptr.offset,
-                  self.eval_expr(frame, args[1]),
-                  Some(limit),
-                  false,
-                ) {
-                Some(index) => Some(ptr.base + index)
-                None => Some(0L)
-              }
-            }
-          }
-          None => {
-            self.fail("unsupported MIR interpreter memchr argument")
-            Some(0L)
-          }
-        }
-      }
-    "__builtin_strstr" =>
-      if args.length() < 2 {
-        Some(0L)
-      } else {
-        match
-          (
-            self.literal_string_pointer(frame, args[0]),
-            self.literal_string_pointer(frame, args[1]),
-          ) {
-          (Some(haystack), Some(needle)) =>
-            match
-              string_literal_find_string_from(
-                haystack.value,
-                haystack.offset,
-                needle.value,
-                needle.offset,
-              ) {
-              Some(index) => Some(haystack.base + index)
-              None => Some(0L)
-            }
-          _ => {
-            self.fail("unsupported MIR interpreter strstr argument")
-            Some(0L)
-          }
-        }
-      }
     _ => None
   }
 }
@@ -2437,7 +2647,7 @@ fn Interpreter::eval_expr(
       )
     }
     Unary("~", operand) => {
-      let ty = unary_integer_result_type(self.program.expr_type(operand, scope))
+      let ty = self.program.expr_type(operand, scope).integer_promote()
       self.program.runtime_cast_int(self.eval_expr(frame, operand).lnot(), ty)
     }
     Unary("!", operand) =>
@@ -2513,12 +2723,14 @@ fn Interpreter::eval_expr(
       0L
     }
     Sizeof(ty) => self.program.type_size(ty).to_int64()
-    SizeofExpr(String(value)) => (value.length() + 1).to_int64()
+    SizeofExpr(String(value)) => @ctype.string_literal_object_size(value)
     SizeofExpr(e) =>
       self.program.type_size(self.program.expr_type(e, scope)).to_int64()
     Alignof(ty) => self.program.type_align(ty).to_int64()
     AlignofExpr(String(value)) =>
-      self.program.type_align(Array(SChar, value.length() + 1)).to_int64()
+      self.program
+      .type_align(Array(SChar, @ctype.string_literal_array_length(value)))
+      .to_int64()
     AlignofExpr(e) =>
       self.program.type_align(self.program.expr_type(e, scope)).to_int64()
     Cast(ty, value) =>

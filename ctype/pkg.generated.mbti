@@ -2,10 +2,237 @@
 package "bobzhang/kimicc/ctype"
 
 // Values
+pub fn binary_expr_result_type(String, Type, Type, Bool, Bool) -> Type
+
+pub fn binary_result_type(String, Type, Type, Bool) -> Type
+
+pub fn builtin_address_query_info(String) -> String?
+
+pub fn builtin_atomic_compare_exchange_call_info(String) -> (String, Int, Int)?
+
+pub fn builtin_atomic_exchange_call_info(String) -> (String, Int, Int)?
+
+pub fn builtin_atomic_load_store_call_info(String) -> (String, Int)?
+
+pub fn builtin_atomic_lock_free_call_info(String) -> (String, Bool)?
+
+pub fn builtin_atomic_lock_free_size_supported(Int64) -> Bool
+
+pub fn builtin_atomic_update_call_info(String) -> (String, Bool, Int, Int)?
+
+pub fn builtin_atomic_update_op(String) -> (String, Bool)?
+
+pub fn builtin_atomic_zero_store_call_info(String) -> (String, Int)?
+
+pub fn builtin_classify_type_code(Type) -> Int64
+
+pub fn builtin_compare_libcall_arg_type(String, Int) -> Type
+
+pub fn builtin_compare_libcall_info(String, Int) -> (String, Int)?
+
+pub fn builtin_constant_query_call_info(String) -> String?
+
+pub fn builtin_constant_query_result(String, Bool) -> Int64?
+
+pub fn builtin_darwin_fd_helper_call_info(String) -> (String, Int)?
+
+pub fn builtin_fence_call_info(String) -> (String, Int)?
+
+pub fn builtin_fixed_int_constant_call_info(String) -> (Int64, Int)?
+
+pub fn builtin_fixed_return_type(String) -> Type?
+
+pub fn builtin_heap_libcall_arg_type(String, Int) -> Type
+
+pub fn builtin_heap_libcall_info(String, Int) -> (String, Int)?
+
+pub fn builtin_identity_call_info(String) -> (String, Int)?
+
+pub fn builtin_length_libcall_arg_type(Int) -> Type
+
+pub fn builtin_length_libcall_info(String, Int) -> (String, Int)?
+
+pub fn builtin_memory_libcall_arg_type(String, Int) -> Type
+
+pub fn builtin_memory_libcall_info(String, Int) -> (String, Int)?
+
+pub fn builtin_noop_call_info(String) -> String?
+
+pub fn builtin_object_size_call_info(String) -> String?
+
+pub fn builtin_overflow_op(String) -> String?
+
+pub fn builtin_printf_libcall_arg_type(String, Int) -> Type?
+
+pub fn builtin_printf_libcall_symbol(String, Int) -> String?
+
+pub fn builtin_printf_libcall_variadic(String) -> Bool
+
+pub fn builtin_printf_source_index_used(Array[Int], Int) -> Bool
+
+pub fn builtin_printf_source_indexes(String, Int) -> Array[Int]?
+
+pub fn builtin_return_condition_arg_index(String) -> Int?
+
+pub fn builtin_return_rule(String) -> BuiltinReturnRule?
+
+pub fn builtin_return_type(String, Array[Type], Int64?) -> Type?
+
+pub fn builtin_search_libcall_arg_type(String, Int) -> Type
+
+pub fn builtin_search_libcall_info(String, Int) -> (String, Int)?
+
+pub fn builtin_span_libcall_info(String, Int) -> (String, Int)?
+
+pub fn builtin_stack_alloc_call_info(String) -> (String, Int)?
+
+pub fn builtin_strl_libcall_arg_type(Int) -> Type
+
+pub fn builtin_strl_libcall_info(String, Int) -> (String, Int)?
+
+pub fn builtin_trap_call_info(String) -> String?
+
+pub fn builtin_va_setup_call_info(String) -> (String, Int)?
+
+pub fn builtin_zero_memory_call_info(String) -> (String, Int)?
+
+pub fn byte_swap_bits(Int64, Int) -> Int64
+
+pub fn count_leading_zero_bits(Int64, Int) -> Int64
+
+pub fn count_one_bits(Int64, Int) -> Int64
+
+pub fn count_trailing_zero_bits(Int64, Int) -> Int64
+
+pub fn first_set_bit(Int64, Int) -> Int64
+
+pub fn floating_abs(Double) -> Double
+
+pub fn floating_builtin_classify(String, Double) -> Bool?
+
+pub fn floating_builtin_compare(String, Double, Double) -> Bool?
+
+pub fn floating_builtin_compare_op(String) -> String?
+
+pub fn floating_builtin_constant(String, Double?, Double?) -> Double?
+
+pub fn floating_builtin_constant_arg_count(String) -> Int?
+
+pub fn floating_builtin_constant_bits_info(String) -> (Int64, Type)?
+
+pub fn floating_builtin_constant_from_folded_args(String, Double?, Double?) -> Double?
+
+pub fn floating_builtin_runtime_class_info(String) -> (String, Type)?
+
+pub fn floating_builtin_runtime_math_info(String) -> (String, Type, Int)?
+
+pub fn floating_classify(String, Double, Type) -> Bool?
+
+pub fn floating_compare(String, Double, Double) -> Bool?
+
+pub fn floating_constant_binary_arith(String, Double, Double) -> Double?
+
+pub fn floating_constant_from_integer_bits(Int64) -> Double
+
+pub fn floating_constant_to_integer_bits(Double) -> Int64
+
+pub fn floating_constant_unary(String, Double) -> Double?
+
+pub fn floating_copysign(Double, Double) -> Double
+
+pub fn floating_signbit(Double) -> Bool
+
+pub fn generic_selection_control_type(Type) -> Type
+
+pub fn generic_types_compatible(Type, Type) -> Bool
+
+pub fn integer_abs_builtin_type(String) -> Type?
+
+pub fn integer_alignment_builtin_info(String, Type) -> (String, Type)?
+
+pub fn integer_bswap_builtin_info(String, Type) -> (Type, Int)?
+
+pub fn integer_common_type(Type, Type) -> Type
+
+pub fn integer_constant(Int64, Type) -> IntegerConstant
+
+pub fn integer_constant_apply_binary_type(IntegerConstant, IntegerConstant) -> (IntegerConstant, IntegerConstant, Type)
+
+pub fn integer_constant_binary_arith(String, IntegerConstant, IntegerConstant) -> IntegerConstant?
+
+pub fn integer_constant_bool(Bool) -> IntegerConstant
+
+pub fn integer_constant_divide(String, IntegerConstant, IntegerConstant) -> IntegerConstant?
+
+pub fn integer_constant_equal_compare(IntegerConstant, IntegerConstant) -> Bool
+
+pub fn integer_constant_from_floating(Double, Type) -> IntegerConstant
+
+pub fn integer_constant_logical(String, IntegerConstant, IntegerConstant) -> IntegerConstant?
+
+pub fn integer_constant_rel_compare(String, IntegerConstant, IntegerConstant) -> Bool
+
+pub fn integer_constant_shift(String, IntegerConstant, IntegerConstant) -> IntegerConstant?
+
+pub fn integer_constant_token_type(Int64) -> Type
+
+pub fn integer_constant_unary(String, IntegerConstant) -> IntegerConstant?
+
+pub fn integer_count_builtin_info(String) -> (String, Int)?
+
+pub fn integer_literal_type(Int64) -> Type
+
+pub fn integer_rotate_builtin_info(String, Type) -> (Type, Int, Bool)?
+
+pub fn integer_scalar_builtin_constant(String, IntegerConstant?, IntegerConstant?, Type) -> IntegerConstant?
+
+pub fn integer_scalar_builtin_constant_from_folded_args(String, Int, IntegerConstant?, IntegerConstant?, Type) -> IntegerConstant?
+
+pub fn mask_int_width(Int64, Int) -> Int64
+
+pub fn object_size_fact_result(ObjectSizeFact?, Int64) -> Int64
+
+pub fn object_size_unknown(Int64) -> Int64
+
+pub fn rotate_bits(Int64, Int64, Int, Bool) -> Int64
+
+pub fn string_literal_array_length(String) -> Int
+
+pub fn string_literal_c_length(String) -> Int
+
+pub fn string_literal_c_length_from(String, Int64) -> Int64
+
+pub fn string_literal_object_size(String) -> Int64
+
+pub fn ternary_result_type(Type, Type, Bool) -> Type
+
+pub fn unary_numeric_result_type(Type, Bool) -> Type
 
 // Errors
 
 // Types and methods
+pub(all) enum BuiltinReturnRule {
+  BuiltinFixedReturn(Type)
+  BuiltinFirstArgReturn(Type)
+  BuiltinAtomicTargetReturn(Type)
+  BuiltinChooseExprReturn
+} derive(Eq)
+
+pub(all) struct IntegerConstant {
+  bits : Int64
+  ty : Type
+} derive(Eq)
+pub fn IntegerConstant::cast(Self, Type) -> Self
+
+pub(all) struct ObjectSizeFact {
+  whole : Int
+  subobject : Int
+} derive(Eq)
+pub fn ObjectSizeFact::array_element(Self, Int, Int, Int64) -> Self?
+pub fn ObjectSizeFact::member_field(Self, Int, Int) -> Self?
+pub fn ObjectSizeFact::subtract_offset(Self, Int) -> Self?
+pub fn ObjectSizeFact::value(Self, Int64) -> Int
+
 pub(all) enum OffsetDesignator {
   OffsetField(String)
   OffsetIndex(Int64)
@@ -40,11 +267,31 @@ pub(all) enum Type {
   Aligned(Type, Int)
 } derive(Eq)
 pub fn Type::align(Self) -> Int
+pub fn Type::array_element(Self) -> Self?
+pub fn Type::atomic_target(Self) -> Self
+pub fn Type::cast_integer_bits(Self, Int64) -> Int64
+pub fn Type::const_int_width(Self) -> Int?
+pub fn Type::const_is_unsigned(Self) -> Bool
+pub fn Type::core_type(Self) -> Self
+pub fn Type::field_receiver(Self) -> Self?
+pub fn Type::generic_builtin_bswap_width(Self) -> Int
+pub fn Type::generic_builtin_rotate_width(Self) -> Int
+pub fn Type::integer_promote(Self) -> Self
+pub fn Type::integer_rank(Self) -> Int
+pub fn Type::is_aggregate(Self) -> Bool
+pub fn Type::is_anonymous_aggregate(Self) -> Bool
+pub fn Type::is_float_or_double(Self) -> Bool
 pub fn Type::is_floating(Self) -> Bool
+pub fn Type::is_floating_with_long_double(Self, Bool) -> Bool
+pub fn Type::is_int128(Self) -> Bool
 pub fn Type::is_integer(Self) -> Bool
+pub fn Type::is_object_aggregate(Self) -> Bool
 pub fn Type::is_signed(Self) -> Bool
+pub fn Type::is_unsigned_integer(Self) -> Bool
+pub fn Type::pointer_or_array_element(Self) -> Self?
 pub fn Type::size(Self) -> Int
 pub fn Type::to_unsigned(Self) -> Self
+pub fn Type::without_alignment(Self) -> Self
 pub impl Show for Type
 
 // Type aliases

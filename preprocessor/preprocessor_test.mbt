@@ -458,6 +458,16 @@ test "linux amd64 has builtin reflects supported lowering" {
     #|#else
     #|int unpredictable_hint = 0;
     #|#endif
+    #|#if __has_builtin(__builtin___clear_cache) && __has_builtin(__builtin_clear_cache)
+    #|int clear_cache_hint = 1;
+    #|#else
+    #|int clear_cache_hint = 0;
+    #|#endif
+    #|#if __has_builtin(__builtin_alloca) && __has_builtin(__builtin_alloca_with_align)
+    #|int dynamic_stack_builtins = 1;
+    #|#else
+    #|int dynamic_stack_builtins = 0;
+    #|#endif
     #|#if __has_builtin(__builtin_is_aligned) && __has_builtin(__builtin_align_up) && __has_builtin(__builtin_align_down)
     #|int alignment_builtins = 1;
     #|#else
@@ -472,7 +482,7 @@ test "linux amd64 has builtin reflects supported lowering" {
     Ok(text) =>
       inspect(
         text,
-        content="int memory_and_return_address=1;\nint gnu_copy_builtins=1;\nint atomic_and_overflow=1;\nint sync_update_builtins=1;\nint compile_time_selection=1;\nint floating_environment_query=1;\nint unpredictable_hint=1;\nint alignment_builtins=1;\nint unsupported=0;\n",
+        content="int memory_and_return_address=1;\nint gnu_copy_builtins=1;\nint atomic_and_overflow=1;\nint sync_update_builtins=1;\nint compile_time_selection=1;\nint floating_environment_query=1;\nint unpredictable_hint=1;\nint clear_cache_hint=1;\nint dynamic_stack_builtins=1;\nint alignment_builtins=1;\nint unsupported=0;\n",
       )
     Err(err) => fail(err.to_string())
   }
@@ -745,6 +755,14 @@ test "function-like macro invocation may span newline before paren" {
     #|(macos(10.14)) = 7 };
   let text = expect_preprocess(source)
   inspect(text, content="enum{VALUE=7};\n")
+}
+
+///|
+test "range designator ellipsis stays separate from numeric tokens" {
+  let source =
+    #|int a[4] = { [2 ... 3] = 7 };
+  let text = expect_preprocess(source)
+  inspect(text, content="int a[4]={[2 ... 3]=7};\n")
 }
 
 ///|

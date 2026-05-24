@@ -505,31 +505,12 @@ fn Parser::parse_postfix(self : Parser) -> Expr {
 }
 
 ///|
-fn generic_strip_type(ty : Type) -> Type {
-  match ty {
-    Aligned(inner, _) => generic_strip_type(inner)
-    _ => ty
-  }
-}
-
-///|
-fn generic_control_type(ty : Type) -> Type {
-  match generic_strip_type(ty) {
-    Array(elem, _) => Pointer(elem)
-    other => other
-  }
-}
-
-///|
-fn generic_types_compatible(control_ty : Type, assoc_ty : Type) -> Bool {
-  generic_strip_type(control_ty) == generic_strip_type(assoc_ty)
-}
-
-///|
 fn Parser::parse_generic_selection(self : Parser) -> Expr {
   self.expect(LParen)
   let control = self.parse_assign()
-  let control_ty = generic_control_type(self.const_expr_type(control))
+  let control_ty = @ctype.generic_selection_control_type(
+    self.const_expr_type(control),
+  )
   let mut selected : Expr? = None
   let mut default_expr : Expr? = None
   while self.token == Comma {
@@ -545,7 +526,8 @@ fn Parser::parse_generic_selection(self : Parser) -> Expr {
         let assoc_ty = self.parse_type_name()
         self.expect(Colon)
         let expr = self.parse_assign()
-        if selected is None && generic_types_compatible(control_ty, assoc_ty) {
+        if selected is None &&
+          @ctype.generic_types_compatible(control_ty, assoc_ty) {
           selected = Some(expr)
         }
       }
@@ -584,38 +566,10 @@ fn Parser::parse_builtin_types_compatible_p(self : Parser) -> Expr {
   self.expect(Comma)
   let rhs_ty = self.parse_type_name()
   self.expect(RParen)
-  if generic_types_compatible(lhs_ty, rhs_ty) {
+  if @ctype.generic_types_compatible(lhs_ty, rhs_ty) {
     Number(1)
   } else {
     Number(0)
-  }
-}
-
-///|
-fn classify_type_code(ty : Type) -> Int64 {
-  match generic_strip_type(ty) {
-    Atomic(inner) => classify_type_code(inner)
-    Void => 0
-    Bool => 4
-    Float | Double | LongDouble => 8
-    Float16 => abort("_Float16 classification is not supported")
-    Float128 => abort("__float128 classification is not supported")
-    Pointer(_) | Array(_, _) | FuncPtr(_, _, _) => 5
-    Struct(_) => 12
-    Union(_) => 13
-    SChar
-    | UChar
-    | SShort
-    | UShort
-    | SInt
-    | UInt
-    | SLong
-    | ULong
-    | SLongLong
-    | ULongLong
-    | SInt128
-    | UInt128 => 1
-    Aligned(inner, _) => classify_type_code(inner)
   }
 }
 
@@ -624,7 +578,7 @@ fn Parser::parse_builtin_classify_type(self : Parser) -> Expr {
   self.expect(LParen)
   let expr = self.parse_assign()
   self.expect(RParen)
-  Number(classify_type_code(self.const_expr_type(expr)))
+  Number(@ctype.builtin_classify_type_code(self.const_expr_type(expr)))
 }
 
 ///|

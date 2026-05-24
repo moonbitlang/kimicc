@@ -20,7 +20,6 @@ priv struct Codegen {
   globals : Map[String, CodegenGlobalDecl]
   mut emitted_labels : Map[String, String]
   mut defined_labels : Map[String, Bool]
-  mut fp_literals : Array[Double]
   mut sret_dest_offset : Int
   mut sret_scratch_offset : Int
   mut sret_scratch_size : Int
@@ -63,6 +62,43 @@ fn escape_string(s : String) -> String {
     }
   }
   buf.to_string()
+}
+
+///|
+fn escape_string_prefix(s : String, limit : Int) -> String {
+  let buf = StringBuilder::new()
+  let mut emitted = 0
+  for ch in s {
+    if emitted >= limit {
+      break
+    }
+    let value = ch.to_int()
+    if value < 0x20 || value >= 0x7f || ch == '\\' || ch == '"' {
+      write_octal_escape(buf, value)
+    } else {
+      buf.write_char(ch)
+    }
+    emitted += 1
+  }
+  buf.to_string()
+}
+
+///|
+fn global_char_array_string_directive(value : String, width : Int) -> String {
+  if value.length() < width {
+    "\t.asciz\t\"" + escape_string(value) + "\""
+  } else {
+    "\t.ascii\t\"" + escape_string_prefix(value, width) + "\""
+  }
+}
+
+///|
+fn global_char_array_string_padding(value : String, width : Int) -> Int {
+  if value.length() < width {
+    width - value.length() - 1
+  } else {
+    0
+  }
 }
 
 ///|
@@ -207,9 +243,77 @@ fn mir_codegen_collect_value_inline_refs(
     | MirVaArg(base, _)
     | MirVaArgAddr(base, _) =>
       mir_codegen_collect_value_inline_refs(base, inline_decls, bodies, needed)
+    MirVaStart(target) | MirVaEnd(target) =>
+      mir_codegen_collect_value_inline_refs(
+        target, inline_decls, bodies, needed,
+      )
+    MirVaCopy(target, source) => {
+      mir_codegen_collect_value_inline_refs(
+        target, inline_decls, bodies, needed,
+      )
+      mir_codegen_collect_value_inline_refs(
+        source, inline_decls, bodies, needed,
+      )
+    }
+    MirBzero(dst, size) => {
+      mir_codegen_collect_value_inline_refs(dst, inline_decls, bodies, needed)
+      mir_codegen_collect_value_inline_refs(size, inline_decls, bodies, needed)
+    }
+    MirAtomicLoad(ptr, order, _) => {
+      mir_codegen_collect_value_inline_refs(ptr, inline_decls, bodies, needed)
+      mir_codegen_collect_value_inline_refs(order, inline_decls, bodies, needed)
+    }
+    MirAtomicStore(ptr, value, order) => {
+      mir_codegen_collect_value_inline_refs(ptr, inline_decls, bodies, needed)
+      mir_codegen_collect_value_inline_refs(value, inline_decls, bodies, needed)
+      mir_codegen_collect_value_inline_refs(order, inline_decls, bodies, needed)
+    }
+    MirAtomicUpdate(_, _, ptr, value, extras, _) => {
+      mir_codegen_collect_value_inline_refs(ptr, inline_decls, bodies, needed)
+      mir_codegen_collect_value_inline_refs(value, inline_decls, bodies, needed)
+      for extra in extras {
+        mir_codegen_collect_value_inline_refs(
+          extra, inline_decls, bodies, needed,
+        )
+      }
+    }
+    MirAtomicExchange(ptr, value, extras, _) => {
+      mir_codegen_collect_value_inline_refs(ptr, inline_decls, bodies, needed)
+      mir_codegen_collect_value_inline_refs(value, inline_decls, bodies, needed)
+      for extra in extras {
+        mir_codegen_collect_value_inline_refs(
+          extra, inline_decls, bodies, needed,
+        )
+      }
+    }
+    MirAtomicCompareExchange(ptr, expected, desired, extras) => {
+      mir_codegen_collect_value_inline_refs(ptr, inline_decls, bodies, needed)
+      mir_codegen_collect_value_inline_refs(
+        expected, inline_decls, bodies, needed,
+      )
+      mir_codegen_collect_value_inline_refs(
+        desired, inline_decls, bodies, needed,
+      )
+      for extra in extras {
+        mir_codegen_collect_value_inline_refs(
+          extra, inline_decls, bodies, needed,
+        )
+      }
+    }
+    MirLibCall(_, args, _) =>
+      for arg in args {
+        mir_codegen_collect_value_inline_refs(arg, inline_decls, bodies, needed)
+      }
     MirBinary(_, left, right, _) => {
       mir_codegen_collect_value_inline_refs(left, inline_decls, bodies, needed)
       mir_codegen_collect_value_inline_refs(right, inline_decls, bodies, needed)
+    }
+    MirOverflow(_, left, right, result_ptr) => {
+      mir_codegen_collect_value_inline_refs(left, inline_decls, bodies, needed)
+      mir_codegen_collect_value_inline_refs(right, inline_decls, bodies, needed)
+      mir_codegen_collect_value_inline_refs(
+        result_ptr, inline_decls, bodies, needed,
+      )
     }
     MirCall(name, args, _) => {
       mir_codegen_mark_needed_inline(name, inline_decls, bodies, needed)
@@ -467,7 +571,6 @@ fn Codegen::new() -> Codegen {
     globals: {},
     emitted_labels: {},
     defined_labels: {},
-    fp_literals: [],
     sret_dest_offset: -1,
     sret_scratch_offset: -1,
     sret_scratch_size: 0,
@@ -717,8 +820,8 @@ fn Codegen::emit_mir_global_string(
 ) -> Unit {
   match peel_aligned_type(ty) {
     Array(SChar, n) | Array(UChar, n) => {
-      self.emit("\t.asciz\t\"" + escape_string(value) + "\"")
-      let pad = n - value.length() - 1
+      self.emit(global_char_array_string_directive(value, n))
+      let pad = global_char_array_string_padding(value, n)
       if pad > 0 {
         self.emit("\t.space\t" + pad.to_string())
       }
