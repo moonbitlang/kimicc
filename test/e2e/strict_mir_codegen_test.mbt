@@ -7647,6 +7647,46 @@ async test "strict MIR codegen matches parser codegen for stores through va_arg 
 }
 
 ///|
+test "strict MIR codegen stores through va_arg pointers from clang caller" {
+  let callee =
+    #|typedef __builtin_va_list va_list;
+    #|void write_variadic(int value, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, value);
+    #|  *__builtin_va_arg(ap, int*) = value;
+    #|  __builtin_va_end(ap);
+    #|}
+  let driver =
+    #|void write_variadic(int value, ...);
+    #|int main(void) {
+    #|  int x = 0;
+    #|  write_variadic(37, &x);
+    #|  return x;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 37)
+}
+
+///|
+test "strict MIR codegen passes va_arg pointer stores to clang callees" {
+  let caller =
+    #|void write_variadic(int value, ...);
+    #|int main(void) {
+    #|  int x = 0;
+    #|  write_variadic(37, &x);
+    #|  return x;
+    #|}
+  let callee =
+    #|typedef __builtin_va_list va_list;
+    #|void write_variadic(int value, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, value);
+    #|  *__builtin_va_arg(ap, int*) = value;
+    #|  __builtin_va_end(ap);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 37)
+}
+
+///|
 test "strict MIR codegen executes aggregate va_arg reads from clang caller" {
   let callee =
     #|typedef __builtin_va_list va_list;
