@@ -9008,6 +9008,46 @@ async test "strict MIR codegen matches parser codegen for checked floating print
 }
 
 ///|
+test "strict MIR codegen exposes checked floating printf formatting to clang callers" {
+  let callee =
+    #|int eval_checked_floating_printf_formatting(void) {
+    #|  char buf[80];
+    #|  int n = __builtin___snprintf_chk(buf, 80, 0, 80, "%+.1f|% 6.2f|%05.0f", 1.5, 2.0, 3.0);
+    #|  if (n != 17) return 1;
+    #|  if (buf[0] != '+' || buf[1] != '1' || buf[2] != '.' || buf[3] != '5' || buf[4] != '|') return 2;
+    #|  if (buf[5] != ' ' || buf[6] != ' ' || buf[7] != '2' || buf[8] != '.' || buf[9] != '0' || buf[10] != '0') return 3;
+    #|  if (buf[11] != '|' || buf[12] != '0' || buf[13] != '0' || buf[14] != '0' || buf[15] != '0' || buf[16] != '3' || buf[17] != 0) return 4;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_checked_floating_printf_formatting(void);
+    #|int main(void) {
+    #|  return eval_checked_floating_printf_formatting();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang checked floating printf formatting" {
+  let caller =
+    #|int eval_checked_floating_printf_formatting_from_clang(void);
+    #|int main(void) {
+    #|  return eval_checked_floating_printf_formatting_from_clang();
+    #|}
+  let callee =
+    #|int eval_checked_floating_printf_formatting_from_clang(void) {
+    #|  char buf[80];
+    #|  int n = __builtin___snprintf_chk(buf, 80, 0, 80, "%+.1f|% 6.2f|%05.0f", 1.5, 2.0, 3.0);
+    #|  if (n != 17) return 1;
+    #|  if (buf[0] != '+' || buf[1] != '1' || buf[2] != '.' || buf[3] != '5' || buf[4] != '|') return 2;
+    #|  if (buf[5] != ' ' || buf[6] != ' ' || buf[7] != '2' || buf[8] != '.' || buf[9] != '0' || buf[10] != '0') return 3;
+    #|  if (buf[11] != '|' || buf[12] != '0' || buf[13] != '0' || buf[14] != '0' || buf[15] != '0' || buf[16] != '3' || buf[17] != 0) return 4;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 async test "strict MIR codegen matches parser codegen for checked scientific printf formatting" {
   let source =
     #|extern int printf(const char *, ...);
