@@ -9208,6 +9208,40 @@ async test "strict MIR codegen matches parser codegen for long double fabs and i
 }
 
 ///|
+test "strict MIR codegen exposes long double fabs and infinity builtins to clang callers" {
+  let callee =
+    #|int finitel(long double x) {
+    #|  return x == x && __builtin_fabsl(x) != __builtin_infl();
+    #|}
+    #|int eval_long_double_fabs(void) {
+    #|  return finitel(-5.5L) + 2 * finitel(__builtin_infl());
+    #|}
+  let driver =
+    #|int eval_long_double_fabs(void);
+    #|int main(void) {
+    #|  return eval_long_double_fabs();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 1)
+}
+
+///|
+test "strict MIR codegen calls clang long double fabs and infinity builtins" {
+  let caller =
+    #|int eval_long_double_fabs(void);
+    #|int main(void) {
+    #|  return eval_long_double_fabs();
+    #|}
+  let callee =
+    #|int finitel(long double x) {
+    #|  return x == x && __builtin_fabsl(x) != __builtin_infl();
+    #|}
+    #|int eval_long_double_fabs(void) {
+    #|  return finitel(-5.5L) + 2 * finitel(__builtin_infl());
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 1)
+}
+
+///|
 fn strict_mir_floating_comparison_builtin_source() -> String {
   let source =
     #|int main(void) {
