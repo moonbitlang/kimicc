@@ -9595,6 +9595,96 @@ async test "strict MIR codegen matches parser codegen for aggregate member retur
 }
 
 ///|
+test "strict MIR codegen returns aggregate members to clang callers" {
+  let callee =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|struct Desc {
+    #|  int flags;
+    #|  Value value;
+    #|};
+    #|Value pick(struct Desc *desc) {
+    #|  return desc->value;
+    #|}
+  let driver =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|struct Desc {
+    #|  int flags;
+    #|  Value value;
+    #|};
+    #|Value pick(struct Desc *desc);
+    #|int main(void) {
+    #|  struct Desc desc;
+    #|  desc.value = (Value){ (ValueUnion){ .int32 = 6 }, 4 };
+    #|  Value value = pick(&desc);
+    #|  return value.u.int32 + (int)value.tag;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 10)
+}
+
+///|
+test "strict MIR codegen receives aggregate member returns from clang callees" {
+  let caller =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|struct Desc {
+    #|  int flags;
+    #|  Value value;
+    #|};
+    #|Value pick(struct Desc *desc);
+    #|int main(void) {
+    #|  struct Desc desc;
+    #|  desc.value = (Value){ (ValueUnion){ .int32 = 6 }, 4 };
+    #|  Value value = pick(&desc);
+    #|  return value.u.int32 + (int)value.tag;
+    #|}
+  let callee =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|struct Desc {
+    #|  int flags;
+    #|  Value value;
+    #|};
+    #|Value pick(struct Desc *desc) {
+    #|  return desc->value;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 10)
+}
+
+///|
 fn strict_mir_identity_cast_aggregate_argument_source() -> String {
   let source =
     #|typedef union ValueUnion {
