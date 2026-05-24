@@ -2531,7 +2531,7 @@ async test "strict MIR codegen matches parser codegen for string destination lib
 }
 
 ///|
-test "strict MIR codegen executes end-pointer memory string builtins" {
+fn strict_mir_end_pointer_memory_string_builtins_source() -> String {
   let source =
     #|void *mempcpy(void *dst, const void *src, unsigned long n) {
     #|  char *d = (char *)dst;
@@ -2584,7 +2584,22 @@ test "strict MIR codegen executes end-pointer memory string builtins" {
     #|  if (n != 46) return 14;
     #|  return 42;
     #|}
+  source
+}
+
+///|
+test "strict MIR codegen executes end-pointer memory string builtins" {
+  let source = strict_mir_end_pointer_memory_string_builtins_source()
   assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
+async test "strict MIR codegen matches parser codegen for end-pointer memory string builtins" {
+  let result = run_source_strict_mir_against_parser_codegen(
+    strict_mir_end_pointer_memory_string_builtins_source(),
+    "strict_mir_end_pointer_memory_string_builtins_differential",
+  )
+  assert_eq(result.code, 42)
 }
 
 ///|
