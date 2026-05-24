@@ -9483,6 +9483,74 @@ async test "strict MIR codegen matches parser codegen for aggregate call result 
 }
 
 ///|
+test "strict MIR codegen returns aggregate call result fields to clang callers" {
+  let callee =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|Value make(int value) {
+    #|  return (Value){ (ValueUnion){ .int32 = value }, 3 };
+    #|}
+  let driver =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|Value make(int value);
+    #|int main(void) {
+    #|  return make(5).u.int32 + (int)make(2).tag;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 8)
+}
+
+///|
+test "strict MIR codegen reads aggregate call result fields from clang callees" {
+  let caller =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|Value make(int value);
+    #|int main(void) {
+    #|  return make(5).u.int32 + (int)make(2).tag;
+    #|}
+  let callee =
+    #|typedef union ValueUnion {
+    #|  int int32;
+    #|  double float64;
+    #|  void *ptr;
+    #|  long long short_big_int;
+    #|} ValueUnion;
+    #|typedef struct Value {
+    #|  ValueUnion u;
+    #|  long tag;
+    #|} Value;
+    #|Value make(int value) {
+    #|  return (Value){ (ValueUnion){ .int32 = value }, 3 };
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 8)
+}
+
+///|
 fn strict_mir_aggregate_member_return_source() -> String {
   let source =
     #|typedef union ValueUnion {
