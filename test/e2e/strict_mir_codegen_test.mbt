@@ -7568,6 +7568,52 @@ async test "strict MIR codegen matches parser codegen for va_copy" {
 }
 
 ///|
+test "strict MIR codegen executes va_copy from clang caller" {
+  let callee =
+    #|typedef __builtin_va_list va_list;
+    #|int copy_variadic(int tag, ...) {
+    #|  va_list ap;
+    #|  va_list copy;
+    #|  __builtin_va_start(ap, tag);
+    #|  __builtin_va_copy(copy, ap);
+    #|  int first = __builtin_va_arg(ap, int);
+    #|  int copied = __builtin_va_arg(copy, int);
+    #|  __builtin_va_end(copy);
+    #|  __builtin_va_end(ap);
+    #|  return first + copied;
+    #|}
+  let driver =
+    #|int copy_variadic(int tag, ...);
+    #|int main(void) {
+    #|  return copy_variadic(0, 21);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang va_copy callees" {
+  let caller =
+    #|int copy_variadic(int tag, ...);
+    #|int main(void) {
+    #|  return copy_variadic(0, 21);
+    #|}
+  let callee =
+    #|typedef __builtin_va_list va_list;
+    #|int copy_variadic(int tag, ...) {
+    #|  va_list ap;
+    #|  va_list copy;
+    #|  __builtin_va_start(ap, tag);
+    #|  __builtin_va_copy(copy, ap);
+    #|  int first = __builtin_va_arg(ap, int);
+    #|  int copied = __builtin_va_arg(copy, int);
+    #|  __builtin_va_end(copy);
+    #|  __builtin_va_end(ap);
+    #|  return first + copied;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_va_arg_pointer_store_source() -> String {
   let source =
     #|typedef __builtin_va_list va_list;
