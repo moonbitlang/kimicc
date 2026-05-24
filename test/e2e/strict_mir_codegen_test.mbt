@@ -1490,6 +1490,44 @@ test "strict MIR codegen receives int128 return values from clang callees" {
 }
 
 ///|
+test "strict MIR codegen receives stack-passed int128 parameters from clang callers" {
+  let callee =
+    #|typedef __int128 i128;
+    #|long split_stack_from_clang(long a0, long a1, long a2, long a3, long a4,
+    #|                            long a5, long a6, long a7, long a8, i128 v) {
+    #|  return a8 + (long)v + (long)(v >> 64);
+    #|}
+  let driver =
+    #|typedef __int128 i128;
+    #|long split_stack_from_clang(long a0, long a1, long a2, long a3, long a4,
+    #|                            long a5, long a6, long a7, long a8, i128 v);
+    #|int main(void) {
+    #|  i128 v = ((i128)5 << 64) | 7;
+    #|  return (int)split_stack_from_clang(0, 0, 0, 0, 0, 0, 0, 0, 30, v);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen passes stack-passed int128 parameters to clang callees" {
+  let caller =
+    #|typedef __int128 i128;
+    #|long split_stack_to_clang(long a0, long a1, long a2, long a3, long a4,
+    #|                          long a5, long a6, long a7, long a8, i128 v);
+    #|int main(void) {
+    #|  i128 v = ((i128)5 << 64) | 7;
+    #|  return (int)split_stack_to_clang(0, 0, 0, 0, 0, 0, 0, 0, 30, v);
+    #|}
+  let callee =
+    #|typedef __int128 i128;
+    #|long split_stack_to_clang(long a0, long a1, long a2, long a3, long a4,
+    #|                          long a5, long a6, long a7, long a8, i128 v) {
+    #|  return a8 + (long)v + (long)(v >> 64);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_implicit_external_scalar_call_arguments_source() -> String {
   let source =
     #|int main(void) {
