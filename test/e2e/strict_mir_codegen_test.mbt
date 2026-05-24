@@ -9593,6 +9593,60 @@ async test "strict MIR codegen matches parser codegen for bitfield post incremen
 }
 
 ///|
+test "strict MIR codegen applies bitfield post increment from clang callers" {
+  let callee =
+    #|struct S {
+    #|  unsigned int len : 31;
+    #|  unsigned char wide : 1;
+    #|  unsigned short data[8];
+    #|};
+    #|int bump(struct S *p) {
+    #|  p->len = 2;
+    #|  p->data[p->len++] = 9;
+    #|  return p->len + p->data[2];
+    #|}
+  let driver =
+    #|struct S {
+    #|  unsigned int len : 31;
+    #|  unsigned char wide : 1;
+    #|  unsigned short data[8];
+    #|};
+    #|int bump(struct S *p);
+    #|int main(void) {
+    #|  struct S s = {0};
+    #|  return bump(&s);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 12)
+}
+
+///|
+test "strict MIR codegen passes bitfield post increment state to clang callees" {
+  let caller =
+    #|struct S {
+    #|  unsigned int len : 31;
+    #|  unsigned char wide : 1;
+    #|  unsigned short data[8];
+    #|};
+    #|int bump(struct S *p);
+    #|int main(void) {
+    #|  struct S s = {0};
+    #|  return bump(&s);
+    #|}
+  let callee =
+    #|struct S {
+    #|  unsigned int len : 31;
+    #|  unsigned char wide : 1;
+    #|  unsigned short data[8];
+    #|};
+    #|int bump(struct S *p) {
+    #|  p->len = 2;
+    #|  p->data[p->len++] = 9;
+    #|  return p->len + p->data[2];
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 12)
+}
+
+///|
 async test "strict MIR codegen matches parser codegen for aggregate compound literal arguments" {
   let result = run_source_strict_mir_against_parser_codegen(
     strict_mir_aggregate_compound_literal_argument_source(),
