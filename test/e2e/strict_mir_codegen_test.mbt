@@ -5742,6 +5742,38 @@ async test "strict MIR codegen matches parser codegen for anonymous union array 
 }
 
 ///|
+fn strict_mir_local_extern_function_prototype_source() -> String {
+  let source =
+    #|int value = 37;
+    #|int *external_ptr(void) {
+    #|  return &value;
+    #|}
+    #|int read_external(void) {
+    #|  extern int *external_ptr(void);
+    #|  return *external_ptr();
+    #|}
+    #|int main(void) {
+    #|  return read_external();
+    #|}
+  source
+}
+
+///|
+test "strict MIR codegen executes local extern function prototypes" {
+  let source = strict_mir_local_extern_function_prototype_source()
+  assert_eq(run_source_strict_mir(source), 37)
+}
+
+///|
+async test "strict MIR codegen matches parser codegen for local extern function prototypes" {
+  let result = run_source_strict_mir_against_parser_codegen(
+    strict_mir_local_extern_function_prototype_source(),
+    "strict_mir_local_extern_function_prototype_differential",
+  )
+  assert_eq(result.code, 37)
+}
+
+///|
 test "strict MIR codegen calls local extern function prototypes" {
   let callee =
     #|int read_external(void) {
