@@ -8394,6 +8394,62 @@ async test "strict MIR codegen matches parser codegen for checked printf libcall
 }
 
 ///|
+test "strict MIR codegen exposes checked printf libcall side effects to clang callers" {
+  let callee =
+    #|int eval_checked_printf_side_effect(void) {
+    #|  char buf[32];
+    #|  int side = 0;
+    #|  int n = __builtin___snprintf_chk(buf, 32, side += 1, side += 2, "%d", 42);
+    #|  if (n != 2) return 1;
+    #|  if (side != 3) return 2;
+    #|  if (buf[0] != '4' || buf[1] != '2' || buf[2] != 0) return 3;
+    #|  n = __builtin___sprintf_chk(buf, side += 4, side += 8, "%s", "ok");
+    #|  if (n != 2) return 4;
+    #|  if (side != 15) return 5;
+    #|  if (buf[0] != 'o' || buf[1] != 'k' || buf[2] != 0) return 6;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_checked_printf_side_effect(void);
+    #|int main(void) {
+    #|  return eval_checked_printf_side_effect();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang checked printf libcall side effects" {
+  let caller =
+    #|int eval_checked_printf_side_effect_from_clang(void);
+    #|int main(void) {
+    #|  return eval_checked_printf_side_effect_from_clang();
+    #|}
+  let callee =
+    #|int bump_flag(int *side, int delta) {
+    #|  *side += delta;
+    #|  return 0;
+    #|}
+    #|unsigned long bump_size(int *side, int delta) {
+    #|  *side += delta;
+    #|  return 32;
+    #|}
+    #|int eval_checked_printf_side_effect_from_clang(void) {
+    #|  char buf[32];
+    #|  int side = 0;
+    #|  int n = __builtin___snprintf_chk(buf, 32, bump_flag(&side, 1), bump_size(&side, 2), "%d", 42);
+    #|  if (n != 2) return 1;
+    #|  if (side != 3) return 2;
+    #|  if (buf[0] != '4' || buf[1] != '2' || buf[2] != 0) return 3;
+    #|  n = __builtin___sprintf_chk(buf, bump_flag(&side, 4), bump_size(&side, 8), "%s", "ok");
+    #|  if (n != 2) return 4;
+    #|  if (side != 15) return 5;
+    #|  if (buf[0] != 'o' || buf[1] != 'k' || buf[2] != 0) return 6;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_plain_printf_builtin_source() -> String {
   let source =
     #|int main(void) {
