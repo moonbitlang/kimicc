@@ -847,6 +847,70 @@ async test "strict MIR codegen matches parser codegen for alignment and hint bui
 }
 
 ///|
+test "strict MIR codegen exposes alignment and hint builtins to clang callers" {
+  let callee =
+    #|int eval_alignment_hint_builtins(void) {
+    #|  int side = 0;
+    #|  unsigned long value = 37ul;
+    #|  char buf[64];
+    #|  char *p = buf + 3;
+    #|  if (__builtin_unpredictable(side += 1) != 1) return 1;
+    #|  if (__builtin_expect(side += 2, side += 4) != 3) return 2;
+    #|  if (side != 7) return 3;
+    #|  if (__builtin_expect_with_probability(side += 5, side += 6, 0.25) != 12) return 4;
+    #|  if (side != 18) return 5;
+    #|  __builtin_assume(side == 18);
+    #|  __builtin_prefetch(buf + (side += 1));
+    #|  char *q = __builtin_assume_aligned(p + 5, 8, side += 3);
+    #|  if (q != buf + 8) return 6;
+    #|  if (__builtin_align_up(value, 8ul) != 40ul) return 7;
+    #|  if (__builtin_align_down(value, 8ul) != 32ul) return 8;
+    #|  if (!__builtin_is_aligned(40ul, 8ul)) return 9;
+    #|  if (__builtin_is_aligned(value, 8ul)) return 10;
+    #|  if (side != 22) return 11;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_alignment_hint_builtins(void);
+    #|int main(void) {
+    #|  return eval_alignment_hint_builtins();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang alignment and hint builtins" {
+  let caller =
+    #|int eval_alignment_hint_builtins_from_clang(void);
+    #|int main(void) {
+    #|  return eval_alignment_hint_builtins_from_clang();
+    #|}
+  let callee =
+    #|int eval_alignment_hint_builtins_from_clang(void) {
+    #|  int side = 0;
+    #|  unsigned long value = 37ul;
+    #|  char buf[64];
+    #|  char *p = buf + 3;
+    #|  if (__builtin_unpredictable(side += 1) != 1) return 1;
+    #|  if (__builtin_expect(side += 2, 3) != 3) return 2;
+    #|  if (side != 3) return 3;
+    #|  if (__builtin_expect_with_probability(side += 5, 8, 0.25) != 8) return 4;
+    #|  if (side != 8) return 5;
+    #|  __builtin_assume(side == 8);
+    #|  __builtin_prefetch(buf + (side += 1));
+    #|  char *q = __builtin_assume_aligned(p + 5, 8, side += 3);
+    #|  if (q != buf + 8) return 6;
+    #|  if (__builtin_align_up(value, 8ul) != 40ul) return 7;
+    #|  if (__builtin_align_down(value, 8ul) != 32ul) return 8;
+    #|  if (!__builtin_is_aligned(40ul, 8ul)) return 9;
+    #|  if (__builtin_is_aligned(value, 8ul)) return 10;
+    #|  if (side != 12) return 11;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_alloca_source() -> String {
   let source =
     #|int main(void) {
