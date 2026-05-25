@@ -765,6 +765,46 @@ async test "strict MIR codegen matches parser codegen for clear-cache builtins" 
 }
 
 ///|
+test "strict MIR codegen exposes clear-cache builtins to clang callers" {
+  let callee =
+    #|int eval_clear_cache_builtins(void) {
+    #|  int side = 0;
+    #|  char buf[16];
+    #|  __builtin___clear_cache(buf + (side += 2), buf + (side += 4));
+    #|  __builtin_clear_cache(buf + (side += 8), buf + (side += 16));
+    #|  return side + 12;
+    #|}
+  let driver =
+    #|int eval_clear_cache_builtins(void);
+    #|int main(void) {
+    #|  return eval_clear_cache_builtins();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang clear-cache builtin" {
+  let caller =
+    #|int eval_clear_cache_from_clang(void);
+    #|int main(void) {
+    #|  return eval_clear_cache_from_clang();
+    #|}
+  let callee =
+    #|int eval_clear_cache_from_clang(void) {
+    #|  int side = 0;
+    #|  char buf[64];
+    #|  char *begin = buf + (side += 2);
+    #|  char *end = buf + (side += 4);
+    #|  __builtin___clear_cache(begin, end);
+    #|  begin = buf + (side += 8);
+    #|  end = buf + (side += 16);
+    #|  __builtin___clear_cache(begin, end);
+    #|  return side + 12;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_alignment_hint_builtin_source() -> String {
   let source =
     #|int main(void) {
