@@ -7568,6 +7568,96 @@ async test "strict MIR codegen matches parser codegen for global floating aggreg
 }
 
 ///|
+test "strict MIR codegen exposes global floating aggregate byte copies to clang callers" {
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *memset(void *, int, size_t);
+    #|extern void *memcpy(void *, const void *, size_t);
+    #|extern void *memmove(void *, const void *, size_t);
+    #|struct Box {
+    #|  char tag;
+    #|  float f;
+    #|  double d;
+    #|};
+    #|struct Box global_box;
+    #|struct Box global_slots[2];
+    #|int eval_global_floating_aggregate_byte_copy(void) {
+    #|  struct Box local;
+    #|  struct Box copy;
+    #|  memset(&global_box, 0, sizeof(global_box));
+    #|  memset(global_slots, 0, sizeof(global_slots));
+    #|  memset(&local, 0, sizeof(local));
+    #|  memset(&copy, 0, sizeof(copy));
+    #|  local.tag = 7;
+    #|  local.f = 1.5f;
+    #|  local.d = 2.25;
+    #|  if (memcpy(&global_box, &local, sizeof(global_box)) != &global_box) return 1;
+    #|  if (global_box.tag != 7) return 2;
+    #|  if ((int)(global_box.f * 10.0f) != 15) return 3;
+    #|  if ((int)(global_box.d * 100.0) != 225) return 4;
+    #|  if (memmove(&copy, &global_box, sizeof(copy)) != &copy) return 5;
+    #|  if (copy.tag != 7) return 6;
+    #|  if ((int)(copy.f * 10.0f) != 15) return 7;
+    #|  global_slots[0] = copy;
+    #|  if (memcpy(&global_slots[1], &global_slots[0], sizeof(global_slots[0])) != &global_slots[1]) return 8;
+    #|  if (global_slots[1].tag != 7) return 9;
+    #|  if ((int)(global_slots[1].d * 100.0) != 225) return 10;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_global_floating_aggregate_byte_copy(void);
+    #|int main(void) {
+    #|  return eval_global_floating_aggregate_byte_copy();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang global floating aggregate byte copies" {
+  let caller =
+    #|int eval_global_floating_aggregate_byte_copy_from_clang(void);
+    #|int main(void) {
+    #|  return eval_global_floating_aggregate_byte_copy_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *memset(void *, int, size_t);
+    #|extern void *memcpy(void *, const void *, size_t);
+    #|extern void *memmove(void *, const void *, size_t);
+    #|struct Box {
+    #|  char tag;
+    #|  float f;
+    #|  double d;
+    #|};
+    #|struct Box global_box;
+    #|struct Box global_slots[2];
+    #|int eval_global_floating_aggregate_byte_copy_from_clang(void) {
+    #|  struct Box local;
+    #|  struct Box copy;
+    #|  memset(&global_box, 0, sizeof(global_box));
+    #|  memset(global_slots, 0, sizeof(global_slots));
+    #|  memset(&local, 0, sizeof(local));
+    #|  memset(&copy, 0, sizeof(copy));
+    #|  local.tag = 7;
+    #|  local.f = 1.5f;
+    #|  local.d = 2.25;
+    #|  if (memcpy(&global_box, &local, sizeof(global_box)) != &global_box) return 1;
+    #|  if (global_box.tag != 7) return 2;
+    #|  if ((int)(global_box.f * 10.0f) != 15) return 3;
+    #|  if ((int)(global_box.d * 100.0) != 225) return 4;
+    #|  if (memmove(&copy, &global_box, sizeof(copy)) != &copy) return 5;
+    #|  if (copy.tag != 7) return 6;
+    #|  if ((int)(copy.f * 10.0f) != 15) return 7;
+    #|  global_slots[0] = copy;
+    #|  if (memcpy(&global_slots[1], &global_slots[0], sizeof(global_slots[0])) != &global_slots[1]) return 8;
+    #|  if (global_slots[1].tag != 7) return 9;
+    #|  if ((int)(global_slots[1].d * 100.0) != 225) return 10;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_union_overlay_byte_memory_source() -> String {
   let source =
     #|typedef unsigned long size_t;
