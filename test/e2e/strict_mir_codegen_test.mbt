@@ -329,6 +329,80 @@ async test "strict MIR codegen matches parser codegen for compile-time type fact
 }
 
 ///|
+test "strict MIR codegen exposes compile-time type facts to clang callers" {
+  let callee =
+    #|struct S { int x; };
+    #|union U { int x; double y; };
+    #|int eval_compile_time_type_fact(void) {
+    #|  int x = 0;
+    #|  double d = 0.0;
+    #|  int a[2];
+    #|  struct S s;
+    #|  union U u;
+    #|  __typeof__(x++) y = 20;
+    #|  if (x != 0) return 1;
+    #|  typeof(unsigned long) z = 20;
+    #|  __auto_type bonus = 2;
+    #|  __auto_type p = &bonus;
+    #|  for (__auto_type i = 0; i < *p; i++) y = y + 1;
+    #|  if (__builtin_classify_type(x++) != 1) return 3;
+    #|  if (x != 0) return 4;
+    #|  if (__builtin_classify_type((_Bool)0) != 4) return 5;
+    #|  if (__builtin_classify_type(d) != 8) return 6;
+    #|  if (__builtin_classify_type(&x) != 5) return 7;
+    #|  if (__builtin_classify_type(a) != 5) return 8;
+    #|  if (__builtin_classify_type("x") != 5) return 9;
+    #|  if (__builtin_classify_type(s) != 12) return 10;
+    #|  if (__builtin_classify_type(u) != 13) return 11;
+    #|  if (!__builtin_types_compatible_p(__typeof__(z), unsigned long)) return 12;
+    #|  return y + (int)z;
+    #|}
+  let driver =
+    #|int eval_compile_time_type_fact(void);
+    #|int main(void) {
+    #|  return eval_compile_time_type_fact();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang compile-time type facts" {
+  let caller =
+    #|int eval_compile_time_type_fact_from_clang(void);
+    #|int main(void) {
+    #|  return eval_compile_time_type_fact_from_clang();
+    #|}
+  let callee =
+    #|struct S { int x; };
+    #|union U { int x; double y; };
+    #|int eval_compile_time_type_fact_from_clang(void) {
+    #|  int x = 0;
+    #|  double d = 0.0;
+    #|  int a[2];
+    #|  struct S s;
+    #|  union U u;
+    #|  __typeof__(x++) y = 20;
+    #|  if (x != 0) return 1;
+    #|  typeof(unsigned long) z = 20;
+    #|  __auto_type bonus = 2;
+    #|  __auto_type p = &bonus;
+    #|  for (__auto_type i = 0; i < *p; i++) y = y + 1;
+    #|  if (__builtin_classify_type(x++) != 1) return 3;
+    #|  if (x != 0) return 4;
+    #|  if (__builtin_classify_type((_Bool)0) != 4) return 5;
+    #|  if (__builtin_classify_type(d) != 8) return 6;
+    #|  if (__builtin_classify_type(&x) != 5) return 7;
+    #|  if (__builtin_classify_type(a) != 5) return 8;
+    #|  if (__builtin_classify_type("x") != 5) return 9;
+    #|  if (__builtin_classify_type(s) != 12) return 10;
+    #|  if (__builtin_classify_type(u) != 13) return 11;
+    #|  if (!__builtin_types_compatible_p(__typeof__(z), unsigned long)) return 12;
+    #|  return y + (int)z;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_local_computed_goto_source() -> String {
   let source =
     #|int main(void) {
