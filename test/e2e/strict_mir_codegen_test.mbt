@@ -7620,6 +7620,90 @@ async test "strict MIR codegen matches parser codegen for union overlay byte mem
 }
 
 ///|
+test "strict MIR codegen exposes union overlay byte memory to clang callers" {
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *memcpy(void *, const void *, size_t);
+    #|extern int memcmp(const void *, const void *, size_t);
+    #|union Value {
+    #|  float f;
+    #|  unsigned u;
+    #|  unsigned char bytes[4];
+    #|};
+    #|union BytesFirst {
+    #|  unsigned char bytes[4];
+    #|  float f;
+    #|  unsigned u;
+    #|};
+    #|int eval_union_overlay_byte_memory(void) {
+    #|  union Value v;
+    #|  v.f = 1.0f;
+    #|  if (v.u != 0x3f800000u) return 1;
+    #|  v.bytes[0] = 0u;
+    #|  v.bytes[1] = 0u;
+    #|  v.bytes[2] = 0u;
+    #|  v.bytes[3] = 0x40u;
+    #|  if ((int)v.f != 2) return 2;
+    #|  union BytesFirst w;
+    #|  unsigned char raw[4] = {0u, 0u, 0x40u, 0x40u};
+    #|  if (memcpy(w.bytes, raw, 4) != w.bytes) return 3;
+    #|  if ((int)w.f != 3) return 4;
+    #|  if (memcmp(w.bytes, raw, 4) != 0) return 5;
+    #|  w.u = 0x40800000u;
+    #|  if ((int)w.f != 4) return 6;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_union_overlay_byte_memory(void);
+    #|int main(void) {
+    #|  return eval_union_overlay_byte_memory();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang union overlay byte memory" {
+  let caller =
+    #|int eval_union_overlay_byte_memory_from_clang(void);
+    #|int main(void) {
+    #|  return eval_union_overlay_byte_memory_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *memcpy(void *, const void *, size_t);
+    #|extern int memcmp(const void *, const void *, size_t);
+    #|union Value {
+    #|  float f;
+    #|  unsigned u;
+    #|  unsigned char bytes[4];
+    #|};
+    #|union BytesFirst {
+    #|  unsigned char bytes[4];
+    #|  float f;
+    #|  unsigned u;
+    #|};
+    #|int eval_union_overlay_byte_memory_from_clang(void) {
+    #|  union Value v;
+    #|  v.f = 1.0f;
+    #|  if (v.u != 0x3f800000u) return 1;
+    #|  v.bytes[0] = 0u;
+    #|  v.bytes[1] = 0u;
+    #|  v.bytes[2] = 0u;
+    #|  v.bytes[3] = 0x40u;
+    #|  if ((int)v.f != 2) return 2;
+    #|  union BytesFirst w;
+    #|  unsigned char raw[4] = {0u, 0u, 0x40u, 0x40u};
+    #|  if (memcpy(w.bytes, raw, 4) != w.bytes) return 3;
+    #|  if ((int)w.f != 3) return 4;
+    #|  if (memcmp(w.bytes, raw, 4) != 0) return 5;
+    #|  w.u = 0x40800000u;
+    #|  if ((int)w.f != 4) return 6;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_long_double_byte_memory_source() -> String {
   let source =
     #|typedef unsigned long size_t;
