@@ -7513,6 +7513,92 @@ async test "strict MIR codegen matches parser codegen for floating aggregate byt
 }
 
 ///|
+test "strict MIR codegen exposes floating aggregate byte copies to clang callers" {
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *memset(void *, int, size_t);
+    #|extern void *memcpy(void *, const void *, size_t);
+    #|extern void *memmove(void *, const void *, size_t);
+    #|struct Box {
+    #|  char tag;
+    #|  float f;
+    #|  double d;
+    #|};
+    #|int eval_floating_aggregate_byte_copy(void) {
+    #|  struct Box src;
+    #|  struct Box dst;
+    #|  struct Box slots[2];
+    #|  memset(&src, 0, sizeof(src));
+    #|  memset(&dst, 0, sizeof(dst));
+    #|  memset(slots, 0, sizeof(slots));
+    #|  src.tag = 5;
+    #|  src.f = 1.25f;
+    #|  src.d = 2.5;
+    #|  if (memcpy(&dst, &src, sizeof(src)) != &dst) return 1;
+    #|  if (dst.tag != 5) return 2;
+    #|  if ((int)(dst.f * 100.0f) != 125) return 3;
+    #|  if ((int)(dst.d * 10.0) != 25) return 4;
+    #|  slots[0].tag = 1;
+    #|  slots[0].f = 3.5f;
+    #|  slots[0].d = 4.5;
+    #|  if (memmove(&slots[1], &slots[0], sizeof(slots[0])) != &slots[1]) return 5;
+    #|  if (slots[1].tag != 1) return 6;
+    #|  if ((int)(slots[1].f * 10.0f) != 35) return 7;
+    #|  if ((int)(slots[1].d * 10.0) != 45) return 8;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_floating_aggregate_byte_copy(void);
+    #|int main(void) {
+    #|  return eval_floating_aggregate_byte_copy();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang floating aggregate byte copies" {
+  let caller =
+    #|int eval_floating_aggregate_byte_copy_from_clang(void);
+    #|int main(void) {
+    #|  return eval_floating_aggregate_byte_copy_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *memset(void *, int, size_t);
+    #|extern void *memcpy(void *, const void *, size_t);
+    #|extern void *memmove(void *, const void *, size_t);
+    #|struct Box {
+    #|  char tag;
+    #|  float f;
+    #|  double d;
+    #|};
+    #|int eval_floating_aggregate_byte_copy_from_clang(void) {
+    #|  struct Box src;
+    #|  struct Box dst;
+    #|  struct Box slots[2];
+    #|  memset(&src, 0, sizeof(src));
+    #|  memset(&dst, 0, sizeof(dst));
+    #|  memset(slots, 0, sizeof(slots));
+    #|  src.tag = 5;
+    #|  src.f = 1.25f;
+    #|  src.d = 2.5;
+    #|  if (memcpy(&dst, &src, sizeof(src)) != &dst) return 1;
+    #|  if (dst.tag != 5) return 2;
+    #|  if ((int)(dst.f * 100.0f) != 125) return 3;
+    #|  if ((int)(dst.d * 10.0) != 25) return 4;
+    #|  slots[0].tag = 1;
+    #|  slots[0].f = 3.5f;
+    #|  slots[0].d = 4.5;
+    #|  if (memmove(&slots[1], &slots[0], sizeof(slots[0])) != &slots[1]) return 5;
+    #|  if (slots[1].tag != 1) return 6;
+    #|  if ((int)(slots[1].f * 10.0f) != 35) return 7;
+    #|  if ((int)(slots[1].d * 10.0) != 45) return 8;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_global_floating_aggregate_byte_copy_source() -> String {
   let source =
     #|typedef unsigned long size_t;
