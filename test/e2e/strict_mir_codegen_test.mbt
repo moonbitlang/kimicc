@@ -3453,6 +3453,39 @@ async test "strict MIR codegen matches parser codegen for implicit external scal
 }
 
 ///|
+test "strict MIR codegen exposes implicit external scalar call arguments to clang callers" {
+  let callee =
+    #|int eval_implicit_external_scalar_call_arguments(void) {
+    #|  if (strcmp("kimicc", "kimicc") != 0) return 1;
+    #|  if (strcmp("abc", "abd") >= 0) return 2;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_implicit_external_scalar_call_arguments(void);
+    #|int main(void) {
+    #|  return eval_implicit_external_scalar_call_arguments();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang scalar string call arguments" {
+  let caller =
+    #|int eval_scalar_string_call_arguments_from_clang(void);
+    #|int main(void) {
+    #|  return eval_scalar_string_call_arguments_from_clang();
+    #|}
+  let callee =
+    #|extern int strcmp(const char *, const char *);
+    #|int eval_scalar_string_call_arguments_from_clang(void) {
+    #|  if (strcmp("kimicc", "kimicc") != 0) return 1;
+    #|  if (strcmp("abc", "abd") >= 0) return 2;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_bzero_source() -> String {
   let source =
     #|struct Pair {
