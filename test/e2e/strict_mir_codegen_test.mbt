@@ -1838,6 +1838,66 @@ async test "strict MIR codegen matches parser codegen for realloc memory preserv
 }
 
 ///|
+test "strict MIR codegen exposes realloc memory preservation to clang callers" {
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *malloc(size_t);
+    #|extern void *realloc(void *, size_t);
+    #|extern void free(void *);
+    #|int eval_realloc_memory_preservation(void) {
+    #|  char *p = malloc(4);
+    #|  if (!p) return 1;
+    #|  p[0] = 'a';
+    #|  p[1] = 'b';
+    #|  p[2] = 0;
+    #|  p = realloc(p, 8);
+    #|  if (!p) return 2;
+    #|  if (__builtin_strcmp(p, "ab") != 0) return 3;
+    #|  p[2] = 'c';
+    #|  p[3] = 0;
+    #|  int result = __builtin_strlen(p) + p[0] - 58;
+    #|  free(p);
+    #|  return result;
+    #|}
+  let driver =
+    #|int eval_realloc_memory_preservation(void);
+    #|int main(void) {
+    #|  return eval_realloc_memory_preservation();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang realloc memory preservation" {
+  let caller =
+    #|int eval_realloc_memory_preservation_from_clang(void);
+    #|int main(void) {
+    #|  return eval_realloc_memory_preservation_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *malloc(size_t);
+    #|extern void *realloc(void *, size_t);
+    #|extern void free(void *);
+    #|int eval_realloc_memory_preservation_from_clang(void) {
+    #|  char *p = malloc(4);
+    #|  if (!p) return 1;
+    #|  p[0] = 'a';
+    #|  p[1] = 'b';
+    #|  p[2] = 0;
+    #|  p = realloc(p, 8);
+    #|  if (!p) return 2;
+    #|  if (__builtin_strcmp(p, "ab") != 0) return 3;
+    #|  p[2] = 'c';
+    #|  p[3] = 0;
+    #|  int result = __builtin_strlen(p) + p[0] - 58;
+    #|  free(p);
+    #|  return result;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_heap_aggregate_memory_source() -> String {
   let source =
     #|typedef unsigned long size_t;
