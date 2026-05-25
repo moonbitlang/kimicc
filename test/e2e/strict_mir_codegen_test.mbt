@@ -3251,6 +3251,66 @@ async test "strict MIR codegen matches parser codegen for int128 direct call ABI
 }
 
 ///|
+test "strict MIR codegen exposes int128 direct call ABI to clang callers" {
+  let callee =
+    #|typedef __int128 i128;
+    #|typedef unsigned __int128 u128;
+    #|static i128 make_i128(long hi, unsigned long lo) {
+    #|  return ((i128)hi << 64) | lo;
+    #|}
+    #|static u128 make_u128(unsigned long hi, unsigned long lo) {
+    #|  return ((u128)hi << 64) | lo;
+    #|}
+    #|static long split_i128(long tag, i128 v) {
+    #|  return tag + (long)v + (long)(v >> 64);
+    #|}
+    #|static unsigned long split_u128(u128 v) {
+    #|  return (unsigned long)v + (unsigned long)(v >> 64);
+    #|}
+    #|int eval_int128_direct_call_abi(void) {
+    #|  i128 s = make_i128(5, 7);
+    #|  u128 u = make_u128(11, 13);
+    #|  return (int)(split_i128(30, s) + split_u128(u) - 24);
+    #|}
+  let driver =
+    #|int eval_int128_direct_call_abi(void);
+    #|int main(void) {
+    #|  return eval_int128_direct_call_abi();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang int128 direct call ABI" {
+  let caller =
+    #|int eval_int128_direct_call_abi_from_clang(void);
+    #|int main(void) {
+    #|  return eval_int128_direct_call_abi_from_clang();
+    #|}
+  let callee =
+    #|typedef __int128 i128;
+    #|typedef unsigned __int128 u128;
+    #|static i128 make_i128(long hi, unsigned long lo) {
+    #|  return ((i128)hi << 64) | lo;
+    #|}
+    #|static u128 make_u128(unsigned long hi, unsigned long lo) {
+    #|  return ((u128)hi << 64) | lo;
+    #|}
+    #|static long split_i128(long tag, i128 v) {
+    #|  return tag + (long)v + (long)(v >> 64);
+    #|}
+    #|static unsigned long split_u128(u128 v) {
+    #|  return (unsigned long)v + (unsigned long)(v >> 64);
+    #|}
+    #|int eval_int128_direct_call_abi_from_clang(void) {
+    #|  i128 s = make_i128(5, 7);
+    #|  u128 u = make_u128(11, 13);
+    #|  return (int)(split_i128(30, s) + split_u128(u) - 24);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_stack_int128_direct_call_source() -> String {
   let source =
     #|typedef __int128 i128;
