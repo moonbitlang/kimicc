@@ -7460,6 +7460,68 @@ async test "strict MIR codegen matches parser codegen for floating array byte me
 }
 
 ///|
+test "strict MIR codegen exposes floating array byte memory to clang callers" {
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *memcpy(void *, const void *, size_t);
+    #|extern void *memmove(void *, const void *, size_t);
+    #|extern int memcmp(const void *, const void *, size_t);
+    #|int eval_floating_array_byte_memory(void) {
+    #|  double src[2] = {1.5, 2.25};
+    #|  double dst[2] = {0.0, 0.0};
+    #|  float fs[3] = {1.25f, 2.5f, 3.75f};
+    #|  float fd[3] = {0.0f, 0.0f, 0.0f};
+    #|  if (memcpy(dst, src, sizeof(src)) != dst) return 1;
+    #|  if (memmove(fd, fs, sizeof(fs)) != fd) return 2;
+    #|  if (memcmp(dst, src, sizeof(src)) != 0) return 3;
+    #|  if (memcmp(fd, fs, sizeof(fs)) != 0) return 4;
+    #|  if ((int)(dst[0] * 10.0) != 15) return 5;
+    #|  if ((int)(dst[1] * 100.0) != 225) return 6;
+    #|  if ((int)(fd[0] * 100.0f) != 125) return 7;
+    #|  fd[1] += 1.5f;
+    #|  if ((int)(fd[1] * 10.0f) != 40) return 8;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_floating_array_byte_memory(void);
+    #|int main(void) {
+    #|  return eval_floating_array_byte_memory();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang floating array byte memory" {
+  let caller =
+    #|int eval_floating_array_byte_memory_from_clang(void);
+    #|int main(void) {
+    #|  return eval_floating_array_byte_memory_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *memcpy(void *, const void *, size_t);
+    #|extern void *memmove(void *, const void *, size_t);
+    #|extern int memcmp(const void *, const void *, size_t);
+    #|int eval_floating_array_byte_memory_from_clang(void) {
+    #|  double src[2] = {1.5, 2.25};
+    #|  double dst[2] = {0.0, 0.0};
+    #|  float fs[3] = {1.25f, 2.5f, 3.75f};
+    #|  float fd[3] = {0.0f, 0.0f, 0.0f};
+    #|  if (memcpy(dst, src, sizeof(src)) != dst) return 1;
+    #|  if (memmove(fd, fs, sizeof(fs)) != fd) return 2;
+    #|  if (memcmp(dst, src, sizeof(src)) != 0) return 3;
+    #|  if (memcmp(fd, fs, sizeof(fs)) != 0) return 4;
+    #|  if ((int)(dst[0] * 10.0) != 15) return 5;
+    #|  if ((int)(dst[1] * 100.0) != 225) return 6;
+    #|  if ((int)(fd[0] * 100.0f) != 125) return 7;
+    #|  fd[1] += 1.5f;
+    #|  if ((int)(fd[1] * 10.0f) != 40) return 8;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_floating_aggregate_byte_copy_source() -> String {
   let source =
     #|typedef unsigned long size_t;
