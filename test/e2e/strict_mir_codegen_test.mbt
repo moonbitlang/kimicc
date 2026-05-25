@@ -4381,6 +4381,70 @@ async test "strict MIR codegen matches parser codegen for memory libcalls" {
 }
 
 ///|
+test "strict MIR codegen exposes memory libcalls to clang callers" {
+  let callee =
+    #|int eval_memory_libcalls(void) {
+    #|  char src[4];
+    #|  char dst[4];
+    #|  int n = 0;
+    #|  src[0] = 'a';
+    #|  src[1] = 'b';
+    #|  src[2] = 'c';
+    #|  src[3] = 0;
+    #|  if (__builtin_memcpy(dst, src, 4) != dst) return 1;
+    #|  if (dst[0] != 'a' || dst[1] != 'b' || dst[2] != 'c' || dst[3] != 0) return 2;
+    #|  if (__builtin_memset(dst + 1, 'x', 2) != dst + 1) return 3;
+    #|  if (dst[0] != 'a' || dst[1] != 'x' || dst[2] != 'x' || dst[3] != 0) return 4;
+    #|  if (__builtin_memmove(dst + 1, dst, 3) != dst + 1) return 5;
+    #|  if (dst[0] != 'a' || dst[1] != 'a' || dst[2] != 'x' || dst[3] != 'x') return 6;
+    #|  if (__builtin___memcpy_chk(dst, src, 1, n += 10) != dst) return 7;
+    #|  if (__builtin___memmove_chk(dst + 1, dst, 1, n += 4) != dst + 1) return 8;
+    #|  if (__builtin___memset_chk(dst + 2, 'z', 1, n += 2) != dst + 2) return 9;
+    #|  if (n != 16) return 10;
+    #|  if (dst[0] != 'a' || dst[1] != 'a' || dst[2] != 'z') return 11;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_memory_libcalls(void);
+    #|int main(void) {
+    #|  return eval_memory_libcalls();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang memory libcalls" {
+  let caller =
+    #|int eval_memory_libcalls_from_clang(void);
+    #|int main(void) {
+    #|  return eval_memory_libcalls_from_clang();
+    #|}
+  let callee =
+    #|int eval_memory_libcalls_from_clang(void) {
+    #|  char src[4];
+    #|  char dst[4];
+    #|  int n = 0;
+    #|  src[0] = 'a';
+    #|  src[1] = 'b';
+    #|  src[2] = 'c';
+    #|  src[3] = 0;
+    #|  if (__builtin_memcpy(dst, src, 4) != dst) return 1;
+    #|  if (dst[0] != 'a' || dst[1] != 'b' || dst[2] != 'c' || dst[3] != 0) return 2;
+    #|  if (__builtin_memset(dst + 1, 'x', 2) != dst + 1) return 3;
+    #|  if (dst[0] != 'a' || dst[1] != 'x' || dst[2] != 'x' || dst[3] != 0) return 4;
+    #|  if (__builtin_memmove(dst + 1, dst, 3) != dst + 1) return 5;
+    #|  if (dst[0] != 'a' || dst[1] != 'a' || dst[2] != 'x' || dst[3] != 'x') return 6;
+    #|  if (__builtin___memcpy_chk(dst, src, 1, n += 10) != dst) return 7;
+    #|  if (__builtin___memmove_chk(dst + 1, dst, 1, n += 4) != dst + 1) return 8;
+    #|  if (__builtin___memset_chk(dst + 2, 'z', 1, n += 2) != dst + 2) return 9;
+    #|  if (n != 16) return 10;
+    #|  if (dst[0] != 'a' || dst[1] != 'a' || dst[2] != 'z') return 11;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_declared_memory_string_libcalls_source() -> String {
   let source =
     #|typedef unsigned long size_t;
