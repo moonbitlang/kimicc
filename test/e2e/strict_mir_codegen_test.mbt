@@ -3645,6 +3645,65 @@ async test "strict MIR codegen matches parser codegen for darwin fd helpers" {
 }
 
 ///|
+test "strict MIR codegen exposes darwin fd helpers to clang callers" {
+  let callee =
+    #|struct fd_set {
+    #|  int fds_bits[32];
+    #|};
+    #|
+    #|int eval_darwin_fd_helpers(void) {
+    #|  struct fd_set fds;
+    #|  int side = 0;
+    #|  __builtin_bzero(&fds, sizeof(fds));
+    #|  __darwin_fd_set((side += 1, 9), &fds);
+    #|  if (!__darwin_fd_isset((side += 2, 9), &fds)) return 1;
+    #|  if (__darwin_fd_isset(8, &fds)) return 2;
+    #|  __darwin_fd_set(40, &fds);
+    #|  if (!__darwin_fd_isset(40, &fds)) return 3;
+    #|  if (__darwin_fd_isset(41, &fds)) return 4;
+    #|  __darwin_fd_clr((side += 4, 9), &fds);
+    #|  if (__darwin_fd_isset(9, &fds)) return 5;
+    #|  __darwin_fd_clr(40, &fds);
+    #|  if (__darwin_fd_isset(40, &fds)) return 6;
+    #|  return side == 7 ? 42 : side;
+    #|}
+  let driver =
+    #|int eval_darwin_fd_helpers(void);
+    #|int main(void) {
+    #|  return eval_darwin_fd_helpers();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang darwin fd helpers" {
+  let caller =
+    #|int eval_darwin_fd_helpers_from_clang(void);
+    #|int main(void) {
+    #|  return eval_darwin_fd_helpers_from_clang();
+    #|}
+  let callee =
+    #|#include <sys/select.h>
+    #|int eval_darwin_fd_helpers_from_clang(void) {
+    #|  fd_set fds;
+    #|  int side = 0;
+    #|  __builtin_bzero(&fds, sizeof(fds));
+    #|  __darwin_fd_set((side += 1, 9), &fds);
+    #|  if (!__darwin_fd_isset((side += 2, 9), &fds)) return 1;
+    #|  if (__darwin_fd_isset(8, &fds)) return 2;
+    #|  __darwin_fd_set(40, &fds);
+    #|  if (!__darwin_fd_isset(40, &fds)) return 3;
+    #|  if (__darwin_fd_isset(41, &fds)) return 4;
+    #|  __darwin_fd_clr((side += 4, 9), &fds);
+    #|  if (__darwin_fd_isset(9, &fds)) return 5;
+    #|  __darwin_fd_clr(40, &fds);
+    #|  if (__darwin_fd_isset(40, &fds)) return 6;
+    #|  return side == 7 ? 42 : side;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_strlen_source() -> String {
   let source =
     #|int main(void) {
