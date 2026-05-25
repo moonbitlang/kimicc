@@ -7393,6 +7393,38 @@ async test "strict MIR codegen matches parser codegen for floating local arithme
 }
 
 ///|
+test "strict MIR codegen exposes floating local arithmetic to clang callers" {
+  let callee =
+    #|int eval_floating_local_arithmetic(void) {
+    #|  double x = 5.5;
+    #|  double y = 2.0;
+    #|  return (int)(x + y) + (int)(x - y) + (int)(x * y) + (int)(x / y) + (int)(x + 2);
+    #|}
+  let driver =
+    #|int eval_floating_local_arithmetic(void);
+    #|int main(void) {
+    #|  return eval_floating_local_arithmetic();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 30)
+}
+
+///|
+test "strict MIR codegen calls clang floating local arithmetic" {
+  let caller =
+    #|int eval_floating_local_arithmetic_from_clang(void);
+    #|int main(void) {
+    #|  return eval_floating_local_arithmetic_from_clang();
+    #|}
+  let callee =
+    #|int eval_floating_local_arithmetic_from_clang(void) {
+    #|  double x = 5.5;
+    #|  double y = 2.0;
+    #|  return (int)(x + y) + (int)(x - y) + (int)(x * y) + (int)(x / y) + (int)(x + 2);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 30)
+}
+
+///|
 fn strict_mir_float_local_arithmetic_source() -> String {
   let source =
     #|int main(void) {
