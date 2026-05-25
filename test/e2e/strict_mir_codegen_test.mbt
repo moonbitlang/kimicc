@@ -1743,6 +1743,62 @@ async test "strict MIR codegen matches parser codegen for malloc memory libcalls
 }
 
 ///|
+test "strict MIR codegen exposes malloc memory libcalls to clang callers" {
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *malloc(size_t);
+    #|extern void *calloc(size_t, size_t);
+    #|extern void free(void *);
+    #|int eval_malloc_memory_libcalls(void) {
+    #|  char *src = malloc(8);
+    #|  char *dst = calloc(8, 1);
+    #|  if (!src || !dst) return 1;
+    #|  __builtin_memset(src, 'A', 4);
+    #|  src[4] = 0;
+    #|  if (__builtin_strlen(src) != 4) return 2;
+    #|  __builtin_memcpy(dst, src, 5);
+    #|  int result = dst[0] + dst[3] - 88;
+    #|  free(src);
+    #|  free(dst);
+    #|  return result;
+    #|}
+  let driver =
+    #|int eval_malloc_memory_libcalls(void);
+    #|int main(void) {
+    #|  return eval_malloc_memory_libcalls();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang malloc memory libcalls" {
+  let caller =
+    #|int eval_malloc_memory_libcalls_from_clang(void);
+    #|int main(void) {
+    #|  return eval_malloc_memory_libcalls_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *malloc(size_t);
+    #|extern void *calloc(size_t, size_t);
+    #|extern void free(void *);
+    #|int eval_malloc_memory_libcalls_from_clang(void) {
+    #|  char *src = malloc(8);
+    #|  char *dst = calloc(8, 1);
+    #|  if (!src || !dst) return 1;
+    #|  __builtin_memset(src, 'A', 4);
+    #|  src[4] = 0;
+    #|  if (__builtin_strlen(src) != 4) return 2;
+    #|  __builtin_memcpy(dst, src, 5);
+    #|  int result = dst[0] + dst[3] - 88;
+    #|  free(src);
+    #|  free(dst);
+    #|  return result;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_realloc_memory_source() -> String {
   let source =
     #|typedef unsigned long size_t;
