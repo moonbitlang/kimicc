@@ -3964,6 +3964,64 @@ async test "strict MIR codegen matches parser codegen for search libcalls" {
 }
 
 ///|
+test "strict MIR codegen exposes search libcalls to clang callers" {
+  let callee =
+    #|int eval_search_libcalls(void) {
+    #|  char s[6] = "abca";
+    #|  char hay[6] = "abcde";
+    #|  char needle[3] = "cd";
+    #|  int n = 0;
+    #|  if (__builtin_strchr((n += 1, s), 'b') != s + 1) return 1;
+    #|  if (__builtin_strchr(s, 'x') != 0) return 2;
+    #|  if (__builtin_strchr(s, 0) != s + 4) return 3;
+    #|  if (__builtin_strrchr(s, 'a') != s + 3) return 4;
+    #|  if (__builtin_strrchr(s, 0) != s + 4) return 5;
+    #|  if (__builtin_memchr(s, 'c', n += 3) != s + 2) return 6;
+    #|  if (__builtin_memchr(s, 'a', 0) != 0) return 7;
+    #|  if (__builtin_strstr(hay + 1, needle) != hay + 2) return 8;
+    #|  if (__builtin_strstr(hay, needle + 1) != hay + 3) return 9;
+    #|  if (__builtin_strstr(hay, "") != hay) return 10;
+    #|  if (n != 4) return 11;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_search_libcalls(void);
+    #|int main(void) {
+    #|  return eval_search_libcalls();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang search libcalls" {
+  let caller =
+    #|int eval_search_libcalls_from_clang(void);
+    #|int main(void) {
+    #|  return eval_search_libcalls_from_clang();
+    #|}
+  let callee =
+    #|int eval_search_libcalls_from_clang(void) {
+    #|  char s[6] = "abca";
+    #|  char hay[6] = "abcde";
+    #|  char needle[3] = "cd";
+    #|  int n = 0;
+    #|  if (__builtin_strchr((n += 1, s), 'b') != s + 1) return 1;
+    #|  if (__builtin_strchr(s, 'x') != 0) return 2;
+    #|  if (__builtin_strchr(s, 0) != s + 4) return 3;
+    #|  if (__builtin_strrchr(s, 'a') != s + 3) return 4;
+    #|  if (__builtin_strrchr(s, 0) != s + 4) return 5;
+    #|  if (__builtin_memchr(s, 'c', n += 3) != s + 2) return 6;
+    #|  if (__builtin_memchr(s, 'a', 0) != 0) return 7;
+    #|  if (__builtin_strstr(hay + 1, needle) != hay + 2) return 8;
+    #|  if (__builtin_strstr(hay, needle + 1) != hay + 3) return 9;
+    #|  if (__builtin_strstr(hay, "") != hay) return 10;
+    #|  if (n != 4) return 11;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_extended_builtin_libcalls_source() -> String {
   let source =
     #|int main(void) {
