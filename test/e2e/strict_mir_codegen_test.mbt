@@ -3877,6 +3877,54 @@ async test "strict MIR codegen matches parser codegen for compare libcalls" {
 }
 
 ///|
+test "strict MIR codegen exposes compare libcalls to clang callers" {
+  let callee =
+    #|int eval_compare_libcalls(void) {
+    #|  char a[4] = "ab";
+    #|  char b[4] = "ac";
+    #|  int n = 0;
+    #|  if (__builtin_strcmp(a, b) >= 0) return 1;
+    #|  if (__builtin_strcmp(b, a) <= 0) return 2;
+    #|  if (__builtin_strncmp(a, b, n += 1) != 0) return 3;
+    #|  if (__builtin_strncmp(a, b, n += 1) >= 0) return 4;
+    #|  if (__builtin_memcmp(a, b, 1) != 0) return 5;
+    #|  if (__builtin_memcmp(a, b, 2) >= 0) return 6;
+    #|  if (n != 2) return 7;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_compare_libcalls(void);
+    #|int main(void) {
+    #|  return eval_compare_libcalls();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang compare libcalls" {
+  let caller =
+    #|int eval_compare_libcalls_from_clang(void);
+    #|int main(void) {
+    #|  return eval_compare_libcalls_from_clang();
+    #|}
+  let callee =
+    #|int eval_compare_libcalls_from_clang(void) {
+    #|  char a[4] = "ab";
+    #|  char b[4] = "ac";
+    #|  int n = 0;
+    #|  if (__builtin_strcmp(a, b) >= 0) return 1;
+    #|  if (__builtin_strcmp(b, a) <= 0) return 2;
+    #|  if (__builtin_strncmp(a, b, n += 1) != 0) return 3;
+    #|  if (__builtin_strncmp(a, b, n += 1) >= 0) return 4;
+    #|  if (__builtin_memcmp(a, b, 1) != 0) return 5;
+    #|  if (__builtin_memcmp(a, b, 2) >= 0) return 6;
+    #|  if (n != 2) return 7;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_search_libcalls_source() -> String {
   let source =
     #|int main(void) {
