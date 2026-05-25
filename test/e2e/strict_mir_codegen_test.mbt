@@ -496,6 +496,44 @@ async test "strict MIR codegen matches parser codegen for static computed goto t
 }
 
 ///|
+test "strict MIR codegen exposes static computed goto table to clang callers" {
+  let callee =
+    #|int eval_static_computed_goto_table(void) {
+    #|  static void *labels[] = { &&bad, &&good };
+    #|  goto *labels[1];
+    #|bad:
+    #|  return 1;
+    #|good:
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_static_computed_goto_table(void);
+    #|int main(void) {
+    #|  return eval_static_computed_goto_table();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang static computed goto table" {
+  let caller =
+    #|int eval_static_computed_goto_table_from_clang(void);
+    #|int main(void) {
+    #|  return eval_static_computed_goto_table_from_clang();
+    #|}
+  let callee =
+    #|int eval_static_computed_goto_table_from_clang(void) {
+    #|  static void *labels[] = { &&bad, &&good };
+    #|  goto *labels[1];
+    #|bad:
+    #|  return 1;
+    #|good:
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_static_computed_goto_range_table_source() -> String {
   let source =
     #|int main(void) {
