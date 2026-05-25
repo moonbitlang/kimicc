@@ -1044,6 +1044,90 @@ async test "strict MIR codegen matches parser codegen for alloca aggregate memor
 }
 
 ///|
+test "strict MIR codegen exposes alloca aggregate memory to clang callers" {
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *memcpy(void *, const void *, size_t);
+    #|extern void *memset(void *, int, size_t);
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|int eval_alloca_aggregate_memory(void) {
+    #|  struct Pair *p = __builtin_alloca(sizeof(struct Pair) * 3);
+    #|  struct Pair *q = __builtin_alloca(sizeof(struct Pair));
+    #|  memset(p, 0, sizeof(struct Pair) * 3);
+    #|  memset(q, 0, sizeof(struct Pair));
+    #|  if (p[0].a != 0 || (int)p[0].b != 0 || p[1].tag != 0) return 1;
+    #|  p[0].a = 9;
+    #|  p[0].b = 1.5;
+    #|  p[0].tag = 4;
+    #|  if (memcpy(q, p, sizeof(*q)) != q) return 2;
+    #|  if (q->a != 9 || (int)(q->b * 2.0) != 3 || q->tag != 4) return 3;
+    #|  p[1] = *q;
+    #|  if (p[1].a != 9 || (int)(p[1].b * 2.0) != 3 || p[1].tag != 4) return 4;
+    #|  p[2].a = p[0].a + p[1].a;
+    #|  p[2].b = p[0].b + p[1].b;
+    #|  p[2].tag = p[0].tag + p[1].tag;
+    #|  if (p[2].a != 18) return 5;
+    #|  if ((int)(p[2].b * 10.0) != 30) return 6;
+    #|  if (p[2].tag != 8) return 7;
+    #|  memset(q, 0, sizeof(*q));
+    #|  if (q->a != 0 || (int)q->b != 0 || q->tag != 0) return 8;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_alloca_aggregate_memory(void);
+    #|int main(void) {
+    #|  return eval_alloca_aggregate_memory();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang alloca aggregate memory" {
+  let caller =
+    #|int eval_alloca_aggregate_memory_from_clang(void);
+    #|int main(void) {
+    #|  return eval_alloca_aggregate_memory_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *memcpy(void *, const void *, size_t);
+    #|extern void *memset(void *, int, size_t);
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|int eval_alloca_aggregate_memory_from_clang(void) {
+    #|  struct Pair *p = __builtin_alloca(sizeof(struct Pair) * 3);
+    #|  struct Pair *q = __builtin_alloca(sizeof(struct Pair));
+    #|  memset(p, 0, sizeof(struct Pair) * 3);
+    #|  memset(q, 0, sizeof(struct Pair));
+    #|  if (p[0].a != 0 || (int)p[0].b != 0 || p[1].tag != 0) return 1;
+    #|  p[0].a = 9;
+    #|  p[0].b = 1.5;
+    #|  p[0].tag = 4;
+    #|  if (memcpy(q, p, sizeof(*q)) != q) return 2;
+    #|  if (q->a != 9 || (int)(q->b * 2.0) != 3 || q->tag != 4) return 3;
+    #|  p[1] = *q;
+    #|  if (p[1].a != 9 || (int)(p[1].b * 2.0) != 3 || p[1].tag != 4) return 4;
+    #|  p[2].a = p[0].a + p[1].a;
+    #|  p[2].b = p[0].b + p[1].b;
+    #|  p[2].tag = p[0].tag + p[1].tag;
+    #|  if (p[2].a != 18) return 5;
+    #|  if ((int)(p[2].b * 10.0) != 30) return 6;
+    #|  if (p[2].tag != 8) return 7;
+    #|  memset(q, 0, sizeof(*q));
+    #|  if (q->a != 0 || (int)q->b != 0 || q->tag != 0) return 8;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_alloca_aggregate_cross_call_source() -> String {
   let source =
     #|typedef unsigned long size_t;
