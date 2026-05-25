@@ -2486,6 +2486,60 @@ async test "strict MIR codegen matches parser codegen for valloc and malloc_size
 }
 
 ///|
+test "strict MIR codegen exposes valloc and malloc_size heap facts to clang callers" {
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *valloc(size_t);
+    #|extern size_t malloc_size(const void *);
+    #|extern void free(void *);
+    #|int eval_valloc_malloc_size_heap_facts(void) {
+    #|  char *p = valloc(32);
+    #|  if (!p) return 1;
+    #|  if ((((unsigned long)p) & 4095ul) != 0) return 2;
+    #|  if (malloc_size(0) != 0) return 3;
+    #|  if (malloc_size(p) < 32) return 4;
+    #|  p[0] = 17;
+    #|  p[31] = 25;
+    #|  int result = p[0] + p[31];
+    #|  free(p);
+    #|  return result;
+    #|}
+  let driver =
+    #|int eval_valloc_malloc_size_heap_facts(void);
+    #|int main(void) {
+    #|  return eval_valloc_malloc_size_heap_facts();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang valloc and malloc_size heap facts" {
+  let caller =
+    #|int eval_valloc_malloc_size_heap_facts_from_clang(void);
+    #|int main(void) {
+    #|  return eval_valloc_malloc_size_heap_facts_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *valloc(size_t);
+    #|extern size_t malloc_size(const void *);
+    #|extern void free(void *);
+    #|int eval_valloc_malloc_size_heap_facts_from_clang(void) {
+    #|  char *p = valloc(32);
+    #|  if (!p) return 1;
+    #|  if ((((unsigned long)p) & 4095ul) != 0) return 2;
+    #|  if (malloc_size(0) != 0) return 3;
+    #|  if (malloc_size(p) < 32) return 4;
+    #|  p[0] = 17;
+    #|  p[31] = 25;
+    #|  int result = p[0] + p[31];
+    #|  free(p);
+    #|  return result;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_frame_return_address_source() -> String {
   let source =
     #|int main(void) {
