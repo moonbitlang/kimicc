@@ -431,6 +431,42 @@ async test "strict MIR codegen matches parser codegen for local computed goto" {
 }
 
 ///|
+test "strict MIR codegen exposes local computed goto to clang callers" {
+  let callee =
+    #|int eval_local_computed_goto(void) {
+    #|  void *target = &&done;
+    #|  goto *target;
+    #|  return 1;
+    #|done:
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_local_computed_goto(void);
+    #|int main(void) {
+    #|  return eval_local_computed_goto();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang local computed goto" {
+  let caller =
+    #|int eval_local_computed_goto_from_clang(void);
+    #|int main(void) {
+    #|  return eval_local_computed_goto_from_clang();
+    #|}
+  let callee =
+    #|int eval_local_computed_goto_from_clang(void) {
+    #|  void *target = &&done;
+    #|  goto *target;
+    #|  return 1;
+    #|done:
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_static_computed_goto_table_source() -> String {
   let source =
     #|int main(void) {
