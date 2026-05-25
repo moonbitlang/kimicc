@@ -2205,6 +2205,80 @@ async test "strict MIR codegen matches parser codegen for builtin heap libcalls"
 }
 
 ///|
+test "strict MIR codegen exposes builtin heap libcalls to clang callers" {
+  let callee =
+    #|int eval_builtin_heap_libcalls(void) {
+    #|  char *p = __builtin_malloc(4);
+    #|  char *q = __builtin_calloc(4, 1);
+    #|  if (!p || !q) return 1;
+    #|  if (q[0] != 0 || q[3] != 0) return 2;
+    #|  p[0] = 'a';
+    #|  p[1] = 'b';
+    #|  p[2] = 0;
+    #|  q[0] = 'x';
+    #|  q[1] = 0;
+    #|  p = __builtin_realloc(p, 8);
+    #|  if (!p) return 3;
+    #|  if (__builtin_strcmp(p, "ab") != 0) return 4;
+    #|  char *s = __builtin_strdup("hi");
+    #|  char *t = __builtin_strndup("wxyz", 2);
+    #|  if (!s || !t) return 5;
+    #|  if (__builtin_strcmp(s, "hi") != 0) return 6;
+    #|  if (__builtin_strcmp(t, "wx") != 0) return 7;
+    #|  int result = __builtin_strlen(p) + __builtin_strlen(q) +
+    #|    __builtin_strlen(s) + __builtin_strlen(t) + p[0] - 62;
+    #|  __builtin_free(p);
+    #|  __builtin_free(q);
+    #|  __builtin_free(s);
+    #|  __builtin_free(t);
+    #|  return result;
+    #|}
+  let driver =
+    #|int eval_builtin_heap_libcalls(void);
+    #|int main(void) {
+    #|  return eval_builtin_heap_libcalls();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang builtin heap libcalls" {
+  let caller =
+    #|int eval_builtin_heap_libcalls_from_clang(void);
+    #|int main(void) {
+    #|  return eval_builtin_heap_libcalls_from_clang();
+    #|}
+  let callee =
+    #|int eval_builtin_heap_libcalls_from_clang(void) {
+    #|  char *p = __builtin_malloc(4);
+    #|  char *q = __builtin_calloc(4, 1);
+    #|  if (!p || !q) return 1;
+    #|  if (q[0] != 0 || q[3] != 0) return 2;
+    #|  p[0] = 'a';
+    #|  p[1] = 'b';
+    #|  p[2] = 0;
+    #|  q[0] = 'x';
+    #|  q[1] = 0;
+    #|  p = __builtin_realloc(p, 8);
+    #|  if (!p) return 3;
+    #|  if (__builtin_strcmp(p, "ab") != 0) return 4;
+    #|  char *s = __builtin_strdup("hi");
+    #|  char *t = __builtin_strndup("wxyz", 2);
+    #|  if (!s || !t) return 5;
+    #|  if (__builtin_strcmp(s, "hi") != 0) return 6;
+    #|  if (__builtin_strcmp(t, "wx") != 0) return 7;
+    #|  int result = __builtin_strlen(p) + __builtin_strlen(q) +
+    #|    __builtin_strlen(s) + __builtin_strlen(t) + p[0] - 62;
+    #|  __builtin_free(p);
+    #|  __builtin_free(q);
+    #|  __builtin_free(s);
+    #|  __builtin_free(t);
+    #|  return result;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_posix_memalign_memory_source() -> String {
   let source =
     #|typedef unsigned long size_t;
