@@ -7218,6 +7218,38 @@ async test "strict MIR codegen matches parser codegen for floating local casts t
 }
 
 ///|
+test "strict MIR codegen exposes floating local casts to clang callers" {
+  let callee =
+    #|int eval_floating_local_casts(void) {
+    #|  double x = 1.75;
+    #|  double y = 2.25;
+    #|  return (int)x + (int)y;
+    #|}
+  let driver =
+    #|int eval_floating_local_casts(void);
+    #|int main(void) {
+    #|  return eval_floating_local_casts();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 3)
+}
+
+///|
+test "strict MIR codegen calls clang floating local casts" {
+  let caller =
+    #|int eval_floating_local_casts_from_clang(void);
+    #|int main(void) {
+    #|  return eval_floating_local_casts_from_clang();
+    #|}
+  let callee =
+    #|int eval_floating_local_casts_from_clang(void) {
+    #|  double x = 1.75;
+    #|  double y = 2.25;
+    #|  return (int)x + (int)y;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 3)
+}
+
+///|
 fn strict_mir_floating_local_comparisons_source() -> String {
   let source =
     #|int main(void) {
