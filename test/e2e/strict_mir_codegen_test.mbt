@@ -3737,6 +3737,52 @@ async test "strict MIR codegen matches parser codegen for strlen libcall operati
 }
 
 ///|
+test "strict MIR codegen exposes strlen libcall operation to clang callers" {
+  let callee =
+    #|int eval_strlen_libcall_operation(void) {
+    #|  char s[4];
+    #|  char *p = s;
+    #|  int n = 0;
+    #|  s[0] = 'a';
+    #|  s[1] = 'b';
+    #|  s[2] = 0;
+    #|  s[3] = 'z';
+    #|  if (__builtin_strlen((n += 1, p)) != 2) return 1;
+    #|  if (n != 1) return 2;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_strlen_libcall_operation(void);
+    #|int main(void) {
+    #|  return eval_strlen_libcall_operation();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang strlen libcall operation" {
+  let caller =
+    #|int eval_strlen_libcall_operation_from_clang(void);
+    #|int main(void) {
+    #|  return eval_strlen_libcall_operation_from_clang();
+    #|}
+  let callee =
+    #|int eval_strlen_libcall_operation_from_clang(void) {
+    #|  char s[4];
+    #|  char *p = s;
+    #|  int n = 0;
+    #|  s[0] = 'a';
+    #|  s[1] = 'b';
+    #|  s[2] = 0;
+    #|  s[3] = 'z';
+    #|  if (__builtin_strlen((n += 1, p)) != 2) return 1;
+    #|  if (n != 1) return 2;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_compare_libcalls_source() -> String {
   let source =
     #|int main(void) {
