@@ -172,6 +172,58 @@ async test "strict MIR codegen matches parser codegen for generic selection lowe
 }
 
 ///|
+test "strict MIR codegen exposes generic selection to clang callers" {
+  let callee =
+    #|int eval_generic_selection(void) {
+    #|  int x = 0;
+    #|  int arr[3];
+    #|  double d = 0.0;
+    #|  unsigned long u = 0;
+    #|  int score = 0;
+    #|  score = score + _Generic(x, int: 10, default: 100);
+    #|  score = score + _Generic(d, double: 20, default: 100);
+    #|  score = score + _Generic("x", char *: 12, char[2]: 100, default: 100);
+    #|  score = score + _Generic(arr, int *: 0, int[3]: 100, default: 100);
+    #|  score = score + _Generic(x++, int: 0, default: 100);
+    #|  if (x != 0) return 1;
+    #|  if (_Generic((0, u), unsigned long: 0, default: 1)) return 2;
+    #|  return score;
+    #|}
+  let driver =
+    #|int eval_generic_selection(void);
+    #|int main(void) {
+    #|  return eval_generic_selection();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang generic selection" {
+  let caller =
+    #|int eval_generic_selection_from_clang(void);
+    #|int main(void) {
+    #|  return eval_generic_selection_from_clang();
+    #|}
+  let callee =
+    #|int eval_generic_selection_from_clang(void) {
+    #|  int x = 0;
+    #|  int arr[3];
+    #|  double d = 0.0;
+    #|  unsigned long u = 0;
+    #|  int score = 0;
+    #|  score = score + _Generic(x, int: 10, default: 100);
+    #|  score = score + _Generic(d, double: 20, default: 100);
+    #|  score = score + _Generic("x", char *: 12, char[2]: 100, default: 100);
+    #|  score = score + _Generic(arr, int *: 0, int[3]: 100, default: 100);
+    #|  score = score + _Generic(x++, int: 0, default: 100);
+    #|  if (x != 0) return 1;
+    #|  if (_Generic((0, u), unsigned long: 0, default: 1)) return 2;
+    #|  return score;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_builtin_choose_expr_source() -> String {
   let source =
     #|int missing(void);
