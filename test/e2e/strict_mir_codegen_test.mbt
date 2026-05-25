@@ -2317,6 +2317,58 @@ async test "strict MIR codegen matches parser codegen for posix_memalign heap me
 }
 
 ///|
+test "strict MIR codegen exposes posix_memalign heap memory to clang callers" {
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern int posix_memalign(char **, size_t, size_t);
+    #|extern void free(void *);
+    #|int eval_posix_memalign_heap_memory(void) {
+    #|  char *p = 0;
+    #|  int rc = posix_memalign(&p, 32, 8);
+    #|  if (rc != 0) return rc;
+    #|  if (!p) return 1;
+    #|  if ((((unsigned long)p) & 31ul) != 0) return 2;
+    #|  p[0] = 40;
+    #|  p[7] = 2;
+    #|  int result = p[0] + p[7];
+    #|  free(p);
+    #|  return result;
+    #|}
+  let driver =
+    #|int eval_posix_memalign_heap_memory(void);
+    #|int main(void) {
+    #|  return eval_posix_memalign_heap_memory();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang posix_memalign heap memory" {
+  let caller =
+    #|int eval_posix_memalign_heap_memory_from_clang(void);
+    #|int main(void) {
+    #|  return eval_posix_memalign_heap_memory_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern int posix_memalign(char **, size_t, size_t);
+    #|extern void free(void *);
+    #|int eval_posix_memalign_heap_memory_from_clang(void) {
+    #|  char *p = 0;
+    #|  int rc = posix_memalign(&p, 32, 8);
+    #|  if (rc != 0) return rc;
+    #|  if (!p) return 1;
+    #|  if ((((unsigned long)p) & 31ul) != 0) return 2;
+    #|  p[0] = 40;
+    #|  p[7] = 2;
+    #|  int result = p[0] + p[7];
+    #|  free(p);
+    #|  return result;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_aligned_alloc_memory_source() -> String {
   let source =
     #|typedef unsigned long size_t;
