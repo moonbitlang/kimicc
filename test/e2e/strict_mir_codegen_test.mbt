@@ -944,6 +944,52 @@ async test "strict MIR codegen matches parser codegen for alloca builtins" {
 }
 
 ///|
+test "strict MIR codegen exposes alloca builtins to clang callers" {
+  let callee =
+    #|int eval_alloca_builtins(void) {
+    #|  int n = 5;
+    #|  char *p = __builtin_alloca(n += 3);
+    #|  p[0] = 40;
+    #|  p[7] = 2;
+    #|  char *q = __builtin_alloca_with_align(n += 4, 256);
+    #|  q[0] = 20;
+    #|  q[3] = 22;
+    #|  if ((((unsigned long)q) & 31ul) != 0) return 1;
+    #|  return q[0] + q[3] + (p[0] + p[7] == 42 ? 0 : 2) +
+    #|    (n == 12 ? 0 : 4);
+    #|}
+  let driver =
+    #|int eval_alloca_builtins(void);
+    #|int main(void) {
+    #|  return eval_alloca_builtins();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang alloca builtins" {
+  let caller =
+    #|int eval_alloca_builtins_from_clang(void);
+    #|int main(void) {
+    #|  return eval_alloca_builtins_from_clang();
+    #|}
+  let callee =
+    #|int eval_alloca_builtins_from_clang(void) {
+    #|  int n = 5;
+    #|  char *p = __builtin_alloca(n += 3);
+    #|  p[0] = 40;
+    #|  p[7] = 2;
+    #|  char *q = __builtin_alloca_with_align(n += 4, 256);
+    #|  q[0] = 20;
+    #|  q[3] = 22;
+    #|  if ((((unsigned long)q) & 31ul) != 0) return 1;
+    #|  return q[0] + q[3] + (p[0] + p[7] == 42 ? 0 : 2) +
+    #|    (n == 12 ? 0 : 4);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_alloca_aggregate_memory_source() -> String {
   let source =
     #|typedef unsigned long size_t;
