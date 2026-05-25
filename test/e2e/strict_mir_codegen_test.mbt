@@ -4270,6 +4270,75 @@ async test "strict MIR codegen matches parser codegen for checked strl libcalls"
 }
 
 ///|
+test "strict MIR codegen exposes checked strl libcalls to clang callers" {
+  let callee =
+    #|int eval_checked_strl_libcalls(void) {
+    #|  char dst[8];
+    #|  int n = 0;
+    #|  if (__builtin___strlcpy_chk(dst, "abcd", 3, n += 8) != 4) return 1;
+    #|  if (dst[0] != 'a' || dst[1] != 'b' || dst[2] != 0) return 2;
+    #|  if (__builtin___strlcat_chk(dst, "xy", 0, n += 8) != 2) return 3;
+    #|  if (n != 16) return 4;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_checked_strl_libcalls(void);
+    #|int main(void) {
+    #|  return eval_checked_strl_libcalls();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang checked strl libcalls" {
+  let caller =
+    #|int eval_checked_strl_libcalls_from_clang(void);
+    #|int main(void) {
+    #|  return eval_checked_strl_libcalls_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|size_t __strlcpy_chk(char *dst, const char *src, size_t size, size_t dstsize) {
+    #|  (void)dstsize;
+    #|  size_t i = 0;
+    #|  while (src[i] != 0) {
+    #|    if (i + 1 < size) dst[i] = src[i];
+    #|    i += 1;
+    #|  }
+    #|  if (size != 0) {
+    #|    size_t term = i < size ? i : size - 1;
+    #|    dst[term] = 0;
+    #|  }
+    #|  return i;
+    #|}
+    #|size_t __strlcat_chk(char *dst, const char *src, size_t size, size_t dstsize) {
+    #|  (void)dstsize;
+    #|  size_t d = 0;
+    #|  while (d < size && dst[d] != 0) d += 1;
+    #|  size_t s = 0;
+    #|  while (src[s] != 0) {
+    #|    if (d + s + 1 < size) dst[d + s] = src[s];
+    #|    s += 1;
+    #|  }
+    #|  if (d < size) {
+    #|    size_t term = d + s < size ? d + s : size - 1;
+    #|    dst[term] = 0;
+    #|  }
+    #|  return d + s;
+    #|}
+    #|int eval_checked_strl_libcalls_from_clang(void) {
+    #|  char dst[8];
+    #|  int n = 0;
+    #|  if (__builtin___strlcpy_chk(dst, "abcd", 3, n += 8) != 4) return 1;
+    #|  if (dst[0] != 'a' || dst[1] != 'b' || dst[2] != 0) return 2;
+    #|  if (__builtin___strlcat_chk(dst, "xy", 0, n += 8) != 2) return 3;
+    #|  if (n != 16) return 4;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_memory_libcalls_source() -> String {
   let source =
     #|int main(void) {
