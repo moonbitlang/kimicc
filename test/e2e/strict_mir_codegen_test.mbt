@@ -92,6 +92,50 @@ async test "strict MIR codegen matches parser codegen for scalar control flow an
 }
 
 ///|
+test "strict MIR codegen exposes scalar control flow to clang callers" {
+  let callee =
+    #|int add(int a, int b) { return a + b; }
+    #|int eval_scalar_control_flow(void) {
+    #|  int i = 0;
+    #|  int s = 0;
+    #|  while (i < 5) {
+    #|    s = s + add(i, 1);
+    #|    i = i + 1;
+    #|  }
+    #|  if (s == 15) return s + 2;
+    #|  return 1;
+    #|}
+  let driver =
+    #|int eval_scalar_control_flow(void);
+    #|int main(void) {
+    #|  return eval_scalar_control_flow();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 17)
+}
+
+///|
+test "strict MIR codegen calls clang scalar control flow" {
+  let caller =
+    #|int eval_scalar_control_flow_from_clang(void);
+    #|int main(void) {
+    #|  return eval_scalar_control_flow_from_clang();
+    #|}
+  let callee =
+    #|int add(int a, int b) { return a + b; }
+    #|int eval_scalar_control_flow_from_clang(void) {
+    #|  int i = 0;
+    #|  int s = 0;
+    #|  while (i < 5) {
+    #|    s = s + add(i, 1);
+    #|    i = i + 1;
+    #|  }
+    #|  if (s == 15) return s + 2;
+    #|  return 1;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 17)
+}
+
+///|
 fn strict_mir_generic_selection_source() -> String {
   let source =
     #|int main(void) {
