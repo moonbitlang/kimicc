@@ -2101,6 +2101,64 @@ async test "strict MIR codegen matches parser codegen for strdup heap memory" {
 }
 
 ///|
+test "strict MIR codegen exposes strdup heap memory to clang callers" {
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern char *strdup(const char *);
+    #|extern char *strndup(const char *, size_t);
+    #|extern void free(void *);
+    #|int eval_strdup_heap_memory(void) {
+    #|  char *p = strdup("hi");
+    #|  if (!p) return 1;
+    #|  if (__builtin_strcmp(p, "hi") != 0) return 2;
+    #|  p[1] = 'o';
+    #|  if (__builtin_strcmp(p, "ho") != 0) return 3;
+    #|  char *q = strndup("abcdef", 3);
+    #|  if (!q) return 4;
+    #|  if (__builtin_strcmp(q, "abc") != 0) return 5;
+    #|  int result = __builtin_strlen(p) + __builtin_strlen(q) + p[1] + q[2] - 173;
+    #|  free(p);
+    #|  free(q);
+    #|  return result;
+    #|}
+  let driver =
+    #|int eval_strdup_heap_memory(void);
+    #|int main(void) {
+    #|  return eval_strdup_heap_memory();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang strdup heap memory" {
+  let caller =
+    #|int eval_strdup_heap_memory_from_clang(void);
+    #|int main(void) {
+    #|  return eval_strdup_heap_memory_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern char *strdup(const char *);
+    #|extern char *strndup(const char *, size_t);
+    #|extern void free(void *);
+    #|int eval_strdup_heap_memory_from_clang(void) {
+    #|  char *p = strdup("hi");
+    #|  if (!p) return 1;
+    #|  if (__builtin_strcmp(p, "hi") != 0) return 2;
+    #|  p[1] = 'o';
+    #|  if (__builtin_strcmp(p, "ho") != 0) return 3;
+    #|  char *q = strndup("abcdef", 3);
+    #|  if (!q) return 4;
+    #|  if (__builtin_strcmp(q, "abc") != 0) return 5;
+    #|  int result = __builtin_strlen(p) + __builtin_strlen(q) + p[1] + q[2] - 173;
+    #|  free(p);
+    #|  free(q);
+    #|  return result;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_builtin_heap_memory_source() -> String {
   let source =
     #|int main(void) {
