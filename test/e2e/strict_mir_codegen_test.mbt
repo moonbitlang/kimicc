@@ -4100,6 +4100,146 @@ async test "strict MIR codegen matches parser codegen for extended builtin libca
 }
 
 ///|
+test "strict MIR codegen exposes extended builtin libcalls to clang callers" {
+  let callee =
+    #|int eval_extended_builtin_libcalls(void) {
+    #|  char text[10];
+    #|  char reject[3];
+    #|  char accept[3];
+    #|  char raw[8];
+    #|  char needle[3];
+    #|  char dst[8];
+    #|  int n = 0;
+    #|  text[0] = 'a';
+    #|  text[1] = 'b';
+    #|  text[2] = 'c';
+    #|  text[3] = '1';
+    #|  text[4] = '2';
+    #|  text[5] = '3';
+    #|  text[6] = 'x';
+    #|  text[7] = 'y';
+    #|  text[8] = 'z';
+    #|  text[9] = 0;
+    #|  reject[0] = '2';
+    #|  reject[1] = 'z';
+    #|  reject[2] = 0;
+    #|  accept[0] = 'x';
+    #|  accept[1] = 'y';
+    #|  accept[2] = 0;
+    #|  raw[0] = 'a';
+    #|  raw[1] = 0;
+    #|  raw[2] = 'b';
+    #|  raw[3] = 'c';
+    #|  raw[4] = 0;
+    #|  raw[5] = 'b';
+    #|  raw[6] = 'c';
+    #|  raw[7] = 0;
+    #|  needle[0] = 0;
+    #|  needle[1] = 'b';
+    #|  needle[2] = 'c';
+    #|  if (__builtin_strnlen(text, n += 10) != 9) return 1;
+    #|  if (__builtin_strnlen(text, 4) != 4) return 2;
+    #|  if (__builtin_strspn(text, "abc") != 3) return 3;
+    #|  if (__builtin_strcspn(text, reject) != 4) return 4;
+    #|  if (__builtin_strpbrk(text, accept) != text + 6) return 5;
+    #|  if (__builtin_strpbrk(text, "q") != 0) return 6;
+    #|  if (__builtin_bcmp(text, "abc123xyz", 9) != 0) return 7;
+    #|  if (__builtin_bcmp(text, "abc123xyq", 9) == 0) return 8;
+    #|  if (__builtin_memmem(raw, 8, needle, 3) != raw + 1) return 9;
+    #|  if (__builtin_memmem(raw + 2, 4, "bc", 2) != raw + 2) return 10;
+    #|  if (__builtin_memmem(raw, 2, "bc", 2) != 0) return 11;
+    #|  if (__builtin_memmem(raw, 8, "bd", 2) != 0) return 12;
+    #|  char *hit = (char *)__builtin_memccpy(dst, raw + 2, 0, 4);
+    #|  if (hit != dst + 3) return 13;
+    #|  if (dst[0] != 'b' || dst[1] != 'c' || dst[2] != 0) return 14;
+    #|  if (__builtin_memccpy(dst, "xy", 'q', 2) != 0) return 15;
+    #|  if (dst[0] != 'x' || dst[1] != 'y') return 16;
+    #|  if (n != 10) return 17;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_extended_builtin_libcalls(void);
+    #|int main(void) {
+    #|  return eval_extended_builtin_libcalls();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang extended libcalls" {
+  let caller =
+    #|int eval_extended_builtin_libcalls_from_clang(void);
+    #|int main(void) {
+    #|  return eval_extended_builtin_libcalls_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|size_t strnlen(const char *, size_t);
+    #|size_t strspn(const char *, const char *);
+    #|size_t strcspn(const char *, const char *);
+    #|char *strpbrk(const char *, const char *);
+    #|int bcmp(const void *, const void *, size_t);
+    #|void *memmem(const void *, size_t, const void *, size_t);
+    #|void *memccpy(void *, const void *, int, size_t);
+    #|int eval_extended_builtin_libcalls_from_clang(void) {
+    #|  char text[10];
+    #|  char reject[3];
+    #|  char accept[3];
+    #|  char raw[8];
+    #|  char needle[3];
+    #|  char dst[8];
+    #|  int n = 0;
+    #|  text[0] = 'a';
+    #|  text[1] = 'b';
+    #|  text[2] = 'c';
+    #|  text[3] = '1';
+    #|  text[4] = '2';
+    #|  text[5] = '3';
+    #|  text[6] = 'x';
+    #|  text[7] = 'y';
+    #|  text[8] = 'z';
+    #|  text[9] = 0;
+    #|  reject[0] = '2';
+    #|  reject[1] = 'z';
+    #|  reject[2] = 0;
+    #|  accept[0] = 'x';
+    #|  accept[1] = 'y';
+    #|  accept[2] = 0;
+    #|  raw[0] = 'a';
+    #|  raw[1] = 0;
+    #|  raw[2] = 'b';
+    #|  raw[3] = 'c';
+    #|  raw[4] = 0;
+    #|  raw[5] = 'b';
+    #|  raw[6] = 'c';
+    #|  raw[7] = 0;
+    #|  needle[0] = 0;
+    #|  needle[1] = 'b';
+    #|  needle[2] = 'c';
+    #|  if (strnlen(text, n += 10) != 9) return 1;
+    #|  if (strnlen(text, 4) != 4) return 2;
+    #|  if (strspn(text, "abc") != 3) return 3;
+    #|  if (strcspn(text, reject) != 4) return 4;
+    #|  if (strpbrk(text, accept) != text + 6) return 5;
+    #|  if (strpbrk(text, "q") != 0) return 6;
+    #|  if (bcmp(text, "abc123xyz", 9) != 0) return 7;
+    #|  if (bcmp(text, "abc123xyq", 9) == 0) return 8;
+    #|  if ((char *)memmem(raw, 8, needle, 3) != raw + 1) return 9;
+    #|  if ((char *)memmem(raw + 2, 4, "bc", 2) != raw + 2) return 10;
+    #|  if (memmem(raw, 2, "bc", 2) != 0) return 11;
+    #|  if (memmem(raw, 8, "bd", 2) != 0) return 12;
+    #|  char *hit = (char *)memccpy(dst, raw + 2, 0, 4);
+    #|  if (hit != dst + 3) return 13;
+    #|  if (dst[0] != 'b' || dst[1] != 'c' || dst[2] != 0) return 14;
+    #|  if (memccpy(dst, "xy", 'q', 2) != 0) return 15;
+    #|  if (dst[0] != 'x' || dst[1] != 'y') return 16;
+    #|  if (n != 10) return 17;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_checked_strl_source() -> String {
   let source =
     #|int main(void) {
