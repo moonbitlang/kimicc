@@ -7367,6 +7367,70 @@ async test "strict MIR codegen matches parser codegen for floating compound upda
 }
 
 ///|
+test "strict MIR codegen exposes floating compound updates to clang callers" {
+  let callee =
+    #|int eval_floating_compound_updates(void) {
+    #|  double x = 1.5;
+    #|  double old = x++;
+    #|  x += 2.5;
+    #|  x *= 2.0;
+    #|  double arr[1];
+    #|  arr[0] = 3.0;
+    #|  double *p = arr;
+    #|  double before = (*p)++;
+    #|  *p += 4.0;
+    #|  float f = (float)1.25;
+    #|  ++f;
+    #|  f *= (float)2.0;
+    #|  int i = 1;
+    #|  i += 2.5;
+    #|  int ints[1];
+    #|  ints[0] = 1;
+    #|  int *q = ints;
+    #|  *q += 2.5;
+    #|  return (int)(old * 10) + (int)x + (int)(before * 10) + (int)arr[0] + (int)(f * 10) + i + ints[0];
+    #|}
+  let driver =
+    #|int eval_floating_compound_updates(void);
+    #|int main(void) {
+    #|  return eval_floating_compound_updates();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 114)
+}
+
+///|
+test "strict MIR codegen calls clang floating compound updates" {
+  let caller =
+    #|int eval_floating_compound_updates_from_clang(void);
+    #|int main(void) {
+    #|  return eval_floating_compound_updates_from_clang();
+    #|}
+  let callee =
+    #|int eval_floating_compound_updates_from_clang(void) {
+    #|  double x = 1.5;
+    #|  double old = x++;
+    #|  x += 2.5;
+    #|  x *= 2.0;
+    #|  double arr[1];
+    #|  arr[0] = 3.0;
+    #|  double *p = arr;
+    #|  double before = (*p)++;
+    #|  *p += 4.0;
+    #|  float f = (float)1.25;
+    #|  ++f;
+    #|  f *= (float)2.0;
+    #|  int i = 1;
+    #|  i += 2.5;
+    #|  int ints[1];
+    #|  ints[0] = 1;
+    #|  int *q = ints;
+    #|  *q += 2.5;
+    #|  return (int)(old * 10) + (int)x + (int)(before * 10) + (int)arr[0] + (int)(f * 10) + i + ints[0];
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 114)
+}
+
+///|
 fn strict_mir_floating_local_arithmetic_source() -> String {
   let source =
     #|int main(void) {
