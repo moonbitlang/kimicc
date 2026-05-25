@@ -7419,6 +7419,38 @@ async test "strict MIR codegen matches parser codegen for float local arithmetic
 }
 
 ///|
+test "strict MIR codegen exposes float local arithmetic to clang callers" {
+  let callee =
+    #|int eval_float_local_arithmetic(void) {
+    #|  float x = (float)5.5;
+    #|  float y = (float)2.0;
+    #|  return (int)(x + y) + (int)(x - y) + (int)(x * y) + (int)(x / y) + (int)(x + 2);
+    #|}
+  let driver =
+    #|int eval_float_local_arithmetic(void);
+    #|int main(void) {
+    #|  return eval_float_local_arithmetic();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 30)
+}
+
+///|
+test "strict MIR codegen calls clang float local arithmetic" {
+  let caller =
+    #|int eval_float_local_arithmetic_from_clang(void);
+    #|int main(void) {
+    #|  return eval_float_local_arithmetic_from_clang();
+    #|}
+  let callee =
+    #|int eval_float_local_arithmetic_from_clang(void) {
+    #|  float x = (float)5.5;
+    #|  float y = (float)2.0;
+    #|  return (int)(x + y) + (int)(x - y) + (int)(x * y) + (int)(x / y) + (int)(x + 2);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 30)
+}
+
+///|
 fn strict_mir_floating_array_byte_memory_source() -> String {
   let source =
     #|typedef unsigned long size_t;
