@@ -2402,6 +2402,54 @@ async test "strict MIR codegen matches parser codegen for aligned_alloc heap mem
 }
 
 ///|
+test "strict MIR codegen exposes aligned_alloc heap memory to clang callers" {
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *aligned_alloc(size_t, size_t);
+    #|extern void free(void *);
+    #|int eval_aligned_alloc_heap_memory(void) {
+    #|  char *p = aligned_alloc(32, 32);
+    #|  if (!p) return 1;
+    #|  if ((((unsigned long)p) & 31ul) != 0) return 2;
+    #|  p[0] = 17;
+    #|  p[31] = 25;
+    #|  int result = p[0] + p[31];
+    #|  free(p);
+    #|  return result;
+    #|}
+  let driver =
+    #|int eval_aligned_alloc_heap_memory(void);
+    #|int main(void) {
+    #|  return eval_aligned_alloc_heap_memory();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang aligned_alloc heap memory" {
+  let caller =
+    #|int eval_aligned_alloc_heap_memory_from_clang(void);
+    #|int main(void) {
+    #|  return eval_aligned_alloc_heap_memory_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *aligned_alloc(size_t, size_t);
+    #|extern void free(void *);
+    #|int eval_aligned_alloc_heap_memory_from_clang(void) {
+    #|  char *p = aligned_alloc(32, 32);
+    #|  if (!p) return 1;
+    #|  if ((((unsigned long)p) & 31ul) != 0) return 2;
+    #|  p[0] = 17;
+    #|  p[31] = 25;
+    #|  int result = p[0] + p[31];
+    #|  free(p);
+    #|  return result;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_valloc_malloc_size_source() -> String {
   let source =
     #|typedef unsigned long size_t;
