@@ -7274,6 +7274,46 @@ async test "strict MIR codegen matches parser codegen for floating ternary conve
 }
 
 ///|
+test "strict MIR codegen exposes floating ternary conversions to clang callers" {
+  let callee =
+    #|int eval_floating_ternary_conversions(void) {
+    #|  double c = 1.0;
+    #|  double z = 0.0;
+    #|  double d = c ? 3 : 2.5;
+    #|  float f = c ? (float)1.25 : 4;
+    #|  int a = c ? 5 : 7;
+    #|  int b = z ? 9 : 11;
+    #|  return (int)(d * 10) + (int)(f * 10) + a + b;
+    #|}
+  let driver =
+    #|int eval_floating_ternary_conversions(void);
+    #|int main(void) {
+    #|  return eval_floating_ternary_conversions();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 58)
+}
+
+///|
+test "strict MIR codegen calls clang floating ternary conversions" {
+  let caller =
+    #|int eval_floating_ternary_conversions_from_clang(void);
+    #|int main(void) {
+    #|  return eval_floating_ternary_conversions_from_clang();
+    #|}
+  let callee =
+    #|int eval_floating_ternary_conversions_from_clang(void) {
+    #|  double c = 1.0;
+    #|  double z = 0.0;
+    #|  double d = c ? 3 : 2.5;
+    #|  float f = c ? (float)1.25 : 4;
+    #|  int a = c ? 5 : 7;
+    #|  int b = z ? 9 : 11;
+    #|  return (int)(d * 10) + (int)(f * 10) + a + b;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 58)
+}
+
+///|
 fn strict_mir_floating_logical_operators_source() -> String {
   let source =
     #|int g;
