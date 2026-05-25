@@ -1961,6 +1961,108 @@ async test "strict MIR codegen matches parser codegen for heap aggregate memory"
 }
 
 ///|
+test "strict MIR codegen exposes heap aggregate memory to clang callers" {
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *malloc(size_t);
+    #|extern void *calloc(size_t, size_t);
+    #|extern void *realloc(void *, size_t);
+    #|extern void *memcpy(void *, const void *, size_t);
+    #|extern void *memset(void *, int, size_t);
+    #|extern void free(void *);
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|int eval_heap_aggregate_memory(void) {
+    #|  struct Pair *p = calloc(2, sizeof(struct Pair));
+    #|  if (!p) return 1;
+    #|  if (p[0].a != 0 || (int)p[0].b != 0 || p[1].tag != 0) return 2;
+    #|  p[0].a = 7;
+    #|  p[0].b = 2.5;
+    #|  p[0].tag = 3;
+    #|  struct Pair *q = malloc(sizeof(struct Pair));
+    #|  if (!q) return 3;
+    #|  if (memcpy(q, p, sizeof(*q)) != q) return 4;
+    #|  if (q->a != 7 || (int)(q->b * 2.0) != 5 || q->tag != 3) return 5;
+    #|  p = realloc(p, sizeof(struct Pair) * 3);
+    #|  if (!p) return 6;
+    #|  if (p[0].a != 7 || (int)(p[0].b * 2.0) != 5 || p[0].tag != 3) return 7;
+    #|  p[1] = *q;
+    #|  if (p[1].a != 7) return 8;
+    #|  p[2].a = p[0].a + p[1].a;
+    #|  p[2].b = p[0].b + p[1].b;
+    #|  p[2].tag = p[0].tag + p[1].tag;
+    #|  if (p[2].a != 14) return 9;
+    #|  if ((int)(p[2].b * 10.0) != 50) return 10;
+    #|  if (p[2].tag != 6) return 11;
+    #|  memset(q, 0, sizeof(*q));
+    #|  if (q->a != 0 || (int)q->b != 0 || q->tag != 0) return 12;
+    #|  free(q);
+    #|  free(p);
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_heap_aggregate_memory(void);
+    #|int main(void) {
+    #|  return eval_heap_aggregate_memory();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang heap aggregate memory" {
+  let caller =
+    #|int eval_heap_aggregate_memory_from_clang(void);
+    #|int main(void) {
+    #|  return eval_heap_aggregate_memory_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *malloc(size_t);
+    #|extern void *calloc(size_t, size_t);
+    #|extern void *realloc(void *, size_t);
+    #|extern void *memcpy(void *, const void *, size_t);
+    #|extern void *memset(void *, int, size_t);
+    #|extern void free(void *);
+    #|struct Pair {
+    #|  int a;
+    #|  double b;
+    #|  char tag;
+    #|};
+    #|int eval_heap_aggregate_memory_from_clang(void) {
+    #|  struct Pair *p = calloc(2, sizeof(struct Pair));
+    #|  if (!p) return 1;
+    #|  if (p[0].a != 0 || (int)p[0].b != 0 || p[1].tag != 0) return 2;
+    #|  p[0].a = 7;
+    #|  p[0].b = 2.5;
+    #|  p[0].tag = 3;
+    #|  struct Pair *q = malloc(sizeof(struct Pair));
+    #|  if (!q) return 3;
+    #|  if (memcpy(q, p, sizeof(*q)) != q) return 4;
+    #|  if (q->a != 7 || (int)(q->b * 2.0) != 5 || q->tag != 3) return 5;
+    #|  p = realloc(p, sizeof(struct Pair) * 3);
+    #|  if (!p) return 6;
+    #|  if (p[0].a != 7 || (int)(p[0].b * 2.0) != 5 || p[0].tag != 3) return 7;
+    #|  p[1] = *q;
+    #|  if (p[1].a != 7) return 8;
+    #|  p[2].a = p[0].a + p[1].a;
+    #|  p[2].b = p[0].b + p[1].b;
+    #|  p[2].tag = p[0].tag + p[1].tag;
+    #|  if (p[2].a != 14) return 9;
+    #|  if ((int)(p[2].b * 10.0) != 50) return 10;
+    #|  if (p[2].tag != 6) return 11;
+    #|  memset(q, 0, sizeof(*q));
+    #|  if (q->a != 0 || (int)q->b != 0 || q->tag != 0) return 12;
+    #|  free(q);
+    #|  free(p);
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_strdup_memory_source() -> String {
   let source =
     #|typedef unsigned long size_t;
