@@ -671,6 +671,52 @@ test "strict MIR codegen emits linux x64 local computed goto table" {
 }
 
 ///|
+test "strict MIR codegen exposes local computed goto table to clang callers" {
+  let callee =
+    #|int eval_local_computed_goto_table(void) {
+    #|  void *labels[] = { &&bad, &&good, &&also_bad };
+    #|  int index = 0;
+    #|  index = index + 1;
+    #|  goto *labels[index];
+    #|bad:
+    #|  return 1;
+    #|also_bad:
+    #|  return 2;
+    #|good:
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_local_computed_goto_table(void);
+    #|int main(void) {
+    #|  return eval_local_computed_goto_table();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang local computed goto table" {
+  let caller =
+    #|int eval_local_computed_goto_table_from_clang(void);
+    #|int main(void) {
+    #|  return eval_local_computed_goto_table_from_clang();
+    #|}
+  let callee =
+    #|int eval_local_computed_goto_table_from_clang(void) {
+    #|  void *labels[] = { &&bad, &&good, &&also_bad };
+    #|  int index = 0;
+    #|  index = index + 1;
+    #|  goto *labels[index];
+    #|bad:
+    #|  return 1;
+    #|also_bad:
+    #|  return 2;
+    #|good:
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 test "strict MIR codegen rejects unsupported source builtins before backend calls" {
   let source =
     #|int main(void) {
