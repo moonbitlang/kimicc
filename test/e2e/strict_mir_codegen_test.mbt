@@ -570,6 +570,58 @@ async test "strict MIR codegen matches parser codegen for static computed goto r
 }
 
 ///|
+test "strict MIR codegen exposes static computed goto range table to clang callers" {
+  let callee =
+    #|int eval_static_computed_goto_range_table(void) {
+    #|  int op = 3;
+    #|  static void * const dispatch_table[4] = {
+    #|    &&case_zero,
+    #|    &&case_one,
+    #|    [2 ... 3] = &&case_two,
+    #|  };
+    #|  goto *dispatch_table[op];
+    #|case_zero:
+    #|  return 1;
+    #|case_one:
+    #|  return 2;
+    #|case_two:
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_static_computed_goto_range_table(void);
+    #|int main(void) {
+    #|  return eval_static_computed_goto_range_table();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang static computed goto range table" {
+  let caller =
+    #|int eval_static_computed_goto_range_table_from_clang(void);
+    #|int main(void) {
+    #|  return eval_static_computed_goto_range_table_from_clang();
+    #|}
+  let callee =
+    #|int eval_static_computed_goto_range_table_from_clang(void) {
+    #|  int op = 3;
+    #|  static void * const dispatch_table[4] = {
+    #|    &&case_zero,
+    #|    &&case_one,
+    #|    [2 ... 3] = &&case_two,
+    #|  };
+    #|  goto *dispatch_table[op];
+    #|case_zero:
+    #|  return 1;
+    #|case_one:
+    #|  return 2;
+    #|case_two:
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_local_computed_goto_table_source() -> String {
   let source =
     #|int main(void) {
