@@ -7325,6 +7325,88 @@ async test "strict MIR codegen matches parser codegen for floating logical opera
 }
 
 ///|
+test "strict MIR codegen exposes floating logical operators to clang callers" {
+  let callee =
+    #|int g;
+    #|int bump(void) {
+    #|  g = g + 1;
+    #|  return 1;
+    #|}
+    #|int eval_floating_logical_operators(void) {
+    #|  double z = 0.0;
+    #|  double x = 1.5;
+    #|  double n = z / z;
+    #|  int a = !z;
+    #|  int b = !x;
+    #|  int c = !n;
+    #|  int d = z || bump();
+    #|  int e = x || bump();
+    #|  int f = z && bump();
+    #|  int h = x && bump();
+    #|  int i = n && bump();
+    #|  int j = n || bump();
+    #|  if (a != 1) return 1;
+    #|  if (b != 0) return 2;
+    #|  if (c != 0) return 3;
+    #|  if (d != 1) return 4;
+    #|  if (e != 1) return 5;
+    #|  if (f != 0) return 6;
+    #|  if (h != 1) return 7;
+    #|  if (i != 1) return 8;
+    #|  if (j != 1) return 9;
+    #|  if (g != 3) return 10;
+    #|  return 37;
+    #|}
+  let driver =
+    #|int eval_floating_logical_operators(void);
+    #|int main(void) {
+    #|  return eval_floating_logical_operators();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 37)
+}
+
+///|
+test "strict MIR codegen calls clang floating logical operators" {
+  let caller =
+    #|int eval_floating_logical_operators_from_clang(void);
+    #|int main(void) {
+    #|  return eval_floating_logical_operators_from_clang();
+    #|}
+  let callee =
+    #|int g;
+    #|int bump(void) {
+    #|  g = g + 1;
+    #|  return 1;
+    #|}
+    #|int eval_floating_logical_operators_from_clang(void) {
+    #|  double z = 0.0;
+    #|  double x = 1.5;
+    #|  double n = z / z;
+    #|  int a = !z;
+    #|  int b = !x;
+    #|  int c = !n;
+    #|  int d = z || bump();
+    #|  int e = x || bump();
+    #|  int f = z && bump();
+    #|  int h = x && bump();
+    #|  int i = n && bump();
+    #|  int j = n || bump();
+    #|  if (a != 1) return 1;
+    #|  if (b != 0) return 2;
+    #|  if (c != 0) return 3;
+    #|  if (d != 1) return 4;
+    #|  if (e != 1) return 5;
+    #|  if (f != 0) return 6;
+    #|  if (h != 1) return 7;
+    #|  if (i != 1) return 8;
+    #|  if (j != 1) return 9;
+    #|  if (g != 3) return 10;
+    #|  return 37;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 37)
+}
+
+///|
 fn strict_mir_floating_compound_updates_source() -> String {
   let source =
     #|int main(void) {
