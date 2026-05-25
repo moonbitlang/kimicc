@@ -3532,6 +3532,78 @@ async test "strict MIR codegen matches parser codegen for bzero operation" {
 }
 
 ///|
+test "strict MIR codegen exposes bzero operation to clang callers" {
+  let callee =
+    #|struct Pair {
+    #|  int a;
+    #|  int b;
+    #|};
+    #|struct Pair global_pair = { 19, 23 };
+    #|int eval_bzero_operation(void) {
+    #|  char buf[4];
+    #|  struct Pair local = { 7, 35 };
+    #|  struct Pair slots[2];
+    #|  int n = 0;
+    #|  buf[0] = 1;
+    #|  buf[1] = 2;
+    #|  buf[2] = 3;
+    #|  buf[3] = 4;
+    #|  slots[0].a = 5;
+    #|  slots[0].b = 37;
+    #|  __builtin_bzero(buf, n += 4);
+    #|  __builtin_bzero(&local, sizeof(local));
+    #|  __builtin_bzero(&global_pair, sizeof(global_pair));
+    #|  __builtin_bzero(&slots[0], sizeof(slots[0]));
+    #|  if (n != 4) return 1;
+    #|  return 42 + buf[0] + buf[1] + buf[2] + buf[3] +
+    #|    local.a + local.b + global_pair.a + global_pair.b +
+    #|    slots[0].a + slots[0].b;
+    #|}
+  let driver =
+    #|int eval_bzero_operation(void);
+    #|int main(void) {
+    #|  return eval_bzero_operation();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang bzero operation" {
+  let caller =
+    #|int eval_bzero_operation_from_clang(void);
+    #|int main(void) {
+    #|  return eval_bzero_operation_from_clang();
+    #|}
+  let callee =
+    #|struct Pair {
+    #|  int a;
+    #|  int b;
+    #|};
+    #|struct Pair global_pair = { 19, 23 };
+    #|int eval_bzero_operation_from_clang(void) {
+    #|  char buf[4];
+    #|  struct Pair local = { 7, 35 };
+    #|  struct Pair slots[2];
+    #|  int n = 0;
+    #|  buf[0] = 1;
+    #|  buf[1] = 2;
+    #|  buf[2] = 3;
+    #|  buf[3] = 4;
+    #|  slots[0].a = 5;
+    #|  slots[0].b = 37;
+    #|  __builtin_bzero(buf, n += 4);
+    #|  __builtin_bzero(&local, sizeof(local));
+    #|  __builtin_bzero(&global_pair, sizeof(global_pair));
+    #|  __builtin_bzero(&slots[0], sizeof(slots[0]));
+    #|  if (n != 4) return 1;
+    #|  return 42 + buf[0] + buf[1] + buf[2] + buf[3] +
+    #|    local.a + local.b + global_pair.a + global_pair.b +
+    #|    slots[0].a + slots[0].b;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_darwin_fd_helpers_source() -> String {
   let source =
     #|struct fd_set {
