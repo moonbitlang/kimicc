@@ -7244,6 +7244,38 @@ async test "strict MIR codegen matches parser codegen for floating local compari
 }
 
 ///|
+test "strict MIR codegen exposes floating local comparisons to clang callers" {
+  let callee =
+    #|int eval_floating_local_comparisons(void) {
+    #|  double x = 1.5;
+    #|  double y = 2.5;
+    #|  return (x < y) + (x != y) + (y > 2.0) + (x == 1.5) + (x <= y) + (y >= x);
+    #|}
+  let driver =
+    #|int eval_floating_local_comparisons(void);
+    #|int main(void) {
+    #|  return eval_floating_local_comparisons();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 6)
+}
+
+///|
+test "strict MIR codegen calls clang floating local comparisons" {
+  let caller =
+    #|int eval_floating_local_comparisons_from_clang(void);
+    #|int main(void) {
+    #|  return eval_floating_local_comparisons_from_clang();
+    #|}
+  let callee =
+    #|int eval_floating_local_comparisons_from_clang(void) {
+    #|  double x = 1.5;
+    #|  double y = 2.5;
+    #|  return (x < y) + (x != y) + (y > 2.0) + (x == 1.5) + (x <= y) + (y >= x);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 6)
+}
+
+///|
 fn strict_mir_floating_ternary_conversions_source() -> String {
   let source =
     #|int main(void) {
