@@ -250,6 +250,38 @@ async test "strict MIR codegen matches parser codegen for builtin choose express
 }
 
 ///|
+test "strict MIR codegen exposes builtin choose expression to clang callers" {
+  let callee =
+    #|int missing(void);
+    #|int eval_builtin_choose_expr(void) {
+    #|  return __builtin_choose_expr(__builtin_types_compatible_p(int, signed int), 40, missing()) +
+    #|         __builtin_choose_expr(__builtin_types_compatible_p(int, unsigned int), missing(), 2);
+    #|}
+  let driver =
+    #|int eval_builtin_choose_expr(void);
+    #|int main(void) {
+    #|  return eval_builtin_choose_expr();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang builtin choose expression" {
+  let caller =
+    #|int eval_builtin_choose_expr_from_clang(void);
+    #|int main(void) {
+    #|  return eval_builtin_choose_expr_from_clang();
+    #|}
+  let callee =
+    #|int missing(void);
+    #|int eval_builtin_choose_expr_from_clang(void) {
+    #|  return __builtin_choose_expr(__builtin_types_compatible_p(int, signed int), 40, missing()) +
+    #|         __builtin_choose_expr(__builtin_types_compatible_p(int, unsigned int), missing(), 2);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_compile_time_type_fact_source() -> String {
   let source =
     #|struct S { int x; };
