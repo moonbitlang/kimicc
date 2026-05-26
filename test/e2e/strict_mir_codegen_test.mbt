@@ -4737,6 +4737,80 @@ async test "strict MIR codegen matches parser codegen for declared strnlen and m
 }
 
 ///|
+test "strict MIR codegen exposes declared strnlen and memccpy to clang callers" {
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern size_t strnlen(const char *, size_t);
+    #|extern void *memccpy(void *, const void *, int, size_t);
+    #|extern int strcmp(const char *, const char *);
+    #|int eval_strnlen_memccpy(void) {
+    #|  char src[8];
+    #|  char dst[8];
+    #|  src[0] = 'a';
+    #|  src[1] = 'b';
+    #|  src[2] = 'c';
+    #|  src[3] = 0;
+    #|  src[4] = 'd';
+    #|  if (strnlen(src, 8) != 3) return 1;
+    #|  if (strnlen(src, 2) != 2) return 2;
+    #|  char *hit = memccpy(dst, src, 'c', 8);
+    #|  if (hit != dst + 3) return 3;
+    #|  dst[3] = 0;
+    #|  if (strcmp(dst, "abc") != 0) return 4;
+    #|  src[0] = 'x';
+    #|  src[1] = 'y';
+    #|  src[2] = 'z';
+    #|  src[3] = 0;
+    #|  if (memccpy(dst, src, 'q', 4) != 0) return 5;
+    #|  if (strcmp(dst, "xyz") != 0) return 6;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_strnlen_memccpy(void);
+    #|int main(void) {
+    #|  return eval_strnlen_memccpy();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang declared strnlen and memccpy" {
+  let caller =
+    #|int eval_strnlen_memccpy_from_clang(void);
+    #|int main(void) {
+    #|  return eval_strnlen_memccpy_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern size_t strnlen(const char *, size_t);
+    #|extern void *memccpy(void *, const void *, int, size_t);
+    #|extern int strcmp(const char *, const char *);
+    #|int eval_strnlen_memccpy_from_clang(void) {
+    #|  char src[8];
+    #|  char dst[8];
+    #|  src[0] = 'a';
+    #|  src[1] = 'b';
+    #|  src[2] = 'c';
+    #|  src[3] = 0;
+    #|  src[4] = 'd';
+    #|  if (strnlen(src, 8) != 3) return 1;
+    #|  if (strnlen(src, 2) != 2) return 2;
+    #|  char *hit = memccpy(dst, src, 'c', 8);
+    #|  if (hit != dst + 3) return 3;
+    #|  dst[3] = 0;
+    #|  if (strcmp(dst, "abc") != 0) return 4;
+    #|  src[0] = 'x';
+    #|  src[1] = 'y';
+    #|  src[2] = 'z';
+    #|  src[3] = 0;
+    #|  if (memccpy(dst, src, 'q', 4) != 0) return 5;
+    #|  if (strcmp(dst, "xyz") != 0) return 6;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_memmem_source() -> String {
   let source =
     #|typedef unsigned long size_t;
