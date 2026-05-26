@@ -8808,6 +8808,58 @@ async test "strict MIR codegen matches parser codegen when switch enters for-loo
 }
 
 ///|
+test "strict MIR codegen exposes switch case skipping for init to clang callers" {
+  let callee =
+    #|int eval_switch_case_skips_for_init(void) {
+    #|  int x = 2;
+    #|  int total = 0;
+    #|  switch (x) {
+    #|    for (total = 100; x > 0; x = x - 1) {
+    #|    case 1:
+    #|      total = total + 10;
+    #|      break;
+    #|    case 2:
+    #|      total = total + 20;
+    #|    }
+    #|    total = total + 3;
+    #|  }
+    #|  return total;
+    #|}
+  let driver =
+    #|int eval_switch_case_skips_for_init(void);
+    #|int main(void) {
+    #|  return eval_switch_case_skips_for_init();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 33)
+}
+
+///|
+test "strict MIR codegen calls clang switch case skipping for init" {
+  let caller =
+    #|int eval_switch_case_skips_for_init_from_clang(void);
+    #|int main(void) {
+    #|  return eval_switch_case_skips_for_init_from_clang();
+    #|}
+  let callee =
+    #|int eval_switch_case_skips_for_init_from_clang(void) {
+    #|  int x = 2;
+    #|  int total = 0;
+    #|  switch (x) {
+    #|    for (total = 100; x > 0; x = x - 1) {
+    #|    case 1:
+    #|      total = total + 10;
+    #|      break;
+    #|    case 2:
+    #|      total = total + 20;
+    #|    }
+    #|    total = total + 3;
+    #|  }
+    #|  return total;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 33)
+}
+
+///|
 fn strict_mir_switch_case_nested_do_while_source() -> String {
   let source =
     #|int main(void) {
