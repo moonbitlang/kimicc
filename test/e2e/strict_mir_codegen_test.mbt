@@ -5396,6 +5396,102 @@ async test "strict MIR codegen matches parser codegen for declared strtok" {
 }
 
 ///|
+test "strict MIR codegen exposes declared strtok to clang callers" {
+  let callee =
+    #|extern char *strtok(char *, const char *);
+    #|extern int strcmp(const char *, const char *);
+    #|int eval_strtok(void) {
+    #|  char text[12];
+    #|  text[0] = ',';
+    #|  text[1] = 'a';
+    #|  text[2] = 'b';
+    #|  text[3] = ',';
+    #|  text[4] = ';';
+    #|  text[5] = 'c';
+    #|  text[6] = 'd';
+    #|  text[7] = ';';
+    #|  text[8] = 0;
+    #|  text[9] = 'x';
+    #|  char other[4];
+    #|  other[0] = 'z';
+    #|  other[1] = ':';
+    #|  other[2] = 'q';
+    #|  other[3] = 0;
+    #|  char *first = strtok(text, ",;");
+    #|  if (first != text + 1) return 1;
+    #|  if (strcmp(first, "ab") != 0) return 2;
+    #|  if (text[3] != 0) return 3;
+    #|  char *second = strtok(0, ",;");
+    #|  if (second != text + 5) return 4;
+    #|  if (strcmp(second, "cd") != 0) return 5;
+    #|  if (text[7] != 0) return 6;
+    #|  if (strtok(0, ",;") != 0) return 7;
+    #|  char *reset = strtok(other, ":");
+    #|  if (reset != other) return 8;
+    #|  if (strcmp(reset, "z") != 0) return 9;
+    #|  if (other[1] != 0) return 10;
+    #|  char *tail = strtok(0, ":");
+    #|  if (tail != other + 2) return 11;
+    #|  if (strcmp(tail, "q") != 0) return 12;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_strtok(void);
+    #|int main(void) {
+    #|  return eval_strtok();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang declared strtok" {
+  let caller =
+    #|int eval_strtok_from_clang(void);
+    #|int main(void) {
+    #|  return eval_strtok_from_clang();
+    #|}
+  let callee =
+    #|extern char *strtok(char *, const char *);
+    #|extern int strcmp(const char *, const char *);
+    #|int eval_strtok_from_clang(void) {
+    #|  char text[12];
+    #|  text[0] = ',';
+    #|  text[1] = 'a';
+    #|  text[2] = 'b';
+    #|  text[3] = ',';
+    #|  text[4] = ';';
+    #|  text[5] = 'c';
+    #|  text[6] = 'd';
+    #|  text[7] = ';';
+    #|  text[8] = 0;
+    #|  text[9] = 'x';
+    #|  char other[4];
+    #|  other[0] = 'z';
+    #|  other[1] = ':';
+    #|  other[2] = 'q';
+    #|  other[3] = 0;
+    #|  char *first = strtok(text, ",;");
+    #|  if (first != text + 1) return 1;
+    #|  if (strcmp(first, "ab") != 0) return 2;
+    #|  if (text[3] != 0) return 3;
+    #|  char *second = strtok(0, ",;");
+    #|  if (second != text + 5) return 4;
+    #|  if (strcmp(second, "cd") != 0) return 5;
+    #|  if (text[7] != 0) return 6;
+    #|  if (strtok(0, ",;") != 0) return 7;
+    #|  char *reset = strtok(other, ":");
+    #|  if (reset != other) return 8;
+    #|  if (strcmp(reset, "z") != 0) return 9;
+    #|  if (other[1] != 0) return 10;
+    #|  char *tail = strtok(0, ":");
+    #|  if (tail != other + 2) return 11;
+    #|  if (strcmp(tail, "q") != 0) return 12;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_decimal_integer_conversion_source() -> String {
   let source =
     #|extern long strtol(const char *, char **, int);
