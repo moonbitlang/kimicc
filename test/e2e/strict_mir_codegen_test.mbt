@@ -5946,6 +5946,74 @@ async test "strict MIR codegen matches parser codegen for float object memory by
 }
 
 ///|
+test "strict MIR codegen exposes float object memory bytes to clang callers" {
+  let callee =
+    #|static float gf = 1.5f;
+    #|int eval_float_object_memory(void) {
+    #|  float x = 1.0f;
+    #|  unsigned char *p = (unsigned char *)&x;
+    #|  if (p[0] != 0u || p[1] != 0u || p[2] != 0x80u || p[3] != 0x3fu) return 1;
+    #|  p[0] = 0u;
+    #|  p[1] = 0u;
+    #|  p[2] = 0u;
+    #|  p[3] = 0x40u;
+    #|  if ((int)x != 2) return 2;
+    #|  unsigned char raw[4];
+    #|  raw[0] = 0u;
+    #|  raw[1] = 0u;
+    #|  raw[2] = 0x40u;
+    #|  raw[3] = 0x40u;
+    #|  if ((int)*(float *)raw != 3) return 3;
+    #|  float y = 0.0f;
+    #|  __builtin_memcpy(&y, &gf, sizeof(y));
+    #|  if ((int)y != 1) return 4;
+    #|  __builtin_memset(&gf, 0, sizeof(gf));
+    #|  if ((int)gf != 0) return 5;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_float_object_memory(void);
+    #|int main(void) {
+    #|  return eval_float_object_memory();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang float object memory bytes" {
+  let caller =
+    #|int eval_float_object_memory_from_clang(void);
+    #|int main(void) {
+    #|  return eval_float_object_memory_from_clang();
+    #|}
+  let callee =
+    #|static float gf = 1.5f;
+    #|int eval_float_object_memory_from_clang(void) {
+    #|  float x = 1.0f;
+    #|  unsigned char *p = (unsigned char *)&x;
+    #|  if (p[0] != 0u || p[1] != 0u || p[2] != 0x80u || p[3] != 0x3fu) return 1;
+    #|  p[0] = 0u;
+    #|  p[1] = 0u;
+    #|  p[2] = 0u;
+    #|  p[3] = 0x40u;
+    #|  if ((int)x != 2) return 2;
+    #|  unsigned char raw[4];
+    #|  raw[0] = 0u;
+    #|  raw[1] = 0u;
+    #|  raw[2] = 0x40u;
+    #|  raw[3] = 0x40u;
+    #|  if ((int)*(float *)raw != 3) return 3;
+    #|  float y = 0.0f;
+    #|  __builtin_memcpy(&y, &gf, sizeof(y));
+    #|  if ((int)y != 1) return 4;
+    #|  __builtin_memset(&gf, 0, sizeof(gf));
+    #|  if ((int)gf != 0) return 5;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_scalar_aggregate_field_memory_source() -> String {
   let source =
     #|struct S {
