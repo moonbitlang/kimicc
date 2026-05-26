@@ -6965,6 +6965,46 @@ async test "strict MIR codegen matches parser codegen for aggregate array elemen
 }
 
 ///|
+test "strict MIR codegen exposes aggregate array element address to clang callers" {
+  let callee =
+    #|struct Item { int v; };
+    #|struct Item items[3];
+    #|struct Item *pick(int i) {
+    #|  return &items[i];
+    #|}
+    #|int eval_aggregate_array_element_address(void) {
+    #|  items[2].v = 42;
+    #|  return pick(2)->v;
+    #|}
+  let driver =
+    #|int eval_aggregate_array_element_address(void);
+    #|int main(void) {
+    #|  return eval_aggregate_array_element_address();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang aggregate array element address" {
+  let caller =
+    #|int eval_aggregate_array_element_address_from_clang(void);
+    #|int main(void) {
+    #|  return eval_aggregate_array_element_address_from_clang();
+    #|}
+  let callee =
+    #|struct Item { int v; };
+    #|struct Item items[3];
+    #|struct Item *pick(int i) {
+    #|  return &items[i];
+    #|}
+    #|int eval_aggregate_array_element_address_from_clang(void) {
+    #|  items[2].v = 42;
+    #|  return pick(2)->v;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_pointer_post_update_through_memory_source() -> String {
   let source =
     #|int main(void) {
