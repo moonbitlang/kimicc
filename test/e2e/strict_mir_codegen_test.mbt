@@ -8985,6 +8985,54 @@ async test "strict MIR codegen matches parser codegen for struct copies with bit
 }
 
 ///|
+test "strict MIR codegen exposes struct copies with bitfields to clang callers" {
+  let callee =
+    #|struct Flags {
+    #|  int x;
+    #|  unsigned a : 1;
+    #|  unsigned b : 2;
+    #|};
+    #|int eval_struct_copy_with_bitfields(void) {
+    #|  struct Flags flags;
+    #|  flags.x = 30;
+    #|  flags.a = 1;
+    #|  flags.b = 2;
+    #|  struct Flags copy = flags;
+    #|  return copy.x + copy.a + (copy.b << 1);
+    #|}
+  let driver =
+    #|int eval_struct_copy_with_bitfields(void);
+    #|int main(void) {
+    #|  return eval_struct_copy_with_bitfields();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 35)
+}
+
+///|
+test "strict MIR codegen calls clang struct copies with bitfields" {
+  let caller =
+    #|int eval_struct_copy_with_bitfields_from_clang(void);
+    #|int main(void) {
+    #|  return eval_struct_copy_with_bitfields_from_clang();
+    #|}
+  let callee =
+    #|struct Flags {
+    #|  int x;
+    #|  unsigned a : 1;
+    #|  unsigned b : 2;
+    #|};
+    #|int eval_struct_copy_with_bitfields_from_clang(void) {
+    #|  struct Flags flags;
+    #|  flags.x = 30;
+    #|  flags.a = 1;
+    #|  flags.b = 2;
+    #|  struct Flags copy = flags;
+    #|  return copy.x + copy.a + (copy.b << 1);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 35)
+}
+
+///|
 fn strict_mir_pointer_arithmetic_local_array_source() -> String {
   let source =
     #|int main(void) {
