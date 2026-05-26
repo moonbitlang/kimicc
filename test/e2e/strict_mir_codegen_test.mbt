@@ -7033,6 +7033,42 @@ async test "strict MIR codegen matches parser codegen for pointer post update th
 }
 
 ///|
+test "strict MIR codegen exposes pointer post update through memory to clang callers" {
+  let callee =
+    #|int eval_pointer_post_update_through_memory(void) {
+    #|  int values[3] = {4, 7, 9};
+    #|  int *p = values;
+    #|  int **pp = &p;
+    #|  int first = *((*pp)++);
+    #|  return first + **pp;
+    #|}
+  let driver =
+    #|int eval_pointer_post_update_through_memory(void);
+    #|int main(void) {
+    #|  return eval_pointer_post_update_through_memory();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 11)
+}
+
+///|
+test "strict MIR codegen calls clang pointer post update through memory" {
+  let caller =
+    #|int eval_pointer_post_update_through_memory_from_clang(void);
+    #|int main(void) {
+    #|  return eval_pointer_post_update_through_memory_from_clang();
+    #|}
+  let callee =
+    #|int eval_pointer_post_update_through_memory_from_clang(void) {
+    #|  int values[3] = {4, 7, 9};
+    #|  int *p = values;
+    #|  int **pp = &p;
+    #|  int first = *((*pp)++);
+    #|  return first + **pp;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 11)
+}
+
+///|
 fn strict_mir_small_aggregate_call_result_source() -> String {
   let source =
     #|struct Pair { long a; long b; };
