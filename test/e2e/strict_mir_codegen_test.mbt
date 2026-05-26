@@ -6056,6 +6056,70 @@ async test "strict MIR codegen matches parser codegen for scalar aggregate field
 }
 
 ///|
+test "strict MIR codegen exposes scalar aggregate field memory libcalls to clang callers" {
+  let callee =
+    #|struct S {
+    #|  unsigned int head;
+    #|  unsigned int values[2];
+    #|};
+    #|static struct S g = { 0x12345678u, { 0x01020304u, 0x89abcdefu } };
+    #|int eval_scalar_aggregate_field_memory(void) {
+    #|  struct S s;
+    #|  s.head = 0x55667788u;
+    #|  s.values[0] = 0u;
+    #|  s.values[1] = 0u;
+    #|  unsigned int copy = 0u;
+    #|  if (__builtin_memcpy(&copy, &s.head, sizeof(copy)) != &copy) return 1;
+    #|  if (copy != 0x55667788u) return 2;
+    #|  __builtin_memcpy(&s.values[1], &g.values[1], sizeof(copy));
+    #|  if (s.values[1] != 0x89abcdefu) return 3;
+    #|  __builtin_memset(&s.head, 0, sizeof(s.head));
+    #|  if (s.head != 0u) return 4;
+    #|  __builtin_memset(&g.values[0], 0, sizeof(g.values[0]));
+    #|  if (g.values[0] != 0u) return 5;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_scalar_aggregate_field_memory(void);
+    #|int main(void) {
+    #|  return eval_scalar_aggregate_field_memory();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang scalar aggregate field memory libcalls" {
+  let caller =
+    #|int eval_scalar_aggregate_field_memory_from_clang(void);
+    #|int main(void) {
+    #|  return eval_scalar_aggregate_field_memory_from_clang();
+    #|}
+  let callee =
+    #|struct S {
+    #|  unsigned int head;
+    #|  unsigned int values[2];
+    #|};
+    #|static struct S g = { 0x12345678u, { 0x01020304u, 0x89abcdefu } };
+    #|int eval_scalar_aggregate_field_memory_from_clang(void) {
+    #|  struct S s;
+    #|  s.head = 0x55667788u;
+    #|  s.values[0] = 0u;
+    #|  s.values[1] = 0u;
+    #|  unsigned int copy = 0u;
+    #|  if (__builtin_memcpy(&copy, &s.head, sizeof(copy)) != &copy) return 1;
+    #|  if (copy != 0x55667788u) return 2;
+    #|  __builtin_memcpy(&s.values[1], &g.values[1], sizeof(copy));
+    #|  if (s.values[1] != 0x89abcdefu) return 3;
+    #|  __builtin_memset(&s.head, 0, sizeof(s.head));
+    #|  if (s.head != 0u) return 4;
+    #|  __builtin_memset(&g.values[0], 0, sizeof(g.values[0]));
+    #|  if (g.values[0] != 0u) return 5;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_direct_scalar_byte_memory_source() -> String {
   let source =
     #|struct S {
