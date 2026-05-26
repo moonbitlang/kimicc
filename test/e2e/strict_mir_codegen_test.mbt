@@ -8170,6 +8170,52 @@ async test "strict MIR codegen matches parser codegen for aggregate pointer memb
 }
 
 ///|
+test "strict MIR codegen exposes aggregate pointer members to clang callers" {
+  let callee =
+    #|struct Pair { long a; long b; };
+    #|int sum_pair(struct Pair *p) {
+    #|  p->a = p->a + 6;
+    #|  return (int)(p->a + p->b);
+    #|}
+    #|int eval_aggregate_pointer_member(void) {
+    #|  struct Pair local_pair = { 1, 2 };
+    #|  struct Pair *p = &local_pair;
+    #|  int seen = sum_pair(p);
+    #|  if (local_pair.a != 7) return 1;
+    #|  return seen;
+    #|}
+  let driver =
+    #|int eval_aggregate_pointer_member(void);
+    #|int main(void) {
+    #|  return eval_aggregate_pointer_member();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 9)
+}
+
+///|
+test "strict MIR codegen calls clang aggregate pointer members" {
+  let caller =
+    #|int eval_aggregate_pointer_member_from_clang(void);
+    #|int main(void) {
+    #|  return eval_aggregate_pointer_member_from_clang();
+    #|}
+  let callee =
+    #|struct Pair { long a; long b; };
+    #|int sum_pair(struct Pair *p) {
+    #|  p->a = p->a + 6;
+    #|  return (int)(p->a + p->b);
+    #|}
+    #|int eval_aggregate_pointer_member_from_clang(void) {
+    #|  struct Pair local_pair = { 1, 2 };
+    #|  struct Pair *p = &local_pair;
+    #|  int seen = sum_pair(p);
+    #|  if (local_pair.a != 7) return 1;
+    #|  return seen;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 9)
+}
+
+///|
 fn strict_mir_globals_arrays_and_structs_source() -> String {
   let source =
     #|struct Pair { int x; int y; };
