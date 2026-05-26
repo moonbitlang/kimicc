@@ -6895,6 +6895,46 @@ async test "strict MIR codegen matches parser codegen for local aggregate member
 }
 
 ///|
+test "strict MIR codegen exposes local aggregate member address function table to clang callers" {
+  let callee =
+    #|struct Methods { int (*init)(void); };
+    #|struct Config { struct Methods methods; };
+    #|int good(void) { return 42; }
+    #|int eval_local_aggregate_member_address_function_table(void) {
+    #|  struct Config cfg;
+    #|  struct Methods *to = &cfg.methods;
+    #|  to->init = good;
+    #|  return cfg.methods.init();
+    #|}
+  let driver =
+    #|int eval_local_aggregate_member_address_function_table(void);
+    #|int main(void) {
+    #|  return eval_local_aggregate_member_address_function_table();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang local aggregate member address function table" {
+  let caller =
+    #|int eval_local_aggregate_member_address_function_table_from_clang(void);
+    #|int main(void) {
+    #|  return eval_local_aggregate_member_address_function_table_from_clang();
+    #|}
+  let callee =
+    #|struct Methods { int (*init)(void); };
+    #|struct Config { struct Methods methods; };
+    #|int good(void) { return 42; }
+    #|int eval_local_aggregate_member_address_function_table_from_clang(void) {
+    #|  struct Config cfg;
+    #|  struct Methods *to = &cfg.methods;
+    #|  to->init = good;
+    #|  return cfg.methods.init();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_aggregate_array_element_address_source() -> String {
   let source =
     #|struct Item { int v; };
