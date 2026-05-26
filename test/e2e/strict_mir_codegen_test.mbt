@@ -5257,6 +5257,88 @@ async test "strict MIR codegen matches parser codegen for declared strsep" {
 }
 
 ///|
+test "strict MIR codegen exposes declared strsep to clang callers" {
+  let callee =
+    #|extern char *strsep(char **, const char *);
+    #|extern int strcmp(const char *, const char *);
+    #|int eval_strsep(void) {
+    #|  char text[8];
+    #|  text[0] = 'a';
+    #|  text[1] = 'b';
+    #|  text[2] = ',';
+    #|  text[3] = 'c';
+    #|  text[4] = 'd';
+    #|  text[5] = ',';
+    #|  text[6] = 0;
+    #|  text[7] = 'z';
+    #|  char *p = text;
+    #|  char *first = strsep(&p, ",");
+    #|  if (first != text) return 1;
+    #|  if (p != text + 3) return 2;
+    #|  if (text[2] != 0) return 3;
+    #|  if (strcmp(first, "ab") != 0) return 4;
+    #|  char *second = strsep(&p, ",");
+    #|  if (second != text + 3) return 5;
+    #|  if (p != text + 6) return 6;
+    #|  if (text[5] != 0) return 7;
+    #|  if (strcmp(second, "cd") != 0) return 8;
+    #|  char *third = strsep(&p, ",");
+    #|  if (third != text + 6) return 9;
+    #|  if (p != 0) return 10;
+    #|  if (strcmp(third, "") != 0) return 11;
+    #|  if (strsep(&p, ",") != 0) return 12;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_strsep(void);
+    #|int main(void) {
+    #|  return eval_strsep();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang declared strsep" {
+  let caller =
+    #|int eval_strsep_from_clang(void);
+    #|int main(void) {
+    #|  return eval_strsep_from_clang();
+    #|}
+  let callee =
+    #|extern char *strsep(char **, const char *);
+    #|extern int strcmp(const char *, const char *);
+    #|int eval_strsep_from_clang(void) {
+    #|  char text[8];
+    #|  text[0] = 'a';
+    #|  text[1] = 'b';
+    #|  text[2] = ',';
+    #|  text[3] = 'c';
+    #|  text[4] = 'd';
+    #|  text[5] = ',';
+    #|  text[6] = 0;
+    #|  text[7] = 'z';
+    #|  char *p = text;
+    #|  char *first = strsep(&p, ",");
+    #|  if (first != text) return 1;
+    #|  if (p != text + 3) return 2;
+    #|  if (text[2] != 0) return 3;
+    #|  if (strcmp(first, "ab") != 0) return 4;
+    #|  char *second = strsep(&p, ",");
+    #|  if (second != text + 3) return 5;
+    #|  if (p != text + 6) return 6;
+    #|  if (text[5] != 0) return 7;
+    #|  if (strcmp(second, "cd") != 0) return 8;
+    #|  char *third = strsep(&p, ",");
+    #|  if (third != text + 6) return 9;
+    #|  if (p != 0) return 10;
+    #|  if (strcmp(third, "") != 0) return 11;
+    #|  if (strsep(&p, ",") != 0) return 12;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_strtok_source() -> String {
   let source =
     #|extern char *strtok(char *, const char *);
