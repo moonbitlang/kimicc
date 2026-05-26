@@ -5123,6 +5123,90 @@ async test "strict MIR codegen matches parser codegen for declared case-insensit
 }
 
 ///|
+test "strict MIR codegen exposes declared case-insensitive and BSD string libcalls to clang callers" {
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern int strcasecmp(const char *, const char *);
+    #|extern int strncasecmp(const char *, const char *, size_t);
+    #|extern char *strcasestr(const char *, const char *);
+    #|extern char *index(const char *, int);
+    #|extern char *rindex(const char *, int);
+    #|int eval_case_bsd_string_libcalls(void) {
+    #|  char s[7];
+    #|  s[0] = 'A';
+    #|  s[1] = 'b';
+    #|  s[2] = 'C';
+    #|  s[3] = 'a';
+    #|  s[4] = 'B';
+    #|  s[5] = 'c';
+    #|  s[6] = 0;
+    #|  if (strcasecmp("AbC", "aBc") != 0) return 1;
+    #|  if (strcasecmp("abc", "abd") >= 0) return 2;
+    #|  if (strcasecmp("abe", "abd") <= 0) return 3;
+    #|  if (strncasecmp("AbD", "aBc", 2) != 0) return 4;
+    #|  if (strncasecmp("AbD", "aBc", 3) <= 0) return 5;
+    #|  if (strncasecmp(s, "zz", 0) != 0) return 6;
+    #|  if (strcasestr(s, "ca") != s + 2) return 7;
+    #|  if (strcasestr(s, "BC") != s + 1) return 8;
+    #|  if (strcasestr(s, "") != s) return 9;
+    #|  if (strcasestr(s, "qq") != 0) return 10;
+    #|  if (index(s, 'B') != s + 4) return 11;
+    #|  if (rindex(s, 'a') != s + 3) return 12;
+    #|  if (rindex(s, 'A') != s) return 13;
+    #|  if (index(s, 'z') != 0) return 14;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_case_bsd_string_libcalls(void);
+    #|int main(void) {
+    #|  return eval_case_bsd_string_libcalls();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang declared case-insensitive and BSD string libcalls" {
+  let caller =
+    #|int eval_case_bsd_string_libcalls_from_clang(void);
+    #|int main(void) {
+    #|  return eval_case_bsd_string_libcalls_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern int strcasecmp(const char *, const char *);
+    #|extern int strncasecmp(const char *, const char *, size_t);
+    #|extern char *strcasestr(const char *, const char *);
+    #|extern char *index(const char *, int);
+    #|extern char *rindex(const char *, int);
+    #|int eval_case_bsd_string_libcalls_from_clang(void) {
+    #|  char s[7];
+    #|  s[0] = 'A';
+    #|  s[1] = 'b';
+    #|  s[2] = 'C';
+    #|  s[3] = 'a';
+    #|  s[4] = 'B';
+    #|  s[5] = 'c';
+    #|  s[6] = 0;
+    #|  if (strcasecmp("AbC", "aBc") != 0) return 1;
+    #|  if (strcasecmp("abc", "abd") >= 0) return 2;
+    #|  if (strcasecmp("abe", "abd") <= 0) return 3;
+    #|  if (strncasecmp("AbD", "aBc", 2) != 0) return 4;
+    #|  if (strncasecmp("AbD", "aBc", 3) <= 0) return 5;
+    #|  if (strncasecmp(s, "zz", 0) != 0) return 6;
+    #|  if (strcasestr(s, "ca") != s + 2) return 7;
+    #|  if (strcasestr(s, "BC") != s + 1) return 8;
+    #|  if (strcasestr(s, "") != s) return 9;
+    #|  if (strcasestr(s, "qq") != 0) return 10;
+    #|  if (index(s, 'B') != s + 4) return 11;
+    #|  if (rindex(s, 'a') != s + 3) return 12;
+    #|  if (rindex(s, 'A') != s) return 13;
+    #|  if (index(s, 'z') != 0) return 14;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_strsep_source() -> String {
   let source =
     #|extern char *strsep(char **, const char *);
