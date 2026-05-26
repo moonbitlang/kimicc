@@ -6169,6 +6169,84 @@ async test "strict MIR codegen matches parser codegen for direct scalar byte mem
 }
 
 ///|
+test "strict MIR codegen exposes direct scalar byte memory access to clang callers" {
+  let callee =
+    #|struct S {
+    #|  unsigned int head;
+    #|  unsigned int tail;
+    #|};
+    #|static unsigned int g = 0x01020304u;
+    #|int eval_direct_scalar_byte_memory(void) {
+    #|  unsigned int x = 0x12345678u;
+    #|  unsigned char *p = (unsigned char *)&x;
+    #|  if (p[0] != 0x78u) return 1;
+    #|  if (p[1] != 0x56u) return 2;
+    #|  p[1] = 0xaau;
+    #|  if (x != 0x1234aa78u) return 3;
+    #|  unsigned char raw[4];
+    #|  raw[0] = 0xefu;
+    #|  raw[1] = 0xbeu;
+    #|  raw[2] = 0xadu;
+    #|  raw[3] = 0xdeu;
+    #|  if (*(unsigned int *)raw != 0xdeadbeefu) return 4;
+    #|  struct S s;
+    #|  s.head = 0u;
+    #|  s.tail = 0u;
+    #|  *(unsigned int *)(((unsigned char *)&s) + sizeof(unsigned int)) = g;
+    #|  if (s.tail != 0x01020304u) return 5;
+    #|  unsigned char *q = (unsigned char *)&g;
+    #|  q[0] = 0x2au;
+    #|  if (g != 0x0102032au) return 6;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_direct_scalar_byte_memory(void);
+    #|int main(void) {
+    #|  return eval_direct_scalar_byte_memory();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang direct scalar byte memory access" {
+  let caller =
+    #|int eval_direct_scalar_byte_memory_from_clang(void);
+    #|int main(void) {
+    #|  return eval_direct_scalar_byte_memory_from_clang();
+    #|}
+  let callee =
+    #|struct S {
+    #|  unsigned int head;
+    #|  unsigned int tail;
+    #|};
+    #|static unsigned int g = 0x01020304u;
+    #|int eval_direct_scalar_byte_memory_from_clang(void) {
+    #|  unsigned int x = 0x12345678u;
+    #|  unsigned char *p = (unsigned char *)&x;
+    #|  if (p[0] != 0x78u) return 1;
+    #|  if (p[1] != 0x56u) return 2;
+    #|  p[1] = 0xaau;
+    #|  if (x != 0x1234aa78u) return 3;
+    #|  unsigned char raw[4];
+    #|  raw[0] = 0xefu;
+    #|  raw[1] = 0xbeu;
+    #|  raw[2] = 0xadu;
+    #|  raw[3] = 0xdeu;
+    #|  if (*(unsigned int *)raw != 0xdeadbeefu) return 4;
+    #|  struct S s;
+    #|  s.head = 0u;
+    #|  s.tail = 0u;
+    #|  *(unsigned int *)(((unsigned char *)&s) + sizeof(unsigned int)) = g;
+    #|  if (s.tail != 0x01020304u) return 5;
+    #|  unsigned char *q = (unsigned char *)&g;
+    #|  q[0] = 0x2au;
+    #|  if (g != 0x0102032au) return 6;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_string_destination_libcalls_source() -> String {
   let source =
     #|int main(void) {
