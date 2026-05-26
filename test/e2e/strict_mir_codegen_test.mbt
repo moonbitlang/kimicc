@@ -6292,6 +6292,76 @@ async test "strict MIR codegen matches parser codegen for string destination lib
 }
 
 ///|
+test "strict MIR codegen exposes string destination libcalls to clang callers" {
+  let callee =
+    #|int eval_string_destination_libcalls(void) {
+    #|  char dst[16];
+    #|  int n = 0;
+    #|  if (__builtin_strcpy(dst, "ab") != dst) return 1;
+    #|  if (dst[0] != 'a' || dst[1] != 'b' || dst[2] != 0) return 2;
+    #|  if (__builtin___strcpy_chk(dst, "cd", n += 16) != dst) return 3;
+    #|  if (dst[0] != 'c' || dst[1] != 'd' || dst[2] != 0) return 4;
+    #|  if (__builtin_strcat(dst, "e") != dst) return 5;
+    #|  if (dst[0] != 'c' || dst[1] != 'd' || dst[2] != 'e' || dst[3] != 0) return 6;
+    #|  if (__builtin___strcat_chk(dst, "f", n += 16) != dst) return 7;
+    #|  if (dst[0] != 'c' || dst[1] != 'd' || dst[2] != 'e' || dst[3] != 'f') return 8;
+    #|  if (__builtin_strncpy(dst, "xy", 3) != dst) return 9;
+    #|  if (dst[0] != 'x' || dst[1] != 'y' || dst[2] != 0) return 10;
+    #|  dst[0] = 0;
+    #|  if (__builtin___strncpy_chk(dst, "pq", 2, n += 16) != dst) return 11;
+    #|  if (dst[0] != 'p' || dst[1] != 'q') return 12;
+    #|  dst[2] = 0;
+    #|  if (__builtin_strncat(dst, "rs", 1) != dst) return 13;
+    #|  if (dst[0] != 'p' || dst[1] != 'q' || dst[2] != 'r' || dst[3] != 0) return 14;
+    #|  if (__builtin___strncat_chk(dst, "tu", 1, n += 16) != dst) return 15;
+    #|  if (dst[0] != 'p' || dst[1] != 'q' || dst[2] != 'r' || dst[3] != 't') return 16;
+    #|  if (n != 64) return 17;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_string_destination_libcalls(void);
+    #|int main(void) {
+    #|  return eval_string_destination_libcalls();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang string destination libcalls" {
+  let caller =
+    #|int eval_string_destination_libcalls_from_clang(void);
+    #|int main(void) {
+    #|  return eval_string_destination_libcalls_from_clang();
+    #|}
+  let callee =
+    #|int eval_string_destination_libcalls_from_clang(void) {
+    #|  char dst[16];
+    #|  int n = 0;
+    #|  if (__builtin_strcpy(dst, "ab") != dst) return 1;
+    #|  if (dst[0] != 'a' || dst[1] != 'b' || dst[2] != 0) return 2;
+    #|  if (__builtin___strcpy_chk(dst, "cd", n += 16) != dst) return 3;
+    #|  if (dst[0] != 'c' || dst[1] != 'd' || dst[2] != 0) return 4;
+    #|  if (__builtin_strcat(dst, "e") != dst) return 5;
+    #|  if (dst[0] != 'c' || dst[1] != 'd' || dst[2] != 'e' || dst[3] != 0) return 6;
+    #|  if (__builtin___strcat_chk(dst, "f", n += 16) != dst) return 7;
+    #|  if (dst[0] != 'c' || dst[1] != 'd' || dst[2] != 'e' || dst[3] != 'f') return 8;
+    #|  if (__builtin_strncpy(dst, "xy", 3) != dst) return 9;
+    #|  if (dst[0] != 'x' || dst[1] != 'y' || dst[2] != 0) return 10;
+    #|  dst[0] = 0;
+    #|  if (__builtin___strncpy_chk(dst, "pq", 2, n += 16) != dst) return 11;
+    #|  if (dst[0] != 'p' || dst[1] != 'q') return 12;
+    #|  dst[2] = 0;
+    #|  if (__builtin_strncat(dst, "rs", 1) != dst) return 13;
+    #|  if (dst[0] != 'p' || dst[1] != 'q' || dst[2] != 'r' || dst[3] != 0) return 14;
+    #|  if (__builtin___strncat_chk(dst, "tu", 1, n += 16) != dst) return 15;
+    #|  if (dst[0] != 'p' || dst[1] != 'q' || dst[2] != 'r' || dst[3] != 't') return 16;
+    #|  if (n != 64) return 17;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_end_pointer_memory_string_builtins_source() -> String {
   let source =
     #|void *mempcpy(void *dst, const void *src, unsigned long n) {
