@@ -8550,6 +8550,46 @@ async test "strict MIR codegen matches parser codegen for signed bitfield loads"
 }
 
 ///|
+test "strict MIR codegen exposes signed bitfield loads to clang callers" {
+  let callee =
+    #|struct Bits { unsigned a : 3; signed b : 4; unsigned c : 5; };
+    #|static struct Bits bits = { .a = 5, .b = -3, .c = 17 };
+    #|int eval_signed_bitfield(void) {
+    #|  struct Bits local;
+    #|  local.a = 3;
+    #|  local.b = -2;
+    #|  local.c = 24;
+    #|  return bits.a + bits.b + bits.c + local.a + local.b + local.c;
+    #|}
+  let driver =
+    #|int eval_signed_bitfield(void);
+    #|int main(void) {
+    #|  return eval_signed_bitfield();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 44)
+}
+
+///|
+test "strict MIR codegen calls clang signed bitfield loads" {
+  let caller =
+    #|int eval_signed_bitfield_from_clang(void);
+    #|int main(void) {
+    #|  return eval_signed_bitfield_from_clang();
+    #|}
+  let callee =
+    #|struct Bits { unsigned a : 3; signed b : 4; unsigned c : 5; };
+    #|static struct Bits bits = { .a = 5, .b = -3, .c = 17 };
+    #|int eval_signed_bitfield_from_clang(void) {
+    #|  struct Bits local;
+    #|  local.a = 3;
+    #|  local.b = -2;
+    #|  local.c = 24;
+    #|  return bits.a + bits.b + bits.c + local.a + local.b + local.c;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 44)
+}
+
+///|
 fn strict_mir_switch_case_nested_if_source() -> String {
   let source =
     #|int main(void) {
