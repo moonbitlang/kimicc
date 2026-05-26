@@ -8325,6 +8325,46 @@ async test "strict MIR codegen matches parser codegen for static nested array ac
 }
 
 ///|
+test "strict MIR codegen exposes static nested array access to clang callers" {
+  let callee =
+    #|int eval_static_nested_array_access(void) {
+    #|  static const unsigned char trans[2][3] = {
+    #|    { 1, 2, 3 },
+    #|    { 4, 5, 6 },
+    #|  };
+    #|  int i = 1;
+    #|  int j = 2;
+    #|  return trans[i][j];
+    #|}
+  let driver =
+    #|int eval_static_nested_array_access(void);
+    #|int main(void) {
+    #|  return eval_static_nested_array_access();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 6)
+}
+
+///|
+test "strict MIR codegen calls clang static nested array access" {
+  let caller =
+    #|int eval_static_nested_array_access_from_clang(void);
+    #|int main(void) {
+    #|  return eval_static_nested_array_access_from_clang();
+    #|}
+  let callee =
+    #|int eval_static_nested_array_access_from_clang(void) {
+    #|  static const unsigned char trans[2][3] = {
+    #|    { 1, 2, 3 },
+    #|    { 4, 5, 6 },
+    #|  };
+    #|  int i = 1;
+    #|  int j = 2;
+    #|  return trans[i][j];
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 6)
+}
+
+///|
 fn strict_mir_array_element_aggregate_field_source() -> String {
   let source =
     #|struct Item { int v; };
