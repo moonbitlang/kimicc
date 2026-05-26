@@ -8474,6 +8474,52 @@ async test "strict MIR codegen matches parser codegen for bitfield loads and sto
 }
 
 ///|
+test "strict MIR codegen exposes bitfield loads and stores to clang callers" {
+  let callee =
+    #|struct Flags {
+    #|  unsigned a : 1;
+    #|  unsigned b : 2;
+    #|  unsigned c : 3;
+    #|};
+    #|int eval_bitfield_load_store(void) {
+    #|  struct Flags flags;
+    #|  flags.a = 1;
+    #|  flags.b = 2;
+    #|  flags.c = 5;
+    #|  return flags.a + (flags.b << 1) + (flags.c << 3);
+    #|}
+  let driver =
+    #|int eval_bitfield_load_store(void);
+    #|int main(void) {
+    #|  return eval_bitfield_load_store();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 45)
+}
+
+///|
+test "strict MIR codegen calls clang bitfield loads and stores" {
+  let caller =
+    #|int eval_bitfield_load_store_from_clang(void);
+    #|int main(void) {
+    #|  return eval_bitfield_load_store_from_clang();
+    #|}
+  let callee =
+    #|struct Flags {
+    #|  unsigned a : 1;
+    #|  unsigned b : 2;
+    #|  unsigned c : 3;
+    #|};
+    #|int eval_bitfield_load_store_from_clang(void) {
+    #|  struct Flags flags;
+    #|  flags.a = 1;
+    #|  flags.b = 2;
+    #|  flags.c = 5;
+    #|  return flags.a + (flags.b << 1) + (flags.c << 3);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 45)
+}
+
+///|
 fn strict_mir_signed_bitfield_source() -> String {
   let source =
     #|struct Bits { unsigned a : 3; signed b : 4; unsigned c : 5; };
