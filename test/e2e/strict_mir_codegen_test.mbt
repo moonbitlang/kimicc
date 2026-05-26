@@ -8249,6 +8249,52 @@ async test "strict MIR codegen matches parser codegen for globals arrays and str
 }
 
 ///|
+test "strict MIR codegen exposes globals arrays and structs to clang callers" {
+  let callee =
+    #|struct Pair { int x; int y; };
+    #|int g = 9;
+    #|int eval_globals_arrays_and_structs(void) {
+    #|  int a[3];
+    #|  struct Pair p;
+    #|  a[0] = 2;
+    #|  a[1] = 5;
+    #|  p.x = a[0] + g;
+    #|  p.y = a[1];
+    #|  g = p.x + p.y;
+    #|  return g;
+    #|}
+  let driver =
+    #|int eval_globals_arrays_and_structs(void);
+    #|int main(void) {
+    #|  return eval_globals_arrays_and_structs();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 16)
+}
+
+///|
+test "strict MIR codegen calls clang globals arrays and structs" {
+  let caller =
+    #|int eval_globals_arrays_and_structs_from_clang(void);
+    #|int main(void) {
+    #|  return eval_globals_arrays_and_structs_from_clang();
+    #|}
+  let callee =
+    #|struct Pair { int x; int y; };
+    #|int g = 9;
+    #|int eval_globals_arrays_and_structs_from_clang(void) {
+    #|  int a[3];
+    #|  struct Pair p;
+    #|  a[0] = 2;
+    #|  a[1] = 5;
+    #|  p.x = a[0] + g;
+    #|  p.y = a[1];
+    #|  g = p.x + p.y;
+    #|  return g;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 16)
+}
+
+///|
 fn strict_mir_static_nested_array_access_source() -> String {
   let source =
     #|int main(void) {
