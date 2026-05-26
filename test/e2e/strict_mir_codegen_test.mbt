@@ -5850,6 +5850,58 @@ async test "strict MIR codegen matches parser codegen for double object memory l
 }
 
 ///|
+test "strict MIR codegen exposes double object memory libcalls to clang callers" {
+  let callee =
+    #|static double gd = 9.5;
+    #|int eval_double_object_memory(void) {
+    #|  double x = 1.25;
+    #|  double y = 0.0;
+    #|  double z = -4.5;
+    #|  if (__builtin_memcpy(&y, &x, sizeof(y)) != &y) return 1;
+    #|  if ((int)(y * 4.0) != 5) return 2;
+    #|  __builtin_memmove(&z, &gd, sizeof(z));
+    #|  if ((int)(z * 2.0) != 19) return 3;
+    #|  __builtin_memset(&z, 0, sizeof(z));
+    #|  if ((int)z != 0) return 4;
+    #|  __builtin_memcpy(&gd, &x, sizeof(gd));
+    #|  if ((int)(gd * 4.0) != 5) return 5;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_double_object_memory(void);
+    #|int main(void) {
+    #|  return eval_double_object_memory();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang double object memory libcalls" {
+  let caller =
+    #|int eval_double_object_memory_from_clang(void);
+    #|int main(void) {
+    #|  return eval_double_object_memory_from_clang();
+    #|}
+  let callee =
+    #|static double gd = 9.5;
+    #|int eval_double_object_memory_from_clang(void) {
+    #|  double x = 1.25;
+    #|  double y = 0.0;
+    #|  double z = -4.5;
+    #|  if (__builtin_memcpy(&y, &x, sizeof(y)) != &y) return 1;
+    #|  if ((int)(y * 4.0) != 5) return 2;
+    #|  __builtin_memmove(&z, &gd, sizeof(z));
+    #|  if ((int)(z * 2.0) != 19) return 3;
+    #|  __builtin_memset(&z, 0, sizeof(z));
+    #|  if ((int)z != 0) return 4;
+    #|  __builtin_memcpy(&gd, &x, sizeof(gd));
+    #|  if ((int)(gd * 4.0) != 5) return 5;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_float_object_memory_source() -> String {
   let source =
     #|static float gf = 1.5f;
