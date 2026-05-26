@@ -5758,6 +5758,62 @@ async test "strict MIR codegen matches parser codegen for scalar object memory l
 }
 
 ///|
+test "strict MIR codegen exposes scalar object memory libcalls to clang callers" {
+  let callee =
+    #|static unsigned int g = 0x89abcdefu;
+    #|int eval_scalar_object_memory(void) {
+    #|  unsigned int x = 0x12345678u;
+    #|  unsigned int y = 0u;
+    #|  unsigned int z = 0xffffffffu;
+    #|  if (__builtin_memcpy(&y, &x, sizeof(y)) != &y) return 1;
+    #|  if (y != x) return 2;
+    #|  if (__builtin_memset(&z, 0, sizeof(z)) != &z) return 3;
+    #|  if (z != 0u) return 4;
+    #|  __builtin_memset(&z, 0x2a, 1);
+    #|  if (z != 42u) return 5;
+    #|  __builtin_memmove(&z, &g, sizeof(z));
+    #|  if (z != g) return 6;
+    #|  __builtin_memset(&g, 0, sizeof(g));
+    #|  if (g != 0u) return 7;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_scalar_object_memory(void);
+    #|int main(void) {
+    #|  return eval_scalar_object_memory();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang scalar object memory libcalls" {
+  let caller =
+    #|int eval_scalar_object_memory_from_clang(void);
+    #|int main(void) {
+    #|  return eval_scalar_object_memory_from_clang();
+    #|}
+  let callee =
+    #|static unsigned int g = 0x89abcdefu;
+    #|int eval_scalar_object_memory_from_clang(void) {
+    #|  unsigned int x = 0x12345678u;
+    #|  unsigned int y = 0u;
+    #|  unsigned int z = 0xffffffffu;
+    #|  if (__builtin_memcpy(&y, &x, sizeof(y)) != &y) return 1;
+    #|  if (y != x) return 2;
+    #|  if (__builtin_memset(&z, 0, sizeof(z)) != &z) return 3;
+    #|  if (z != 0u) return 4;
+    #|  __builtin_memset(&z, 0x2a, 1);
+    #|  if (z != 42u) return 5;
+    #|  __builtin_memmove(&z, &g, sizeof(z));
+    #|  if (z != g) return 6;
+    #|  __builtin_memset(&g, 0, sizeof(g));
+    #|  if (g != 0u) return 7;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_double_object_memory_source() -> String {
   let source =
     #|static double gd = 9.5;
