@@ -6609,6 +6609,40 @@ async test "strict MIR codegen matches parser codegen for stack-passed integer d
 }
 
 ///|
+test "strict MIR codegen exposes stack-passed integer direct calls to clang callers" {
+  let callee =
+    #|int sum9(int a, int b, int c, int d, int e, int f, int g, int h, int i) {
+    #|  return a + b + c + d + e + f + g + h + i;
+    #|}
+    #|int eval_stack_integer_direct_call(void) {
+    #|  return sum9(1, 2, 3, 4, 5, 6, 7, 8, 9);
+    #|}
+  let driver =
+    #|int eval_stack_integer_direct_call(void);
+    #|int main(void) {
+    #|  return eval_stack_integer_direct_call();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 45)
+}
+
+///|
+test "strict MIR codegen calls clang stack-passed integer direct calls" {
+  let caller =
+    #|int eval_stack_integer_direct_call_from_clang(void);
+    #|int main(void) {
+    #|  return eval_stack_integer_direct_call_from_clang();
+    #|}
+  let callee =
+    #|int sum9(int a, int b, int c, int d, int e, int f, int g, int h, int i) {
+    #|  return a + b + c + d + e + f + g + h + i;
+    #|}
+    #|int eval_stack_integer_direct_call_from_clang(void) {
+    #|  return sum9(1, 2, 3, 4, 5, 6, 7, 8, 9);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 45)
+}
+
+///|
 fn strict_mir_stack_integer_indirect_call_source() -> String {
   let source =
     #|int sum9(int a, int b, int c, int d, int e, int f, int g, int h, int i) {
