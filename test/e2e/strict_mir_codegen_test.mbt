@@ -8716,6 +8716,62 @@ async test "strict MIR codegen matches parser codegen for switch case labels nes
 }
 
 ///|
+test "strict MIR codegen exposes switch case labels nested in loops to clang callers" {
+  let callee =
+    #|int eval_switch_case_nested_loop(void) {
+    #|  int x = 2;
+    #|  int total = 0;
+    #|  switch (x) {
+    #|    while (x > 0) {
+    #|    case 1:
+    #|      total = total + 10;
+    #|      x = 0;
+    #|      break;
+    #|    case 2:
+    #|      total = total + 20;
+    #|      x = x - 1;
+    #|    }
+    #|    total = total + 3;
+    #|  }
+    #|  return total;
+    #|}
+  let driver =
+    #|int eval_switch_case_nested_loop(void);
+    #|int main(void) {
+    #|  return eval_switch_case_nested_loop();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 33)
+}
+
+///|
+test "strict MIR codegen calls clang switch case labels nested in loops" {
+  let caller =
+    #|int eval_switch_case_nested_loop_from_clang(void);
+    #|int main(void) {
+    #|  return eval_switch_case_nested_loop_from_clang();
+    #|}
+  let callee =
+    #|int eval_switch_case_nested_loop_from_clang(void) {
+    #|  int x = 2;
+    #|  int total = 0;
+    #|  switch (x) {
+    #|    while (x > 0) {
+    #|    case 1:
+    #|      total = total + 10;
+    #|      x = 0;
+    #|      break;
+    #|    case 2:
+    #|      total = total + 20;
+    #|      x = x - 1;
+    #|    }
+    #|    total = total + 3;
+    #|  }
+    #|  return total;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 33)
+}
+
+///|
 fn strict_mir_switch_case_skips_for_init_source() -> String {
   let source =
     #|int main(void) {
