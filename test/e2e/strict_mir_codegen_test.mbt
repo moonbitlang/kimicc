@@ -5662,6 +5662,64 @@ async test "strict MIR codegen matches parser codegen for declared integer conve
 }
 
 ///|
+test "strict MIR codegen exposes declared integer conversion bases to clang callers" {
+  let callee =
+    #|extern long strtol(const char *, char **, int);
+    #|extern unsigned long strtoul(const char *, char **, int);
+    #|int eval_integer_conversion_bases(void) {
+    #|  char *end;
+    #|  if (strtol("0x2a!", &end, 0) != 42L) return 1;
+    #|  if (*end != '!') return 2;
+    #|  if (strtol("052!", &end, 0) != 42L) return 3;
+    #|  if (*end != '!') return 4;
+    #|  if (strtol("2A!", &end, 16) != 42L) return 5;
+    #|  if (*end != '!') return 6;
+    #|  if (strtoul("101010!", &end, 2) != 42UL) return 7;
+    #|  if (*end != '!') return 8;
+    #|  if (strtol("z!", &end, 36) != 35L) return 9;
+    #|  if (*end != '!') return 10;
+    #|  if (strtol("19!", &end, 8) != 1L) return 11;
+    #|  if (*end != '9') return 12;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_integer_conversion_bases(void);
+    #|int main(void) {
+    #|  return eval_integer_conversion_bases();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang declared integer conversion bases" {
+  let caller =
+    #|int eval_integer_conversion_bases_from_clang(void);
+    #|int main(void) {
+    #|  return eval_integer_conversion_bases_from_clang();
+    #|}
+  let callee =
+    #|extern long strtol(const char *, char **, int);
+    #|extern unsigned long strtoul(const char *, char **, int);
+    #|int eval_integer_conversion_bases_from_clang(void) {
+    #|  char *end;
+    #|  if (strtol("0x2a!", &end, 0) != 42L) return 1;
+    #|  if (*end != '!') return 2;
+    #|  if (strtol("052!", &end, 0) != 42L) return 3;
+    #|  if (*end != '!') return 4;
+    #|  if (strtol("2A!", &end, 16) != 42L) return 5;
+    #|  if (*end != '!') return 6;
+    #|  if (strtoul("101010!", &end, 2) != 42UL) return 7;
+    #|  if (*end != '!') return 8;
+    #|  if (strtol("z!", &end, 36) != 35L) return 9;
+    #|  if (*end != '!') return 10;
+    #|  if (strtol("19!", &end, 8) != 1L) return 11;
+    #|  if (*end != '9') return 12;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_scalar_object_memory_source() -> String {
   let source =
     #|static unsigned int g = 0x89abcdefu;
