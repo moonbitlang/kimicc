@@ -8397,6 +8397,50 @@ async test "strict MIR codegen matches parser codegen for array element aggregat
 }
 
 ///|
+test "strict MIR codegen exposes array element aggregate fields to clang callers" {
+  let callee =
+    #|struct Item { int v; };
+    #|struct Db { struct Item a[2]; };
+    #|int get(struct Db *db, int i) {
+    #|  return db->a[i].v;
+    #|}
+    #|int eval_array_element_aggregate_field(void) {
+    #|  struct Db db;
+    #|  db.a[0].v = 4;
+    #|  db.a[1].v = 7;
+    #|  return get(&db, 1);
+    #|}
+  let driver =
+    #|int eval_array_element_aggregate_field(void);
+    #|int main(void) {
+    #|  return eval_array_element_aggregate_field();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 7)
+}
+
+///|
+test "strict MIR codegen calls clang array element aggregate fields" {
+  let caller =
+    #|int eval_array_element_aggregate_field_from_clang(void);
+    #|int main(void) {
+    #|  return eval_array_element_aggregate_field_from_clang();
+    #|}
+  let callee =
+    #|struct Item { int v; };
+    #|struct Db { struct Item a[2]; };
+    #|int get(struct Db *db, int i) {
+    #|  return db->a[i].v;
+    #|}
+    #|int eval_array_element_aggregate_field_from_clang(void) {
+    #|  struct Db db;
+    #|  db.a[0].v = 4;
+    #|  db.a[1].v = 7;
+    #|  return get(&db, 1);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 7)
+}
+
+///|
 fn strict_mir_bitfield_load_store_source() -> String {
   let source =
     #|struct Flags {
