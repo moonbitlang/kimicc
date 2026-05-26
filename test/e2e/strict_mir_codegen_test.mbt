@@ -4854,6 +4854,74 @@ async test "strict MIR codegen matches parser codegen for declared memmem" {
 }
 
 ///|
+test "strict MIR codegen exposes declared memmem to clang callers" {
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern char *memmem(const void *, size_t, const void *, size_t);
+    #|int eval_memmem(void) {
+    #|  char hay[8];
+    #|  char needle[3];
+    #|  hay[0] = 'a';
+    #|  hay[1] = 0;
+    #|  hay[2] = 'b';
+    #|  hay[3] = 'c';
+    #|  hay[4] = 0;
+    #|  hay[5] = 'b';
+    #|  hay[6] = 'c';
+    #|  hay[7] = 0;
+    #|  needle[0] = 0;
+    #|  needle[1] = 'b';
+    #|  needle[2] = 'c';
+    #|  if (memmem(hay, 8, needle, 3) != hay + 1) return 1;
+    #|  if (memmem(hay + 2, 4, "bc", 2) != hay + 2) return 2;
+    #|  if (memmem(hay, 2, "bc", 2) != 0) return 3;
+    #|  if (memmem(hay, 8, hay + 7, 0) != 0) return 4;
+    #|  if (memmem(hay, 8, "bd", 2) != 0) return 5;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_memmem(void);
+    #|int main(void) {
+    #|  return eval_memmem();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang declared memmem" {
+  let caller =
+    #|int eval_memmem_from_clang(void);
+    #|int main(void) {
+    #|  return eval_memmem_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern char *memmem(const void *, size_t, const void *, size_t);
+    #|int eval_memmem_from_clang(void) {
+    #|  char hay[8];
+    #|  char needle[3];
+    #|  hay[0] = 'a';
+    #|  hay[1] = 0;
+    #|  hay[2] = 'b';
+    #|  hay[3] = 'c';
+    #|  hay[4] = 0;
+    #|  hay[5] = 'b';
+    #|  hay[6] = 'c';
+    #|  hay[7] = 0;
+    #|  needle[0] = 0;
+    #|  needle[1] = 'b';
+    #|  needle[2] = 'c';
+    #|  if (memmem(hay, 8, needle, 3) != hay + 1) return 1;
+    #|  if (memmem(hay + 2, 4, "bc", 2) != hay + 2) return 2;
+    #|  if (memmem(hay, 2, "bc", 2) != 0) return 3;
+    #|  if (memmem(hay, 8, hay + 7, 0) != 0) return 4;
+    #|  if (memmem(hay, 8, "bd", 2) != 0) return 5;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_string_span_libcalls_source() -> String {
   let source =
     #|typedef unsigned long size_t;
