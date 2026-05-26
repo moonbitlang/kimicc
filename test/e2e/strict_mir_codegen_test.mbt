@@ -4497,6 +4497,86 @@ async test "strict MIR codegen matches parser codegen for declared memory and st
 }
 
 ///|
+test "strict MIR codegen exposes declared memory and string libcalls to clang callers" {
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *memcpy(void *, const void *, size_t);
+    #|extern void *memmove(void *, const void *, size_t);
+    #|extern void *memset(void *, int, size_t);
+    #|extern int memcmp(const void *, const void *, size_t);
+    #|extern size_t strlen(const char *);
+    #|extern int strcmp(const char *, const char *);
+    #|extern char *strcpy(char *, const char *);
+    #|extern char *strcat(char *, const char *);
+    #|extern char *strchr(const char *, int);
+    #|extern char *strstr(const char *, const char *);
+    #|int eval_declared_memory_string_libcalls(void) {
+    #|  char src[8];
+    #|  char dst[16];
+    #|  if (strcpy(src, "abc") != src) return 1;
+    #|  if (strlen(src) != 3) return 2;
+    #|  if (memcpy(dst, src, 4) != dst) return 3;
+    #|  if (strcmp(dst, "abc") != 0) return 4;
+    #|  if (memset(dst + 1, 'x', 2) != dst + 1) return 5;
+    #|  if (memcmp(dst, "axx", 3) != 0) return 6;
+    #|  strcpy(src, "wxyz");
+    #|  memmove(src + 1, src, 3);
+    #|  if (strcmp(src, "wwxy") != 0) return 7;
+    #|  strcpy(dst, "hi");
+    #|  if (strcat(dst, "!") != dst) return 8;
+    #|  if (strchr(dst, '!') != dst + 2) return 9;
+    #|  if (strstr(dst, "i!") != dst + 1) return 10;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_declared_memory_string_libcalls(void);
+    #|int main(void) {
+    #|  return eval_declared_memory_string_libcalls();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang declared memory and string libcalls" {
+  let caller =
+    #|int eval_declared_memory_string_libcalls_from_clang(void);
+    #|int main(void) {
+    #|  return eval_declared_memory_string_libcalls_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void *memcpy(void *, const void *, size_t);
+    #|extern void *memmove(void *, const void *, size_t);
+    #|extern void *memset(void *, int, size_t);
+    #|extern int memcmp(const void *, const void *, size_t);
+    #|extern size_t strlen(const char *);
+    #|extern int strcmp(const char *, const char *);
+    #|extern char *strcpy(char *, const char *);
+    #|extern char *strcat(char *, const char *);
+    #|extern char *strchr(const char *, int);
+    #|extern char *strstr(const char *, const char *);
+    #|int eval_declared_memory_string_libcalls_from_clang(void) {
+    #|  char src[8];
+    #|  char dst[16];
+    #|  if (strcpy(src, "abc") != src) return 1;
+    #|  if (strlen(src) != 3) return 2;
+    #|  if (memcpy(dst, src, 4) != dst) return 3;
+    #|  if (strcmp(dst, "abc") != 0) return 4;
+    #|  if (memset(dst + 1, 'x', 2) != dst + 1) return 5;
+    #|  if (memcmp(dst, "axx", 3) != 0) return 6;
+    #|  strcpy(src, "wxyz");
+    #|  memmove(src + 1, src, 3);
+    #|  if (strcmp(src, "wwxy") != 0) return 7;
+    #|  strcpy(dst, "hi");
+    #|  if (strcat(dst, "!") != dst) return 8;
+    #|  if (strchr(dst, '!') != dst + 2) return 9;
+    #|  if (strstr(dst, "i!") != dst + 1) return 10;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_declared_bsd_memory_libcalls_source() -> String {
   let source =
     #|typedef unsigned long size_t;
