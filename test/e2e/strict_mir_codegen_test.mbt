@@ -5543,6 +5543,84 @@ async test "strict MIR codegen matches parser codegen for declared decimal integ
 }
 
 ///|
+test "strict MIR codegen exposes declared decimal integer conversion libcalls to clang callers" {
+  let callee =
+    #|extern long strtol(const char *, char **, int);
+    #|extern long long strtoll(const char *, char **, int);
+    #|extern unsigned long strtoul(const char *, char **, int);
+    #|extern unsigned long long strtoull(const char *, char **, int);
+    #|extern int atoi(const char *);
+    #|extern long atol(const char *);
+    #|extern long long atoll(const char *);
+    #|int eval_decimal_integer_conversion(void) {
+    #|  char *end;
+    #|  char nodigits[4];
+    #|  nodigits[0] = 'x';
+    #|  nodigits[1] = '7';
+    #|  nodigits[2] = 0;
+    #|  nodigits[3] = 'z';
+    #|  if (strtol("  -42xyz", &end, 10) != -42L) return 1;
+    #|  if (*end != 'x') return 2;
+    #|  if (strtoll("+17", &end, 10) != 17LL) return 3;
+    #|  if (*end != 0) return 4;
+    #|  if (strtoul("42x", &end, 10) != 42UL) return 5;
+    #|  if (*end != 'x') return 6;
+    #|  if (strtoull("9", 0, 10) != 9ULL) return 7;
+    #|  if (strtol(nodigits, &end, 10) != 0L) return 8;
+    #|  if (end != nodigits) return 9;
+    #|  if (atoi(" -12q") != -12) return 10;
+    #|  if (atol("33q") != 33L) return 11;
+    #|  if (atoll("-44q") != -44LL) return 12;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_decimal_integer_conversion(void);
+    #|int main(void) {
+    #|  return eval_decimal_integer_conversion();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang declared decimal integer conversion libcalls" {
+  let caller =
+    #|int eval_decimal_integer_conversion_from_clang(void);
+    #|int main(void) {
+    #|  return eval_decimal_integer_conversion_from_clang();
+    #|}
+  let callee =
+    #|extern long strtol(const char *, char **, int);
+    #|extern long long strtoll(const char *, char **, int);
+    #|extern unsigned long strtoul(const char *, char **, int);
+    #|extern unsigned long long strtoull(const char *, char **, int);
+    #|extern int atoi(const char *);
+    #|extern long atol(const char *);
+    #|extern long long atoll(const char *);
+    #|int eval_decimal_integer_conversion_from_clang(void) {
+    #|  char *end;
+    #|  char nodigits[4];
+    #|  nodigits[0] = 'x';
+    #|  nodigits[1] = '7';
+    #|  nodigits[2] = 0;
+    #|  nodigits[3] = 'z';
+    #|  if (strtol("  -42xyz", &end, 10) != -42L) return 1;
+    #|  if (*end != 'x') return 2;
+    #|  if (strtoll("+17", &end, 10) != 17LL) return 3;
+    #|  if (*end != 0) return 4;
+    #|  if (strtoul("42x", &end, 10) != 42UL) return 5;
+    #|  if (*end != 'x') return 6;
+    #|  if (strtoull("9", 0, 10) != 9ULL) return 7;
+    #|  if (strtol(nodigits, &end, 10) != 0L) return 8;
+    #|  if (end != nodigits) return 9;
+    #|  if (atoi(" -12q") != -12) return 10;
+    #|  if (atol("33q") != 33L) return 11;
+    #|  if (atoll("-44q") != -44LL) return 12;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_integer_conversion_bases_source() -> String {
   let source =
     #|extern long strtol(const char *, char **, int);
