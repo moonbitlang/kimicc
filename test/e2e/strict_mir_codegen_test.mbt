@@ -4623,6 +4623,74 @@ async test "strict MIR codegen matches parser codegen for declared BSD memory li
 }
 
 ///|
+test "strict MIR codegen exposes declared BSD memory libcalls to clang callers" {
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void bzero(void *, size_t);
+    #|extern void bcopy(const void *, void *, size_t);
+    #|extern int bcmp(const void *, const void *, size_t);
+    #|extern int strcmp(const char *, const char *);
+    #|int eval_declared_bsd_memory_libcalls(void) {
+    #|  char src[8];
+    #|  char dst[8];
+    #|  src[0] = 'a';
+    #|  src[1] = 'b';
+    #|  src[2] = 'c';
+    #|  src[3] = 0;
+    #|  bzero(dst, 8);
+    #|  if (dst[0] != 0 || dst[7] != 0) return 1;
+    #|  bcopy(src, dst, 4);
+    #|  if (strcmp(dst, "abc") != 0) return 2;
+    #|  if (bcmp(src, dst, 4) != 0) return 3;
+    #|  dst[1] = 'x';
+    #|  if (bcmp(src, dst, 3) == 0) return 4;
+    #|  bcopy(dst, dst + 1, 3);
+    #|  if (dst[0] != 'a' || dst[1] != 'a' || dst[2] != 'x' || dst[3] != 'c') return 5;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_declared_bsd_memory_libcalls(void);
+    #|int main(void) {
+    #|  return eval_declared_bsd_memory_libcalls();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang declared BSD memory libcalls" {
+  let caller =
+    #|int eval_declared_bsd_memory_libcalls_from_clang(void);
+    #|int main(void) {
+    #|  return eval_declared_bsd_memory_libcalls_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern void bzero(void *, size_t);
+    #|extern void bcopy(const void *, void *, size_t);
+    #|extern int bcmp(const void *, const void *, size_t);
+    #|extern int strcmp(const char *, const char *);
+    #|int eval_declared_bsd_memory_libcalls_from_clang(void) {
+    #|  char src[8];
+    #|  char dst[8];
+    #|  src[0] = 'a';
+    #|  src[1] = 'b';
+    #|  src[2] = 'c';
+    #|  src[3] = 0;
+    #|  bzero(dst, 8);
+    #|  if (dst[0] != 0 || dst[7] != 0) return 1;
+    #|  bcopy(src, dst, 4);
+    #|  if (strcmp(dst, "abc") != 0) return 2;
+    #|  if (bcmp(src, dst, 4) != 0) return 3;
+    #|  dst[1] = 'x';
+    #|  if (bcmp(src, dst, 3) == 0) return 4;
+    #|  bcopy(dst, dst + 1, 3);
+    #|  if (dst[0] != 'a' || dst[1] != 'a' || dst[2] != 'x' || dst[3] != 'c') return 5;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_strnlen_memccpy_source() -> String {
   let source =
     #|typedef unsigned long size_t;
