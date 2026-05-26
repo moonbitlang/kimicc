@@ -6434,6 +6434,154 @@ async test "strict MIR codegen matches parser codegen for end-pointer memory str
 }
 
 ///|
+test "strict MIR codegen exposes end-pointer memory string builtins to clang callers" {
+  let callee =
+    #|void *mempcpy(void *dst, const void *src, unsigned long n) {
+    #|  char *d = (char *)dst;
+    #|  const char *s = (const char *)src;
+    #|  for (unsigned long i = 0; i < n; i = i + 1) d[i] = s[i];
+    #|  return d + n;
+    #|}
+    #|char *stpcpy(char *dst, const char *src) {
+    #|  char *d = dst;
+    #|  while (*src) {
+    #|    *d = *src;
+    #|    d = d + 1;
+    #|    src = src + 1;
+    #|  }
+    #|  *d = 0;
+    #|  return d;
+    #|}
+    #|char *stpncpy(char *dst, const char *src, unsigned long n) {
+    #|  char *d = dst;
+    #|  while (n && *src) {
+    #|    *d = *src;
+    #|    d = d + 1;
+    #|    src = src + 1;
+    #|    n = n - 1;
+    #|  }
+    #|  char *ret = d;
+    #|  while (n) {
+    #|    *d = 0;
+    #|    d = d + 1;
+    #|    n = n - 1;
+    #|  }
+    #|  return ret;
+    #|}
+    #|void *__mempcpy_chk(void *dst, const void *src, unsigned long n, unsigned long dstlen) {
+    #|  (void)dstlen;
+    #|  return mempcpy(dst, src, n);
+    #|}
+    #|char *__stpcpy_chk(char *dst, const char *src, unsigned long dstlen) {
+    #|  (void)dstlen;
+    #|  return stpcpy(dst, src);
+    #|}
+    #|char *__stpncpy_chk(char *dst, const char *src, unsigned long n, unsigned long dstlen) {
+    #|  (void)dstlen;
+    #|  return stpncpy(dst, src, n);
+    #|}
+    #|int eval_end_pointer_memory_string_builtins(void) {
+    #|  char copy[16];
+    #|  int n = 0;
+    #|  if (__builtin_mempcpy(copy, "uv", 2) != copy + 2) return 1;
+    #|  if (copy[0] != 'u' || copy[1] != 'v') return 2;
+    #|  if (__builtin___mempcpy_chk(copy + 2, "wx", 2, n += 14) != copy + 4) return 3;
+    #|  if (copy[2] != 'w' || copy[3] != 'x') return 4;
+    #|  if (n != 14) return 5;
+    #|  if (__builtin_stpcpy(copy, "hi") != copy + 2) return 6;
+    #|  if (copy[0] != 'h' || copy[1] != 'i' || copy[2] != 0) return 7;
+    #|  if (__builtin___stpcpy_chk(copy, "ok", n += 16) != copy + 2) return 8;
+    #|  if (copy[0] != 'o' || copy[1] != 'k' || copy[2] != 0) return 9;
+    #|  if (__builtin_stpncpy(copy, "abcd", 2) != copy + 2) return 10;
+    #|  if (copy[0] != 'a' || copy[1] != 'b') return 11;
+    #|  if (__builtin___stpncpy_chk(copy, "cd", 5, n += 16) != copy + 2) return 12;
+    #|  if (copy[0] != 'c' || copy[1] != 'd' || copy[2] != 0) return 13;
+    #|  if (n != 46) return 14;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_end_pointer_memory_string_builtins(void);
+    #|int main(void) {
+    #|  return eval_end_pointer_memory_string_builtins();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang end-pointer memory string builtins" {
+  let caller =
+    #|int eval_end_pointer_memory_string_builtins_from_clang(void);
+    #|int main(void) {
+    #|  return eval_end_pointer_memory_string_builtins_from_clang();
+    #|}
+  let callee =
+    #|void *mempcpy(void *dst, const void *src, unsigned long n) {
+    #|  char *d = (char *)dst;
+    #|  const char *s = (const char *)src;
+    #|  for (unsigned long i = 0; i < n; i = i + 1) d[i] = s[i];
+    #|  return d + n;
+    #|}
+    #|char *stpcpy(char *dst, const char *src) {
+    #|  char *d = dst;
+    #|  while (*src) {
+    #|    *d = *src;
+    #|    d = d + 1;
+    #|    src = src + 1;
+    #|  }
+    #|  *d = 0;
+    #|  return d;
+    #|}
+    #|char *stpncpy(char *dst, const char *src, unsigned long n) {
+    #|  char *d = dst;
+    #|  while (n && *src) {
+    #|    *d = *src;
+    #|    d = d + 1;
+    #|    src = src + 1;
+    #|    n = n - 1;
+    #|  }
+    #|  char *ret = d;
+    #|  while (n) {
+    #|    *d = 0;
+    #|    d = d + 1;
+    #|    n = n - 1;
+    #|  }
+    #|  return ret;
+    #|}
+    #|void *__mempcpy_chk(void *dst, const void *src, unsigned long n, unsigned long dstlen) {
+    #|  (void)dstlen;
+    #|  return mempcpy(dst, src, n);
+    #|}
+    #|char *__stpcpy_chk(char *dst, const char *src, unsigned long dstlen) {
+    #|  (void)dstlen;
+    #|  return stpcpy(dst, src);
+    #|}
+    #|char *__stpncpy_chk(char *dst, const char *src, unsigned long n, unsigned long dstlen) {
+    #|  (void)dstlen;
+    #|  return stpncpy(dst, src, n);
+    #|}
+    #|int eval_end_pointer_memory_string_builtins_from_clang(void) {
+    #|  char copy[16];
+    #|  int n = 0;
+    #|  if (__builtin_mempcpy(copy, "uv", 2) != copy + 2) return 1;
+    #|  if (copy[0] != 'u' || copy[1] != 'v') return 2;
+    #|  if (__builtin___mempcpy_chk(copy + 2, "wx", 2, n += 14) != copy + 4) return 3;
+    #|  if (copy[2] != 'w' || copy[3] != 'x') return 4;
+    #|  if (n != 14) return 5;
+    #|  if (__builtin_stpcpy(copy, "hi") != copy + 2) return 6;
+    #|  if (copy[0] != 'h' || copy[1] != 'i' || copy[2] != 0) return 7;
+    #|  if (__builtin___stpcpy_chk(copy, "ok", n += 16) != copy + 2) return 8;
+    #|  if (copy[0] != 'o' || copy[1] != 'k' || copy[2] != 0) return 9;
+    #|  if (__builtin_stpncpy(copy, "abcd", 2) != copy + 2) return 10;
+    #|  if (copy[0] != 'a' || copy[1] != 'b') return 11;
+    #|  if (__builtin___stpncpy_chk(copy, "cd", 5, n += 16) != copy + 2) return 12;
+    #|  if (copy[0] != 'c' || copy[1] != 'd' || copy[2] != 0) return 13;
+    #|  if (n != 46) return 14;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_stack_integer_direct_call_source() -> String {
   let source =
     #|int sum9(int a, int b, int c, int d, int e, int f, int g, int h, int i) {
