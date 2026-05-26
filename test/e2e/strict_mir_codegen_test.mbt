@@ -4977,6 +4977,98 @@ async test "strict MIR codegen matches parser codegen for declared string span l
 }
 
 ///|
+test "strict MIR codegen exposes declared string span libcalls to clang callers" {
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern size_t strspn(const char *, const char *);
+    #|extern size_t strcspn(const char *, const char *);
+    #|extern char *strpbrk(const char *, const char *);
+    #|int eval_string_span_libcalls(void) {
+    #|  char s[10];
+    #|  char reject[3];
+    #|  char accept[3];
+    #|  s[0] = 'a';
+    #|  s[1] = 'b';
+    #|  s[2] = 'c';
+    #|  s[3] = '1';
+    #|  s[4] = '2';
+    #|  s[5] = '3';
+    #|  s[6] = 'x';
+    #|  s[7] = 'y';
+    #|  s[8] = 'z';
+    #|  s[9] = 0;
+    #|  reject[0] = '2';
+    #|  reject[1] = 'z';
+    #|  reject[2] = 0;
+    #|  accept[0] = 'x';
+    #|  accept[1] = 'y';
+    #|  accept[2] = 0;
+    #|  if (strspn(s, "abc") != 3) return 1;
+    #|  if (strspn(s, "") != 0) return 2;
+    #|  if (strspn(s + 3, "12345") != 3) return 3;
+    #|  if (strcspn(s, reject) != 4) return 4;
+    #|  if (strcspn(s, "") != 9) return 5;
+    #|  if (strpbrk(s, accept) != s + 6) return 6;
+    #|  if (strpbrk(s, "31") != s + 3) return 7;
+    #|  if (strpbrk(s, "") != 0) return 8;
+    #|  if (strpbrk(s, "q") != 0) return 9;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_string_span_libcalls(void);
+    #|int main(void) {
+    #|  return eval_string_span_libcalls();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang declared string span libcalls" {
+  let caller =
+    #|int eval_string_span_libcalls_from_clang(void);
+    #|int main(void) {
+    #|  return eval_string_span_libcalls_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long size_t;
+    #|extern size_t strspn(const char *, const char *);
+    #|extern size_t strcspn(const char *, const char *);
+    #|extern char *strpbrk(const char *, const char *);
+    #|int eval_string_span_libcalls_from_clang(void) {
+    #|  char s[10];
+    #|  char reject[3];
+    #|  char accept[3];
+    #|  s[0] = 'a';
+    #|  s[1] = 'b';
+    #|  s[2] = 'c';
+    #|  s[3] = '1';
+    #|  s[4] = '2';
+    #|  s[5] = '3';
+    #|  s[6] = 'x';
+    #|  s[7] = 'y';
+    #|  s[8] = 'z';
+    #|  s[9] = 0;
+    #|  reject[0] = '2';
+    #|  reject[1] = 'z';
+    #|  reject[2] = 0;
+    #|  accept[0] = 'x';
+    #|  accept[1] = 'y';
+    #|  accept[2] = 0;
+    #|  if (strspn(s, "abc") != 3) return 1;
+    #|  if (strspn(s, "") != 0) return 2;
+    #|  if (strspn(s + 3, "12345") != 3) return 3;
+    #|  if (strcspn(s, reject) != 4) return 4;
+    #|  if (strcspn(s, "") != 9) return 5;
+    #|  if (strpbrk(s, accept) != s + 6) return 6;
+    #|  if (strpbrk(s, "31") != s + 3) return 7;
+    #|  if (strpbrk(s, "") != 0) return 8;
+    #|  if (strpbrk(s, "q") != 0) return 9;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_case_bsd_string_libcalls_source() -> String {
   let source =
     #|typedef unsigned long size_t;
