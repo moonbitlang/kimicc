@@ -8095,6 +8095,48 @@ async test "strict MIR codegen matches parser codegen for aggregate object addre
 }
 
 ///|
+test "strict MIR codegen exposes aggregate object addresses to clang callers" {
+  let callee =
+    #|struct Pair { long a; long b; };
+    #|struct Pair global_pair = { 5, 6 };
+    #|int eval_aggregate_object_address(void) {
+    #|  struct Pair local_pair = { 1, 2 };
+    #|  struct Pair copy = { 0, 0 };
+    #|  __builtin_memcpy(&copy, &local_pair, sizeof(copy));
+    #|  if (copy.a + copy.b != 3) return 1;
+    #|  __builtin_memcpy(&copy, &global_pair, sizeof(copy));
+    #|  return (int)(copy.a + copy.b);
+    #|}
+  let driver =
+    #|int eval_aggregate_object_address(void);
+    #|int main(void) {
+    #|  return eval_aggregate_object_address();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 11)
+}
+
+///|
+test "strict MIR codegen calls clang aggregate object addresses" {
+  let caller =
+    #|int eval_aggregate_object_address_from_clang(void);
+    #|int main(void) {
+    #|  return eval_aggregate_object_address_from_clang();
+    #|}
+  let callee =
+    #|struct Pair { long a; long b; };
+    #|struct Pair global_pair = { 5, 6 };
+    #|int eval_aggregate_object_address_from_clang(void) {
+    #|  struct Pair local_pair = { 1, 2 };
+    #|  struct Pair copy = { 0, 0 };
+    #|  __builtin_memcpy(&copy, &local_pair, sizeof(copy));
+    #|  if (copy.a + copy.b != 3) return 1;
+    #|  __builtin_memcpy(&copy, &global_pair, sizeof(copy));
+    #|  return (int)(copy.a + copy.b);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 11)
+}
+
+///|
 fn strict_mir_aggregate_pointer_member_source() -> String {
   let source =
     #|struct Pair { long a; long b; };
