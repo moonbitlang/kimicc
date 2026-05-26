@@ -6671,6 +6671,42 @@ async test "strict MIR codegen matches parser codegen for stack-passed integer i
 }
 
 ///|
+test "strict MIR codegen exposes stack-passed integer indirect calls to clang callers" {
+  let callee =
+    #|int sum9(int a, int b, int c, int d, int e, int f, int g, int h, int i) {
+    #|  return a + b + c + d + e + f + g + h + i;
+    #|}
+    #|int eval_stack_integer_indirect_call(void) {
+    #|  int (*fp)(int, int, int, int, int, int, int, int, int) = sum9;
+    #|  return fp(1, 2, 3, 4, 5, 6, 7, 8, 9);
+    #|}
+  let driver =
+    #|int eval_stack_integer_indirect_call(void);
+    #|int main(void) {
+    #|  return eval_stack_integer_indirect_call();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 45)
+}
+
+///|
+test "strict MIR codegen calls clang stack-passed integer indirect calls" {
+  let caller =
+    #|int eval_stack_integer_indirect_call_from_clang(void);
+    #|int main(void) {
+    #|  return eval_stack_integer_indirect_call_from_clang();
+    #|}
+  let callee =
+    #|int sum9(int a, int b, int c, int d, int e, int f, int g, int h, int i) {
+    #|  return a + b + c + d + e + f + g + h + i;
+    #|}
+    #|int eval_stack_integer_indirect_call_from_clang(void) {
+    #|  int (*fp)(int, int, int, int, int, int, int, int, int) = sum9;
+    #|  return fp(1, 2, 3, 4, 5, 6, 7, 8, 9);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 45)
+}
+
+///|
 fn strict_mir_indirect_variadic_function_pointer_source() -> String {
   let source =
     #|typedef __builtin_va_list va_list;
