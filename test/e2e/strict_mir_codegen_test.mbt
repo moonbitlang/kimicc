@@ -9208,6 +9208,68 @@ async test "strict MIR codegen matches parser codegen for memory compound update
 }
 
 ///|
+test "strict MIR codegen exposes memory compound update lhs across rhs to clang callers" {
+  let callee =
+    #|typedef unsigned long long Bitmask;
+    #|struct Item { Bitmask colUsed; };
+    #|
+    #|void mark_memory_compound_lhs(struct Item *item, int iCol) {
+    #|  item->colUsed |= ((Bitmask)1) << (iCol >= 64 ? 63 : iCol);
+    #|}
+    #|
+    #|int eval_memory_compound_lhs(void) {
+    #|  struct Item item;
+    #|  Bitmask b;
+    #|  int n = 0;
+    #|  item.colUsed = 0;
+    #|  for (int i = 0; i < 5; i = i + 1) {
+    #|    mark_memory_compound_lhs(&item, i);
+    #|  }
+    #|  for (b = item.colUsed; b; b = b >> 1) {
+    #|    n = n + 1;
+    #|  }
+    #|  return n;
+    #|}
+  let driver =
+    #|int eval_memory_compound_lhs(void);
+    #|int main(void) {
+    #|  return eval_memory_compound_lhs();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 5)
+}
+
+///|
+test "strict MIR codegen calls clang memory compound update lhs across rhs" {
+  let caller =
+    #|int eval_memory_compound_lhs_from_clang(void);
+    #|int main(void) {
+    #|  return eval_memory_compound_lhs_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned long long Bitmask;
+    #|struct Item { Bitmask colUsed; };
+    #|
+    #|void mark_memory_compound_lhs_from_clang(struct Item *item, int iCol) {
+    #|  item->colUsed |= ((Bitmask)1) << (iCol >= 64 ? 63 : iCol);
+    #|}
+    #|
+    #|int eval_memory_compound_lhs_from_clang(void) {
+    #|  struct Item item;
+    #|  Bitmask b;
+    #|  int n = 0;
+    #|  item.colUsed = 0;
+    #|  for (int i = 0; i < 5; i = i + 1) {
+    #|    mark_memory_compound_lhs_from_clang(&item, i);
+    #|  }
+    #|  for (b = item.colUsed; b; b = b >> 1) {
+    #|    n = n + 1;
+    #|  }
+    #|  return n;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 5)
+}
+
+///|
 fn strict_mir_pointer_memory_update_lhs_source() -> String {
   let source =
     #|struct Holder { int *p; };
