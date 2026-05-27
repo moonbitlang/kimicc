@@ -9549,6 +9549,114 @@ async test "strict MIR codegen matches parser codegen for indirect stack object 
 }
 
 ///|
+test "strict MIR codegen exposes indirect stack object pointer calls to clang callers" {
+  let callee =
+    #|extern int printf(const char *, ...);
+    #|struct Pair { int x; int y; };
+    #|void write_ints(int *p) {
+    #|  p[0] = 20;
+    #|  p[1] = 22;
+    #|}
+    #|int read_ints(int *p) {
+    #|  return p[0] + p[1];
+    #|}
+    #|void write_bytes(char *p) {
+    #|  p[0] = 'h';
+    #|  p[1] = 'i';
+    #|  p[2] = 0;
+    #|}
+    #|int read_bytes(char *p) {
+    #|  return p[0] + p[1] == 209 ? 42 : 1;
+    #|}
+    #|void write_pair(struct Pair *p) {
+    #|  p->x = 31;
+    #|  p->y = 11;
+    #|}
+    #|int read_pair(struct Pair *p) {
+    #|  return p->x + p->y;
+    #|}
+    #|int eval_indirect_stack_object_pointer_calls(void) {
+    #|  void (*wi)(int *) = write_ints;
+    #|  int (*ri)(int *) = read_ints;
+    #|  void (*wb)(char *) = write_bytes;
+    #|  int (*rb)(char *) = read_bytes;
+    #|  void (*wp)(struct Pair *) = write_pair;
+    #|  int (*rp)(struct Pair *) = read_pair;
+    #|  int values[2];
+    #|  char *buf = __builtin_alloca(3);
+    #|  struct Pair pair;
+    #|  wi(values);
+    #|  wb(buf);
+    #|  wp(&pair);
+    #|  int a = ri(values);
+    #|  int b = rb(buf);
+    #|  int c = rp(&pair);
+    #|  printf("%d|%s|%d\n", a, buf, c);
+    #|  return (a + b + c) & 255;
+    #|}
+  let driver =
+    #|int eval_indirect_stack_object_pointer_calls(void);
+    #|int main(void) {
+    #|  return eval_indirect_stack_object_pointer_calls();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 126)
+}
+
+///|
+test "strict MIR codegen calls clang indirect stack object pointer calls" {
+  let caller =
+    #|int eval_indirect_stack_object_pointer_calls_from_clang(void);
+    #|int main(void) {
+    #|  return eval_indirect_stack_object_pointer_calls_from_clang();
+    #|}
+  let callee =
+    #|extern int printf(const char *, ...);
+    #|struct Pair { int x; int y; };
+    #|void write_ints(int *p) {
+    #|  p[0] = 20;
+    #|  p[1] = 22;
+    #|}
+    #|int read_ints(int *p) {
+    #|  return p[0] + p[1];
+    #|}
+    #|void write_bytes(char *p) {
+    #|  p[0] = 'h';
+    #|  p[1] = 'i';
+    #|  p[2] = 0;
+    #|}
+    #|int read_bytes(char *p) {
+    #|  return p[0] + p[1] == 209 ? 42 : 1;
+    #|}
+    #|void write_pair(struct Pair *p) {
+    #|  p->x = 31;
+    #|  p->y = 11;
+    #|}
+    #|int read_pair(struct Pair *p) {
+    #|  return p->x + p->y;
+    #|}
+    #|int eval_indirect_stack_object_pointer_calls_from_clang(void) {
+    #|  void (*wi)(int *) = write_ints;
+    #|  int (*ri)(int *) = read_ints;
+    #|  void (*wb)(char *) = write_bytes;
+    #|  int (*rb)(char *) = read_bytes;
+    #|  void (*wp)(struct Pair *) = write_pair;
+    #|  int (*rp)(struct Pair *) = read_pair;
+    #|  int values[2];
+    #|  char *buf = __builtin_alloca(3);
+    #|  struct Pair pair;
+    #|  wi(values);
+    #|  wb(buf);
+    #|  wp(&pair);
+    #|  int a = ri(values);
+    #|  int b = rb(buf);
+    #|  int c = rp(&pair);
+    #|  printf("%d|%s|%d\n", a, buf, c);
+    #|  return (a + b + c) & 255;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 126)
+}
+
+///|
 fn strict_mir_direct_array_decay_pointer_arithmetic_source() -> String {
   let source =
     #|int main(void) {
