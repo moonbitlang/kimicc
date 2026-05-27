@@ -11269,6 +11269,92 @@ async test "strict MIR codegen matches parser codegen for aggregate call-result 
 }
 
 ///|
+test "strict MIR codegen exposes aggregate call-result ternary assignments to clang callers" {
+  let callee =
+    #|struct Box { int a; int b; };
+    #|int side;
+    #|struct Box make(int tag) {
+    #|  struct Box box;
+    #|  box.a = tag;
+    #|  box.b = 42;
+    #|  side = side * 10 + tag;
+    #|  return box;
+    #|}
+    #|int pick_false(void) {
+    #|  struct Box dst;
+    #|  int cond = 0;
+    #|  side = 0;
+    #|  dst = cond ? make(1) : make(2);
+    #|  if (side != 2) return side;
+    #|  if (dst.a != 2) return dst.a;
+    #|  return dst.b;
+    #|}
+    #|int pick_true(void) {
+    #|  struct Box dst;
+    #|  int cond = 1;
+    #|  side = 0;
+    #|  dst = cond ? make(3) : make(4);
+    #|  if (side != 3) return side;
+    #|  if (dst.a != 3) return dst.a;
+    #|  return dst.b;
+    #|}
+    #|int eval_aggregate_call_result_ternary_assignment(void) {
+    #|  if (pick_false() != 42) return 1;
+    #|  if (pick_true() != 42) return 2;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_aggregate_call_result_ternary_assignment(void);
+    #|int main(void) {
+    #|  return eval_aggregate_call_result_ternary_assignment();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang aggregate call-result ternary assignments" {
+  let caller =
+    #|int eval_aggregate_call_result_ternary_assignment_from_clang(void);
+    #|int main(void) {
+    #|  return eval_aggregate_call_result_ternary_assignment_from_clang();
+    #|}
+  let callee =
+    #|struct Box { int a; int b; };
+    #|int side;
+    #|struct Box make(int tag) {
+    #|  struct Box box;
+    #|  box.a = tag;
+    #|  box.b = 42;
+    #|  side = side * 10 + tag;
+    #|  return box;
+    #|}
+    #|int pick_false(void) {
+    #|  struct Box dst;
+    #|  int cond = 0;
+    #|  side = 0;
+    #|  dst = cond ? make(1) : make(2);
+    #|  if (side != 2) return side;
+    #|  if (dst.a != 2) return dst.a;
+    #|  return dst.b;
+    #|}
+    #|int pick_true(void) {
+    #|  struct Box dst;
+    #|  int cond = 1;
+    #|  side = 0;
+    #|  dst = cond ? make(3) : make(4);
+    #|  if (side != 3) return side;
+    #|  if (dst.a != 3) return dst.a;
+    #|  return dst.b;
+    #|}
+    #|int eval_aggregate_call_result_ternary_assignment_from_clang(void) {
+    #|  if (pick_false() != 42) return 1;
+    #|  if (pick_true() != 42) return 2;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_aggregate_ternary_call_argument_source() -> String {
   let source =
     #|struct Box { int a; int b; };
