@@ -9879,6 +9879,40 @@ async test "strict MIR codegen matches parser codegen for member array decay in 
 }
 
 ///|
+test "strict MIR codegen exposes member array decay in pointer comparisons to clang callers" {
+  let callee =
+    #|struct S { int *p; int a[2]; };
+    #|int eval_member_array_decay_pointer_comparison(void) {
+    #|  struct S s;
+    #|  s.p = s.a;
+    #|  return s.p == s.a;
+    #|}
+  let driver =
+    #|int eval_member_array_decay_pointer_comparison(void);
+    #|int main(void) {
+    #|  return eval_member_array_decay_pointer_comparison();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 1)
+}
+
+///|
+test "strict MIR codegen calls clang member array decay in pointer comparisons" {
+  let caller =
+    #|int eval_member_array_decay_pointer_comparison_from_clang(void);
+    #|int main(void) {
+    #|  return eval_member_array_decay_pointer_comparison_from_clang();
+    #|}
+  let callee =
+    #|struct S { int *p; int a[2]; };
+    #|int eval_member_array_decay_pointer_comparison_from_clang(void) {
+    #|  struct S s;
+    #|  s.p = s.a;
+    #|  return s.p == s.a;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 1)
+}
+
+///|
 fn strict_mir_local_aggregate_array_initializer_source() -> String {
   let source =
     #|struct Item { const char *z; int a; int b; };
