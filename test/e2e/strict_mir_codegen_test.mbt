@@ -11969,6 +11969,52 @@ async test "strict MIR codegen matches parser codegen for aggregate compound lit
 }
 
 ///|
+test "strict MIR codegen exposes aggregate compound literal ternary arguments to clang callers" {
+  let callee =
+    #|struct Box { int a; int b; };
+    #|int sum(struct Box box) {
+    #|  return box.a + box.b;
+    #|}
+    #|int eval_aggregate_compound_literal_ternary_argument(void) {
+    #|  int cond = 0;
+    #|  if (sum(cond ? (struct Box){ 1, 2 } : (struct Box){ 19, 23 }) != 42) {
+    #|    return 1;
+    #|  }
+    #|  cond = 1;
+    #|  return sum(cond ? (struct Box){ 20, 22 } : (struct Box){ 3, 4 });
+    #|}
+  let driver =
+    #|int eval_aggregate_compound_literal_ternary_argument(void);
+    #|int main(void) {
+    #|  return eval_aggregate_compound_literal_ternary_argument();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang aggregate compound literal ternary arguments" {
+  let caller =
+    #|int eval_aggregate_compound_literal_ternary_argument_from_clang(void);
+    #|int main(void) {
+    #|  return eval_aggregate_compound_literal_ternary_argument_from_clang();
+    #|}
+  let callee =
+    #|struct Box { int a; int b; };
+    #|int sum(struct Box box) {
+    #|  return box.a + box.b;
+    #|}
+    #|int eval_aggregate_compound_literal_ternary_argument_from_clang(void) {
+    #|  int cond = 0;
+    #|  if (sum(cond ? (struct Box){ 1, 2 } : (struct Box){ 19, 23 }) != 42) {
+    #|    return 1;
+    #|  }
+    #|  cond = 1;
+    #|  return sum(cond ? (struct Box){ 20, 22 } : (struct Box){ 3, 4 });
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_aggregate_compound_literal_ternary_return_source() -> String {
   let source =
     #|struct Box { int a; int b; };
