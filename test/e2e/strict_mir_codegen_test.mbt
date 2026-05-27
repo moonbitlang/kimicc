@@ -11870,6 +11870,72 @@ async test "strict MIR codegen matches parser codegen for aggregate call-result 
 }
 
 ///|
+test "strict MIR codegen exposes aggregate call-result ternary returns to clang callers" {
+  let callee =
+    #|struct Box { int a; int b; };
+    #|int side;
+    #|struct Box make(int tag) {
+    #|  struct Box box;
+    #|  box.a = tag;
+    #|  box.b = 42 - tag;
+    #|  side = side * 10 + tag;
+    #|  return box;
+    #|}
+    #|struct Box pick(int cond) {
+    #|  return cond ? make(5) : make(6);
+    #|}
+    #|int eval_aggregate_call_result_ternary_return(void) {
+    #|  side = 0;
+    #|  struct Box a = pick(0);
+    #|  if (side != 6) return side;
+    #|  if (a.a + a.b != 42) return 1;
+    #|  side = 0;
+    #|  struct Box b = pick(1);
+    #|  if (side != 5) return side;
+    #|  return b.a + b.b;
+    #|}
+  let driver =
+    #|int eval_aggregate_call_result_ternary_return(void);
+    #|int main(void) {
+    #|  return eval_aggregate_call_result_ternary_return();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang aggregate call-result ternary returns" {
+  let caller =
+    #|int eval_aggregate_call_result_ternary_return_from_clang(void);
+    #|int main(void) {
+    #|  return eval_aggregate_call_result_ternary_return_from_clang();
+    #|}
+  let callee =
+    #|struct Box { int a; int b; };
+    #|int side;
+    #|struct Box make(int tag) {
+    #|  struct Box box;
+    #|  box.a = tag;
+    #|  box.b = 42 - tag;
+    #|  side = side * 10 + tag;
+    #|  return box;
+    #|}
+    #|struct Box pick(int cond) {
+    #|  return cond ? make(5) : make(6);
+    #|}
+    #|int eval_aggregate_call_result_ternary_return_from_clang(void) {
+    #|  side = 0;
+    #|  struct Box a = pick(0);
+    #|  if (side != 6) return side;
+    #|  if (a.a + a.b != 42) return 1;
+    #|  side = 0;
+    #|  struct Box b = pick(1);
+    #|  if (side != 5) return side;
+    #|  return b.a + b.b;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_aggregate_compound_literal_ternary_argument_source() -> String {
   let source =
     #|struct Box { int a; int b; };
