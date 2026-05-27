@@ -9405,6 +9405,98 @@ async test "strict MIR codegen matches parser codegen for stack object pointer c
 }
 
 ///|
+test "strict MIR codegen exposes stack object pointer calls to clang callers" {
+  let callee =
+    #|extern int printf(const char *, ...);
+    #|struct Pair { int x; int y; };
+    #|void fill_array(int *p) {
+    #|  p[0] = 12;
+    #|  p[1] = 30;
+    #|}
+    #|int sum_array(int *p) {
+    #|  return p[0] + p[1];
+    #|}
+    #|void fill_chars(char *p) {
+    #|  __builtin_strcpy(p, "ok");
+    #|}
+    #|int check_chars(char *p) {
+    #|  return __builtin_strlen(p) == 2 && p[0] == 'o' && p[1] == 'k' ? 42 : 1;
+    #|}
+    #|void fill_pair(struct Pair *p) {
+    #|  p->x = 19;
+    #|  p->y = 23;
+    #|}
+    #|int sum_pair(struct Pair *p) {
+    #|  return p->x + p->y;
+    #|}
+    #|int eval_stack_object_pointer_calls(void) {
+    #|  int values[2];
+    #|  char *buf = __builtin_alloca(4);
+    #|  struct Pair pair;
+    #|  fill_array(values);
+    #|  fill_chars(buf);
+    #|  fill_pair(&pair);
+    #|  int a = sum_array(values);
+    #|  int b = check_chars(buf);
+    #|  int c = sum_pair(&pair);
+    #|  printf("%d|%s|%d\n", a, buf, c);
+    #|  return (a + b + c) & 255;
+    #|}
+  let driver =
+    #|int eval_stack_object_pointer_calls(void);
+    #|int main(void) {
+    #|  return eval_stack_object_pointer_calls();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 126)
+}
+
+///|
+test "strict MIR codegen calls clang stack object pointer calls" {
+  let caller =
+    #|int eval_stack_object_pointer_calls_from_clang(void);
+    #|int main(void) {
+    #|  return eval_stack_object_pointer_calls_from_clang();
+    #|}
+  let callee =
+    #|extern int printf(const char *, ...);
+    #|struct Pair { int x; int y; };
+    #|void fill_array(int *p) {
+    #|  p[0] = 12;
+    #|  p[1] = 30;
+    #|}
+    #|int sum_array(int *p) {
+    #|  return p[0] + p[1];
+    #|}
+    #|void fill_chars(char *p) {
+    #|  __builtin_strcpy(p, "ok");
+    #|}
+    #|int check_chars(char *p) {
+    #|  return __builtin_strlen(p) == 2 && p[0] == 'o' && p[1] == 'k' ? 42 : 1;
+    #|}
+    #|void fill_pair(struct Pair *p) {
+    #|  p->x = 19;
+    #|  p->y = 23;
+    #|}
+    #|int sum_pair(struct Pair *p) {
+    #|  return p->x + p->y;
+    #|}
+    #|int eval_stack_object_pointer_calls_from_clang(void) {
+    #|  int values[2];
+    #|  char *buf = __builtin_alloca(4);
+    #|  struct Pair pair;
+    #|  fill_array(values);
+    #|  fill_chars(buf);
+    #|  fill_pair(&pair);
+    #|  int a = sum_array(values);
+    #|  int b = check_chars(buf);
+    #|  int c = sum_pair(&pair);
+    #|  printf("%d|%s|%d\n", a, buf, c);
+    #|  return (a + b + c) & 255;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 126)
+}
+
+///|
 async test "strict MIR codegen matches parser codegen for indirect stack object pointer calls" {
   let source =
     #|extern int printf(const char *, ...);
