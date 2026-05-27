@@ -9942,6 +9942,44 @@ async test "strict MIR codegen matches parser codegen for local aggregate array 
 }
 
 ///|
+test "strict MIR codegen exposes local aggregate array initializers to clang callers" {
+  let callee =
+    #|struct Item { const char *z; int a; int b; };
+    #|int eval_local_aggregate_array_initializer(void) {
+    #|  struct Item items[] = {
+    #|    { "x", 1, 2 },
+    #|    { "y", 3, 4 },
+    #|  };
+    #|  return items[1].a + items[0].b + (items[0].z == items[1].z);
+    #|}
+  let driver =
+    #|int eval_local_aggregate_array_initializer(void);
+    #|int main(void) {
+    #|  return eval_local_aggregate_array_initializer();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 5)
+}
+
+///|
+test "strict MIR codegen calls clang local aggregate array initializers" {
+  let caller =
+    #|int eval_local_aggregate_array_initializer_from_clang(void);
+    #|int main(void) {
+    #|  return eval_local_aggregate_array_initializer_from_clang();
+    #|}
+  let callee =
+    #|struct Item { const char *z; int a; int b; };
+    #|int eval_local_aggregate_array_initializer_from_clang(void) {
+    #|  struct Item items[] = {
+    #|    { "x", 1, 2 },
+    #|    { "y", 3, 4 },
+    #|  };
+    #|  return items[1].a + items[0].b + (items[0].z == items[1].z);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 5)
+}
+
+///|
 fn strict_mir_local_array_range_initializer_source() -> String {
   let source =
     #|struct Item { int a; int b; };
