@@ -12326,6 +12326,44 @@ async test "strict MIR codegen matches parser codegen for atomic load/store oper
 }
 
 ///|
+test "strict MIR codegen exposes atomic load/store operations to clang callers" {
+  let callee =
+    #|int eval_atomic_load_store(void) {
+    #|  unsigned int x = 5;
+    #|  int order = 0;
+    #|  __atomic_store_n(&x, 37, order += 1);
+    #|  if (order != 1) return 1;
+    #|  if (__atomic_load_n(&x, order += 2) != 37) return 2;
+    #|  return 39 + order;
+    #|}
+  let driver =
+    #|int eval_atomic_load_store(void);
+    #|int main(void) {
+    #|  return eval_atomic_load_store();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang atomic load/store operations" {
+  let caller =
+    #|int eval_atomic_load_store_from_clang(void);
+    #|int main(void) {
+    #|  return eval_atomic_load_store_from_clang();
+    #|}
+  let callee =
+    #|int eval_atomic_load_store_from_clang(void) {
+    #|  unsigned int x = 5;
+    #|  int order = 0;
+    #|  __atomic_store_n(&x, 37, order += 1);
+    #|  if (order != 1) return 1;
+    #|  if (__atomic_load_n(&x, order += 2) != 37) return 2;
+    #|  return 39 + order;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_atomic_read_modify_write_source() -> String {
   (
     #|int main(void) {
