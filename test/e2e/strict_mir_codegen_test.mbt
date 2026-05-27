@@ -10409,6 +10409,54 @@ async test "strict MIR codegen matches parser codegen for aggregate array field 
 }
 
 ///|
+test "strict MIR codegen exposes aggregate array field copies to clang callers" {
+  let callee =
+    #|struct Item { int x; int y; };
+    #|struct Db { struct Item items[2]; int tail; };
+    #|int eval_aggregate_array_field_copy(void) {
+    #|  struct Db src;
+    #|  src.items[0].x = 10;
+    #|  src.items[0].y = 1;
+    #|  src.items[1].x = 2;
+    #|  src.items[1].y = 29;
+    #|  src.tail = 3;
+    #|  struct Db copy = src;
+    #|  src.items[1].y = 0;
+    #|  return copy.items[0].x + copy.items[1].y + copy.tail;
+    #|}
+  let driver =
+    #|int eval_aggregate_array_field_copy(void);
+    #|int main(void) {
+    #|  return eval_aggregate_array_field_copy();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang aggregate array field copies" {
+  let caller =
+    #|int eval_aggregate_array_field_copy_from_clang(void);
+    #|int main(void) {
+    #|  return eval_aggregate_array_field_copy_from_clang();
+    #|}
+  let callee =
+    #|struct Item { int x; int y; };
+    #|struct Db { struct Item items[2]; int tail; };
+    #|int eval_aggregate_array_field_copy_from_clang(void) {
+    #|  struct Db src;
+    #|  src.items[0].x = 10;
+    #|  src.items[0].y = 1;
+    #|  src.items[1].x = 2;
+    #|  src.items[1].y = 29;
+    #|  src.tail = 3;
+    #|  struct Db copy = src;
+    #|  src.items[1].y = 0;
+    #|  return copy.items[0].x + copy.items[1].y + copy.tail;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_va_arg_pointer_aggregate_copy_source() -> String {
   let source =
     #|typedef __builtin_va_list va_list;
