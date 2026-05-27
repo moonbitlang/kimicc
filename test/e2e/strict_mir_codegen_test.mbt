@@ -12538,6 +12538,68 @@ async test "strict MIR codegen matches parser codegen for exchange-style atomic 
 }
 
 ///|
+test "strict MIR codegen exposes exchange-style atomic builtins to clang callers" {
+  let callee =
+    #|int eval_exchange_style_atomic(void) {
+    #|  unsigned char flag = 0;
+    #|  unsigned int w = 10;
+    #|  int side = 0;
+    #|  if (__atomic_test_and_set(&flag, side += 1)) return 1;
+    #|  if (side != 1 || flag != 1) return 2;
+    #|  if (!__atomic_test_and_set(&flag, side += 2)) return 3;
+    #|  if (side != 3) return 4;
+    #|  __atomic_clear(&flag, side += 4);
+    #|  if (side != 7 || flag != 0) return 5;
+    #|  if (__sync_fetch_and_add(&w, 2u) != 10u) return 6;
+    #|  if (__sync_add_and_fetch(&w, 5u) != 17u) return 7;
+    #|  if (__sync_fetch_and_nand(&w, 15u) != 17u) return 8;
+    #|  if (w != ~1u) return 9;
+    #|  __sync_lock_release(&w);
+    #|  if (w != 0u) return 10;
+    #|  if (__sync_lock_test_and_set(&w, 23u) != 0u) return 11;
+    #|  if (__sync_swap(&w, 42u) != 23u) return 12;
+    #|  return (int)w;
+    #|}
+  let driver =
+    #|int eval_exchange_style_atomic(void);
+    #|int main(void) {
+    #|  return eval_exchange_style_atomic();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang exchange-style atomic builtins" {
+  let caller =
+    #|int eval_exchange_style_atomic_from_clang(void);
+    #|int main(void) {
+    #|  return eval_exchange_style_atomic_from_clang();
+    #|}
+  let callee =
+    #|int eval_exchange_style_atomic_from_clang(void) {
+    #|  unsigned char flag = 0;
+    #|  unsigned int w = 10;
+    #|  int side = 0;
+    #|  if (__atomic_test_and_set(&flag, side += 1)) return 1;
+    #|  if (side != 1 || flag != 1) return 2;
+    #|  if (!__atomic_test_and_set(&flag, side += 2)) return 3;
+    #|  if (side != 3) return 4;
+    #|  __atomic_clear(&flag, side += 4);
+    #|  if (side != 7 || flag != 0) return 5;
+    #|  if (__sync_fetch_and_add(&w, 2u) != 10u) return 6;
+    #|  if (__sync_add_and_fetch(&w, 5u) != 17u) return 7;
+    #|  if (__sync_fetch_and_nand(&w, 15u) != 17u) return 8;
+    #|  if (w != ~1u) return 9;
+    #|  __sync_lock_release(&w);
+    #|  if (w != 0u) return 10;
+    #|  if (__sync_lock_test_and_set(&w, 23u) != 0u) return 11;
+    #|  if (__sync_swap(&w, 42u) != 23u) return 12;
+    #|  return (int)w;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_sync_compare_and_swap_source() -> String {
   let source =
     #|int main(void) {
