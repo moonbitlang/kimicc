@@ -10720,6 +10720,46 @@ test "strict MIR codegen executes global compound literal initializers" {
 }
 
 ///|
+test "strict MIR codegen exposes global compound literal initializers to clang callers" {
+  let callee =
+    #|int gi = (int){42};
+    #|struct Pair {
+    #|  int a;
+    #|  int b;
+    #|};
+    #|struct Pair gp = (struct Pair){ .b = 35, .a = 7 };
+    #|int eval_global_compound_literal_initializer(void) {
+    #|  return gi == 42 && gp.a + gp.b == 42 ? 42 : 1;
+    #|}
+  let driver =
+    #|int eval_global_compound_literal_initializer(void);
+    #|int main(void) {
+    #|  return eval_global_compound_literal_initializer();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang global compound literal initializers" {
+  let caller =
+    #|int eval_global_compound_literal_initializer_from_clang(void);
+    #|int main(void) {
+    #|  return eval_global_compound_literal_initializer_from_clang();
+    #|}
+  let callee =
+    #|int gi = (int){42};
+    #|struct Pair {
+    #|  int a;
+    #|  int b;
+    #|};
+    #|struct Pair gp = (struct Pair){ .b = 35, .a = 7 };
+    #|int eval_global_compound_literal_initializer_from_clang(void) {
+    #|  return gi == 42 && gp.a + gp.b == 42 ? 42 : 1;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_braced_scalar_global_initializer_source() -> String {
   let source =
     #|int scalar = {21};
