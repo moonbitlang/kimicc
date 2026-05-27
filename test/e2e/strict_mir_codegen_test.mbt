@@ -9816,6 +9816,42 @@ async test "strict MIR codegen matches parser codegen for member array decay in 
 }
 
 ///|
+test "strict MIR codegen exposes member array decay in pointer differences to clang callers" {
+  let callee =
+    #|struct S { int a[4]; unsigned char iPrev; };
+    #|int eval_member_array_decay_pointer_difference(void) {
+    #|  struct S s;
+    #|  int *p = &s.a[2];
+    #|  s.iPrev = (unsigned char)(p - s.a);
+    #|  return s.iPrev;
+    #|}
+  let driver =
+    #|int eval_member_array_decay_pointer_difference(void);
+    #|int main(void) {
+    #|  return eval_member_array_decay_pointer_difference();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 2)
+}
+
+///|
+test "strict MIR codegen calls clang member array decay in pointer differences" {
+  let caller =
+    #|int eval_member_array_decay_pointer_difference_from_clang(void);
+    #|int main(void) {
+    #|  return eval_member_array_decay_pointer_difference_from_clang();
+    #|}
+  let callee =
+    #|struct S { int a[4]; unsigned char iPrev; };
+    #|int eval_member_array_decay_pointer_difference_from_clang(void) {
+    #|  struct S s;
+    #|  int *p = &s.a[2];
+    #|  s.iPrev = (unsigned char)(p - s.a);
+    #|  return s.iPrev;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 2)
+}
+
+///|
 fn strict_mir_member_array_decay_pointer_comparison_source() -> String {
   let source =
     #|struct S { int *p; int a[2]; };
