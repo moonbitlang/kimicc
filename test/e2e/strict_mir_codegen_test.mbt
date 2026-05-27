@@ -12046,6 +12046,44 @@ async test "strict MIR codegen matches parser codegen for aggregate compound lit
 }
 
 ///|
+test "strict MIR codegen returns aggregate compound literal ternaries to clang callers" {
+  let callee =
+    #|struct Box { int a; int b; };
+    #|struct Box pick(int cond) {
+    #|  return cond ? (struct Box){ 20, 22 } : (struct Box){ 19, 23 };
+    #|}
+  let driver =
+    #|struct Box { int a; int b; };
+    #|struct Box pick(int cond);
+    #|int main(void) {
+    #|  struct Box a = pick(0);
+    #|  if (a.a + a.b != 42) return 1;
+    #|  struct Box b = pick(1);
+    #|  return b.a + b.b;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen receives aggregate compound literal ternary returns from clang callees" {
+  let caller =
+    #|struct Box { int a; int b; };
+    #|struct Box pick(int cond);
+    #|int main(void) {
+    #|  struct Box a = pick(0);
+    #|  if (a.a + a.b != 42) return 1;
+    #|  struct Box b = pick(1);
+    #|  return b.a + b.b;
+    #|}
+  let callee =
+    #|struct Box { int a; int b; };
+    #|struct Box pick(int cond) {
+    #|  return cond ? (struct Box){ 20, 22 } : (struct Box){ 19, 23 };
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_aggregate_compound_literal_ternary_assignment_source() -> String {
   let source =
     #|struct Box { int a; int b; };
