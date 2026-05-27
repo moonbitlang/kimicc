@@ -12112,6 +12112,42 @@ async test "strict MIR codegen matches parser codegen for aggregate compound lit
 }
 
 ///|
+test "strict MIR codegen exposes aggregate compound literal ternary assignments to clang callers" {
+  let callee =
+    #|struct Box { int a; int b; };
+    #|int eval_aggregate_compound_literal_ternary_assignment(void) {
+    #|  struct Box rval;
+    #|  int found = 0;
+    #|  rval = !found ? (struct Box){ 1, 41 } : (struct Box){ 1, 2 };
+    #|  return rval.a + rval.b;
+    #|}
+  let driver =
+    #|int eval_aggregate_compound_literal_ternary_assignment(void);
+    #|int main(void) {
+    #|  return eval_aggregate_compound_literal_ternary_assignment();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang aggregate compound literal ternary assignments" {
+  let caller =
+    #|int eval_aggregate_compound_literal_ternary_assignment_from_clang(void);
+    #|int main(void) {
+    #|  return eval_aggregate_compound_literal_ternary_assignment_from_clang();
+    #|}
+  let callee =
+    #|struct Box { int a; int b; };
+    #|int eval_aggregate_compound_literal_ternary_assignment_from_clang(void) {
+    #|  struct Box rval;
+    #|  int found = 0;
+    #|  rval = !found ? (struct Box){ 1, 41 } : (struct Box){ 1, 2 };
+    #|  return rval.a + rval.b;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_aggregate_void_cast_source() -> String {
   let source =
     #|struct Token { int n; };
