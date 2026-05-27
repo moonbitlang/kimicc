@@ -10573,6 +10573,56 @@ test "strict MIR codegen executes global aggregate float array initializers" {
 }
 
 ///|
+test "strict MIR codegen exposes global aggregate float array initializers to clang callers" {
+  let callee =
+    #|struct Xform {
+    #|  unsigned char nName;
+    #|  char zName[7];
+    #|  float rLimit;
+    #|  float rXform;
+    #|};
+    #|static const struct Xform xs[] = {
+    #|  { 6, "second", 4.5f, 4.5f },
+    #|  { 4, "hour", 20.0f, 3.0f },
+    #|};
+    #|int eval_global_aggregate_float_array_initializer(void) {
+    #|  return xs[1].nName + xs[0].zName[0] - 115
+    #|       + (int)xs[1].rLimit + (int)(xs[0].rXform * 4.0f);
+    #|}
+  let driver =
+    #|int eval_global_aggregate_float_array_initializer(void);
+    #|int main(void) {
+    #|  return eval_global_aggregate_float_array_initializer();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang global aggregate float array initializers" {
+  let caller =
+    #|int eval_global_aggregate_float_array_initializer_from_clang(void);
+    #|int main(void) {
+    #|  return eval_global_aggregate_float_array_initializer_from_clang();
+    #|}
+  let callee =
+    #|struct Xform {
+    #|  unsigned char nName;
+    #|  char zName[7];
+    #|  float rLimit;
+    #|  float rXform;
+    #|};
+    #|static const struct Xform xs[] = {
+    #|  { 6, "second", 4.5f, 4.5f },
+    #|  { 4, "hour", 20.0f, 3.0f },
+    #|};
+    #|int eval_global_aggregate_float_array_initializer_from_clang(void) {
+    #|  return xs[1].nName + xs[0].zName[0] - 115
+    #|       + (int)xs[1].rLimit + (int)(xs[0].rXform * 4.0f);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_exact_width_global_string_aggregate_source() -> String {
   let source =
     #|struct S {
