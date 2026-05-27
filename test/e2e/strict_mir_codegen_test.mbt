@@ -10013,6 +10013,52 @@ async test "strict MIR codegen matches parser codegen for local array range init
 }
 
 ///|
+test "strict MIR codegen exposes local array range initializers to clang callers" {
+  let callee =
+    #|struct Item { int a; int b; };
+    #|int eval_local_array_range_initializer(void) {
+    #|  int nums[5] = { [0 ... 2] = 4, [4] = 5 };
+    #|  struct Item items[4] = {
+    #|    [0 ... 1] = { 3, 4 },
+    #|    [3] = { 7, 8 },
+    #|  };
+    #|  int *p = (int[]){ [0 ... 1] = 5, [2] = 4 };
+    #|  return nums[0] + nums[2] + nums[3] + nums[4] +
+    #|    items[0].a + items[1].b + items[2].a + items[3].b +
+    #|    p[0] + p[1] + p[2];
+    #|}
+  let driver =
+    #|int eval_local_array_range_initializer(void);
+    #|int main(void) {
+    #|  return eval_local_array_range_initializer();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang local array range initializers" {
+  let caller =
+    #|int eval_local_array_range_initializer_from_clang(void);
+    #|int main(void) {
+    #|  return eval_local_array_range_initializer_from_clang();
+    #|}
+  let callee =
+    #|struct Item { int a; int b; };
+    #|int eval_local_array_range_initializer_from_clang(void) {
+    #|  int nums[5] = { [0 ... 2] = 4, [4] = 5 };
+    #|  struct Item items[4] = {
+    #|    [0 ... 1] = { 3, 4 },
+    #|    [3] = { 7, 8 },
+    #|  };
+    #|  int *p = (int[]){ [0 ... 1] = 5, [2] = 4 };
+    #|  return nums[0] + nums[2] + nums[3] + nums[4] +
+    #|    items[0].a + items[1].b + items[2].a + items[3].b +
+    #|    p[0] + p[1] + p[2];
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_nested_local_compound_literal_designators_source() -> String {
   let source =
     #|struct Inner { int z; int q; };
