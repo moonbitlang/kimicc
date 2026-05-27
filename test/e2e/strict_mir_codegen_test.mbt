@@ -11389,6 +11389,54 @@ async test "strict MIR codegen matches parser codegen for aggregate ternary call
 }
 
 ///|
+test "strict MIR codegen exposes aggregate ternary call arguments to clang callers" {
+  let callee =
+    #|struct Box { int a; int b; };
+    #|struct Desc { int flags; struct Box getter; struct Box setter; };
+    #|struct Box dup(struct Box v) { return v; }
+    #|int eval_aggregate_ternary_call_argument(void) {
+    #|  struct Desc desc;
+    #|  desc.flags = 0;
+    #|  desc.getter.a = 1;
+    #|  desc.getter.b = 2;
+    #|  desc.setter.a = 20;
+    #|  desc.setter.b = 21;
+    #|  struct Box r = dup(desc.flags ? desc.getter : desc.setter);
+    #|  return r.a + r.b + 1;
+    #|}
+  let driver =
+    #|int eval_aggregate_ternary_call_argument(void);
+    #|int main(void) {
+    #|  return eval_aggregate_ternary_call_argument();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang aggregate ternary call arguments" {
+  let caller =
+    #|int eval_aggregate_ternary_call_argument_from_clang(void);
+    #|int main(void) {
+    #|  return eval_aggregate_ternary_call_argument_from_clang();
+    #|}
+  let callee =
+    #|struct Box { int a; int b; };
+    #|struct Desc { int flags; struct Box getter; struct Box setter; };
+    #|struct Box dup(struct Box v) { return v; }
+    #|int eval_aggregate_ternary_call_argument_from_clang(void) {
+    #|  struct Desc desc;
+    #|  desc.flags = 0;
+    #|  desc.getter.a = 1;
+    #|  desc.getter.b = 2;
+    #|  desc.setter.a = 20;
+    #|  desc.setter.b = 21;
+    #|  struct Box r = dup(desc.flags ? desc.getter : desc.setter);
+    #|  return r.a + r.b + 1;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_aggregate_call_result_ternary_argument_source() -> String {
   let source =
     #|struct Box { int a; int b; };
