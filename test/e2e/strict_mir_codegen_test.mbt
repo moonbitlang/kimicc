@@ -9684,6 +9684,40 @@ async test "strict MIR codegen matches parser codegen for direct array decay in 
 }
 
 ///|
+test "strict MIR codegen exposes direct array decay in pointer arithmetic to clang callers" {
+  let callee =
+    #|int eval_direct_array_decay_pointer_arithmetic(void) {
+    #|  int a[3];
+    #|  a[0] = 3;
+    #|  a[1] = 6;
+    #|  return *(a + 1);
+    #|}
+  let driver =
+    #|int eval_direct_array_decay_pointer_arithmetic(void);
+    #|int main(void) {
+    #|  return eval_direct_array_decay_pointer_arithmetic();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 6)
+}
+
+///|
+test "strict MIR codegen calls clang direct array decay in pointer arithmetic" {
+  let caller =
+    #|int eval_direct_array_decay_pointer_arithmetic_from_clang(void);
+    #|int main(void) {
+    #|  return eval_direct_array_decay_pointer_arithmetic_from_clang();
+    #|}
+  let callee =
+    #|int eval_direct_array_decay_pointer_arithmetic_from_clang(void) {
+    #|  int a[3];
+    #|  a[0] = 3;
+    #|  a[1] = 6;
+    #|  return *(a + 1);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 6)
+}
+
+///|
 fn strict_mir_ternary_local_array_decay_source() -> String {
   let source =
     #|int main(void) {
