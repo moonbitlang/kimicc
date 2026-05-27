@@ -11162,6 +11162,60 @@ async test "strict MIR codegen matches parser codegen for aggregate ternary copi
 }
 
 ///|
+test "strict MIR codegen exposes aggregate ternary copies to clang callers" {
+  let callee =
+    #|struct Token { char *z; int n; };
+    #|union U { struct Token tok; int i; };
+    #|int eval_aggregate_ternary_copy(void) {
+    #|  union U stack[2];
+    #|  union U *p = &stack[1];
+    #|  p[-1].tok.z = "left";
+    #|  p[-1].tok.n = 3;
+    #|  p[0].tok.z = "right";
+    #|  p[0].tok.n = 5;
+    #|  p[-1].tok = (p[0].tok.n == 0 ? p[-1].tok : p[0].tok);
+    #|  int first = p[-1].tok.n;
+    #|  p[-1].tok.n = 8;
+    #|  p[0].tok.n = 0;
+    #|  p[-1].tok = (p[0].tok.n == 0 ? p[0].tok : p[-1].tok);
+    #|  return first * 10 + p[-1].tok.n;
+    #|}
+  let driver =
+    #|int eval_aggregate_ternary_copy(void);
+    #|int main(void) {
+    #|  return eval_aggregate_ternary_copy();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 50)
+}
+
+///|
+test "strict MIR codegen calls clang aggregate ternary copies" {
+  let caller =
+    #|int eval_aggregate_ternary_copy_from_clang(void);
+    #|int main(void) {
+    #|  return eval_aggregate_ternary_copy_from_clang();
+    #|}
+  let callee =
+    #|struct Token { char *z; int n; };
+    #|union U { struct Token tok; int i; };
+    #|int eval_aggregate_ternary_copy_from_clang(void) {
+    #|  union U stack[2];
+    #|  union U *p = &stack[1];
+    #|  p[-1].tok.z = "left";
+    #|  p[-1].tok.n = 3;
+    #|  p[0].tok.z = "right";
+    #|  p[0].tok.n = 5;
+    #|  p[-1].tok = (p[0].tok.n == 0 ? p[-1].tok : p[0].tok);
+    #|  int first = p[-1].tok.n;
+    #|  p[-1].tok.n = 8;
+    #|  p[0].tok.n = 0;
+    #|  p[-1].tok = (p[0].tok.n == 0 ? p[0].tok : p[-1].tok);
+    #|  return first * 10 + p[-1].tok.n;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 50)
+}
+
+///|
 fn strict_mir_aggregate_call_result_ternary_assignment_source() -> String {
   let source =
     #|struct Box { int a; int b; };
