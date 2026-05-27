@@ -10931,6 +10931,48 @@ async test "strict MIR codegen matches parser codegen for file-scope compound li
 }
 
 ///|
+test "strict MIR codegen exposes file-scope compound literal addresses to clang callers" {
+  let callee =
+    #|struct S {
+    #|  int a;
+    #|  int b;
+    #|};
+    #|struct S *p = &(struct S){ .b = 23, .a = 19 };
+    #|int *q = &((struct S){ 5, 37 }).b;
+    #|int *r = (int[]){ 11, 31 };
+    #|int eval_file_scope_compound_literal_address(void) {
+    #|  return p->a + p->b == 42 && *q == 37 && r[0] + r[1] == 42 ? 42 : 1;
+    #|}
+  let driver =
+    #|int eval_file_scope_compound_literal_address(void);
+    #|int main(void) {
+    #|  return eval_file_scope_compound_literal_address();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang file-scope compound literal addresses" {
+  let caller =
+    #|int eval_file_scope_compound_literal_address_from_clang(void);
+    #|int main(void) {
+    #|  return eval_file_scope_compound_literal_address_from_clang();
+    #|}
+  let callee =
+    #|struct S {
+    #|  int a;
+    #|  int b;
+    #|};
+    #|struct S *p = &(struct S){ .b = 23, .a = 19 };
+    #|int *q = &((struct S){ 5, 37 }).b;
+    #|int *r = (int[]){ 11, 31 };
+    #|int eval_file_scope_compound_literal_address_from_clang(void) {
+    #|  return p->a + p->b == 42 && *q == 37 && r[0] + r[1] == 42 ? 42 : 1;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_local_array_compound_literal_source() -> String {
   let source =
     #|struct Pair { int x; int y; };
