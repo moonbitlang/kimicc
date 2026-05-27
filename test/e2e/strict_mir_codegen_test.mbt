@@ -12247,6 +12247,56 @@ async test "strict MIR codegen matches parser codegen for member array decay in 
 }
 
 ///|
+test "strict MIR codegen exposes member array decay in pointer call args to clang callers" {
+  let callee =
+    #|struct Info { unsigned aReadMark[4]; };
+    #|unsigned load_mark(struct Info *pInfo, int i) {
+    #|  return __atomic_load_n(pInfo->aReadMark + i, 0);
+    #|}
+    #|void store_mark(struct Info *pInfo, int i, unsigned value) {
+    #|  __atomic_store_n(pInfo->aReadMark + i, value, 0);
+    #|}
+    #|int eval_member_array_decay_pointer_call_args(void) {
+    #|  struct Info info;
+    #|  info.aReadMark[0] = 5;
+    #|  info.aReadMark[1] = 7;
+    #|  store_mark(&info, 1, 37);
+    #|  return (int)(load_mark(&info, 0) + load_mark(&info, 1));
+    #|}
+  let driver =
+    #|int eval_member_array_decay_pointer_call_args(void);
+    #|int main(void) {
+    #|  return eval_member_array_decay_pointer_call_args();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang member array decay in pointer call args" {
+  let caller =
+    #|int eval_member_array_decay_pointer_call_args_from_clang(void);
+    #|int main(void) {
+    #|  return eval_member_array_decay_pointer_call_args_from_clang();
+    #|}
+  let callee =
+    #|struct Info { unsigned aReadMark[4]; };
+    #|unsigned load_mark(struct Info *pInfo, int i) {
+    #|  return __atomic_load_n(pInfo->aReadMark + i, 0);
+    #|}
+    #|void store_mark(struct Info *pInfo, int i, unsigned value) {
+    #|  __atomic_store_n(pInfo->aReadMark + i, value, 0);
+    #|}
+    #|int eval_member_array_decay_pointer_call_args_from_clang(void) {
+    #|  struct Info info;
+    #|  info.aReadMark[0] = 5;
+    #|  info.aReadMark[1] = 7;
+    #|  store_mark(&info, 1, 37);
+    #|  return (int)(load_mark(&info, 0) + load_mark(&info, 1));
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_atomic_load_store_source() -> String {
   let source =
     #|int main(void) {
