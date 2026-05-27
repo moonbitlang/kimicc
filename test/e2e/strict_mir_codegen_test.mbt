@@ -10099,6 +10099,66 @@ async test "strict MIR codegen matches parser codegen for nested local compound 
 }
 
 ///|
+test "strict MIR codegen exposes nested local compound literal designators to clang callers" {
+  let callee =
+    #|struct Inner { int z; int q; };
+    #|struct S { int tag; struct Inner inner; int a[3]; };
+    #|struct Pair { int a; int b; };
+    #|int eval_nested_local_compound_literal_designators(void) {
+    #|  struct S s = (struct S){
+    #|    .inner.z = 20,
+    #|    .inner.q = 2,
+    #|    .a[2] = 5,
+    #|    .tag = 1,
+    #|    .a[0] = 4
+    #|  };
+    #|  struct Pair *pairs = (struct Pair[]){
+    #|    [1].b = 1,
+    #|    [0].a = 4,
+    #|    [1].a = 5
+    #|  };
+    #|  return s.tag + s.inner.z + s.inner.q + s.a[0] + s.a[1] + s.a[2] +
+    #|    pairs[0].a + pairs[0].b + pairs[1].a + pairs[1].b;
+    #|}
+  let driver =
+    #|int eval_nested_local_compound_literal_designators(void);
+    #|int main(void) {
+    #|  return eval_nested_local_compound_literal_designators();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang nested local compound literal designators" {
+  let caller =
+    #|int eval_nested_local_compound_literal_designators_from_clang(void);
+    #|int main(void) {
+    #|  return eval_nested_local_compound_literal_designators_from_clang();
+    #|}
+  let callee =
+    #|struct Inner { int z; int q; };
+    #|struct S { int tag; struct Inner inner; int a[3]; };
+    #|struct Pair { int a; int b; };
+    #|int eval_nested_local_compound_literal_designators_from_clang(void) {
+    #|  struct S s = (struct S){
+    #|    .inner.z = 20,
+    #|    .inner.q = 2,
+    #|    .a[2] = 5,
+    #|    .tag = 1,
+    #|    .a[0] = 4
+    #|  };
+    #|  struct Pair *pairs = (struct Pair[]){
+    #|    [1].b = 1,
+    #|    [0].a = 4,
+    #|    [1].a = 5
+    #|  };
+    #|  return s.tag + s.inner.z + s.inner.q + s.a[0] + s.a[1] + s.a[2] +
+    #|    pairs[0].a + pairs[0].b + pairs[1].a + pairs[1].b;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_local_scalar_brace_initializer_source() -> String {
   let source =
     #|struct S { int a; int b; };
