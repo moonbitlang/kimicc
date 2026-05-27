@@ -10788,6 +10788,42 @@ async test "strict MIR codegen matches parser codegen for braced scalar global i
 }
 
 ///|
+test "strict MIR codegen exposes braced scalar global initializers to clang callers" {
+  let callee =
+    #|int scalar = {21};
+    #|int nested = {{21}};
+    #|double fp = {0.5 + 40.5};
+    #|char *text = {"xyz"};
+    #|int eval_braced_scalar_global_initializer(void) {
+    #|  return scalar + nested == 42 && (int)fp == 41 && text[2] == 'z' ? 42 : 1;
+    #|}
+  let driver =
+    #|int eval_braced_scalar_global_initializer(void);
+    #|int main(void) {
+    #|  return eval_braced_scalar_global_initializer();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang braced scalar global initializers" {
+  let caller =
+    #|int eval_braced_scalar_global_initializer_from_clang(void);
+    #|int main(void) {
+    #|  return eval_braced_scalar_global_initializer_from_clang();
+    #|}
+  let callee =
+    #|int scalar = {21};
+    #|int nested = {{21}};
+    #|double fp = {0.5 + 40.5};
+    #|char *text = {"xyz"};
+    #|int eval_braced_scalar_global_initializer_from_clang(void) {
+    #|  return scalar + nested == 42 && (int)fp == 41 && text[2] == 'z' ? 42 : 1;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_nested_braced_scalar_global_initializer_source() -> String {
   let source =
     #|int arr[2] = {{20}, {22}};
