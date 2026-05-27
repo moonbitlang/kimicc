@@ -10299,7 +10299,7 @@ test "strict MIR codegen calls clang global aggregate copies" {
 }
 
 ///|
-async test "strict MIR codegen matches parser codegen for initialized global aggregate memory" {
+fn strict_mir_initialized_global_aggregate_memory_source() -> String {
   let source =
     #|extern int printf(const char *, ...);
     #|struct Pair { int a; int b; };
@@ -10314,10 +10314,64 @@ async test "strict MIR codegen matches parser codegen for initialized global agg
     #|  printf("%d:%d:%d:%d\n", g.head, copy.a, copy.b, g.tail);
     #|  return g.head + copy.a + copy.b + g.tail;
     #|}
+  source
+}
+
+///|
+async test "strict MIR codegen matches parser codegen for initialized global aggregate memory" {
+  let source = strict_mir_initialized_global_aggregate_memory_source()
   let result = run_source_strict_mir_against_parser_codegen(
     source, "strict_mir_initialized_global_aggregate_memory_differential",
   )
   assert_true(result.output.contains("5:17:19:1"))
+}
+
+///|
+test "strict MIR codegen exposes initialized global aggregate memory to clang callers" {
+  let callee =
+    #|extern int printf(const char *, ...);
+    #|struct Pair { int a; int b; };
+    #|struct Outer { int head; struct Pair pairs[2]; int tail; };
+    #|static struct Outer g = {
+    #|  .head = 5,
+    #|  .pairs = { [1] = { .a = 17, .b = 19 } },
+    #|  .tail = 1
+    #|};
+    #|int eval_initialized_global_aggregate_memory(void) {
+    #|  struct Pair copy = g.pairs[1];
+    #|  printf("%d:%d:%d:%d\n", g.head, copy.a, copy.b, g.tail);
+    #|  return g.head + copy.a + copy.b + g.tail;
+    #|}
+  let driver =
+    #|int eval_initialized_global_aggregate_memory(void);
+    #|int main(void) {
+    #|  return eval_initialized_global_aggregate_memory();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang initialized global aggregate memory" {
+  let caller =
+    #|int eval_initialized_global_aggregate_memory_from_clang(void);
+    #|int main(void) {
+    #|  return eval_initialized_global_aggregate_memory_from_clang();
+    #|}
+  let callee =
+    #|extern int printf(const char *, ...);
+    #|struct Pair { int a; int b; };
+    #|struct Outer { int head; struct Pair pairs[2]; int tail; };
+    #|static struct Outer g = {
+    #|  .head = 5,
+    #|  .pairs = { [1] = { .a = 17, .b = 19 } },
+    #|  .tail = 1
+    #|};
+    #|int eval_initialized_global_aggregate_memory_from_clang(void) {
+    #|  struct Pair copy = g.pairs[1];
+    #|  printf("%d:%d:%d:%d\n", g.head, copy.a, copy.b, g.tail);
+    #|  return g.head + copy.a + copy.b + g.tail;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
 }
 
 ///|
