@@ -10856,6 +10856,50 @@ async test "strict MIR codegen matches parser codegen for nested braced scalar g
 }
 
 ///|
+test "strict MIR codegen exposes nested braced scalar global initializers to clang callers" {
+  let callee =
+    #|int arr[2] = {{20}, {22}};
+    #|struct S {
+    #|  int a;
+    #|  double b;
+    #|  char *c;
+    #|};
+    #|struct S s = {{7}, {35.5}, {"ok"}};
+    #|int eval_nested_braced_scalar_global_initializer(void) {
+    #|  return arr[0] + arr[1] == 42 && s.a + (int)s.b == 42 && s.c[1] == 'k'
+    #|       ? 42 : 1;
+    #|}
+  let driver =
+    #|int eval_nested_braced_scalar_global_initializer(void);
+    #|int main(void) {
+    #|  return eval_nested_braced_scalar_global_initializer();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang nested braced scalar global initializers" {
+  let caller =
+    #|int eval_nested_braced_scalar_global_initializer_from_clang(void);
+    #|int main(void) {
+    #|  return eval_nested_braced_scalar_global_initializer_from_clang();
+    #|}
+  let callee =
+    #|int arr[2] = {{20}, {22}};
+    #|struct S {
+    #|  int a;
+    #|  double b;
+    #|  char *c;
+    #|};
+    #|struct S s = {{7}, {35.5}, {"ok"}};
+    #|int eval_nested_braced_scalar_global_initializer_from_clang(void) {
+    #|  return arr[0] + arr[1] == 42 && s.a + (int)s.b == 42 && s.c[1] == 'k'
+    #|       ? 42 : 1;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_file_scope_compound_literal_address_source() -> String {
   let source =
     #|struct S {
