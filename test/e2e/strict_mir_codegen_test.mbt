@@ -10188,6 +10188,44 @@ async test "strict MIR codegen matches parser codegen for local scalar brace ini
 }
 
 ///|
+test "strict MIR codegen exposes local scalar brace initializers to clang callers" {
+  let callee =
+    #|struct S { int a; int b; };
+    #|int eval_local_scalar_brace_initializer(void) {
+    #|  int x = {19}, y = {{23}};
+    #|  int arr[2] = {{5}, {37}};
+    #|  struct S s = {{11}, {31}};
+    #|  return x + y == 42 && arr[0] + arr[1] == 42 && s.a + s.b == 42
+    #|       ? 42 : 1;
+    #|}
+  let driver =
+    #|int eval_local_scalar_brace_initializer(void);
+    #|int main(void) {
+    #|  return eval_local_scalar_brace_initializer();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang local scalar brace initializers" {
+  let caller =
+    #|int eval_local_scalar_brace_initializer_from_clang(void);
+    #|int main(void) {
+    #|  return eval_local_scalar_brace_initializer_from_clang();
+    #|}
+  let callee =
+    #|struct S { int a; int b; };
+    #|int eval_local_scalar_brace_initializer_from_clang(void) {
+    #|  int x = {19}, y = {{23}};
+    #|  int arr[2] = {{5}, {37}};
+    #|  struct S s = {{11}, {31}};
+    #|  return x + y == 42 && arr[0] + arr[1] == 42 && s.a + s.b == 42
+    #|       ? 42 : 1;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_global_aggregate_copy_source() -> String {
   let source =
     #|struct Item { int x; int *p; };
