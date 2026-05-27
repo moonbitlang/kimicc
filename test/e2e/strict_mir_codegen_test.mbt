@@ -10257,6 +10257,48 @@ async test "strict MIR codegen matches parser codegen for global aggregate copie
 }
 
 ///|
+test "strict MIR codegen exposes global aggregate copies to clang callers" {
+  let callee =
+    #|struct Item { int x; int *p; };
+    #|static const struct Item zeroItem = {0};
+    #|int eval_global_aggregate_copy(void) {
+    #|  struct Item items[1];
+    #|  struct Item *p = &items[0];
+    #|  p->x = 7;
+    #|  p->p = (int*)1;
+    #|  *p = zeroItem;
+    #|  return p->x + (p->p != 0);
+    #|}
+  let driver =
+    #|int eval_global_aggregate_copy(void);
+    #|int main(void) {
+    #|  return eval_global_aggregate_copy();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 0)
+}
+
+///|
+test "strict MIR codegen calls clang global aggregate copies" {
+  let caller =
+    #|int eval_global_aggregate_copy_from_clang(void);
+    #|int main(void) {
+    #|  return eval_global_aggregate_copy_from_clang();
+    #|}
+  let callee =
+    #|struct Item { int x; int *p; };
+    #|static const struct Item zeroItem = {0};
+    #|int eval_global_aggregate_copy_from_clang(void) {
+    #|  struct Item items[1];
+    #|  struct Item *p = &items[0];
+    #|  p->x = 7;
+    #|  p->p = (int*)1;
+    #|  *p = zeroItem;
+    #|  return p->x + (p->p != 0);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 0)
+}
+
+///|
 async test "strict MIR codegen matches parser codegen for initialized global aggregate memory" {
   let source =
     #|extern int printf(const char *, ...);
