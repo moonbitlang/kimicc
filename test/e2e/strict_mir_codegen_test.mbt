@@ -9129,6 +9129,44 @@ async test "strict MIR codegen matches parser codegen for casted object pointer 
 }
 
 ///|
+test "strict MIR codegen exposes casted object pointer byte offsets to clang callers" {
+  let callee =
+    #|struct S { unsigned char a; unsigned char b; };
+    #|int eval_casted_object_pointer_byte_offsets(void) {
+    #|  struct S s;
+    #|  s.a = 0;
+    #|  s.b = 0;
+    #|  *(((unsigned char *)&s) + __builtin_offsetof(struct S, b)) = 42;
+    #|  return s.b;
+    #|}
+  let driver =
+    #|int eval_casted_object_pointer_byte_offsets(void);
+    #|int main(void) {
+    #|  return eval_casted_object_pointer_byte_offsets();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang casted object pointer byte offsets" {
+  let caller =
+    #|int eval_casted_object_pointer_byte_offsets_from_clang(void);
+    #|int main(void) {
+    #|  return eval_casted_object_pointer_byte_offsets_from_clang();
+    #|}
+  let callee =
+    #|struct S { unsigned char a; unsigned char b; };
+    #|int eval_casted_object_pointer_byte_offsets_from_clang(void) {
+    #|  struct S s;
+    #|  s.a = 0;
+    #|  s.b = 0;
+    #|  *(((unsigned char *)&s) + __builtin_offsetof(struct S, b)) = 42;
+    #|  return s.b;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_memory_compound_lhs_source() -> String {
   let source =
     #|typedef unsigned long long Bitmask;
