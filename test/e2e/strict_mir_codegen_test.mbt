@@ -11004,6 +11004,48 @@ async test "strict MIR codegen matches parser codegen for local array compound l
 }
 
 ///|
+test "strict MIR codegen exposes local array compound literals to clang callers" {
+  let callee =
+    #|struct Pair { int x; int y; };
+    #|int eval_local_array_compound_literal(void) {
+    #|  int side = 0;
+    #|  int *p = (int[]){ side += 10, 11 };
+    #|  struct Pair *pairs = (struct Pair[]){ { 3, 4 }, { 7, 8 } };
+    #|  int (*q)[2] = &(int[2]){ 4, 6 };
+    #|  if (side != 10) return 1;
+    #|  return p[0] + p[1] + pairs[0].x + pairs[1].y +
+    #|    (*q)[0] + (*q)[1];
+    #|}
+  let driver =
+    #|int eval_local_array_compound_literal(void);
+    #|int main(void) {
+    #|  return eval_local_array_compound_literal();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang local array compound literals" {
+  let caller =
+    #|int eval_local_array_compound_literal_from_clang(void);
+    #|int main(void) {
+    #|  return eval_local_array_compound_literal_from_clang();
+    #|}
+  let callee =
+    #|struct Pair { int x; int y; };
+    #|int eval_local_array_compound_literal_from_clang(void) {
+    #|  int side = 0;
+    #|  int *p = (int[]){ side += 10, 11 };
+    #|  struct Pair *pairs = (struct Pair[]){ { 3, 4 }, { 7, 8 } };
+    #|  int (*q)[2] = &(int[2]){ 4, 6 };
+    #|  if (side != 10) return 1;
+    #|  return p[0] + p[1] + pairs[0].x + pairs[1].y +
+    #|    (*q)[0] + (*q)[1];
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 async test "strict MIR codegen matches parser codegen for global compound literal initializers" {
   let result = run_source_strict_mir_against_parser_codegen(
     strict_mir_global_compound_literal_initializer_source(),
