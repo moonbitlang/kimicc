@@ -9748,6 +9748,46 @@ async test "strict MIR codegen matches parser codegen for ternary local array de
 }
 
 ///|
+test "strict MIR codegen exposes ternary local array decay before indexing to clang callers" {
+  let callee =
+    #|int eval_ternary_local_array_decay(void) {
+    #|  int a[2];
+    #|  int b[2];
+    #|  a[0] = 3;
+    #|  a[1] = 5;
+    #|  b[0] = 7;
+    #|  b[1] = 11;
+    #|  return (1 ? a : b)[1] + (0 ? a : b)[0];
+    #|}
+  let driver =
+    #|int eval_ternary_local_array_decay(void);
+    #|int main(void) {
+    #|  return eval_ternary_local_array_decay();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 12)
+}
+
+///|
+test "strict MIR codegen calls clang ternary local array decay before indexing" {
+  let caller =
+    #|int eval_ternary_local_array_decay_from_clang(void);
+    #|int main(void) {
+    #|  return eval_ternary_local_array_decay_from_clang();
+    #|}
+  let callee =
+    #|int eval_ternary_local_array_decay_from_clang(void) {
+    #|  int a[2];
+    #|  int b[2];
+    #|  a[0] = 3;
+    #|  a[1] = 5;
+    #|  b[0] = 7;
+    #|  b[1] = 11;
+    #|  return (1 ? a : b)[1] + (0 ? a : b)[0];
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 12)
+}
+
+///|
 fn strict_mir_member_array_decay_pointer_difference_source() -> String {
   let source =
     #|struct S { int a[4]; unsigned char iPrev; };
