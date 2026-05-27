@@ -11085,6 +11085,46 @@ async test "strict MIR codegen matches parser codegen for casted string pointer 
 }
 
 ///|
+test "strict MIR codegen exposes casted string pointer global array initializers to clang callers" {
+  let callee =
+    #|typedef unsigned char u8;
+    #|static unsigned char * const azOne[] = { (u8*)" " };
+    #|int read_ending(void) {
+    #|  static const char *azEndings[] = { "dylib" };
+    #|  return azEndings[0][0] - 58;
+    #|}
+    #|int eval_casted_string_pointer_global_array_initializer(void) {
+    #|  return azOne[0][0] + read_ending() - 32;
+    #|}
+  let driver =
+    #|int eval_casted_string_pointer_global_array_initializer(void);
+    #|int main(void) {
+    #|  return eval_casted_string_pointer_global_array_initializer();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang casted string pointer global array initializers" {
+  let caller =
+    #|int eval_casted_string_pointer_global_array_initializer_from_clang(void);
+    #|int main(void) {
+    #|  return eval_casted_string_pointer_global_array_initializer_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned char u8;
+    #|static unsigned char * const azOne[] = { (u8*)" " };
+    #|int read_ending(void) {
+    #|  static const char *azEndings[] = { "dylib" };
+    #|  return azEndings[0][0] - 58;
+    #|}
+    #|int eval_casted_string_pointer_global_array_initializer_from_clang(void) {
+    #|  return azOne[0][0] + read_ending() - 32;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_aggregate_ternary_copy_source() -> String {
   let source =
     #|struct Token { char *z; int n; };
