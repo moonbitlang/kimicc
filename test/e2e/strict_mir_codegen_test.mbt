@@ -12634,6 +12634,54 @@ async test "strict MIR codegen matches parser codegen for sync compare-and-swap 
 }
 
 ///|
+test "strict MIR codegen exposes sync compare-and-swap builtins to clang callers" {
+  let callee =
+    #|int eval_sync_compare_and_swap(void) {
+    #|  unsigned int w = 10u;
+    #|  int side = 0;
+    #|  if (!__sync_bool_compare_and_swap(&w, side += 10, 12u)) return 1;
+    #|  if (side != 10 || w != 12u) return 2;
+    #|  if (__sync_bool_compare_and_swap(&w, 10u, side += 1)) return 3;
+    #|  if (side != 11 || w != 12u) return 4;
+    #|  if (__sync_val_compare_and_swap(&w, 12u, side += 6) != 12u) return 5;
+    #|  if (side != 17 || w != 17u) return 6;
+    #|  if (__sync_val_compare_and_swap(&w, 12u, side += 25) != 17u) return 7;
+    #|  if (side != 42 || w != 17u) return 8;
+    #|  return side;
+    #|}
+  let driver =
+    #|int eval_sync_compare_and_swap(void);
+    #|int main(void) {
+    #|  return eval_sync_compare_and_swap();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang sync compare-and-swap builtins" {
+  let caller =
+    #|int eval_sync_compare_and_swap_from_clang(void);
+    #|int main(void) {
+    #|  return eval_sync_compare_and_swap_from_clang();
+    #|}
+  let callee =
+    #|int eval_sync_compare_and_swap_from_clang(void) {
+    #|  unsigned int w = 10u;
+    #|  int side = 0;
+    #|  if (!__sync_bool_compare_and_swap(&w, side += 10, 12u)) return 1;
+    #|  if (side != 10 || w != 12u) return 2;
+    #|  if (__sync_bool_compare_and_swap(&w, 10u, side += 1)) return 3;
+    #|  if (side != 11 || w != 12u) return 4;
+    #|  if (__sync_val_compare_and_swap(&w, 12u, side += 6) != 12u) return 5;
+    #|  if (side != 17 || w != 17u) return 6;
+    #|  if (__sync_val_compare_and_swap(&w, 12u, side += 25) != 17u) return 7;
+    #|  if (side != 42 || w != 17u) return 8;
+    #|  return side;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_generic_pointer_atomic_source() -> String {
   (
     #|int main(void) {
