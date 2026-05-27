@@ -12176,6 +12176,42 @@ async test "strict MIR codegen matches parser codegen for aggregate void casts" 
 }
 
 ///|
+test "strict MIR codegen exposes aggregate void casts to clang callers" {
+  let callee =
+    #|struct Token { int n; };
+    #|int eval_aggregate_void_cast(void) {
+    #|  struct Token t;
+    #|  t.n = 42;
+    #|  (void)t;
+    #|  return t.n;
+    #|}
+  let driver =
+    #|int eval_aggregate_void_cast(void);
+    #|int main(void) {
+    #|  return eval_aggregate_void_cast();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang aggregate void casts" {
+  let caller =
+    #|int eval_aggregate_void_cast_from_clang(void);
+    #|int main(void) {
+    #|  return eval_aggregate_void_cast_from_clang();
+    #|}
+  let callee =
+    #|struct Token { int n; };
+    #|int eval_aggregate_void_cast_from_clang(void) {
+    #|  struct Token t;
+    #|  t.n = 42;
+    #|  (void)t;
+    #|  return t.n;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_member_array_decay_pointer_call_args_source() -> String {
   let source =
     #|struct Info { unsigned aReadMark[4]; };
