@@ -10652,6 +10652,44 @@ async test "strict MIR codegen matches parser codegen for exact-width global str
 }
 
 ///|
+test "strict MIR codegen exposes exact-width global string aggregate fields to clang callers" {
+  let callee =
+    #|struct S {
+    #|  char a[3];
+    #|  char b;
+    #|};
+    #|struct S s = { "abc", 5 };
+    #|int eval_exact_width_global_string_aggregate(void) {
+    #|  return s.a[0] == 'a' && s.a[2] == 'c' && s.b == 5 ? 42 : s.b;
+    #|}
+  let driver =
+    #|int eval_exact_width_global_string_aggregate(void);
+    #|int main(void) {
+    #|  return eval_exact_width_global_string_aggregate();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang exact-width global string aggregate fields" {
+  let caller =
+    #|int eval_exact_width_global_string_aggregate_from_clang(void);
+    #|int main(void) {
+    #|  return eval_exact_width_global_string_aggregate_from_clang();
+    #|}
+  let callee =
+    #|struct S {
+    #|  char a[3];
+    #|  char b;
+    #|};
+    #|struct S s = { "abc", 5 };
+    #|int eval_exact_width_global_string_aggregate_from_clang(void) {
+    #|  return s.a[0] == 'a' && s.a[2] == 'c' && s.b == 5 ? 42 : s.b;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 async test "strict MIR codegen matches parser codegen for global aggregate float array initializers" {
   let result = run_source_strict_mir_against_parser_codegen(
     strict_mir_global_aggregate_float_array_initializer_source(),
