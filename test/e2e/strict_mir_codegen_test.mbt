@@ -9307,6 +9307,60 @@ async test "strict MIR codegen matches parser codegen for pointer memory update 
 }
 
 ///|
+test "strict MIR codegen exposes pointer memory update lhs across rhs to clang callers" {
+  let callee =
+    #|struct Holder { int *p; };
+    #|
+    #|int step_pointer_memory_update_lhs(int *base) {
+    #|  return base[0] - 2;
+    #|}
+    #|
+    #|int eval_pointer_memory_update_lhs(void) {
+    #|  int values[3];
+    #|  struct Holder holder;
+    #|  values[0] = 3;
+    #|  values[1] = 17;
+    #|  values[2] = 29;
+    #|  holder.p = values;
+    #|  holder.p += step_pointer_memory_update_lhs(values);
+    #|  return *holder.p;
+    #|}
+  let driver =
+    #|int eval_pointer_memory_update_lhs(void);
+    #|int main(void) {
+    #|  return eval_pointer_memory_update_lhs();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 17)
+}
+
+///|
+test "strict MIR codegen calls clang pointer memory update lhs across rhs" {
+  let caller =
+    #|int eval_pointer_memory_update_lhs_from_clang(void);
+    #|int main(void) {
+    #|  return eval_pointer_memory_update_lhs_from_clang();
+    #|}
+  let callee =
+    #|struct Holder { int *p; };
+    #|
+    #|int step_pointer_memory_update_lhs_from_clang(int *base) {
+    #|  return base[0] - 2;
+    #|}
+    #|
+    #|int eval_pointer_memory_update_lhs_from_clang(void) {
+    #|  int values[3];
+    #|  struct Holder holder;
+    #|  values[0] = 3;
+    #|  values[1] = 17;
+    #|  values[2] = 29;
+    #|  holder.p = values;
+    #|  holder.p += step_pointer_memory_update_lhs_from_clang(values);
+    #|  return *holder.p;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 17)
+}
+
+///|
 async test "strict MIR codegen matches parser codegen for stack object pointer calls" {
   let source =
     #|extern int printf(const char *, ...);
