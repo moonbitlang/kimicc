@@ -9062,6 +9062,44 @@ async test "strict MIR codegen matches parser codegen for pointer arithmetic on 
 }
 
 ///|
+test "strict MIR codegen exposes pointer arithmetic on local arrays to clang callers" {
+  let callee =
+    #|int eval_pointer_arithmetic_local_array(void) {
+    #|  int a[3];
+    #|  int *p = a;
+    #|  int *q;
+    #|  q = a;
+    #|  q[1] = 8;
+    #|  return *(p + 1);
+    #|}
+  let driver =
+    #|int eval_pointer_arithmetic_local_array(void);
+    #|int main(void) {
+    #|  return eval_pointer_arithmetic_local_array();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 8)
+}
+
+///|
+test "strict MIR codegen calls clang pointer arithmetic on local arrays" {
+  let caller =
+    #|int eval_pointer_arithmetic_local_array_from_clang(void);
+    #|int main(void) {
+    #|  return eval_pointer_arithmetic_local_array_from_clang();
+    #|}
+  let callee =
+    #|int eval_pointer_arithmetic_local_array_from_clang(void) {
+    #|  int a[3];
+    #|  int *p = a;
+    #|  int *q;
+    #|  q = a;
+    #|  q[1] = 8;
+    #|  return *(p + 1);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 8)
+}
+
+///|
 fn strict_mir_casted_object_pointer_byte_offsets_source() -> String {
   let source =
     #|struct S { unsigned char a; unsigned char b; };
