@@ -3347,6 +3347,15 @@ int scan_file(FILE *fp, const char *fmt, ...) {
   return n;
 }
 
+int scan_stdin(const char *fmt, ...) {
+  va_list ap;
+  int n;
+  va_start(ap, fmt);
+  n = vscanf(fmt, ap);
+  va_end(ap);
+  return n;
+}
+
 int scan_wide(const wchar_t *src, const wchar_t *fmt, ...) {
   va_list ap;
   int n;
@@ -3405,9 +3414,11 @@ int main(void) {
   FILE *fp;
   size_t got;
   wint_t wc;
+  int saved_stdin = -1;
   int saved_stdout = -1;
   int wide_file_scanned = 0;
   int file_scanned = 0;
+  int stdin_scanned = 0;
   int scanned = 0;
   int wide_scanned = 0;
   int n = render(buf, "i=%d s=%s f=%.1f", 7, "ok", 2.5);
@@ -3459,6 +3470,22 @@ int main(void) {
   if (n != 2) return 64;
   if (file_scanned != 23) return 65;
   if (file_word[0] != 'f' || file_word[3] != 'e' || file_word[4] != 0) return 66;
+  fp = tmpfile();
+  if (!fp) return 92;
+  if (fputs("29 pipe", fp) < 0) return 93;
+  rewind(fp);
+  saved_stdin = dup(0);
+  if (saved_stdin < 0) return 94;
+  if (dup2(fileno(fp), 0) < 0) return 95;
+  clearerr(stdin);
+  n = scan_stdin("%d %7s", &stdin_scanned, file_word);
+  if (dup2(saved_stdin, 0) < 0) return 96;
+  close(saved_stdin);
+  clearerr(stdin);
+  fclose(fp);
+  if (n != 2) return 97;
+  if (stdin_scanned != 29) return 98;
+  if (file_word[0] != 'p' || file_word[3] != 'e' || file_word[4] != 0) return 99;
   n = scan_wide(wide_scan_src, wide_scan_fmt, &wide_scanned, wide_word);
   if (n != 2) return 67;
   if (wide_scanned != 31) return 68;

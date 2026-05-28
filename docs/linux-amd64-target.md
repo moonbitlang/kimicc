@@ -508,7 +508,7 @@ libc/POSIX headers such as `arpa/inet.h`, `assert.h`, `ctype.h`, `dirent.h`,
 `sys/utsname.h`, `sys/uio.h`, and `sys/wait.h`. A separate linked probe passes
 the generated `va_list` state to glibc `vsnprintf`, `vsprintf`, `vprintf`,
 `vswprintf`, `vfprintf`, `vfwprintf`, `vdprintf`, `vasprintf`, `vsscanf`,
-`vswscanf`, `vfscanf`, and `vfwscanf`, and passes a `va_copy`-copied cursor
+`vscanf`, `vswscanf`, `vfscanf`, and `vfwscanf`, and passes a `va_copy`-copied cursor
 back to `vsnprintf`, covering real libc v-function interop paths without
 claiming complete `va_list` interoperability. Another
 linked libc runtime probe covers ordinary calls through glibc declarations such
