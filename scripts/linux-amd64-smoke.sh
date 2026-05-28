@@ -3266,6 +3266,15 @@ int render(char *buf, const char *fmt, ...) {
   return n;
 }
 
+int render_unbounded(char *buf, const char *fmt, ...) {
+  va_list ap;
+  int n;
+  va_start(ap, fmt);
+  n = vsprintf(buf, fmt, ap);
+  va_end(ap);
+  return n;
+}
+
 int render_file(FILE *fp, const char *fmt, ...) {
   va_list ap;
   int n;
@@ -3406,6 +3415,10 @@ int main(void) {
   if (buf[0] != 'i' || buf[2] != '7' || buf[6] != 'o') return 41;
   if (buf[9] != 'f' || buf[11] != '2' || buf[13] != '5') return 41;
   if (buf[14] != 0) return 41;
+  n = render_unbounded(buf, "u=%d t=%s", 5, "sp");
+  if (n != 8) return 90;
+  if (buf[0] != 'u' || buf[2] != '5' || buf[4] != 't' ||
+      buf[6] != 's' || buf[7] != 'p' || buf[8] != 0) return 91;
   fp = tmpfile();
   if (!fp) return 43;
   n = render_file(fp, "x=%d y=%s", 8, "yo");
