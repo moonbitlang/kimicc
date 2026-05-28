@@ -1280,7 +1280,7 @@ int target_predefines(void) {
 #else
   return 513;
 #endif
-#if __has_builtin(__builtin_mempcpy) && __has_builtin(__builtin___mempcpy_chk) && __has_builtin(__builtin_stpcpy) && __has_builtin(__builtin___stpncpy_chk)
+#if __has_builtin(__builtin___strcpy_chk) && __has_builtin(__builtin___strcat_chk) && __has_builtin(__builtin___strncpy_chk) && __has_builtin(__builtin___strncat_chk) && __has_builtin(__builtin_mempcpy) && __has_builtin(__builtin___mempcpy_chk) && __has_builtin(__builtin_stpcpy) && __has_builtin(__builtin___stpncpy_chk)
   target = target + 0;
 #else
   return 573;
@@ -1481,6 +1481,8 @@ int string_builtins(void) {
   char cat[8];
   char copy[16];
   __builtin_strcpy(dst, "ab");
+  if (__builtin___strcpy_chk(copy, "uv", 16) != copy) return 670;
+  if (__builtin_strcmp(copy, "uv") != 0) return 671;
   __builtin___strcat_chk(dst, "c", 16);
   if (__builtin_strlen(dst) != 3) return 284;
   if (__builtin_strcmp(dst, "abc") != 0) return 285;
