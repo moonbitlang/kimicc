@@ -473,6 +473,11 @@ test "linux amd64 has builtin reflects supported lowering" {
     #|#else
     #|int alignment_builtins = 0;
     #|#endif
+    #|#if __has_builtin(__builtin___printf_chk) && __has_builtin(__builtin___vprintf_chk) && __has_builtin(__builtin___fprintf_chk) && __has_builtin(__builtin___vfprintf_chk)
+    #|int checked_formatted_output = 1;
+    #|#else
+    #|int checked_formatted_output = 0;
+    #|#endif
     #|#if __has_builtin(__builtin_unsupported_vector_thing)
     #|int unsupported = 1;
     #|#else
@@ -482,7 +487,7 @@ test "linux amd64 has builtin reflects supported lowering" {
     Ok(text) =>
       inspect(
         text,
-        content="int memory_and_return_address=1;\nint gnu_copy_builtins=1;\nint atomic_and_overflow=1;\nint sync_update_builtins=1;\nint compile_time_selection=1;\nint floating_environment_query=1;\nint unpredictable_hint=1;\nint clear_cache_hint=1;\nint dynamic_stack_builtins=1;\nint alignment_builtins=1;\nint unsupported=0;\n",
+        content="int memory_and_return_address=1;\nint gnu_copy_builtins=1;\nint atomic_and_overflow=1;\nint sync_update_builtins=1;\nint compile_time_selection=1;\nint floating_environment_query=1;\nint unpredictable_hint=1;\nint clear_cache_hint=1;\nint dynamic_stack_builtins=1;\nint alignment_builtins=1;\nint checked_formatted_output=1;\nint unsupported=0;\n",
       )
     Err(err) => fail(err.to_string())
   }
