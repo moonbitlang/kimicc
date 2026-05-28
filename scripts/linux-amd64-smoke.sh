@@ -3250,6 +3250,7 @@ C
 "$kimicc" -fsyntax-only -target linux-amd64 "$header_syntax_source_path"
 
 cat > "$va_list_source_path" <<'C'
+#define _GNU_SOURCE
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -3267,6 +3268,15 @@ int render_file(FILE *fp, const char *fmt, ...) {
   int n;
   va_start(ap, fmt);
   n = vfprintf(fp, fmt, ap);
+  va_end(ap);
+  return n;
+}
+
+int render_fd(int fd, const char *fmt, ...) {
+  va_list ap;
+  int n;
+  va_start(ap, fmt);
+  n = vdprintf(fd, fmt, ap);
   va_end(ap);
   return n;
 }
@@ -3327,6 +3337,16 @@ int main(void) {
       buf[6] != 'x' || buf[7] != 'y' || buf[8] != 0) return 51;
   if (copy_buf[0] != 'c' || copy_buf[2] != '3' || copy_buf[4] != 'q' ||
       copy_buf[6] != 'x' || copy_buf[7] != 'y' || copy_buf[8] != 0) return 52;
+  fp = tmpfile();
+  if (!fp) return 53;
+  n = render_fd(fileno(fp), "d=%d z=%s", 4, "fd");
+  if (n != 8) return 54;
+  rewind(fp);
+  got = fread(file_buf, 1, 8, fp);
+  fclose(fp);
+  if (got != 8) return 55;
+  if (file_buf[0] != 'd' || file_buf[2] != '4' || file_buf[4] != 'z' ||
+      file_buf[6] != 'f' || file_buf[7] != 'd') return 56;
   return 42;
 }
 C
