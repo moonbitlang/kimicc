@@ -64,8 +64,5 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Build Linux amd64 smoke image
-        run: scripts/build-linux-amd64-smoke-image.sh
-
       - name: Linux amd64 smoke
-        run: KIMICC_LINUX_AMD64_SMOKE_FORCE_DOCKER=1 scripts/linux-amd64-smoke.sh
+        run: KIMICC_LINUX_AMD64_SMOKE_FORCE_DOCKER=1 KIMICC_LINUX_AMD64_SMOKE_REBUILD_IMAGE=1 scripts/linux-amd64-smoke.sh

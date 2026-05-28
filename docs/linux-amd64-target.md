@@ -476,7 +476,9 @@ smoke script to rebuild the image even when it already exists, and combine it
 with `KIMICC_LINUX_AMD64_SMOKE_NO_CACHE=1` to refresh the MoonBit toolchain
 layer. Set `KIMICC_LINUX_AMD64_SMOKE_IMAGE` to use a different image tag. On a
 Linux/amd64 host, set `KIMICC_LINUX_AMD64_SMOKE_FORCE_DOCKER=1` to force the
-Docker path, which is how CI validates the cached image workflow.
+Docker path. CI combines `KIMICC_LINUX_AMD64_SMOKE_FORCE_DOCKER=1` and
+`KIMICC_LINUX_AMD64_SMOKE_REBUILD_IMAGE=1` to validate the cached-image rebuild
+workflow.
 
 The script copies the repository to a temporary directory inside the container,
 installs missing tools when needed, runs the target/codegen/driver/preprocessor
