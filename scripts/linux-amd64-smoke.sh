@@ -3254,6 +3254,7 @@ cat > "$va_list_source_path" <<'C'
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <wchar.h>
 
 int render(char *buf, const char *fmt, ...) {
@@ -3270,6 +3271,15 @@ int render_file(FILE *fp, const char *fmt, ...) {
   int n;
   va_start(ap, fmt);
   n = vfprintf(fp, fmt, ap);
+  va_end(ap);
+  return n;
+}
+
+int render_stdout(const char *fmt, ...) {
+  va_list ap;
+  int n;
+  va_start(ap, fmt);
+  n = vprintf(fmt, ap);
   va_end(ap);
   return n;
 }
@@ -3386,6 +3396,7 @@ int main(void) {
   FILE *fp;
   size_t got;
   wint_t wc;
+  int saved_stdout = -1;
   int wide_file_scanned = 0;
   int file_scanned = 0;
   int scanned = 0;
@@ -3405,6 +3416,23 @@ int main(void) {
   if (got != 8) return 45;
   if (file_buf[0] != 'x' || file_buf[2] != '8' || file_buf[4] != 'y' ||
       file_buf[6] != 'y' || file_buf[7] != 'o') return 46;
+  fp = tmpfile();
+  if (!fp) return 81;
+  if (fflush(stdout) != 0) return 82;
+  saved_stdout = dup(1);
+  if (saved_stdout < 0) return 83;
+  if (dup2(fileno(fp), 1) < 0) return 84;
+  n = render_stdout("p=%d r=%s", 2, "io");
+  if (fflush(stdout) != 0) return 85;
+  if (dup2(saved_stdout, 1) < 0) return 86;
+  close(saved_stdout);
+  if (n != 8) return 87;
+  rewind(fp);
+  got = fread(file_buf, 1, 8, fp);
+  fclose(fp);
+  if (got != 8) return 88;
+  if (file_buf[0] != 'p' || file_buf[2] != '2' || file_buf[4] != 'r' ||
+      file_buf[6] != 'i' || file_buf[7] != 'o') return 89;
   n = scan("17 done", "%d %7s", &scanned, word);
   if (n != 2) return 47;
   if (scanned != 17) return 48;
