@@ -13198,6 +13198,60 @@ async test "strict MIR codegen matches parser codegen for anonymous union array 
 }
 
 ///|
+test "strict MIR codegen exposes anonymous union array member decay to clang callers" {
+  let callee =
+    #|typedef unsigned char uint8_t;
+    #|typedef unsigned long size_t;
+    #|typedef struct TinyAlloc {
+    #|  uint8_t *p;
+    #|  uint8_t *bufend;
+    #|  union {
+    #|    uint8_t buffer[1];
+    #|    size_t _aligner_;
+    #|  };
+    #|} TinyAlloc;
+    #|int eval_anonymous_union_array_member_decay(void) {
+    #|  TinyAlloc al;
+    #|  al.p = al.buffer;
+    #|  al.bufend = al.buffer + 1;
+    #|  return (int)(al.bufend - al.p);
+    #|}
+  let driver =
+    #|int eval_anonymous_union_array_member_decay(void);
+    #|int main(void) {
+    #|  return eval_anonymous_union_array_member_decay();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 1)
+}
+
+///|
+test "strict MIR codegen calls clang anonymous union array member decay" {
+  let caller =
+    #|int eval_anonymous_union_array_member_decay_from_clang(void);
+    #|int main(void) {
+    #|  return eval_anonymous_union_array_member_decay_from_clang();
+    #|}
+  let callee =
+    #|typedef unsigned char uint8_t;
+    #|typedef unsigned long size_t;
+    #|typedef struct TinyAlloc {
+    #|  uint8_t *p;
+    #|  uint8_t *bufend;
+    #|  union {
+    #|    uint8_t buffer[1];
+    #|    size_t _aligner_;
+    #|  };
+    #|} TinyAlloc;
+    #|int eval_anonymous_union_array_member_decay_from_clang(void) {
+    #|  TinyAlloc al;
+    #|  al.p = al.buffer;
+    #|  al.bufend = al.buffer + 1;
+    #|  return (int)(al.bufend - al.p);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 1)
+}
+
+///|
 fn strict_mir_local_extern_function_prototype_source() -> String {
   let source =
     #|int value = 37;
