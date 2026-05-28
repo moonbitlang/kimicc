@@ -3319,6 +3319,15 @@ int scan_file(FILE *fp, const char *fmt, ...) {
   return n;
 }
 
+int scan_wide(const wchar_t *src, const wchar_t *fmt, ...) {
+  va_list ap;
+  int n;
+  va_start(ap, fmt);
+  n = vswscanf(src, fmt, ap);
+  va_end(ap);
+  return n;
+}
+
 int render_copy(char *first, char *second, const char *fmt, ...) {
   va_list ap;
   va_list copy;
@@ -3341,13 +3350,22 @@ int main(void) {
   wchar_t wide_fmt[5] = {
     (wchar_t)'w', (wchar_t)'=', (wchar_t)'%', (wchar_t)'d', 0,
   };
+  wchar_t wide_scan_fmt[8] = {
+    (wchar_t)'%', (wchar_t)'d', (wchar_t)' ', (wchar_t)'%',
+    (wchar_t)'7', (wchar_t)'l', (wchar_t)'s', 0,
+  };
+  wchar_t wide_scan_src[6] = {
+    (wchar_t)'3', (wchar_t)'1', (wchar_t)' ', (wchar_t)'o', (wchar_t)'k', 0,
+  };
   wchar_t wide[32] = {0};
+  wchar_t wide_word[8] = {0};
   char file_word[8] = {0};
   char word[8] = {0};
   FILE *fp;
   size_t got;
   int file_scanned = 0;
   int scanned = 0;
+  int wide_scanned = 0;
   int n = render(buf, "i=%d s=%s f=%.1f", 7, "ok", 2.5);
   if (n != 14) return 40;
   if (buf[0] != 'i' || buf[2] != '7' || buf[6] != 'o') return 41;
@@ -3376,6 +3394,11 @@ int main(void) {
   if (n != 2) return 64;
   if (file_scanned != 23) return 65;
   if (file_word[0] != 'f' || file_word[3] != 'e' || file_word[4] != 0) return 66;
+  n = scan_wide(wide_scan_src, wide_scan_fmt, &wide_scanned, wide_word);
+  if (n != 2) return 67;
+  if (wide_scanned != 31) return 68;
+  if (wide_word[0] != (wchar_t)'o' || wide_word[1] != (wchar_t)'k' ||
+      wide_word[2] != 0) return 69;
   n = render_copy(buf, copy_buf, "c=%d q=%s", 3, "xy");
   if (n != 808) return 50;
   if (buf[0] != 'c' || buf[2] != '3' || buf[4] != 'q' ||
