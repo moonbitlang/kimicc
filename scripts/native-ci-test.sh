@@ -3,6 +3,9 @@ set -euo pipefail
 
 target="${MOON_TARGET:-native}"
 
+echo "==> check strict MIR clang-driver fixture coverage"
+scripts/check-strict-mir-interop.sh
+
 core_packages=(
   target
   parser

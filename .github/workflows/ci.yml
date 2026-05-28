@@ -31,7 +31,7 @@ jobs:
         run: moon update
 
       - name: Check shell scripts
-        run: bash -n scripts/fetch-external-parser-fixtures.sh scripts/linux-amd64-smoke.sh scripts/build-linux-amd64-smoke-image.sh scripts/native-ci-test.sh
+        run: bash -n scripts/check-strict-mir-interop.sh scripts/fetch-external-parser-fixtures.sh scripts/linux-amd64-smoke.sh scripts/build-linux-amd64-smoke-image.sh scripts/native-ci-test.sh
 
       - name: Check formatting
         run: |
