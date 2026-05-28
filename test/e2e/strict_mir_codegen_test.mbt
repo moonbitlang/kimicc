@@ -13695,6 +13695,58 @@ async test "strict MIR codegen matches parser codegen for over-aligned array fie
 }
 
 ///|
+test "strict MIR codegen exposes over-aligned array field pointers to clang callers" {
+  let callee =
+    #|struct State {
+    #|  int pad;
+    #|  unsigned long long acc[2] __attribute__((aligned(64)));
+    #|  unsigned long len;
+    #|};
+    #|static struct State st;
+    #|static void reset(struct State *s) {
+    #|  s->acc[0] = 10ull;
+    #|  s->acc[1] = 32ull;
+    #|  s->len = s->acc[0] + s->acc[1];
+    #|}
+    #|int eval_over_aligned_array_field_pointer(void) {
+    #|  reset(&st);
+    #|  return st.len == 42ul ? 42 : 1;
+    #|}
+  let driver =
+    #|int eval_over_aligned_array_field_pointer(void);
+    #|int main(void) {
+    #|  return eval_over_aligned_array_field_pointer();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang over-aligned array field pointers" {
+  let caller =
+    #|int eval_over_aligned_array_field_pointer_from_clang(void);
+    #|int main(void) {
+    #|  return eval_over_aligned_array_field_pointer_from_clang();
+    #|}
+  let callee =
+    #|struct State {
+    #|  int pad;
+    #|  unsigned long long acc[2] __attribute__((aligned(64)));
+    #|  unsigned long len;
+    #|};
+    #|static struct State st;
+    #|static void reset(struct State *s) {
+    #|  s->acc[0] = 10ull;
+    #|  s->acc[1] = 32ull;
+    #|  s->len = s->acc[0] + s->acc[1];
+    #|}
+    #|int eval_over_aligned_array_field_pointer_from_clang(void) {
+    #|  reset(&st);
+    #|  return st.len == 42ul ? 42 : 1;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_implicit_global_array_decay_source() -> String {
   let source =
     #|char version[4] = "abc";
