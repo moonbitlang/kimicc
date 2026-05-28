@@ -132,8 +132,10 @@ scripts/linux-amd64-smoke.sh
 `scripts/linux-amd64-smoke.sh` automatically uses
 `kimicc-linux-amd64-smoke:ubuntu24.04` when that image exists locally; set
 `KIMICC_LINUX_AMD64_SMOKE_IMAGE` to use another image tag. Set
-`KIMICC_LINUX_AMD64_SMOKE_NO_CACHE=1` when rebuilding the cached image to
-refresh the MoonBit toolchain layer. On a Linux/amd64 host, set
+`KIMICC_LINUX_AMD64_SMOKE_REBUILD_IMAGE=1` when running the smoke script to
+rebuild the cached image first, and combine it with
+`KIMICC_LINUX_AMD64_SMOKE_NO_CACHE=1` to refresh the MoonBit toolchain layer.
+On a Linux/amd64 host, set
 `KIMICC_LINUX_AMD64_SMOKE_FORCE_DOCKER=1` to force the Docker path.
 
 See [`docs/linux-amd64-target.md`](docs/linux-amd64-target.md) for current
