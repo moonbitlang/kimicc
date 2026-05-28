@@ -2,6 +2,17 @@
 set -euo pipefail
 
 target="${MOON_TARGET:-native}"
+tinycc_fixture="${TINYCC_PREPROCESSED_OUTPUT:-/tmp/tinycc_stripped.c}"
+quickjs_fixture="${QUICKJS_PREPROCESSED_OUTPUT:-/tmp/quickjs_preprocessed.c}"
+
+ensure_external_parser_fixtures() {
+  if [[ -s "${tinycc_fixture}" && -s "${quickjs_fixture}" ]]; then
+    return
+  fi
+
+  echo "==> fetch external parser fixtures"
+  scripts/fetch-external-parser-fixtures.sh
+}
 
 echo "==> check strict MIR clang-driver fixture coverage"
 scripts/check-strict-mir-interop.sh
@@ -18,6 +29,8 @@ core_packages=(
 
 echo "==> moon test core packages (${target})"
 moon test --target "${target}" "${core_packages[@]}"
+
+ensure_external_parser_fixtures
 
 echo "==> moon test e2e files individually (${target})"
 while IFS= read -r test_file; do
