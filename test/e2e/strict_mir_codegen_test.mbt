@@ -12919,6 +12919,54 @@ async test "strict MIR codegen matches parser codegen for sync minmax atomic bui
 }
 
 ///|
+test "strict MIR codegen exposes sync minmax atomic builtins to clang callers" {
+  let callee =
+    #|int eval_sync_minmax_atomic(void) {
+    #|  int sw = -3;
+    #|  unsigned int uw = 10u;
+    #|  if (__sync_fetch_and_max(&sw, -1) != -3) return 1;
+    #|  if (sw != -1) return 2;
+    #|  if (__sync_fetch_and_min(&sw, -7) != -1) return 3;
+    #|  if (sw != -7) return 4;
+    #|  if (__sync_fetch_and_umax(&uw, 12u) != 10u) return 5;
+    #|  if (uw != 12u) return 6;
+    #|  if (__sync_fetch_and_umin(&uw, 7u) != 12u) return 7;
+    #|  if (uw != 7u) return 8;
+    #|  return sw + (int)uw + 42;
+    #|}
+  let driver =
+    #|int eval_sync_minmax_atomic(void);
+    #|int main(void) {
+    #|  return eval_sync_minmax_atomic();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang sync minmax atomic builtins" {
+  let caller =
+    #|int eval_sync_minmax_atomic_from_clang(void);
+    #|int main(void) {
+    #|  return eval_sync_minmax_atomic_from_clang();
+    #|}
+  let callee =
+    #|int eval_sync_minmax_atomic_from_clang(void) {
+    #|  int sw = -3;
+    #|  unsigned int uw = 10u;
+    #|  if (__sync_fetch_and_max(&sw, -1) != -3) return 1;
+    #|  if (sw != -1) return 2;
+    #|  if (__sync_fetch_and_min(&sw, -7) != -1) return 3;
+    #|  if (sw != -7) return 4;
+    #|  if (__sync_fetch_and_umax(&uw, 12u) != 10u) return 5;
+    #|  if (uw != 12u) return 6;
+    #|  if (__sync_fetch_and_umin(&uw, 7u) != 12u) return 7;
+    #|  if (uw != 7u) return 8;
+    #|  return sw + (int)uw + 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_atomic_rmw_extra_operands_source() -> String {
   let source =
     #|int main(void) {
