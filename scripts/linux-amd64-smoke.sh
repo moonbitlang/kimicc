@@ -1505,6 +1505,15 @@ int render_checked_buffer(char *buf, unsigned long size, const char *fmt, ...) {
   return n;
 }
 
+int render_checked_unbounded(char *buf, const char *fmt, ...) {
+  va_list ap;
+  int n;
+  __builtin_va_start(ap, fmt);
+  n = __builtin___vsprintf_chk(buf, 0, 64, fmt, ap);
+  __builtin_va_end(ap);
+  return n;
+}
+
 int formatted_builtins(void) {
   char dst[64];
   char file_buf[16] = {0};
@@ -1519,6 +1528,9 @@ int formatted_builtins(void) {
   n = render_checked_buffer(dst, 64, "v=%d/%s", 10, "buf");
   if (n != 8) return 641;
   if (__builtin_strcmp(dst, "v=10/buf") != 0) return 642;
+  n = render_checked_unbounded(dst, "u=%d/%s", 11, "raw");
+  if (n != 8) return 643;
+  if (__builtin_strcmp(dst, "u=11/raw") != 0) return 644;
   fp = tmpfile();
   if (!fp) return 633;
   n = __builtin___fprintf_chk(fp, 1, "f=%d %s", 8, "ok");
