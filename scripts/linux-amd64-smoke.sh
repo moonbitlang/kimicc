@@ -3254,6 +3254,7 @@ cat > "$va_list_source_path" <<'C'
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <wchar.h>
 
 int render(char *buf, const char *fmt, ...) {
   va_list ap;
@@ -3291,6 +3292,15 @@ int render_alloc(char **out, const char *fmt, ...) {
   return n;
 }
 
+int render_wide(wchar_t *out, size_t cap, const wchar_t *fmt, ...) {
+  va_list ap;
+  int n;
+  va_start(ap, fmt);
+  n = vswprintf(out, cap, fmt, ap);
+  va_end(ap);
+  return n;
+}
+
 int scan(const char *src, const char *fmt, ...) {
   va_list ap;
   int n;
@@ -3319,6 +3329,10 @@ int main(void) {
   char copy_buf[64];
   char file_buf[16] = {0};
   char *allocated = 0;
+  wchar_t wide_fmt[5] = {
+    (wchar_t)'w', (wchar_t)'=', (wchar_t)'%', (wchar_t)'d', 0,
+  };
+  wchar_t wide[32] = {0};
   char word[8] = {0};
   FILE *fp;
   size_t got;
@@ -3364,6 +3378,10 @@ int main(void) {
   if (allocated[0] != 'a' || allocated[2] != '5' || allocated[4] != 'b' ||
       allocated[6] != 'h' || allocated[9] != 'p' || allocated[10] != 0) return 59;
   free(allocated);
+  n = render_wide(wide, 32, wide_fmt, 6);
+  if (n != 3) return 60;
+  if (wide[0] != (wchar_t)'w' || wide[2] != (wchar_t)'6' ||
+      wide[3] != 0) return 61;
   return 42;
 }
 C
