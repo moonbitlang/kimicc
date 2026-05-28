@@ -3337,6 +3337,15 @@ int scan_wide(const wchar_t *src, const wchar_t *fmt, ...) {
   return n;
 }
 
+int scan_wide_file(FILE *fp, const wchar_t *fmt, ...) {
+  va_list ap;
+  int n;
+  va_start(ap, fmt);
+  n = vfwscanf(fp, fmt, ap);
+  va_end(ap);
+  return n;
+}
+
 int render_copy(char *first, char *second, const char *fmt, ...) {
   va_list ap;
   va_list copy;
@@ -3370,12 +3379,14 @@ int main(void) {
     (wchar_t)'3', (wchar_t)'1', (wchar_t)' ', (wchar_t)'o', (wchar_t)'k', 0,
   };
   wchar_t wide[32] = {0};
+  wchar_t wide_file_word[8] = {0};
   wchar_t wide_word[8] = {0};
   char file_word[8] = {0};
   char word[8] = {0};
   FILE *fp;
   size_t got;
   wint_t wc;
+  int wide_file_scanned = 0;
   int file_scanned = 0;
   int scanned = 0;
   int wide_scanned = 0;
@@ -3452,6 +3463,20 @@ int main(void) {
   wc = fgetwc(fp);
   fclose(fp);
   if (wc != WEOF) return 75;
+  fp = tmpfile();
+  if (!fp) return 76;
+  if (fputwc((wchar_t)'4', fp) == WEOF ||
+      fputwc((wchar_t)'1', fp) == WEOF ||
+      fputwc((wchar_t)' ', fp) == WEOF ||
+      fputwc((wchar_t)'i', fp) == WEOF ||
+      fputwc((wchar_t)'n', fp) == WEOF) return 77;
+  rewind(fp);
+  n = scan_wide_file(fp, wide_scan_fmt, &wide_file_scanned, wide_file_word);
+  fclose(fp);
+  if (n != 2) return 78;
+  if (wide_file_scanned != 41) return 79;
+  if (wide_file_word[0] != (wchar_t)'i' ||
+      wide_file_word[1] != (wchar_t)'n' || wide_file_word[2] != 0) return 80;
   return 42;
 }
 C
