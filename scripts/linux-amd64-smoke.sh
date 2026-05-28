@@ -1496,6 +1496,15 @@ int render_checked_file(FILE *fp, const char *fmt, ...) {
   return n;
 }
 
+int render_checked_buffer(char *buf, unsigned long size, const char *fmt, ...) {
+  va_list ap;
+  int n;
+  __builtin_va_start(ap, fmt);
+  n = __builtin___vsnprintf_chk(buf, size, 0, size, fmt, ap);
+  __builtin_va_end(ap);
+  return n;
+}
+
 int formatted_builtins(void) {
   char dst[64];
   char file_buf[16] = {0};
@@ -1507,6 +1516,9 @@ int formatted_builtins(void) {
   n = __builtin___sprintf_chk(dst, 0, 64, "%s:%d", "ok", 7);
   if (n != 4) return 419;
   if (__builtin_strcmp(dst, "ok:7") != 0) return 420;
+  n = render_checked_buffer(dst, 64, "v=%d/%s", 10, "buf");
+  if (n != 8) return 641;
+  if (__builtin_strcmp(dst, "v=10/buf") != 0) return 642;
   fp = tmpfile();
   if (!fp) return 633;
   n = __builtin___fprintf_chk(fp, 1, "f=%d %s", 8, "ok");
