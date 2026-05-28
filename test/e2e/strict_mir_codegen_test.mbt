@@ -13417,6 +13417,38 @@ async test "strict MIR codegen matches parser codegen for casted pointer derefer
 }
 
 ///|
+test "strict MIR codegen exposes casted pointer dereference to clang callers" {
+  let callee =
+    #|int eval_casted_pointer_dereference(void) {
+    #|  char c = 37;
+    #|  char *p = &c;
+    #|  return *(unsigned char*)p;
+    #|}
+  let driver =
+    #|int eval_casted_pointer_dereference(void);
+    #|int main(void) {
+    #|  return eval_casted_pointer_dereference();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 37)
+}
+
+///|
+test "strict MIR codegen calls clang casted pointer dereference" {
+  let caller =
+    #|int eval_casted_pointer_dereference_from_clang(void);
+    #|int main(void) {
+    #|  return eval_casted_pointer_dereference_from_clang();
+    #|}
+  let callee =
+    #|int eval_casted_pointer_dereference_from_clang(void) {
+    #|  char c = 37;
+    #|  char *p = &c;
+    #|  return *(unsigned char*)p;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 37)
+}
+
+///|
 fn strict_mir_casted_global_array_decay_source() -> String {
   let source =
     #|int a[3] = {4, 5, 6};
