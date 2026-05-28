@@ -3329,6 +3329,15 @@ int render_wide_file(FILE *fp, const wchar_t *fmt, ...) {
   return n;
 }
 
+int render_wide_stdout(const wchar_t *fmt, ...) {
+  va_list ap;
+  int n;
+  va_start(ap, fmt);
+  n = vwprintf(fmt, ap);
+  va_end(ap);
+  return n;
+}
+
 int scan(const char *src, const char *fmt, ...) {
   va_list ap;
   int n;
@@ -3399,6 +3408,9 @@ int main(void) {
   wchar_t wide_file_fmt[5] = {
     (wchar_t)'f', (wchar_t)'=', (wchar_t)'%', (wchar_t)'d', 0,
   };
+  wchar_t wide_stdout_fmt[5] = {
+    (wchar_t)'o', (wchar_t)'=', (wchar_t)'%', (wchar_t)'d', 0,
+  };
   wchar_t wide_scan_fmt[8] = {
     (wchar_t)'%', (wchar_t)'d', (wchar_t)' ', (wchar_t)'%',
     (wchar_t)'7', (wchar_t)'l', (wchar_t)'s', 0,
@@ -3411,11 +3423,13 @@ int main(void) {
   wchar_t wide_word[8] = {0};
   char file_word[8] = {0};
   char word[8] = {0};
+  char wide_stdout_path[] = "/tmp/kimicc-vwprintf-XXXXXX";
   FILE *fp;
   size_t got;
   wint_t wc;
   int saved_stdin = -1;
   int saved_stdout = -1;
+  int wide_stdout_fd = -1;
   int wide_file_scanned = 0;
   int file_scanned = 0;
   int stdin_scanned = 0;
@@ -3545,6 +3559,23 @@ int main(void) {
   if (wide_file_scanned != 41) return 79;
   if (wide_file_word[0] != (wchar_t)'i' ||
       wide_file_word[1] != (wchar_t)'n' || wide_file_word[2] != 0) return 80;
+  wide_stdout_fd = mkstemp(wide_stdout_path);
+  if (wide_stdout_fd < 0) return 100;
+  close(wide_stdout_fd);
+  if (!freopen(wide_stdout_path, "w+", stdout)) return 101;
+  unlink(wide_stdout_path);
+  n = render_wide_stdout(wide_stdout_fmt, 7);
+  if (fflush(stdout) != 0) return 102;
+  if (n != 3) return 103;
+  rewind(stdout);
+  wc = fgetwc(stdout);
+  if (wc != (wint_t)(wchar_t)'o') return 104;
+  wc = fgetwc(stdout);
+  if (wc != (wint_t)(wchar_t)'=') return 105;
+  wc = fgetwc(stdout);
+  if (wc != (wint_t)(wchar_t)'7') return 106;
+  wc = fgetwc(stdout);
+  if (wc != WEOF) return 107;
   return 42;
 }
 C
