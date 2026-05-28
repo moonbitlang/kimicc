@@ -13004,6 +13004,60 @@ async test "strict MIR codegen matches parser codegen for atomic rmw extra opera
 }
 
 ///|
+test "strict MIR codegen exposes atomic rmw extra operands to clang callers" {
+  let callee =
+    #|int eval_atomic_rmw_extra_operands(void) {
+    #|  unsigned int x = 5;
+    #|  unsigned int expected = 20;
+    #|  int order = 0;
+    #|  int exchange_order = 0;
+    #|  int weak = 0;
+    #|  int success = 0;
+    #|  int failure = 0;
+    #|  if (__atomic_fetch_add(&x, 7, order += 1) != 5) return 1;
+    #|  if (x != 12) return 2;
+    #|  if (__atomic_exchange_n(&x, 20, exchange_order += 2) != 12) return 3;
+    #|  if (!__atomic_compare_exchange_n(&x, &expected, 42, weak += 1, success += 2, failure += 3)) return 4;
+    #|  if (x != 42) return 5;
+    #|  if (order != 1 || exchange_order != 2 || weak != 1 || success != 2 || failure != 3) return 6;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_atomic_rmw_extra_operands(void);
+    #|int main(void) {
+    #|  return eval_atomic_rmw_extra_operands();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang atomic rmw extra operands" {
+  let caller =
+    #|int eval_atomic_rmw_extra_operands_from_clang(void);
+    #|int main(void) {
+    #|  return eval_atomic_rmw_extra_operands_from_clang();
+    #|}
+  let callee =
+    #|int eval_atomic_rmw_extra_operands_from_clang(void) {
+    #|  unsigned int x = 5;
+    #|  unsigned int expected = 20;
+    #|  int order = 0;
+    #|  int exchange_order = 0;
+    #|  int weak = 0;
+    #|  int success = 0;
+    #|  int failure = 0;
+    #|  if (__atomic_fetch_add(&x, 7, order += 1) != 5) return 1;
+    #|  if (x != 12) return 2;
+    #|  if (__atomic_exchange_n(&x, 20, exchange_order += 2) != 12) return 3;
+    #|  if (!__atomic_compare_exchange_n(&x, &expected, 42, weak += 1, success += 2, failure += 3)) return 4;
+    #|  if (x != 42) return 5;
+    #|  if (order != 1 || exchange_order != 2 || weak != 1 || success != 2 || failure != 3) return 6;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_integer_overflow_source() -> String {
   let source =
     #|int main(void) {
