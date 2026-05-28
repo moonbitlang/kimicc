@@ -3310,6 +3310,15 @@ int scan(const char *src, const char *fmt, ...) {
   return n;
 }
 
+int scan_file(FILE *fp, const char *fmt, ...) {
+  va_list ap;
+  int n;
+  va_start(ap, fmt);
+  n = vfscanf(fp, fmt, ap);
+  va_end(ap);
+  return n;
+}
+
 int render_copy(char *first, char *second, const char *fmt, ...) {
   va_list ap;
   va_list copy;
@@ -3333,9 +3342,11 @@ int main(void) {
     (wchar_t)'w', (wchar_t)'=', (wchar_t)'%', (wchar_t)'d', 0,
   };
   wchar_t wide[32] = {0};
+  char file_word[8] = {0};
   char word[8] = {0};
   FILE *fp;
   size_t got;
+  int file_scanned = 0;
   int scanned = 0;
   int n = render(buf, "i=%d s=%s f=%.1f", 7, "ok", 2.5);
   if (n != 14) return 40;
@@ -3356,6 +3367,15 @@ int main(void) {
   if (n != 2) return 47;
   if (scanned != 17) return 48;
   if (word[0] != 'd' || word[3] != 'e' || word[4] != 0) return 49;
+  fp = tmpfile();
+  if (!fp) return 62;
+  if (fputs("23 file", fp) < 0) return 63;
+  rewind(fp);
+  n = scan_file(fp, "%d %7s", &file_scanned, file_word);
+  fclose(fp);
+  if (n != 2) return 64;
+  if (file_scanned != 23) return 65;
+  if (file_word[0] != 'f' || file_word[3] != 'e' || file_word[4] != 0) return 66;
   n = render_copy(buf, copy_buf, "c=%d q=%s", 3, "xy");
   if (n != 808) return 50;
   if (buf[0] != 'c' || buf[2] != '3' || buf[4] != 'q' ||

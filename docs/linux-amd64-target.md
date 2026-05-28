@@ -507,11 +507,11 @@ libc/POSIX headers such as `arpa/inet.h`, `assert.h`, `ctype.h`, `dirent.h`,
 `sys/statvfs.h`, `sys/syscall.h`, `sys/timerfd.h`, `sys/times.h`, `sys/time.h`,
 `sys/utsname.h`, `sys/uio.h`, and `sys/wait.h`. A separate linked probe passes
 the generated `va_list` state to glibc `vsnprintf`, `vswprintf`, `vfprintf`,
-`vdprintf`, `vasprintf`, and `vsscanf`, and passes a `va_copy`-copied cursor
-back to `vsnprintf`, covering real libc v-function interop paths without
-claiming complete `va_list` interoperability. Another linked libc runtime probe
-covers ordinary calls through glibc declarations such as `strtol`, `isdigit`,
-`tolower`, `snprintf`,
+`vdprintf`, `vasprintf`, `vsscanf`, and `vfscanf`, and passes a
+`va_copy`-copied cursor back to `vsnprintf`, covering real libc v-function
+interop paths without claiming complete `va_list` interoperability. Another
+linked libc runtime probe covers ordinary calls through glibc declarations such
+as `strtol`, `isdigit`, `tolower`, `snprintf`,
 `strerror`, `sqrt`, `setjmp`, `longjmp`, `setlocale`, `mbstowcs`, `wcstombs`,
 `wcslen`, `btowc`, and `wctob`, plus `qsort`, `bsearch`, `signal`, `raise`,
 `atexit`, `setenv`, `getenv`, and `unsetenv`; the `qsort`, `bsearch`, `signal`,
