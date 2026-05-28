@@ -13776,6 +13776,38 @@ async test "strict MIR codegen matches parser codegen for implicit global array 
 }
 
 ///|
+test "strict MIR codegen exposes implicit global array decay to clang callers" {
+  let callee =
+    #|char version[4] = "abc";
+    #|char *get(void) {
+    #|  return version;
+    #|}
+  let driver =
+    #|char *get(void);
+    #|int main(void) {
+    #|  char *p = get();
+    #|  return p[1];
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 98)
+}
+
+///|
+test "strict MIR codegen calls clang implicit global array decay" {
+  let caller =
+    #|char *get_from_clang(void);
+    #|int main(void) {
+    #|  char *p = get_from_clang();
+    #|  return p[1];
+    #|}
+  let callee =
+    #|char version_from_clang[4] = "abc";
+    #|char *get_from_clang(void) {
+    #|  return version_from_clang;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 98)
+}
+
+///|
 fn strict_mir_floating_local_casts_source() -> String {
   let source =
     #|int main(void) {
