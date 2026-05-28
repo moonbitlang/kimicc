@@ -3274,8 +3274,23 @@ int scan(const char *src, const char *fmt, ...) {
   return n;
 }
 
+int render_copy(char *first, char *second, const char *fmt, ...) {
+  va_list ap;
+  va_list copy;
+  int n;
+  int m;
+  va_start(ap, fmt);
+  va_copy(copy, ap);
+  n = vsnprintf(first, 64, fmt, ap);
+  m = vsnprintf(second, 64, fmt, copy);
+  va_end(copy);
+  va_end(ap);
+  return n * 100 + m;
+}
+
 int main(void) {
   char buf[64];
+  char copy_buf[64];
   char file_buf[16] = {0};
   char word[8] = {0};
   FILE *fp;
@@ -3300,6 +3315,12 @@ int main(void) {
   if (n != 2) return 47;
   if (scanned != 17) return 48;
   if (word[0] != 'd' || word[3] != 'e' || word[4] != 0) return 49;
+  n = render_copy(buf, copy_buf, "c=%d q=%s", 3, "xy");
+  if (n != 808) return 50;
+  if (buf[0] != 'c' || buf[2] != '3' || buf[4] != 'q' ||
+      buf[6] != 'x' || buf[7] != 'y' || buf[8] != 0) return 51;
+  if (copy_buf[0] != 'c' || copy_buf[2] != '3' || copy_buf[4] != 'q' ||
+      copy_buf[6] != 'x' || copy_buf[7] != 'y' || copy_buf[8] != 0) return 52;
   return 42;
 }
 C
