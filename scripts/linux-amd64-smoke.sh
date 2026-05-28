@@ -3253,6 +3253,7 @@ cat > "$va_list_source_path" <<'C'
 #define _GNU_SOURCE
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 int render(char *buf, const char *fmt, ...) {
   va_list ap;
@@ -3277,6 +3278,15 @@ int render_fd(int fd, const char *fmt, ...) {
   int n;
   va_start(ap, fmt);
   n = vdprintf(fd, fmt, ap);
+  va_end(ap);
+  return n;
+}
+
+int render_alloc(char **out, const char *fmt, ...) {
+  va_list ap;
+  int n;
+  va_start(ap, fmt);
+  n = vasprintf(out, fmt, ap);
   va_end(ap);
   return n;
 }
@@ -3308,6 +3318,7 @@ int main(void) {
   char buf[64];
   char copy_buf[64];
   char file_buf[16] = {0};
+  char *allocated = 0;
   char word[8] = {0};
   FILE *fp;
   size_t got;
@@ -3347,6 +3358,12 @@ int main(void) {
   if (got != 8) return 55;
   if (file_buf[0] != 'd' || file_buf[2] != '4' || file_buf[4] != 'z' ||
       file_buf[6] != 'f' || file_buf[7] != 'd') return 56;
+  n = render_alloc(&allocated, "a=%d b=%s", 5, "heap");
+  if (n != 10) return 57;
+  if (!allocated) return 58;
+  if (allocated[0] != 'a' || allocated[2] != '5' || allocated[4] != 'b' ||
+      allocated[6] != 'h' || allocated[9] != 'p' || allocated[10] != 0) return 59;
+  free(allocated);
   return 42;
 }
 C
