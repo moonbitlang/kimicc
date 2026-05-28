@@ -3256,13 +3256,35 @@ int render(char *buf, const char *fmt, ...) {
   return n;
 }
 
+int render_file(FILE *fp, const char *fmt, ...) {
+  va_list ap;
+  int n;
+  va_start(ap, fmt);
+  n = vfprintf(fp, fmt, ap);
+  va_end(ap);
+  return n;
+}
+
 int main(void) {
   char buf[64];
+  char file_buf[16] = {0};
+  FILE *fp;
+  size_t got;
   int n = render(buf, "i=%d s=%s f=%.1f", 7, "ok", 2.5);
   if (n != 14) return 40;
   if (buf[0] != 'i' || buf[2] != '7' || buf[6] != 'o') return 41;
   if (buf[9] != 'f' || buf[11] != '2' || buf[13] != '5') return 41;
   if (buf[14] != 0) return 41;
+  fp = tmpfile();
+  if (!fp) return 43;
+  n = render_file(fp, "x=%d y=%s", 8, "yo");
+  if (n != 8) return 44;
+  rewind(fp);
+  got = fread(file_buf, 1, 8, fp);
+  fclose(fp);
+  if (got != 8) return 45;
+  if (file_buf[0] != 'x' || file_buf[2] != '8' || file_buf[4] != 'y' ||
+      file_buf[6] != 'y' || file_buf[7] != 'o') return 46;
   return 42;
 }
 C
