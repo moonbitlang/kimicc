@@ -13480,6 +13480,48 @@ async test "strict MIR codegen matches parser codegen for casted global array de
 }
 
 ///|
+test "strict MIR codegen exposes casted global array decay to clang callers" {
+  let callee =
+    #|int a[3] = {4, 5, 6};
+    #|int *get(int *pn) {
+    #|  *pn = sizeof(a) / sizeof(a[0]);
+    #|  return (int*)a;
+    #|}
+    #|int eval_casted_global_array_decay(void) {
+    #|  int n = 0;
+    #|  int *p = get(&n);
+    #|  return p[1] + n;
+    #|}
+  let driver =
+    #|int eval_casted_global_array_decay(void);
+    #|int main(void) {
+    #|  return eval_casted_global_array_decay();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 8)
+}
+
+///|
+test "strict MIR codegen calls clang casted global array decay" {
+  let caller =
+    #|int eval_casted_global_array_decay_from_clang(void);
+    #|int main(void) {
+    #|  return eval_casted_global_array_decay_from_clang();
+    #|}
+  let callee =
+    #|int a[3] = {4, 5, 6};
+    #|int *get(int *pn) {
+    #|  *pn = sizeof(a) / sizeof(a[0]);
+    #|  return (int*)a;
+    #|}
+    #|int eval_casted_global_array_decay_from_clang(void) {
+    #|  int n = 0;
+    #|  int *p = get(&n);
+    #|  return p[1] + n;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 8)
+}
+
+///|
 fn strict_mir_aligned_global_array_address_source() -> String {
   let source =
     #|static unsigned char secret[16] __attribute__((aligned(64))) = {1, 2, 3, 4, 5, 6, 7, 8};
