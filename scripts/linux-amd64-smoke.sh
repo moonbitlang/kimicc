@@ -576,10 +576,17 @@ cat > "$source_path" <<'C'
 typedef __builtin_va_list va_list;
 typedef struct __kimicc_FILE FILE;
 
+extern FILE *stdout;
+
 FILE *tmpfile(void);
 unsigned long fread(void *ptr, unsigned long size, unsigned long nmemb, FILE *stream);
 void rewind(FILE *stream);
 int fclose(FILE *stream);
+int fflush(FILE *stream);
+int fileno(FILE *stream);
+int dup(int oldfd);
+int dup2(int oldfd, int newfd);
+int close(int fd);
 
 struct Pair {
   long a;
@@ -1519,6 +1526,7 @@ int formatted_builtins(void) {
   char file_buf[16] = {0};
   FILE *fp;
   int got;
+  int saved;
   int n = __builtin___snprintf_chk(dst, 64, 0, 64, "%d-%s", 12, "xy");
   if (n != 5) return 417;
   if (__builtin_strcmp(dst, "12-xy") != 0) return 418;
@@ -1531,6 +1539,23 @@ int formatted_builtins(void) {
   n = render_checked_unbounded(dst, "u=%d/%s", 11, "raw");
   if (n != 8) return 643;
   if (__builtin_strcmp(dst, "u=11/raw") != 0) return 644;
+  fp = tmpfile();
+  if (!fp) return 645;
+  if (fflush(stdout) != 0) return 646;
+  saved = dup(1);
+  if (saved < 0) return 647;
+  if (dup2(fileno(fp), 1) < 0) return 648;
+  n = __builtin___printf_chk(1, "p=%d %s", 13, "io");
+  if (fflush(stdout) != 0) return 649;
+  if (dup2(saved, 1) < 0) return 650;
+  close(saved);
+  if (n != 7) return 651;
+  rewind(fp);
+  got = fread(file_buf, 1, 7, fp);
+  fclose(fp);
+  if (got != 7) return 652;
+  if (file_buf[0] != 'p' || file_buf[2] != '1' || file_buf[3] != '3' ||
+      file_buf[5] != 'i' || file_buf[6] != 'o') return 653;
   fp = tmpfile();
   if (!fp) return 633;
   n = __builtin___fprintf_chk(fp, 1, "f=%d %s", 8, "ok");
