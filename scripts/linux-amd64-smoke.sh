@@ -574,6 +574,12 @@ cat > "$source_path" <<'C'
 #include "pragma_once_header.h"
 
 typedef __builtin_va_list va_list;
+typedef struct __kimicc_FILE FILE;
+
+FILE *tmpfile(void);
+unsigned long fread(void *ptr, unsigned long size, unsigned long nmemb, FILE *stream);
+void rewind(FILE *stream);
+int fclose(FILE *stream);
 
 struct Pair {
   long a;
@@ -1483,12 +1489,25 @@ int string_builtins(void) {
 
 int formatted_builtins(void) {
   char dst[64];
+  char file_buf[16] = {0};
+  FILE *fp;
+  int got;
   int n = __builtin___snprintf_chk(dst, 64, 0, 64, "%d-%s", 12, "xy");
   if (n != 5) return 417;
   if (__builtin_strcmp(dst, "12-xy") != 0) return 418;
   n = __builtin___sprintf_chk(dst, 0, 64, "%s:%d", "ok", 7);
   if (n != 4) return 419;
   if (__builtin_strcmp(dst, "ok:7") != 0) return 420;
+  fp = tmpfile();
+  if (!fp) return 633;
+  n = __builtin___fprintf_chk(fp, 1, "f=%d %s", 8, "ok");
+  if (n != 6) return 634;
+  rewind(fp);
+  got = fread(file_buf, 1, 6, fp);
+  fclose(fp);
+  if (got != 6) return 635;
+  if (file_buf[0] != 'f' || file_buf[2] != '8' || file_buf[4] != 'o' ||
+      file_buf[5] != 'k') return 636;
   return 0;
 }
 
