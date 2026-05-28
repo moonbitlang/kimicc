@@ -13551,6 +13551,44 @@ async test "strict MIR codegen matches parser codegen for aligned global array a
 }
 
 ///|
+test "strict MIR codegen exposes aligned global array addresses to clang callers" {
+  let callee =
+    #|static unsigned char secret[16] __attribute__((aligned(64))) = {1, 2, 3, 4, 5, 6, 7, 8};
+    #|unsigned char *get(void) {
+    #|  return (unsigned char*)secret;
+    #|}
+    #|int eval_aligned_global_array_address(void) {
+    #|  unsigned char *p = get();
+    #|  return p[0] + p[7] + (((unsigned long)p & 63) == 0 ? 33 : 0);
+    #|}
+  let driver =
+    #|int eval_aligned_global_array_address(void);
+    #|int main(void) {
+    #|  return eval_aligned_global_array_address();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang aligned global array addresses" {
+  let caller =
+    #|int eval_aligned_global_array_address_from_clang(void);
+    #|int main(void) {
+    #|  return eval_aligned_global_array_address_from_clang();
+    #|}
+  let callee =
+    #|static unsigned char secret[16] __attribute__((aligned(64))) = {1, 2, 3, 4, 5, 6, 7, 8};
+    #|unsigned char *get(void) {
+    #|  return (unsigned char*)secret;
+    #|}
+    #|int eval_aligned_global_array_address_from_clang(void) {
+    #|  unsigned char *p = get();
+    #|  return p[0] + p[7] + (((unsigned long)p & 63) == 0 ? 33 : 0);
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_aligned_local_array_scratch_source() -> String {
   let source =
     #|static void mix(unsigned long long *acc, unsigned long long seed) {
