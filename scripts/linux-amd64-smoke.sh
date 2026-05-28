@@ -1521,6 +1521,15 @@ int render_checked_unbounded(char *buf, const char *fmt, ...) {
   return n;
 }
 
+int render_checked_stdout(const char *fmt, ...) {
+  va_list ap;
+  int n;
+  __builtin_va_start(ap, fmt);
+  n = __builtin___vprintf_chk(1, fmt, ap);
+  __builtin_va_end(ap);
+  return n;
+}
+
 int formatted_builtins(void) {
   char dst[64];
   char file_buf[16] = {0};
@@ -1556,6 +1565,23 @@ int formatted_builtins(void) {
   if (got != 7) return 652;
   if (file_buf[0] != 'p' || file_buf[2] != '1' || file_buf[3] != '3' ||
       file_buf[5] != 'i' || file_buf[6] != 'o') return 653;
+  fp = tmpfile();
+  if (!fp) return 654;
+  if (fflush(stdout) != 0) return 655;
+  saved = dup(1);
+  if (saved < 0) return 656;
+  if (dup2(fileno(fp), 1) < 0) return 657;
+  n = render_checked_stdout("q=%d %s", 14, "vo");
+  if (fflush(stdout) != 0) return 658;
+  if (dup2(saved, 1) < 0) return 659;
+  close(saved);
+  if (n != 7) return 660;
+  rewind(fp);
+  got = fread(file_buf, 1, 7, fp);
+  fclose(fp);
+  if (got != 7) return 661;
+  if (file_buf[0] != 'q' || file_buf[2] != '1' || file_buf[3] != '4' ||
+      file_buf[5] != 'v' || file_buf[6] != 'o') return 662;
   fp = tmpfile();
   if (!fp) return 633;
   n = __builtin___fprintf_chk(fp, 1, "f=%d %s", 8, "ok");
