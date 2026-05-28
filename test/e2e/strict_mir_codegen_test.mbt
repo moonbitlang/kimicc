@@ -12832,6 +12832,59 @@ async test "strict MIR codegen matches parser codegen for atomic lock-free query
 }
 
 ///|
+test "strict MIR codegen exposes atomic lock-free query builtins to clang callers" {
+  let callee =
+    #|int eval_atomic_lock_free_query(void) {
+    #|  int side = 0;
+    #|  int object = 0;
+    #|  if (!__atomic_is_lock_free((side += 1, 4), &object)) return 1;
+    #|  if (side != 1) return 2;
+    #|  if (__atomic_is_lock_free(3, (void *)(long)(side += 10))) return 3;
+    #|  if (side != 11) return 4;
+    #|  if (!__c11_atomic_is_lock_free((side += 4, 8))) return 5;
+    #|  if (__c11_atomic_is_lock_free(16)) return 6;
+    #|  if (!__atomic_always_lock_free(4, (void *)(long)(side += 100))) return 7;
+    #|  if (__atomic_always_lock_free(16, 0)) return 8;
+    #|  if (side != 15) return 9;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_atomic_lock_free_query(void);
+    #|int main(void) {
+    #|  return eval_atomic_lock_free_query();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang atomic lock-free query builtins" {
+  let caller =
+    #|int eval_atomic_lock_free_query_from_clang(void);
+    #|int main(void) {
+    #|  return eval_atomic_lock_free_query_from_clang();
+    #|}
+  let callee =
+    #|int eval_atomic_lock_free_query_from_clang(void) {
+    #|  int side = 0;
+    #|  int object = 0;
+    #|  if (!__atomic_is_lock_free((side += 1, 4), &object)) return 1;
+    #|  if (side != 1) return 2;
+    #|  if (__atomic_is_lock_free(3, (void *)(long)(side += 10))) return 3;
+    #|  if (side != 11) return 4;
+    #|  if (!__c11_atomic_is_lock_free((side += 4, 8))) return 5;
+    #|  int c11_wide = __c11_atomic_is_lock_free(16);
+    #|  if (c11_wide != 0 && c11_wide != 1) return 6;
+    #|  int always_4 = __atomic_always_lock_free(4, (void *)(long)(side += 100));
+    #|  if (always_4 != 0 && always_4 != 1) return 7;
+    #|  int always_wide = __atomic_always_lock_free(16, 0);
+    #|  if (always_wide != 0 && always_wide != 1) return 8;
+    #|  if (side != 15) return 9;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_sync_minmax_atomic_source() -> String {
   let source =
     #|int main(void) {
