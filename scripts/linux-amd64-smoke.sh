@@ -1487,6 +1487,15 @@ int string_builtins(void) {
   return 0;
 }
 
+int render_checked_file(FILE *fp, const char *fmt, ...) {
+  va_list ap;
+  int n;
+  __builtin_va_start(ap, fmt);
+  n = __builtin___vfprintf_chk(fp, 1, fmt, ap);
+  __builtin_va_end(ap);
+  return n;
+}
+
 int formatted_builtins(void) {
   char dst[64];
   char file_buf[16] = {0};
@@ -1508,6 +1517,16 @@ int formatted_builtins(void) {
   if (got != 6) return 635;
   if (file_buf[0] != 'f' || file_buf[2] != '8' || file_buf[4] != 'o' ||
       file_buf[5] != 'k') return 636;
+  fp = tmpfile();
+  if (!fp) return 637;
+  n = render_checked_file(fp, "v=%d %s", 9, "va");
+  if (n != 6) return 638;
+  rewind(fp);
+  got = fread(file_buf, 1, 6, fp);
+  fclose(fp);
+  if (got != 6) return 639;
+  if (file_buf[0] != 'v' || file_buf[2] != '9' || file_buf[4] != 'v' ||
+      file_buf[5] != 'a') return 640;
   return 0;
 }
 
