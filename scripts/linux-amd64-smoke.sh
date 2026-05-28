@@ -3383,6 +3383,15 @@ int scan_wide_file(FILE *fp, const wchar_t *fmt, ...) {
   return n;
 }
 
+int scan_wide_stdin(const wchar_t *fmt, ...) {
+  va_list ap;
+  int n;
+  va_start(ap, fmt);
+  n = vwscanf(fmt, ap);
+  va_end(ap);
+  return n;
+}
+
 int render_copy(char *first, char *second, const char *fmt, ...) {
   va_list ap;
   va_list copy;
@@ -3420,19 +3429,23 @@ int main(void) {
   };
   wchar_t wide[32] = {0};
   wchar_t wide_file_word[8] = {0};
+  wchar_t wide_stdin_word[8] = {0};
   wchar_t wide_word[8] = {0};
   char file_word[8] = {0};
   char word[8] = {0};
+  char wide_stdin_path[] = "/tmp/kimicc-vwscanf-XXXXXX";
   char wide_stdout_path[] = "/tmp/kimicc-vwprintf-XXXXXX";
   FILE *fp;
   size_t got;
   wint_t wc;
   int saved_stdin = -1;
   int saved_stdout = -1;
+  int wide_stdin_fd = -1;
   int wide_stdout_fd = -1;
   int wide_file_scanned = 0;
   int file_scanned = 0;
   int stdin_scanned = 0;
+  int wide_stdin_scanned = 0;
   int scanned = 0;
   int wide_scanned = 0;
   int n = render(buf, "i=%d s=%s f=%.1f", 7, "ok", 2.5);
@@ -3559,6 +3572,24 @@ int main(void) {
   if (wide_file_scanned != 41) return 79;
   if (wide_file_word[0] != (wchar_t)'i' ||
       wide_file_word[1] != (wchar_t)'n' || wide_file_word[2] != 0) return 80;
+  wide_stdin_fd = mkstemp(wide_stdin_path);
+  if (wide_stdin_fd < 0) return 108;
+  fp = fdopen(wide_stdin_fd, "w");
+  if (!fp) return 109;
+  if (fputwc((wchar_t)'5', fp) == WEOF ||
+      fputwc((wchar_t)'3', fp) == WEOF ||
+      fputwc((wchar_t)' ', fp) == WEOF ||
+      fputwc((wchar_t)'u', fp) == WEOF ||
+      fputwc((wchar_t)'p', fp) == WEOF) return 110;
+  if (fclose(fp) != 0) return 111;
+  if (!freopen(wide_stdin_path, "r", stdin)) return 112;
+  unlink(wide_stdin_path);
+  clearerr(stdin);
+  n = scan_wide_stdin(wide_scan_fmt, &wide_stdin_scanned, wide_stdin_word);
+  if (n != 2) return 113;
+  if (wide_stdin_scanned != 53) return 114;
+  if (wide_stdin_word[0] != (wchar_t)'u' ||
+      wide_stdin_word[1] != (wchar_t)'p' || wide_stdin_word[2] != 0) return 115;
   wide_stdout_fd = mkstemp(wide_stdout_path);
   if (wide_stdout_fd < 0) return 100;
   close(wide_stdout_fd);
