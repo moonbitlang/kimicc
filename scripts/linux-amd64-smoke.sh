@@ -1275,7 +1275,7 @@ int target_predefines(void) {
   if (!clang_version[0] || !compiler_version[0]) return 576;
   if (literal_encoding[0] != 'U' || literal_encoding[4] != '8') return 580;
   if (wide_literal_encoding[0] != 'U' || wide_literal_encoding[4] != '3') return 581;
-#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_return_address) && __has_builtin(__builtin_dynamic_object_size) && __has_builtin(__builtin_flt_rounds) && __has_builtin(__builtin_unpredictable) && __has_builtin(__builtin_is_aligned) && __has_builtin(__builtin_align_up) && __has_builtin(__builtin_align_down) && __has_builtin(__atomic_load_n) && __has_builtin(__sync_bool_compare_and_swap) && __has_builtin(__sync_val_compare_and_swap) && __has_builtin(__sync_fetch_and_max) && __has_builtin(__sync_fetch_and_min) && __has_builtin(__sync_fetch_and_umax) && __has_builtin(__sync_fetch_and_umin) && __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p) && __has_builtin(__builtin_classify_type)
+#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin___memcpy_chk) && __has_builtin(__builtin___memmove_chk) && __has_builtin(__builtin___memset_chk) && __has_builtin(__builtin_return_address) && __has_builtin(__builtin_dynamic_object_size) && __has_builtin(__builtin_flt_rounds) && __has_builtin(__builtin_unpredictable) && __has_builtin(__builtin_is_aligned) && __has_builtin(__builtin_align_up) && __has_builtin(__builtin_align_down) && __has_builtin(__atomic_load_n) && __has_builtin(__sync_bool_compare_and_swap) && __has_builtin(__sync_val_compare_and_swap) && __has_builtin(__sync_fetch_and_max) && __has_builtin(__sync_fetch_and_min) && __has_builtin(__sync_fetch_and_umax) && __has_builtin(__sync_fetch_and_umin) && __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p) && __has_builtin(__builtin_classify_type)
   target = target + 0;
 #else
   return 513;
@@ -1436,6 +1436,16 @@ int memory_builtins(void) {
   if (src[0] != 1 || src[2] != 3) return 277;
   __builtin_bzero(dst, 4);
   if (dst[0] != 0 || dst[2] != 0) return 278;
+  if (__builtin___memcpy_chk(dst, src, 4, 4) != dst) return 664;
+  if (dst[0] != 1 || dst[2] != 3) return 665;
+  dst[0] = 9;
+  dst[1] = 8;
+  dst[2] = 7;
+  dst[3] = 0;
+  if (__builtin___memmove_chk(src, dst, 4, 4) != src) return 666;
+  if (src[0] != 9 || src[1] != 8 || src[2] != 7) return 667;
+  if (__builtin___memset_chk(dst, 5, 3, 4) != dst) return 668;
+  if (dst[0] != 5 || dst[2] != 5 || dst[3] != 0) return 669;
   return 0;
 }
 
