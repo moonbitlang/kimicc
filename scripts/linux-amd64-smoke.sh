@@ -3301,6 +3301,15 @@ int render_wide(wchar_t *out, size_t cap, const wchar_t *fmt, ...) {
   return n;
 }
 
+int render_wide_file(FILE *fp, const wchar_t *fmt, ...) {
+  va_list ap;
+  int n;
+  va_start(ap, fmt);
+  n = vfwprintf(fp, fmt, ap);
+  va_end(ap);
+  return n;
+}
+
 int scan(const char *src, const char *fmt, ...) {
   va_list ap;
   int n;
@@ -3350,6 +3359,9 @@ int main(void) {
   wchar_t wide_fmt[5] = {
     (wchar_t)'w', (wchar_t)'=', (wchar_t)'%', (wchar_t)'d', 0,
   };
+  wchar_t wide_file_fmt[5] = {
+    (wchar_t)'f', (wchar_t)'=', (wchar_t)'%', (wchar_t)'d', 0,
+  };
   wchar_t wide_scan_fmt[8] = {
     (wchar_t)'%', (wchar_t)'d', (wchar_t)' ', (wchar_t)'%',
     (wchar_t)'7', (wchar_t)'l', (wchar_t)'s', 0,
@@ -3363,6 +3375,7 @@ int main(void) {
   char word[8] = {0};
   FILE *fp;
   size_t got;
+  wint_t wc;
   int file_scanned = 0;
   int scanned = 0;
   int wide_scanned = 0;
@@ -3425,6 +3438,20 @@ int main(void) {
   if (n != 3) return 60;
   if (wide[0] != (wchar_t)'w' || wide[2] != (wchar_t)'6' ||
       wide[3] != 0) return 61;
+  fp = tmpfile();
+  if (!fp) return 70;
+  n = render_wide_file(fp, wide_file_fmt, 9);
+  if (n != 3) return 71;
+  rewind(fp);
+  wc = fgetwc(fp);
+  if (wc != (wint_t)(wchar_t)'f') return 72;
+  wc = fgetwc(fp);
+  if (wc != (wint_t)(wchar_t)'=') return 73;
+  wc = fgetwc(fp);
+  if (wc != (wint_t)(wchar_t)'9') return 74;
+  wc = fgetwc(fp);
+  fclose(fp);
+  if (wc != WEOF) return 75;
   return 42;
 }
 C
