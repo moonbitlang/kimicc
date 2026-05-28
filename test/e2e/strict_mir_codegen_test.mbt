@@ -13099,6 +13099,68 @@ async test "strict MIR codegen matches parser codegen for integer overflow built
 }
 
 ///|
+test "strict MIR codegen exposes integer overflow builtins to clang callers" {
+  let callee =
+    #|int eval_integer_overflow(void) {
+    #|  int i = 0;
+    #|  unsigned u = 0;
+    #|  long long l = 0;
+    #|  unsigned long long ul = 0;
+    #|  int total = 0;
+    #|  total += __builtin_add_overflow(1, 2, &i);
+    #|  if (i != 3) return 1;
+    #|  total += __builtin_add_overflow(2147483647, 1, &i);
+    #|  if (i != (-2147483647 - 1)) return 2;
+    #|  total += __builtin_sub_overflow(0u, 1u, &u);
+    #|  if (u != 4294967295u) return 3;
+    #|  total += __builtin_mul_overflow(50000, 50000, &i);
+    #|  if (i >= 0) return 4;
+    #|  total += __builtin_uaddll_overflow(0xffffffffffffffffULL, 1ULL, &ul);
+    #|  if (ul != 0ULL) return 5;
+    #|  total += __builtin_saddll_overflow(9223372036854775807LL, 1LL, &l);
+    #|  if (l != (-9223372036854775807LL - 1LL)) return 6;
+    #|  return total + 37;
+    #|}
+  let driver =
+    #|int eval_integer_overflow(void);
+    #|int main(void) {
+    #|  return eval_integer_overflow();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang integer overflow builtins" {
+  let caller =
+    #|int eval_integer_overflow_from_clang(void);
+    #|int main(void) {
+    #|  return eval_integer_overflow_from_clang();
+    #|}
+  let callee =
+    #|int eval_integer_overflow_from_clang(void) {
+    #|  int i = 0;
+    #|  unsigned u = 0;
+    #|  long long l = 0;
+    #|  unsigned long long ul = 0;
+    #|  int total = 0;
+    #|  total += __builtin_add_overflow(1, 2, &i);
+    #|  if (i != 3) return 1;
+    #|  total += __builtin_add_overflow(2147483647, 1, &i);
+    #|  if (i != (-2147483647 - 1)) return 2;
+    #|  total += __builtin_sub_overflow(0u, 1u, &u);
+    #|  if (u != 4294967295u) return 3;
+    #|  total += __builtin_mul_overflow(50000, 50000, &i);
+    #|  if (i >= 0) return 4;
+    #|  total += __builtin_uaddll_overflow(0xffffffffffffffffULL, 1ULL, &ul);
+    #|  if (ul != 0ULL) return 5;
+    #|  total += __builtin_saddll_overflow(9223372036854775807LL, 1LL, &l);
+    #|  if (l != (-9223372036854775807LL - 1LL)) return 6;
+    #|  return total + 37;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_anonymous_union_array_member_decay_source() -> String {
   let source =
     #|typedef unsigned char uint8_t;
