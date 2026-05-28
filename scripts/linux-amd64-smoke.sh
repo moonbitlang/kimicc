@@ -3265,11 +3265,22 @@ int render_file(FILE *fp, const char *fmt, ...) {
   return n;
 }
 
+int scan(const char *src, const char *fmt, ...) {
+  va_list ap;
+  int n;
+  va_start(ap, fmt);
+  n = vsscanf(src, fmt, ap);
+  va_end(ap);
+  return n;
+}
+
 int main(void) {
   char buf[64];
   char file_buf[16] = {0};
+  char word[8] = {0};
   FILE *fp;
   size_t got;
+  int scanned = 0;
   int n = render(buf, "i=%d s=%s f=%.1f", 7, "ok", 2.5);
   if (n != 14) return 40;
   if (buf[0] != 'i' || buf[2] != '7' || buf[6] != 'o') return 41;
@@ -3285,6 +3296,10 @@ int main(void) {
   if (got != 8) return 45;
   if (file_buf[0] != 'x' || file_buf[2] != '8' || file_buf[4] != 'y' ||
       file_buf[6] != 'y' || file_buf[7] != 'o') return 46;
+  n = scan("17 done", "%d %7s", &scanned, word);
+  if (n != 2) return 47;
+  if (scanned != 17) return 48;
+  if (word[0] != 'd' || word[3] != 'e' || word[4] != 0) return 49;
   return 42;
 }
 C
