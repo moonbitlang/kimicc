@@ -13351,6 +13351,46 @@ async test "strict MIR codegen matches parser codegen for local pointer updates"
 }
 
 ///|
+test "strict MIR codegen exposes local pointer updates to clang callers" {
+  let callee =
+    #|int eval_local_pointer_updates(void) {
+    #|  char buf[4];
+    #|  char *p = buf;
+    #|  p++;
+    #|  *p = 7;
+    #|  p += 1;
+    #|  *p = 9;
+    #|  return buf[1] + buf[2];
+    #|}
+  let driver =
+    #|int eval_local_pointer_updates(void);
+    #|int main(void) {
+    #|  return eval_local_pointer_updates();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 16)
+}
+
+///|
+test "strict MIR codegen calls clang local pointer updates" {
+  let caller =
+    #|int eval_local_pointer_updates_from_clang(void);
+    #|int main(void) {
+    #|  return eval_local_pointer_updates_from_clang();
+    #|}
+  let callee =
+    #|int eval_local_pointer_updates_from_clang(void) {
+    #|  char buf[4];
+    #|  char *p = buf;
+    #|  p++;
+    #|  *p = 7;
+    #|  p += 1;
+    #|  *p = 9;
+    #|  return buf[1] + buf[2];
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 16)
+}
+
+///|
 fn strict_mir_casted_pointer_dereference_source() -> String {
   let source =
     #|int main(void) {
