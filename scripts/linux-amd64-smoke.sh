@@ -20,7 +20,13 @@ if [ "$needs_docker" = "1" ] &&
     echo "linux-amd64 smoke requires Docker on non-linux/amd64 hosts or when forced" >&2
     exit 1
   fi
-  if [ -z "$smoke_image" ]; then
+  if [ "${KIMICC_LINUX_AMD64_SMOKE_REBUILD_IMAGE:-0}" = "1" ]; then
+    if [ -z "$smoke_image" ]; then
+      smoke_image="$default_smoke_image"
+    fi
+    KIMICC_LINUX_AMD64_SMOKE_IMAGE="$smoke_image" \
+      scripts/build-linux-amd64-smoke-image.sh
+  elif [ -z "$smoke_image" ]; then
     if docker image inspect "$default_smoke_image" >/dev/null 2>&1; then
       smoke_image="$default_smoke_image"
     elif [ "${KIMICC_LINUX_AMD64_SMOKE_BUILD_IMAGE:-0}" = "1" ]; then
