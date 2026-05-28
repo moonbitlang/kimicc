@@ -163,8 +163,9 @@ the target split real and testable without claiming full C ABI coverage yet.
 - Fortified formatted-output builtins `__builtin___snprintf_chk`,
   `__builtin___vsnprintf_chk`, `__builtin___sprintf_chk`,
   `__builtin___vsprintf_chk`, `__builtin___printf_chk`,
-  `__builtin___fprintf_chk`, and `__builtin___vfprintf_chk` drop the fortify
-  metadata arguments and lower to the corresponding Linux libc calls.
+  `__builtin___vprintf_chk`, `__builtin___fprintf_chk`, and
+  `__builtin___vfprintf_chk` drop the fortify metadata arguments and lower to
+  the corresponding Linux libc calls.
 - Common scalar hint/query builtins lower without external calls:
   `__builtin_expect`, `__builtin_expect_with_probability`,
   `__builtin_unpredictable`, `__builtin_assume`,

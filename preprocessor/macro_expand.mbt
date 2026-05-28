@@ -376,6 +376,7 @@ fn pp_linux_amd64_has_builtin(name : String) -> Bool {
     | "__builtin___sprintf_chk"
     | "__builtin___vsprintf_chk"
     | "__builtin___printf_chk"
+    | "__builtin___vprintf_chk"
     | "__builtin___fprintf_chk"
     | "__builtin___vfprintf_chk"
     | "__builtin_fabs"
