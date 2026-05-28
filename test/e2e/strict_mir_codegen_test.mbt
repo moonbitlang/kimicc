@@ -12727,6 +12727,76 @@ async test "strict MIR codegen matches parser codegen for generic pointer atomic
 }
 
 ///|
+test "strict MIR codegen exposes generic pointer atomic builtins to clang callers" {
+  let callee =
+    #|int eval_generic_pointer_atomic(void) {
+    #|  int x = 11;
+    #|  int out = 0;
+    #|  int set = 17;
+    #|  int old = 0;
+    #|  int desired = 23;
+    #|  int expected = 17;
+    #|  int side = 0;
+    #|  __atomic_load(&x, &out, side += 1);
+    #|  if (out != 11 || side != 1) return 1;
+    #|  __atomic_store(&x, &set, side += 2);
+    #|  if (x != 17 || side != 3) return 2;
+    #|  __atomic_exchange(&x, &desired, &old, side += 4);
+    #|  if (x != 23 || old != 17 || side != 7) return 3;
+    #|  int fail_desired = 29;
+    #|  expected = 17;
+    #|  if (__atomic_compare_exchange(&x, &expected, &fail_desired, side += 8, side += 16, side += 32)) return 4;
+    #|  if (expected != 23 || x != 23 || side != 63) return 5;
+    #|  desired = 31;
+    #|  expected = 23;
+    #|  if (!__atomic_compare_exchange(&x, &expected, &desired, side += 64, side += 128, side += 256)) return 6;
+    #|  if (x != 31 || expected != 23 || side != 511) return 7;
+    #|  return 42;
+    #|}
+  let driver =
+    #|int eval_generic_pointer_atomic(void);
+    #|int main(void) {
+    #|  return eval_generic_pointer_atomic();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang generic pointer atomic builtins" {
+  let caller =
+    #|int eval_generic_pointer_atomic_from_clang(void);
+    #|int main(void) {
+    #|  return eval_generic_pointer_atomic_from_clang();
+    #|}
+  let callee =
+    #|int eval_generic_pointer_atomic_from_clang(void) {
+    #|  int x = 11;
+    #|  int out = 0;
+    #|  int set = 17;
+    #|  int old = 0;
+    #|  int desired = 23;
+    #|  int expected = 17;
+    #|  int side = 0;
+    #|  __atomic_load(&x, &out, side += 1);
+    #|  if (out != 11 || side != 1) return 1;
+    #|  __atomic_store(&x, &set, side += 2);
+    #|  if (x != 17 || side != 3) return 2;
+    #|  __atomic_exchange(&x, &desired, &old, side += 4);
+    #|  if (x != 23 || old != 17 || side != 7) return 3;
+    #|  int fail_desired = 29;
+    #|  expected = 17;
+    #|  if (__atomic_compare_exchange(&x, &expected, &fail_desired, side += 8, side += 16, side += 32)) return 4;
+    #|  if (expected != 23 || x != 23 || side != 63) return 5;
+    #|  desired = 31;
+    #|  expected = 23;
+    #|  if (!__atomic_compare_exchange(&x, &expected, &desired, side += 64, side += 128, side += 256)) return 6;
+    #|  if (x != 31 || expected != 23 || side != 511) return 7;
+    #|  return 42;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_atomic_lock_free_query_source() -> String {
   (
     #|int main(void) {
