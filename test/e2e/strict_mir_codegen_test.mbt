@@ -13619,6 +13619,46 @@ async test "strict MIR codegen matches parser codegen for aligned local array sc
 }
 
 ///|
+test "strict MIR codegen exposes aligned local array scratch state to clang callers" {
+  let callee =
+    #|static void mix(unsigned long long *acc, unsigned long long seed) {
+    #|  acc[0] += seed;
+    #|  acc[1] ^= seed;
+    #|}
+    #|int eval_aligned_local_array_scratch(void) {
+    #|  _Alignas(8) unsigned long long acc[4] = {10ull, 20ull, 7ull, 2ull};
+    #|  mix(acc, 5ull);
+    #|  return acc[0] == 15ull && acc[1] == 17ull && acc[2] == 7ull && acc[3] == 2ull ? 42 : 1;
+    #|}
+  let driver =
+    #|int eval_aligned_local_array_scratch(void);
+    #|int main(void) {
+    #|  return eval_aligned_local_array_scratch();
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(callee, driver), 42)
+}
+
+///|
+test "strict MIR codegen calls clang aligned local array scratch state" {
+  let caller =
+    #|int eval_aligned_local_array_scratch_from_clang(void);
+    #|int main(void) {
+    #|  return eval_aligned_local_array_scratch_from_clang();
+    #|}
+  let callee =
+    #|static void mix(unsigned long long *acc, unsigned long long seed) {
+    #|  acc[0] += seed;
+    #|  acc[1] ^= seed;
+    #|}
+    #|int eval_aligned_local_array_scratch_from_clang(void) {
+    #|  _Alignas(8) unsigned long long acc[4] = {10ull, 20ull, 7ull, 2ull};
+    #|  mix(acc, 5ull);
+    #|  return acc[0] == 15ull && acc[1] == 17ull && acc[2] == 7ull && acc[3] == 2ull ? 42 : 1;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
+}
+
+///|
 fn strict_mir_over_aligned_array_field_pointer_source() -> String {
   let source =
     #|struct State {
