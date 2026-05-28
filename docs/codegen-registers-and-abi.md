@@ -234,11 +234,14 @@ System V register-save area, and `__builtin_va_*` lowering is
 implemented for scalar values plus the covered small and memory-class aggregate
 `va_arg` subset. Common memory and string builtins are lowered to Linux libc
 calls before normal x86-64 call lowering; fortified `strlcpy`/`strlcat`
-checked builtins drop their object-size argument before the libc call. Common
-scalar hint/query and bit-manipulation builtins lower directly without
-external calls; `__builtin_unpredictable` returns its value operand like the
-other no-op prediction hints, and object-size query builtins conservatively
-report unknown size. Scalar alignment query/rounding builtins
+checked builtins drop their object-size argument before the libc call.
+Fortified formatted-output builtins lower to `snprintf`, `vsnprintf`,
+`sprintf`, `vsprintf`, `printf`, `vprintf`, `fprintf`, and `vfprintf` after
+dropping fortify metadata arguments. Common scalar hint/query and
+bit-manipulation builtins lower directly without external calls;
+`__builtin_unpredictable` returns its value operand like the other no-op
+prediction hints, and object-size query builtins conservatively report unknown
+size. Scalar alignment query/rounding builtins
 `__builtin_is_aligned`, `__builtin_align_up`, and `__builtin_align_down` lower
 directly with integer mask operations on the value representation.
 `__builtin_flt_rounds` currently reports the default round-to-nearest mode.
