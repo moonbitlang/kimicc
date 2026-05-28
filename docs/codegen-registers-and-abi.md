@@ -282,8 +282,9 @@ representative unsigned max-value macro comparisons, including `UINTPTR_MAX`
 and `SIZE_MAX`, in `_Static_assert` expressions. That is a targeted
 system-header gate, not a complete libc or System V ABI conformance claim. A
 separate smoke passes kimicc's generated `va_list` state to glibc `vsnprintf`,
-`vfprintf`, and `vsscanf`, which covers real v-function interop paths while
-leaving broader libc `va_list` compatibility open.
+`vfprintf`, and `vsscanf`, and also passes a `va_copy`-copied cursor back to
+`vsnprintf`, which covers real v-function interop paths while leaving broader
+libc `va_list` compatibility open.
 Small scalar-field
 `struct`/`union` arguments and returns up to 16 bytes are
 classified recursively by eightbyte, including nested structs/unions and arrays
