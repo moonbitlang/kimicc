@@ -1285,6 +1285,11 @@ int target_predefines(void) {
 #else
   return 573;
 #endif
+#if __has_builtin(__builtin___snprintf_chk) && __has_builtin(__builtin___vsnprintf_chk) && __has_builtin(__builtin___sprintf_chk) && __has_builtin(__builtin___vsprintf_chk) && __has_builtin(__builtin___printf_chk) && __has_builtin(__builtin___vprintf_chk) && __has_builtin(__builtin___fprintf_chk) && __has_builtin(__builtin___vfprintf_chk)
+  target = target + 0;
+#else
+  return 663;
+#endif
 #if __has_builtin(__builtin_unsupported_vector_thing)
   return 514;
 #endif
