@@ -1483,7 +1483,7 @@ int string_builtins(void) {
   __builtin_strcpy(dst, "ab");
   if (__builtin___strcpy_chk(copy, "uv", 16) != copy) return 670;
   if (__builtin_strcmp(copy, "uv") != 0) return 671;
-  __builtin___strcat_chk(dst, "c", 16);
+  if (__builtin___strcat_chk(dst, "c", 16) != dst) return 672;
   if (__builtin_strlen(dst) != 3) return 284;
   if (__builtin_strcmp(dst, "abc") != 0) return 285;
   __builtin___strncpy_chk(dst, "xyzz", 2, 16);
