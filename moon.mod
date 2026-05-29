@@ -1,6 +1,6 @@
 name = "bobzhang/kimicc"
 
-version = "0.1.190"
+version = "0.1.191"
 
 readme = "README.md"
 
