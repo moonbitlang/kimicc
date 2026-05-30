@@ -473,7 +473,7 @@ test "linux amd64 has builtin reflects supported lowering" {
     #|#else
     #|int alignment_builtins = 0;
     #|#endif
-    #|#if __has_builtin(__builtin___printf_chk) && __has_builtin(__builtin___vprintf_chk) && __has_builtin(__builtin___fprintf_chk) && __has_builtin(__builtin___vfprintf_chk)
+    #|#if __has_builtin(__builtin___snprintf_chk) && __has_builtin(__builtin___vsnprintf_chk) && __has_builtin(__builtin___sprintf_chk) && __has_builtin(__builtin___vsprintf_chk) && __has_builtin(__builtin___printf_chk) && __has_builtin(__builtin___vprintf_chk) && __has_builtin(__builtin___fprintf_chk) && __has_builtin(__builtin___vfprintf_chk)
     #|int checked_formatted_output = 1;
     #|#else
     #|int checked_formatted_output = 0;
