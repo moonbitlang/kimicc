@@ -1488,7 +1488,7 @@ int string_builtins(void) {
   if (__builtin_strcmp(dst, "abc") != 0) return 285;
   if (__builtin___strncpy_chk(dst, "xyzz", 2, 16) != dst) return 673;
   dst[2] = 0;
-  __builtin___strncat_chk(dst, "pq", 1, 16);
+  if (__builtin___strncat_chk(dst, "pq", 1, 16) != dst) return 674;
   if (__builtin_strcmp(dst, "xyp") != 0) return 286;
   if (__builtin_strncmp(dst, "xyq", 2) != 0) return 421;
   if (__builtin_memcmp(dst, "xyp", 3) != 0) return 422;
