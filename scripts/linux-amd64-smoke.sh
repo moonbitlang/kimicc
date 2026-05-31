@@ -1275,10 +1275,20 @@ int target_predefines(void) {
   if (!clang_version[0] || !compiler_version[0]) return 576;
   if (literal_encoding[0] != 'U' || literal_encoding[4] != '8') return 580;
   if (wide_literal_encoding[0] != 'U' || wide_literal_encoding[4] != '3') return 581;
-#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_memmove) && __has_builtin(__builtin_memset) && __has_builtin(__builtin_bzero) && __has_builtin(__builtin___memcpy_chk) && __has_builtin(__builtin___memmove_chk) && __has_builtin(__builtin___memset_chk) && __has_builtin(__builtin_return_address) && __has_builtin(__builtin_dynamic_object_size) && __has_builtin(__builtin_flt_rounds) && __has_builtin(__builtin_unpredictable) && __has_builtin(__builtin_is_aligned) && __has_builtin(__builtin_align_up) && __has_builtin(__builtin_align_down) && __has_builtin(__atomic_load_n) && __has_builtin(__sync_bool_compare_and_swap) && __has_builtin(__sync_val_compare_and_swap) && __has_builtin(__sync_fetch_and_max) && __has_builtin(__sync_fetch_and_min) && __has_builtin(__sync_fetch_and_umax) && __has_builtin(__sync_fetch_and_umin) && __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p) && __has_builtin(__builtin_classify_type)
+#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_memmove) && __has_builtin(__builtin_memset) && __has_builtin(__builtin_bzero) && __has_builtin(__builtin___memcpy_chk) && __has_builtin(__builtin___memmove_chk) && __has_builtin(__builtin___memset_chk)
   target = target + 0;
 #else
   return 513;
+#endif
+#if __has_builtin(__builtin_expect) && __has_builtin(__builtin_expect_with_probability) && __has_builtin(__builtin_unpredictable) && __has_builtin(__builtin_assume) && __has_builtin(__builtin_assume_aligned) && __has_builtin(__builtin_prefetch) && __has_builtin(__builtin_flt_rounds) && __has_builtin(__builtin_constant_p) && __has_builtin(__builtin_object_size) && __has_builtin(__builtin_dynamic_object_size) && __has_builtin(__builtin_frame_address) && __has_builtin(__builtin_return_address) && __has_builtin(__builtin_extract_return_addr) && __has_builtin(__builtin_frob_return_addr) && __has_builtin(__builtin_is_aligned) && __has_builtin(__builtin_align_up) && __has_builtin(__builtin_align_down)
+  target = target + 0;
+#else
+  return 676;
+#endif
+#if __has_builtin(__atomic_load_n) && __has_builtin(__sync_bool_compare_and_swap) && __has_builtin(__sync_val_compare_and_swap) && __has_builtin(__sync_fetch_and_max) && __has_builtin(__sync_fetch_and_min) && __has_builtin(__sync_fetch_and_umax) && __has_builtin(__sync_fetch_and_umin) && __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p) && __has_builtin(__builtin_classify_type)
+  target = target + 0;
+#else
+  return 677;
 #endif
 #if __has_builtin(__builtin___strcpy_chk) && __has_builtin(__builtin___strcat_chk) && __has_builtin(__builtin___strncpy_chk) && __has_builtin(__builtin___strncat_chk) && __has_builtin(__builtin___strlcpy_chk) && __has_builtin(__builtin___strlcat_chk)
   target = target + 0;
