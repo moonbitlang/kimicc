@@ -423,10 +423,15 @@ test "linux amd64 has builtin reflects supported lowering" {
     emit_line_markers: options.emit_line_markers,
   }
   let source =
-    #|#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_return_address) && __has_builtin(__builtin_dynamic_object_size)
-    #|int memory_and_return_address = 1;
+    #|#if __has_builtin(__builtin_memcpy) && __has_builtin(__builtin_memmove) && __has_builtin(__builtin_memset) && __has_builtin(__builtin_bzero) && __has_builtin(__builtin___memcpy_chk) && __has_builtin(__builtin___memmove_chk) && __has_builtin(__builtin___memset_chk)
+    #|int memory_builtins = 1;
     #|#else
-    #|int memory_and_return_address = 0;
+    #|int memory_builtins = 0;
+    #|#endif
+    #|#if __has_builtin(__builtin_return_address) && __has_builtin(__builtin_dynamic_object_size)
+    #|int object_and_return_address = 1;
+    #|#else
+    #|int object_and_return_address = 0;
     #|#endif
     #|#if __has_builtin(__builtin___strcpy_chk) && __has_builtin(__builtin___strcat_chk) && __has_builtin(__builtin___strncpy_chk) && __has_builtin(__builtin___strncat_chk) && __has_builtin(__builtin___strlcpy_chk) && __has_builtin(__builtin___strlcat_chk)
     #|int checked_string_builtins = 1;
@@ -492,7 +497,7 @@ test "linux amd64 has builtin reflects supported lowering" {
     Ok(text) =>
       inspect(
         text,
-        content="int memory_and_return_address=1;\nint checked_string_builtins=1;\nint gnu_copy_builtins=1;\nint atomic_and_overflow=1;\nint sync_update_builtins=1;\nint compile_time_selection=1;\nint floating_environment_query=1;\nint unpredictable_hint=1;\nint clear_cache_hint=1;\nint dynamic_stack_builtins=1;\nint alignment_builtins=1;\nint checked_formatted_output=1;\nint unsupported=0;\n",
+        content="int memory_builtins=1;\nint object_and_return_address=1;\nint checked_string_builtins=1;\nint gnu_copy_builtins=1;\nint atomic_and_overflow=1;\nint sync_update_builtins=1;\nint compile_time_selection=1;\nint floating_environment_query=1;\nint unpredictable_hint=1;\nint clear_cache_hint=1;\nint dynamic_stack_builtins=1;\nint alignment_builtins=1;\nint checked_formatted_output=1;\nint unsupported=0;\n",
       )
     Err(err) => fail(err.to_string())
   }
