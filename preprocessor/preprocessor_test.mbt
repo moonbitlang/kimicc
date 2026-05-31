@@ -478,7 +478,17 @@ test "linux amd64 has builtin reflects supported lowering" {
     #|#else
     #|int atomic_compare_exchange_builtins = 0;
     #|#endif
-    #|#if __has_builtin(__sync_fetch_and_add) && __has_builtin(__sync_add_and_fetch) && __has_builtin(__sync_fetch_and_nand) && __has_builtin(__sync_nand_and_fetch) && __has_builtin(__sync_fetch_and_max) && __has_builtin(__sync_fetch_and_min) && __has_builtin(__sync_fetch_and_umax) && __has_builtin(__sync_fetch_and_umin) && __has_builtin(__sync_lock_test_and_set) && __has_builtin(__sync_lock_release) && __has_builtin(__sync_swap)
+    #|#if __has_builtin(__atomic_fetch_add) && __has_builtin(__atomic_fetch_sub) && __has_builtin(__atomic_fetch_and) && __has_builtin(__atomic_fetch_or) && __has_builtin(__atomic_fetch_xor) && __has_builtin(__atomic_fetch_nand) && __has_builtin(__atomic_add_fetch) && __has_builtin(__atomic_sub_fetch) && __has_builtin(__atomic_and_fetch) && __has_builtin(__atomic_or_fetch) && __has_builtin(__atomic_xor_fetch) && __has_builtin(__atomic_nand_fetch)
+    #|int atomic_read_modify_write_builtins = 1;
+    #|#else
+    #|int atomic_read_modify_write_builtins = 0;
+    #|#endif
+    #|#if __has_builtin(__c11_atomic_fetch_add) && __has_builtin(__c11_atomic_fetch_sub) && __has_builtin(__c11_atomic_fetch_and) && __has_builtin(__c11_atomic_fetch_or) && __has_builtin(__c11_atomic_fetch_xor)
+    #|int c11_atomic_fetch_builtins = 1;
+    #|#else
+    #|int c11_atomic_fetch_builtins = 0;
+    #|#endif
+    #|#if __has_builtin(__sync_fetch_and_add) && __has_builtin(__sync_fetch_and_sub) && __has_builtin(__sync_fetch_and_and) && __has_builtin(__sync_fetch_and_or) && __has_builtin(__sync_fetch_and_xor) && __has_builtin(__sync_fetch_and_nand) && __has_builtin(__sync_fetch_and_max) && __has_builtin(__sync_fetch_and_min) && __has_builtin(__sync_fetch_and_umax) && __has_builtin(__sync_fetch_and_umin) && __has_builtin(__sync_add_and_fetch) && __has_builtin(__sync_sub_and_fetch) && __has_builtin(__sync_and_and_fetch) && __has_builtin(__sync_or_and_fetch) && __has_builtin(__sync_xor_and_fetch) && __has_builtin(__sync_nand_and_fetch)
     #|int sync_update_builtins = 1;
     #|#else
     #|int sync_update_builtins = 0;
@@ -527,7 +537,7 @@ test "linux amd64 has builtin reflects supported lowering" {
     Ok(text) =>
       inspect(
         text,
-        content="int memory_builtins=1;\nint object_and_return_address=1;\nint scalar_hint_query_builtins=1;\nint checked_string_builtins=1;\nint gnu_copy_builtins=1;\nint overflow_builtins=1;\nint atomic_fence_builtins=1;\nint atomic_lock_free_builtins=1;\nint atomic_load_store_builtins=1;\nint atomic_exchange_builtins=1;\nint atomic_compare_exchange_builtins=1;\nint sync_update_builtins=1;\nint compile_time_selection=1;\nint floating_environment_query=1;\nint unpredictable_hint=1;\nint clear_cache_hint=1;\nint dynamic_stack_builtins=1;\nint alignment_builtins=1;\nint checked_formatted_output=1;\nint unsupported=0;\n",
+        content="int memory_builtins=1;\nint object_and_return_address=1;\nint scalar_hint_query_builtins=1;\nint checked_string_builtins=1;\nint gnu_copy_builtins=1;\nint overflow_builtins=1;\nint atomic_fence_builtins=1;\nint atomic_lock_free_builtins=1;\nint atomic_load_store_builtins=1;\nint atomic_exchange_builtins=1;\nint atomic_compare_exchange_builtins=1;\nint atomic_read_modify_write_builtins=1;\nint c11_atomic_fetch_builtins=1;\nint sync_update_builtins=1;\nint compile_time_selection=1;\nint floating_environment_query=1;\nint unpredictable_hint=1;\nint clear_cache_hint=1;\nint dynamic_stack_builtins=1;\nint alignment_builtins=1;\nint checked_formatted_output=1;\nint unsupported=0;\n",
       )
     Err(err) => fail(err.to_string())
   }
