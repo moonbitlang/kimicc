@@ -1280,10 +1280,15 @@ int target_predefines(void) {
 #else
   return 513;
 #endif
-#if __has_builtin(__builtin___strcpy_chk) && __has_builtin(__builtin___strcat_chk) && __has_builtin(__builtin___strncpy_chk) && __has_builtin(__builtin___strncat_chk) && __has_builtin(__builtin_mempcpy) && __has_builtin(__builtin___mempcpy_chk) && __has_builtin(__builtin_stpcpy) && __has_builtin(__builtin___stpncpy_chk)
+#if __has_builtin(__builtin___strcpy_chk) && __has_builtin(__builtin___strcat_chk) && __has_builtin(__builtin___strncpy_chk) && __has_builtin(__builtin___strncat_chk) && __has_builtin(__builtin___strlcpy_chk) && __has_builtin(__builtin___strlcat_chk)
   target = target + 0;
 #else
   return 573;
+#endif
+#if __has_builtin(__builtin_mempcpy) && __has_builtin(__builtin___mempcpy_chk) && __has_builtin(__builtin_stpcpy) && __has_builtin(__builtin___stpcpy_chk) && __has_builtin(__builtin_stpncpy) && __has_builtin(__builtin___stpncpy_chk)
+  target = target + 0;
+#else
+  return 675;
 #endif
 #if __has_builtin(__builtin___snprintf_chk) && __has_builtin(__builtin___vsnprintf_chk) && __has_builtin(__builtin___sprintf_chk) && __has_builtin(__builtin___vsprintf_chk) && __has_builtin(__builtin___printf_chk) && __has_builtin(__builtin___vprintf_chk) && __has_builtin(__builtin___fprintf_chk) && __has_builtin(__builtin___vfprintf_chk)
   target = target + 0;
