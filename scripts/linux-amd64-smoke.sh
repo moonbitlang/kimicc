@@ -1285,7 +1285,37 @@ int target_predefines(void) {
 #else
   return 676;
 #endif
-#if __has_builtin(__atomic_load_n) && __has_builtin(__sync_bool_compare_and_swap) && __has_builtin(__sync_val_compare_and_swap) && __has_builtin(__sync_fetch_and_max) && __has_builtin(__sync_fetch_and_min) && __has_builtin(__sync_fetch_and_umax) && __has_builtin(__sync_fetch_and_umin) && __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p) && __has_builtin(__builtin_classify_type)
+#if __has_builtin(__atomic_thread_fence) && __has_builtin(__atomic_signal_fence) && __has_builtin(__c11_atomic_thread_fence) && __has_builtin(__c11_atomic_signal_fence) && __has_builtin(__sync_synchronize)
+  target = target + 0;
+#else
+  return 678;
+#endif
+#if __has_builtin(__atomic_always_lock_free) && __has_builtin(__atomic_is_lock_free) && __has_builtin(__c11_atomic_is_lock_free)
+  target = target + 0;
+#else
+  return 679;
+#endif
+#if __has_builtin(__atomic_load) && __has_builtin(__atomic_load_n) && __has_builtin(__atomic_store) && __has_builtin(__atomic_store_n) && __has_builtin(__atomic_clear) && __has_builtin(__c11_atomic_load) && __has_builtin(__c11_atomic_store)
+  target = target + 0;
+#else
+  return 680;
+#endif
+#if __has_builtin(__atomic_exchange) && __has_builtin(__atomic_exchange_n) && __has_builtin(__atomic_test_and_set) && __has_builtin(__c11_atomic_exchange) && __has_builtin(__sync_swap) && __has_builtin(__sync_lock_test_and_set) && __has_builtin(__sync_lock_release)
+  target = target + 0;
+#else
+  return 681;
+#endif
+#if __has_builtin(__atomic_compare_exchange) && __has_builtin(__atomic_compare_exchange_n) && __has_builtin(__c11_atomic_compare_exchange_strong) && __has_builtin(__c11_atomic_compare_exchange_weak) && __has_builtin(__sync_bool_compare_and_swap) && __has_builtin(__sync_val_compare_and_swap)
+  target = target + 0;
+#else
+  return 682;
+#endif
+#if __has_builtin(__sync_fetch_and_add) && __has_builtin(__sync_add_and_fetch) && __has_builtin(__sync_fetch_and_nand) && __has_builtin(__sync_nand_and_fetch) && __has_builtin(__sync_fetch_and_max) && __has_builtin(__sync_fetch_and_min) && __has_builtin(__sync_fetch_and_umax) && __has_builtin(__sync_fetch_and_umin) && __has_builtin(__sync_lock_test_and_set) && __has_builtin(__sync_lock_release) && __has_builtin(__sync_swap)
+  target = target + 0;
+#else
+  return 683;
+#endif
+#if __has_builtin(__builtin_choose_expr) && __has_builtin(__builtin_types_compatible_p) && __has_builtin(__builtin_classify_type)
   target = target + 0;
 #else
   return 677;
