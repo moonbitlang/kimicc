@@ -1310,7 +1310,17 @@ int target_predefines(void) {
 #else
   return 682;
 #endif
-#if __has_builtin(__sync_fetch_and_add) && __has_builtin(__sync_add_and_fetch) && __has_builtin(__sync_fetch_and_nand) && __has_builtin(__sync_nand_and_fetch) && __has_builtin(__sync_fetch_and_max) && __has_builtin(__sync_fetch_and_min) && __has_builtin(__sync_fetch_and_umax) && __has_builtin(__sync_fetch_and_umin) && __has_builtin(__sync_lock_test_and_set) && __has_builtin(__sync_lock_release) && __has_builtin(__sync_swap)
+#if __has_builtin(__atomic_fetch_add) && __has_builtin(__atomic_fetch_sub) && __has_builtin(__atomic_fetch_and) && __has_builtin(__atomic_fetch_or) && __has_builtin(__atomic_fetch_xor) && __has_builtin(__atomic_fetch_nand) && __has_builtin(__atomic_add_fetch) && __has_builtin(__atomic_sub_fetch) && __has_builtin(__atomic_and_fetch) && __has_builtin(__atomic_or_fetch) && __has_builtin(__atomic_xor_fetch) && __has_builtin(__atomic_nand_fetch)
+  target = target + 0;
+#else
+  return 684;
+#endif
+#if __has_builtin(__c11_atomic_fetch_add) && __has_builtin(__c11_atomic_fetch_sub) && __has_builtin(__c11_atomic_fetch_and) && __has_builtin(__c11_atomic_fetch_or) && __has_builtin(__c11_atomic_fetch_xor)
+  target = target + 0;
+#else
+  return 685;
+#endif
+#if __has_builtin(__sync_fetch_and_add) && __has_builtin(__sync_fetch_and_sub) && __has_builtin(__sync_fetch_and_and) && __has_builtin(__sync_fetch_and_or) && __has_builtin(__sync_fetch_and_xor) && __has_builtin(__sync_fetch_and_nand) && __has_builtin(__sync_fetch_and_max) && __has_builtin(__sync_fetch_and_min) && __has_builtin(__sync_fetch_and_umax) && __has_builtin(__sync_fetch_and_umin) && __has_builtin(__sync_add_and_fetch) && __has_builtin(__sync_sub_and_fetch) && __has_builtin(__sync_and_and_fetch) && __has_builtin(__sync_or_and_fetch) && __has_builtin(__sync_xor_and_fetch) && __has_builtin(__sync_nand_and_fetch)
   target = target + 0;
 #else
   return 683;
