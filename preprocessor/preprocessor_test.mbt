@@ -448,10 +448,20 @@ test "linux amd64 has builtin reflects supported lowering" {
     #|#else
     #|int gnu_copy_builtins = 0;
     #|#endif
-    #|#if __has_builtin(__builtin_add_overflow)
-    #|int overflow_builtins = 1;
+    #|#if __has_builtin(__builtin_add_overflow) && __has_builtin(__builtin_sub_overflow) && __has_builtin(__builtin_mul_overflow)
+    #|int generic_overflow_builtins = 1;
     #|#else
-    #|int overflow_builtins = 0;
+    #|int generic_overflow_builtins = 0;
+    #|#endif
+    #|#if __has_builtin(__builtin_sadd_overflow) && __has_builtin(__builtin_saddl_overflow) && __has_builtin(__builtin_saddll_overflow) && __has_builtin(__builtin_ssub_overflow) && __has_builtin(__builtin_ssubl_overflow) && __has_builtin(__builtin_ssubll_overflow) && __has_builtin(__builtin_smul_overflow) && __has_builtin(__builtin_smull_overflow) && __has_builtin(__builtin_smulll_overflow)
+    #|int signed_overflow_builtins = 1;
+    #|#else
+    #|int signed_overflow_builtins = 0;
+    #|#endif
+    #|#if __has_builtin(__builtin_uadd_overflow) && __has_builtin(__builtin_uaddl_overflow) && __has_builtin(__builtin_uaddll_overflow) && __has_builtin(__builtin_usub_overflow) && __has_builtin(__builtin_usubl_overflow) && __has_builtin(__builtin_usubll_overflow) && __has_builtin(__builtin_umul_overflow) && __has_builtin(__builtin_umull_overflow) && __has_builtin(__builtin_umulll_overflow)
+    #|int unsigned_overflow_builtins = 1;
+    #|#else
+    #|int unsigned_overflow_builtins = 0;
     #|#endif
     #|#if __has_builtin(__atomic_thread_fence) && __has_builtin(__atomic_signal_fence) && __has_builtin(__c11_atomic_thread_fence) && __has_builtin(__c11_atomic_signal_fence) && __has_builtin(__sync_synchronize)
     #|int atomic_fence_builtins = 1;
@@ -537,7 +547,7 @@ test "linux amd64 has builtin reflects supported lowering" {
     Ok(text) =>
       inspect(
         text,
-        content="int memory_builtins=1;\nint object_and_return_address=1;\nint scalar_hint_query_builtins=1;\nint checked_string_builtins=1;\nint gnu_copy_builtins=1;\nint overflow_builtins=1;\nint atomic_fence_builtins=1;\nint atomic_lock_free_builtins=1;\nint atomic_load_store_builtins=1;\nint atomic_exchange_builtins=1;\nint atomic_compare_exchange_builtins=1;\nint atomic_read_modify_write_builtins=1;\nint c11_atomic_fetch_builtins=1;\nint sync_update_builtins=1;\nint compile_time_selection=1;\nint floating_environment_query=1;\nint unpredictable_hint=1;\nint clear_cache_hint=1;\nint dynamic_stack_builtins=1;\nint alignment_builtins=1;\nint checked_formatted_output=1;\nint unsupported=0;\n",
+        content="int memory_builtins=1;\nint object_and_return_address=1;\nint scalar_hint_query_builtins=1;\nint checked_string_builtins=1;\nint gnu_copy_builtins=1;\nint generic_overflow_builtins=1;\nint signed_overflow_builtins=1;\nint unsigned_overflow_builtins=1;\nint atomic_fence_builtins=1;\nint atomic_lock_free_builtins=1;\nint atomic_load_store_builtins=1;\nint atomic_exchange_builtins=1;\nint atomic_compare_exchange_builtins=1;\nint atomic_read_modify_write_builtins=1;\nint c11_atomic_fetch_builtins=1;\nint sync_update_builtins=1;\nint compile_time_selection=1;\nint floating_environment_query=1;\nint unpredictable_hint=1;\nint clear_cache_hint=1;\nint dynamic_stack_builtins=1;\nint alignment_builtins=1;\nint checked_formatted_output=1;\nint unsupported=0;\n",
       )
     Err(err) => fail(err.to_string())
   }
