@@ -1285,6 +1285,21 @@ int target_predefines(void) {
 #else
   return 676;
 #endif
+#if __has_builtin(__builtin_add_overflow) && __has_builtin(__builtin_sub_overflow) && __has_builtin(__builtin_mul_overflow)
+  target = target + 0;
+#else
+  return 686;
+#endif
+#if __has_builtin(__builtin_sadd_overflow) && __has_builtin(__builtin_saddl_overflow) && __has_builtin(__builtin_saddll_overflow) && __has_builtin(__builtin_ssub_overflow) && __has_builtin(__builtin_ssubl_overflow) && __has_builtin(__builtin_ssubll_overflow) && __has_builtin(__builtin_smul_overflow) && __has_builtin(__builtin_smull_overflow) && __has_builtin(__builtin_smulll_overflow)
+  target = target + 0;
+#else
+  return 687;
+#endif
+#if __has_builtin(__builtin_uadd_overflow) && __has_builtin(__builtin_uaddl_overflow) && __has_builtin(__builtin_uaddll_overflow) && __has_builtin(__builtin_usub_overflow) && __has_builtin(__builtin_usubl_overflow) && __has_builtin(__builtin_usubll_overflow) && __has_builtin(__builtin_umul_overflow) && __has_builtin(__builtin_umull_overflow) && __has_builtin(__builtin_umulll_overflow)
+  target = target + 0;
+#else
+  return 688;
+#endif
 #if __has_builtin(__atomic_thread_fence) && __has_builtin(__atomic_signal_fence) && __has_builtin(__c11_atomic_thread_fence) && __has_builtin(__c11_atomic_signal_fence) && __has_builtin(__sync_synchronize)
   target = target + 0;
 #else
@@ -1860,6 +1875,7 @@ int overflow_builtins(void) {
   long long out = 0;
   long lout = 0;
   unsigned long long ull = 0;
+  unsigned long ul = 0;
   unsigned int u = 0;
   int i = 0;
   if (!__builtin_add_overflow(s, 1LL, &out)) return 445;
@@ -1887,21 +1903,30 @@ int overflow_builtins(void) {
   if (out != (-9223372036854775807LL - 1LL)) return 481;
   if (!__builtin_uadd_overflow(0xffffffffu, 1u, &u)) return 482;
   if (u != 0) return 483;
+  if (!__builtin_uaddl_overflow(0xfffffffffffffffful, 1ul, &ul)) return 689;
+  if (ul != 0) return 690;
   if (!__builtin_uaddll_overflow(0xffffffffffffffffull, 1ull, &ull)) return 484;
   if (ull != 0) return 485;
   if (!__builtin_ssub_overflow(-2147483647 - 1, 1, &i)) return 486;
   if (i != 2147483647) return 487;
+  if (!__builtin_ssubl_overflow(-9223372036854775807L - 1L, 1L, &lout)) return 691;
+  if (lout != 9223372036854775807L) return 692;
   if (!__builtin_ssubll_overflow(-9223372036854775807LL - 1LL, 1LL, &out)) return 488;
   if (out != 9223372036854775807LL) return 489;
   if (!__builtin_usub_overflow(0u, 1u, &u)) return 490;
   if (u != 0xffffffffu) return 491;
+  if (!__builtin_usubl_overflow(0ul, 1ul, &ul)) return 693;
+  if (ul != 0xfffffffffffffffful) return 694;
   if (!__builtin_usubll_overflow(0ull, 1ull, &ull)) return 492;
   if (ull != 0xffffffffffffffffull) return 493;
   if (!__builtin_smul_overflow(2000000000, 2, &i)) return 494;
   if ((unsigned int)i != 4000000000u) return 495;
+  if (!__builtin_smull_overflow(3037000500L, 3037000500L, &lout)) return 695;
   if (!__builtin_smulll_overflow(3037000500LL, 3037000500LL, &out)) return 496;
   if (!__builtin_umul_overflow(0xffffffffu, 2u, &u)) return 497;
   if (u != 0xfffffffeu) return 498;
+  if (!__builtin_umull_overflow(0xfffffffffffffffful, 2ul, &ul)) return 696;
+  if (ul != 0xfffffffffffffffeul) return 697;
   if (!__builtin_umulll_overflow(0xffffffffffffffffull, 2ull, &ull)) return 499;
   if (ull != 0xfffffffffffffffeull) return 500;
   return 0;
