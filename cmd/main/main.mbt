@@ -1086,6 +1086,7 @@ fn consume_ignored_option(
     | "-auxbase"
     | "-auxbase-strip"
     | "-b"
+    | "-G"
     | "-MJ"
     | "-std"
     | "--std"
