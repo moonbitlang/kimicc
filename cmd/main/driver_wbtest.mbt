@@ -263,7 +263,9 @@ test "driver consumes ignored flags with separate values" {
       "build/foo.o", "-cxx-isystem", "cxx/include", "-dsym-dir", "dsym", "-dumpbase",
       "foo.c", "-dumpbase-ext", ".c", "-dumpdir", "aux/", "-fmodules-user-build-path",
       "modules", "-fdepscan-share-identifier", "build-share", "-fexperimental-openacc-macro-override",
-      "202011", "foo.c",
+      "202011", "-ccc-install-dir", "/tmp/toolchain", "-ccc-gcc-name", "gcc-custom",
+      "-ccc-arcmt-migrate", "arcmt-dir", "-ccc-objcmt-migrate", "objcmt-dir", "-gen-cdb-fragment-path",
+      "compile.json", "foo.c",
     ]) {
     Ok(opts) => opts
     Err(err) => abort(err)
