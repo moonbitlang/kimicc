@@ -1355,10 +1355,75 @@ int target_predefines(void) {
 #else
   return 675;
 #endif
+#if __has_builtin(__builtin_strlen) && __has_builtin(__builtin_strcmp) && __has_builtin(__builtin_strncmp) && __has_builtin(__builtin_strchr) && __has_builtin(__builtin_strrchr) && __has_builtin(__builtin_strstr) && __has_builtin(__builtin_memcmp) && __has_builtin(__builtin_memchr)
+  target = target + 0;
+#else
+  return 698;
+#endif
+#if __has_builtin(__builtin_strcpy) && __has_builtin(__builtin_strcat) && __has_builtin(__builtin_strncpy) && __has_builtin(__builtin_strncat)
+  target = target + 0;
+#else
+  return 699;
+#endif
+#if __has_builtin(__builtin_abs) && __has_builtin(__builtin_labs) && __has_builtin(__builtin_llabs)
+  target = target + 0;
+#else
+  return 700;
+#endif
+#if __has_builtin(__builtin_clz) && __has_builtin(__builtin_clzl) && __has_builtin(__builtin_clzll) && __has_builtin(__builtin_ctz) && __has_builtin(__builtin_ctzl) && __has_builtin(__builtin_ctzll) && __has_builtin(__builtin_ffs) && __has_builtin(__builtin_ffsl) && __has_builtin(__builtin_ffsll)
+  target = target + 0;
+#else
+  return 701;
+#endif
+#if __has_builtin(__builtin_bswap) && __has_builtin(__builtin_bswap16) && __has_builtin(__builtin_bswap32) && __has_builtin(__builtin_bswap64) && __has_builtin(__builtin_rotateleft) && __has_builtin(__builtin_rotateleft32) && __has_builtin(__builtin_rotateleft64) && __has_builtin(__builtin_rotateright) && __has_builtin(__builtin_rotateright32) && __has_builtin(__builtin_rotateright64)
+  target = target + 0;
+#else
+  return 702;
+#endif
+#if __has_builtin(__builtin_popcount) && __has_builtin(__builtin_popcountl) && __has_builtin(__builtin_popcountll) && __has_builtin(__builtin_parity) && __has_builtin(__builtin_parityl) && __has_builtin(__builtin_parityll)
+  target = target + 0;
+#else
+  return 703;
+#endif
+#if __has_builtin(__builtin_fabs) && __has_builtin(__builtin_fabsf) && __has_builtin(__builtin_fabsl) && __has_builtin(__builtin_copysign) && __has_builtin(__builtin_copysignf) && __has_builtin(__builtin_copysignl) && __has_builtin(__builtin_sqrt) && __has_builtin(__builtin_sqrtf) && __has_builtin(__builtin_sqrtl) && __has_builtin(__builtin_nan) && __has_builtin(__builtin_nanf) && __has_builtin(__builtin_nanl) && __has_builtin(__builtin_huge_val) && __has_builtin(__builtin_huge_valf) && __has_builtin(__builtin_huge_vall) && __has_builtin(__builtin_inf) && __has_builtin(__builtin_inff) && __has_builtin(__builtin_infl)
+  target = target + 0;
+#else
+  return 704;
+#endif
+#if __has_builtin(__builtin_isgreater) && __has_builtin(__builtin_isgreaterequal) && __has_builtin(__builtin_isless) && __has_builtin(__builtin_islessequal) && __has_builtin(__builtin_islessgreater) && __has_builtin(__builtin_isunordered)
+  target = target + 0;
+#else
+  return 705;
+#endif
+#if __has_builtin(__builtin_isnan) && __has_builtin(__builtin_isnanf) && __has_builtin(__builtin_isnanl) && __has_builtin(__builtin_isinf) && __has_builtin(__builtin_isinff) && __has_builtin(__builtin_isinfl) && __has_builtin(__builtin_isfinite) && __has_builtin(__builtin_isfinitef) && __has_builtin(__builtin_isfinitel) && __has_builtin(__builtin_isnormal) && __has_builtin(__builtin_isnormalf) && __has_builtin(__builtin_isnormall) && __has_builtin(__builtin_signbit) && __has_builtin(__builtin_signbitf) && __has_builtin(__builtin_signbitl)
+  target = target + 0;
+#else
+  return 706;
+#endif
 #if __has_builtin(__builtin___snprintf_chk) && __has_builtin(__builtin___vsnprintf_chk) && __has_builtin(__builtin___sprintf_chk) && __has_builtin(__builtin___vsprintf_chk) && __has_builtin(__builtin___printf_chk) && __has_builtin(__builtin___vprintf_chk) && __has_builtin(__builtin___fprintf_chk) && __has_builtin(__builtin___vfprintf_chk)
   target = target + 0;
 #else
   return 663;
+#endif
+#if __has_builtin(__builtin___clear_cache) && __has_builtin(__builtin_clear_cache)
+  target = target + 0;
+#else
+  return 707;
+#endif
+#if __has_builtin(__builtin_alloca) && __has_builtin(__builtin_alloca_with_align)
+  target = target + 0;
+#else
+  return 708;
+#endif
+#if __has_builtin(__builtin_va_start) && __has_builtin(__builtin_va_arg) && __has_builtin(__builtin_va_end) && __has_builtin(__builtin_va_copy) && __has_builtin(__builtin_offsetof)
+  target = target + 0;
+#else
+  return 709;
+#endif
+#if __has_builtin(__builtin_trap) && __has_builtin(__builtin_unreachable)
+  target = target + 0;
+#else
+  return 710;
 #endif
 #if __has_builtin(__builtin_unsupported_vector_thing)
   return 514;
