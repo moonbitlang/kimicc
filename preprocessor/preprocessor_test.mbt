@@ -294,6 +294,17 @@ test "darwin arm64 predefined macros cover system header probes" {
     #|#else
     #|int darwin_fast64_probes = 2;
     #|#endif
+    #|#if TARGET_OS_MAC == 1 && TARGET_OS_OSX == 1 && TARGET_OS_ARROW == 1
+    #|#if TARGET_OS_IPHONE == 0 && TARGET_IPHONE_SIMULATOR == 0 && TARGET_OS_SIMULATOR == 0
+    #|#if TARGET_OS_IOS == 0 && TARGET_OS_MACCATALYST == 0 && TARGET_OS_DRIVERKIT == 0
+    #|#if TARGET_OS_LINUX == 0 && TARGET_OS_WINDOWS == 0 && TARGET_OS_WIN32 == 0 && TARGET_OS_UNIX == 0
+    #|int darwin_platform_probes = 1;
+    #|#else
+    #|int darwin_platform_probes = 2;
+    #|#endif
+    #|#endif
+    #|#endif
+    #|#endif
     #|#define KIMICC_STRINGIFY_1(x) #x
     #|#define KIMICC_STRINGIFY(x) KIMICC_STRINGIFY_1(x)
     #|const char *darwin_int64_format = __INT64_FMTd__;
@@ -314,6 +325,7 @@ test "darwin arm64 predefined macros cover system header probes" {
       #|int darwin_int64_probes=1;
       #|int darwin_least64_probes=1;
       #|int darwin_fast64_probes=1;
+      #|int darwin_platform_probes=1;
       #|const char*darwin_int64_format="lld";
       #|const char*darwin_uint64_format="llu";
       #|const char*darwin_fast64_format="llx";
