@@ -729,6 +729,34 @@ test "driver keeps link-only inputs and framework flags" {
 }
 
 ///|
+test "driver preserves Darwin sectcreate linker operands" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "foo.o", "-sectcreate", "__TEXT", "__info_plist", "Info.plist", "-o",
+      "tool",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.input_path is None)
+  assert_true(opts.output_path is Some("tool"))
+  assert_string_array_eq(opts.linker_args, [
+    "foo.o", "-sectcreate", "__TEXT", "__info_plist", "Info.plist",
+  ])
+}
+
+///|
+test "driver rejects incomplete Darwin sectcreate linker operands" {
+  match
+    parse_driver_args([
+      "kimicc", "foo.o", "-sectcreate", "__TEXT", "__info_plist",
+    ]) {
+    Ok(_) => abort("expected missing sectcreate operand")
+    Err(err) => assert_eq(err, "missing argument after -sectcreate")
+  }
+}
+
+///|
 test "driver parses syntax-only mode" {
   let opts = match parse_driver_args(["kimicc", "-fsyntax-only", "foo.c"]) {
     Ok(opts) => opts

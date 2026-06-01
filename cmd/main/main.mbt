@@ -1386,6 +1386,25 @@ fn consume_ignored_option(
 }
 
 ///|
+fn consume_linker_option_values(
+  opts : DriverOptions,
+  argv : Array[String],
+  index : Int,
+  arg : String,
+  value_count : Int,
+) -> Result[Int, String] {
+  if index + value_count < argv.length() {
+    opts.linker_args.push(arg)
+    for offset in 1..<=value_count {
+      opts.linker_args.push(argv[index + offset])
+    }
+    Ok(index + value_count)
+  } else {
+    Err("missing argument after " + arg)
+  }
+}
+
+///|
 fn consume_linker_option(
   opts : DriverOptions,
   argv : Array[String],
@@ -1393,6 +1412,7 @@ fn consume_linker_option(
   arg : String,
 ) -> Result[Int, String] {
   match arg {
+    "-sectcreate" => consume_linker_option_values(opts, argv, index, arg, 3)
     "-framework"
     | "-l"
     | "-F"
