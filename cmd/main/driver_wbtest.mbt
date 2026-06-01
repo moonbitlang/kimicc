@@ -757,6 +757,68 @@ test "driver rejects incomplete Darwin sectcreate linker operands" {
 }
 
 ///|
+test "driver preserves Darwin linker options by argument count" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "foo.o", "-sectorder", "__TEXT", "__text", "order.txt", "-add_empty_section",
+      "__DATA", "__empty", "-segaddr", "__DATA", "0x1000", "-seg_page_size", "__TEXT",
+      "0x4000", "-platform_version", "macos", "14.0", "15.0", "-sectalign", "__TEXT",
+      "__text", "4", "-rename_section", "__TEXT", "__old", "__TEXT", "__new", "-alias",
+      "_old", "_new", "-rename_segment", "__OLD", "__NEW", "-o", "tool",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.input_path is None)
+  assert_string_array_eq(opts.linker_args, [
+    "foo.o", "-sectorder", "__TEXT", "__text", "order.txt", "-add_empty_section",
+    "__DATA", "__empty", "-segaddr", "__DATA", "0x1000", "-seg_page_size", "__TEXT",
+    "0x4000", "-platform_version", "macos", "14.0", "15.0", "-sectalign", "__TEXT",
+    "__text", "4", "-rename_section", "__TEXT", "__old", "__TEXT", "__new", "-alias",
+    "_old", "_new", "-rename_segment", "__OLD", "__NEW",
+  ])
+}
+
+///|
+test "driver preserves common Darwin linker flags" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "foo.o", "-force_load", "libAll.a", "-load_hidden", "libHidden.a",
+      "-order_file", "order.txt", "-object_path_lto", "lto.o", "-oso_prefix", "/build/root",
+      "-exported_symbols_list", "exports.txt", "-undefined", "dynamic_lookup", "-weak_framework",
+      "CoreGraphics", "-bundle_loader", "host", "-dylib_file", "/usr/lib/libSystem.B.dylib:/tmp/libSystem.B.dylib",
+      "-image_base", "0x100000000", "-pagezero_size", "0", "-dead_strip", "-dead_strip_dylibs",
+      "-flat_namespace", "-ObjC", "-objc_relative_method_lists", "-all_load", "-sectorder_detail",
+      "-why_load", "-trace_symbol_layout", "-no_dead_strip_inits_and_terms", "-o",
+      "tool",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.input_path is None)
+  assert_string_array_eq(opts.linker_args, [
+    "foo.o", "-force_load", "libAll.a", "-load_hidden", "libHidden.a", "-order_file",
+    "order.txt", "-object_path_lto", "lto.o", "-oso_prefix", "/build/root", "-exported_symbols_list",
+    "exports.txt", "-undefined", "dynamic_lookup", "-weak_framework", "CoreGraphics",
+    "-bundle_loader", "host", "-dylib_file", "/usr/lib/libSystem.B.dylib:/tmp/libSystem.B.dylib",
+    "-image_base", "0x100000000", "-pagezero_size", "0", "-dead_strip", "-dead_strip_dylibs",
+    "-flat_namespace", "-ObjC", "-objc_relative_method_lists", "-all_load", "-sectorder_detail",
+    "-why_load", "-trace_symbol_layout", "-no_dead_strip_inits_and_terms",
+  ])
+}
+
+///|
+test "driver rejects incomplete Darwin multi-argument linker options" {
+  match
+    parse_driver_args([
+      "kimicc", "foo.o", "-rename_section", "__TEXT", "__old", "__TEXT",
+    ]) {
+    Ok(_) => abort("expected missing rename_section operand")
+    Err(err) => assert_eq(err, "missing argument after -rename_section")
+  }
+}
+
+///|
 test "driver parses syntax-only mode" {
   let opts = match parse_driver_args(["kimicc", "-fsyntax-only", "foo.c"]) {
     Ok(opts) => opts

@@ -1412,19 +1412,59 @@ fn consume_linker_option(
   arg : String,
 ) -> Result[Int, String] {
   match arg {
-    "-sectcreate" => consume_linker_option_values(opts, argv, index, arg, 3)
+    "-rename_section" => consume_linker_option_values(opts, argv, index, arg, 4)
+    "-platform_version" | "-sectalign" | "-sectcreate" | "-sectorder" =>
+      consume_linker_option_values(opts, argv, index, arg, 3)
+    "-add_empty_section"
+    | "-alias"
+    | "-rename_segment"
+    | "-seg_page_size"
+    | "-segaddr" => consume_linker_option_values(opts, argv, index, arg, 2)
     "-framework"
+    | "-needed_framework"
+    | "-reexport_framework"
+    | "-upward_framework"
+    | "-weak_framework"
     | "-l"
     | "-F"
     | "-L"
     | "-Xlinker"
+    | "-add_ast_path"
+    | "-alias_list"
+    | "-bundle_loader"
     | "-compatibility_version"
+    | "-commons"
     | "-current_version"
+    | "-delay_framework"
+    | "-dylib_file"
     | "-e"
+    | "-exported_symbols_list"
     | "-filelist"
+    | "-force_load"
+    | "-image_base"
+    | "-image_suffix"
     | "-install_name"
+    | "-ios_version_min"
+    | "-load_hidden"
+    | "-macos_version_min"
+    | "-multiply_defined"
+    | "-multiply_defined_unused"
+    | "-needed_library"
+    | "-object_path_lto"
+    | "-order_file"
+    | "-pagezero_size"
+    | "-reexport_library"
     | "-rpath"
+    | "-seg1addr"
+    | "-seg_addr_table_filename"
+    | "-segs_read_only_addr"
+    | "-segs_read_write_addr"
+    | "-oso_prefix"
+    | "-trace_symbol_layout_file"
     | "-u"
+    | "-undefined"
+    | "-unexported_symbols_list"
+    | "-weak_library"
     | "-z"
     | "-T" =>
       if index + 1 < argv.length() {
@@ -1476,14 +1516,29 @@ fn consume_linker_option(
         arg == "-pie" ||
         arg == "-no-pie" ||
         arg == "--no-pie" ||
+        arg == "-no_pie" ||
         arg == "-nostdlib" ||
         arg == "--nostdlib" ||
         arg == "-nodefaultlibs" ||
         arg == "--nodefaultlibs" ||
         arg == "-nostartfiles" ||
         arg == "--nostartfiles" ||
+        arg == "-ObjC" ||
+        arg == "-objc_relative_method_lists" ||
+        arg == "-all_load" ||
+        arg == "-dead_strip" ||
+        arg == "-dead_strip_dylibs" ||
+        arg == "-flat_namespace" ||
+        arg == "-no_dead_strip_inits_and_terms" ||
+        arg == "-noall_load" ||
+        arg == "-order_file_statistics" ||
         arg == "-r" ||
-        arg == "-s" {
+        arg == "-s" ||
+        arg == "-sectorder_detail" ||
+        arg == "-trace_symbol_layout" ||
+        arg == "-twolevel_namespace" ||
+        arg == "-twolevel_namespace_hints" ||
+        arg == "-why_load" {
         opts.linker_args.push(arg)
         Ok(index)
       } else {
@@ -1524,6 +1579,15 @@ fn validate_driver_options(opts : DriverOptions) -> Result[Unit, String] {
   } else {
     Ok(())
   }
+}
+
+///|
+fn is_darwin_linker_o_option(arg : String) -> Bool {
+  arg == "-objc_relative_method_lists" ||
+  arg == "-object_path_lto" ||
+  arg == "-order_file" ||
+  arg == "-order_file_statistics" ||
+  arg == "-oso_prefix"
 }
 
 ///|
@@ -1599,7 +1663,9 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
             }
             Err(err) => return Err(err)
           }
-        } else if starts_with(arg, "-o") && arg.length() > 2 {
+        } else if starts_with(arg, "-o") &&
+          arg.length() > 2 &&
+          !is_darwin_linker_o_option(arg) {
           opts.output_path = Some(arg[2:].to_owned())
         } else if starts_with(arg, "-print-prog-name=") {
           opts.print_prog_name = Some(
