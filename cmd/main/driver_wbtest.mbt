@@ -808,6 +808,109 @@ test "driver preserves common Darwin linker flags" {
 }
 
 ///|
+test "driver preserves additional Darwin linker operands" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "foo.o", "-syslibroot", "/SDK", "-dtrace", "probes.d", "-map", "link.map",
+      "-why_live", "_symbol", "-stack_size", "0x100000", "-stack_addr", "0x70000000",
+      "-headerpad", "0x1000", "-seg_addr_table", "segaddr.txt", "-bitcode_symbol_map",
+      "maps", "-lto_library", "/toolchain/libLTO.dylib", "-cache_path_lto", "lto-cache",
+      "-prune_interval_lto", "30", "-prune_after_lto", "86400", "-max_relative_cache_size_lto",
+      "10", "-move_to_rw_segment", "__DATA", "move-rw.txt", "-move_to_ro_segment",
+      "__TEXT", "move-ro.txt", "-segprot", "__DATA", "rw-", "rw-", "-section_order",
+      "__TEXT", "__text:__stubs", "-merge_library", "libMerge.a", "-merge_framework",
+      "Metal", "-assert_weak_library", "libWeak.dylib", "-delay_library", "libDelay.dylib",
+      "-upward_library", "libUp.dylib", "-assert_weak_framework", "AVFoundation",
+      "-allowable_client", "Client", "-client_name", "Client", "-umbrella", "Umbrella",
+      "-sub_library", "sub", "-sub_umbrella", "SubUmbrella", "-init", "_init_func",
+      "-final_output", "ThinName", "-dot", "deps.dot", "-interposable_list", "interpose.txt",
+      "-unaligned_pointers", "warning", "-weak_reference_mismatches", "weak", "-read_only_relocs",
+      "suppress", "-dylinker_install_name", "/usr/lib/dyld", "-exported_symbol",
+      "_foo", "-unexported_symbol", "_bar", "-reexported_symbols_list", "reexports.txt",
+      "-non_global_symbols_strip_list", "strip.txt", "-non_global_symbols_no_strip_list",
+      "keep.txt", "-dirty_data_list", "dirty.txt", "-max_default_common_align", "0x40",
+      "-o", "tool",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.input_path is None)
+  assert_string_array_eq(opts.linker_args, [
+    "foo.o", "-syslibroot", "/SDK", "-dtrace", "probes.d", "-map", "link.map", "-why_live",
+    "_symbol", "-stack_size", "0x100000", "-stack_addr", "0x70000000", "-headerpad",
+    "0x1000", "-seg_addr_table", "segaddr.txt", "-bitcode_symbol_map", "maps", "-lto_library",
+    "/toolchain/libLTO.dylib", "-cache_path_lto", "lto-cache", "-prune_interval_lto",
+    "30", "-prune_after_lto", "86400", "-max_relative_cache_size_lto", "10", "-move_to_rw_segment",
+    "__DATA", "move-rw.txt", "-move_to_ro_segment", "__TEXT", "move-ro.txt", "-segprot",
+    "__DATA", "rw-", "rw-", "-section_order", "__TEXT", "__text:__stubs", "-merge_library",
+    "libMerge.a", "-merge_framework", "Metal", "-assert_weak_library", "libWeak.dylib",
+    "-delay_library", "libDelay.dylib", "-upward_library", "libUp.dylib", "-assert_weak_framework",
+    "AVFoundation", "-allowable_client", "Client", "-client_name", "Client", "-umbrella",
+    "Umbrella", "-sub_library", "sub", "-sub_umbrella", "SubUmbrella", "-init", "_init_func",
+    "-final_output", "ThinName", "-dot", "deps.dot", "-interposable_list", "interpose.txt",
+    "-unaligned_pointers", "warning", "-weak_reference_mismatches", "weak", "-read_only_relocs",
+    "suppress", "-dylinker_install_name", "/usr/lib/dyld", "-exported_symbol", "_foo",
+    "-unexported_symbol", "_bar", "-reexported_symbols_list", "reexports.txt", "-non_global_symbols_strip_list",
+    "strip.txt", "-non_global_symbols_no_strip_list", "keep.txt", "-dirty_data_list",
+    "dirty.txt", "-max_default_common_align", "0x40",
+  ])
+}
+
+///|
+test "driver preserves additional Darwin linker toggles" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "foo.o", "-execute", "-dylib", "-dylinker", "-dynamic", "-preload",
+      "-Z", "-search_paths_first", "-search_dylibs_first", "-no_order_inits", "-no_implicit_dylibs",
+      "-no_zero_fill_sections", "-merge_zero_fill_sections", "-no_branch_islands",
+      "-reproducible", "-allow_stack_execute", "-export_dynamic", "-keep_private_externs",
+      "-no_exported_symbols", "-bitcode_bundle", "-bitcode_hide_symbols", "-adhoc_codesign",
+      "-no_adhoc_codesign", "-data_const", "-no_data_const", "-const_selrefs", "-no_const_selrefs",
+      "-version_details", "-no_weak_imports", "-no_deduplicate", "-verbose_deduplicate",
+      "-no_inits", "-no_warn_inits", "-warn_duplicate_libraries", "-no_warn_duplicate_libraries",
+      "-debug_variant", "-allow_heap_execute", "-application_extension", "-no_application_extension",
+      "-fatal_warnings", "-no_eh_labels", "-warn_compact_unwind", "-warn_weak_exports",
+      "-no_weak_exports", "-warn_unused_dylibs", "-no_warn_unused_dylibs", "-allow_sub_type_mismatches",
+      "-no_uuid", "-random_uuid", "-root_safe", "-setuid_safe", "-interposable",
+      "-headerpad_max_install_names", "-bind_at_load", "-force_flat_namespace", "-prebind",
+      "-force_cpusubtype_ALL", "-no_arch_warnings", "-arch_errors_fatal", "-arch_multiple",
+      "-keep_relocs", "-warn_stabs", "-warn_commons", "-read_only_stubs", "-slow_stubs",
+      "-no_function_starts", "-no_objc_category_merging", "-no_objc_relative_method_lists",
+      "-fixup_chains_section", "-fixup_chains_section_vm", "-page_align_data_atoms",
+      "-not_for_dyld_shared_cache", "-search_in_sparse_frameworks", "-ld_classic",
+      "-ld_new", "-make_mergeable", "-no_merged_libraries_hook", "-needed-lsqlite3",
+      "-reexport-lz", "-upward-lfoo", "-hidden-lbar", "-weak-lobjc", "-assert-weak-lswiftCore",
+      "-delay-lcrypto", "-merge-lCompression", "-o", "tool",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.input_path is None)
+  assert_string_array_eq(opts.linker_args, [
+    "foo.o", "-execute", "-dylib", "-dylinker", "-dynamic", "-preload", "-Z", "-search_paths_first",
+    "-search_dylibs_first", "-no_order_inits", "-no_implicit_dylibs", "-no_zero_fill_sections",
+    "-merge_zero_fill_sections", "-no_branch_islands", "-reproducible", "-allow_stack_execute",
+    "-export_dynamic", "-keep_private_externs", "-no_exported_symbols", "-bitcode_bundle",
+    "-bitcode_hide_symbols", "-adhoc_codesign", "-no_adhoc_codesign", "-data_const",
+    "-no_data_const", "-const_selrefs", "-no_const_selrefs", "-version_details",
+    "-no_weak_imports", "-no_deduplicate", "-verbose_deduplicate", "-no_inits", "-no_warn_inits",
+    "-warn_duplicate_libraries", "-no_warn_duplicate_libraries", "-debug_variant",
+    "-allow_heap_execute", "-application_extension", "-no_application_extension",
+    "-fatal_warnings", "-no_eh_labels", "-warn_compact_unwind", "-warn_weak_exports",
+    "-no_weak_exports", "-warn_unused_dylibs", "-no_warn_unused_dylibs", "-allow_sub_type_mismatches",
+    "-no_uuid", "-random_uuid", "-root_safe", "-setuid_safe", "-interposable", "-headerpad_max_install_names",
+    "-bind_at_load", "-force_flat_namespace", "-prebind", "-force_cpusubtype_ALL",
+    "-no_arch_warnings", "-arch_errors_fatal", "-arch_multiple", "-keep_relocs",
+    "-warn_stabs", "-warn_commons", "-read_only_stubs", "-slow_stubs", "-no_function_starts",
+    "-no_objc_category_merging", "-no_objc_relative_method_lists", "-fixup_chains_section",
+    "-fixup_chains_section_vm", "-page_align_data_atoms", "-not_for_dyld_shared_cache",
+    "-search_in_sparse_frameworks", "-ld_classic", "-ld_new", "-make_mergeable",
+    "-no_merged_libraries_hook", "-needed-lsqlite3", "-reexport-lz", "-upward-lfoo",
+    "-hidden-lbar", "-weak-lobjc", "-assert-weak-lswiftCore", "-delay-lcrypto", "-merge-lCompression",
+  ])
+}
+
+///|
 test "driver rejects incomplete Darwin multi-argument linker options" {
   match
     parse_driver_args([
@@ -815,6 +918,10 @@ test "driver rejects incomplete Darwin multi-argument linker options" {
     ]) {
     Ok(_) => abort("expected missing rename_section operand")
     Err(err) => assert_eq(err, "missing argument after -rename_section")
+  }
+  match parse_driver_args(["kimicc", "foo.o", "-map"]) {
+    Ok(_) => abort("expected missing map operand")
+    Err(err) => assert_eq(err, "missing argument after -map")
   }
 }
 

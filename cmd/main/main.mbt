@@ -1413,14 +1413,22 @@ fn consume_linker_option(
 ) -> Result[Int, String] {
   match arg {
     "-rename_section" => consume_linker_option_values(opts, argv, index, arg, 4)
-    "-platform_version" | "-sectalign" | "-sectcreate" | "-sectorder" =>
-      consume_linker_option_values(opts, argv, index, arg, 3)
-    "-add_empty_section"
+    "-platform_version"
+    | "-sectalign"
+    | "-sectcreate"
+    | "-sectorder"
+    | "-segprot" => consume_linker_option_values(opts, argv, index, arg, 3)
+    "-move_to_ro_segment"
+    | "-move_to_rw_segment"
+    | "-add_empty_section"
     | "-alias"
     | "-rename_segment"
+    | "-section_order"
     | "-seg_page_size"
     | "-segaddr" => consume_linker_option_values(opts, argv, index, arg, 2)
     "-framework"
+    | "-assert_weak_framework"
+    | "-delay_framework"
     | "-needed_framework"
     | "-reexport_framework"
     | "-upward_framework"
@@ -1430,41 +1438,79 @@ fn consume_linker_option(
     | "-L"
     | "-Xlinker"
     | "-add_ast_path"
+    | "-allowable_client"
     | "-alias_list"
+    | "-assert_weak_library"
+    | "-bitcode_symbol_map"
     | "-bundle_loader"
+    | "-cache_path_lto"
+    | "-client_name"
     | "-compatibility_version"
     | "-commons"
     | "-current_version"
-    | "-delay_framework"
+    | "-delay_library"
+    | "-dirty_data_list"
     | "-dylib_file"
+    | "-dylinker_install_name"
+    | "-dot"
+    | "-dtrace"
     | "-e"
+    | "-exported_symbol"
     | "-exported_symbols_list"
     | "-filelist"
+    | "-final_output"
     | "-force_load"
+    | "-headerpad"
     | "-image_base"
     | "-image_suffix"
     | "-install_name"
+    | "-init"
+    | "-interposable_list"
     | "-ios_version_min"
     | "-load_hidden"
+    | "-lto_library"
     | "-macos_version_min"
+    | "-map"
+    | "-max_default_common_align"
+    | "-max_relative_cache_size_lto"
+    | "-merge_framework"
+    | "-merge_library"
     | "-multiply_defined"
     | "-multiply_defined_unused"
     | "-needed_library"
+    | "-non_global_symbols_no_strip_list"
+    | "-non_global_symbols_strip_list"
     | "-object_path_lto"
     | "-order_file"
     | "-pagezero_size"
+    | "-prune_after_lto"
+    | "-prune_interval_lto"
+    | "-read_only_relocs"
     | "-reexport_library"
+    | "-reexported_symbols_list"
     | "-rpath"
     | "-seg1addr"
+    | "-seg_addr_table"
     | "-seg_addr_table_filename"
     | "-segs_read_only_addr"
     | "-segs_read_write_addr"
     | "-oso_prefix"
+    | "-stack_addr"
+    | "-stack_size"
+    | "-sub_library"
+    | "-sub_umbrella"
+    | "-syslibroot"
     | "-trace_symbol_layout_file"
     | "-u"
+    | "-unaligned_pointers"
     | "-undefined"
+    | "-umbrella"
+    | "-unexported_symbol"
     | "-unexported_symbols_list"
+    | "-upward_library"
+    | "-weak_reference_mismatches"
     | "-weak_library"
+    | "-why_live"
     | "-z"
     | "-T" =>
       if index + 1 < argv.length() {
@@ -1494,10 +1540,18 @@ fn consume_linker_option(
         starts_with(arg, "-L") ||
         starts_with(arg, "-F") ||
         starts_with(arg, "-Wl,") ||
+        starts_with(arg, "-assert-weak-l") ||
+        starts_with(arg, "-delay-l") ||
         starts_with(arg, "-fuse-ld=") ||
+        starts_with(arg, "-hidden-l") ||
+        starts_with(arg, "-merge-l") ||
+        starts_with(arg, "-needed-l") ||
+        starts_with(arg, "-reexport-l") ||
         starts_with(arg, "-rtlib=") ||
         starts_with(arg, "-stdlib=") ||
         starts_with(arg, "-unwindlib=") ||
+        starts_with(arg, "-upward-l") ||
+        starts_with(arg, "-weak-l") ||
         starts_with(arg, "--rtlib=") ||
         starts_with(arg, "--stdlib=") ||
         starts_with(arg, "--unwindlib=") ||
@@ -1517,6 +1571,7 @@ fn consume_linker_option(
         arg == "-no-pie" ||
         arg == "--no-pie" ||
         arg == "-no_pie" ||
+        arg == "-execute" ||
         arg == "-nostdlib" ||
         arg == "--nostdlib" ||
         arg == "-nodefaultlibs" ||
@@ -1526,19 +1581,97 @@ fn consume_linker_option(
         arg == "-ObjC" ||
         arg == "-objc_relative_method_lists" ||
         arg == "-all_load" ||
+        arg == "-adhoc_codesign" ||
+        arg == "-allow_heap_execute" ||
+        arg == "-allow_stack_execute" ||
+        arg == "-allow_sub_type_mismatches" ||
+        arg == "-application_extension" ||
+        arg == "-arch_errors_fatal" ||
+        arg == "-arch_multiple" ||
+        arg == "-bind_at_load" ||
+        arg == "-bitcode_bundle" ||
+        arg == "-bitcode_hide_symbols" ||
+        arg == "-const_selrefs" ||
+        arg == "-data_const" ||
+        arg == "-debug_variant" ||
         arg == "-dead_strip" ||
         arg == "-dead_strip_dylibs" ||
+        arg == "-dylib" ||
+        arg == "-dylinker" ||
+        arg == "-dynamic" ||
+        arg == "-export_dynamic" ||
+        arg == "-fatal_warnings" ||
+        arg == "-fixup_chains_section" ||
+        arg == "-fixup_chains_section_vm" ||
         arg == "-flat_namespace" ||
+        arg == "-force_cpusubtype_ALL" ||
+        arg == "-force_flat_namespace" ||
+        arg == "-headerpad_max_install_names" ||
+        arg == "-interposable" ||
+        arg == "-keep_private_externs" ||
+        arg == "-keep_relocs" ||
+        arg == "-ld_classic" ||
+        arg == "-ld_new" ||
+        arg == "-make_mergeable" ||
+        arg == "-merge_zero_fill_sections" ||
+        arg == "-no_adhoc_codesign" ||
+        arg == "-no_application_extension" ||
+        arg == "-no_arch_warnings" ||
+        arg == "-no_branch_islands" ||
+        arg == "-no_const_selrefs" ||
+        arg == "-no_data_const" ||
         arg == "-no_dead_strip_inits_and_terms" ||
+        arg == "-no_deduplicate" ||
+        arg == "-no_eh_labels" ||
+        arg == "-no_exported_symbols" ||
+        arg == "-no_function_starts" ||
+        arg == "-no_implicit_dylibs" ||
+        arg == "-no_inits" ||
+        arg == "-no_merged_libraries_hook" ||
+        arg == "-no_objc_category_merging" ||
+        arg == "-no_objc_relative_method_lists" ||
+        arg == "-no_order_inits" ||
+        arg == "-no_uuid" ||
+        arg == "-no_warn_duplicate_libraries" ||
+        arg == "-no_warn_inits" ||
+        arg == "-no_warn_unused_dylibs" ||
+        arg == "-no_weak_exports" ||
+        arg == "-no_weak_imports" ||
+        arg == "-no_zero_fill_sections" ||
         arg == "-noall_load" ||
+        arg == "-not_for_dyld_shared_cache" ||
         arg == "-order_file_statistics" ||
+        arg == "-page_align_data_atoms" ||
+        arg == "-prebind" ||
+        arg == "-preload" ||
+        arg == "-print_statistics" ||
+        arg == "-random_uuid" ||
+        arg == "-read_only_stubs" ||
+        arg == "-reproducible" ||
+        arg == "-root_safe" ||
         arg == "-r" ||
+        arg == "-search_dylibs_first" ||
+        arg == "-search_in_sparse_frameworks" ||
+        arg == "-search_paths_first" ||
         arg == "-s" ||
         arg == "-sectorder_detail" ||
+        arg == "-setuid_safe" ||
+        arg == "-slow_stubs" ||
         arg == "-trace_symbol_layout" ||
         arg == "-twolevel_namespace" ||
         arg == "-twolevel_namespace_hints" ||
+        arg == "-version_details" ||
+        arg == "-verbose_deduplicate" ||
+        arg == "-warn_commons" ||
+        arg == "-warn_compact_unwind" ||
+        arg == "-warn_duplicate_libraries" ||
+        arg == "-warn_stabs" ||
+        arg == "-warn_unused_dylibs" ||
+        arg == "-warn_weak_exports" ||
         arg == "-why_load" {
+        opts.linker_args.push(arg)
+        Ok(index)
+      } else if arg == "-Z" {
         opts.linker_args.push(arg)
         Ok(index)
       } else {
