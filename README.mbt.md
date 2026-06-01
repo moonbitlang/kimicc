@@ -63,8 +63,9 @@ moon run cmd/main --target native -- -target linux-amd64 -print-multi-lib
 moon run cmd/main --target native -- -print-libgcc-file-name
 ```
 
-The short `-v` verbose flag is accepted without replacing compilation; use
-`--version` for the version-only query.
+The short `-v` verbose flag is accepted without replacing compilation. Use
+`--version` for the version banner and `-dumpversion` for the bare package
+version; both are kept in sync with `moon.mod`.
 
 Object, library, shared-library, and assembly inputs are delegated to the
 platform toolchain for link-only flows. Compile-only assembly inputs are
