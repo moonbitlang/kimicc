@@ -448,6 +448,21 @@ test "linux amd64 has builtin reflects supported lowering" {
     #|#else
     #|int gnu_copy_builtins = 0;
     #|#endif
+    #|#if __has_builtin(__builtin_strlen) && __has_builtin(__builtin_strcmp) && __has_builtin(__builtin_strncmp) && __has_builtin(__builtin_strchr) && __has_builtin(__builtin_strrchr) && __has_builtin(__builtin_strstr) && __has_builtin(__builtin_memcmp) && __has_builtin(__builtin_memchr)
+    #|int string_query_builtins = 1;
+    #|#else
+    #|int string_query_builtins = 0;
+    #|#endif
+    #|#if __has_builtin(__builtin_strcpy) && __has_builtin(__builtin_strcat) && __has_builtin(__builtin_strncpy) && __has_builtin(__builtin_strncat)
+    #|int string_copy_builtins = 1;
+    #|#else
+    #|int string_copy_builtins = 0;
+    #|#endif
+    #|#if __has_builtin(__builtin_abs) && __has_builtin(__builtin_labs) && __has_builtin(__builtin_llabs)
+    #|int integer_abs_builtins = 1;
+    #|#else
+    #|int integer_abs_builtins = 0;
+    #|#endif
     #|#if __has_builtin(__builtin_add_overflow) && __has_builtin(__builtin_sub_overflow) && __has_builtin(__builtin_mul_overflow)
     #|int generic_overflow_builtins = 1;
     #|#else
@@ -462,6 +477,36 @@ test "linux amd64 has builtin reflects supported lowering" {
     #|int unsigned_overflow_builtins = 1;
     #|#else
     #|int unsigned_overflow_builtins = 0;
+    #|#endif
+    #|#if __has_builtin(__builtin_clz) && __has_builtin(__builtin_clzl) && __has_builtin(__builtin_clzll) && __has_builtin(__builtin_ctz) && __has_builtin(__builtin_ctzl) && __has_builtin(__builtin_ctzll) && __has_builtin(__builtin_ffs) && __has_builtin(__builtin_ffsl) && __has_builtin(__builtin_ffsll)
+    #|int bit_scan_builtins = 1;
+    #|#else
+    #|int bit_scan_builtins = 0;
+    #|#endif
+    #|#if __has_builtin(__builtin_bswap) && __has_builtin(__builtin_bswap16) && __has_builtin(__builtin_bswap32) && __has_builtin(__builtin_bswap64) && __has_builtin(__builtin_rotateleft) && __has_builtin(__builtin_rotateleft32) && __has_builtin(__builtin_rotateleft64) && __has_builtin(__builtin_rotateright) && __has_builtin(__builtin_rotateright32) && __has_builtin(__builtin_rotateright64)
+    #|int bit_transform_builtins = 1;
+    #|#else
+    #|int bit_transform_builtins = 0;
+    #|#endif
+    #|#if __has_builtin(__builtin_popcount) && __has_builtin(__builtin_popcountl) && __has_builtin(__builtin_popcountll) && __has_builtin(__builtin_parity) && __has_builtin(__builtin_parityl) && __has_builtin(__builtin_parityll)
+    #|int bit_count_builtins = 1;
+    #|#else
+    #|int bit_count_builtins = 0;
+    #|#endif
+    #|#if __has_builtin(__builtin_fabs) && __has_builtin(__builtin_fabsf) && __has_builtin(__builtin_fabsl) && __has_builtin(__builtin_copysign) && __has_builtin(__builtin_copysignf) && __has_builtin(__builtin_copysignl) && __has_builtin(__builtin_sqrt) && __has_builtin(__builtin_sqrtf) && __has_builtin(__builtin_sqrtl) && __has_builtin(__builtin_nan) && __has_builtin(__builtin_nanf) && __has_builtin(__builtin_nanl) && __has_builtin(__builtin_huge_val) && __has_builtin(__builtin_huge_valf) && __has_builtin(__builtin_huge_vall) && __has_builtin(__builtin_inf) && __has_builtin(__builtin_inff) && __has_builtin(__builtin_infl)
+    #|int floating_value_builtins = 1;
+    #|#else
+    #|int floating_value_builtins = 0;
+    #|#endif
+    #|#if __has_builtin(__builtin_isgreater) && __has_builtin(__builtin_isgreaterequal) && __has_builtin(__builtin_isless) && __has_builtin(__builtin_islessequal) && __has_builtin(__builtin_islessgreater) && __has_builtin(__builtin_isunordered)
+    #|int floating_compare_builtins = 1;
+    #|#else
+    #|int floating_compare_builtins = 0;
+    #|#endif
+    #|#if __has_builtin(__builtin_isnan) && __has_builtin(__builtin_isnanf) && __has_builtin(__builtin_isnanl) && __has_builtin(__builtin_isinf) && __has_builtin(__builtin_isinff) && __has_builtin(__builtin_isinfl) && __has_builtin(__builtin_isfinite) && __has_builtin(__builtin_isfinitef) && __has_builtin(__builtin_isfinitel) && __has_builtin(__builtin_isnormal) && __has_builtin(__builtin_isnormalf) && __has_builtin(__builtin_isnormall) && __has_builtin(__builtin_signbit) && __has_builtin(__builtin_signbitf) && __has_builtin(__builtin_signbitl)
+    #|int floating_classify_builtins = 1;
+    #|#else
+    #|int floating_classify_builtins = 0;
     #|#endif
     #|#if __has_builtin(__atomic_thread_fence) && __has_builtin(__atomic_signal_fence) && __has_builtin(__c11_atomic_thread_fence) && __has_builtin(__c11_atomic_signal_fence) && __has_builtin(__sync_synchronize)
     #|int atomic_fence_builtins = 1;
@@ -528,6 +573,16 @@ test "linux amd64 has builtin reflects supported lowering" {
     #|#else
     #|int dynamic_stack_builtins = 0;
     #|#endif
+    #|#if __has_builtin(__builtin_va_start) && __has_builtin(__builtin_va_arg) && __has_builtin(__builtin_va_end) && __has_builtin(__builtin_va_copy) && __has_builtin(__builtin_offsetof)
+    #|int variadic_and_offset_builtins = 1;
+    #|#else
+    #|int variadic_and_offset_builtins = 0;
+    #|#endif
+    #|#if __has_builtin(__builtin_trap) && __has_builtin(__builtin_unreachable)
+    #|int control_flow_builtins = 1;
+    #|#else
+    #|int control_flow_builtins = 0;
+    #|#endif
     #|#if __has_builtin(__builtin_is_aligned) && __has_builtin(__builtin_align_up) && __has_builtin(__builtin_align_down)
     #|int alignment_builtins = 1;
     #|#else
@@ -547,7 +602,7 @@ test "linux amd64 has builtin reflects supported lowering" {
     Ok(text) =>
       inspect(
         text,
-        content="int memory_builtins=1;\nint object_and_return_address=1;\nint scalar_hint_query_builtins=1;\nint checked_string_builtins=1;\nint gnu_copy_builtins=1;\nint generic_overflow_builtins=1;\nint signed_overflow_builtins=1;\nint unsigned_overflow_builtins=1;\nint atomic_fence_builtins=1;\nint atomic_lock_free_builtins=1;\nint atomic_load_store_builtins=1;\nint atomic_exchange_builtins=1;\nint atomic_compare_exchange_builtins=1;\nint atomic_read_modify_write_builtins=1;\nint c11_atomic_fetch_builtins=1;\nint sync_update_builtins=1;\nint compile_time_selection=1;\nint floating_environment_query=1;\nint unpredictable_hint=1;\nint clear_cache_hint=1;\nint dynamic_stack_builtins=1;\nint alignment_builtins=1;\nint checked_formatted_output=1;\nint unsupported=0;\n",
+        content="int memory_builtins=1;\nint object_and_return_address=1;\nint scalar_hint_query_builtins=1;\nint checked_string_builtins=1;\nint gnu_copy_builtins=1;\nint string_query_builtins=1;\nint string_copy_builtins=1;\nint integer_abs_builtins=1;\nint generic_overflow_builtins=1;\nint signed_overflow_builtins=1;\nint unsigned_overflow_builtins=1;\nint bit_scan_builtins=1;\nint bit_transform_builtins=1;\nint bit_count_builtins=1;\nint floating_value_builtins=1;\nint floating_compare_builtins=1;\nint floating_classify_builtins=1;\nint atomic_fence_builtins=1;\nint atomic_lock_free_builtins=1;\nint atomic_load_store_builtins=1;\nint atomic_exchange_builtins=1;\nint atomic_compare_exchange_builtins=1;\nint atomic_read_modify_write_builtins=1;\nint c11_atomic_fetch_builtins=1;\nint sync_update_builtins=1;\nint compile_time_selection=1;\nint floating_environment_query=1;\nint unpredictable_hint=1;\nint clear_cache_hint=1;\nint dynamic_stack_builtins=1;\nint variadic_and_offset_builtins=1;\nint control_flow_builtins=1;\nint alignment_builtins=1;\nint checked_formatted_output=1;\nint unsupported=0;\n",
       )
     Err(err) => fail(err.to_string())
   }
