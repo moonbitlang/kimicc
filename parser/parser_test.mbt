@@ -191,10 +191,14 @@ test "parse GNU mode attributes for linux integer typedef layout" {
     #|typedef int register_t __attribute__((__mode__(__word__)));
     #|typedef unsigned int fpu_control_t __attribute__((mode(__HI__)));
     #|typedef int spec_small_t __attribute__((mode(HI)));
+    #|typedef int byte_int_t __attribute__((mode(byte)));
+    #|typedef unsigned int pointer_uint_t __attribute__((mode(pointer)));
     #|int main(void) {
     #|  int reg_size[sizeof(register_t)];
     #|  int fpu_size[sizeof(fpu_control_t)];
     #|  int spec_size[sizeof(spec_small_t)];
+    #|  int byte_size[sizeof(byte_int_t)];
+    #|  int pointer_size[sizeof(pointer_uint_t)];
     #|  return 0;
     #|}
   let prog = @parser.parse_for_target(source, linux)
@@ -205,6 +209,8 @@ test "parse GNU mode attributes for linux integer typedef layout" {
           VarDecl(Array(SInt, 8), "reg_size", None),
           VarDecl(Array(SInt, 2), "fpu_size", None),
           VarDecl(Array(SInt, 2), "spec_size", None),
+          VarDecl(Array(SInt, 1), "byte_size", None),
+          VarDecl(Array(SInt, 8), "pointer_size", None),
           Return(Some(Number(0))),
         ]
       )

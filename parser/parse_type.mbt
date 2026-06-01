@@ -267,11 +267,12 @@ fn Parser::apply_decl_mode(self : Parser, ty : Type, mode : String?) -> Type {
         DarwinArm64 | LinuxAmd64 => 64
       }
       match name {
-        "QI" => sized_integer_type(unsigned, 8)
+        "QI" | "byte" => sized_integer_type(unsigned, 8)
         "HI" => sized_integer_type(unsigned, 16)
         "SI" => sized_integer_type(unsigned, 32)
         "DI" => sized_integer_type(unsigned, 64)
-        "word" | "unwind_word" => sized_integer_type(unsigned, word_bits)
+        "word" | "unwind_word" | "pointer" =>
+          sized_integer_type(unsigned, word_bits)
         "TI" => sized_integer_type(unsigned, 128)
         "HF" => Float16
         "SF" => Float
