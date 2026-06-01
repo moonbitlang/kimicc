@@ -305,14 +305,46 @@ test "darwin arm64 predefined macros cover system header probes" {
     #|#endif
     #|#endif
     #|#endif
+    #|#if __BOOL_WIDTH__ == 8 && __INT8_MAX__ == 127 && __UINT8_MAX__ == 255
+    #|#if __INT16_MAX__ == 32767 && __UINT16_MAX__ == 65535 && __INT32_MAX__ == 2147483647 && __UINT32_MAX__ == 4294967295U
+    #|#if defined(__INT8_C_SUFFIX__) && defined(__INT16_C_SUFFIX__) && defined(__UINT8_C_SUFFIX__) && defined(__UINT16_C_SUFFIX__)
+    #|int darwin_small_integer_probes = 1;
+    #|#else
+    #|int darwin_small_integer_probes = 2;
+    #|#endif
+    #|#endif
+    #|#endif
+    #|#if __INT_LEAST8_WIDTH__ == 8 && __INT_LEAST16_WIDTH__ == 16 && __INT_LEAST32_WIDTH__ == 32
+    #|#if __INT_LEAST8_MAX__ == 127 && __UINT_LEAST16_MAX__ == 65535 && __UINT_LEAST32_MAX__ == 4294967295U
+    #|int darwin_least_integer_probes = 1;
+    #|#else
+    #|int darwin_least_integer_probes = 2;
+    #|#endif
+    #|#endif
+    #|#if __INT_FAST8_WIDTH__ == 8 && __INT_FAST16_WIDTH__ == 16 && __INT_FAST32_WIDTH__ == 32
+    #|#if __INT_FAST16_MAX__ == 32767 && __UINT_FAST8_MAX__ == 255 && __UINT_FAST32_MAX__ == 4294967295U
+    #|int darwin_fast_integer_probes = 1;
+    #|#else
+    #|int darwin_fast_integer_probes = 2;
+    #|#endif
+    #|#endif
     #|#define KIMICC_STRINGIFY_1(x) #x
     #|#define KIMICC_STRINGIFY(x) KIMICC_STRINGIFY_1(x)
+    #|const char *darwin_int8_format = __INT8_FMTd__;
+    #|const char *darwin_uint16_format = __UINT16_FMTx__;
     #|const char *darwin_int64_format = __INT64_FMTd__;
     #|const char *darwin_uint64_format = __UINT64_FMTu__;
     #|const char *darwin_fast64_format = __UINT_FAST64_FMTx__;
     #|const char *darwin_least64_format = __INT_LEAST64_FMTi__;
+    #|const char *darwin_size_format = __SIZE_FMTu__;
+    #|const char *darwin_intmax_format = __INTMAX_FMTi__;
+    #|const char *darwin_uintptr_format = __UINTPTR_FMTx__;
+    #|const char *darwin_intmax_suffix = KIMICC_STRINGIFY(__INTMAX_C_SUFFIX__);
+    #|const char *darwin_uint32_suffix = KIMICC_STRINGIFY(__UINT32_C_SUFFIX__);
     #|const char *darwin_int64_suffix = KIMICC_STRINGIFY(__INT64_C_SUFFIX__);
     #|const char *darwin_uint64_suffix = KIMICC_STRINGIFY(__UINT64_C_SUFFIX__);
+    #|__CHAR16_TYPE__ darwin_char16_value;
+    #|__CHAR32_TYPE__ darwin_char32_value;
     #|__INT64_TYPE__ darwin_int64_value;
     #|__UINT64_TYPE__ darwin_uint64_value;
     #|__INT_LEAST64_TYPE__ darwin_least64_value;
@@ -326,12 +358,24 @@ test "darwin arm64 predefined macros cover system header probes" {
       #|int darwin_least64_probes=1;
       #|int darwin_fast64_probes=1;
       #|int darwin_platform_probes=1;
+      #|int darwin_small_integer_probes=1;
+      #|int darwin_least_integer_probes=1;
+      #|int darwin_fast_integer_probes=1;
+      #|const char*darwin_int8_format="hhd";
+      #|const char*darwin_uint16_format="hx";
       #|const char*darwin_int64_format="lld";
       #|const char*darwin_uint64_format="llu";
       #|const char*darwin_fast64_format="llx";
       #|const char*darwin_least64_format="lli";
+      #|const char*darwin_size_format="lu";
+      #|const char*darwin_intmax_format="li";
+      #|const char*darwin_uintptr_format="lx";
+      #|const char*darwin_intmax_suffix="L";
+      #|const char*darwin_uint32_suffix="U";
       #|const char*darwin_int64_suffix="LL";
       #|const char*darwin_uint64_suffix="ULL";
+      #|unsigned short darwin_char16_value;
+      #|unsigned int darwin_char32_value;
       #|long long int darwin_int64_value;
       #|long long unsigned int darwin_uint64_value;
       #|long long int darwin_least64_value;
