@@ -1737,6 +1737,7 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
     Err(err) => return Err(err)
   }
   let opts = DriverOptions::new()
+  let mut driver_mode_cpp = false
   let mut i = 1
   while i < argv.length() {
     let arg = argv[i]
@@ -1833,6 +1834,16 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
               i = next_i
             }
             Err(err) => return Err(err)
+          }
+        } else if starts_with(arg, "--driver-mode=") {
+          let mode = arg["--driver-mode=".length():].to_owned()
+          match mode {
+            "cpp" => driver_mode_cpp = true
+            "gcc" | "g++" | "cl" | "flang" => driver_mode_cpp = false
+            _ =>
+              return Err(
+                "unsupported argument '" + mode + "' to option '--driver-mode='",
+              )
           }
         } else if arg == "-fsyntax-only" {
           opts.output = CheckSyntax
@@ -2019,6 +2030,9 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
         }
     }
     i = i + 1
+  }
+  if driver_mode_cpp && opts.output != EmitDependencies {
+    opts.output = EmitPreprocessed
   }
   match validate_driver_options(opts) {
     Ok(_) => Ok(opts)

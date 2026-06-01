@@ -306,6 +306,28 @@ test "driver consumes clang pass-through flags with separate values" {
 }
 
 ///|
+test "driver honors cpp driver mode" {
+  let opts = match
+    parse_driver_args(["kimicc", "--driver-mode=cpp", "-c", "foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.output == EmitPreprocessed)
+  assert_true(opts.input_path is Some("foo.c"))
+  let deps = match
+    parse_driver_args(["kimicc", "--driver-mode=cpp", "-M", "foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(deps.output == EmitDependencies)
+  match parse_driver_args(["kimicc", "--driver-mode=wat", "foo.c"]) {
+    Ok(_) => abort("expected unsupported driver mode")
+    Err(err) =>
+      assert_eq(err, "unsupported argument 'wat' to option '--driver-mode='")
+  }
+}
+
+///|
 test "driver verbose flag does not replace compilation" {
   let opts = match parse_driver_args(["kimicc", "-v", "-S", "foo.c"]) {
     Ok(opts) => opts
