@@ -264,6 +264,26 @@ test "target macros follow selected target" {
 }
 
 ///|
+test "darwin arm64 predefined macros cover system header probes" {
+  let source =
+    #|#if defined(__APPLE__) && defined(__MACH__) && defined(__aarch64__) && defined(__arm64__)
+    #|#if __SIZEOF_POINTER__ == 8 && __SIZEOF_LONG__ == 8 && __CHAR_BIT__ == 8
+    #|#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ && __FLOAT_WORD_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    #|#if __BIGGEST_ALIGNMENT__ == 8 && __SIZEOF_LONG_DOUBLE__ == 8
+    #|#if __LDBL_MANT_DIG__ == 53 && __LDBL_DECIMAL_DIG__ == 17
+    #|int darwin_probes = 1;
+    #|#else
+    #|int darwin_probes = 2;
+    #|#endif
+    #|#endif
+    #|#endif
+    #|#endif
+    #|#endif
+  let text = expect_preprocess(source)
+  inspect(text, content="int darwin_probes=1;\n")
+}
+
+///|
 test "linux amd64 predefined macros cover system header probes" {
   let linux = match @target.Target::parse("linux-amd64") {
     Some(target) => target

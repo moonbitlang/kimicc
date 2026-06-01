@@ -246,6 +246,7 @@ fn Preprocessor::seed_darwin_arm64_macros(self : Preprocessor) -> Unit {
   self.seed_macro("__aarch64__", "1")
   self.seed_macro("__arm64__", "1")
   self.seed_macro("__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__", "150500")
+  self.seed_macro("__BIGGEST_ALIGNMENT__", "8")
   self.seed_macro("__SIZEOF_LONG_DOUBLE__", "8")
   self.seed_macro("__LDBL_MANT_DIG__", "53")
   self.seed_macro("__LDBL_DIG__", "15")
