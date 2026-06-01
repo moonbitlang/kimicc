@@ -268,7 +268,7 @@ MoonBit package version:
 
    - Ensure `git status --short` contains only intended changes.
    - Commit the validated slice.
-   - Bump `moon.mod.json` only when publishing a new package version.
+   - Bump `moon.mod` only when publishing a new package version.
    - Run `moon publish` only after the default native gate and at least the
      external compiler testbed gate pass on the publish commit.
    - For a confidence/publish announcement, report which optional SQLite gates
