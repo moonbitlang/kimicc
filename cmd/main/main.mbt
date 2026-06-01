@@ -1776,6 +1776,7 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
       "-E" | "--preprocess-only" => opts.output = EmitPreprocessed
       "-S" => opts.output = EmitAssembly
       "-c" | "--compile" => opts.output = EmitObject
+      "--analyze" => opts.output = CheckSyntax
       "--preprocessed" => opts.already_preprocessed = true
       "--strict-mir-codegen" | "-fno-parser-codegen-fallback" =>
         opts.strict_mir_codegen = true
@@ -2749,6 +2750,7 @@ fn print_usage() -> Unit {
     #|  -S                  compile to assembly
     #|  -c                  compile to a relocatable object
     #|  -fsyntax-only       preprocess and parse without emitting output
+    #|  --analyze           parse without emitting output
     #|  -M, -MM             write dependencies only
     #|  default             compile C source inputs and delegate final linking to clang
     #|

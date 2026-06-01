@@ -936,6 +936,21 @@ test "driver parses syntax-only mode" {
 }
 
 ///|
+test "driver treats analyzer mode as syntax-only" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "--analyze", "--analyzer-output", "plist", "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.output == CheckSyntax)
+  assert_true(opts.input_path is Some("foo.c"))
+  assert_eq(opts.extra_input_paths.length(), 0)
+  assert_eq(opts.linker_args.length(), 0)
+}
+
+///|
 test "driver treats assembly compile input as delegated input" {
   let opts = match
     parse_driver_args(["kimicc", "-c", "start.s", "-o", "start.o"]) {
