@@ -283,10 +283,18 @@ if [ -s "$driver_stdout_path" ]; then
 fi
 grep -F 'error: no input file' "$driver_stderr_path" >/dev/null
 
+driver_version="$(awk -F '"' '/^version = "/ { print $2; exit }' moon.mod)"
+if [ -z "$driver_version" ]; then
+  echo "could not read package version from moon.mod" >&2
+  exit 1
+fi
+driver_banner="kimicc $driver_version"
 "$kimicc" -v >"$driver_query_path"
-grep -Fx 'kimicc 0.1.6' "$driver_query_path" >/dev/null
+grep -Fx "$driver_banner" "$driver_query_path" >/dev/null
 "$kimicc" --version >"$driver_query_path"
-grep -Fx 'kimicc 0.1.6' "$driver_query_path" >/dev/null
+grep -Fx "$driver_banner" "$driver_query_path" >/dev/null
+"$kimicc" -dumpversion >"$driver_query_path"
+grep -Fx "$driver_version" "$driver_query_path" >/dev/null
 "$kimicc" -target linux-amd64 -dumpmachine >"$driver_query_path"
 grep -Fx 'x86_64-linux-gnu' "$driver_query_path" >/dev/null
 "$kimicc" --target linux/amd64 --print-target-triple >"$driver_query_path"
