@@ -314,6 +314,12 @@ test "driver honors cpp driver mode" {
   }
   assert_true(opts.output == EmitPreprocessed)
   assert_true(opts.input_path is Some("foo.c"))
+  let basename_opts = match parse_driver_args(["/usr/bin/cpp", "-c", "foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(basename_opts.output == EmitPreprocessed)
+  assert_true(basename_opts.input_path is Some("foo.c"))
   let deps = match
     parse_driver_args(["kimicc", "--driver-mode=cpp", "-M", "foo.c"]) {
     Ok(opts) => opts

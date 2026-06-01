@@ -232,6 +232,22 @@ fn ends_with(value : String, suffix : String) -> Bool {
 }
 
 ///|
+fn path_basename(path : String) -> String {
+  let mut start = 0
+  for i = 0; i < path.length(); i = i + 1 {
+    if path[i] == '/' {
+      start = i + 1
+    }
+  }
+  path[start:].to_owned()
+}
+
+///|
+fn is_cpp_driver_invocation(argv : Array[String]) -> Bool {
+  argv.length() > 0 && path_basename(argv[0]) == "cpp"
+}
+
+///|
 fn split_define_arg(arg : String) -> (String, String) {
   let mut eq = -1
   for i = 0; i < arg.length(); i = i + 1 {
@@ -1737,7 +1753,7 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
     Err(err) => return Err(err)
   }
   let opts = DriverOptions::new()
-  let mut driver_mode_cpp = false
+  let mut driver_mode_cpp = is_cpp_driver_invocation(argv)
   let mut i = 1
   while i < argv.length() {
     let arg = argv[i]
