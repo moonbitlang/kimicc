@@ -17,6 +17,9 @@ ensure_external_parser_fixtures() {
 echo "==> check strict MIR clang-driver fixture coverage"
 scripts/check-strict-mir-interop.sh
 
+echo "==> check linux has-builtin coverage"
+scripts/check-linux-has-builtin-coverage.sh
+
 core_packages=(
   target
   parser
