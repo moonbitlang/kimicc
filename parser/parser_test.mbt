@@ -835,15 +835,21 @@ test "parse GNU aligned attributes" {
   let source =
     #|int __attribute__((aligned(32))) global_spec;
     #|int global_post __attribute__((__aligned__(64)));
+    #|int global_default __attribute__((aligned));
+    #|int global_empty __attribute__((__aligned__()));
     #|struct AlignedAttr {
     #|  char c;
     #|  int x __attribute__((aligned(16)));
+    #|  int z __attribute__((aligned));
     #|  char y;
     #|};
     #|typedef int aligned_int __attribute__((aligned(16)));
+    #|typedef int default_aligned_int __attribute__((aligned));
     #|aligned_int typed_global;
+    #|default_aligned_int default_typed_global;
     #|int main(void) {
     #|  int local __attribute__((aligned(32)));
+    #|  int default_local __attribute__((aligned));
     #|  return 0;
     #|}
   let prog = @parser.parse(source)
@@ -851,7 +857,10 @@ test "parse GNU aligned attributes" {
     [
       { ty: Aligned(SInt, 32), name: "global_spec", .. },
       { ty: Aligned(SInt, 64), name: "global_post", .. },
+      { ty: Aligned(SInt, 16), name: "global_default", .. },
+      { ty: Aligned(SInt, 16), name: "global_empty", .. },
       { ty: Aligned(SInt, 16), name: "typed_global", .. },
+      { ty: Aligned(SInt, 16), name: "default_typed_global", .. },
     ] => ()
     _ => fail("Expected GNU aligned globals and typedef")
   }
@@ -859,6 +868,7 @@ test "parse GNU aligned attributes" {
     [
       { ty: SChar, name: "c", .. },
       { ty: Aligned(SInt, 16), name: "x", .. },
+      { ty: Aligned(SInt, 16), name: "z", .. },
       { ty: SChar, name: "y", .. },
     ] => ()
     _ => fail("Expected GNU aligned struct field")
@@ -866,7 +876,11 @@ test "parse GNU aligned attributes" {
   match prog.decls[0].body {
     Some(
       Compound(
-        [VarDecl(Aligned(SInt, 32), "local", None), Return(Some(Number(0)))]
+        [
+          VarDecl(Aligned(SInt, 32), "local", None),
+          VarDecl(Aligned(SInt, 16), "default_local", None),
+          Return(Some(Number(0))),
+        ]
       )
     ) => ()
     _ => fail("Expected GNU aligned local variable")

@@ -37,6 +37,13 @@ fn merge_align(lhs : Int?, rhs : Int?) -> Int? {
 }
 
 ///|
+fn Parser::default_aligned_attribute_value(self : Parser) -> Int {
+  match self.target {
+    DarwinArm64 | LinuxAmd64 => 16
+  }
+}
+
+///|
 fn merge_mode(lhs : String?, rhs : String?) -> String? {
   match rhs {
     Some(_) => rhs
@@ -190,17 +197,30 @@ fn Parser::skip_attributes_info(self : Parser) -> AttributeInfo {
             self.advance()
             if self.token == LParen {
               self.advance()
-              let expr = self.parse_assign()
-              self.expect(RParen)
-              match self.fold_const(expr) {
-                Some(n) => {
-                  let align = n.to_int()
-                  if align > 0 {
-                    info.align = merge_align(info.align, Some(align))
+              if self.token == RParen {
+                info.align = merge_align(
+                  info.align,
+                  Some(self.default_aligned_attribute_value()),
+                )
+                self.expect(RParen)
+              } else {
+                let expr = self.parse_assign()
+                self.expect(RParen)
+                match self.fold_const(expr) {
+                  Some(n) => {
+                    let align = n.to_int()
+                    if align > 0 {
+                      info.align = merge_align(info.align, Some(align))
+                    }
                   }
+                  None => ()
                 }
-                None => ()
               }
+            } else {
+              info.align = merge_align(
+                info.align,
+                Some(self.default_aligned_attribute_value()),
+              )
             }
             continue
           }
