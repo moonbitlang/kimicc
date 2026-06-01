@@ -1079,6 +1079,7 @@ fn consume_ignored_option(
   match arg {
     "--config"
     | "-arch"
+    | "--analyzer-output"
     | "-analyzer-output"
     | "-arcmt-migrate-report-output"
     | "-aux-info"
