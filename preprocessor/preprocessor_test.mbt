@@ -266,11 +266,11 @@ test "target macros follow selected target" {
 ///|
 test "darwin arm64 predefined macros cover system header probes" {
   let source =
-    #|#if defined(__APPLE__) && defined(__MACH__) && defined(__aarch64__) && defined(__arm64__)
+    #|#if defined(__APPLE__) && defined(__MACH__) && defined(__aarch64__) && defined(__arm64__) && defined(__arm64)
     #|#if __SIZEOF_POINTER__ == 8 && __SIZEOF_LONG__ == 8 && __CHAR_BIT__ == 8
     #|#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ && __FLOAT_WORD_ORDER__ == __ORDER_LITTLE_ENDIAN__
     #|#if __BIGGEST_ALIGNMENT__ == 8 && __SIZEOF_LONG_DOUBLE__ == 8
-    #|#if __LDBL_MANT_DIG__ == 53 && __LDBL_DECIMAL_DIG__ == 17
+    #|#if __LDBL_MANT_DIG__ == 53 && __LDBL_DECIMAL_DIG__ == 17 && __ENVIRONMENT_OS_VERSION_MIN_REQUIRED__ == 150500
     #|int darwin_probes = 1;
     #|#else
     #|int darwin_probes = 2;
@@ -279,8 +279,54 @@ test "darwin arm64 predefined macros cover system header probes" {
     #|#endif
     #|#endif
     #|#endif
+    #|#if __INT64_MAX__ == 9223372036854775807LL && __UINT64_MAX__ == 18446744073709551615ULL
+    #|int darwin_int64_probes = 1;
+    #|#else
+    #|int darwin_int64_probes = 2;
+    #|#endif
+    #|#if __INT_LEAST64_MAX__ == 9223372036854775807LL && __UINT_LEAST64_MAX__ == 18446744073709551615ULL && __INT_LEAST64_WIDTH__ == 64
+    #|int darwin_least64_probes = 1;
+    #|#else
+    #|int darwin_least64_probes = 2;
+    #|#endif
+    #|#if __INT_FAST64_MAX__ == 9223372036854775807LL && __UINT_FAST64_MAX__ == 18446744073709551615ULL && __INT_FAST64_WIDTH__ == 64
+    #|int darwin_fast64_probes = 1;
+    #|#else
+    #|int darwin_fast64_probes = 2;
+    #|#endif
+    #|#define KIMICC_STRINGIFY_1(x) #x
+    #|#define KIMICC_STRINGIFY(x) KIMICC_STRINGIFY_1(x)
+    #|const char *darwin_int64_format = __INT64_FMTd__;
+    #|const char *darwin_uint64_format = __UINT64_FMTu__;
+    #|const char *darwin_fast64_format = __UINT_FAST64_FMTx__;
+    #|const char *darwin_least64_format = __INT_LEAST64_FMTi__;
+    #|const char *darwin_int64_suffix = KIMICC_STRINGIFY(__INT64_C_SUFFIX__);
+    #|const char *darwin_uint64_suffix = KIMICC_STRINGIFY(__UINT64_C_SUFFIX__);
+    #|__INT64_TYPE__ darwin_int64_value;
+    #|__UINT64_TYPE__ darwin_uint64_value;
+    #|__INT_LEAST64_TYPE__ darwin_least64_value;
+    #|__UINT_FAST64_TYPE__ darwin_fast64_value;
   let text = expect_preprocess(source)
-  inspect(text, content="int darwin_probes=1;\n")
+  inspect(
+    text,
+    content=(
+      #|int darwin_probes=1;
+      #|int darwin_int64_probes=1;
+      #|int darwin_least64_probes=1;
+      #|int darwin_fast64_probes=1;
+      #|const char*darwin_int64_format="lld";
+      #|const char*darwin_uint64_format="llu";
+      #|const char*darwin_fast64_format="llx";
+      #|const char*darwin_least64_format="lli";
+      #|const char*darwin_int64_suffix="LL";
+      #|const char*darwin_uint64_suffix="ULL";
+      #|long long int darwin_int64_value;
+      #|long long unsigned int darwin_uint64_value;
+      #|long long int darwin_least64_value;
+      #|long long unsigned int darwin_fast64_value;
+      #|
+    ),
+  )
 }
 
 ///|
