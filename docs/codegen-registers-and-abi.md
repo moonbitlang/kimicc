@@ -336,13 +336,14 @@ operands are folded to the covered parser type model's alignment.
 GNU `__builtin_choose_expr` and `__builtin_types_compatible_p` are handled the
 same way for the covered parser type model.
 GNU `__builtin_classify_type` is also folded before backend lowering.
-`_Alignas` and numeric GNU `__attribute__((aligned(N)))` participate in x86-64
-aggregate layout, ELF global alignment, and stack-local frame realignment.
-Functions that need a local frame alignment greater than 16 bytes save and
-restore `r13` when using it as the aligned local-frame base. GNU
-`__attribute__((mode(...)))` maps common Linux header scalar modes such as `HI`,
-`DI`, `word`, and `unwind_word` onto the corresponding covered parser scalar
-types before ABI layout and codegen. GNU
+`_Alignas`, numeric GNU `__attribute__((aligned(N)))`, and bare or empty GNU
+`aligned` attributes participate in x86-64 aggregate layout, ELF global
+alignment, and stack-local frame realignment. Functions that need a local frame
+alignment greater than 16 bytes save and restore `r13` when using it as the
+aligned local-frame base. GNU `__attribute__((mode(...)))` maps common Linux
+header scalar modes such as `byte`, `HI`, `DI`, `pointer`, `word`, and
+`unwind_word` onto the corresponding covered parser scalar types before ABI
+layout and codegen. GNU
 `__attribute__((packed))` participates in aggregate layout, and packed
 aggregates with unaligned fields become System V memory-class arguments and
 returns. The same unaligned-field rule is applied when a non-packed outer
