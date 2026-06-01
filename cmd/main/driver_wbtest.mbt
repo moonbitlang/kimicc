@@ -258,7 +258,7 @@ test "driver consumes ignored flags with separate values" {
       "--std", "c11", "-MJ", "compile.json", "-serialize-diagnostics", "diag.dia",
       "--serialize-diagnostics", "diag2.dia", "-working-directory", "/tmp/build",
       "-fdebug-compilation-dir", "/tmp/build", "-fmodule-map-file", "module.modulemap",
-      "--config", "clang.cfg", "-analyzer-output", "plist", "-arcmt-migrate-report-output",
+      "--config", "clang.cfg", "--analyzer-output", "plist", "-arcmt-migrate-report-output",
       "arcmt.plist", "-aux-info", "protos.h", "-auxbase", "foo", "-auxbase-strip",
       "build/foo.o", "-cxx-isystem", "cxx/include", "-dsym-dir", "dsym", "-dumpbase",
       "foo.c", "-dumpbase-ext", ".c", "-dumpdir", "aux/", "-fmodules-user-build-path",
