@@ -326,6 +326,29 @@ test "driver long version flag remains terminal" {
 }
 
 ///|
+fn moon_mod_version_for_test() -> String {
+  let content = match read_file("moon.mod") {
+    Some(content) => content
+    None => abort("cannot read moon.mod")
+  }
+  let prefix = "version = \""
+  for raw in content.split("\n") {
+    let line = raw.trim().to_owned()
+    if starts_with(line, prefix) && ends_with(line, "\"") {
+      return line[prefix.length():line.length() - 1].to_owned()
+    }
+  }
+  abort("cannot find moon.mod version")
+}
+
+///|
+test "driver version matches moon package version" {
+  let version = moon_mod_version_for_test()
+  assert_eq(driver_version(), version)
+  assert_eq(driver_version_banner(), "kimicc " + version)
+}
+
+///|
 test "driver language flag classifies extensionless inputs" {
   let opts = match
     parse_driver_args([

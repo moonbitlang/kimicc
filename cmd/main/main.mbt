@@ -204,6 +204,16 @@ fn write_stdout(content : String) -> Unit {
 }
 
 ///|
+fn driver_version() -> String {
+  "0.1.203"
+}
+
+///|
+fn driver_version_banner() -> String {
+  "kimicc " + driver_version()
+}
+
+///|
 fn fail(message : String) -> Unit {
   moonbit_write_stderr(@utf8.encode("error: " + message + "\n"))
   moonbit_exit(1)
@@ -2764,7 +2774,7 @@ fn main {
     return
   }
   if opts.show_version {
-    println("kimicc 0.1.6")
+    println(driver_version_banner())
     return
   }
   if opts.dump_machine || opts.print_target_triple {
@@ -2772,7 +2782,7 @@ fn main {
     return
   }
   if opts.dump_version {
-    println("0.1.6")
+    println(driver_version())
     return
   }
   if opts.print_resource_dir {
@@ -2847,7 +2857,7 @@ fn main {
         }
         run_link(opts, output_path, None)
       } else if opts.verbose && opts.output == LinkExecutable {
-        println("kimicc 0.1.6")
+        println(driver_version_banner())
       } else {
         fail("no input file")
       }
