@@ -1146,6 +1146,10 @@ test "driver seeds pic and pie predefined macros" {
     "int pic=2;\nint pie=2;\n",
   )
   assert_eq(
+    preprocess_driver_pic_pie(["kimicc", "-E", "foo.c"]),
+    "int pic=2;\nint pie=0;\n",
+  )
+  assert_eq(
     preprocess_driver_pic_pie(["kimicc", "-E", "-fpic", "foo.c"]),
     "int pic=1;\nint pie=0;\n",
   )
