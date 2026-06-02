@@ -39,6 +39,7 @@ jobs:
             scripts/check-external-testbed-assets.sh \
             scripts/check-sqlite-conformance-plan.sh \
             scripts/fetch-external-parser-fixtures.sh \
+            scripts/fetch-external-testbed-sources.sh \
             scripts/linux-amd64-smoke.sh \
             scripts/build-linux-amd64-smoke-image.sh \
             scripts/native-ci-test.sh

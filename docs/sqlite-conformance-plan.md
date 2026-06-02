@@ -209,6 +209,8 @@ MoonBit package version:
 2. External compiler testbed gate:
 
    ```bash
+   scripts/fetch-external-testbed-sources.sh tarballs
+
    KIMICC_EXTERNAL_TESTBED=all \
      scripts/check-external-testbed-assets.sh
 
@@ -230,6 +232,10 @@ MoonBit package version:
    assembly and direct Mach-O object modes. The asset checker verifies that the
    required opt-in source trees and preprocessed QuickJS/TinyCC fixtures are
    present under the `/tmp/kimicc_*` paths consumed by the MoonBit harness.
+   The source fetcher prepares the archive-backed zlib, xxHash, cJSON, inih, and
+   Lua source trees; QuickJS full-build fixtures, tree-sitter generated parser
+   sources, OCaml `ocamlyacc` sources, and TinyCC parser fixtures remain
+   explicit setup steps.
 
 3. SQLite middle-weight release gate:
 

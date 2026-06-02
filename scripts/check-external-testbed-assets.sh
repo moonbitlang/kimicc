@@ -157,7 +157,8 @@ if (( ${#missing[@]} > 0 )); then
   printf '  - %s\n' "${missing[@]}" >&2
   echo >&2
   echo "For TinyCC parser fixtures, run scripts/fetch-external-parser-fixtures.sh." >&2
-  echo "Other opt-in testbeds require their documented source trees to be pre-seeded under /tmp." >&2
+  echo "For zlib, xxHash, cJSON, inih, and Lua sources, run scripts/fetch-external-testbed-sources.sh tarballs." >&2
+  echo "QuickJS full-build fixtures, tree-sitter generated parsers, and ocamlyacc require separate setup." >&2
   exit 1
 fi
 
