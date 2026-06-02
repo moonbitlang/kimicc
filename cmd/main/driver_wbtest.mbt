@@ -1468,6 +1468,28 @@ test "driver language flag recognizes preprocessed C inputs" {
 }
 
 ///|
+test "driver preserves per-input preprocessed C language after reset" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-E", "-x", "cpp-output", "generated", "-x", "none", "main.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.input_path is Some("generated"))
+  assert_true(opts.input_language is None)
+  assert_string_array_eq(opts.extra_input_paths, ["main.c"])
+  assert_true(recorded_as_preprocessed_source(opts, "generated"))
+  assert_true(!recorded_as_preprocessed_source(opts, "main.c"))
+
+  let text = "#define X 1\nint value = X;\n"
+  let generated = preprocess_source_with_dependencies(text, "generated", opts)
+  assert_eq(generated.text, text)
+  let main = preprocess_source_with_dependencies(text, "main.c", opts)
+  assert_eq(main.text, "int value=1;\n")
+}
+
+///|
 test "driver splits response file content" {
   let args = match
     split_response_file_content(

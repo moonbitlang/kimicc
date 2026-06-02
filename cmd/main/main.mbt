@@ -50,7 +50,9 @@ priv struct DriverOptions {
   mut target : @target.Target
   mut output_path : String?
   mut input_path : String?
+  mut input_path_language : String?
   extra_input_paths : Array[String]
+  extra_input_languages : Array[String?]
   mut emit_dependencies : Bool
   mut dependency_include_system : Bool
   mut dependency_phony_targets : Bool
@@ -112,7 +114,9 @@ fn DriverOptions::new() -> DriverOptions {
     target: @target.Target::default(),
     output_path: None,
     input_path: None,
+    input_path_language: None,
     extra_input_paths: [],
+    extra_input_languages: [],
     emit_dependencies: false,
     dependency_include_system: true,
     dependency_phony_targets: false,
@@ -938,8 +942,41 @@ fn treats_as_assembly_input(opts : DriverOptions, path : String) -> Bool {
 }
 
 ///|
+fn recorded_source_language(
+  opts : DriverOptions,
+  input_path : String,
+) -> String? {
+  match opts.input_path {
+    Some(path) => if path == input_path { return opts.input_path_language }
+    None => ()
+  }
+  let mut i = 0
+  while i < opts.extra_input_paths.length() {
+    if opts.extra_input_paths[i] == input_path &&
+      i < opts.extra_input_languages.length() {
+      return opts.extra_input_languages[i]
+    }
+    i += 1
+  }
+  None
+}
+
+///|
+fn recorded_as_preprocessed_source(
+  opts : DriverOptions,
+  input_path : String,
+) -> Bool {
+  match recorded_source_language(opts, input_path) {
+    Some(language) => language_is_preprocessed_c_source(language)
+    None => false
+  }
+}
+
+///|
 fn treats_as_preprocessed_source(opts : DriverOptions, path : String) -> Bool {
   if opts.already_preprocessed || is_preprocessed_source_path(path) {
+    true
+  } else if recorded_as_preprocessed_source(opts, path) {
     true
   } else {
     match opts.input_language {
@@ -956,6 +993,31 @@ fn is_linker_input(path : String) -> Bool {
   is_assembly_input(path) ||
   ends_with(path, ".dylib") ||
   ends_with(path, ".so")
+}
+
+///|
+fn current_c_source_language(opts : DriverOptions) -> String? {
+  match opts.input_language {
+    Some(language) =>
+      if language_is_c_source(language) {
+        Some(language)
+      } else {
+        None
+      }
+    None => None
+  }
+}
+
+///|
+fn add_primary_source_input(opts : DriverOptions, value : String) -> Unit {
+  opts.input_path = Some(value)
+  opts.input_path_language = current_c_source_language(opts)
+}
+
+///|
+fn add_extra_source_input(opts : DriverOptions, value : String) -> Unit {
+  opts.extra_input_paths.push(value)
+  opts.extra_input_languages.push(current_c_source_language(opts))
 }
 
 ///|
@@ -982,7 +1044,7 @@ fn add_positional(opts : DriverOptions, value : String) -> Result[Unit, String] 
       } else if is_linker_input(value) && !treats_as_c_source(opts, value) {
         opts.linker_args.push(value)
       } else {
-        opts.input_path = Some(value)
+        add_primary_source_input(opts, value)
       }
     Some(_) =>
       if (opts.output == LinkExecutable || opts.output == EmitObject) &&
@@ -993,7 +1055,7 @@ fn add_positional(opts : DriverOptions, value : String) -> Result[Unit, String] 
         !treats_as_c_source(opts, value) {
         opts.linker_args.push(value)
       } else if treats_as_c_source(opts, value) {
-        opts.extra_input_paths.push(value)
+        add_extra_source_input(opts, value)
       } else if opts.output == LinkExecutable &&
         !treats_as_c_source(opts, value) {
         opts.linker_args.push(value)
