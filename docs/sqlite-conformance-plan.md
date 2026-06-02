@@ -198,7 +198,7 @@ MoonBit package version:
    ```bash
    moon fmt
    moon info --target native
-   moon test --target native
+   scripts/native-ci-test.sh
    git diff --check
    ```
 
