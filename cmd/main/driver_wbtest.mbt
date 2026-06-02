@@ -406,6 +406,24 @@ test "driver language flag delegates extensionless assembler" {
 }
 
 ///|
+test "driver preserves per-input assembler language after reset" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-c", "-x", "assembler", "start", "-x", "none", "main.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(opts.input_path is Some("main.c"))
+  assert_true(opts.input_language is None)
+  assert_string_array_eq(opts.assembly_input_paths, ["start"])
+  assert_true(recorded_as_assembly_input(opts, "start"))
+  assert_string_array_eq(assemble_args(opts, "start", "start.o"), [
+    "clang", "-x", "assembler", "-c", "start", "-o", "start.o",
+  ])
+}
+
+///|
 test "driver forwards forced assembler language to clang" {
   let opts = match
     parse_driver_args([

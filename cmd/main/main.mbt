@@ -70,6 +70,7 @@ priv struct DriverOptions {
   undefines : Array[String]
   linker_args : Array[String]
   assembly_input_paths : Array[String]
+  assembly_input_languages : Array[String?]
   toolchain_args : Array[String]
   mut input_language : String?
   mut already_preprocessed : Bool
@@ -131,6 +132,7 @@ fn DriverOptions::new() -> DriverOptions {
     undefines: [],
     linker_args: [],
     assembly_input_paths: [],
+    assembly_input_languages: [],
     toolchain_args: [],
     input_language: None,
     already_preprocessed: false,
@@ -960,6 +962,15 @@ fn is_linker_input(path : String) -> Bool {
 fn add_delegated_assembly_input(opts : DriverOptions, value : String) -> Unit {
   opts.linker_args.push(value)
   opts.assembly_input_paths.push(value)
+  match opts.input_language {
+    Some(language) =>
+      if language_is_assembler(language) {
+        opts.assembly_input_languages.push(Some(language))
+      } else {
+        opts.assembly_input_languages.push(None)
+      }
+    None => opts.assembly_input_languages.push(None)
+  }
 }
 
 ///|
@@ -993,6 +1004,37 @@ fn add_positional(opts : DriverOptions, value : String) -> Result[Unit, String] 
       }
   }
   Ok(())
+}
+
+///|
+fn recorded_assembly_language(
+  opts : DriverOptions,
+  input_path : String,
+) -> String? {
+  let mut i = 0
+  while i < opts.assembly_input_paths.length() {
+    if opts.assembly_input_paths[i] == input_path &&
+      i < opts.assembly_input_languages.length() {
+      return opts.assembly_input_languages[i]
+    }
+    i += 1
+  }
+  None
+}
+
+///|
+fn recorded_as_assembly_input(
+  opts : DriverOptions,
+  input_path : String,
+) -> Bool {
+  if is_assembly_input(input_path) {
+    true
+  } else {
+    match recorded_assembly_language(opts, input_path) {
+      Some(language) => language_is_assembler(language)
+      None => false
+    }
+  }
 }
 
 ///|
@@ -2739,7 +2781,11 @@ fn assemble_args(
   for arg in opts.toolchain_args {
     args.push(arg)
   }
-  match opts.input_language {
+  let language = match recorded_assembly_language(opts, asm_path) {
+    Some(language) => Some(language)
+    None => opts.input_language
+  }
+  match language {
     Some(language) =>
       if language_is_assembler(language) {
         args.push("-x")
@@ -2781,7 +2827,7 @@ fn compile_assembly_inputs(opts : DriverOptions) -> Unit {
     fail("no input file")
   }
   for input_path in opts.assembly_input_paths {
-    if !treats_as_assembly_input(opts, input_path) {
+    if !recorded_as_assembly_input(opts, input_path) {
       fail("no C input file")
     }
     assemble_with_clang(
