@@ -70,6 +70,11 @@ fixtures locally. It writes `/tmp/tinycc_stripped.c` and
 fetch falls back through `TINYCC_FETCH_REF` (default `mob`) when the server
 does not advertise raw pinned SHA fetches.
 
+Use `scripts/fetch-external-testbed-sources.sh quickjs` to reproduce the
+QuickJS full-build fixtures consumed by the opt-in external testbed. It fetches
+the same `QUICKJS_REF`, runs QuickJS's `repl.c` generation step, and writes
+`/tmp/kimicc_quickjs_build/{quickjs,libregexp,libunicode,cutils,quickjs-libc,repl,qjs,dtoa}.i`.
+
 Native CI uses `scripts/native-ci-test.sh` for the MoonBit test pass. The
 script runs ordinary package tests together, then runs each `test/e2e/*_test.mbt`
 file as its own native test target. This keeps the external e2e coverage in CI
