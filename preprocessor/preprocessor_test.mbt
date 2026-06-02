@@ -297,7 +297,7 @@ test "darwin arm64 predefined macros cover system header probes" {
     #|#if TARGET_OS_MAC == 1 && TARGET_OS_OSX == 1 && TARGET_OS_ARROW == 1
     #|#if TARGET_OS_IPHONE == 0 && TARGET_IPHONE_SIMULATOR == 0 && TARGET_OS_SIMULATOR == 0
     #|#if TARGET_OS_IOS == 0 && TARGET_OS_MACCATALYST == 0 && TARGET_OS_DRIVERKIT == 0
-    #|#if TARGET_OS_LINUX == 0 && TARGET_OS_WINDOWS == 0 && TARGET_OS_WIN32 == 0 && TARGET_OS_UNIX == 0
+    #|#if TARGET_OS_UIKITFORMAC == 0 && TARGET_OS_LINUX == 0 && TARGET_OS_WINDOWS == 0 && TARGET_OS_WIN32 == 0 && TARGET_OS_UNIX == 0
     #|int darwin_platform_probes = 1;
     #|#else
     #|int darwin_platform_probes = 2;
@@ -328,6 +328,22 @@ test "darwin arm64 predefined macros cover system header probes" {
     #|int darwin_fast_integer_probes = 2;
     #|#endif
     #|#endif
+    #|#if __CLANG_ATOMIC_BOOL_LOCK_FREE == 2 && __CLANG_ATOMIC_CHAR_LOCK_FREE == 2 && __CLANG_ATOMIC_WCHAR_T_LOCK_FREE == 2
+    #|#if __CLANG_ATOMIC_CHAR16_T_LOCK_FREE == 2 && __CLANG_ATOMIC_CHAR32_T_LOCK_FREE == 2 && __GCC_ATOMIC_WCHAR_T_LOCK_FREE == 2
+    #|int darwin_atomic_lock_free_probes = 1;
+    #|#else
+    #|int darwin_atomic_lock_free_probes = 2;
+    #|#endif
+    #|#endif
+    #|#if __GXX_ABI_VERSION == 1002 && __GCC_CONSTRUCTIVE_SIZE == 64 && __GCC_DESTRUCTIVE_SIZE == 64
+    #|#if __FPCLASS_QNAN == 0x0002 && __FPCLASS_POSINF == 0x0200 && __MEMORY_SCOPE_SYSTEM == 0 && __OPENCL_MEMORY_SCOPE_SUB_GROUP == 4
+    #|#if __WINT_MAX__ == 2147483647
+    #|int darwin_numeric_constant_probes = 1;
+    #|#else
+    #|int darwin_numeric_constant_probes = 2;
+    #|#endif
+    #|#endif
+    #|#endif
     #|#define KIMICC_STRINGIFY_1(x) #x
     #|#define KIMICC_STRINGIFY(x) KIMICC_STRINGIFY_1(x)
     #|const char *darwin_int8_format = __INT8_FMTd__;
@@ -343,6 +359,8 @@ test "darwin arm64 predefined macros cover system header probes" {
     #|const char *darwin_uint32_suffix = KIMICC_STRINGIFY(__UINT32_C_SUFFIX__);
     #|const char *darwin_int64_suffix = KIMICC_STRINGIFY(__INT64_C_SUFFIX__);
     #|const char *darwin_uint64_suffix = KIMICC_STRINGIFY(__UINT64_C_SUFFIX__);
+    #|const char *darwin_register_prefix = KIMICC_STRINGIFY(__REGISTER_PREFIX__);
+    #|const char *darwin_user_label_prefix = KIMICC_STRINGIFY(__USER_LABEL_PREFIX__);
     #|__CHAR16_TYPE__ darwin_char16_value;
     #|__CHAR32_TYPE__ darwin_char32_value;
     #|__INT64_TYPE__ darwin_int64_value;
@@ -361,6 +379,8 @@ test "darwin arm64 predefined macros cover system header probes" {
       #|int darwin_small_integer_probes=1;
       #|int darwin_least_integer_probes=1;
       #|int darwin_fast_integer_probes=1;
+      #|int darwin_atomic_lock_free_probes=1;
+      #|int darwin_numeric_constant_probes=1;
       #|const char*darwin_int8_format="hhd";
       #|const char*darwin_uint16_format="hx";
       #|const char*darwin_int64_format="lld";
@@ -374,6 +394,8 @@ test "darwin arm64 predefined macros cover system header probes" {
       #|const char*darwin_uint32_suffix="U";
       #|const char*darwin_int64_suffix="LL";
       #|const char*darwin_uint64_suffix="ULL";
+      #|const char*darwin_register_prefix="";
+      #|const char*darwin_user_label_prefix="_";
       #|unsigned short darwin_char16_value;
       #|unsigned int darwin_char32_value;
       #|long long int darwin_int64_value;
