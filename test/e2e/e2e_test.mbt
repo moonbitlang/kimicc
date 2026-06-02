@@ -494,10 +494,38 @@ async test "compile c4_stripped fixture" {
 
 ///|
 async test "parse tinycc stripped" {
-  let data = @fs.read_file("/tmp/tinycc_stripped.c")
+  let data = @fs.read_file(tinycc_preprocessed_fixture_path())
   let source = data.text()
   let assembly = compile(source)
   assert_true(assembly.contains("_main:"))
+}
+
+///|
+test "external parser fixture paths use optional environment overrides" {
+  assert_eq(
+    tinycc_preprocessed_fixture_path_from_env(None),
+    tinycc_preprocessed_default_fixture_path(),
+  )
+  assert_eq(
+    tinycc_preprocessed_fixture_path_from_env(Some("")),
+    tinycc_preprocessed_default_fixture_path(),
+  )
+  assert_eq(
+    tinycc_preprocessed_fixture_path_from_env(Some("/tmp/custom-tinycc.i")),
+    "/tmp/custom-tinycc.i",
+  )
+  assert_eq(
+    quickjs_preprocessed_fixture_path_from_env(None),
+    quickjs_preprocessed_default_fixture_path(),
+  )
+  assert_eq(
+    quickjs_preprocessed_fixture_path_from_env(Some("")),
+    quickjs_preprocessed_default_fixture_path(),
+  )
+  assert_eq(
+    quickjs_preprocessed_fixture_path_from_env(Some("/tmp/custom-quickjs.i")),
+    "/tmp/custom-quickjs.i",
+  )
 }
 
 ///|
@@ -1014,7 +1042,7 @@ async test "offsetof nested and array member designators fold to offsets" {
 
 ///|
 async test "parse quickjs preprocessed" {
-  let data = @fs.read_file("/tmp/quickjs_preprocessed.c")
+  let data = @fs.read_file(quickjs_preprocessed_fixture_path())
   let source = data.text()
   let assembly = compile(source)
   assert_true(assembly.contains("_JS_Eval:"))

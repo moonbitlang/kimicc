@@ -455,6 +455,57 @@ fn external_testbed_enabled(name : String) -> Bool {
 }
 
 ///|
+fn preprocessed_fixture_path_from_env(
+  value : String?,
+  default_path : String,
+) -> String {
+  match value {
+    Some(path) => if path == "" { default_path } else { path }
+    None => default_path
+  }
+}
+
+///|
+fn tinycc_preprocessed_default_fixture_path() -> String {
+  "/tmp/tinycc_stripped.c"
+}
+
+///|
+fn tinycc_preprocessed_fixture_path_from_env(path : String?) -> String {
+  preprocessed_fixture_path_from_env(
+    path,
+    tinycc_preprocessed_default_fixture_path(),
+  )
+}
+
+///|
+fn tinycc_preprocessed_fixture_path() -> String {
+  tinycc_preprocessed_fixture_path_from_env(
+    @env.get_env_var("TINYCC_PREPROCESSED_OUTPUT"),
+  )
+}
+
+///|
+fn quickjs_preprocessed_default_fixture_path() -> String {
+  "/tmp/quickjs_preprocessed.c"
+}
+
+///|
+fn quickjs_preprocessed_fixture_path_from_env(path : String?) -> String {
+  preprocessed_fixture_path_from_env(
+    path,
+    quickjs_preprocessed_default_fixture_path(),
+  )
+}
+
+///|
+fn quickjs_preprocessed_fixture_path() -> String {
+  quickjs_preprocessed_fixture_path_from_env(
+    @env.get_env_var("QUICKJS_PREPROCESSED_OUTPUT"),
+  )
+}
+
+///|
 async fn compile_sqlite_fixture_object() -> String {
   let source = preprocess_c_file(
     "test/fixtures/sqlite/sqlite3.c", "sqlite3_preprocessed",
