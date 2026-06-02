@@ -342,6 +342,13 @@ test "darwin arm64 predefined macros cover system header probes" {
     #|int darwin_atomic_lock_free_probes = 2;
     #|#endif
     #|#endif
+    #|#if __GCC_HAVE_SYNC_COMPARE_AND_SWAP_1 == 1 && __GCC_HAVE_SYNC_COMPARE_AND_SWAP_2 == 1
+    #|#if __GCC_HAVE_SYNC_COMPARE_AND_SWAP_4 == 1 && __GCC_HAVE_SYNC_COMPARE_AND_SWAP_8 == 1 && !defined(__GCC_HAVE_SYNC_COMPARE_AND_SWAP_16)
+    #|int darwin_sync_compare_exchange_probes = 1;
+    #|#else
+    #|int darwin_sync_compare_exchange_probes = 2;
+    #|#endif
+    #|#endif
     #|#if __GXX_ABI_VERSION == 1002 && __GCC_CONSTRUCTIVE_SIZE == 64 && __GCC_DESTRUCTIVE_SIZE == 64
     #|#if __FPCLASS_QNAN == 0x0002 && __FPCLASS_POSINF == 0x0200 && __MEMORY_SCOPE_SYSTEM == 0 && __OPENCL_MEMORY_SCOPE_SUB_GROUP == 4
     #|#if __WINT_MAX__ == 2147483647
@@ -388,6 +395,7 @@ test "darwin arm64 predefined macros cover system header probes" {
       #|int darwin_least_integer_probes=1;
       #|int darwin_fast_integer_probes=1;
       #|int darwin_atomic_lock_free_probes=1;
+      #|int darwin_sync_compare_exchange_probes=1;
       #|int darwin_numeric_constant_probes=1;
       #|const char*darwin_int8_format="hhd";
       #|const char*darwin_uint16_format="hx";
