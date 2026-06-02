@@ -630,6 +630,48 @@ test "driver parses isystem after include path" {
 }
 
 ///|
+test "driver normalizes equals-joined include path options" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-fsyntax-only", "-isystem=/sys", "-isystem-after=/after", "-idirafter=/late",
+      "-iquote=/quote", "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_string_array_eq(opts.include_paths, ["/quote"])
+  assert_string_array_eq(opts.system_include_paths, ["/sys"])
+  assert_string_array_eq(opts.after_system_include_paths, ["/after", "/late"])
+  let wp_opts = match
+    parse_driver_args([
+      "kimicc", "-fsyntax-only", "-Wp,-isystem=/wp-sys,-isystem-after=/wp-after,-idirafter=/wp-late,-iquote=/wp-quote",
+      "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_string_array_eq(wp_opts.include_paths, ["/wp-quote"])
+  assert_string_array_eq(wp_opts.system_include_paths, ["/wp-sys"])
+  assert_string_array_eq(wp_opts.after_system_include_paths, [
+    "/wp-after", "/wp-late",
+  ])
+  let x_opts = match
+    parse_driver_args([
+      "kimicc", "-fsyntax-only", "-Xpreprocessor", "-isystem=/x-sys", "-Xpreprocessor",
+      "-isystem-after=/x-after", "-Xpreprocessor", "-idirafter=/x-late", "-Xpreprocessor",
+      "-iquote=/x-quote", "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_string_array_eq(x_opts.include_paths, ["/x-quote"])
+  assert_string_array_eq(x_opts.system_include_paths, ["/x-sys"])
+  assert_string_array_eq(x_opts.after_system_include_paths, [
+    "/x-after", "/x-late",
+  ])
+}
+
+///|
 test "driver consumes unsupported include options with values" {
   let opts = match
     parse_driver_args([

@@ -311,6 +311,33 @@ fn option_value(
 }
 
 ///|
+fn strip_joined_equals_value(
+  value : String,
+  value_index : Int,
+  option_index : Int,
+) -> String {
+  if value_index == option_index && starts_with(value, "=") {
+    value[1:].to_owned()
+  } else {
+    value
+  }
+}
+
+///|
+fn include_path_option_value(
+  argv : Array[String],
+  index : Int,
+  prefix : String,
+  name : String,
+) -> Result[(String, Int), String] {
+  match option_value(argv, index, prefix, name) {
+    Ok((value, next_i)) =>
+      Ok((strip_joined_equals_value(value, next_i, index), next_i))
+    Err(err) => Err(err)
+  }
+}
+
+///|
 fn long_option_value(
   argv : Array[String],
   index : Int,
@@ -580,6 +607,20 @@ fn wp_option_value(
 }
 
 ///|
+fn wp_include_path_option_value(
+  parts : Array[String],
+  index : Int,
+  prefix : String,
+  option : String,
+) -> Result[(String, Int), String] {
+  match wp_option_value(parts, index, prefix, option) {
+    Ok((value, next_i)) =>
+      Ok((strip_joined_equals_value(value, next_i, index), next_i))
+    Err(err) => Err(err)
+  }
+}
+
+///|
 fn apply_wp_options(opts : DriverOptions, arg : String) -> Result[Unit, String] {
   let body = arg["-Wp,".length():].to_owned()
   let parts : Array[String] = []
@@ -677,7 +718,10 @@ fn apply_wp_options(opts : DriverOptions, arg : String) -> Result[Unit, String] 
         Err(err) => return Err(err)
       }
     } else if part == "-isystem-after" || starts_with(part, "-isystem-after") {
-      match wp_option_value(parts, i, "-isystem-after", "-isystem-after") {
+      match
+        wp_include_path_option_value(
+          parts, i, "-isystem-after", "-isystem-after",
+        ) {
         Ok((value, next_i)) => {
           opts.after_system_include_paths.push(value)
           i = next_i
@@ -685,7 +729,7 @@ fn apply_wp_options(opts : DriverOptions, arg : String) -> Result[Unit, String] 
         Err(err) => return Err(err)
       }
     } else if part == "-isystem" || starts_with(part, "-isystem") {
-      match wp_option_value(parts, i, "-isystem", "-isystem") {
+      match wp_include_path_option_value(parts, i, "-isystem", "-isystem") {
         Ok((value, next_i)) => {
           opts.system_include_paths.push(value)
           i = next_i
@@ -693,7 +737,7 @@ fn apply_wp_options(opts : DriverOptions, arg : String) -> Result[Unit, String] 
         Err(err) => return Err(err)
       }
     } else if part == "-idirafter" || starts_with(part, "-idirafter") {
-      match wp_option_value(parts, i, "-idirafter", "-idirafter") {
+      match wp_include_path_option_value(parts, i, "-idirafter", "-idirafter") {
         Ok((value, next_i)) => {
           opts.after_system_include_paths.push(value)
           i = next_i
@@ -701,7 +745,7 @@ fn apply_wp_options(opts : DriverOptions, arg : String) -> Result[Unit, String] 
         Err(err) => return Err(err)
       }
     } else if part == "-iquote" || starts_with(part, "-iquote") {
-      match wp_option_value(parts, i, "-iquote", "-iquote") {
+      match wp_include_path_option_value(parts, i, "-iquote", "-iquote") {
         Ok((value, next_i)) => {
           opts.include_paths.push(value)
           i = next_i
@@ -740,6 +784,20 @@ fn xpreprocessor_option_value(
     Ok((value, index + 1))
   } else {
     xpreprocessor_value(argv, index, option)
+  }
+}
+
+///|
+fn xpreprocessor_include_path_option_value(
+  argv : Array[String],
+  index : Int,
+  prefix : String,
+  option : String,
+) -> Result[(String, Int), String] {
+  match xpreprocessor_option_value(argv, index, prefix, option) {
+    Ok((value, next_i)) =>
+      Ok((strip_joined_equals_value(value, next_i, index + 1), next_i))
+    Err(err) => Err(err)
   }
 }
 
@@ -842,7 +900,8 @@ fn consume_xpreprocessor_option(
       Err(err) => Err(err)
     }
   } else if part == "-iquote" || starts_with(part, "-iquote") {
-    match xpreprocessor_option_value(argv, index, "-iquote", "-iquote") {
+    match
+      xpreprocessor_include_path_option_value(argv, index, "-iquote", "-iquote") {
       Ok((value, next_i)) => {
         opts.include_paths.push(value)
         Ok(next_i)
@@ -851,7 +910,7 @@ fn consume_xpreprocessor_option(
     }
   } else if part == "-isystem-after" || starts_with(part, "-isystem-after") {
     match
-      xpreprocessor_option_value(
+      xpreprocessor_include_path_option_value(
         argv, index, "-isystem-after", "-isystem-after",
       ) {
       Ok((value, next_i)) => {
@@ -861,7 +920,10 @@ fn consume_xpreprocessor_option(
       Err(err) => Err(err)
     }
   } else if part == "-isystem" || starts_with(part, "-isystem") {
-    match xpreprocessor_option_value(argv, index, "-isystem", "-isystem") {
+    match
+      xpreprocessor_include_path_option_value(
+        argv, index, "-isystem", "-isystem",
+      ) {
       Ok((value, next_i)) => {
         opts.system_include_paths.push(value)
         Ok(next_i)
@@ -869,7 +931,10 @@ fn consume_xpreprocessor_option(
       Err(err) => Err(err)
     }
   } else if part == "-idirafter" || starts_with(part, "-idirafter") {
-    match xpreprocessor_option_value(argv, index, "-idirafter", "-idirafter") {
+    match
+      xpreprocessor_include_path_option_value(
+        argv, index, "-idirafter", "-idirafter",
+      ) {
       Ok((value, next_i)) => {
         opts.after_system_include_paths.push(value)
         Ok(next_i)
@@ -2064,7 +2129,10 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
             Err(err) => return Err(err)
           }
         } else if arg == "-isystem-after" || starts_with(arg, "-isystem-after") {
-          match option_value(argv, i, "-isystem-after", "-isystem-after") {
+          match
+            include_path_option_value(
+              argv, i, "-isystem-after", "-isystem-after",
+            ) {
             Ok((value, next_i)) => {
               opts.after_system_include_paths.push(value)
               i = next_i
@@ -2072,7 +2140,7 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
             Err(err) => return Err(err)
           }
         } else if arg == "-isystem" || starts_with(arg, "-isystem") {
-          match option_value(argv, i, "-isystem", "-isystem") {
+          match include_path_option_value(argv, i, "-isystem", "-isystem") {
             Ok((value, next_i)) => {
               opts.system_include_paths.push(value)
               i = next_i
@@ -2088,7 +2156,7 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
             Err(err) => return Err(err)
           }
         } else if arg == "-iquote" || starts_with(arg, "-iquote") {
-          match option_value(argv, i, "-iquote", "-iquote") {
+          match include_path_option_value(argv, i, "-iquote", "-iquote") {
             Ok((value, next_i)) => {
               opts.include_paths.push(value)
               i = next_i
@@ -2096,7 +2164,7 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
             Err(err) => return Err(err)
           }
         } else if arg == "-idirafter" || starts_with(arg, "-idirafter") {
-          match option_value(argv, i, "-idirafter", "-idirafter") {
+          match include_path_option_value(argv, i, "-idirafter", "-idirafter") {
             Ok((value, next_i)) => {
               opts.after_system_include_paths.push(value)
               i = next_i
