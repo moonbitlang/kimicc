@@ -47,6 +47,16 @@ check_plan_mentions_array() {
   return "${status}"
 }
 
+check_plan_mentions_text() {
+  local label="$1"
+  local text="$2"
+
+  if ! grep -Fq "${text}" "${plan}"; then
+    echo "${label} missing from docs/sqlite-conformance-plan.md: ${text}" >&2
+    return 1
+  fi
+}
+
 status=0
 
 check_plan_mentions_array \
@@ -61,8 +71,12 @@ check_plan_mentions_array \
   "SQLite release gate" \
   "sqlite_release_gate_script_paths" || status=1
 
+check_plan_mentions_text \
+  "Default native release gate" \
+  "scripts/native-ci-test.sh" || status=1
+
 if [[ "${status}" -ne 0 ]]; then
   exit "${status}"
 fi
 
-echo "sqlite conformance plan script paths are documented"
+echo "sqlite conformance plan script paths and release gate are documented"
