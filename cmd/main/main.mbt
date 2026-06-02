@@ -207,7 +207,7 @@ fn write_stdout(content : String) -> Unit {
 
 ///|
 fn driver_version() -> String {
-  "0.1.229"
+  "0.1.230"
 }
 
 ///|
