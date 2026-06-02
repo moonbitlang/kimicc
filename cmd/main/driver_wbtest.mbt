@@ -1435,6 +1435,21 @@ test "driver recognizes preprocessed inputs" {
 }
 
 ///|
+test "driver language flag recognizes preprocessed C inputs" {
+  let opts = match
+    parse_driver_args(["kimicc", "-E", "-x", "cpp-output", "foo"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(treats_as_preprocessed_source(opts, "foo"))
+  let text = "#define X 1\nint value = X;\n"
+  let result = preprocess_source_with_dependencies(text, "foo", opts)
+  assert_eq(result.text, text)
+  assert_eq(result.dependency_records.length(), 1)
+  assert_eq(result.dependency_records[0].path, "foo")
+}
+
+///|
 test "driver splits response file content" {
   let args = match
     split_response_file_content(
