@@ -8,7 +8,7 @@ missing=()
 
 usage() {
   cat <<'EOF'
-usage: KIMICC_EXTERNAL_TESTBED=<name|all> scripts/check-external-testbed-assets.sh
+usage: KIMICC_EXTERNAL_TESTBED=<name|all-supported|all> scripts/check-external-testbed-assets.sh
 
 Checks that the opt-in external compiler testbed sources expected by
 test/e2e/external_testbeds_test.mbt are present under their documented /tmp
@@ -120,6 +120,16 @@ check_ocamlyacc() {
   done
 }
 
+check_all_supported() {
+  check_tinycc
+  check_quickjs
+  check_zlib
+  check_xxhash
+  check_cjson
+  check_inih
+  check_lua
+}
+
 check_one() {
   case "$1" in
     tinycc) check_tinycc ;;
@@ -131,20 +141,17 @@ check_one() {
     lua) check_lua ;;
     tree-sitter) check_tree_sitter ;;
     ocamlyacc) check_ocamlyacc ;;
+    all-supported)
+      check_all_supported
+      ;;
     all)
-      check_tinycc
-      check_quickjs
-      check_zlib
-      check_xxhash
-      check_cjson
-      check_inih
-      check_lua
+      check_all_supported
       check_tree_sitter
       check_ocamlyacc
       ;;
     *)
       echo "unknown KIMICC_EXTERNAL_TESTBED value: $1" >&2
-      echo "expected one of: tinycc quickjs zlib xxhash cjson inih lua tree-sitter ocamlyacc all" >&2
+      echo "expected one of: tinycc quickjs zlib xxhash cjson inih lua tree-sitter ocamlyacc all-supported all" >&2
       exit 2
       ;;
   esac
@@ -159,6 +166,7 @@ if (( ${#missing[@]} > 0 )); then
   echo "For TinyCC parser fixtures, run scripts/fetch-external-parser-fixtures.sh." >&2
   echo "For QuickJS full-build fixtures, run scripts/fetch-external-testbed-sources.sh quickjs." >&2
   echo "For zlib, xxHash, cJSON, inih, and Lua sources, run scripts/fetch-external-testbed-sources.sh tarballs." >&2
+  echo "For the automated subset, run both fetch scripts, then use KIMICC_EXTERNAL_TESTBED=all-supported." >&2
   echo "tree-sitter generated parsers and ocamlyacc require separate setup." >&2
   exit 1
 fi

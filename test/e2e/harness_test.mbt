@@ -446,9 +446,11 @@ fn shell_join_quoted(values : Array[String]) -> String {
 fn external_testbed_enabled(name : String) -> Bool {
   moonbit_system(
     @utf8.encode(
-      "test \"${KIMICC_EXTERNAL_TESTBED:-}\" = " +
+      "case \"${KIMICC_EXTERNAL_TESTBED:-}\" in " +
       shell_quote(name) +
-      " || test \"${KIMICC_EXTERNAL_TESTBED:-}\" = all",
+      "|all) exit 0 ;; all-supported) case " +
+      shell_quote(name) +
+      " in tinycc|quickjs|zlib|xxhash|cjson|inih|lua) exit 0 ;; *) exit 1 ;; esac ;; *) exit 1 ;; esac",
     ),
   ) ==
   0

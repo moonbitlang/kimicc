@@ -83,6 +83,10 @@ check_plan_mentions_text \
   "External testbed source fetcher" \
   "scripts/fetch-external-testbed-sources.sh" || status=1
 
+check_plan_mentions_text \
+  "External testbed automated subset" \
+  "KIMICC_EXTERNAL_TESTBED=all-supported" || status=1
+
 if [[ "${status}" -ne 0 ]]; then
   exit "${status}"
 fi
