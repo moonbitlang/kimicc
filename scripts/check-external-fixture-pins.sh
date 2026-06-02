@@ -3,6 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fetch_script="${repo_root}/scripts/fetch-external-parser-fixtures.sh"
+testbed_source_script="${repo_root}/scripts/fetch-external-testbed-sources.sh"
 native_ci="${repo_root}/scripts/native-ci-test.sh"
 workflow="${repo_root}/.github/workflows/ci.yml"
 harness="${repo_root}/test/e2e/harness_test.mbt"
@@ -12,6 +13,12 @@ extract_fetch_ref() {
   local name="$1"
   local env_name="$2"
   sed -nE "s/^${name}_ref=\"\\\$\\{${env_name}:-([0-9a-f]+)\\}\"$/\\1/p" "${fetch_script}"
+}
+
+extract_testbed_source_ref() {
+  local name="$1"
+  local env_name="$2"
+  sed -nE "s/^${name}_ref=\"\\\$\\{${env_name}:-([0-9a-f]+)\\}\"$/\\1/p" "${testbed_source_script}"
 }
 
 extract_workflow_ref() {
@@ -134,6 +141,12 @@ check_pin \
 check_pin \
   "QuickJS" \
   "$(extract_fetch_ref quickjs QUICKJS_REF)" \
+  "$(extract_workflow_ref QUICKJS_REF)" \
+  "$(extract_plan_ref QuickJS)"
+
+check_pin \
+  "QuickJS full-build" \
+  "$(extract_testbed_source_ref quickjs QUICKJS_REF)" \
   "$(extract_workflow_ref QUICKJS_REF)" \
   "$(extract_plan_ref QuickJS)"
 
