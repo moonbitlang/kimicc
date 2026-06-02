@@ -717,6 +717,27 @@ test "driver uses resource dir for preprocessing and clang" {
 }
 
 ///|
+test "driver forwards architecture option to clang" {
+  let opts = match
+    parse_driver_args(["kimicc", "-arch", "arm64", "foo.c", "support.o"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_string_array_eq(opts.toolchain_args, ["-arch", "arm64"])
+  assert_string_array_eq(link_args(opts, "tool", Some("foo.s")), [
+    "clang", "-o", "tool", "-arch", "arm64", "foo.s", "support.o",
+  ])
+  let asm_opts = match
+    parse_driver_args(["kimicc", "-c", "-arch", "arm64", "start.s"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_string_array_eq(assemble_args(asm_opts, "start.s", "start.o"), [
+    "clang", "-arch", "arm64", "-c", "start.s", "-o", "start.o",
+  ])
+}
+
+///|
 test "driver forwards gcc toolchain discovery options to clang" {
   let opts = match
     parse_driver_args([
