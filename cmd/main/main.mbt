@@ -1215,7 +1215,6 @@ fn consume_ignored_option(
 ) -> Result[Int, String] {
   match arg {
     "--config"
-    | "-arch"
     | "--analyzer-output"
     | "-analyzer-output"
     | "-arcmt-migrate-report-output"
@@ -1290,6 +1289,14 @@ fn consume_ignored_option(
         Err("missing argument after " + arg)
       }
     "-Xassembler" =>
+      if index + 1 < argv.length() {
+        opts.toolchain_args.push(arg)
+        opts.toolchain_args.push(argv[index + 1])
+        Ok(index + 1)
+      } else {
+        Err("missing argument after " + arg)
+      }
+    "-arch" =>
       if index + 1 < argv.length() {
         opts.toolchain_args.push(arg)
         opts.toolchain_args.push(argv[index + 1])
