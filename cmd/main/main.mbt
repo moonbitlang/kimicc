@@ -910,6 +910,11 @@ fn language_is_c_source(language : String) -> Bool {
 }
 
 ///|
+fn language_is_preprocessed_c_source(language : String) -> Bool {
+  language == "cpp-output"
+}
+
+///|
 fn language_is_assembler(language : String) -> Bool {
   language == "assembler" || language == "assembler-with-cpp"
 }
@@ -927,6 +932,18 @@ fn treats_as_assembly_input(opts : DriverOptions, path : String) -> Bool {
   match opts.input_language {
     Some(language) => language_is_assembler(language)
     None => is_assembly_input(path)
+  }
+}
+
+///|
+fn treats_as_preprocessed_source(opts : DriverOptions, path : String) -> Bool {
+  if opts.already_preprocessed || is_preprocessed_source_path(path) {
+    true
+  } else {
+    match opts.input_language {
+      Some(language) => language_is_preprocessed_c_source(language)
+      None => false
+    }
   }
 }
 
@@ -2510,7 +2527,7 @@ fn preprocess_source_with_dependencies(
   input_path : String,
   opts : DriverOptions,
 ) -> DriverPreprocessResult {
-  if opts.already_preprocessed || is_preprocessed_source_path(input_path) {
+  if treats_as_preprocessed_source(opts, input_path) {
     if opts.forced_includes.length() > 0 || opts.macro_includes.length() > 0 {
       fail("--preprocessed cannot be combined with -include or -imacros")
     }
@@ -2538,12 +2555,11 @@ fn dump_macros_source_with_dependencies(
   input_path : String,
   opts : DriverOptions,
 ) -> DriverPreprocessResult {
-  if (opts.already_preprocessed || is_preprocessed_source_path(input_path)) &&
+  if treats_as_preprocessed_source(opts, input_path) &&
     (opts.forced_includes.length() > 0 || opts.macro_includes.length() > 0) {
     fail("--preprocessed cannot be combined with -include or -imacros")
   }
-  let preprocessed_source = if opts.already_preprocessed ||
-    is_preprocessed_source_path(input_path) {
+  let preprocessed_source = if treats_as_preprocessed_source(opts, input_path) {
     command_line_macro_prefix(opts) + source
   } else {
     driver_preprocess_source(source, opts)
