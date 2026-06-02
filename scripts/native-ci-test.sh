@@ -20,6 +20,9 @@ scripts/check-strict-mir-interop.sh
 echo "==> check linux has-builtin coverage"
 scripts/check-linux-has-builtin-coverage.sh
 
+echo "==> check external parser fixture pins"
+scripts/check-external-fixture-pins.sh
+
 core_packages=(
   target
   parser
