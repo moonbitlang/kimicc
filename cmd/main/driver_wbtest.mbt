@@ -566,7 +566,12 @@ test "driver parses long configure query flags" {
 
 ///|
 test "linux amd64 include paths keep clang fallbacks after libc" {
-  let paths = linux_amd64_system_include_paths()
+  let opts = match
+    parse_driver_args(["kimicc", "-target", "linux-amd64", "foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  let paths = full_system_include_paths(opts)
   let mut usr_include = -1
   let mut clang_fallback = -1
   for i = 0; i < paths.length(); i = i + 1 {
@@ -723,8 +728,9 @@ test "driver forwards linux sysroot to includes and clang" {
   assert_eq(opts.toolchain_args.length(), 1)
   assert_eq(opts.toolchain_args[0], "--sysroot=/opt/sysroot")
   let paths = full_system_include_paths(opts)
-  assert_eq(paths[0], "/opt/sysroot/usr/include/x86_64-linux-gnu")
-  assert_eq(paths[1], "/opt/sysroot/usr/include")
+  assert_eq(paths[0], "/usr/lib/llvm-20/lib/clang/20/include")
+  assert_true(paths.contains("/opt/sysroot/usr/include/x86_64-linux-gnu"))
+  assert_true(paths.contains("/opt/sysroot/usr/include"))
   assert_string_array_eq(link_args(opts, "out", Some("foo.s")), [
     "clang", "-o", "out", "-target", "x86_64-linux-gnu", "--sysroot=/opt/sysroot",
     "foo.s",
@@ -741,7 +747,11 @@ test "driver forwards separated isysroot spelling" {
   assert_eq(opts.toolchain_args[0], "-isysroot")
   assert_eq(opts.toolchain_args[1], "/SDK")
   let paths = full_system_include_paths(opts)
-  assert_eq(paths[0], "/SDK/usr/include")
+  assert_eq(
+    paths[0],
+    "/Library/Developer/CommandLineTools/usr/lib/clang/17/include",
+  )
+  assert_true(paths.contains("/SDK/usr/include"))
 }
 
 ///|
@@ -788,6 +798,79 @@ test "driver nostdinc suppresses resource dir include default" {
   assert_string_array_eq(full_system_include_paths(opts), ["/explicit"])
   assert_string_array_eq(link_args(opts, "out", Some("foo.s")), [
     "clang", "-o", "out", "-resource-dir", "/clang/lib", "foo.s",
+  ])
+}
+
+///|
+test "driver nobuiltininc keeps standard library include defaults" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-nobuiltininc", "-resource-dir", "/clang/lib", "-isysroot", "/SDK",
+      "-isystem", "/explicit", "-idirafter", "/late", "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  let paths = full_system_include_paths(opts)
+  let mut saw_resource_dir = false
+  let mut saw_builtin_default = false
+  let mut saw_sysroot = false
+  for path in paths {
+    if path == "/clang/lib/include" {
+      saw_resource_dir = true
+    } else if path ==
+      "/Library/Developer/CommandLineTools/usr/lib/clang/17/include" {
+      saw_builtin_default = true
+    } else if path == "/SDK/usr/include" {
+      saw_sysroot = true
+    }
+  }
+  assert_true(!saw_resource_dir)
+  assert_true(!saw_builtin_default)
+  assert_true(saw_sysroot)
+  assert_eq(paths[0], "/explicit")
+  assert_eq(paths[paths.length() - 1], "/late")
+  assert_string_array_eq(link_args(opts, "out", Some("foo.s")), [
+    "clang", "-o", "out", "-resource-dir", "/clang/lib", "-isysroot", "/SDK", "foo.s",
+  ])
+}
+
+///|
+test "driver nostdlibinc keeps builtin include defaults" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-nostdlibinc", "-resource-dir", "/clang/lib", "-isysroot", "/SDK",
+      "-isystem", "/explicit", "-idirafter", "/late", "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  let paths = full_system_include_paths(opts)
+  let mut saw_resource_dir = false
+  let mut saw_builtin_default = false
+  let mut saw_sysroot = false
+  let mut saw_stdlib_default = false
+  for path in paths {
+    if path == "/clang/lib/include" {
+      saw_resource_dir = true
+    } else if path ==
+      "/Library/Developer/CommandLineTools/usr/lib/clang/17/include" {
+      saw_builtin_default = true
+    } else if path == "/SDK/usr/include" {
+      saw_sysroot = true
+    } else if path ==
+      "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include" {
+      saw_stdlib_default = true
+    }
+  }
+  assert_true(saw_resource_dir)
+  assert_true(saw_builtin_default)
+  assert_true(!saw_sysroot)
+  assert_true(!saw_stdlib_default)
+  assert_eq(paths[0], "/explicit")
+  assert_eq(paths[paths.length() - 1], "/late")
+  assert_string_array_eq(link_args(opts, "out", Some("foo.s")), [
+    "clang", "-o", "out", "-resource-dir", "/clang/lib", "-isysroot", "/SDK", "foo.s",
   ])
 }
 

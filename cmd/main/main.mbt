@@ -88,7 +88,8 @@ priv struct DriverOptions {
   mut fast_math : Bool
   mut fast_math_explicit : Bool
   mut strict_mir_codegen : Bool
-  mut no_standard_includes : Bool
+  mut no_builtin_includes : Bool
+  mut no_standard_library_includes : Bool
   mut show_help : Bool
   mut show_version : Bool
   mut verbose : Bool
@@ -153,7 +154,8 @@ fn DriverOptions::new() -> DriverOptions {
     fast_math: false,
     fast_math_explicit: false,
     strict_mir_codegen: false,
-    no_standard_includes: false,
+    no_builtin_includes: false,
+    no_standard_library_includes: false,
     show_help: false,
     show_version: false,
     verbose: false,
@@ -1998,7 +2000,12 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
       "--preprocessed" => opts.already_preprocessed = true
       "--strict-mir-codegen" | "-fno-parser-codegen-fallback" =>
         opts.strict_mir_codegen = true
-      "-nostdinc" => opts.no_standard_includes = true
+      "-nostdinc" => {
+        opts.no_builtin_includes = true
+        opts.no_standard_library_includes = true
+      }
+      "-nobuiltininc" => opts.no_builtin_includes = true
+      "-nostdlibinc" => opts.no_standard_library_includes = true
       "-o" =>
         match option_value(argv, i, "-o", "-o") {
           Ok((value, next_i)) => {
@@ -2255,23 +2262,42 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
 }
 
 ///|
-fn standard_system_include_paths() -> Array[String] {
+fn darwin_builtin_include_paths() -> Array[String] {
   [
     "/Library/Developer/CommandLineTools/usr/lib/clang/17/include", "/Library/Developer/CommandLineTools/usr/lib/clang/17.0.0/include",
     "/Library/Developer/CommandLineTools/usr/lib/clang/18/include", "/Library/Developer/CommandLineTools/usr/lib/clang/16/include",
+  ]
+}
+
+///|
+fn darwin_standard_library_include_paths() -> Array[String] {
+  [
     "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include", "/Library/Developer/CommandLineTools/usr/include",
     "/opt/homebrew/include", "/usr/local/include",
   ]
 }
 
 ///|
-fn linux_amd64_system_include_paths() -> Array[String] {
+fn linux_amd64_builtin_include_paths() -> Array[String] {
   [
     "/usr/lib/llvm-20/lib/clang/20/include", "/usr/lib/llvm-19/lib/clang/19/include",
     "/usr/lib/llvm-18/lib/clang/18/include", "/usr/lib/llvm-17/lib/clang/17/include",
-    "/usr/lib/llvm-16/lib/clang/16/include", "/usr/lib/gcc/x86_64-linux-gnu/14/include",
-    "/usr/lib/gcc/x86_64-linux-gnu/13/include", "/usr/local/include", "/usr/include/x86_64-linux-gnu",
-    "/usr/include", "/usr/lib/clang/18/include", "/usr/lib/clang/17/include", "/usr/lib/clang/16/include",
+    "/usr/lib/llvm-16/lib/clang/16/include",
+  ]
+}
+
+///|
+fn linux_amd64_builtin_fallback_include_paths() -> Array[String] {
+  [
+    "/usr/lib/clang/18/include", "/usr/lib/clang/17/include", "/usr/lib/clang/16/include",
+  ]
+}
+
+///|
+fn linux_amd64_standard_library_include_paths() -> Array[String] {
+  [
+    "/usr/lib/gcc/x86_64-linux-gnu/14/include", "/usr/lib/gcc/x86_64-linux-gnu/13/include",
+    "/usr/local/include", "/usr/include/x86_64-linux-gnu", "/usr/include",
   ]
 }
 
@@ -2281,10 +2307,22 @@ fn full_system_include_paths(opts : DriverOptions) -> Array[String] {
   for path in opts.system_include_paths {
     paths.push(path)
   }
-  if !opts.no_standard_includes {
+  if !opts.no_builtin_includes {
     for path in opts.resource_include_paths {
       paths.push(path)
     }
+    match opts.target {
+      DarwinArm64 =>
+        for path in darwin_builtin_include_paths() {
+          paths.push(path)
+        }
+      LinuxAmd64 =>
+        for path in linux_amd64_builtin_include_paths() {
+          paths.push(path)
+        }
+    }
+  }
+  if !opts.no_standard_library_includes {
     for sysroot in opts.sysroot_paths {
       match opts.target {
         DarwinArm64 => paths.push(sysroot + "/usr/include")
@@ -2296,11 +2334,20 @@ fn full_system_include_paths(opts : DriverOptions) -> Array[String] {
     }
     match opts.target {
       DarwinArm64 =>
-        for path in standard_system_include_paths() {
+        for path in darwin_standard_library_include_paths() {
           paths.push(path)
         }
       LinuxAmd64 =>
-        for path in linux_amd64_system_include_paths() {
+        for path in linux_amd64_standard_library_include_paths() {
+          paths.push(path)
+        }
+    }
+  }
+  if !opts.no_builtin_includes {
+    match opts.target {
+      DarwinArm64 => ()
+      LinuxAmd64 =>
+        for path in linux_amd64_builtin_fallback_include_paths() {
           paths.push(path)
         }
     }
@@ -3008,7 +3055,9 @@ fn print_usage() -> Unit {
     #|                      remap OLD to NEW in __FILE__
     #|  -Wp,OPTS            forward supported comma-separated preprocessor options
     #|  -Xpreprocessor OPT  forward one supported preprocessor option
-    #|  -nostdinc           disable built-in system include paths
+    #|  -nostdinc           disable builtin and standard library include paths
+    #|  -nobuiltininc       disable builtin/resource include paths
+    #|  -nostdlibinc        disable standard library include paths
     #|  --preprocessed      skip preprocessing and parse input as already preprocessed C
     #|  --strict-mir-codegen
     #|                      require parser-AST-free MIR codegen; reject unsupported coverage
