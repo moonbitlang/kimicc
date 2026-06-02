@@ -79,6 +79,10 @@ check_plan_mentions_text \
   "External testbed asset checker" \
   "scripts/check-external-testbed-assets.sh" || status=1
 
+check_plan_mentions_text \
+  "External testbed source fetcher" \
+  "scripts/fetch-external-testbed-sources.sh" || status=1
+
 if [[ "${status}" -ne 0 ]]; then
   exit "${status}"
 fi
