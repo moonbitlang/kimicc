@@ -61,6 +61,7 @@ priv struct DriverOptions {
   dependency_targets : Array[String]
   include_paths : Array[String]
   system_include_paths : Array[String]
+  resource_include_paths : Array[String]
   after_system_include_paths : Array[String]
   sysroot_paths : Array[String]
   file_prefix_maps : Array[@preprocessor.PreprocessPrefixMap]
@@ -125,6 +126,7 @@ fn DriverOptions::new() -> DriverOptions {
     dependency_targets: [],
     include_paths: [],
     system_include_paths: [],
+    resource_include_paths: [],
     after_system_include_paths: [],
     sysroot_paths: [],
     file_prefix_maps: [],
@@ -401,7 +403,7 @@ fn add_sysroot(opts : DriverOptions, spelling : String, path : String) -> Unit {
 
 ///|
 fn add_resource_dir(opts : DriverOptions, path : String) -> Unit {
-  opts.system_include_paths.push(path + "/include")
+  opts.resource_include_paths.push(path + "/include")
   opts.toolchain_args.push("-resource-dir")
   opts.toolchain_args.push(path)
 }
@@ -2280,6 +2282,9 @@ fn full_system_include_paths(opts : DriverOptions) -> Array[String] {
     paths.push(path)
   }
   if !opts.no_standard_includes {
+    for path in opts.resource_include_paths {
+      paths.push(path)
+    }
     for sysroot in opts.sysroot_paths {
       match opts.target {
         DarwinArm64 => paths.push(sysroot + "/usr/include")

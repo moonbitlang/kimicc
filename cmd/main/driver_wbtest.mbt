@@ -776,6 +776,22 @@ test "driver uses resource dir for preprocessing and clang" {
 }
 
 ///|
+test "driver nostdinc suppresses resource dir include default" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-nostdinc", "-resource-dir", "/clang/lib", "-isystem", "/explicit",
+      "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_string_array_eq(full_system_include_paths(opts), ["/explicit"])
+  assert_string_array_eq(link_args(opts, "out", Some("foo.s")), [
+    "clang", "-o", "out", "-resource-dir", "/clang/lib", "foo.s",
+  ])
+}
+
+///|
 test "driver forwards architecture option to clang" {
   let opts = match
     parse_driver_args(["kimicc", "-arch", "arm64", "foo.c", "support.o"]) {
