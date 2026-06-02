@@ -23,6 +23,9 @@ scripts/check-linux-has-builtin-coverage.sh
 echo "==> check external parser fixture pins"
 scripts/check-external-fixture-pins.sh
 
+echo "==> check sqlite conformance plan"
+scripts/check-sqlite-conformance-plan.sh
+
 core_packages=(
   target
   parser
