@@ -36,6 +36,7 @@ jobs:
             scripts/check-strict-mir-interop.sh \
             scripts/check-linux-has-builtin-coverage.sh \
             scripts/check-external-fixture-pins.sh \
+            scripts/check-external-testbed-assets.sh \
             scripts/check-sqlite-conformance-plan.sh \
             scripts/fetch-external-parser-fixtures.sh \
             scripts/linux-amd64-smoke.sh \

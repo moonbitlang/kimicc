@@ -75,6 +75,10 @@ check_plan_mentions_text \
   "Default native release gate" \
   "scripts/native-ci-test.sh" || status=1
 
+check_plan_mentions_text \
+  "External testbed asset checker" \
+  "scripts/check-external-testbed-assets.sh" || status=1
+
 if [[ "${status}" -ne 0 ]]; then
   exit "${status}"
 fi

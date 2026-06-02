@@ -210,6 +210,9 @@ MoonBit package version:
 
    ```bash
    KIMICC_EXTERNAL_TESTBED=all \
+     scripts/check-external-testbed-assets.sh
+
+   KIMICC_EXTERNAL_TESTBED=all \
      moon test test/e2e/external_testbeds_test.mbt --target native
    ```
 
@@ -224,7 +227,9 @@ MoonBit package version:
    assembly and direct Mach-O object modes, TinyCC stripped compiler object
    emission in kimicc assembly and direct Mach-O object modes, OCaml
    `ocamlyacc` clang differentials, and tree-sitter parser/query APIs in kimicc
-   assembly and direct Mach-O object modes.
+   assembly and direct Mach-O object modes. The asset checker verifies that the
+   required opt-in source trees and preprocessed QuickJS/TinyCC fixtures are
+   present under the `/tmp/kimicc_*` paths consumed by the MoonBit harness.
 
 3. SQLite middle-weight release gate:
 
