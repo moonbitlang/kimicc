@@ -2279,16 +2279,16 @@ fn full_system_include_paths(opts : DriverOptions) -> Array[String] {
   for path in opts.system_include_paths {
     paths.push(path)
   }
-  for sysroot in opts.sysroot_paths {
-    match opts.target {
-      DarwinArm64 => paths.push(sysroot + "/usr/include")
-      LinuxAmd64 => {
-        paths.push(sysroot + "/usr/include/x86_64-linux-gnu")
-        paths.push(sysroot + "/usr/include")
+  if !opts.no_standard_includes {
+    for sysroot in opts.sysroot_paths {
+      match opts.target {
+        DarwinArm64 => paths.push(sysroot + "/usr/include")
+        LinuxAmd64 => {
+          paths.push(sysroot + "/usr/include/x86_64-linux-gnu")
+          paths.push(sysroot + "/usr/include")
+        }
       }
     }
-  }
-  if !opts.no_standard_includes {
     match opts.target {
       DarwinArm64 =>
         for path in standard_system_include_paths() {

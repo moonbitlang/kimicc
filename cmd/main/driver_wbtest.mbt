@@ -745,6 +745,23 @@ test "driver forwards separated isysroot spelling" {
 }
 
 ///|
+test "driver nostdinc suppresses sysroot include defaults" {
+  let opts = match
+    parse_driver_args([
+      "kimicc", "-nostdinc", "-isysroot", "/SDK", "-isystem", "/explicit", "-idirafter",
+      "/late", "foo.c",
+    ]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  let paths = full_system_include_paths(opts)
+  assert_string_array_eq(paths, ["/explicit", "/late"])
+  assert_string_array_eq(link_args(opts, "out", Some("foo.s")), [
+    "clang", "-o", "out", "-isysroot", "/SDK", "foo.s",
+  ])
+}
+
+///|
 test "driver uses resource dir for preprocessing and clang" {
   let opts = match
     parse_driver_args(["kimicc", "-resource-dir", "/clang/lib", "foo.c"]) {
