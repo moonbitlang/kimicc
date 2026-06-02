@@ -166,6 +166,28 @@ KIMICC_SQLITE_CONFORMANCE=full \
   --filter 'sqlite public full residual failures match clang and direct when enabled'
 ```
 
+The MoonBit harness keeps these SQLite public script path lists in
+`test/e2e/sqlite_test.mbt`:
+
+- Smoke scripts: `test/select1.test`, `test/select2.test`,
+  `test/select3.test`, `test/select4.test`, `test/select5.test`,
+  `test/select6.test`, `test/select7.test`, `test/select8.test`,
+  `test/select9.test`, `test/selectA.test`, `test/selectB.test`,
+  `test/selectC.test`, `test/selectD.test`, `test/selectE.test`,
+  `test/selectF.test`, `test/selectG.test`, `test/selectH.test`, and
+  `test/with6.test`.
+- Residual scripts: `test/func.test`, `test/json101.test`,
+  `test/json501.test`, `test/literal.test`, `test/types3.test`, and
+  `test/loadext.test`.
+- Release gate scripts: `test/selectC.test`, `ext/expert/expert1.test`,
+  `ext/fts5/test/fts5contentless.test`, `ext/fts5/test/fts5aa.test`,
+  `ext/fts5/test/fts5origintext4.test`, `ext/intck/intck1.test`,
+  `ext/intck/intck2.test`, `ext/recover/recover1.test`,
+  `ext/rtree/rtree2.test`, `ext/rtree/rtree7.test`,
+  `ext/rtree/rtree9.test`, `test/avtrans.test`, `test/decimal.test`,
+  `test/func7.test`, `test/corruptI.test`, and
+  `test/incrcorrupt.test`.
+
 ## Release Gate Checklist
 
 Use these gates before claiming a confidence increase or publishing a new
