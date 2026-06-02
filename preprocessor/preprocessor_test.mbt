@@ -305,6 +305,13 @@ test "darwin arm64 predefined macros cover system header probes" {
     #|#endif
     #|#endif
     #|#endif
+    #|#if defined(__DYNAMIC__) && __DYNAMIC__ == 1 && __PIC__ == 2 && __pic__ == 2
+    #|#if __NO_MATH_ERRNO__ == 1 && __PRAGMA_REDEFINE_EXTNAME == 1 && __STDC_NO_THREADS__ == 1
+    #|int darwin_driver_constant_probes = 1;
+    #|#else
+    #|int darwin_driver_constant_probes = 2;
+    #|#endif
+    #|#endif
     #|#if __BOOL_WIDTH__ == 8 && __INT8_MAX__ == 127 && __UINT8_MAX__ == 255
     #|#if __INT16_MAX__ == 32767 && __UINT16_MAX__ == 65535 && __INT32_MAX__ == 2147483647 && __UINT32_MAX__ == 4294967295U
     #|#if defined(__INT8_C_SUFFIX__) && defined(__INT16_C_SUFFIX__) && defined(__UINT8_C_SUFFIX__) && defined(__UINT16_C_SUFFIX__)
@@ -376,6 +383,7 @@ test "darwin arm64 predefined macros cover system header probes" {
       #|int darwin_least64_probes=1;
       #|int darwin_fast64_probes=1;
       #|int darwin_platform_probes=1;
+      #|int darwin_driver_constant_probes=1;
       #|int darwin_small_integer_probes=1;
       #|int darwin_least_integer_probes=1;
       #|int darwin_fast_integer_probes=1;
