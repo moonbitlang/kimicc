@@ -881,7 +881,7 @@ async test "external TinyCC stripped compiler builds and emits smoke object when
   if !external_testbed_enabled("tinycc") {
     return
   }
-  let source_path = "/tmp/tinycc_stripped.c"
+  let source_path = tinycc_preprocessed_fixture_path()
   require_external_path(source_path, "TinyCC stripped source")
   let data = @fs.read_file(source_path)
   let object_path = compile_source_to_object_path(
@@ -901,7 +901,7 @@ async test "external TinyCC stripped compiler direct object builds and emits smo
   if !external_testbed_enabled("tinycc") {
     return
   }
-  let source_path = "/tmp/tinycc_stripped.c"
+  let source_path = tinycc_preprocessed_fixture_path()
   require_external_path(source_path, "TinyCC stripped source")
   let data = @fs.read_file(source_path)
   let object_path = compile_source_to_direct_object_path(
@@ -921,7 +921,7 @@ async test "external TinyCC stripped compiler strict MIR builds and emits smoke 
   if !external_testbed_enabled("tinycc") {
     return
   }
-  let source_path = "/tmp/tinycc_stripped.c"
+  let source_path = tinycc_preprocessed_fixture_path()
   require_external_path(source_path, "TinyCC stripped source")
   let object_path = compile_preprocessed_file_with_strict_mir_object_path(
     source_path, "tinycc_strict_mir_external_stripped",
