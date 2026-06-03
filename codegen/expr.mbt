@@ -3498,12 +3498,11 @@ fn Codegen::emit_store_saved_register_aggregate_at_x9(
   self : Codegen,
   ty : @parser.Type,
 ) -> Unit {
-  self.emit("\tldr\tx10, [sp]")
-  self.emit("\tstr\tx10, [x9]")
-  if self.type_size(ty) > 8 {
-    self.emit("\tldr\tx10, [sp, #8]")
-    self.emit("\tstr\tx10, [x9, #8]")
-  }
+  self.emit("\tmov\tx0, x9")
+  self.emit("\tmov\tx1, sp")
+  self.emit_load_int("x2", self.type_size(ty).to_int64())
+  self.emit("\tbl\t_memcpy")
+  self.emit("\tmov\tx9, x0")
   self.emit("\tadd\tsp, sp, #16")
 }
 
