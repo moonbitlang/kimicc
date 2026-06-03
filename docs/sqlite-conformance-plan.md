@@ -212,14 +212,14 @@ MoonBit package version:
    scripts/fetch-external-parser-fixtures.sh
    scripts/fetch-external-testbed-sources.sh all-supported
 
-   KIMICC_EXTERNAL_TESTBED=all \
+   KIMICC_EXTERNAL_TESTBED=all-supported \
      scripts/check-external-testbed-assets.sh
 
-   KIMICC_EXTERNAL_TESTBED=all \
+   KIMICC_EXTERNAL_TESTBED=all-supported \
      moon test test/e2e/external_testbeds_test.mbt --target native
    ```
 
-   This currently covers QuickJS `qjs` in kimicc assembly and direct Mach-O
+   This automated subset covers QuickJS `qjs` in kimicc assembly and direct Mach-O
    object modes, zlib 1.3.1 compression/decompression in kimicc assembly and
    direct Mach-O object modes, xxHash 0.8.2 XXH32/XXH64/XXH3 checksum,
    128-bit hash, and streaming APIs in kimicc assembly and direct Mach-O object
@@ -228,15 +228,14 @@ MoonBit package version:
    modes, inih r58 callback-driven parsing in kimicc assembly and direct Mach-O
    object modes, Lua 5.4.6 interpreter language-matrix execution in kimicc
    assembly and direct Mach-O object modes, TinyCC stripped compiler object
-   emission in kimicc assembly and direct Mach-O object modes, OCaml
-   `ocamlyacc` clang differentials, and tree-sitter parser/query APIs in kimicc
-   assembly and direct Mach-O object modes. The asset checker verifies that the
+   emission in kimicc assembly and direct Mach-O object modes. The asset checker verifies that the
    required opt-in source trees and preprocessed QuickJS/TinyCC fixtures are
    present under the `/tmp/kimicc_*` paths consumed by the MoonBit harness.
    The source fetcher prepares QuickJS full-build fixtures plus the
    archive-backed zlib, xxHash, cJSON, inih, and Lua source trees. The parser
    fixture fetcher prepares TinyCC. tree-sitter generated parser sources and
-   OCaml `ocamlyacc` sources remain explicit setup steps.
+   OCaml `ocamlyacc` sources remain explicit setup steps; after preparing them,
+   use `KIMICC_EXTERNAL_TESTBED=all` to run the full manual opt-in corpus.
 
 3. SQLite middle-weight release gate:
 
