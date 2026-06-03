@@ -757,6 +757,55 @@ async test "e2e sixteen byte struct return assign and pass by value" {
 }
 
 ///|
+async test "e2e twelve byte aggregate return assignment preserves following field" {
+  let source =
+    #|typedef struct {
+    #|  unsigned bytes;
+    #|  struct {
+    #|    unsigned row;
+    #|    unsigned column;
+    #|  } extent;
+    #|} Length;
+    #|
+    #|typedef struct Node Node;
+    #|typedef struct {
+    #|  Node *node;
+    #|  unsigned long tag;
+    #|} Link;
+    #|
+    #|struct Node {
+    #|  unsigned short state;
+    #|  Length position;
+    #|  Link links[1];
+    #|};
+    #|
+    #|Length length_add(Length left, Length right) {
+    #|  unsigned poison = 1;
+    #|  Length result = {
+    #|    .bytes = left.bytes + right.bytes,
+    #|    .extent = {
+    #|      .row = left.extent.row + right.extent.row,
+    #|      .column = left.extent.column + right.extent.column,
+    #|    },
+    #|  };
+    #|  if (poison != 1) return left;
+    #|  return result;
+    #|}
+    #|
+    #|int main(void) {
+    #|  Node previous = {0};
+    #|  Node node = {0};
+    #|  Length delta = {7, {0, 7}};
+    #|  node.links[0].node = &previous;
+    #|  node.position = length_add(node.position, delta);
+    #|  if (node.links[0].node != &previous) return 1;
+    #|  return 42;
+    #|}
+  let exit_code = run_source_async(source)
+  inspect(exit_code, content="42")
+}
+
+///|
 async test "e2e mixed scalar aggregate return and argument ABI" {
   let source =
     #|typedef struct Mix {
