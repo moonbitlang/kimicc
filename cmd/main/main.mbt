@@ -39,6 +39,12 @@ priv enum DriverOutput {
 } derive(Eq)
 
 ///|
+priv enum DriverCodegenRoute {
+  MirCodegen
+  ParserAstCodegen
+}
+
+///|
 priv enum DriverMacroOp {
   Define(String, String, Bool)
   Undef(String, Bool)
@@ -87,7 +93,7 @@ priv struct DriverOptions {
   mut no_inline : Bool
   mut fast_math : Bool
   mut fast_math_explicit : Bool
-  mut strict_mir_codegen : Bool
+  mut codegen_route : DriverCodegenRoute
   mut no_builtin_includes : Bool
   mut no_standard_library_includes : Bool
   mut show_help : Bool
@@ -153,7 +159,7 @@ fn DriverOptions::new() -> DriverOptions {
     no_inline: true,
     fast_math: false,
     fast_math_explicit: false,
-    strict_mir_codegen: false,
+    codegen_route: MirCodegen,
     no_builtin_includes: false,
     no_standard_library_includes: false,
     show_help: false,
@@ -1935,6 +1941,16 @@ fn validate_driver_options(opts : DriverOptions) -> Result[Unit, String] {
 }
 
 ///|
+fn parse_codegen_route(value : String) -> Result[DriverCodegenRoute, String] {
+  match value {
+    "mir" | "strict-mir" => Ok(MirCodegen)
+    "parser" | "parser-ast" | "legacy-parser" | "ast" =>
+      Ok(ParserAstCodegen)
+    _ => Err("unsupported codegen route '" + value + "'")
+  }
+}
+
+///|
 fn is_darwin_linker_o_option(arg : String) -> Bool {
   arg == "-objc_relative_method_lists" ||
   arg == "-object_path_lto" ||
@@ -1998,8 +2014,12 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
       "-c" | "--compile" => opts.output = EmitObject
       "--analyze" => opts.output = CheckSyntax
       "--preprocessed" => opts.already_preprocessed = true
-      "--strict-mir-codegen" | "-fno-parser-codegen-fallback" =>
-        opts.strict_mir_codegen = true
+      "--strict-mir-codegen" | "-fno-parser-codegen-fallback" => {
+        opts.codegen_route = MirCodegen
+      }
+      "--mir-codegen" => opts.codegen_route = MirCodegen
+      "--parser-codegen" | "--legacy-parser-codegen" =>
+        opts.codegen_route = ParserAstCodegen
       "-nostdinc" => {
         opts.no_builtin_includes = true
         opts.no_standard_library_includes = true
@@ -2062,6 +2082,18 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
               return Err(
                 "unsupported argument '" + mode + "' to option '--driver-mode='",
               )
+          }
+        } else if starts_with(arg, "--codegen=") || arg == "--codegen" {
+          match long_option_value(argv, i, "--codegen") {
+            Ok((value, next_i)) =>
+              match parse_codegen_route(value) {
+                Ok(route) => {
+                  opts.codegen_route = route
+                  i = next_i
+                }
+                Err(err) => return Err(err)
+              }
+            Err(err) => return Err(err)
           }
         } else if arg == "-fsyntax-only" {
           opts.output = CheckSyntax
@@ -2822,17 +2854,20 @@ fn generate_assembly_from_preprocessed(
       return ""
     }
   }
-  if opts.strict_mir_codegen {
-    let mir_module = @mir.lower_to_module(prog, opts.target)
-    match @mir_codegen.generate_assembly_from_mir_module_strict(mir_module) {
-      Ok(assembly) => assembly
-      Err(err) => {
-        fail(err)
-        ""
+  match opts.codegen_route {
+    MirCodegen => {
+      let mir_module = @mir.lower_to_module(prog, opts.target)
+      match @mir_codegen.generate_assembly_from_mir_module_strict(mir_module) {
+        Ok(assembly) => assembly
+        Err(err) => {
+          fail(err)
+          ""
+        }
       }
     }
-  } else {
-    @codegen.generate_assembly_for_target(prog, opts.target)
+    ParserAstCodegen => {
+      @codegen.generate_assembly_for_target(prog, opts.target)
+    }
   }
 }
 
@@ -3059,8 +3094,11 @@ fn print_usage() -> Unit {
     #|  -nobuiltininc       disable builtin/resource include paths
     #|  -nostdlibinc        disable standard library include paths
     #|  --preprocessed      skip preprocessing and parse input as already preprocessed C
+    #|  --codegen=mir|parser
+    #|                      select MIR codegen (default) or legacy parser-AST codegen
+    #|  --parser-codegen    alias for --codegen=parser
     #|  --strict-mir-codegen
-    #|                      require parser-AST-free MIR codegen; reject unsupported coverage
+    #|                      accepted for compatibility; MIR codegen is the default
     #|
     #|Output options:
     #|  -o PATH             set output path
@@ -3183,34 +3221,39 @@ fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
       if output_path == "-" {
         fail("direct object output to stdout is not supported")
       }
-      match opts.target {
-        DarwinArm64 => {
-          let preprocessed = preprocess_source_with_dependencies(
-            source, input_path, opts,
-          )
-          let prog = @parser.parse_for_target(preprocessed.text, opts.target)
-          match @parser.validate_semantics(prog) {
-            Ok(_) => ()
-            Err(err) => {
-              fail(err)
-              return
+      let preprocessed = preprocess_source_with_dependencies(
+        source, input_path, opts,
+      )
+      match opts.codegen_route {
+        ParserAstCodegen =>
+          match opts.target {
+            DarwinArm64 => {
+              let prog = @parser.parse_for_target(preprocessed.text, opts.target)
+              match @parser.validate_semantics(prog) {
+                Ok(_) => ()
+                Err(err) => {
+                  fail(err)
+                  return
+                }
+              }
+              let object = @codegen.generate_macho_object(prog)
+              if !write_bytes_file(output_path, object) {
+                fail("cannot write file: " + output_path)
+              }
+            }
+            LinuxAmd64 => {
+              let assembly = generate_assembly_from_preprocessed(
+                preprocessed.text,
+                opts,
+              )
+              let asm_path = temp_file_path("object", input_path + source, ".s")
+              if !write_file(asm_path, assembly) {
+                fail("cannot write temporary assembly: " + asm_path)
+              }
+              assemble_with_clang(opts, asm_path, output_path)
             }
           }
-          let object = @codegen.generate_macho_object(prog)
-          if !write_bytes_file(output_path, object) {
-            fail("cannot write file: " + output_path)
-          }
-          write_dependency_file(
-            opts,
-            input_path,
-            output_path,
-            preprocessed.dependency_records,
-          )
-        }
-        LinuxAmd64 => {
-          let preprocessed = preprocess_source_with_dependencies(
-            source, input_path, opts,
-          )
+        MirCodegen => {
           let assembly = generate_assembly_from_preprocessed(
             preprocessed.text,
             opts,
@@ -3220,14 +3263,14 @@ fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
             fail("cannot write temporary assembly: " + asm_path)
           }
           assemble_with_clang(opts, asm_path, output_path)
-          write_dependency_file(
-            opts,
-            input_path,
-            output_path,
-            preprocessed.dependency_records,
-          )
         }
       }
+      write_dependency_file(
+        opts,
+        input_path,
+        output_path,
+        preprocessed.dependency_records,
+      )
     }
     CheckSyntax => {
       let preprocessed = preprocess_source_with_dependencies(

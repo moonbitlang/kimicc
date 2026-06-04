@@ -44,20 +44,42 @@ test "driver parses strict MIR codegen flag" {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
-  assert_true(opts.strict_mir_codegen)
+  assert_true(opts.codegen_route is MirCodegen)
   let compat_opts = match
     parse_driver_args(["kimicc", "-fno-parser-codegen-fallback", "-S", "foo.c"]) {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
-  assert_true(compat_opts.strict_mir_codegen)
+  assert_true(compat_opts.codegen_route is MirCodegen)
 }
 
 ///|
-test "driver strict MIR codegen emits parser-AST-free supported assembly" {
+test "driver parses explicit codegen route flags" {
+  let mir_opts = match
+    parse_driver_args(["kimicc", "--codegen=mir", "-S", "foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(mir_opts.codegen_route is MirCodegen)
+  let parser_opts = match
+    parse_driver_args(["kimicc", "--codegen", "parser", "-S", "foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(parser_opts.codegen_route is ParserAstCodegen)
+  let alias_opts = match
+    parse_driver_args(["kimicc", "--parser-codegen", "-S", "foo.c"]) {
+    Ok(opts) => opts
+    Err(err) => abort(err)
+  }
+  assert_true(alias_opts.codegen_route is ParserAstCodegen)
+}
+
+///|
+test "driver default MIR codegen emits parser-AST-free supported assembly" {
   let opts = match
     parse_driver_args([
-      "kimicc", "--strict-mir-codegen", "--preprocessed", "-S", "-o", "-", "foo.c",
+      "kimicc", "--preprocessed", "-S", "-o", "-", "foo.c",
     ]) {
     Ok(opts) => opts
     Err(err) => abort(err)
@@ -69,9 +91,11 @@ test "driver strict MIR codegen emits parser-AST-free supported assembly" {
 }
 
 ///|
-test "driver default codegen uses direct AST path" {
+test "driver parser codegen flag uses direct AST path" {
   let opts = match
-    parse_driver_args(["kimicc", "--preprocessed", "-S", "-o", "-", "foo.c"]) {
+    parse_driver_args([
+      "kimicc", "--parser-codegen", "--preprocessed", "-S", "-o", "-", "foo.c",
+    ]) {
     Ok(opts) => opts
     Err(err) => abort(err)
   }
