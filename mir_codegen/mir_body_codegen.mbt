@@ -824,7 +824,7 @@ fn mir_body_codegen_fp_update_supported(
 ///|
 fn mir_body_codegen_local_type(ty : @ctype.Type) -> Bool {
   match ty {
-    Aligned(inner, align) => align <= 16 && mir_body_codegen_local_type(inner)
+    Aligned(inner, _) => mir_body_codegen_local_type(inner)
     Array(elem, _) => mir_body_codegen_local_type(elem)
     Struct(_) | Union(_) => true
     _ => mir_body_codegen_scalar_type(ty)
