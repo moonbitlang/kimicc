@@ -3279,6 +3279,21 @@ fn mir_body_bitfield_access_type(layout : FieldLayout) -> @ctype.Type {
 }
 
 ///|
+fn mir_body_bitfield_promoted_type(layout : FieldLayout) -> @ctype.Type {
+  let width = match layout.bit_width {
+    Some(value) => value
+    None => return layout.ty.integer_promote()
+  }
+  let int_width = @ctype.Type::SInt.const_int_width().unwrap_or(32)
+  let ty = layout.ty.without_alignment()
+  if ty.is_integer() && width <= int_width {
+    @ctype.Type::SInt
+  } else {
+    layout.ty.integer_promote()
+  }
+}
+
+///|
 fn Program::lower_mir_bitfield_storage(
   self : Program,
   obj : @parser.Expr,
@@ -3432,7 +3447,7 @@ fn Program::lower_mir_bitfield_compound_update(
   lhs : @parser.Expr,
   op : String,
   rhs : @parser.Expr,
-  result_ty : @ctype.Type,
+  _result_ty : @ctype.Type,
   ctx : BodyLowerContext,
 ) -> MirValue? {
   let (obj, field) = match lhs {
@@ -3452,11 +3467,18 @@ fn Program::lower_mir_bitfield_compound_update(
     Some(value) => value
     None => return None
   }
+  let promoted_lhs_ty = mir_body_bitfield_promoted_type(layout)
+  let op_ty = @ctype.binary_result_type(
+    op,
+    promoted_lhs_ty,
+    rhs_value.ty(),
+    self.target is DarwinArm64,
+  )
   lower_mir_bitfield_store_value(
     lhs_ty,
     addr,
     layout,
-    MirBinary(op, current, rhs_value, result_ty),
+    MirBinary(op, MirCast(promoted_lhs_ty, current), rhs_value, op_ty),
     ctx,
   )
 }

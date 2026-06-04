@@ -16652,6 +16652,27 @@ test "strict MIR codegen passes int128 variadic args to clang callees" {
 }
 
 ///|
+test "strict MIR codegen emits linux x64 stack int128 named variadic args" {
+  let source =
+    #|typedef unsigned __int128 u128;
+    #|int check_var_after_named(long a, long b, long c, long d, long e, long f,
+    #|                          long g, u128 named, ...);
+    #|u128 make_u128(unsigned long hi, unsigned long lo) {
+    #|  return ((u128)hi << 64) | lo;
+    #|}
+    #|int main(void) {
+    #|  u128 x = make_u128(1, 41);
+    #|  return check_var_after_named(1, 2, 3, 4, 5, 6, 7, x, x);
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("linux target did not parse")
+  }
+  let assembly = compile_strict_mir_for_target(source, target)
+  assert_true(assembly.contains("\tcall\tcheck_var_after_named"))
+}
+
+///|
 fn strict_mir_va_copy_source() -> String {
   let source =
     #|typedef __builtin_va_list va_list;
@@ -17805,6 +17826,97 @@ async test "strict MIR codegen matches parser codegen for bitfield compound upda
     "strict_mir_bitfield_compound_update_differential",
   )
   assert_eq(result.code, 3)
+}
+
+///|
+test "strict MIR codegen promotes unsigned bitfield division before store" {
+  let source =
+    #|struct Bits {
+    #|  unsigned int a : 3;
+    #|};
+    #|int main(void) {
+    #|  struct Bits bits;
+    #|  bits.a = 1;
+    #|  bits.a /= -1;
+    #|  return bits.a == 7 ? 42 : bits.a;
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
+test "strict MIR codegen emits linux x64 unsigned64 to double conversion" {
+  let source =
+    #|double to_double(unsigned long x) {
+    #|  return (double)x;
+    #|}
+    #|unsigned long from_double(double x) {
+    #|  return (unsigned long)x;
+    #|}
+    #|int main(void) {
+    #|  unsigned long hi = 1UL << 63;
+    #|  double d = to_double(hi);
+    #|  return from_double(d) == hi ? 42 : 1;
+    #|}
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("linux target did not parse")
+  }
+  let assembly = compile_strict_mir_for_target(source, target)
+  assert_true(assembly.contains("\ttest\trax, rax"))
+  assert_true(assembly.contains("\taddsd\txmm0, xmm0"))
+  assert_true(assembly.contains("\tsubsd\txmm0, xmm1"))
+  assert_true(assembly.contains("\tor\trax, r10"))
+}
+
+///|
+test "strict MIR codegen treats void pointer arithmetic as byte arithmetic" {
+  let source =
+    #|int main(void) {
+    #|  char bytes[8] = {0};
+    #|  void *v = bytes;
+    #|  v += 3;
+    #|  if ((char *)v - bytes != 3) return 1;
+    #|  v = 2 + v;
+    #|  if ((char *)v - bytes != 5) return 2;
+    #|  v--;
+    #|  if (v - (void *)bytes != 4) return 3;
+    #|  return 42;
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
+test "strict MIR codegen applies default promotions to variadic float args" {
+  let source =
+    #|typedef __builtin_va_list va_list;
+    #|double sum(int n, ...) {
+    #|  va_list ap;
+    #|  __builtin_va_start(ap, n);
+    #|  double value = __builtin_va_arg(ap, double);
+    #|  __builtin_va_end(ap);
+    #|  return value;
+    #|}
+    #|int main(void) {
+    #|  float f = 1.5f;
+    #|  return (int)sum(1, f) == 1 ? 42 : 1;
+    #|}
+  assert_eq(run_source_strict_mir(source), 42)
+}
+
+///|
+test "strict MIR codegen applies default promotions to unprototyped calls" {
+  let caller =
+    #|int old_mix();
+    #|float one(void) { return 1.5f; }
+    #|int main(void) {
+    #|  signed char c = 2;
+    #|  return old_mix(c, one());
+    #|}
+  let callee =
+    #|int old_mix(int a, double b) {
+    #|  return a + (int)b + 39;
+    #|}
+  assert_eq(run_strict_mir_with_clang_driver(caller, callee), 42)
 }
 
 ///|
