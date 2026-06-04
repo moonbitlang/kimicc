@@ -78,9 +78,7 @@ test "driver parses explicit codegen route flags" {
 ///|
 test "driver default MIR codegen emits parser-AST-free supported assembly" {
   let opts = match
-    parse_driver_args([
-      "kimicc", "--preprocessed", "-S", "-o", "-", "foo.c",
-    ]) {
+    parse_driver_args(["kimicc", "--preprocessed", "-S", "-o", "-", "foo.c"]) {
     Ok(opts) => opts
     Err(err) => abort(err)
   }

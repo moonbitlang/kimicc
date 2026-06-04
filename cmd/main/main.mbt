@@ -1944,8 +1944,7 @@ fn validate_driver_options(opts : DriverOptions) -> Result[Unit, String] {
 fn parse_codegen_route(value : String) -> Result[DriverCodegenRoute, String] {
   match value {
     "mir" | "strict-mir" => Ok(MirCodegen)
-    "parser" | "parser-ast" | "legacy-parser" | "ast" =>
-      Ok(ParserAstCodegen)
+    "parser" | "parser-ast" | "legacy-parser" | "ast" => Ok(ParserAstCodegen)
     _ => Err("unsupported codegen route '" + value + "'")
   }
 }
@@ -2014,9 +2013,8 @@ fn parse_driver_args(argv : Array[String]) -> Result[DriverOptions, String] {
       "-c" | "--compile" => opts.output = EmitObject
       "--analyze" => opts.output = CheckSyntax
       "--preprocessed" => opts.already_preprocessed = true
-      "--strict-mir-codegen" | "-fno-parser-codegen-fallback" => {
+      "--strict-mir-codegen" | "-fno-parser-codegen-fallback" =>
         opts.codegen_route = MirCodegen
-      }
       "--mir-codegen" => opts.codegen_route = MirCodegen
       "--parser-codegen" | "--legacy-parser-codegen" =>
         opts.codegen_route = ParserAstCodegen
@@ -2865,9 +2863,7 @@ fn generate_assembly_from_preprocessed(
         }
       }
     }
-    ParserAstCodegen => {
-      @codegen.generate_assembly_for_target(prog, opts.target)
-    }
+    ParserAstCodegen => @codegen.generate_assembly_for_target(prog, opts.target)
   }
 }
 
@@ -3228,7 +3224,10 @@ fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
         ParserAstCodegen =>
           match opts.target {
             DarwinArm64 => {
-              let prog = @parser.parse_for_target(preprocessed.text, opts.target)
+              let prog = @parser.parse_for_target(
+                preprocessed.text,
+                opts.target,
+              )
               match @parser.validate_semantics(prog) {
                 Ok(_) => ()
                 Err(err) => {

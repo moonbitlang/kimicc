@@ -2086,6 +2086,36 @@ fn mir_body_pointer_integer_op(
 }
 
 ///|
+fn mir_body_pointer_compare_binary(
+  op : String,
+  lhs : @ctype.Type,
+  rhs : @ctype.Type,
+) -> Bool {
+  (
+    op == "==" ||
+    op == "!=" ||
+    op == "<" ||
+    op == "<=" ||
+    op == ">" ||
+    op == ">="
+  ) &&
+  (
+    pointer_or_array_element_type(lhs) is Some(_) ||
+    pointer_or_array_element_type(rhs) is Some(_)
+  )
+}
+
+///|
+fn mir_body_unsigned_compare_binary(
+  op : String,
+  lhs : @ctype.Type,
+  rhs : @ctype.Type,
+) -> Bool {
+  mir_body_pointer_compare_binary(op, lhs, rhs) ||
+  mir_body_unsigned_binary(op, lhs, rhs)
+}
+
+///|
 fn mir_body_pointer_diff_elem(
   op : String,
   lhs : @ctype.Type,
@@ -5519,7 +5549,7 @@ fn Codegen::gen_mir_binary(
       }
     "==" | "!=" | "<" | ">" | "<=" | ">=" => {
       self.emit("\tcmp\tx10, x9")
-      let unsigned = mir_body_unsigned_binary(op, lhs.ty(), rhs.ty())
+      let unsigned = mir_body_unsigned_compare_binary(op, lhs.ty(), rhs.ty())
       let cc = match op {
         "==" => "eq"
         "!=" => "ne"
@@ -8904,7 +8934,7 @@ fn X64Codegen::gen_mir_binary(
     }
     "==" | "!=" | "<" | ">" | "<=" | ">=" => {
       self.emit("\tcmp\trax, r10")
-      let unsigned = mir_body_unsigned_binary(op, lhs.ty(), rhs.ty())
+      let unsigned = mir_body_unsigned_compare_binary(op, lhs.ty(), rhs.ty())
       let cc = match op {
         "==" => "sete"
         "!=" => "setne"

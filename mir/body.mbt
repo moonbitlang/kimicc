@@ -3271,6 +3271,14 @@ fn mir_body_signed_bitfield_type(ty : @ctype.Type) -> Bool {
 }
 
 ///|
+fn mir_body_bitfield_access_type(layout : FieldLayout) -> @ctype.Type {
+  match layout.ty {
+    Bool | Aligned(Bool, _) => UChar
+    _ => layout.ty
+  }
+}
+
+///|
 fn Program::lower_mir_bitfield_storage(
   self : Program,
   obj : @parser.Expr,
@@ -3283,13 +3291,15 @@ fn Program::lower_mir_bitfield_storage(
       match layout.bit_width {
         Some(_) =>
           match self.lower_mir_object_addr(obj, ctx) {
-            Some(base) =>
+            Some(base) => {
+              let access_ty = mir_body_bitfield_access_type(layout)
               Some(
                 (
-                  mir_body_offset_addr_value(base, layout.offset, layout.ty),
+                  mir_body_offset_addr_value(base, layout.offset, access_ty),
                   layout,
                 ),
               )
+            }
             None => None
           }
         None => None
@@ -3314,7 +3324,8 @@ fn Program::lower_mir_bitfield_load(
     Some(value) => value
     None => return None
   }
-  let storage = MirLoad(addr, layout.ty)
+  let access_ty = mir_body_bitfield_access_type(layout)
+  let storage = MirLoad(addr, access_ty)
   let shifted = if layout.bit_offset == 0 {
     storage
   } else {
@@ -3322,20 +3333,20 @@ fn Program::lower_mir_bitfield_load(
       ">>",
       storage,
       MirConst(layout.bit_offset.to_int64(), SInt),
-      layout.ty,
+      access_ty,
     )
   }
   let masked = MirBinary(
     "&",
     shifted,
-    MirConst(mir_body_bitfield_mask(width), layout.ty),
-    layout.ty,
+    MirConst(mir_body_bitfield_mask(width), access_ty),
+    access_ty,
   )
   let value = if width > 0 &&
     width < 64 &&
     mir_body_signed_bitfield_type(self.core_type(layout.ty)) {
-    let sign = MirConst(1L << (width - 1), layout.ty)
-    MirBinary("-", MirBinary("^", masked, sign, layout.ty), sign, layout.ty)
+    let sign = MirConst(1L << (width - 1), access_ty)
+    MirBinary("-", MirBinary("^", masked, sign, access_ty), sign, access_ty)
   } else {
     masked
   }
@@ -3373,7 +3384,8 @@ fn lower_mir_bitfield_store_value(
   value : MirValue,
   ctx : BodyLowerContext,
 ) -> MirValue? {
-  let temp = ctx.declare_temp(layout.ty)
+  let access_ty = mir_body_bitfield_access_type(layout)
+  let temp = ctx.declare_temp(access_ty)
   let width = match layout.bit_width {
     Some(value) => value
     None => return None
@@ -3384,8 +3396,8 @@ fn lower_mir_bitfield_store_value(
   let masked_value = MirBinary(
     "&",
     temp_value,
-    MirConst(mask, layout.ty),
-    layout.ty,
+    MirConst(mask, access_ty),
+    access_ty,
   )
   let shifted_value = if layout.bit_offset == 0 {
     masked_value
@@ -3394,20 +3406,20 @@ fn lower_mir_bitfield_store_value(
       "<<",
       masked_value,
       MirConst(layout.bit_offset.to_int64(), SInt),
-      layout.ty,
+      access_ty,
     )
   }
   let cleared = MirBinary(
     "&",
-    MirLoad(addr, layout.ty),
-    MirConst(shifted_mask.lnot(), layout.ty),
-    layout.ty,
+    MirLoad(addr, access_ty),
+    MirConst(shifted_mask.lnot(), access_ty),
+    access_ty,
   )
-  let stored = MirBinary("|", cleared, shifted_value, layout.ty)
+  let stored = MirBinary("|", cleared, shifted_value, access_ty)
   mir_body_sequence_exprs(
     [
-      MirExprStmt(MirAssignLocal(temp, MirCast(layout.ty, value))),
-      MirExprStmt(MirStore(addr, stored, layout.ty)),
+      MirExprStmt(MirAssignLocal(temp, MirCast(access_ty, value))),
+      MirExprStmt(MirStore(addr, stored, access_ty)),
     ],
     MirCast(lhs_ty, temp_value),
     lhs_ty,
