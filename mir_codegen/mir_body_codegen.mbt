@@ -337,43 +337,12 @@ fn mir_body_codegen_x64_variadic_args_supported(
   int_arg_limit : Int,
   mir : @mir.MirModule,
 ) -> Bool {
-  let codegen = X64Codegen::new_with_mir_module(mir)
-  let mut int_count = 0
-  let mut fp_count = 0
-  for i in 0..<params.length() {
-    let param = params[i]
-    if mir_body_codegen_abi_fp_type(param) {
-      if fp_count < 8 {
-        fp_count += 1
-      } else if i < named_count {
-        return false
-      }
-    } else if mir_body_codegen_abi_int_type(param) {
-      int_count += mir_body_codegen_abi_int_slots(param)
-      if int_count > int_arg_limit && i < named_count {
-        return false
-      }
-    } else {
-      match peel_aligned_type(param) {
-        Struct(_) | Union(_) =>
-          if i >= named_count {
-            match codegen.aggregate_classes(param) {
-              Some(classes) => {
-                let int_needed = x64_class_count(classes, IntClass)
-                let fp_needed = x64_class_count(classes, SseClass)
-                if int_count + int_needed <= int_arg_limit &&
-                  fp_count + fp_needed <= 8 {
-                  int_count += int_needed
-                  fp_count += fp_needed
-                }
-              }
-              None => ()
-            }
-          } else {
-            return false
-          }
-        _ => return false
-      }
+  ignore(named_count)
+  ignore(int_arg_limit)
+  ignore(mir)
+  for param in params {
+    if !mir_body_codegen_x64_arg_with_stack_supported(param) {
+      return false
     }
   }
   true
@@ -824,7 +793,7 @@ fn mir_body_codegen_fp_update_supported(
 ///|
 fn mir_body_codegen_local_type(ty : @ctype.Type) -> Bool {
   match ty {
-    Aligned(inner, align) => align <= 16 && mir_body_codegen_local_type(inner)
+    Aligned(inner, _) => mir_body_codegen_local_type(inner)
     Array(elem, _) => mir_body_codegen_local_type(elem)
     Struct(_) | Union(_) => true
     _ => mir_body_codegen_scalar_type(ty)
@@ -1658,7 +1627,7 @@ fn mir_body_codegen_call_supported(
       if !mir_body_codegen_abi_scalar_type(arg.ty()) {
         return false
       }
-      params.push(arg.ty())
+      params.push(mir_body_default_argument_promoted_type(arg.ty()))
     }
     if mir.target is LinuxAmd64 {
       return mir_body_codegen_x64_args_with_stack_supported(params)
@@ -1680,7 +1649,7 @@ fn mir_body_codegen_call_supported(
       let ty = if i < sig.params.length() {
         sig.params[i]
       } else {
-        args[i].ty()
+        mir_body_default_argument_promoted_type(args[i].ty())
       }
       call_params.push(ty)
     }
@@ -1707,12 +1676,19 @@ fn mir_body_codegen_call_supported(
     )
   }
   if sig.params.length() != args.length() {
-    return false
+    if sig.params.length() != 0 {
+      return false
+    }
+  }
+  let call_params = if sig.params.length() == 0 && args.length() > 0 {
+    mir_body_default_argument_promoted_types(args)
+  } else {
+    sig.params
   }
   if mir.target is LinuxAmd64 {
-    mir_body_codegen_x64_args_with_stack_supported(sig.params)
+    mir_body_codegen_x64_args_with_stack_supported(call_params)
   } else {
-    mir_body_codegen_darwin_args_with_stack_supported(sig.params, mir)
+    mir_body_codegen_darwin_args_with_stack_supported(call_params, mir)
   }
 }
 
@@ -1744,7 +1720,11 @@ fn mir_body_codegen_indirect_call_supported(
         }
         let call_params : Array[@ctype.Type] = []
         for i in 0..<args.length() {
-          let ty = if i < params.length() { params[i] } else { args[i].ty() }
+          let ty = if i < params.length() {
+            params[i]
+          } else {
+            mir_body_default_argument_promoted_type(args[i].ty())
+          }
           call_params.push(ty)
         }
         if mir.target is DarwinArm64 {
@@ -1776,7 +1756,7 @@ fn mir_body_codegen_indirect_call_supported(
         }
       } else if params.length() == 0 {
         for arg in args {
-          call_params.push(arg.ty())
+          call_params.push(mir_body_default_argument_promoted_type(arg.ty()))
         }
       } else {
         return false
@@ -1811,6 +1791,25 @@ fn mir_indirect_call_variadic(callee_ty : @ctype.Type) -> Bool {
 }
 
 ///|
+fn mir_body_default_argument_promoted_type(ty : @ctype.Type) -> @ctype.Type {
+  match peel_aligned_type(ty) {
+    Float => @ctype.Type::Double
+    _ => if ty.is_integer() { ty.integer_promote() } else { ty }
+  }
+}
+
+///|
+fn mir_body_default_argument_promoted_types(
+  args : Array[@mir.MirValue],
+) -> Array[@ctype.Type] {
+  let params : Array[@ctype.Type] = []
+  for arg in args {
+    params.push(mir_body_default_argument_promoted_type(arg.ty()))
+  }
+  params
+}
+
+///|
 fn mir_indirect_call_named_arg_count(callee_ty : @ctype.Type) -> Int {
   match mir_indirect_callable_type(callee_ty) {
     Some(FuncPtr(_, params, _)) => params.length()
@@ -1825,9 +1824,13 @@ fn mir_indirect_call_arg_type(
   actual : @ctype.Type,
 ) -> @ctype.Type {
   match mir_indirect_callable_type(callee_ty) {
-    Some(FuncPtr(_, params, _)) =>
+    Some(FuncPtr(_, params, variadic)) =>
       if index >= 0 && index < params.length() {
         params[index]
+      } else if variadic {
+        mir_body_default_argument_promoted_type(actual)
+      } else if params.length() == 0 {
+        mir_body_default_argument_promoted_type(actual)
       } else {
         actual
       }
@@ -2083,6 +2086,36 @@ fn mir_body_pointer_integer_op(
       lhs.is_integer() &&
       pointer_or_array_element_type(rhs) is Some(_)
   }
+}
+
+///|
+fn mir_body_pointer_compare_binary(
+  op : String,
+  lhs : @ctype.Type,
+  rhs : @ctype.Type,
+) -> Bool {
+  (
+    op == "==" ||
+    op == "!=" ||
+    op == "<" ||
+    op == "<=" ||
+    op == ">" ||
+    op == ">="
+  ) &&
+  (
+    pointer_or_array_element_type(lhs) is Some(_) ||
+    pointer_or_array_element_type(rhs) is Some(_)
+  )
+}
+
+///|
+fn mir_body_unsigned_compare_binary(
+  op : String,
+  lhs : @ctype.Type,
+  rhs : @ctype.Type,
+) -> Bool {
+  mir_body_pointer_compare_binary(op, lhs, rhs) ||
+  mir_body_unsigned_binary(op, lhs, rhs)
 }
 
 ///|
@@ -2596,8 +2629,19 @@ fn Codegen::emit_mir_atomic_compare_exchange(
 ///|
 fn Codegen::mir_pointer_update_scale(self : Codegen, ty : @ctype.Type) -> Int {
   match pointer_or_array_element_type(ty) {
-    Some(elem_ty) => self.type_size(elem_ty)
+    Some(elem_ty) => self.mir_pointer_element_scale(elem_ty)
     None => 1
+  }
+}
+
+///|
+fn Codegen::mir_pointer_element_scale(
+  self : Codegen,
+  elem_ty : @ctype.Type,
+) -> Int {
+  match elem_ty {
+    Void => 1
+    _ => self.type_size(elem_ty)
   }
 }
 
@@ -3526,7 +3570,10 @@ fn Codegen::gen_mir_value(
       self.gen_mir_address_base(base, offsets, frame_size)
       self.emit("\tstr\tx9, [sp, #-16]!")
       self.gen_mir_value(index, offsets, frame_size)
-      self.emit_load_int("x10", self.type_size(elem_ty).to_int64())
+      self.emit_load_int(
+        "x10",
+        self.mir_pointer_element_scale(elem_ty).to_int64(),
+      )
       self.emit("\tmul\tx9, x9, x10")
       self.emit("\tldr\tx10, [sp], #16")
       self.emit("\tadd\tx9, x10, x9")
@@ -4978,6 +5025,12 @@ fn Codegen::mir_call_arg_type(
     if index < params.length() {
       return params[index]
     }
+    if params.length() == 0 && !self.mir_direct_call_variadic(name) {
+      return mir_body_default_argument_promoted_type(actual)
+    }
+  }
+  if self.mir_direct_call_variadic(name) {
+    return mir_body_default_argument_promoted_type(actual)
   }
   actual
 }
@@ -5310,7 +5363,7 @@ fn Codegen::gen_mir_binary(
     self.emit("\tldr\tx10, [sp], #16")
     match pointer_or_array_element_type(lhs.ty()) {
       Some(elem_ty) => {
-        let scale = self.type_size(elem_ty)
+        let scale = self.mir_pointer_element_scale(elem_ty)
         if scale != 1 {
           self.emit_load_int("x11", scale.to_int64())
           self.emit("\tmul\tx9, x9, x11")
@@ -5324,7 +5377,7 @@ fn Codegen::gen_mir_binary(
       None =>
         match pointer_or_array_element_type(rhs.ty()) {
           Some(elem_ty) => {
-            let scale = self.type_size(elem_ty)
+            let scale = self.mir_pointer_element_scale(elem_ty)
             if scale != 1 {
               self.emit_load_int("x11", scale.to_int64())
               self.emit("\tmul\tx10, x10, x11")
@@ -5519,7 +5572,7 @@ fn Codegen::gen_mir_binary(
       }
     "==" | "!=" | "<" | ">" | "<=" | ">=" => {
       self.emit("\tcmp\tx10, x9")
-      let unsigned = mir_body_unsigned_binary(op, lhs.ty(), rhs.ty())
+      let unsigned = mir_body_unsigned_compare_binary(op, lhs.ty(), rhs.ty())
       let cc = match op {
         "==" => "eq"
         "!=" => "ne"
@@ -6014,7 +6067,9 @@ fn X64Codegen::emit_mir_numeric_conversion(
     } else if dst_core == Bool {
       self.emit_fp_to_bool(src_core)
     } else if dst_core.is_integer() {
-      if src_core == Float {
+      if dst_core.const_is_unsigned() && self.type_size(dst_core) == 8 {
+        self.emit_mir_fp_to_unsigned64(src_core)
+      } else if src_core == Float {
         self.emit("\tcvttss2si\trax, xmm0")
       } else {
         self.emit("\tcvttsd2si\trax, xmm0")
@@ -6022,7 +6077,10 @@ fn X64Codegen::emit_mir_numeric_conversion(
       self.emit_int_conversion_to(dst_core)
     }
   } else if x64_is_fp_type(dst_core) {
-    if dst_core == Float {
+    self.emit_int_conversion_to(src_core)
+    if src_core.const_is_unsigned() && self.type_size(src_core) == 8 {
+      self.emit_mir_unsigned64_to_fp(dst_core)
+    } else if dst_core == Float {
       self.emit("\tcvtsi2ss\txmm0, rax")
     } else {
       self.emit("\tcvtsi2sd\txmm0, rax")
@@ -6030,6 +6088,63 @@ fn X64Codegen::emit_mir_numeric_conversion(
   } else {
     self.emit_int_conversion_to(dst_core)
   }
+}
+
+///|
+fn X64Codegen::emit_mir_unsigned64_to_fp(
+  self : X64Codegen,
+  dst : @ctype.Type,
+) -> Unit {
+  let high_label = self.new_label()
+  let done_label = self.new_label()
+  let suffix = x64_fp_suffix(dst)
+  self.emit("\ttest\trax, rax")
+  self.emit("\tjs\t" + high_label)
+  self.emit("\tcvtsi2" + suffix + "\txmm0, rax")
+  self.emit("\tjmp\t" + done_label)
+  self.emit(high_label + ":")
+  self.emit("\tmov\tr10, rax")
+  self.emit("\tand\teax, 1")
+  self.emit("\tshr\tr10, 1")
+  self.emit("\tor\tr10, rax")
+  self.emit("\tcvtsi2" + suffix + "\txmm0, r10")
+  self.emit("\tadd" + suffix + "\txmm0, xmm0")
+  self.emit(done_label + ":")
+}
+
+///|
+fn X64Codegen::emit_mir_fp_to_unsigned64(
+  self : X64Codegen,
+  src : @ctype.Type,
+) -> Unit {
+  let low_label = self.new_label()
+  let done_label = self.new_label()
+  let suffix = x64_fp_suffix(src)
+  if src == Float {
+    self.emit("\tmov\teax, 1593835520")
+    self.emit("\tmovd\txmm1, eax")
+  } else {
+    self.emit("\tmovabs\tr10, 4890909195324358656")
+    self.emit("\tmovq\txmm1, r10")
+  }
+  self.emit("\tucomi" + suffix + "\txmm0, xmm1")
+  self.emit("\tjb\t" + low_label)
+  self.emit("\tsub" + suffix + "\txmm0, xmm1")
+  if src == Float {
+    self.emit("\tcvttss2si\trax, xmm0")
+  } else {
+    self.emit("\tcvttsd2si\trax, xmm0")
+  }
+  self.emit("\tmovabs\tr10, -9223372036854775808")
+  self.emit("\tor\trax, r10")
+  self.emit("\tjmp\t" + done_label)
+  self.emit(low_label + ":")
+  if src == Float {
+    self.emit("\tcvttss2si\trax, xmm0")
+  } else {
+    self.emit("\tcvttsd2si\trax, xmm0")
+  }
+  self.emit(done_label + ":")
 }
 
 ///|
@@ -6479,8 +6594,19 @@ fn X64Codegen::mir_pointer_update_scale(
   ty : @ctype.Type,
 ) -> Int {
   match pointer_or_array_element_type(ty) {
-    Some(elem_ty) => self.type_size(elem_ty)
+    Some(elem_ty) => self.mir_pointer_element_scale(elem_ty)
     None => 1
+  }
+}
+
+///|
+fn X64Codegen::mir_pointer_element_scale(
+  self : X64Codegen,
+  elem_ty : @ctype.Type,
+) -> Int {
+  match elem_ty {
+    Void => 1
+    _ => self.type_size(elem_ty)
   }
 }
 
@@ -7201,7 +7327,7 @@ fn X64Codegen::gen_mir_value(
       self.gen_mir_address_base(base, offsets)
       self.emit_mir_push_rax()
       self.gen_mir_value(index, offsets)
-      let elem_size = self.type_size(elem_ty)
+      let elem_size = self.mir_pointer_element_scale(elem_ty)
       if elem_size != 1 {
         self.emit("\timul\trax, rax, " + elem_size.to_string())
       }
@@ -7738,6 +7864,8 @@ fn X64Codegen::gen_mir_value(
       let source_indexes = mir_body_codegen_direct_call_source_indexes(args)
       let has_sret = self.is_memory_aggregate(ty)
       let mut call_stack_cleanup = 0
+      let mut dynamic_call_stack_align = false
+      let mut dynamic_call_stack_restore_offset = 0
       if self.mir_direct_call_variadic(name) {
         let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
         let fp_arg_regs = [
@@ -7852,14 +7980,34 @@ fn X64Codegen::gen_mir_value(
           raw_area += size
         }
         let stack_area = x64_align_to(stack_arg_index * 8, call_stack_align)
-        if stack_area > 0 {
+        let dynamic_stack_align = call_stack_align > 16 && stack_area > 0
+        dynamic_call_stack_align = dynamic_stack_align
+        dynamic_call_stack_restore_offset = stack_area
+        let raw_base_reg = if dynamic_stack_align { "r10" } else { "rsp" }
+        let raw_offset_base = if dynamic_stack_align { 0 } else { stack_area }
+        let outgoing_stack_area = if dynamic_stack_align {
+          x64_align_to(stack_area + 16, call_stack_align)
+        } else {
+          stack_area
+        }
+        if dynamic_stack_align {
+          self.emit("\tmov\tr10, rsp")
+          self.emit("\tlea\tr11, " + x64_mem_at_reg("rsp", raw_area))
+          self.emit("\tand\trsp, -" + call_stack_align.to_string())
+          self.emit("\tsub\trsp, " + outgoing_stack_area.to_string())
+          self.emit("\tmov\tQWORD PTR " + x64_rsp_ref(stack_area) + ", r11")
+        } else if stack_area > 0 {
           self.emit("\tsub\trsp, " + stack_area.to_string())
         }
-        call_stack_cleanup = raw_area + stack_area
+        call_stack_cleanup = if dynamic_stack_align {
+          0
+        } else {
+          raw_area + stack_area
+        }
         for i in 0..<source_indexes.length() {
           if stack_arg_indexes[i] >= 0 {
             let raw_offset = mir_body_codegen_raw_arg_offset(
-              raw_sizes, i, stack_area,
+              raw_sizes, i, raw_offset_base,
             )
             if arg_is_aggregate[i] {
               let stack_offset = stack_arg_indexes[i] * 8
@@ -7867,7 +8015,7 @@ fn X64Codegen::gen_mir_value(
                 let width = self.aggregate_word_width(expected_types[i], word)
                 self.emit_load_int_bytes_from_mem_reg(
                   "rax",
-                  "rsp",
+                  raw_base_reg,
                   raw_offset + word * 8,
                   width,
                 )
@@ -7887,7 +8035,7 @@ fn X64Codegen::gen_mir_value(
                 "\txmm0, " +
                 size +
                 " PTR " +
-                x64_rsp_ref(raw_offset),
+                x64_mem_at_reg(raw_base_reg, raw_offset),
               )
               self.emit(
                 "\tmov" +
@@ -7901,11 +8049,25 @@ fn X64Codegen::gen_mir_value(
             } else {
               let stack_offset = stack_arg_indexes[i] * 8
               if mir_body_codegen_int128_type(expected_types[i]) {
-                self.emit_mir_copy_int128_arg_from_raw_to_stack(
-                  raw_offset, stack_offset,
+                self.emit(
+                  "\tmov\trax, QWORD PTR " +
+                  x64_mem_at_reg(raw_base_reg, raw_offset),
+                )
+                self.emit(
+                  "\tmov\tQWORD PTR " + x64_rsp_ref(stack_offset) + ", rax",
+                )
+                self.emit(
+                  "\tmov\trax, QWORD PTR " +
+                  x64_mem_at_reg(raw_base_reg, raw_offset + 8),
+                )
+                self.emit(
+                  "\tmov\tQWORD PTR " + x64_rsp_ref(stack_offset + 8) + ", rax",
                 )
               } else {
-                self.emit("\tmov\trax, QWORD PTR " + x64_rsp_ref(raw_offset))
+                self.emit(
+                  "\tmov\trax, QWORD PTR " +
+                  x64_mem_at_reg(raw_base_reg, raw_offset),
+                )
                 self.emit(
                   "\tmov\tQWORD PTR " + x64_rsp_ref(stack_offset) + ", rax",
                 )
@@ -7915,7 +8077,7 @@ fn X64Codegen::gen_mir_value(
         }
         for i in 0..<source_indexes.length() {
           let raw_offset = mir_body_codegen_raw_arg_offset(
-            raw_sizes, i, stack_area,
+            raw_sizes, i, raw_offset_base,
           )
           if mir_body_codegen_abi_fp_type(expected_types[i]) {
             if fp_arg_indexes[i] >= 0 {
@@ -7929,7 +8091,7 @@ fn X64Codegen::gen_mir_value(
                 ", " +
                 size +
                 " PTR " +
-                x64_rsp_ref(raw_offset),
+                x64_mem_at_reg(raw_base_reg, raw_offset),
               )
             }
           } else if arg_is_aggregate[i] && stack_arg_indexes[i] < 0 {
@@ -7941,7 +8103,7 @@ fn X64Codegen::gen_mir_value(
                 IntClass => {
                   self.emit_load_int_bytes_from_mem_reg(
                     arg_regs[int_cursor],
-                    "rsp",
+                    raw_base_reg,
                     raw_offset + word * 8,
                     width,
                   )
@@ -7950,7 +8112,7 @@ fn X64Codegen::gen_mir_value(
                 SseClass => {
                   self.emit_load_sse_word_from_mem_reg(
                     fp_arg_regs[fp_cursor],
-                    "rsp",
+                    raw_base_reg,
                     raw_offset + word * 8,
                     width,
                   )
@@ -7960,17 +8122,24 @@ fn X64Codegen::gen_mir_value(
             }
           } else if int_arg_indexes[i] >= 0 {
             if mir_body_codegen_int128_type(expected_types[i]) {
-              self.emit_mir_load_int128_arg_from_raw_to_regs(
-                arg_regs,
-                int_arg_indexes[i],
-                raw_offset,
+              self.emit(
+                "\tmov\t" +
+                arg_regs[int_arg_indexes[i]] +
+                ", QWORD PTR " +
+                x64_mem_at_reg(raw_base_reg, raw_offset),
+              )
+              self.emit(
+                "\tmov\t" +
+                arg_regs[int_arg_indexes[i] + 1] +
+                ", QWORD PTR " +
+                x64_mem_at_reg(raw_base_reg, raw_offset + 8),
               )
             } else {
               self.emit(
                 "\tmov\t" +
                 arg_regs[int_arg_indexes[i]] +
                 ", QWORD PTR " +
-                x64_rsp_ref(raw_offset),
+                x64_mem_at_reg(raw_base_reg, raw_offset),
               )
             }
           }
@@ -8219,7 +8388,12 @@ fn X64Codegen::gen_mir_value(
         self.emit_call_sret_addr(ty)
       }
       self.emit("\tcall\t" + mir_body_codegen_direct_call_symbol(name))
-      if call_stack_cleanup > 0 {
+      if dynamic_call_stack_align {
+        self.emit(
+          "\tmov\trsp, QWORD PTR " +
+          x64_rsp_ref(dynamic_call_stack_restore_offset),
+        )
+      } else if call_stack_cleanup > 0 {
         self.emit("\tadd\trsp, " + call_stack_cleanup.to_string())
       }
       if self.is_supported_small_aggregate(ty) {
@@ -8545,6 +8719,12 @@ fn X64Codegen::mir_call_arg_type(
     if index < params.length() {
       return params[index]
     }
+    if params.length() == 0 && !self.mir_direct_call_variadic(name) {
+      return mir_body_default_argument_promoted_type(actual)
+    }
+  }
+  if self.mir_direct_call_variadic(name) {
+    return mir_body_default_argument_promoted_type(actual)
   }
   actual
 }
@@ -8726,7 +8906,7 @@ fn X64Codegen::gen_mir_binary(
     self.emit_mir_pop_rax()
     match pointer_or_array_element_type(lhs.ty()) {
       Some(elem_ty) => {
-        let scale = self.type_size(elem_ty)
+        let scale = self.mir_pointer_element_scale(elem_ty)
         if scale != 1 {
           self.emit("\timul\tr10, r10, " + scale.to_string())
         }
@@ -8739,7 +8919,7 @@ fn X64Codegen::gen_mir_binary(
       None =>
         match pointer_or_array_element_type(rhs.ty()) {
           Some(elem_ty) => {
-            let scale = self.type_size(elem_ty)
+            let scale = self.mir_pointer_element_scale(elem_ty)
             if scale != 1 {
               self.emit("\timul\trax, rax, " + scale.to_string())
             }
@@ -8904,7 +9084,7 @@ fn X64Codegen::gen_mir_binary(
     }
     "==" | "!=" | "<" | ">" | "<=" | ">=" => {
       self.emit("\tcmp\trax, r10")
-      let unsigned = mir_body_unsigned_binary(op, lhs.ty(), rhs.ty())
+      let unsigned = mir_body_unsigned_compare_binary(op, lhs.ty(), rhs.ty())
       let cc = match op {
         "==" => "sete"
         "!=" => "setne"
@@ -9218,7 +9398,12 @@ fn X64Codegen::gen_mir_func(
       Array(UChar, 176),
     )
   }
-  let frame_size = x64_align_to(self.stack_size, 16)
+  let frame_align = if self.stack_align > 16 { self.stack_align } else { 16 }
+  let frame_size = x64_align_to(self.stack_size, frame_align)
+  let realign_frame = frame_align > 16
+  if realign_frame {
+    self.local_base_reg = "r12"
+  }
   self.emit_function_section(decl.section)
   self.emit_symbol_binding(
     decl.name,
@@ -9231,8 +9416,15 @@ fn X64Codegen::gen_mir_func(
   self.emit(decl.name + ":")
   self.emit("\tpush\trbp")
   self.emit("\tmov\trbp, rsp")
+  if realign_frame {
+    self.emit("\tpush\tr12")
+    self.emit("\tand\trsp, -" + frame_align.to_string())
+  }
   if frame_size > 0 {
     self.emit("\tsub\trsp, " + frame_size.to_string())
+  }
+  if realign_frame {
+    self.emit("\tlea\tr12, " + x64_mem_at_reg("rsp", frame_size))
   }
   if self.sret_dest_offset >= 0 {
     self.emit(
@@ -9361,6 +9553,9 @@ fn X64Codegen::gen_mir_func(
   self.gen_mir_stmts(body.body, offsets)
   self.emit("\tmov\trax, 0")
   self.emit(".L" + decl.name + "_ret:")
+  if realign_frame {
+    self.emit("\tmov\tr12, QWORD PTR [rbp - 8]")
+  }
   self.emit("\tmov\trsp, rbp")
   self.emit("\tpop\trbp")
   self.emit("\tret")

@@ -8,6 +8,11 @@ extern "c" fn moonbit_system(cmd : Bytes) -> Int = "moonbit_system"
 
 ///|
 fn compile(source : String) -> String {
+  compile_source_to_mir_assembly(source)
+}
+
+///|
+fn compile_with_legacy_parser_codegen(source : String) -> String {
   let prog = @parser.parse(source)
   let codegen = @codegen.Codegen::new()
   codegen.generate(prog)
@@ -146,11 +151,8 @@ async fn run_source_strict_mir_against_parser_codegen(
   let strict_asm_path = temp_file_path(tag + "_strict_mir", source, ".s")
   let parser_bin = temp_file_path(tag + "_parser_codegen", source, "")
   let strict_bin = temp_file_path(tag + "_strict_mir", source, "")
-  write_text_file(parser_asm_path, compile(source))
-  write_text_file(
-    strict_asm_path,
-    compile_source_to_strict_mir_assembly(source),
-  )
+  write_text_file(parser_asm_path, compile_with_legacy_parser_codegen(source))
+  write_text_file(strict_asm_path, compile_source_to_mir_assembly(source))
   run_command_checked(
     "clang -o " + shell_quote(parser_bin) + " " + shell_quote(parser_asm_path),
     "link parser codegen differential " + tag,
@@ -313,7 +315,7 @@ fn compile_source_to_object_path(source : String, tag : String) -> String {
 }
 
 ///|
-fn compile_source_to_strict_mir_assembly(source : String) -> String {
+fn compile_source_to_mir_assembly(source : String) -> String {
   let target = @target.Target::default()
   let prog = @parser.parse_for_target(source, target)
   match @parser.validate_semantics(prog) {
@@ -327,6 +329,11 @@ fn compile_source_to_strict_mir_assembly(source : String) -> String {
     Ok(assembly) => assembly
     Err(err) => abort("strict MIR codegen failed: " + err)
   }
+}
+
+///|
+fn compile_source_to_strict_mir_assembly(source : String) -> String {
+  compile_source_to_mir_assembly(source)
 }
 
 ///|
