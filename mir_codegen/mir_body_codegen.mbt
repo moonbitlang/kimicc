@@ -6359,8 +6359,10 @@ fn X64Codegen::emit_mir_store_aggregate_param_from_regs(
   int_start : Int,
   fp_start : Int,
 ) -> Unit {
-  let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
-  let fp_arg_regs = [
+  let arg_regs : ReadOnlyArray[String] = [
+    "rdi", "rsi", "rdx", "rcx", "r8", "r9",
+  ]
+  let fp_arg_regs : ReadOnlyArray[String] = [
     "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
   ]
   self.emit_local_addr(local_offset)
@@ -6913,8 +6915,10 @@ fn X64Codegen::emit_mir_save_variadic_registers(self : X64Codegen) -> Unit {
   if self.va_reg_save_offset < 0 {
     return
   }
-  let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
-  let fp_arg_regs = [
+  let arg_regs : ReadOnlyArray[String] = [
+    "rdi", "rsi", "rdx", "rcx", "r8", "r9",
+  ]
+  let fp_arg_regs : ReadOnlyArray[String] = [
     "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
   ]
   for i in 0..<arg_regs.length() {
@@ -7867,8 +7871,10 @@ fn X64Codegen::gen_mir_value(
       let mut dynamic_call_stack_align = false
       let mut dynamic_call_stack_restore_offset = 0
       if self.mir_direct_call_variadic(name) {
-        let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
-        let fp_arg_regs = [
+        let arg_regs : ReadOnlyArray[String] = [
+          "rdi", "rsi", "rdx", "rcx", "r8", "r9",
+        ]
+        let fp_arg_regs : ReadOnlyArray[String] = [
           "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
         ]
         let expected_types : Array[@ctype.Type] = []
@@ -8148,7 +8154,7 @@ fn X64Codegen::gen_mir_value(
         self.emit("\tmov\tal, " + fp_reg_count.to_string())
       } else {
         let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
-        let fp_arg_regs = [
+        let fp_arg_regs : ReadOnlyArray[String] = [
           "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
         ]
         let expected_types : Array[@ctype.Type] = []
@@ -8409,7 +8415,7 @@ fn X64Codegen::gen_mir_value(
       self.emit_mir_push_rax()
       let has_sret = self.is_memory_aggregate(ty)
       let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
-      let fp_arg_regs = [
+      let fp_arg_regs : ReadOnlyArray[String] = [
         "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
       ]
       let expected_types : Array[@ctype.Type] = []
@@ -9432,8 +9438,10 @@ fn X64Codegen::gen_mir_func(
     )
   }
   self.emit_mir_save_variadic_registers()
-  let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
-  let fp_arg_regs = [
+  let arg_regs : ReadOnlyArray[String] = [
+    "rdi", "rsi", "rdx", "rcx", "r8", "r9",
+  ]
+  let fp_arg_regs : ReadOnlyArray[String] = [
     "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
   ]
   let mut int_arg_index = if has_sret { 1 } else { 0 }

@@ -1053,8 +1053,8 @@ fn X64Codegen::emit_load_small_aggregate_return(
     Some(classes) => classes
     None => abort("x86-64 backend does not support this aggregate return yet")
   }
-  let int_regs = ["rax", "rdx"]
-  let fp_regs = ["xmm0", "xmm1"]
+  let int_regs : ReadOnlyArray[String] = ["rax", "rdx"]
+  let fp_regs : ReadOnlyArray[String] = ["xmm0", "xmm1"]
   let mut int_idx = 0
   let mut fp_idx = 0
   self.emit("\tmov\tr10, rax")
@@ -1092,8 +1092,8 @@ fn X64Codegen::emit_store_small_aggregate_return(
     Some(classes) => classes
     None => abort("x86-64 backend does not support this aggregate return yet")
   }
-  let int_regs = ["rax", "rdx"]
-  let fp_regs = ["xmm0", "xmm1"]
+  let int_regs : ReadOnlyArray[String] = ["rax", "rdx"]
+  let fp_regs : ReadOnlyArray[String] = ["xmm0", "xmm1"]
   let mut int_idx = 0
   let mut fp_idx = 0
   for word in 0..<classes.length() {

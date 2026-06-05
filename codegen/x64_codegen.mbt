@@ -1222,8 +1222,8 @@ fn X64Codegen::emit_load_small_aggregate_return(
     Some(classes) => classes
     None => abort("x86-64 backend does not support this aggregate return yet")
   }
-  let int_regs = ["rax", "rdx"]
-  let fp_regs = ["xmm0", "xmm1"]
+  let int_regs : ReadOnlyArray[String] = ["rax", "rdx"]
+  let fp_regs : ReadOnlyArray[String] = ["xmm0", "xmm1"]
   let mut int_idx = 0
   let mut fp_idx = 0
   self.emit("\tmov\tr10, rax")
@@ -1261,8 +1261,8 @@ fn X64Codegen::emit_store_small_aggregate_return(
     Some(classes) => classes
     None => abort("x86-64 backend does not support this aggregate return yet")
   }
-  let int_regs = ["rax", "rdx"]
-  let fp_regs = ["xmm0", "xmm1"]
+  let int_regs : ReadOnlyArray[String] = ["rax", "rdx"]
+  let fp_regs : ReadOnlyArray[String] = ["xmm0", "xmm1"]
   let mut int_idx = 0
   let mut fp_idx = 0
   for word in 0..<classes.length() {
@@ -1721,8 +1721,10 @@ fn X64Codegen::emit_save_variadic_registers(self : X64Codegen) -> Unit {
   if self.va_reg_save_offset < 0 {
     return
   }
-  let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
-  let fp_arg_regs = [
+  let arg_regs : ReadOnlyArray[String] = [
+    "rdi", "rsi", "rdx", "rcx", "r8", "r9",
+  ]
+  let fp_arg_regs : ReadOnlyArray[String] = [
     "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
   ]
   for i = 0; i < arg_regs.length(); i = i + 1 {
@@ -6295,8 +6297,10 @@ fn X64Codegen::gen_call(
   func : @parser.Expr,
   args : Array[@parser.Expr],
 ) -> Unit {
-  let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
-  let fp_arg_regs = [
+  let arg_regs : ReadOnlyArray[String] = [
+    "rdi", "rsi", "rdx", "rcx", "r8", "r9",
+  ]
+  let fp_arg_regs : ReadOnlyArray[String] = [
     "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
   ]
   let arg_is_fp : Array[Bool] = []
@@ -7415,8 +7419,10 @@ fn X64Codegen::emit_function(
         )
       }
       self.emit_save_variadic_registers()
-      let arg_regs = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
-      let fp_arg_regs = [
+      let arg_regs : ReadOnlyArray[String] = [
+        "rdi", "rsi", "rdx", "rcx", "r8", "r9",
+      ]
+      let fp_arg_regs : ReadOnlyArray[String] = [
         "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
       ]
       let mut int_idx = if self.is_memory_aggregate(decl.ret) { 1 } else { 0 }

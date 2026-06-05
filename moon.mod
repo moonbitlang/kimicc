@@ -14,4 +14,4 @@ import {
 
 preferred_target = "native"
 
-warnings = "+missing_doc+unnecessary_annotation"
+warnings = "+missing_doc+unnecessary_annotation+prefer_readonly_array"
