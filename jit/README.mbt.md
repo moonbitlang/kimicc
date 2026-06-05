@@ -19,9 +19,10 @@ import {
 ## Compile once, call by symbol
 
 `compile` expects already-preprocessed source and returns `Some(module)` on
-success, or `None` when parsing, memory mapping, relocation, or symbol
-resolution fails. Call functions on the returned `Module` so the source is
-compiled only once.
+success, or `None` when codegen succeeds but native image allocation, memory
+protection, relocation, or external-symbol resolution fails. (Parsing and
+codegen errors abort rather than returning `None`.) Call functions on the
+returned `Module` so the source is compiled only once.
 
 ```moonbit check
 ///|
@@ -44,7 +45,8 @@ test "compile and call" {
 ## One-shot helpers
 
 The `call_i32_N` free functions compile and call in a single step — convenient
-for tests. They return `None` if compilation fails or the symbol is absent.
+for tests. They return `None` if native loading fails or the requested symbol is
+absent (invalid source still aborts during parsing).
 
 ```moonbit check
 ///|

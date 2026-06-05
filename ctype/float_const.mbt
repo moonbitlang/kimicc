@@ -24,9 +24,12 @@ pub fn floating_signbit(value : Double) -> Bool {
 ///|
 /// Composes a value from the magnitude of one operand and the sign of another.
 ///
-/// Models C's `copysign`: the result has `floating_abs(magnitude)` as its
-/// magnitude and takes its sign from `floating_signbit(sign)`, so the sign of
-/// negative zero propagates correctly.
+/// The result has `floating_abs(magnitude)` as its magnitude and takes its sign
+/// from `floating_signbit(sign)`. This is the constant-folding approximation of
+/// C's `copysign` and matches it for ordinary values, but note it inherits
+/// `floating_abs`'s historical handling of `-0.0`: because `floating_abs`
+/// returns `-0.0` unchanged, `copysign(-0.0, +x)` yields `-0.0` rather than the
+/// `+0.0` true `copysign` would produce.
 pub fn floating_copysign(magnitude : Double, sign : Double) -> Double {
   let value = floating_abs(magnitude)
   if floating_signbit(sign) {

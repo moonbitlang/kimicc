@@ -60,9 +60,10 @@ test "parse for a specific target" {
 
 ## Validating semantics
 
-`validate_semantics` runs the parser's semantic checks over a parsed `Program`,
-returning `Ok(())` when it is well-formed or `Err(message)` describing the first
-problem found.
+`validate_semantics` runs the parser's lightweight semantic checks over a parsed
+`Program`, returning `Ok(())` when they pass or `Err(message)` describing the
+first problem found. It is not a complete ISO C constraint checker — it catches
+the cases the parser needs, not every diagnosable error.
 
 ```moonbit check
 ///|
