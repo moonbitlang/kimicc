@@ -58,8 +58,10 @@ test "lower to a program and a module" {
 ## Target-aware type and layout queries
 
 Both `Program` and `MirModule` expose `type_size`, `type_align`, `field_layout`,
-and `offset_of_path`. They resolve `struct`/`union` types through the layout
-computed during lowering, so they work where a bare `@ctype.Type` cannot.
+and `offset_of_path`. They resolve `struct`/`union` types through aggregate
+layouts, which a `Program` computes lazily from its declarations on first use
+(`to_module` forces all of them), so they work where a bare `@ctype.Type`
+cannot.
 
 ```moonbit check
 ///|

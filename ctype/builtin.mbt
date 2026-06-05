@@ -921,6 +921,12 @@ pub fn builtin_memory_libcall_info(
 }
 
 ///|
+/// C type expected at argument `index` of a lowered memory/string libcall.
+///
+/// Used after `builtin_memory_libcall_info` selects a libcall (such as
+/// `memset`, `memccpy`, or `strcpy`) to coerce each forwarded argument to the
+/// libc prototype. Pointer and length positions are typed precisely; any index
+/// beyond the named ones falls back to `ULong` (the `size_t` count argument).
 pub fn builtin_memory_libcall_arg_type(symbol : String, index : Int) -> Type {
   match symbol {
     "memset" =>
@@ -949,6 +955,13 @@ pub fn builtin_memory_libcall_arg_type(symbol : String, index : Int) -> Type {
 }
 
 ///|
+/// Heap-management libcall selected by a source builtin, with its forwarded
+/// argument count.
+///
+/// Maps allocation builtins such as `__builtin_malloc`, `__builtin_calloc`,
+/// `__builtin_realloc`, `__builtin_free`, and the `strdup` family to the libc
+/// symbol they lower to. Returns `None` when the builtin name is unknown or the
+/// argument count does not match the builtin's prototype.
 pub fn builtin_heap_libcall_info(
   name : String,
   arg_count : Int,
@@ -990,6 +1003,12 @@ pub fn builtin_heap_libcall_info(
 }
 
 ///|
+/// C type expected at argument `index` of a lowered heap-management libcall.
+///
+/// Companion to `builtin_heap_libcall_info`: it gives each argument of the
+/// selected libc symbol (`malloc`, `calloc`, `realloc`, `free`, `strdup`,
+/// `strndup`) its prototype type, defaulting to `Pointer(Void)` for unmodeled
+/// positions.
 pub fn builtin_heap_libcall_arg_type(symbol : String, index : Int) -> Type {
   match symbol {
     "malloc" => ULong
@@ -1011,6 +1030,11 @@ pub fn builtin_heap_libcall_arg_type(symbol : String, index : Int) -> Type {
 }
 
 ///|
+/// String-length libcall selected by a source builtin, with its forwarded
+/// argument count.
+///
+/// Maps `__builtin_strlen` and `__builtin_strnlen` to `strlen`/`strnlen`.
+/// Returns `None` for unknown names or mismatched argument counts.
 pub fn builtin_length_libcall_info(
   name : String,
   arg_count : Int,
@@ -1033,6 +1057,10 @@ pub fn builtin_length_libcall_info(
 }
 
 ///|
+/// C type expected at argument `index` of a lowered `strlen`/`strnlen` call.
+///
+/// Argument 0 is the `char *` string; any later argument is the `size_t`
+/// bound, returned as `ULong`.
 pub fn builtin_length_libcall_arg_type(index : Int) -> Type {
   if index == 0 {
     Pointer(SChar)
@@ -1042,6 +1070,12 @@ pub fn builtin_length_libcall_arg_type(index : Int) -> Type {
 }
 
 ///|
+/// Comparison libcall selected by a source builtin, with its forwarded
+/// argument count.
+///
+/// Maps `__builtin_strcmp`, `__builtin_strncmp`, and `__builtin_memcmp` to
+/// `strcmp`/`strncmp`/`memcmp`. Returns `None` for unknown names or mismatched
+/// argument counts.
 pub fn builtin_compare_libcall_info(
   name : String,
   arg_count : Int,
@@ -1071,6 +1105,11 @@ pub fn builtin_compare_libcall_info(
 }
 
 ///|
+/// C type expected at argument `index` of a lowered comparison libcall.
+///
+/// Companion to `builtin_compare_libcall_info`. The pointer operands of
+/// `strcmp`/`strncmp` are `char *` and those of `memcmp` are `void *`; the
+/// trailing length argument is `size_t` (`ULong`).
 pub fn builtin_compare_libcall_arg_type(symbol : String, index : Int) -> Type {
   match symbol {
     "strcmp" | "strncmp" =>
@@ -1088,6 +1127,13 @@ pub fn builtin_compare_libcall_arg_type(symbol : String, index : Int) -> Type {
 }
 
 ///|
+/// Search libcall selected by a source builtin, with its forwarded argument
+/// count.
+///
+/// Maps the character/substring search builtins (`__builtin_strchr`,
+/// `__builtin_strrchr`, `__builtin_strstr`, `__builtin_memchr`,
+/// `__builtin_memmem`) to their libc symbols. Returns `None` for unknown names
+/// or mismatched argument counts.
 pub fn builtin_search_libcall_info(
   name : String,
   arg_count : Int,
@@ -1128,6 +1174,11 @@ pub fn builtin_search_libcall_info(
 }
 
 ///|
+/// C type expected at argument `index` of a lowered search libcall.
+///
+/// Companion to `builtin_search_libcall_info`. String searches take `char *`
+/// haystacks/needles and an `int` character argument; memory searches take
+/// `void *` operands; trailing length arguments are `size_t` (`ULong`).
 pub fn builtin_search_libcall_arg_type(symbol : String, index : Int) -> Type {
   match symbol {
     "strchr" | "strrchr" =>
@@ -1157,6 +1208,12 @@ pub fn builtin_search_libcall_arg_type(symbol : String, index : Int) -> Type {
 }
 
 ///|
+/// Span libcall selected by a source builtin, with its forwarded argument
+/// count.
+///
+/// Maps `__builtin_strspn`, `__builtin_strcspn`, and `__builtin_strpbrk` to
+/// their libc symbols, each forwarding its two `char *` arguments. Returns
+/// `None` for unknown names or mismatched argument counts.
 pub fn builtin_span_libcall_info(
   name : String,
   arg_count : Int,
@@ -1185,6 +1242,12 @@ pub fn builtin_span_libcall_info(
 }
 
 ///|
+/// BSD `strlcpy`/`strlcat` libcall selected by a fortified source builtin.
+///
+/// Maps the `_chk` fortified forms `__builtin___strlcpy_chk` and
+/// `__builtin___strlcat_chk` to `strlcpy`/`strlcat`, forwarding their first
+/// three arguments (dropping the trailing object-size guard). Returns `None`
+/// for unknown names or mismatched argument counts.
 pub fn builtin_strl_libcall_info(
   name : String,
   arg_count : Int,
@@ -1207,6 +1270,10 @@ pub fn builtin_strl_libcall_info(
 }
 
 ///|
+/// C type expected at argument `index` of a lowered `strlcpy`/`strlcat` call.
+///
+/// Arguments 0 and 1 are the `char *` destination and source; argument 2 is the
+/// `size_t` buffer size, returned as `ULong`.
 pub fn builtin_strl_libcall_arg_type(index : Int) -> Type {
   match index {
     0 | 1 => Pointer(SChar)
@@ -1215,6 +1282,17 @@ pub fn builtin_strl_libcall_arg_type(index : Int) -> Type {
 }
 
 ///|
+/// libc `printf`-family symbol that a source builtin lowers to.
+///
+/// Recognizes the `printf`/`sprintf`/`snprintf` builtins and their `v...` and
+/// fortified `_chk` variants, mapping each to the plain libc symbol
+/// (`printf`, `sprintf`, `snprintf`, `vsnprintf`, …). The accepted argument
+/// counts differ per builtin: variadic forms require at least the fixed
+/// arguments, while the `v...` forms take an exact count. Returns `None` when
+/// the name is unknown or the count is too small.
+///
+/// Unlike the other `_info` helpers this returns only the symbol; the source
+/// argument positions to forward come from `builtin_printf_source_indexes`.
 pub fn builtin_printf_libcall_symbol(name : String, arg_count : Int) -> String? {
   match name {
     "__builtin_snprintf" => if arg_count >= 3 { Some("snprintf") } else { None }
@@ -1281,6 +1359,14 @@ pub fn builtin_printf_libcall_symbol(name : String, arg_count : Int) -> String? 
 }
 
 ///|
+/// Source argument positions forwarded to a lowered `printf`-family libcall.
+///
+/// Fortified `_chk` builtins carry extra guard arguments (a flag and an
+/// object-size) that the plain libc function does not take. This returns the
+/// indices of the original-call arguments that survive lowering, in call
+/// order, so the backend can drop the guard arguments. For non-fortified
+/// builtins it returns every index. Returns `None` when the name is unknown or
+/// the argument count is too small.
 pub fn builtin_printf_source_indexes(
   name : String,
   arg_count : Int,
@@ -1393,6 +1479,11 @@ pub fn builtin_printf_source_indexes(
 }
 
 ///|
+/// Whether a source argument `index` appears in a forwarded-index list.
+///
+/// A small membership helper over the result of
+/// `builtin_printf_source_indexes`, letting the lowering decide whether a given
+/// original argument is forwarded to the libc call or dropped as a guard.
 pub fn builtin_printf_source_index_used(
   indexes : Array[Int],
   index : Int,
@@ -1406,6 +1497,12 @@ pub fn builtin_printf_source_index_used(
 }
 
 ///|
+/// Whether a lowered `printf`-family libcall is variadic.
+///
+/// The non-`v` symbols (`printf`, `sprintf`, `snprintf`, `fprintf`) take a
+/// trailing `...` of format arguments, so they are variadic; the `v...` forms
+/// take a single `va_list` and are not. Callers use this to decide how to type
+/// arguments past the fixed prototype.
 pub fn builtin_printf_libcall_variadic(symbol : String) -> Bool {
   match symbol {
     "snprintf" | "sprintf" | "printf" | "fprintf" => true
@@ -1414,6 +1511,13 @@ pub fn builtin_printf_libcall_variadic(symbol : String) -> Bool {
 }
 
 ///|
+/// C type expected at fixed argument `index` of a `printf`-family libcall.
+///
+/// Returns the prototype type for the leading fixed arguments of the selected
+/// symbol (for example `snprintf`'s `char *`, `size_t`, `char *` prefix), and
+/// `None` once past the fixed prototype — those trailing positions belong to
+/// the variadic format arguments (see `builtin_printf_libcall_variadic`) and
+/// are typed from the call instead.
 pub fn builtin_printf_libcall_arg_type(symbol : String, index : Int) -> Type? {
   match symbol {
     "snprintf" =>

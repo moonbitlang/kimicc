@@ -1111,8 +1111,9 @@ fn Program::lower_mir_global_address_reloc_parts(
 /// the parser AST and builds MIR-owned tables: function signatures and
 /// declarations, merged global declarations with lowered initializers,
 /// aggregate declarations, and a lowered body (`MirFuncBody`) for every defined
-/// function. Type sizes and layouts are computed for `target`, so the same C
-/// source lowered for different targets can differ.
+/// function whose body the MIR layer supports — functions using constructs not
+/// yet modeled are simply omitted from `bodies`. Type sizes and layouts follow
+/// `target`, so the same C source lowered for different targets can differ.
 ///
 /// The returned `Program` still retains the source AST for semantic queries;
 /// call `to_module` (or use `lower_to_module`) to obtain the parser-free

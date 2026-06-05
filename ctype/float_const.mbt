@@ -12,12 +12,21 @@ pub fn floating_abs(value : Double) -> Double {
 }
 
 ///|
+/// Returns the IEEE sign bit of a floating value.
+///
+/// This is true for negative numbers and, crucially, for negative zero, which a
+/// plain `value < 0.0` test would miss. It models C's `signbit`.
 pub fn floating_signbit(value : Double) -> Bool {
   let neg_inf = -(1.0 / 0.0)
   value < 0.0 || (value == 0.0 && 1.0 / value == neg_inf)
 }
 
 ///|
+/// Composes a value from the magnitude of one operand and the sign of another.
+///
+/// Models C's `copysign`: the result has `floating_abs(magnitude)` as its
+/// magnitude and takes its sign from `floating_signbit(sign)`, so the sign of
+/// negative zero propagates correctly.
 pub fn floating_copysign(magnitude : Double, sign : Double) -> Double {
   let value = floating_abs(magnitude)
   if floating_signbit(sign) {
@@ -28,6 +37,10 @@ pub fn floating_copysign(magnitude : Double, sign : Double) -> Double {
 }
 
 ///|
+/// Folds a binary floating arithmetic operator on two constant operands.
+///
+/// `op` is a source-level operator string. Returns `Some(result)` for `+`, `-`,
+/// `*`, and `/`, and `None` for any operator this folder does not handle.
 pub fn floating_constant_binary_arith(
   op : String,
   left : Double,
@@ -43,6 +56,10 @@ pub fn floating_constant_binary_arith(
 }
 
 ///|
+/// Folds a unary floating operator on a constant operand.
+///
+/// Returns `Some(value)` for unary `+`, `Some(-value)` for unary `-`, and
+/// `None` for any other operator.
 pub fn floating_constant_unary(op : String, value : Double) -> Double? {
   match op {
     "-" => Some(-value)
@@ -52,16 +69,30 @@ pub fn floating_constant_unary(op : String, value : Double) -> Double? {
 }
 
 ///|
+/// Converts a stored integer constant value to its double value.
+///
+/// Constant evaluation keeps integers as `Int64`; this performs the numeric
+/// `Int64 -> Double` conversion (not an IEEE bit reinterpretation) used when an
+/// integer constant participates in floating arithmetic.
 pub fn floating_constant_from_integer_bits(bits : Int64) -> Double {
   bits.to_double()
 }
 
 ///|
+/// Converts a double constant to the integer value used by constant evaluation.
+///
+/// This truncates toward zero through `Int`, mirroring C's float-to-integer
+/// conversion for the constant folder (not an IEEE bit reinterpretation).
 pub fn floating_constant_to_integer_bits(value : Double) -> Int64 {
   value.to_int().to_int64()
 }
 
 ///|
+/// Builds an integer constant of type `ty` from a double constant value.
+///
+/// Truncates `value` toward zero (via `floating_constant_to_integer_bits`) and
+/// wraps the result as an `IntegerConstant` of the requested type, used when a
+/// floating constant is cast or assigned to an integer in a constant context.
 pub fn integer_constant_from_floating(
   value : Double,
   ty : Type,
@@ -70,6 +101,12 @@ pub fn integer_constant_from_floating(
 }
 
 ///|
+/// Number of arguments a constant-foldable floating builtin expects.
+///
+/// Recognizes the `fabs`/`sqrt`/`copysign` math builtins and the
+/// `nan`/`inf`/`huge_val` constant builtins (across their `f`/`l` suffixes),
+/// returning their arity (`0`, `1`, or `2`). Returns `None` for names this
+/// folder does not model. It gates `floating_builtin_constant_from_folded_args`.
 pub fn floating_builtin_constant_arg_count(name : String) -> Int? {
   match name {
     "__builtin_fabs"
@@ -94,6 +131,14 @@ pub fn floating_builtin_constant_arg_count(name : String) -> Int? {
 }
 
 ///|
+/// Evaluates a constant-foldable floating builtin to a double.
+///
+/// Implements the constant results of `__builtin_fabs`, `__builtin_copysign`,
+/// `__builtin_sqrt`, and the `nan`/`inf`/`huge_val` families (with their
+/// `f`/`l` suffixes). `arg0`/`arg1` supply the operands a given builtin needs;
+/// returns `None` when the name is unmodeled or a required operand is missing.
+/// Prefer `floating_builtin_constant_from_folded_args`, which checks arity
+/// first.
 pub fn floating_builtin_constant(
   name : String,
   arg0 : Double?,
@@ -178,6 +223,12 @@ fn floating_normal_min(ty : Type) -> Double {
 }
 
 ///|
+/// Evaluates a floating classification predicate on a constant value.
+///
+/// `kind` is one of `"isnan"`, `"isinf"`, `"isfinite"`, `"isnormal"`, or
+/// `"signbit"`. `ty` selects the smallest-normal threshold for `"isnormal"`
+/// (`Float` vs wider). Returns `Some(result)` for a known predicate or `None`
+/// otherwise. This backs C's classification macros at constant-evaluation time.
 pub fn floating_classify(kind : String, value : Double, ty : Type) -> Bool? {
   let nan = value != value
   let pos_inf = 1.0 / 0.0
@@ -195,6 +246,11 @@ pub fn floating_classify(kind : String, value : Double, ty : Type) -> Bool? {
 }
 
 ///|
+/// Evaluates a `__builtin_is*`/`__builtin_signbit` classification on a constant.
+///
+/// Maps each classification builtin name (and its `f`/`l` suffix) to the
+/// corresponding `floating_classify` predicate and execution type. Returns
+/// `None` for names this folder does not model.
 pub fn floating_builtin_classify(name : String, value : Double) -> Bool? {
   match name {
     "__builtin_isnan" => floating_classify("isnan", value, Double)
@@ -238,6 +294,12 @@ pub fn floating_builtin_runtime_class_info(name : String) -> (String, Type)? {
 }
 
 ///|
+/// Evaluates a floating comparison, including the unordered relations.
+///
+/// Handles the ordinary relational operators plus `"<>"` (less-or-greater,
+/// false when either operand is NaN) and `"unordered"` (true when either is
+/// NaN). Returns `None` for an unknown operator. This is the constant-fold and
+/// modeled-runtime core behind `floating_builtin_compare`.
 pub fn floating_compare(op : String, left : Double, right : Double) -> Bool? {
   let unordered = left != left || right != right
   match op {
@@ -268,6 +330,11 @@ pub fn floating_builtin_compare_op(name : String) -> String? {
 }
 
 ///|
+/// Evaluates a floating comparison builtin on two constant operands.
+///
+/// Resolves the builtin name to a comparison operator via
+/// `floating_builtin_compare_op` and applies `floating_compare`. Returns `None`
+/// for names this folder does not model.
 pub fn floating_builtin_compare(
   name : String,
   left : Double,

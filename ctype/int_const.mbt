@@ -16,11 +16,29 @@ pub fn integer_constant(bits : Int64, ty : Type) -> IntegerConstant {
 }
 
 ///|
+/// Builds an `int`-typed integer constant from a boolean.
+///
+/// `true` becomes `1` and `false` becomes `0`, both typed `SInt`, matching the
+/// `int` result type of C relational and logical operators.
 pub fn integer_constant_bool(value : Bool) -> IntegerConstant {
   integer_constant(if value { 1L } else { 0L }, SInt)
 }
 
 ///|
+/// Reinterprets this constant's value into another integer type.
+///
+/// The bits are re-normalized to `ty` (truncated and sign/zero-extended to the
+/// destination width), modeling a C integer conversion in a constant context.
+///
+/// # Example
+///
+/// ```moonbit check
+/// test {
+///   // 256 cast to unsigned char wraps to 0.
+///   let big = @ctype.integer_constant(256L, @ctype.Type::SInt)
+///   inspect(big.cast(@ctype.Type::UChar).bits, content="0")
+/// }
+/// ```
 pub fn IntegerConstant::cast(
   self : IntegerConstant,
   ty : Type,
@@ -29,6 +47,12 @@ pub fn IntegerConstant::cast(
 }
 
 ///|
+/// Applies the usual arithmetic conversions to a pair of integer constants.
+///
+/// Computes the common type of the two operands (`integer_common_type`), casts
+/// both to it, and returns the converted operands together with that result
+/// type. This is the shared promotion step every binary integer fold runs
+/// first.
 pub fn integer_constant_apply_binary_type(
   left : IntegerConstant,
   right : IntegerConstant,
@@ -38,6 +62,25 @@ pub fn integer_constant_apply_binary_type(
 }
 
 ///|
+/// Folds a non-dividing binary integer operator on two constants.
+///
+/// Promotes the operands to their common type, then evaluates `+`, `-`, `*`,
+/// `|`, `&`, or `^`, returning the result in that type. Division and remainder
+/// are handled separately by `integer_constant_divide`; shifts by
+/// `integer_constant_shift`. Returns `None` for any other operator.
+///
+/// # Example
+///
+/// ```moonbit check
+/// test {
+///   let a = @ctype.integer_constant(20L, @ctype.Type::SInt)
+///   let b = @ctype.integer_constant(22L, @ctype.Type::SInt)
+///   inspect(
+///     @ctype.integer_constant_binary_arith("+", a, b).unwrap().bits,
+///     content="42",
+///   )
+/// }
+/// ```
 pub fn integer_constant_binary_arith(
   op : String,
   left : IntegerConstant,
@@ -57,6 +100,12 @@ pub fn integer_constant_binary_arith(
 }
 
 ///|
+/// Tests two integer constants for equality after the usual conversions.
+///
+/// Both operands are promoted to their common type before comparing bits, so
+/// values of different source types compare as C would. Sign- and
+/// width-independent (`==`/`!=` give the same answer either way), so this does
+/// not branch on signedness like `integer_constant_rel_compare`.
 pub fn integer_constant_equal_compare(
   left : IntegerConstant,
   right : IntegerConstant,
@@ -66,6 +115,11 @@ pub fn integer_constant_equal_compare(
 }
 
 ///|
+/// Evaluates an ordering comparison on two integer constants.
+///
+/// Promotes the operands to their common type and compares with `<`, `>`, `<=`,
+/// or `>=`. When the common type is unsigned the bits are compared as unsigned,
+/// so `(unsigned)-1 > 0` holds. Returns `false` for an unrecognized operator.
 pub fn integer_constant_rel_compare(
   op : String,
   left : IntegerConstant,
@@ -94,6 +148,12 @@ pub fn integer_constant_rel_compare(
 }
 
 ///|
+/// Folds integer division or remainder on two constants.
+///
+/// Promotes the operands to their common type and evaluates `/` or `%`, using
+/// unsigned arithmetic when that type is unsigned. Returns `None` for any other
+/// operator and, importantly, for division by zero, so the caller leaves the
+/// expression unfolded rather than trapping at compile time.
 pub fn integer_constant_divide(
   op : String,
   left : IntegerConstant,
@@ -122,6 +182,13 @@ pub fn integer_constant_divide(
 }
 
 ///|
+/// Folds a left or right shift on integer constants.
+///
+/// Unlike the other binary folds, a shift does not convert to a common type:
+/// each operand is integer-promoted independently and the result takes the
+/// promoted type of the left operand. `>>` is arithmetic for signed left
+/// operands and logical for unsigned ones. Returns `None` for any operator
+/// other than `<<` and `>>`.
 pub fn integer_constant_shift(
   op : String,
   left : IntegerConstant,
@@ -148,6 +215,11 @@ pub fn integer_constant_shift(
 }
 
 ///|
+/// Folds a unary integer operator on a constant.
+///
+/// Handles arithmetic negation `-`, unary plus `+`, and bitwise complement `~`
+/// (each on the integer-promoted operand type) as well as logical negation `!`
+/// (yielding an `int` `0`/`1`). Returns `None` for any other operator.
 pub fn integer_constant_unary(
   op : String,
   value : IntegerConstant,
@@ -171,6 +243,13 @@ pub fn integer_constant_unary(
 }
 
 ///|
+/// Folds a logical `&&`/`||` on two integer constants.
+///
+/// Each operand is treated as a truth value (nonzero is true) and the result is
+/// an `int` `0`/`1`. Note this evaluates both operands; it does not model C's
+/// short-circuit semantics, which is sound here because the operands are
+/// already-folded constants with no side effects. Returns `None` for any other
+/// operator.
 pub fn integer_constant_logical(
   op : String,
   left : IntegerConstant,

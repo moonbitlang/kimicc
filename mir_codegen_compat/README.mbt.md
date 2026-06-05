@@ -28,9 +28,9 @@ import {
 |---|---|---|---|
 | `generate_assembly_for_target_with_parser_fallback` | MIR, falling back to parser-AST | `String` | Default. Best MIR output where covered, never fails on the supported subset. |
 | `generate_assembly_for_target` | parser-AST only | `String` | Force the legacy backend. |
-| `generate_assembly_from_mir` | MIR module | `String` | You already hold a `@mir.Program`; abort on uncovered constructs. |
+| `generate_assembly_from_mir` | MIR Program | `String` | You already hold a `@mir.Program`; abort on uncovered constructs. |
 | `generate_assembly_for_target_strict` | MIR, strict | `Result[String, String]` | Detect uncovered constructs as an `Err` instead of falling back. |
-| `generate_assembly_from_mir_strict` | MIR module, strict | `Result[String, String]` | Same, for a pre-lowered `@mir.Program`. |
+| `generate_assembly_from_mir_strict` | MIR Program, strict | `Result[String, String]` | Same, for a pre-lowered `@mir.Program`. |
 
 ## Recommended entry point
 

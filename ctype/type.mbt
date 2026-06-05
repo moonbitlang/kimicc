@@ -681,6 +681,15 @@ pub fn Type::align(self : Type) -> Int {
 }
 
 ///|
+/// One step of a member-access path into an aggregate type.
+///
+/// A list of these designators describes a nested location such as
+/// `s.field.arr[3]`, and is consumed by the layout queries
+/// `@mir.Program::offset_of_path` / `@mir.MirModule::offset_of_path` (which
+/// implement `__builtin_offsetof`) and the object-size facts.
+///
+/// - `OffsetField(name)` descends into the named struct or union field.
+/// - `OffsetIndex(i)` steps `i` elements into an array.
 pub(all) enum OffsetDesignator {
   OffsetField(String)
   OffsetIndex(Int64)

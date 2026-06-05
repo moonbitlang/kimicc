@@ -157,9 +157,9 @@ pub fn Target::object_format(self : Target) -> String {
 /// Returns the assembler symbol prefix applied to C identifiers on this target.
 ///
 /// Darwin prepends a leading underscore to C symbols (so `main` becomes
-/// `_main`), while the System V ELF convention on Linux uses no prefix. Code
-/// generators use this when mangling C function and global names into assembly
-/// labels.
+/// `_main`), while the System V ELF convention on Linux uses no prefix. This
+/// reports the prefix a caller should apply when mangling C function and global
+/// names into assembly labels.
 ///
 /// # Example
 ///
