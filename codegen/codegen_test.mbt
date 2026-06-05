@@ -2049,7 +2049,7 @@ test "generate darwin arm64 global scalar initializer uses MIR metadata" {
   mir.global_decls[0] = {
     ty: g.ty,
     name: g.name,
-    init: Some(@mir.MirGlobalInit::MirGlobalScalarInt(7L)),
+    init: Some(MirGlobalScalarInt(7L)),
     has_init: g.has_init,
     is_static: g.is_static,
     is_extern: g.is_extern,
@@ -2094,7 +2094,7 @@ test "generate darwin arm64 global symbol initializer uses MIR metadata" {
   mir.global_decls[1] = {
     ty: p.ty,
     name: p.name,
-    init: Some(@mir.MirGlobalInit::MirGlobalSymbol("g")),
+    init: Some(MirGlobalSymbol("g")),
     has_init: p.has_init,
     is_static: p.is_static,
     is_extern: p.is_extern,
@@ -2116,7 +2116,7 @@ test "generate darwin arm64 global symbol offset initializer uses MIR metadata" 
   mir.global_decls[1] = {
     ty: p.ty,
     name: p.name,
-    init: Some(@mir.MirGlobalInit::MirGlobalSymbolOffset("g", 4)),
+    init: Some(MirGlobalSymbolOffset("g", 4)),
     has_init: p.has_init,
     is_static: p.is_static,
     is_extern: p.is_extern,
@@ -5118,7 +5118,7 @@ test "generate linux amd64 strict MIR global scalar initializer uses MIR metadat
   mir.global_decls[0] = {
     ty: g.ty,
     name: g.name,
-    init: Some(@mir.MirGlobalInit::MirGlobalScalarInt(11L)),
+    init: Some(MirGlobalScalarInt(11L)),
     has_init: g.has_init,
     is_static: g.is_static,
     is_extern: g.is_extern,
@@ -6678,7 +6678,7 @@ test "generate linux amd64 global scalar initializer uses MIR metadata" {
   mir.global_decls[0] = {
     ty: g.ty,
     name: g.name,
-    init: Some(@mir.MirGlobalInit::MirGlobalScalarInt(7L)),
+    init: Some(MirGlobalScalarInt(7L)),
     has_init: g.has_init,
     is_static: g.is_static,
     is_extern: g.is_extern,
@@ -6706,7 +6706,7 @@ test "generate linux amd64 global symbol initializer uses MIR metadata" {
   mir.global_decls[1] = {
     ty: p.ty,
     name: p.name,
-    init: Some(@mir.MirGlobalInit::MirGlobalSymbol("g")),
+    init: Some(MirGlobalSymbol("g")),
     has_init: p.has_init,
     is_static: p.is_static,
     is_extern: p.is_extern,
@@ -6732,7 +6732,7 @@ test "generate linux amd64 global symbol offset initializer uses MIR metadata" {
   mir.global_decls[1] = {
     ty: p.ty,
     name: p.name,
-    init: Some(@mir.MirGlobalInit::MirGlobalSymbolOffset("g", 4)),
+    init: Some(MirGlobalSymbolOffset("g", 4)),
     has_init: p.has_init,
     is_static: p.is_static,
     is_extern: p.is_extern,

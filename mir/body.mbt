@@ -597,7 +597,7 @@ fn Program::lower_mir_array_init_stores_impl(
             self.lower_mir_struct_init_stores_impl(
               addr,
               elem_ty,
-              @parser.Expr::Array([value_expr]),
+              Array([value_expr]),
               ctx,
               false,
             )
@@ -3295,7 +3295,7 @@ fn mir_body_bitfield_promoted_type(layout : FieldLayout) -> @ctype.Type {
   let int_width = @ctype.Type::SInt.const_int_width().unwrap_or(32)
   let ty = layout.ty.without_alignment()
   if ty.is_integer() && width <= int_width {
-    @ctype.Type::SInt
+    SInt
   } else {
     layout.ty.integer_promote()
   }

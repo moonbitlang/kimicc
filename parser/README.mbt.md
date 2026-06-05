@@ -38,7 +38,7 @@ test "parse a translation unit" {
 
   let answer = program.decls[0]
   inspect(answer.name, content="answer")
-  inspect(answer.ret == @ctype.Type::SInt, content="true")
+  inspect(answer.ret == SInt, content="true")
   inspect(answer.variadic, content="false")
 }
 ```

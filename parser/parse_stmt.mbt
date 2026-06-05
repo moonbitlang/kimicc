@@ -57,9 +57,9 @@ fn Parser::parse_initializer_value(
 ) -> Expr {
   if self.token == LBrace {
     if compound_literal {
-      Expr::Array(self.parse_compound_literal_init_exprs())
+      Array(self.parse_compound_literal_init_exprs())
     } else {
-      Expr::Array(self.parse_brace_init_exprs())
+      Array(self.parse_brace_init_exprs())
     }
   } else {
     self.parse_assign()

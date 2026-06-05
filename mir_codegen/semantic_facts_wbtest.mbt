@@ -3,12 +3,8 @@ fn semantic_test_aggregate_decl() -> @mir.MirAggregateDecl {
   {
     name: "Pair",
     fields: [
-      { name: "head", ty: @ctype.Type::SInt, bit_width: None },
-      {
-        name: "tail",
-        ty: @ctype.Type::Array(@ctype.Type::SInt, 2),
-        bit_width: None,
-      },
+      { name: "head", ty: SInt, bit_width: None },
+      { name: "tail", ty: Array(SInt, 2), bit_width: None },
     ],
     is_union: false,
     is_packed: false,
@@ -21,7 +17,7 @@ fn semantic_test_aggregate_layout() -> @mir.AggregateLayout {
     fields: [
       {
         name: "head",
-        ty: @ctype.Type::SInt,
+        ty: SInt,
         offset: 0,
         size: 4,
         bit_offset: 0,
@@ -29,7 +25,7 @@ fn semantic_test_aggregate_layout() -> @mir.AggregateLayout {
       },
       {
         name: "tail",
-        ty: @ctype.Type::Array(@ctype.Type::SInt, 2),
+        ty: Array(SInt, 2),
         offset: 4,
         size: 8,
         bit_offset: 0,
@@ -48,15 +44,12 @@ fn semantic_test_module(target : @target.Target) -> @mir.MirModule {
   let aggregate = semantic_test_aggregate_decl()
   let layout = semantic_test_aggregate_layout()
   let global : @mir.MirGlobalDecl = {
-    ty: @ctype.Type::Struct("Pair"),
+    ty: Struct("Pair"),
     name: "g_pair",
     init: Some(
-      @mir.MirGlobalInit::MirGlobalArray([
-        @mir.MirGlobalInit::MirGlobalScalarInt(7L),
-        @mir.MirGlobalInit::MirGlobalArray([
-          @mir.MirGlobalInit::MirGlobalScalarInt(11L),
-          @mir.MirGlobalInit::MirGlobalScalarInt(13L),
-        ]),
+      MirGlobalArray([
+        MirGlobalScalarInt(7L),
+        MirGlobalArray([MirGlobalScalarInt(11L), MirGlobalScalarInt(13L)]),
       ]),
     ),
     has_init: true,
@@ -82,14 +75,14 @@ fn semantic_test_module(target : @target.Target) -> @mir.MirModule {
 
 ///|
 test "darwin MIR codegen uses parser-free module layout facts" {
-  let mir_module = semantic_test_module(@target.Target::DarwinArm64)
+  let mir_module = semantic_test_module(DarwinArm64)
   let codegen = Codegen::new_with_mir_module(mir_module)
   codegen.register_mir_aggregate_layouts(mir_module)
-  assert_eq(codegen.type_size(@ctype.Type::Struct("Pair")), 12)
-  assert_eq(codegen.type_align(@ctype.Type::Struct("Pair")), 4)
-  match mir_module.field_layout(@ctype.Type::Struct("Pair"), "tail") {
+  assert_eq(codegen.type_size(Struct("Pair")), 12)
+  assert_eq(codegen.type_align(Struct("Pair")), 4)
+  match mir_module.field_layout(Struct("Pair"), "tail") {
     Some(field) => {
-      assert_eq(field.ty, @ctype.Type::Array(@ctype.Type::SInt, 2))
+      assert_eq(field.ty, Array(SInt, 2))
       assert_eq(field.offset, 4)
       assert_eq(field.size, 8)
       assert_eq(field.bit_offset, 0)
@@ -98,9 +91,9 @@ test "darwin MIR codegen uses parser-free module layout facts" {
     None => abort("unexpected Darwin MIR field layout")
   }
   match
-    mir_module.offset_of_path(@ctype.Type::Struct("Pair"), [
-      @ctype.OffsetDesignator::OffsetField("tail"),
-      @ctype.OffsetDesignator::OffsetIndex(1L),
+    mir_module.offset_of_path(Struct("Pair"), [
+      OffsetField("tail"),
+      OffsetIndex(1L),
     ]) {
     Some(8) => ()
     _ => abort("unexpected Darwin MIR offset path")
@@ -117,14 +110,14 @@ test "darwin MIR codegen uses parser-free module layout facts" {
 
 ///|
 test "linux x64 MIR codegen uses parser-free module layout facts" {
-  let mir_module = semantic_test_module(@target.Target::LinuxAmd64)
+  let mir_module = semantic_test_module(LinuxAmd64)
   let codegen = X64Codegen::new_with_mir_module(mir_module)
   codegen.register_mir_aggregate_layouts(mir_module)
-  assert_eq(codegen.type_size(@ctype.Type::Struct("Pair")), 12)
-  assert_eq(codegen.type_align(@ctype.Type::Struct("Pair")), 4)
-  match mir_module.field_layout(@ctype.Type::Struct("Pair"), "tail") {
+  assert_eq(codegen.type_size(Struct("Pair")), 12)
+  assert_eq(codegen.type_align(Struct("Pair")), 4)
+  match mir_module.field_layout(Struct("Pair"), "tail") {
     Some(field) => {
-      assert_eq(field.ty, @ctype.Type::Array(@ctype.Type::SInt, 2))
+      assert_eq(field.ty, Array(SInt, 2))
       assert_eq(field.offset, 4)
       assert_eq(field.size, 8)
       assert_eq(field.bit_offset, 0)
@@ -133,9 +126,9 @@ test "linux x64 MIR codegen uses parser-free module layout facts" {
     None => abort("unexpected x86-64 MIR field layout")
   }
   match
-    mir_module.offset_of_path(@ctype.Type::Struct("Pair"), [
-      @ctype.OffsetDesignator::OffsetField("tail"),
-      @ctype.OffsetDesignator::OffsetIndex(1L),
+    mir_module.offset_of_path(Struct("Pair"), [
+      OffsetField("tail"),
+      OffsetIndex(1L),
     ]) {
     Some(8) => ()
     _ => abort("unexpected x86-64 MIR offset path")

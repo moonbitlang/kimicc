@@ -35,8 +35,8 @@ pub fn integer_constant_bool(value : Bool) -> IntegerConstant {
 /// ```moonbit check
 /// test {
 ///   // 256 cast to unsigned char wraps to 0.
-///   let big = @ctype.integer_constant(256L, @ctype.Type::SInt)
-///   inspect(big.cast(@ctype.Type::UChar).bits, content="0")
+///   let big = @ctype.integer_constant(256L, SInt)
+///   inspect(big.cast(UChar).bits, content="0")
 /// }
 /// ```
 pub fn IntegerConstant::cast(
@@ -73,8 +73,8 @@ pub fn integer_constant_apply_binary_type(
 ///
 /// ```moonbit check
 /// test {
-///   let a = @ctype.integer_constant(20L, @ctype.Type::SInt)
-///   let b = @ctype.integer_constant(22L, @ctype.Type::SInt)
+///   let a = @ctype.integer_constant(20L, SInt)
+///   let b = @ctype.integer_constant(22L, SInt)
 ///   inspect(
 ///     @ctype.integer_constant_binary_arith("+", a, b).unwrap().bits,
 ///     content="42",

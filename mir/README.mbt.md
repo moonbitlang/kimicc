@@ -82,7 +82,7 @@ test "layout queries" {
   inspect(program.field_layout(p, "arr").unwrap().offset, content="4")
 
   // offsetof(struct P, arr[2]).
-  let path = [@ctype.OffsetField("arr"), @ctype.OffsetIndex(2L)]
+  let path = [@ctype.OffsetField("arr"), OffsetIndex(2L)]
   inspect(program.offset_of_path(p, path).unwrap(), content="12")
 }
 ```

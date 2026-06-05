@@ -5,14 +5,11 @@ test "ctype scalar predicates and aliases" {
   inspect(@ctype.Type::UInt.is_signed(), content="false")
   inspect(@ctype.Type::UInt.is_unsigned_integer(), content="true")
   inspect(@ctype.Type::Bool.is_unsigned_integer(), content="false")
-  inspect(@ctype.Type::Atomic(@ctype.Type::UInt128).is_int128(), content="true")
+  inspect(@ctype.Type::Atomic(UInt128).is_int128(), content="true")
   inspect(@ctype.Type::Bool.const_is_unsigned(), content="true")
   inspect(@ctype.Type::SLong.const_is_unsigned(), content="false")
   inspect(@ctype.Type::Double.is_floating(), content="true")
-  inspect(
-    @ctype.Type::Aligned(@ctype.Type::Float, 8).is_float_or_double(),
-    content="true",
-  )
+  inspect(@ctype.Type::Aligned(Float, 8).is_float_or_double(), content="true")
   inspect(@ctype.Type::SInt.to_unsigned(), content="UInt")
 }
 
@@ -35,58 +32,48 @@ test "ctype string literal helpers cover object and C lengths" {
 ///|
 test "ctype type-shape helpers unwrap transparent wrappers" {
   inspect(
-    @ctype.Type::Atomic(
-      @ctype.Type::Aligned(@ctype.Type::Pointer(@ctype.Type::SInt), 8),
-    ).core_type(),
+    @ctype.Type::Atomic(Aligned(Pointer(SInt), 8)).core_type(),
     content="Pointer(SInt)",
   )
   inspect(
-    @ctype.Type::Aligned(@ctype.Type::Aligned(@ctype.Type::SInt, 4), 16).without_alignment(),
+    @ctype.Type::Aligned(Aligned(SInt, 4), 16).without_alignment(),
     content="SInt",
   )
   inspect(
-    @ctype.Type::Aligned(
-      @ctype.Type::Atomic(@ctype.Type::Aligned(@ctype.Type::SInt, 4)),
-      16,
-    ).without_alignment(),
+    @ctype.Type::Aligned(Atomic(Aligned(SInt, 4)), 16).without_alignment(),
     content="Atomic(Aligned(SInt, 4))",
   )
   inspect(
-    @ctype.Type::Atomic(@ctype.Type::Aligned(@ctype.Type::SInt, 4)).without_alignment(),
+    @ctype.Type::Atomic(Aligned(SInt, 4)).without_alignment(),
     content="Atomic(Aligned(SInt, 4))",
   )
   inspect(
-    @ctype.Type::Aligned(@ctype.Type::Struct("__anon_struct_1"), 16).is_anonymous_aggregate(),
+    @ctype.Type::Aligned(Struct("__anon_struct_1"), 16).is_anonymous_aggregate(),
     content="true",
   )
   inspect(@ctype.Type::Struct("S").is_aggregate(), content="true")
+  inspect(@ctype.Type::Array(SInt, 2).is_aggregate(), content="false")
   inspect(
-    @ctype.Type::Array(@ctype.Type::SInt, 2).is_aggregate(),
-    content="false",
-  )
-  inspect(
-    @ctype.Type::Atomic(@ctype.Type::Array(@ctype.Type::SInt, 2)).is_object_aggregate(),
+    @ctype.Type::Atomic(Array(SInt, 2)).is_object_aggregate(),
     content="true",
   )
-  match
-    @ctype.Type::Pointer(@ctype.Type::Atomic(@ctype.Type::Struct("S"))).field_receiver() {
+  match @ctype.Type::Pointer(Atomic(Struct("S"))).field_receiver() {
     Some(receiver) => inspect(receiver, content="Struct(S)")
     None => abort("expected aggregate field receiver")
   }
-  match @ctype.Type::Pointer(@ctype.Type::SInt).field_receiver() {
+  match @ctype.Type::Pointer(SInt).field_receiver() {
     Some(_) => abort("unexpected aggregate field receiver")
     None => ()
   }
-  match @ctype.Type::Pointer(@ctype.Type::SChar).pointer_or_array_element() {
+  match @ctype.Type::Pointer(SChar).pointer_or_array_element() {
     Some(elem) => inspect(elem, content="SChar")
     None => abort("expected pointer element")
   }
-  match
-    @ctype.Type::Atomic(@ctype.Type::Array(@ctype.Type::UChar, 4)).array_element() {
+  match @ctype.Type::Atomic(Array(UChar, 4)).array_element() {
     Some(elem) => inspect(elem, content="UChar")
     None => abort("expected array element")
   }
-  match @ctype.Type::Pointer(@ctype.Type::SChar).array_element() {
+  match @ctype.Type::Pointer(SChar).array_element() {
     Some(_) => abort("unexpected array element")
     None => ()
   }
@@ -95,45 +82,26 @@ test "ctype type-shape helpers unwrap transparent wrappers" {
 ///|
 test "ctype generic and classify builtins expose parser-neutral type facts" {
   inspect(
-    @ctype.generic_selection_control_type(
-      @ctype.Type::Aligned(@ctype.Type::Array(@ctype.Type::SInt, 4), 16),
-    ),
+    @ctype.generic_selection_control_type(Aligned(Array(SInt, 4), 16)),
     content="Pointer(SInt)",
   )
   inspect(
-    @ctype.generic_types_compatible(
-      @ctype.Type::Aligned(@ctype.Type::SInt, 4),
-      @ctype.Type::SInt,
-    ),
+    @ctype.generic_types_compatible(Aligned(SInt, 4), SInt),
     content="true",
   )
   inspect(
-    @ctype.generic_types_compatible(
-      @ctype.Type::Array(@ctype.Type::SInt, 4),
-      @ctype.Type::Pointer(@ctype.Type::SInt),
-    ),
+    @ctype.generic_types_compatible(Array(SInt, 4), Pointer(SInt)),
     content="false",
   )
-  inspect(@ctype.builtin_classify_type_code(@ctype.Type::SInt), content="1")
-  inspect(@ctype.builtin_classify_type_code(@ctype.Type::Bool), content="4")
+  inspect(@ctype.builtin_classify_type_code(SInt), content="1")
+  inspect(@ctype.builtin_classify_type_code(Bool), content="4")
   inspect(
-    @ctype.builtin_classify_type_code(
-      @ctype.Type::Aligned(@ctype.Type::Atomic(@ctype.Type::Double), 8),
-    ),
+    @ctype.builtin_classify_type_code(Aligned(Atomic(Double), 8)),
     content="8",
   )
-  inspect(
-    @ctype.builtin_classify_type_code(@ctype.Type::Pointer(@ctype.Type::SInt)),
-    content="5",
-  )
-  inspect(
-    @ctype.builtin_classify_type_code(@ctype.Type::Struct("S")),
-    content="12",
-  )
-  inspect(
-    @ctype.builtin_classify_type_code(@ctype.Type::Union("U")),
-    content="13",
-  )
+  inspect(@ctype.builtin_classify_type_code(Pointer(SInt)), content="5")
+  inspect(@ctype.builtin_classify_type_code(Struct("S")), content="12")
+  inspect(@ctype.builtin_classify_type_code(Union("U")), content="13")
 }
 
 ///|
@@ -157,11 +125,11 @@ fn expect_no_const_int_width(ty : @ctype.Type) -> Unit {
 
 ///|
 test "ctype integer constant width helper covers scalar facts" {
-  expect_const_int_width(@ctype.Type::Bool, 1)
-  expect_const_int_width(@ctype.Type::SChar, 8)
-  expect_const_int_width(@ctype.Type::Pointer(@ctype.Type::SInt), 64)
-  expect_const_int_width(@ctype.Type::Atomic(@ctype.Type::UInt128), 128)
-  expect_no_const_int_width(@ctype.Type::Double)
+  expect_const_int_width(Bool, 1)
+  expect_const_int_width(SChar, 8)
+  expect_const_int_width(Pointer(SInt), 64)
+  expect_const_int_width(Atomic(UInt128), 128)
+  expect_no_const_int_width(Double)
 }
 
 ///|
@@ -173,26 +141,24 @@ test "ctype integer bit cast helper covers narrowing and signedness" {
   inspect(@ctype.Type::UInt.cast_integer_bits(-1L), content="4294967295")
   inspect(@ctype.Type::ULongLong.cast_integer_bits(-1L), content="-1")
   inspect(
-    @ctype.Type::Atomic(@ctype.Type::Aligned(@ctype.Type::SChar, 4)).cast_integer_bits(
-      255L,
-    ),
+    @ctype.Type::Atomic(Aligned(SChar, 4)).cast_integer_bits(255L),
     content="-1",
   )
 }
 
 ///|
 test "ctype integer constant helpers cover C arithmetic conversions" {
-  let char_value = @ctype.integer_constant(255L, @ctype.Type::SChar)
+  let char_value = @ctype.integer_constant(255L, SChar)
   inspect(char_value.bits, content="-1")
   inspect(char_value.ty, content="SChar")
-  let wrapped_uint = @ctype.integer_constant(-1L, @ctype.Type::UInt)
+  let wrapped_uint = @ctype.integer_constant(-1L, UInt)
   inspect(wrapped_uint.bits, content="4294967295")
   inspect(wrapped_uint.ty, content="UInt")
   match
     @ctype.integer_constant_binary_arith(
       "+",
-      @ctype.integer_constant(-1L, @ctype.Type::UInt),
-      @ctype.integer_constant(2L, @ctype.Type::SInt),
+      @ctype.integer_constant(-1L, UInt),
+      @ctype.integer_constant(2L, SInt),
     ) {
     Some(value) => {
       inspect(value.bits, content="1")
@@ -203,8 +169,8 @@ test "ctype integer constant helpers cover C arithmetic conversions" {
   match
     @ctype.integer_constant_divide(
       "/",
-      @ctype.integer_constant(-2L, @ctype.Type::ULongLong),
-      @ctype.integer_constant(2L, @ctype.Type::SInt),
+      @ctype.integer_constant(-2L, ULongLong),
+      @ctype.integer_constant(2L, SInt),
     ) {
     Some(value) => inspect(value.bits, content="9223372036854775807")
     None => abort("expected division result")
@@ -212,16 +178,16 @@ test "ctype integer constant helpers cover C arithmetic conversions" {
   inspect(
     @ctype.integer_constant_rel_compare(
       ">",
-      @ctype.integer_constant(-1L, @ctype.Type::UInt),
-      @ctype.integer_constant(0L, @ctype.Type::SInt),
+      @ctype.integer_constant(-1L, UInt),
+      @ctype.integer_constant(0L, SInt),
     ),
     content="true",
   )
   match
     @ctype.integer_constant_shift(
       ">>",
-      @ctype.integer_constant(-1L, @ctype.Type::UInt),
-      @ctype.integer_constant(1L, @ctype.Type::SInt),
+      @ctype.integer_constant(-1L, UInt),
+      @ctype.integer_constant(1L, SInt),
     ) {
     Some(value) => inspect(value.bits, content="2147483647")
     None => abort("expected shift result")
@@ -233,11 +199,7 @@ test "ctype integer constant helpers cover C arithmetic conversions" {
     }
     None => abort("expected unary result")
   }
-  match
-    @ctype.integer_constant_unary(
-      "~",
-      @ctype.integer_constant(0L, @ctype.Type::UChar),
-    ) {
+  match @ctype.integer_constant_unary("~", @ctype.integer_constant(0L, UChar)) {
     Some(value) => {
       inspect(value.bits, content="-1")
       inspect(value.ty, content="SInt")
@@ -247,8 +209,8 @@ test "ctype integer constant helpers cover C arithmetic conversions" {
   match
     @ctype.integer_constant_logical(
       "||",
-      @ctype.integer_constant(0L, @ctype.Type::SInt),
-      @ctype.integer_constant(-1L, @ctype.Type::ULongLong),
+      @ctype.integer_constant(0L, SInt),
+      @ctype.integer_constant(-1L, ULongLong),
     ) {
     Some(value) => {
       inspect(value.bits, content="1")
@@ -312,75 +274,75 @@ test "ctype integer scalar builtin constant helper covers shared facts" {
     "__builtin_flt_rounds",
     None,
     None,
-    @ctype.Type::SInt,
+    SInt,
     1L,
-    @ctype.Type::SInt,
+    SInt,
   )
   expect_integer_builtin_constant(
     "__builtin_abs",
-    Some(@ctype.integer_constant(-7L, @ctype.Type::SInt)),
+    Some(@ctype.integer_constant(-7L, SInt)),
     None,
-    @ctype.Type::SInt,
+    SInt,
     7L,
-    @ctype.Type::SInt,
+    SInt,
   )
   expect_integer_builtin_constant(
     "__builtin_align_up",
-    Some(@ctype.integer_constant(33L, @ctype.Type::ULong)),
-    Some(@ctype.integer_constant(16L, @ctype.Type::SInt)),
-    @ctype.Type::ULong,
+    Some(@ctype.integer_constant(33L, ULong)),
+    Some(@ctype.integer_constant(16L, SInt)),
+    ULong,
     48L,
-    @ctype.Type::ULong,
+    ULong,
   )
   expect_integer_builtin_constant(
     "__builtin_is_aligned",
-    Some(@ctype.integer_constant(32L, @ctype.Type::ULong)),
-    Some(@ctype.integer_constant(16L, @ctype.Type::SInt)),
-    @ctype.Type::ULong,
+    Some(@ctype.integer_constant(32L, ULong)),
+    Some(@ctype.integer_constant(16L, SInt)),
+    ULong,
     1L,
-    @ctype.Type::SInt,
+    SInt,
   )
   expect_integer_builtin_constant(
     "__builtin_clz",
-    Some(@ctype.integer_constant(0x10L, @ctype.Type::SInt)),
+    Some(@ctype.integer_constant(0x10L, SInt)),
     None,
-    @ctype.Type::SInt,
+    SInt,
     27L,
-    @ctype.Type::SInt,
+    SInt,
   )
   expect_integer_builtin_constant(
     "__builtin_bswap32",
-    Some(@ctype.integer_constant(0x01020304L, @ctype.Type::UInt)),
+    Some(@ctype.integer_constant(0x01020304L, UInt)),
     None,
-    @ctype.Type::UInt,
+    UInt,
     0x04030201L,
-    @ctype.Type::UInt,
+    UInt,
   )
   expect_integer_builtin_constant(
     "__builtin_rotateleft32",
-    Some(@ctype.integer_constant(0x12345678L, @ctype.Type::UInt)),
-    Some(@ctype.integer_constant(8L, @ctype.Type::SInt)),
-    @ctype.Type::UInt,
+    Some(@ctype.integer_constant(0x12345678L, UInt)),
+    Some(@ctype.integer_constant(8L, SInt)),
+    UInt,
     0x34567812L,
-    @ctype.Type::UInt,
+    UInt,
   )
   expect_integer_builtin_constant_from_folded_args(
     "__builtin_rotateleft32",
     2,
-    Some(@ctype.integer_constant(0x12345678L, @ctype.Type::UInt)),
-    Some(@ctype.integer_constant(8L, @ctype.Type::SInt)),
-    @ctype.Type::UInt,
+    Some(@ctype.integer_constant(0x12345678L, UInt)),
+    Some(@ctype.integer_constant(8L, SInt)),
+    UInt,
     0x34567812L,
-    @ctype.Type::UInt,
+    UInt,
   )
   expect_integer_builtin_constant_from_folded_args(
     "__builtin_flt_rounds",
     0,
     None,
     None,
-    @ctype.Type::SInt,
+    SInt,
     1L,
-    @ctype.Type::SInt,
+    SInt,
   )
   match
     @ctype.integer_scalar_builtin_constant_from_folded_args(
@@ -388,7 +350,7 @@ test "ctype integer scalar builtin constant helper covers shared facts" {
       1,
       None,
       None,
-      @ctype.Type::SInt,
+      SInt,
     ) {
     Some(_) => abort("unexpected missing folded first arg")
     None => ()
@@ -397,9 +359,9 @@ test "ctype integer scalar builtin constant helper covers shared facts" {
     @ctype.integer_scalar_builtin_constant_from_folded_args(
       "__builtin_align_up",
       2,
-      Some(@ctype.integer_constant(33L, @ctype.Type::ULong)),
+      Some(@ctype.integer_constant(33L, ULong)),
       None,
-      @ctype.Type::ULong,
+      ULong,
     ) {
     Some(_) => abort("unexpected missing folded second arg")
     None => ()
@@ -407,9 +369,9 @@ test "ctype integer scalar builtin constant helper covers shared facts" {
   match
     @ctype.integer_scalar_builtin_constant(
       "__builtin_clz",
-      Some(@ctype.integer_constant(0L, @ctype.Type::SInt)),
+      Some(@ctype.integer_constant(0L, SInt)),
       None,
-      @ctype.Type::SInt,
+      SInt,
     ) {
     Some(_) => abort("unexpected clz zero fold")
     None => ()
@@ -437,7 +399,7 @@ test "ctype generic integer builtin widths cover scalar facts" {
   inspect(@ctype.Type::UInt.generic_builtin_bswap_width(), content="32")
   inspect(@ctype.Type::ULongLong.generic_builtin_bswap_width(), content="64")
   inspect(
-    @ctype.Type::Atomic(@ctype.Type::UChar).generic_builtin_bswap_width(),
+    @ctype.Type::Atomic(UChar).generic_builtin_bswap_width(),
     content="16",
   )
   inspect(@ctype.Type::Double.generic_builtin_bswap_width(), content="64")
@@ -571,31 +533,21 @@ fn expect_integer_alignment_builtin_info(
 
 ///|
 test "ctype integer unary runtime metadata covers abs bswap and rotates" {
-  expect_integer_abs_builtin_type("__builtin_labs", @ctype.Type::SLong)
+  expect_integer_abs_builtin_type("__builtin_labs", SLong)
   expect_no_integer_abs_builtin_type("__builtin_ffs")
-  expect_integer_bswap_builtin_info(
-    "__builtin_bswap16",
-    @ctype.Type::UInt,
-    @ctype.Type::UShort,
-    16,
-  )
-  expect_integer_bswap_builtin_info(
-    "__builtin_bswap",
-    @ctype.Type::ULongLong,
-    @ctype.Type::ULongLong,
-    64,
-  )
+  expect_integer_bswap_builtin_info("__builtin_bswap16", UInt, UShort, 16)
+  expect_integer_bswap_builtin_info("__builtin_bswap", ULongLong, ULongLong, 64)
   expect_integer_rotate_builtin_info(
     "__builtin_rotateleft",
-    @ctype.Type::UShort,
-    @ctype.Type::UShort,
+    UShort,
+    UShort,
     32,
     true,
   )
   expect_integer_rotate_builtin_info(
     "__builtin_rotateright64",
-    @ctype.Type::UInt,
-    @ctype.Type::ULongLong,
+    UInt,
+    ULongLong,
     64,
     false,
   )
@@ -605,27 +557,23 @@ test "ctype integer unary runtime metadata covers abs bswap and rotates" {
 test "ctype integer alignment builtin metadata covers runtime dispatch facts" {
   expect_integer_alignment_builtin_info(
     "__builtin_is_aligned",
-    @ctype.Type::ULong,
+    ULong,
     "is_aligned",
-    @ctype.Type::Bool,
+    Bool,
   )
   expect_integer_alignment_builtin_info(
     "__builtin_align_up",
-    @ctype.Type::ULongLong,
+    ULongLong,
     "align_up",
-    @ctype.Type::ULongLong,
+    ULongLong,
   )
   expect_integer_alignment_builtin_info(
     "__builtin_align_down",
-    @ctype.Type::SInt,
+    SInt,
     "align_down",
-    @ctype.Type::SInt,
+    SInt,
   )
-  match
-    @ctype.integer_alignment_builtin_info(
-      "__builtin_bswap32",
-      @ctype.Type::UInt,
-    ) {
+  match @ctype.integer_alignment_builtin_info("__builtin_bswap32", UInt) {
     Some(_) => abort("unexpected integer alignment builtin info")
     None => ()
   }
@@ -672,7 +620,7 @@ test "ctype floating helpers cover classification and comparisons" {
   }
   inspect(@ctype.floating_constant_from_integer_bits(42L), content="42")
   inspect(@ctype.floating_constant_to_integer_bits(3.9), content="3")
-  match @ctype.integer_constant_from_floating(260.0, @ctype.Type::UChar) {
+  match @ctype.integer_constant_from_floating(260.0, UChar) {
     { bits, ty } => {
       inspect(bits, content="4")
       inspect(ty, content="UChar")
@@ -802,7 +750,7 @@ test "ctype floating helpers cover classification and comparisons" {
     true,
   )
   expect_float_predicate(
-    @ctype.floating_classify("signbit", -0.0, @ctype.Type::Double),
+    @ctype.floating_classify("signbit", -0.0, Double),
     true,
   )
   expect_float_predicate(@ctype.floating_compare(">", 2.0, 1.0), true)
@@ -816,26 +764,11 @@ test "ctype floating helpers cover classification and comparisons" {
 ///|
 test "ctype integer promotion and common type helpers cover C ranks" {
   inspect(@ctype.Type::UShort.integer_promote(), content="SInt")
-  inspect(
-    @ctype.Type::Aligned(@ctype.Type::SShort, 8).integer_promote(),
-    content="SInt",
-  )
+  inspect(@ctype.Type::Aligned(SShort, 8).integer_promote(), content="SInt")
   inspect(@ctype.Type::UInt.integer_rank(), content="3")
-  inspect(
-    @ctype.integer_common_type(@ctype.Type::UInt, @ctype.Type::SLong),
-    content="SLong",
-  )
-  inspect(
-    @ctype.integer_common_type(@ctype.Type::ULong, @ctype.Type::SLongLong),
-    content="ULongLong",
-  )
-  inspect(
-    @ctype.integer_common_type(
-      @ctype.Type::Atomic(@ctype.Type::UChar),
-      @ctype.Type::SShort,
-    ),
-    content="SInt",
-  )
+  inspect(@ctype.integer_common_type(UInt, SLong), content="SLong")
+  inspect(@ctype.integer_common_type(ULong, SLongLong), content="ULongLong")
+  inspect(@ctype.integer_common_type(Atomic(UChar), SShort), content="SInt")
 }
 
 ///|
@@ -848,127 +781,66 @@ test "ctype scalar expression result type helpers cover parser-neutral rules" {
     @ctype.Type::LongDouble.is_floating_with_long_double(false),
     content="false",
   )
+  inspect(@ctype.unary_numeric_result_type(UChar, true), content="SInt")
   inspect(
-    @ctype.unary_numeric_result_type(@ctype.Type::UChar, true),
-    content="SInt",
+    @ctype.unary_numeric_result_type(LongDouble, true),
+    content="LongDouble",
   )
+  inspect(@ctype.binary_result_type("+", Float, Double, true), content="Double")
   inspect(
-    @ctype.unary_numeric_result_type(@ctype.Type::LongDouble, true),
+    @ctype.binary_result_type("+", LongDouble, SInt, true),
     content="LongDouble",
   )
   inspect(
-    @ctype.binary_result_type(
-      "+",
-      @ctype.Type::Float,
-      @ctype.Type::Double,
-      true,
-    ),
-    content="Double",
-  )
-  inspect(
-    @ctype.binary_result_type(
-      "+",
-      @ctype.Type::LongDouble,
-      @ctype.Type::SInt,
-      true,
-    ),
-    content="LongDouble",
-  )
-  inspect(
-    @ctype.binary_result_type(
-      "+",
-      @ctype.Type::LongDouble,
-      @ctype.Type::SInt,
-      false,
-    ),
+    @ctype.binary_result_type("+", LongDouble, SInt, false),
     content="SInt",
   )
+  inspect(@ctype.binary_result_type("<<", UShort, ULong, true), content="SInt")
   inspect(
-    @ctype.binary_result_type(
-      "<<",
-      @ctype.Type::UShort,
-      @ctype.Type::ULong,
-      true,
-    ),
-    content="SInt",
-  )
-  inspect(
-    @ctype.binary_expr_result_type(
-      "+",
-      @ctype.Type::Pointer(@ctype.Type::SInt),
-      @ctype.Type::SLong,
-      false,
-      true,
-    ),
+    @ctype.binary_expr_result_type("+", Pointer(SInt), SLong, false, true),
     content="Pointer(SInt)",
   )
   inspect(
-    @ctype.binary_expr_result_type(
-      "+",
-      @ctype.Type::SLong,
-      @ctype.Type::Array(@ctype.Type::Double, 2),
-      false,
-      true,
-    ),
+    @ctype.binary_expr_result_type("+", SLong, Array(Double, 2), false, true),
     content="Pointer(Double)",
   )
   inspect(
     @ctype.binary_expr_result_type(
       "-",
-      @ctype.Type::Pointer(@ctype.Type::SChar),
-      @ctype.Type::Array(@ctype.Type::SChar, 4),
+      Pointer(SChar),
+      Array(SChar, 4),
       false,
       true,
     ),
     content="SLong",
   )
   inspect(
-    @ctype.binary_expr_result_type(
-      "<<",
-      @ctype.Type::SInt,
-      @ctype.Type::SInt,
-      true,
-      true,
-    ),
+    @ctype.binary_expr_result_type("<<", SInt, SInt, true, true),
     content="ULongLong",
   )
   inspect(
-    @ctype.ternary_result_type(
-      @ctype.Type::Array(@ctype.Type::SChar, 4),
-      @ctype.Type::Pointer(@ctype.Type::Void),
-      true,
-    ),
+    @ctype.ternary_result_type(Array(SChar, 4), Pointer(Void), true),
     content="Pointer(SChar)",
   )
+  inspect(@ctype.ternary_result_type(SInt, ULong, true), content="ULong")
   inspect(
-    @ctype.ternary_result_type(@ctype.Type::SInt, @ctype.Type::ULong, true),
-    content="ULong",
-  )
-  inspect(
-    @ctype.ternary_result_type(
-      @ctype.Type::LongDouble,
-      @ctype.Type::Double,
-      false,
-    ),
+    @ctype.ternary_result_type(LongDouble, Double, false),
     content="Double",
   )
 }
 
 ///|
 test "ctype layout helpers cover scalar ABI facts" {
-  inspect(@ctype.Type::Pointer(@ctype.Type::SInt).size(), content="8")
-  inspect(@ctype.Type::Array(@ctype.Type::SChar, 4).size(), content="4")
-  inspect(@ctype.Type::Aligned(@ctype.Type::SInt, 16).align(), content="16")
+  inspect(@ctype.Type::Pointer(SInt).size(), content="8")
+  inspect(@ctype.Type::Array(SChar, 4).size(), content="4")
+  inspect(@ctype.Type::Aligned(SInt, 16).align(), content="16")
 }
 
 ///|
 test "ctype atomic target helper covers builtin pointer targets" {
+  inspect(@ctype.Type::Pointer(Atomic(UInt)).atomic_target(), content="UInt")
   inspect(
-    @ctype.Type::Pointer(@ctype.Type::Atomic(@ctype.Type::UInt)).atomic_target(),
-    content="UInt",
-  )
-  inspect(
-    @ctype.Type::Array(@ctype.Type::Aligned(@ctype.Type::SShort, 16), 3).atomic_target(),
+    @ctype.Type::Array(Aligned(SShort, 16), 3).atomic_target(),
     content="SShort",
   )
   inspect(@ctype.Type::SInt.atomic_target(), content="SLongLong")
@@ -998,14 +870,11 @@ fn expect_no_builtin_fixed_return_type(name : String) -> Unit {
 
 ///|
 test "ctype builtin fixed return types cover parser-neutral facts" {
-  expect_builtin_fixed_return_type(
-    "__builtin_memcpy",
-    @ctype.Type::Pointer(@ctype.Type::Void),
-  )
-  expect_builtin_fixed_return_type("__builtin_fabsf", @ctype.Type::Float)
-  expect_builtin_fixed_return_type("__builtin_islessgreater", @ctype.Type::SInt)
-  expect_builtin_fixed_return_type("__builtin_add_overflow", @ctype.Type::Bool)
-  expect_builtin_fixed_return_type("__builtin_va_start", @ctype.Type::Void)
+  expect_builtin_fixed_return_type("__builtin_memcpy", Pointer(Void))
+  expect_builtin_fixed_return_type("__builtin_fabsf", Float)
+  expect_builtin_fixed_return_type("__builtin_islessgreater", SInt)
+  expect_builtin_fixed_return_type("__builtin_add_overflow", Bool)
+  expect_builtin_fixed_return_type("__builtin_va_start", Void)
   expect_no_builtin_fixed_return_type("__builtin_bswap")
   expect_no_builtin_fixed_return_type("__atomic_fetch_add")
 }
@@ -1086,32 +955,18 @@ fn expect_no_builtin_return_condition_arg_index(name : String) -> Unit {
 
 ///|
 test "ctype builtin return rules cover argument-dependent facts" {
-  expect_builtin_return_rule(
-    "__builtin_fabsf",
-    @ctype.BuiltinReturnRule::BuiltinFixedReturn(@ctype.Type::Float),
-  )
+  expect_builtin_return_rule("__builtin_fabsf", BuiltinFixedReturn(Float))
   expect_builtin_return_rule(
     "__atomic_fetch_add",
-    @ctype.BuiltinReturnRule::BuiltinAtomicTargetReturn(@ctype.Type::SLongLong),
+    BuiltinAtomicTargetReturn(SLongLong),
   )
-  expect_builtin_return_rule(
-    "__builtin_bswap",
-    @ctype.BuiltinReturnRule::BuiltinFirstArgReturn(@ctype.Type::UInt),
-  )
-  expect_builtin_return_rule(
-    "__builtin_expect",
-    @ctype.BuiltinReturnRule::BuiltinFirstArgReturn(@ctype.Type::SInt),
-  )
+  expect_builtin_return_rule("__builtin_bswap", BuiltinFirstArgReturn(UInt))
+  expect_builtin_return_rule("__builtin_expect", BuiltinFirstArgReturn(SInt))
   expect_builtin_return_rule(
     "__builtin_assume_aligned",
-    @ctype.BuiltinReturnRule::BuiltinFirstArgReturn(
-      @ctype.Type::Pointer(@ctype.Type::Void),
-    ),
+    BuiltinFirstArgReturn(Pointer(Void)),
   )
-  expect_builtin_return_rule(
-    "__builtin_choose_expr",
-    @ctype.BuiltinReturnRule::BuiltinChooseExprReturn,
-  )
+  expect_builtin_return_rule("__builtin_choose_expr", BuiltinChooseExprReturn)
   expect_builtin_return_condition_arg_index("__builtin_choose_expr", 0)
   expect_no_builtin_return_condition_arg_index("__builtin_expect")
   expect_no_builtin_return_rule("__not_a_builtin")
@@ -1143,43 +998,33 @@ fn expect_no_builtin_return_type(name : String) -> Unit {
 
 ///|
 test "ctype builtin return type resolver applies argument facts" {
-  expect_builtin_return_type("__builtin_fabs", [], None, @ctype.Type::Double)
-  expect_builtin_return_type(
-    "__builtin_expect",
-    [@ctype.Type::ULong],
-    None,
-    @ctype.Type::ULong,
-  )
+  expect_builtin_return_type("__builtin_fabs", [], None, Double)
+  expect_builtin_return_type("__builtin_expect", [ULong], None, ULong)
   expect_builtin_return_type(
     "__atomic_fetch_add",
-    [@ctype.Type::Pointer(@ctype.Type::Atomic(@ctype.Type::UInt))],
+    [Pointer(Atomic(UInt))],
     None,
-    @ctype.Type::UInt,
+    UInt,
   )
   expect_builtin_return_type(
     "__builtin_choose_expr",
-    [@ctype.Type::SInt, @ctype.Type::SLong, @ctype.Type::Double],
+    [SInt, SLong, Double],
     Some(1L),
-    @ctype.Type::SLong,
+    SLong,
   )
   expect_builtin_return_type(
     "__builtin_choose_expr",
-    [@ctype.Type::SInt, @ctype.Type::SLong, @ctype.Type::Double],
+    [SInt, SLong, Double],
     Some(0L),
-    @ctype.Type::Double,
+    Double,
   )
   expect_builtin_return_type(
     "__builtin_choose_expr",
-    [@ctype.Type::SInt, @ctype.Type::SLong, @ctype.Type::Double],
+    [SInt, SLong, Double],
     None,
-    @ctype.Type::SLong,
+    SLong,
   )
-  expect_builtin_return_type(
-    "__builtin_choose_expr",
-    [],
-    None,
-    @ctype.Type::SInt,
-  )
+  expect_builtin_return_type("__builtin_choose_expr", [], None, SInt)
   expect_no_builtin_return_type("__not_a_builtin")
 }
 

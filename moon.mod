@@ -14,6 +14,4 @@ import {
 
 preferred_target = "native"
 
-options(
-  source: ".",
-)
+warnings = "+missing_doc+unnecessary_annotation"

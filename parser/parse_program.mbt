@@ -122,7 +122,7 @@ fn Parser::parse_program(self : Parser) -> Program {
                 let aggregate_ty = if is_union {
                   Type::Union(name)
                 } else {
-                  Type::Struct(name)
+                  Struct(name)
                 }
                 self.parse_struct_vars(aggregate_ty)
               } else {

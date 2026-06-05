@@ -1793,7 +1793,7 @@ fn mir_indirect_call_variadic(callee_ty : @ctype.Type) -> Bool {
 ///|
 fn mir_body_default_argument_promoted_type(ty : @ctype.Type) -> @ctype.Type {
   match peel_aligned_type(ty) {
-    Float => @ctype.Type::Double
+    Float => Double
     _ => if ty.is_integer() { ty.integer_promote() } else { ty }
   }
 }
@@ -2851,8 +2851,8 @@ fn Codegen::darwin_hfa_parts(
   ty : @ctype.Type,
 ) -> (@ctype.Type, Int)? {
   match peel_aligned_type(ty) {
-    Float => Some((@ctype.Type::Float, 1))
-    Double | LongDouble => Some((@ctype.Type::Double, 1))
+    Float => Some((Float, 1))
+    Double | LongDouble => Some((Double, 1))
     Array(elem, len) =>
       match self.darwin_hfa_parts(elem) {
         Some((base, count)) => {
@@ -2928,12 +2928,12 @@ fn Codegen::darwin_hfa_member_offsets(
     Float => {
       let offsets : Array[Int] = []
       offsets.push(base_offset)
-      Some((@ctype.Type::Float, offsets))
+      Some((Float, offsets))
     }
     Double | LongDouble => {
       let offsets : Array[Int] = []
       offsets.push(base_offset)
-      Some((@ctype.Type::Double, offsets))
+      Some((Double, offsets))
     }
     Array(elem, len) => {
       let (base, elem_offsets) = match

@@ -189,7 +189,7 @@ pub fn Program::to_module(self : Program) -> MirModule {
     let ty = if decl.is_union {
       @ctype.Type::Union(decl.name)
     } else {
-      @ctype.Type::Struct(decl.name)
+      Struct(decl.name)
     }
     let _ = self.type_size(ty)
   }
@@ -1136,7 +1136,7 @@ fn Program::lower_mir_global_address_reloc_parts(
 ///   )
 ///   inspect(program.bodies.contains("add"), content="true")
 ///   // int is 4 bytes on the supported targets.
-///   inspect(program.type_size(@ctype.Type::SInt), content="4")
+///   inspect(program.type_size(SInt), content="4")
 /// }
 /// ```
 pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
@@ -1334,8 +1334,8 @@ fn number_literal_type(value : Int64) -> @ctype.Type {
 ///     @parser.parse("struct P { int x; int y; }; int main(void) { return 0; }"),
 ///     @target.Target::default(),
 ///   )
-///   inspect(program.type_size(@ctype.Type::SInt), content="4")
-///   inspect(program.type_size(@ctype.Type::Struct("P")), content="8")
+///   inspect(program.type_size(SInt), content="4")
+///   inspect(program.type_size(Struct("P")), content="8")
 /// }
 /// ```
 pub fn Program::type_size(self : Program, ty : @ctype.Type) -> Int {
@@ -1393,11 +1393,8 @@ pub fn Program::type_size(self : Program, ty : @ctype.Type) -> Int {
 ///     @parser.parse("int main(void) { return 0; }"),
 ///     @target.Target::default(),
 ///   )
-///   inspect(program.type_align(@ctype.Type::Double), content="8")
-///   inspect(
-///     program.type_align(@ctype.Type::Aligned(@ctype.Type::SChar, 16)),
-///     content="16",
-///   )
+///   inspect(program.type_align(Double), content="8")
+///   inspect(program.type_align(Aligned(SChar, 16)), content="16")
 /// }
 /// ```
 pub fn Program::type_align(self : Program, ty : @ctype.Type) -> Int {
@@ -1724,12 +1721,9 @@ fn Program::aggregate_layout_by_name(
 ///     @parser.parse("struct P { int x; int y; }; int main(void) { return 0; }"),
 ///     @target.Target::default(),
 ///   )
-///   let y = program.field_layout(@ctype.Type::Struct("P"), "y").unwrap()
+///   let y = program.field_layout(Struct("P"), "y").unwrap()
 ///   inspect(y.offset, content="4")
-///   inspect(
-///     program.field_layout(@ctype.Type::Struct("P"), "z") is None,
-///     content="true",
-///   )
+///   inspect(program.field_layout(Struct("P"), "z") is None, content="true")
 /// }
 /// ```
 pub fn Program::field_layout(
@@ -1775,11 +1769,8 @@ pub fn Program::field_layout(
 ///     @target.Target::default(),
 ///   )
 ///   // offsetof(struct P, arr[2]) == 4 (x) + 2 * sizeof(int)
-///   let path = [@ctype.OffsetField("arr"), @ctype.OffsetIndex(2L)]
-///   inspect(
-///     program.offset_of_path(@ctype.Type::Struct("P"), path).unwrap(),
-///     content="12",
-///   )
+///   let path = [@ctype.OffsetField("arr"), OffsetIndex(2L)]
+///   inspect(program.offset_of_path(Struct("P"), path).unwrap(), content="12")
 /// }
 /// ```
 pub fn Program::offset_of_path(

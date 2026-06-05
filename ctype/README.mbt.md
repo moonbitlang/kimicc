@@ -45,16 +45,13 @@ test "type model and ABI helpers" {
   inspect(@ctype.Type::Double.is_floating(), content="true")
 
   // Pointers are 8 bytes on the supported target.
-  inspect(@ctype.Type::Pointer(@ctype.Type::Void).size(), content="8")
+  inspect(@ctype.Type::Pointer(Void).size(), content="8")
 
   // Signed -> unsigned mapping.
-  inspect(@ctype.Type::SInt.to_unsigned() == @ctype.Type::UInt, content="true")
+  inspect(@ctype.Type::SInt.to_unsigned() == UInt, content="true")
 
   // Integer promotion: char promotes to int.
-  inspect(
-    @ctype.Type::SChar.integer_promote() == @ctype.Type::SInt,
-    content="true",
-  )
+  inspect(@ctype.Type::SChar.integer_promote() == SInt, content="true")
 }
 ```
 
@@ -71,8 +68,8 @@ unfolded, such as division by zero.
 ```moonbit check
 ///|
 test "integer constant folding" {
-  let a = @ctype.integer_constant(20L, @ctype.Type::SInt)
-  let b = @ctype.integer_constant(22L, @ctype.Type::SInt)
+  let a = @ctype.integer_constant(20L, SInt)
+  let b = @ctype.integer_constant(22L, SInt)
 
   // 20 + 22 == 42.
   inspect(
@@ -81,20 +78,20 @@ test "integer constant folding" {
   )
 
   // Division by zero is left unfolded.
-  let zero = @ctype.integer_constant(0L, @ctype.Type::SInt)
+  let zero = @ctype.integer_constant(0L, SInt)
   inspect(@ctype.integer_constant_divide("/", a, zero) is None, content="true")
 
   // Casting renormalizes to the destination width: 256 -> unsigned char -> 0.
-  let big = @ctype.integer_constant(256L, @ctype.Type::SInt)
-  inspect(big.cast(@ctype.Type::UChar).bits, content="0")
+  let big = @ctype.integer_constant(256L, SInt)
+  inspect(big.cast(UChar).bits, content="0")
 
   // Unsigned comparison: (unsigned)-1 > 0.
-  let neg = @ctype.integer_constant(-1L, @ctype.Type::UInt)
+  let neg = @ctype.integer_constant(-1L, UInt)
   inspect(
     @ctype.integer_constant_rel_compare(
       ">",
       neg,
-      @ctype.integer_constant(0L, @ctype.Type::UInt),
+      @ctype.integer_constant(0L, UInt),
     ),
     content="true",
   )
@@ -125,7 +122,7 @@ test "floating constant helpers" {
   // Classification: 1.0/0.0 is infinite, not finite.
   let inf = 1.0 / 0.0
   inspect(
-    @ctype.floating_classify("isinf", inf, @ctype.Type::Double).unwrap(),
+    @ctype.floating_classify("isinf", inf, Double).unwrap(),
     content="true",
   )
 }
