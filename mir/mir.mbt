@@ -163,6 +163,27 @@ pub(all) struct MirModule {
 }
 
 ///|
+/// Projects a `Program` onto a parser-free `MirModule`.
+///
+/// `Program` retains the original `@parser.Program` (in a private field) so it
+/// can answer semantic queries during lowering and fallback. `MirModule` keeps
+/// only MIR-owned declarations, computed layouts, and lowered bodies, which is
+/// the long-term boundary the MIR backend consumes. Calling this first forces
+/// every aggregate layout to be computed, so the resulting module's `layouts`
+/// map is fully populated.
+///
+/// # Example
+///
+/// ```moonbit check
+/// test {
+///   let program = @mir.lower(
+///     @parser.parse("int main(void) { return 0; }"),
+///     @target.Target::default(),
+///   )
+///   let module_ = program.to_module()
+///   inspect(module_.bodies.contains("main"), content="true")
+/// }
+/// ```
 pub fn Program::to_module(self : Program) -> MirModule {
   for decl in self.aggregate_decls {
     let ty = if decl.is_union {
@@ -186,6 +207,12 @@ pub fn Program::to_module(self : Program) -> MirModule {
 }
 
 ///|
+/// Returns an empty typing scope with no locals and no current function.
+///
+/// A `Scope` supplies the local-variable types that MIR semantic queries (such
+/// as constant folding of expressions) need. The empty scope is the right
+/// starting point for evaluating expressions that do not reference locals, for
+/// example file-scope constant initializers.
 pub fn Scope::empty() -> Scope {
   { locals: {}, current_func: "" }
 }
@@ -261,6 +288,21 @@ fn MirGlobalDecl::with_merged_attrs(
 }
 
 ///|
+/// Coalesces repeated declarations of the same global into one definition.
+///
+/// C allows a global to be declared several times (tentative definitions,
+/// `extern` re-declarations, attribute-only declarations). This merges entries
+/// that share a name in source order: an initializing definition wins over a
+/// tentative or `extern` declaration, and attributes such as weakness,
+/// visibility, symbol alias, and section are combined so the surviving entry
+/// carries the union of what was specified. Declarations with distinct names
+/// are preserved in their original order.
+///
+/// Parameters:
+///
+/// - `globals`: the per-declaration global entries, in source order.
+///
+/// Returns one merged entry per distinct global name.
 pub fn merge_global_decls(
   globals : Array[MirGlobalDecl],
 ) -> Array[MirGlobalDecl] {
@@ -1063,6 +1105,39 @@ fn Program::lower_mir_global_address_reloc_parts(
 }
 
 ///|
+/// Lowers a parsed translation unit into a target-sensitive MIR `Program`.
+///
+/// This is the entry point of the `cast -> mir` half of the pipeline. It walks
+/// the parser AST and builds MIR-owned tables: function signatures and
+/// declarations, merged global declarations with lowered initializers,
+/// aggregate declarations, and a lowered body (`MirFuncBody`) for every defined
+/// function. Type sizes and layouts are computed for `target`, so the same C
+/// source lowered for different targets can differ.
+///
+/// The returned `Program` still retains the source AST for semantic queries;
+/// call `to_module` (or use `lower_to_module`) to obtain the parser-free
+/// `MirModule` the backend consumes.
+///
+/// Parameters:
+///
+/// - `source`: an already-parsed translation unit.
+/// - `target`: the target whose ABI drives sizes, alignments, and layouts.
+///
+/// Returns the lowered MIR `Program`.
+///
+/// # Example
+///
+/// ```moonbit check
+/// test {
+///   let program = @mir.lower(
+///     @parser.parse("int add(int x, int y) { return x + y; }"),
+///     @target.Target::default(),
+///   )
+///   inspect(program.bodies.contains("add"), content="true")
+///   // int is 4 bytes on the supported targets.
+///   inspect(program.type_size(@ctype.Type::SInt), content="4")
+/// }
+/// ```
 pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
   let funcs : Map[String, FuncSig] = {}
   let decls : Array[MirFuncDecl] = []
@@ -1160,6 +1235,19 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
 }
 
 ///|
+/// Lowers a parsed translation unit directly to a parser-free `MirModule`.
+///
+/// This is the convenience composition of `lower` followed by `to_module`, and
+/// the typical entry point for the MIR backend
+/// (`@mir_codegen.generate_assembly_from_mir_module`). Use `lower` instead when
+/// you need the intermediate `Program` for semantic queries or interpretation.
+///
+/// Parameters:
+///
+/// - `source`: an already-parsed translation unit.
+/// - `target`: the target whose ABI drives sizes, alignments, and layouts.
+///
+/// Returns the parser-free `MirModule`.
 pub fn lower_to_module(
   source : @parser.Program,
   target : @target.Target,
@@ -1228,6 +1316,27 @@ fn number_literal_type(value : Int64) -> @ctype.Type {
 }
 
 ///|
+/// Returns the size in bytes of a C type under this program's target ABI.
+///
+/// Unlike `@ctype.Type::size`, this resolves `Struct`/`Union` types by looking
+/// up the aggregate layout computed during lowering, so it works for aggregate
+/// types a bare `@ctype.Type` cannot size on its own. `Atomic` and `Aligned`
+/// wrappers report the size of their inner type. Target-specific types such as
+/// `_Float16`, `__float128`, and `long double` follow the rules of
+/// `self.target`, aborting for spellings the target does not support.
+///
+/// # Example
+///
+/// ```moonbit check
+/// test {
+///   let program = @mir.lower(
+///     @parser.parse("struct P { int x; int y; }; int main(void) { return 0; }"),
+///     @target.Target::default(),
+///   )
+///   inspect(program.type_size(@ctype.Type::SInt), content="4")
+///   inspect(program.type_size(@ctype.Type::Struct("P")), content="8")
+/// }
+/// ```
 pub fn Program::type_size(self : Program, ty : @ctype.Type) -> Int {
   match ty {
     Atomic(inner) | Aligned(inner, _) => self.type_size(inner)
@@ -1268,6 +1377,28 @@ pub fn Program::type_size(self : Program, ty : @ctype.Type) -> Int {
 }
 
 ///|
+/// Returns the alignment in bytes of a C type under this program's target ABI.
+///
+/// Like `type_size`, this resolves aggregates through their computed layout.
+/// An `Aligned(inner, n)` wrapper reports the larger of `n` and the natural
+/// alignment of `inner`, modeling `_Alignas` and GNU `aligned` attributes;
+/// `Atomic` reports the alignment of its inner type.
+///
+/// # Example
+///
+/// ```moonbit check
+/// test {
+///   let program = @mir.lower(
+///     @parser.parse("int main(void) { return 0; }"),
+///     @target.Target::default(),
+///   )
+///   inspect(program.type_align(@ctype.Type::Double), content="8")
+///   inspect(
+///     program.type_align(@ctype.Type::Aligned(@ctype.Type::SChar, 16)),
+///     content="16",
+///   )
+/// }
+/// ```
 pub fn Program::type_align(self : Program, ty : @ctype.Type) -> Int {
   match ty {
     Atomic(inner) => self.type_align(inner)
@@ -1573,6 +1704,33 @@ fn Program::aggregate_layout_by_name(
 }
 
 ///|
+/// Looks up the layout of a named field of a struct or union type.
+///
+/// The aggregate layout is computed on demand for `self.target`. Returns
+/// `Some(layout)` describing the field's offset, size, type, and any bit-field
+/// placement, or `None` when `ty` is not an aggregate or has no such field.
+///
+/// Parameters:
+///
+/// - `ty`: the struct or union type to inspect (wrappers are unwrapped).
+/// - `field`: the field name to look up.
+///
+/// # Example
+///
+/// ```moonbit check
+/// test {
+///   let program = @mir.lower(
+///     @parser.parse("struct P { int x; int y; }; int main(void) { return 0; }"),
+///     @target.Target::default(),
+///   )
+///   let y = program.field_layout(@ctype.Type::Struct("P"), "y").unwrap()
+///   inspect(y.offset, content="4")
+///   inspect(
+///     program.field_layout(@ctype.Type::Struct("P"), "z") is None,
+///     content="true",
+///   )
+/// }
+/// ```
 pub fn Program::field_layout(
   self : Program,
   ty : @ctype.Type,
@@ -1592,6 +1750,37 @@ pub fn Program::field_layout(
 }
 
 ///|
+/// Computes the byte offset of a nested member or element path within a type.
+///
+/// This is the layout engine behind `__builtin_offsetof`. The `path` walks the
+/// type one designator at a time: `OffsetField(name)` descends into a struct or
+/// union field, and `OffsetIndex(i)` steps `i` elements into an array. Returns
+/// `Some(offset)` when every designator resolves, or `None` if a field is
+/// missing or a designator does not match the current type.
+///
+/// Parameters:
+///
+/// - `ty`: the type the path starts from.
+/// - `path`: the sequence of field and index designators to follow.
+///
+/// # Example
+///
+/// ```moonbit check
+/// test {
+///   let program = @mir.lower(
+///     @parser.parse(
+///       "struct P { int x; int arr[4]; }; int main(void) { return 0; }",
+///     ),
+///     @target.Target::default(),
+///   )
+///   // offsetof(struct P, arr[2]) == 4 (x) + 2 * sizeof(int)
+///   let path = [@ctype.OffsetField("arr"), @ctype.OffsetIndex(2L)]
+///   inspect(
+///     program.offset_of_path(@ctype.Type::Struct("P"), path).unwrap(),
+///     content="12",
+///   )
+/// }
+/// ```
 pub fn Program::offset_of_path(
   self : Program,
   ty : @ctype.Type,
@@ -1649,6 +1838,11 @@ fn MirModule::aggregate_layout_by_name(
 }
 
 ///|
+/// Returns the size in bytes of a C type under this module's target ABI.
+///
+/// The parser-free counterpart of `Program::type_size`: it resolves aggregates
+/// through the layouts carried by the module, so the backend can size types
+/// without the parser AST.
 pub fn MirModule::type_size(self : MirModule, ty : @ctype.Type) -> Int {
   match ty {
     Atomic(inner) | Aligned(inner, _) => self.type_size(inner)
@@ -1689,6 +1883,9 @@ pub fn MirModule::type_size(self : MirModule, ty : @ctype.Type) -> Int {
 }
 
 ///|
+/// Returns the alignment in bytes of a C type under this module's target ABI.
+///
+/// The parser-free counterpart of `Program::type_align`.
 pub fn MirModule::type_align(self : MirModule, ty : @ctype.Type) -> Int {
   match ty {
     Atomic(inner) => self.type_align(inner)
@@ -1737,6 +1934,11 @@ pub fn MirModule::type_align(self : MirModule, ty : @ctype.Type) -> Int {
 }
 
 ///|
+/// Looks up the layout of a named struct or union field in this module.
+///
+/// The parser-free counterpart of `Program::field_layout`. Returns
+/// `Some(layout)` with the field's offset, size, type, and bit-field placement,
+/// or `None` when `ty` is not an aggregate or has no such field.
 pub fn MirModule::field_layout(
   self : MirModule,
   ty : @ctype.Type,
@@ -1756,6 +1958,11 @@ pub fn MirModule::field_layout(
 }
 
 ///|
+/// Computes the byte offset of a nested member or element path in this module.
+///
+/// The parser-free counterpart of `Program::offset_of_path`, implementing
+/// `__builtin_offsetof`. Returns `Some(offset)` when every `OffsetField` /
+/// `OffsetIndex` designator resolves, or `None` otherwise.
 pub fn MirModule::offset_of_path(
   self : MirModule,
   ty : @ctype.Type,
@@ -1787,6 +1994,11 @@ pub fn MirModule::offset_of_path(
 }
 
 ///|
+/// Returns the `__builtin_object_size` fact for a whole object of type `ty`.
+///
+/// The fact records both the whole-object size and the size of the current
+/// subobject; for a top-level object both equal `type_size(ty)`. It seeds the
+/// path-sensitive query `object_size_path_fact`.
 pub fn MirModule::object_size_fact_for_type(
   self : MirModule,
   ty : @ctype.Type,
@@ -1796,6 +2008,13 @@ pub fn MirModule::object_size_fact_for_type(
 }
 
 ///|
+/// Computes the `__builtin_object_size` fact at the end of a member/element path.
+///
+/// Starting from a whole object of type `ty`, this walks `path` one designator
+/// at a time, narrowing the whole/subobject sizes as it descends into fields and
+/// array elements. The result lets the compiler answer
+/// `__builtin_object_size(&obj.field, type)` with the remaining bytes from that
+/// subobject. Returns `None` if a designator does not resolve.
 pub fn MirModule::object_size_path_fact(
   self : MirModule,
   ty : @ctype.Type,

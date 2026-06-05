@@ -95,6 +95,14 @@ pub(all) struct MirFuncBody {
 } derive(Eq)
 
 ///|
+/// Returns the C type that this MIR value evaluates to.
+///
+/// The type is derived structurally from the value node, so this never
+/// consults a `Program` or `MirModule`. Address-producing nodes report a
+/// pointer to their pointee type (for example `MirAddrLocal` of an `Int` local
+/// has type `Pointer(SInt)`, and a string address has type `Pointer(SChar)`),
+/// while loads, casts, and arithmetic report the type recorded on the node.
+/// Backends use this to choose operand sizes and register classes.
 pub fn MirValue::ty(self : MirValue) -> @ctype.Type {
   match self {
     MirConst(_, ty) => ty
