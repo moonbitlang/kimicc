@@ -10,5 +10,6 @@ options(
     "ffi.mbt": [ "native" ],
     "jit.mbt": [ "native" ],
     "jit_test.mbt": [ "native" ],
+    "README.mbt.md": [ "native" ],
   },
 )
