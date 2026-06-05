@@ -3,3 +3,7 @@ import {
   "bobzhang/kimicc/mir",
   "bobzhang/kimicc/target",
 }
+
+import {
+  "bobzhang/kimicc/parser",
+} for "test"
