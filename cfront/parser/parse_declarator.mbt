@@ -456,12 +456,13 @@ fn Parser::parse_struct_type_specifier(self : Parser) -> Type {
           after_name_packed ||
           self.skip_attributes_packed()
         let pack = combine_pack(is_packed, pragma_pack)
-        let decl = { name: n, fields, is_union: false, pack }
+        let tag = self.define_tag(n)
+        let decl = { name: tag, fields, is_union: false, pack }
         self.aggregates.push(decl)
-        self.struct_decls[n] = decl
-        Struct(n)
+        self.struct_decls[tag] = decl
+        Struct(tag)
       } else {
-        Struct(n)
+        Struct(self.resolve_tag(n))
       }
     }
     LBrace => {
@@ -498,12 +499,13 @@ fn Parser::parse_union_type_specifier(self : Parser) -> Type {
           after_name_packed ||
           self.skip_attributes_packed()
         let pack = combine_pack(is_packed, pragma_pack)
-        let decl = { name: n, fields, is_union: true, pack }
+        let tag = self.define_tag(n)
+        let decl = { name: tag, fields, is_union: true, pack }
         self.aggregates.push(decl)
-        self.struct_decls[n] = decl
-        Union(n)
+        self.struct_decls[tag] = decl
+        Union(tag)
       } else {
-        Union(n)
+        Union(self.resolve_tag(n))
       }
     }
     LBrace => {

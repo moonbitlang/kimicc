@@ -1404,6 +1404,68 @@ fn deterministic_bitfield_differential_source(case_index : Int) -> String {
 }
 
 ///|
+/// Builds a program where several blocks define the same `struct` tag with
+/// different layouts.
+///
+/// C gives tags block scope, so each definition is its own type. kimicc kept one
+/// flat tag table, so a later definition replaced an earlier one and `sizeof` in
+/// the earlier function reported the wrong layout.
+fn deterministic_tag_scope_differential_source(case_index : Int) -> String {
+  let width = case_index % 3 + 1
+  let source = StringBuilder::new()
+  source.write_string("#include <stdio.h>\n")
+  source.write_string("struct Tag { int a; int b; };\n")
+  source.write_string(
+    "static int file_scope(void) { return (int)sizeof(struct Tag); }\n",
+  )
+  source.write_string("static int narrow(void) {\n")
+  source.write_string("  struct Tag { char c; };\n")
+  source.write_string("  struct Tag v;\n")
+  source.write_string("  v.c = (char)")
+  source.write_string(width.to_string())
+  source.write_string(";\n")
+  source.write_string("  return (int)sizeof(struct Tag) + v.c;\n")
+  source.write_string("}\n")
+  source.write_string("static int wide(void) {\n")
+  source.write_string("  struct Tag { double d; long long e; int f; };\n")
+  source.write_string("  return (int)sizeof(struct Tag);\n")
+  source.write_string("}\n")
+  source.write_string("static int nested(void) {\n")
+  source.write_string("  struct Tag { int x; int y; int z; };\n")
+  source.write_string("  int inner;\n")
+  source.write_string(
+    "  { struct Tag { char q; char r; }; inner = (int)sizeof(struct Tag); }\n",
+  )
+  source.write_string("  return (int)sizeof(struct Tag) * 100 + inner;\n")
+  source.write_string("}\n")
+  source.write_string(
+    "static int after_blocks(void) { return (int)sizeof(struct Tag); }\n",
+  )
+  source.write_string("int main(void) {\n")
+  source.write_string(
+    "  printf(\"case=%d file=%d narrow=%d wide=%d nested=%d after=%d\\n\", ",
+  )
+  source.write_string(case_index.to_string())
+  source.write_string(
+    ", file_scope(), narrow(), wide(), nested(), after_blocks());\n",
+  )
+  source.write_string("  return 0;\n")
+  source.write_string("}\n")
+  source.to_string()
+}
+
+///|
+async test "e2e deterministic tag scope differential corpus matches clang" {
+  for case_index in [0, 1, 2] {
+    let result = run_source_against_clang_baseline(
+      deterministic_tag_scope_differential_source(case_index),
+      "tag_scope_differential_" + case_index.to_string(),
+    )
+    assert_true(result.output.contains("case=" + case_index.to_string()))
+  }
+}
+
+///|
 /// Builds a program whose struct layouts only agree with clang if `#pragma
 /// pack` is honored: field offsets, aggregate sizes, `push`/`pop` nesting, and
 /// reads and writes through the resulting unaligned members.

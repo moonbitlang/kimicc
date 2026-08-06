@@ -568,6 +568,7 @@ fn Parser::parse_return_stmt(self : Parser) -> Stmt {
 ///|
 fn Parser::parse_compound_stmt(self : Parser) -> Stmt {
   let saved_value_types = self.value_types.copy()
+  let saved_tags = self.enter_tag_scope()
   self.expect(LBrace)
   let stmts = []
   while self.token != RBrace {
@@ -575,6 +576,7 @@ fn Parser::parse_compound_stmt(self : Parser) -> Stmt {
   }
   self.expect(RBrace)
   self.value_types = saved_value_types
+  self.exit_tag_scope(saved_tags)
   Compound(stmts)
 }
 
