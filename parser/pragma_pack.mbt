@@ -268,7 +268,8 @@ fn read_pack_cap(input : String, from : Int, end : Int) -> Int?? {
 }
 
 ///|
-/// Reads a non-negative C integer literal in hex, octal, or decimal.
+/// Reads a non-negative C integer literal in hex, binary, octal, or decimal,
+/// including any `u`/`l` suffix.
 ///
 /// Returns `None` for a malformed literal or one large enough to overflow,
 /// which callers treat as "ignore this directive" rather than guessing.
@@ -278,6 +279,9 @@ fn read_c_integer_literal(input : String, from : Int, end : Int) -> Int? {
   if i < end && input[i] is '0' {
     if i + 1 < end && (input[i + 1] is 'x' || input[i + 1] is 'X') {
       radix = 16
+      i += 2
+    } else if i + 1 < end && (input[i + 1] is 'b' || input[i + 1] is 'B') {
+      radix = 2
       i += 2
     } else {
       radix = 8
@@ -308,6 +312,24 @@ fn read_c_integer_literal(input : String, from : Int, end : Int) -> Int? {
   if i == start_digits && radix != 8 {
     // `0x` with no digits, or no digits at all.
     return None
+  }
+  // A `u`/`l` suffix is part of the literal, so `2u` and `8UL` are still 2 and
+  // 8 rather than malformed.
+  let mut seen_unsigned = false
+  let mut seen_long = false
+  while i < end {
+    if (input[i] is 'u' || input[i] is 'U') && !seen_unsigned {
+      seen_unsigned = true
+      i += 1
+    } else if (input[i] is 'l' || input[i] is 'L') && !seen_long {
+      seen_long = true
+      i += 1
+      if i < end && (input[i] is 'l' || input[i] is 'L') {
+        i += 1
+      }
+    } else {
+      break
+    }
   }
   // Reject trailing garbage such as `1abc`, which is not a valid literal.
   if i < end &&

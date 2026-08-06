@@ -149,6 +149,27 @@ test "pragma pack parses octal and hex arguments" {
 }
 
 ///|
+/// A `u`/`l` suffix is part of the literal, and `0b` is a binary literal, so
+/// neither form makes the directive inert.
+test "pragma pack accepts integer suffixes and binary literals" {
+  let source =
+    #|#pragma pack(2u)
+    #|struct Unsigned { char c; long long v; };
+    #|#pragma pack(8UL)
+    #|struct UnsignedLong { char c; long long v; };
+    #|#pragma pack(4LL)
+    #|struct LongLong { char c; long long v; };
+    #|#pragma pack(0b10)
+    #|struct Binary { char c; long long v; };
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  debug_inspect(prog.structs[0].pack, content="Some(2)")
+  debug_inspect(prog.structs[1].pack, content="Some(8)")
+  debug_inspect(prog.structs[2].pack, content="Some(4)")
+  debug_inspect(prog.structs[3].pack, content="Some(2)")
+}
+
+///|
 /// The directive table is indexed by source position, so a `pop` sitting after
 /// a struct body must not retroactively apply to that struct.
 test "pragma pack after a struct body does not apply to it" {
