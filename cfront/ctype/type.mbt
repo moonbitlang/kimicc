@@ -693,4 +693,4 @@ pub fn Type::align(self : Type) -> Int {
 pub(all) enum OffsetDesignator {
   OffsetField(String)
   OffsetIndex(Int64)
-} derive(Eq)
+} derive(Eq, Debug)

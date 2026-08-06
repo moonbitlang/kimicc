@@ -10,7 +10,11 @@ pub struct Parser {
   pragma_pack : PragmaPackTable
   mut token : Token
   typedefs : Map[String, Type]
-  anonymous_structs : Array[StructDecl]
+  // Aggregate definitions in creation order, anonymous ones included. Order
+  // matters: an anonymous aggregate is created while parsing the declaration
+  // that introduces it, so appending as they are built puts every definition
+  // ahead of its first use.
+  aggregates : Array[StructDecl]
   struct_decls : Map[String, StructDecl]
   local_func_decls : Array[FuncDecl]
   mut anon_counter : Int
@@ -41,7 +45,7 @@ pub fn Parser::new_for_target(lexer : Lexer, target : @target.Target) -> Parser 
     pragma_pack: PragmaPackTable::scan(lexer.input),
     token: EOF,
     typedefs: {},
-    anonymous_structs: [],
+    aggregates: [],
     struct_decls: {},
     local_func_decls: [],
     anon_counter: 0,

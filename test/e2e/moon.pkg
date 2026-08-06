@@ -7,6 +7,7 @@ import {
   "bobzhang/kimicc/mir",
   "bobzhang/kimicc/mir_codegen",
   "bobzhang/cfront/target",
+  "bobzhang/cfront/printer",
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/async",
