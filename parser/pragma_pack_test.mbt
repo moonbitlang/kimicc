@@ -112,6 +112,43 @@ test "pragma pack rejects out-of-range values" {
 }
 
 ///|
+/// `0` is a valid argument meaning natural alignment, so `pack(0)` clears the
+/// cap and `pack(pop, 0)` pops and then clears it.
+test "pragma pack treats zero as natural alignment" {
+  let source =
+    #|#pragma pack(2)
+    #|#pragma pack(0)
+    #|struct Cleared { char c; long long v; };
+    #|#pragma pack(push, 1)
+    #|#pragma pack(pop, 0)
+    #|struct PoppedToNatural { char c; long long v; };
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  debug_inspect(prog.structs[0].pack, content="None")
+  debug_inspect(prog.structs[1].pack, content="None")
+}
+
+///|
+/// The argument is a C integer literal, so a leading `0` is octal and `0x` is
+/// hex. `016` is octal 14, not a power of two, and is therefore rejected --
+/// reading it as decimal 16 would apply a cap clang refuses.
+test "pragma pack parses octal and hex arguments" {
+  let source =
+    #|#pragma pack(010)
+    #|struct Octal8 { char c; long long v; };
+    #|#pragma pack(0x10)
+    #|struct Hex16 { char c; long long v; };
+    #|#pragma pack(2)
+    #|#pragma pack(016)
+    #|struct OctalRejected { char c; long long v; };
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  debug_inspect(prog.structs[0].pack, content="Some(8)")
+  debug_inspect(prog.structs[1].pack, content="Some(16)")
+  debug_inspect(prog.structs[2].pack, content="Some(2)")
+}
+
+///|
 /// The directive table is indexed by source position, so a `pop` sitting after
 /// a struct body must not retroactively apply to that struct.
 test "pragma pack after a struct body does not apply to it" {

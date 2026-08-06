@@ -91,12 +91,10 @@ fn PragmaPackTable::scan(input : String) -> PragmaPackTable {
         Some(action) => {
           match action {
             PackSet(value) => current = value
+            PackPushKeep => stack.push(current)
             PackPush(value) => {
               stack.push(current)
-              match value {
-                Some(_) => current = value
-                None => ()
-              }
+              current = value
             }
             PackPop =>
               // A pop with an empty stack leaves the cap alone; clang warns
@@ -107,11 +105,13 @@ fn PragmaPackTable::scan(input : String) -> PragmaPackTable {
                 None => ()
               }
             PackPopSet(value) => {
+              // The pop is skipped on an empty stack, but the value still
+              // applies, matching clang.
               match stack.pop() {
                 Some(restored) => current = restored
                 None => ()
               }
-              current = Some(value)
+              current = value
             }
           }
           events.push((end, current))
@@ -154,11 +154,15 @@ fn combine_pack(is_packed : Bool, pragma : Int?) -> Int? {
 
 ///|
 /// One `#pragma pack` state transition.
+/// In every variant an `Int?` payload is the resulting cap, where `None` means
+/// natural alignment. `pack(0)` is spelled that way: C compilers accept `0` and
+/// treat it as `pack()`.
 priv enum PackAction {
   PackSet(Int?)
+  PackPushKeep
   PackPush(Int?)
   PackPop
-  PackPopSet(Int)
+  PackPopSet(Int?)
 }
 
 ///|
@@ -207,8 +211,8 @@ fn parse_pack_directive(input : String, start : Int, end : Int) -> PackAction? {
   // Check the bare `pack(N)` form before reading a keyword, because `read_word`
   // also accepts digits and would otherwise swallow the number.
   if i < end && input[i] is ('0'..='9') {
-    return match read_pack_number(input, i, end) {
-      Some(n) => Some(PackSet(Some(n)))
+    return match read_pack_cap(input, i, end) {
+      Some(cap) => Some(PackSet(cap))
       None => None
     }
   }
@@ -218,12 +222,12 @@ fn parse_pack_directive(input : String, start : Int, end : Int) -> PackAction? {
     if i < end && input[i] is ',' {
       i += 1
       skip_spaces()
-      match read_pack_number(input, i, end) {
-        Some(n) => return Some(PackPush(Some(n)))
-        None => return None
+      return match read_pack_cap(input, i, end) {
+        Some(cap) => Some(PackPush(cap))
+        None => None
       }
     }
-    return Some(PackPush(None))
+    return Some(PackPushKeep)
   }
   if keyword is "pop" {
     // `#pragma pack(pop, N)` pops and then sets the cap to `N`.
@@ -231,8 +235,8 @@ fn parse_pack_directive(input : String, start : Int, end : Int) -> PackAction? {
     if i < end && input[i] is ',' {
       i += 1
       skip_spaces()
-      return match read_pack_number(input, i, end) {
-        Some(n) => Some(PackPopSet(n))
+      return match read_pack_cap(input, i, end) {
+        Some(cap) => Some(PackPopSet(cap))
         None => None
       }
     }
@@ -242,26 +246,77 @@ fn parse_pack_directive(input : String, start : Int, end : Int) -> PackAction? {
 }
 
 ///|
-/// Reads a decimal pack value, rejecting anything that is not a positive power
-/// of two (the only values C compilers accept).
-fn read_pack_number(input : String, from : Int, end : Int) -> Int? {
+/// Reads a pack argument and returns the cap it selects, where `Some(None)` is
+/// a valid argument asking for natural alignment.
+///
+/// The argument is a C integer literal, so `0x10` is 16 and a leading `0` means
+/// octal -- `010` is 8, while `016` is 14 and therefore rejected. Only positive
+/// powers of two up to 16 are accepted, plus `0`, which C compilers treat as
+/// `pack()`. Anything else yields `None`, which makes the whole directive inert.
+fn read_pack_cap(input : String, from : Int, end : Int) -> Int?? {
+  let value = match read_c_integer_literal(input, from, end) {
+    Some(n) => n
+    None => return None
+  }
+  if value == 0 {
+    return Some(None)
+  }
+  if value > 16 || (value & (value - 1)) != 0 {
+    return None
+  }
+  Some(Some(value))
+}
+
+///|
+/// Reads a non-negative C integer literal in hex, octal, or decimal.
+///
+/// Returns `None` for a malformed literal or one large enough to overflow,
+/// which callers treat as "ignore this directive" rather than guessing.
+fn read_c_integer_literal(input : String, from : Int, end : Int) -> Int? {
   let mut i = from
+  let mut radix = 10
+  if i < end && input[i] is '0' {
+    if i + 1 < end && (input[i + 1] is 'x' || input[i + 1] is 'X') {
+      radix = 16
+      i += 2
+    } else {
+      radix = 8
+      i += 1
+      // A lone `0` is a valid literal, so the digit loop below may read none.
+    }
+  }
+  let start_digits = i
   let mut value = 0
-  let mut digits = 0
-  while i < end && input[i] is ('0'..='9') {
-    // Bail before the multiply so a long digit run cannot wrap around into a
-    // value that passes the range and power-of-two checks below.
+  while i < end {
+    let digit = match input[i] {
+      '0'..='9' => input[i].to_int() - '0'
+      'a'..='f' => input[i].to_int() - 'a' + 10
+      'A'..='F' => input[i].to_int() - 'A' + 10
+      _ => break
+    }
+    if digit >= radix {
+      // A digit outside the radix makes the literal malformed, e.g. `08`.
+      return None
+    }
+    // Bail before the multiply so a long run cannot wrap into a small value.
     if value > 16 {
       return None
     }
-    value = value * 10 + (input[i].to_int() - '0')
-    digits += 1
+    value = value * radix + digit
     i += 1
   }
-  if digits == 0 || value <= 0 || value > 16 {
+  if i == start_digits && radix != 8 {
+    // `0x` with no digits, or no digits at all.
     return None
   }
-  if (value & (value - 1)) != 0 {
+  // Reject trailing garbage such as `1abc`, which is not a valid literal.
+  if i < end &&
+    (
+      input[i] is ('a'..='z') ||
+      input[i] is ('A'..='Z') ||
+      input[i] is '_' ||
+      input[i] is ('0'..='9')
+    ) {
     return None
   }
   Some(value)
