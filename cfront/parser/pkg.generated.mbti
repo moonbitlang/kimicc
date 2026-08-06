@@ -105,7 +105,7 @@ pub struct Parser {
   pragma_pack : PragmaPackTable
   mut token : Token
   typedefs : Map[String, @ctype.Type]
-  anonymous_structs : Array[StructDecl]
+  aggregates : Array[StructDecl]
   struct_decls : Map[String, StructDecl]
   local_func_decls : Array[FuncDecl]
   mut anon_counter : Int
