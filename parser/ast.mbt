@@ -83,13 +83,29 @@ pub(all) struct Param {
 /// Struct or union declaration.
 ///
 /// `is_union` distinguishes `union` declarations from `struct` declarations.
-/// `is_packed` records GNU `packed` layout attributes on the aggregate.
+///
+/// `pack` caps the alignment of every field, covering both the GNU `packed`
+/// attribute (equivalent to `Some(1)`) and `#pragma pack(N)` (`Some(n)`).
+/// `None` means fields keep their natural alignment.
 pub(all) struct StructDecl {
   name : String
   fields : Array[Param]
   is_union : Bool
-  is_packed : Bool
+  pack : Int?
 } derive(Eq)
+
+///|
+/// Caps `natural` alignment by an aggregate's `pack` value.
+///
+/// This is the single rule behind both `__attribute__((packed))` and
+/// `#pragma pack(N)`: a field is aligned to the smaller of its natural
+/// alignment and the cap in effect.
+pub fn packed_align(pack : Int?, natural : Int) -> Int {
+  match pack {
+    Some(n) => if n < natural { n } else { natural }
+    None => natural
+  }
+}
 
 ///|
 /// Function declaration or definition.

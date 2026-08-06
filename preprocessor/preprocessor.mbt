@@ -1392,6 +1392,10 @@ fn Preprocessor::process_directive(
         let idx = pp_first_non_space(rest)
         if idx < rest.length() && rest[idx].is_ident("once") {
           self.once_files[physical_file] = true
+        } else if idx < rest.length() && rest[idx].is_ident("pack") {
+          // `#pragma pack` changes struct layout, so it has to survive
+          // preprocessing and reach the parser rather than being dropped.
+          return "#pragma " + pp_tokens_to_source(rest) + "\n"
         } else if idx < rest.length() && rest[idx].is_ident("kimicc_imacros") {
           ignore(
             self.process_include(

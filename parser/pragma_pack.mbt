@@ -1,0 +1,391 @@
+///|
+/// Source-position-indexed `#pragma pack` state.
+///
+/// `#pragma pack` is positional: the alignment cap in effect depends on where a
+/// struct definition sits in the token stream, not on any attribute attached to
+/// the declaration. The parser also backtracks by restoring `Lexer::pos`, so
+/// carrying the pack stack as streaming lexer state would let a rewind replay
+/// or skip directives.
+///
+/// Both problems go away by precomputing the directives into a table sorted by
+/// byte offset and answering `pack_at(pos)` as a pure function of position.
+/// `events` holds `(offset_of_directive_end, pack_in_effect_after_it)`.
+struct PragmaPackTable {
+  events : Array[(Int, Int?)]
+}
+
+///|
+/// Scans `input` for `#pragma pack` directives and records the resulting cap
+/// after each one.
+///
+/// Recognized spellings, matching GCC/MSVC:
+///
+/// - `#pragma pack(N)` sets the cap to `N`
+/// - `#pragma pack()` clears the cap back to natural alignment
+/// - `#pragma pack(push, N)` pushes the current cap and sets `N`
+/// - `#pragma pack(push)` pushes the current cap and keeps it
+/// - `#pragma pack(pop)` restores the cap from the stack
+///
+/// Unrecognized `pack` forms leave the cap unchanged. Directives inside string
+/// literals, character literals, and comments are ignored, since a `#` there is
+/// not a directive.
+///
+/// The `_Pragma("pack(...)")` operator is *not* recognized here. The
+/// preprocessor discards `_Pragma` entirely before this scanner runs, for every
+/// pragma rather than just `pack`, so honoring it needs the macro expander to
+/// emit line-structured output first.
+fn PragmaPackTable::scan(input : String) -> PragmaPackTable {
+  let events : Array[(Int, Int?)] = []
+  let stack : Array[Int?] = []
+  let mut current : Int? = None
+  let len = input.length()
+  let mut i = 0
+  let mut at_line_start = true
+  while i < len {
+    let c = input[i]
+    // Skip over regions where a `#` cannot begin a directive.
+    if c is '"' || c is '\'' {
+      let quote = c
+      i += 1
+      while i < len && input[i] != quote {
+        if input[i] is '\\' {
+          i += 1
+        }
+        i += 1
+      }
+      i += 1
+      at_line_start = false
+      continue
+    }
+    if c is '/' && i + 1 < len && input[i + 1] is '*' {
+      i += 2
+      while i + 1 < len && !(input[i] is '*' && input[i + 1] is '/') {
+        i += 1
+      }
+      i += 2
+      continue
+    }
+    if c is '/' && i + 1 < len && input[i + 1] is '/' {
+      while i < len && input[i] != '\n' {
+        i += 1
+      }
+      continue
+    }
+    if c is '\n' {
+      at_line_start = true
+      i += 1
+      continue
+    }
+    if c is ' ' || c is '\t' || c is '\r' {
+      i += 1
+      continue
+    }
+    if c is '#' && at_line_start {
+      // Consume the whole directive line, then decide whether it was a pack.
+      let start = i
+      let mut end = i
+      while end < len && input[end] != '\n' {
+        end += 1
+      }
+      match parse_pack_directive(input, start, end) {
+        Some(action) => {
+          match action {
+            PackSet(value) => current = value
+            PackPushKeep => stack.push(current)
+            PackPush(value) => {
+              stack.push(current)
+              current = value
+            }
+            PackPop =>
+              // A pop with an empty stack leaves the cap alone; clang warns
+              // under -Wignored-pragmas and keeps the value in effect rather
+              // than reverting to natural alignment.
+              match stack.pop() {
+                Some(restored) => current = restored
+                None => ()
+              }
+            PackPopSet(value) => {
+              // The pop is skipped on an empty stack, but the value still
+              // applies, matching clang.
+              match stack.pop() {
+                Some(restored) => current = restored
+                None => ()
+              }
+              current = value
+            }
+          }
+          events.push((end, current))
+        }
+        None => ()
+      }
+      i = end
+      at_line_start = false
+      continue
+    }
+    at_line_start = false
+    i += 1
+  }
+  { events, }
+}
+
+///|
+/// Returns the `#pragma pack` cap in effect at the current source position.
+///
+/// Callers must sample this *before* parsing an aggregate body, because the
+/// closing `}` may be followed by a `#pragma pack(pop)` that the lexer has
+/// already scanned past by the time the declaration is constructed.
+fn Parser::current_pack(self : Parser) -> Int? {
+  self.pragma_pack.pack_at(self.lexer.pos)
+}
+
+///|
+/// Combines an aggregate's GNU `packed` attribute with the `#pragma pack` cap
+/// in effect at its definition.
+///
+/// `__attribute__((packed))` means "align every field to 1", which is the
+/// strongest possible cap, so it wins over any pragma.
+fn combine_pack(is_packed : Bool, pragma : Int?) -> Int? {
+  if is_packed {
+    Some(1)
+  } else {
+    pragma
+  }
+}
+
+///|
+/// One `#pragma pack` state transition.
+/// In every variant an `Int?` payload is the resulting cap, where `None` means
+/// natural alignment. `pack(0)` is spelled that way: C compilers accept `0` and
+/// treat it as `pack()`.
+priv enum PackAction {
+  PackSet(Int?)
+  PackPushKeep
+  PackPush(Int?)
+  PackPop
+  PackPopSet(Int?)
+}
+
+///|
+/// Recognizes `#pragma pack(...)` on the directive line `input[start:end]`,
+/// returning the transition it encodes, or `None` when the line is some other
+/// directive or an unrecognized `pack` form.
+fn parse_pack_directive(input : String, start : Int, end : Int) -> PackAction? {
+  let mut i = start + 1 // past '#'
+  fn skip_spaces() -> Unit {
+    while i < end && (input[i] is ' ' || input[i] is '\t' || input[i] is '\r') {
+      i += 1
+    }
+  }
+
+  fn read_word() -> String {
+    let word_start = i
+    while i < end &&
+          (
+            input[i] is ('a'..='z') ||
+            input[i] is ('A'..='Z') ||
+            input[i] is ('0'..='9') ||
+            input[i] is '_'
+          ) {
+      i += 1
+    }
+    input[word_start:i].to_owned()
+  }
+
+  skip_spaces()
+  if read_word() != "pragma" {
+    return None
+  }
+  skip_spaces()
+  if read_word() != "pack" {
+    return None
+  }
+  skip_spaces()
+  if i >= end || input[i] != '(' {
+    return None
+  }
+  i += 1
+  skip_spaces()
+  if i < end && input[i] is ')' {
+    return Some(PackSet(None))
+  }
+  // Check the bare `pack(N)` form before reading a keyword, because `read_word`
+  // also accepts digits and would otherwise swallow the number.
+  if i < end && input[i] is ('0'..='9') {
+    return match read_pack_cap(input, i, end) {
+      Some(cap) => Some(PackSet(cap))
+      None => None
+    }
+  }
+  let keyword = read_word()
+  if keyword is "push" {
+    skip_spaces()
+    if i < end && input[i] is ',' {
+      i += 1
+      skip_spaces()
+      return match read_pack_cap(input, i, end) {
+        Some(cap) => Some(PackPush(cap))
+        None => None
+      }
+    }
+    return Some(PackPushKeep)
+  }
+  if keyword is "pop" {
+    // `#pragma pack(pop, N)` pops and then sets the cap to `N`.
+    skip_spaces()
+    if i < end && input[i] is ',' {
+      i += 1
+      skip_spaces()
+      return match read_pack_cap(input, i, end) {
+        Some(cap) => Some(PackPopSet(cap))
+        None => None
+      }
+    }
+    return Some(PackPop)
+  }
+  None
+}
+
+///|
+/// Reads a pack argument and returns the cap it selects, where `Some(None)` is
+/// a valid argument asking for natural alignment.
+///
+/// The argument is a C integer literal, so `0x10` is 16 and a leading `0` means
+/// octal -- `010` is 8, while `016` is 14 and therefore rejected. Only positive
+/// powers of two up to 16 are accepted, plus `0`, which C compilers treat as
+/// `pack()`. Anything else yields `None`, which makes the whole directive inert.
+fn read_pack_cap(input : String, from : Int, end : Int) -> Int?? {
+  let value = match read_c_integer_literal(input, from, end) {
+    Some(n) => n
+    None => return None
+  }
+  if value == 0 {
+    return Some(None)
+  }
+  if value > 16 || (value & (value - 1)) != 0 {
+    return None
+  }
+  Some(Some(value))
+}
+
+///|
+/// Reads a non-negative C integer literal in hex, binary, octal, or decimal,
+/// including any `u`/`l` suffix.
+///
+/// Returns `None` for a malformed literal or one large enough to overflow,
+/// which callers treat as "ignore this directive" rather than guessing.
+fn read_c_integer_literal(input : String, from : Int, end : Int) -> Int? {
+  let mut i = from
+  let mut radix = 10
+  if i < end && input[i] is '0' {
+    if i + 1 < end && (input[i + 1] is 'x' || input[i + 1] is 'X') {
+      radix = 16
+      i += 2
+    } else if i + 1 < end && (input[i + 1] is 'b' || input[i + 1] is 'B') {
+      radix = 2
+      i += 2
+    } else {
+      radix = 8
+      i += 1
+      // A lone `0` is a valid literal, so the digit loop below may read none.
+    }
+  }
+  let start_digits = i
+  let mut value = 0
+  while i < end {
+    let digit = match input[i] {
+      '0'..='9' => input[i].to_int() - '0'
+      'a'..='f' => input[i].to_int() - 'a' + 10
+      'A'..='F' => input[i].to_int() - 'A' + 10
+      _ => break
+    }
+    if digit >= radix {
+      // A digit outside the radix makes the literal malformed, e.g. `08`.
+      return None
+    }
+    // Bail before the multiply so a long run cannot wrap into a small value.
+    if value > 16 {
+      return None
+    }
+    value = value * radix + digit
+    i += 1
+  }
+  if i == start_digits && radix != 8 {
+    // `0x` with no digits, or no digits at all.
+    return None
+  }
+  // A `u`/`l` suffix is part of the literal, so `2u` and `8UL` are still 2 and
+  // 8 rather than malformed.
+  let mut seen_unsigned = false
+  let mut seen_long = false
+  while i < end {
+    if (input[i] is 'u' || input[i] is 'U') && !seen_unsigned {
+      seen_unsigned = true
+      i += 1
+    } else if (input[i] is 'l' || input[i] is 'L') && !seen_long {
+      seen_long = true
+      i += 1
+      if i < end && (input[i] is 'l' || input[i] is 'L') {
+        i += 1
+      }
+    } else {
+      break
+    }
+  }
+  // Reject trailing garbage such as `1abc`, which is not a valid literal.
+  if i < end &&
+    (
+      input[i] is ('a'..='z') ||
+      input[i] is ('A'..='Z') ||
+      input[i] is '_' ||
+      input[i] is ('0'..='9')
+    ) {
+    return None
+  }
+  Some(value)
+}
+
+///|
+/// Returns the pack cap in effect at byte offset `pos`, or `None` for natural
+/// alignment.
+fn PragmaPackTable::pack_at(self : PragmaPackTable, pos : Int) -> Int? {
+  // Binary search for the last directive that ends at or before `pos`.
+  let events = self.events
+  if events.length() == 0 {
+    return None
+  }
+  for lo = 0, hi = events.length(); lo < hi; {
+    let mid = lo + (hi - lo) / 2
+    if events[mid].0 <= pos {
+      continue mid + 1, hi
+    } else {
+      continue lo, mid
+    }
+  } nobreak {
+    if lo == 0 {
+      None
+    } else {
+      events[lo - 1].1
+    }
+  } where {
+    proof_invariant: 0 <= lo && lo <= hi && hi <= events.length(),
+    proof_invariant: lo == 0 || events[lo - 1].0 <= pos,
+    proof_invariant: hi == events.length() || events[hi].0 > pos,
+    proof_reasoning: (
+      #|`events` is built in increasing offset order by `scan`, so it is sorted
+      #|on `.0` and the boundary witnesses generalize:
+      #|  - `events[lo-1].0 <= pos` implies all events[0..lo) end at or before pos
+      #|  - `events[hi].0 > pos` implies all events[hi..len) end after pos
+      #|
+      #|Preservation:
+      #|  - when events[mid].0 <= pos we set lo = mid+1, and events[lo-1] is
+      #|    events[mid], which satisfies the invariant
+      #|  - otherwise we set hi = mid, and events[hi] is events[mid] > pos
+      #|
+      #|Termination: hi - lo strictly decreases, since lo <= mid < hi.
+      #|
+      #|At exit lo == hi, so every event before lo ends at or before pos and
+      #|every event from lo on ends after it. The last directive in effect is
+      #|therefore events[lo-1], or none at all when lo == 0.
+    ),
+  }
+}

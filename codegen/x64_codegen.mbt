@@ -132,6 +132,17 @@ fn X64Codegen::new_label(self : X64Codegen) -> String {
 }
 
 ///|
+/// Returns the field-alignment cap declared on aggregate `name`, or `None` when
+/// it is unknown or uses natural alignment.
+fn X64Codegen::struct_pack(self : X64Codegen, name : String) -> Int? {
+  if self.struct_decls.contains(name) {
+    self.struct_decls[name].pack
+  } else {
+    None
+  }
+}
+
+///|
 fn x64_align_to(value : Int, align : Int) -> Int {
   if align <= 1 {
     value
@@ -276,18 +287,15 @@ fn X64Codegen::type_size(self : X64Codegen, ty : @parser.Type) -> Int {
           let fields = self.struct_layouts[name]
           let mut max_end = 0
           let mut max_align = 1
-          let is_packed = self.struct_decls.contains(name) &&
-            self.struct_decls[name].is_packed
+          let pack = self.struct_pack(name)
           for field in fields {
             let end = field.2 + field.3
             if end > max_end {
               max_end = end
             }
-            if !is_packed {
-              let align = self.type_align(field.1)
-              if align > max_align {
-                max_align = align
-              }
+            let align = @parser.packed_align(pack, self.type_align(field.1))
+            if align > max_align {
+              max_align = align
             }
           }
           x64_align_to(max_end, max_align)
@@ -297,18 +305,15 @@ fn X64Codegen::type_size(self : X64Codegen, ty : @parser.Type) -> Int {
           let fields = self.struct_layouts[name]
           let mut max_size = 0
           let mut max_align = 1
-          let is_packed = self.struct_decls.contains(name) &&
-            self.struct_decls[name].is_packed
+          let pack = self.struct_pack(name)
           for field in fields {
             let size = self.type_size(field.1)
             if size > max_size {
               max_size = size
             }
-            if !is_packed {
-              let align = self.type_align(field.1)
-              if align > max_align {
-                max_align = align
-              }
+            let align = @parser.packed_align(pack, self.type_align(field.1))
+            if align > max_align {
+              max_align = align
             }
           }
           x64_align_to(max_size, max_align)
@@ -347,15 +352,12 @@ fn X64Codegen::type_align(self : X64Codegen, ty : @parser.Type) -> Int {
         SInt128 | UInt128 => 16
         Array(elem, _) => self.type_align(elem)
         Struct(name) | Union(name) => {
-          if self.struct_decls.contains(name) &&
-            self.struct_decls[name].is_packed {
-            return 1
-          }
           self.ensure_struct_layout(name)
+          let pack = self.struct_pack(name)
           let fields = self.struct_layouts[name]
           let mut max_align = 1
           for field in fields {
-            let align = self.type_align(field.1)
+            let align = @parser.packed_align(pack, self.type_align(field.1))
             if align > max_align {
               max_align = align
             }
@@ -406,7 +408,7 @@ fn X64Codegen::compute_struct_layout(
     for field in decl.fields {
       match field.bit_width {
         None => {
-          let align = if decl.is_packed { 1 } else { self.type_align(field.ty) }
+          let align = @parser.packed_align(decl.pack, self.type_align(field.ty))
           offset = x64_align_to(offset, align)
           let size = self.type_size(field.ty)
           fields.push((field.name, field.ty, offset, size, 0, -1))
@@ -416,11 +418,10 @@ fn X64Codegen::compute_struct_layout(
         }
         Some(width) => {
           let container_size = self.type_size(field.ty)
-          let container_align = if decl.is_packed {
-            1
-          } else {
-            self.type_align(field.ty)
-          }
+          let container_align = @parser.packed_align(
+            decl.pack,
+            self.type_align(field.ty),
+          )
           let container_bits = container_size * 8
           if width == 0 {
             offset = x64_align_to(offset, container_align)

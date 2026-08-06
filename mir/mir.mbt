@@ -96,7 +96,7 @@ pub(all) struct MirAggregateDecl {
   name : String
   fields : Array[MirAggregateField]
   is_union : Bool
-  is_packed : Bool
+  pack : Int?
 } derive(Eq)
 
 ///|
@@ -126,7 +126,7 @@ pub(all) struct AggregateLayout {
   size : Int
   align : Int
   is_union : Bool
-  is_packed : Bool
+  pack : Int?
 } derive(Eq)
 
 ///|
@@ -1199,7 +1199,7 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
       name: decl.name,
       fields,
       is_union: decl.is_union,
-      is_packed: decl.is_packed,
+      pack: decl.pack,
     }
     aggregates[decl.name] = aggregate_decl
     aggregate_decls.push(aggregate_decl)
@@ -1501,7 +1501,7 @@ fn Program::compute_struct_layout(
   let mut current_bit_offset = 0
   for field in decl.fields {
     if field.name == "" && field.ty.is_anonymous_aggregate() {
-      let align = if decl.is_packed { 1 } else { self.type_align(field.ty) }
+      let align = @parser.packed_align(decl.pack, self.type_align(field.ty))
       offset = align_to(offset, align)
       for inner in self.flatten_anon_fields(field.ty, offset) {
         fields.push(inner)
@@ -1513,7 +1513,7 @@ fn Program::compute_struct_layout(
     }
     match field.bit_width {
       None => {
-        let align = if decl.is_packed { 1 } else { self.type_align(field.ty) }
+        let align = @parser.packed_align(decl.pack, self.type_align(field.ty))
         offset = align_to(offset, align)
         let size = self.type_size(field.ty)
         fields.push({
@@ -1530,11 +1530,10 @@ fn Program::compute_struct_layout(
       }
       Some(width) => {
         let container_size = self.type_size(field.ty)
-        let container_align = if decl.is_packed {
-          1
-        } else {
-          self.type_align(field.ty)
-        }
+        let container_align = @parser.packed_align(
+          decl.pack,
+          self.type_align(field.ty),
+        )
         let container_bits = container_size * 8
         if width == 0 {
           offset = align_to(offset, container_align)
@@ -1582,23 +1581,17 @@ fn Program::compute_struct_layout(
     if end > max_end {
       max_end = end
     }
-    if !decl.is_packed {
-      let field_align = self.type_align(field.ty)
-      if field_align > max_align {
-        max_align = field_align
-      }
+    let field_align = @parser.packed_align(decl.pack, self.type_align(field.ty))
+    if field_align > max_align {
+      max_align = field_align
     }
   }
   {
     fields,
     size: align_to(max_end, max_align),
-    align: if decl.is_packed {
-      1
-    } else {
-      max_align
-    },
+    align: max_align,
     is_union: false,
-    is_packed: decl.is_packed,
+    pack: decl.pack,
   }
 }
 
@@ -1619,8 +1612,8 @@ fn Program::compute_union_layout(
       if size > max_size {
         max_size = size
       }
-      let align = self.type_align(field.ty)
-      if !decl.is_packed && align > max_align {
+      let align = @parser.packed_align(decl.pack, self.type_align(field.ty))
+      if align > max_align {
         max_align = align
       }
       continue
@@ -1629,8 +1622,8 @@ fn Program::compute_union_layout(
     if size > max_size {
       max_size = size
     }
-    let align = self.type_align(field.ty)
-    if !decl.is_packed && align > max_align {
+    let align = @parser.packed_align(decl.pack, self.type_align(field.ty))
+    if align > max_align {
       max_align = align
     }
     match field.bit_width {
@@ -1659,13 +1652,9 @@ fn Program::compute_union_layout(
   {
     fields,
     size: align_to(max_size, max_align),
-    align: if decl.is_packed {
-      1
-    } else {
-      max_align
-    },
+    align: max_align,
     is_union: true,
-    is_packed: decl.is_packed,
+    pack: decl.pack,
   }
 }
 
@@ -1680,7 +1669,7 @@ fn Program::ensure_layout(self : Program, name : String) -> Unit {
       size: 8,
       align: 8,
       is_union: false,
-      is_packed: false,
+      pack: None,
     }
     return
   }
@@ -1825,7 +1814,7 @@ fn MirModule::aggregate_layout_by_name(
 ) -> AggregateLayout {
   match self.layouts.get(name) {
     Some(layout) => layout
-    None => { fields: [], size: 8, align: 8, is_union: false, is_packed: false }
+    None => { fields: [], size: 8, align: 8, is_union: false, pack: None }
   }
 }
 

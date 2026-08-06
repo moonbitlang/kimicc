@@ -7,6 +7,8 @@ import {
 }
 
 // Values
+pub fn packed_align(Int?, Int) -> Int
+
 pub fn parse(String) -> Program
 
 pub fn parse_for_target(String, @target.Target) -> Program
@@ -99,6 +101,7 @@ pub(all) struct Param {
 pub struct Parser {
   lexer : Lexer
   target : @target.Target
+  pragma_pack : PragmaPackTable
   mut token : Token
   typedefs : Map[String, @ctype.Type]
   anonymous_structs : Array[StructDecl]
@@ -115,6 +118,8 @@ pub struct Parser {
 }
 pub fn Parser::new(Lexer) -> Self
 pub fn Parser::new_for_target(Lexer, @target.Target) -> Self
+
+type PragmaPackTable
 
 pub(all) struct Program {
   structs : Array[StructDecl]
@@ -144,7 +149,7 @@ pub(all) struct StructDecl {
   name : String
   fields : Array[Param]
   is_union : Bool
-  is_packed : Bool
+  pack : Int?
 } derive(Eq)
 
 pub(all) enum Token {

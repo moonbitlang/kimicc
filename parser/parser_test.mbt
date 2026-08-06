@@ -826,8 +826,8 @@ test "parse packed aggregate attributes" {
     #|int main(void) { return 0; }
   let prog = @parser.parse(source)
   inspect(prog.structs.length(), content="2")
-  inspect(prog.structs[0].is_packed, content="true")
-  inspect(prog.structs[1].is_packed, content="true")
+  debug_inspect(prog.structs[0].pack, content="Some(1)")
+  debug_inspect(prog.structs[1].pack, content="Some(1)")
 }
 
 ///|
