@@ -10,7 +10,7 @@ This package only builds for the `native` target.
 
 ## Importing
 
-```moonbit nocheck
+```
 import {
   "bobzhang/kimicc/jit"
 }

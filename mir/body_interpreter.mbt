@@ -614,15 +614,15 @@ fn BodyInterpreter::eval_fp_arith_values(
 
 ///|
 fn BodyInterpreter::new(program : Program) -> BodyInterpreter {
-  let globals : Map[String, Int64] = {}
-  let global_memory : Map[Int64, Int64] = {}
-  let global_addrs : Map[String, Int64] = {}
-  let func_addrs : Map[String, Int64] = {}
-  let func_names : Map[Int64, String] = {}
-  let label_addrs : Map[String, Int64] = {}
-  let label_names : Map[Int64, String] = {}
-  let string_memory : Map[Int64, Int64] = {}
-  let string_addrs : Map[String, Int64] = {}
+  let globals : Map[String, Int64] = Map([])
+  let global_memory : Map[Int64, Int64] = Map([])
+  let global_addrs : Map[String, Int64] = Map([])
+  let func_addrs : Map[String, Int64] = Map([])
+  let func_names : Map[Int64, String] = Map([])
+  let label_addrs : Map[String, Int64] = Map([])
+  let label_names : Map[Int64, String] = Map([])
+  let string_memory : Map[Int64, Int64] = Map([])
+  let string_addrs : Map[String, Int64] = Map([])
   for i in 0..<program.decls.length() {
     let name = program.decls[i].name
     let addr = 3000000000L + i.to_int64() * 100000L
@@ -5671,7 +5671,7 @@ fn BodyInterpreter::snapshot_aggregate_arg(
     return 0L
   }
   let size = self.program.type_size(ty).to_int64()
-  let slots : Map[Int64, Int64] = {}
+  let slots : Map[Int64, Int64] = Map([])
   for addr in self.stack_memory.keys() {
     if addr <= base && addr > base - size {
       slots[base - addr] = self.stack_memory[addr]
@@ -7147,7 +7147,7 @@ fn BodyInterpreter::call_func(
     return 0L
   }
   self.call_depth += 1
-  let bindings : Map[Int, MirLocal] = {}
+  let bindings : Map[Int, MirLocal] = Map([])
   for binding in body.locals {
     bindings[binding.id] = binding
   }

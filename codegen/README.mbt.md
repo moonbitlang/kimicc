@@ -18,7 +18,7 @@ text.
 
 ## Importing
 
-```moonbit nocheck
+```
 import {
   "bobzhang/kimicc/codegen",
   "bobzhang/kimicc/parser",

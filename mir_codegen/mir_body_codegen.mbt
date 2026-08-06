@@ -2139,7 +2139,7 @@ fn Codegen::mir_body_offsets(
   self : Codegen,
   body : @mir.MirFuncBody,
 ) -> Map[Int, Int] {
-  let offsets : Map[Int, Int] = {}
+  let offsets : Map[Int, Int] = Map([])
   for binding in body.locals {
     if mir_body_codegen_local_type(binding.ty) {
       offsets[binding.id] = self.alloc_local(
@@ -6859,7 +6859,7 @@ fn X64Codegen::mir_body_offsets(
   self : X64Codegen,
   body : @mir.MirFuncBody,
 ) -> Map[Int, Int] {
-  let offsets : Map[Int, Int] = {}
+  let offsets : Map[Int, Int] = Map([])
   for binding in body.locals {
     if mir_body_codegen_local_type(binding.ty) {
       offsets[binding.id] = self.alloc_local(

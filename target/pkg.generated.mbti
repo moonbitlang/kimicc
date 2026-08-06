@@ -20,4 +20,3 @@ pub fn Target::triple(Self) -> String
 // Type aliases
 
 // Traits
-

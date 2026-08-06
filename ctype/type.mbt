@@ -30,7 +30,7 @@ pub(all) enum Type {
   Array(Type, Int)
   Atomic(Type)
   Aligned(Type, Int)
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 fn type_array_to_string(types : Array[Type]) -> String {

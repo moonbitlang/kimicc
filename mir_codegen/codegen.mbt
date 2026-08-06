@@ -183,7 +183,7 @@ fn static_global_owner_name(
 fn mir_codegen_inline_decls(
   decls : Array[@mir.MirFuncDecl],
 ) -> Map[String, @mir.MirFuncDecl] {
-  let inline_decls : Map[String, @mir.MirFuncDecl] = {}
+  let inline_decls : Map[String, @mir.MirFuncDecl] = Map([])
   for decl in decls {
     if decl.is_inline {
       inline_decls[decl.name] = decl
@@ -457,7 +457,7 @@ fn mir_codegen_needed_inline_bodies(
   mir_module : @mir.MirModule,
 ) -> Map[String, Bool] {
   let inline_decls = mir_codegen_inline_decls(mir_module.decls)
-  let needed : Map[String, Bool] = {}
+  let needed : Map[String, Bool] = Map([])
   for decl in mir_module.decls {
     if !decl.is_inline && decl.has_body {
       match mir_module.bodies.get(decl.name) {
@@ -1138,7 +1138,7 @@ fn Codegen::generate_mir_only(
   self.register_mir_global_decls(mir_module)
   let codegen_func_decls = codegen_func_decls_from_mir(mir_module.decls)
   let needed_inline = mir_codegen_needed_inline_bodies(mir_module)
-  let func_label_maps : Map[String, Map[String, String]] = {}
+  let func_label_maps : Map[String, Map[String, String]] = Map([])
   for decl in mir_module.decls {
     if mir_codegen_should_emit_body(decl, needed_inline) {
       match mir_module.bodies.get(decl.name) {

@@ -156,7 +156,7 @@ fn BodyLowerContext::new(current_func : String) -> BodyLowerContext {
 
 ///|
 fn BodyLowerContext::scope(self : BodyLowerContext) -> Scope {
-  let locals : Map[String, @ctype.Type] = {}
+  let locals : Map[String, @ctype.Type] = Map([])
   for binding in self.locals {
     match self.lookup_local(binding.name) {
       Some(active) =>

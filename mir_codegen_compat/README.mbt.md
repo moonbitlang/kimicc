@@ -14,7 +14,7 @@ re-exports and combines the two backends.
 
 ## Importing
 
-```moonbit nocheck
+```
 import {
   "bobzhang/kimicc/mir_codegen_compat",
   "bobzhang/kimicc/parser",

@@ -2432,7 +2432,7 @@ fn X64Codegen::generate_mir_only(
     self.emit_mir_function_decl_directives(decl)
   }
   let needed_inline = mir_codegen_needed_inline_bodies(mir_module)
-  let func_label_maps : Map[String, Map[String, String]] = {}
+  let func_label_maps : Map[String, Map[String, String]] = Map([])
   for decl in mir_module.decls {
     if mir_codegen_should_emit_body(decl, needed_inline) {
       match mir_module.bodies.get(decl.name) {

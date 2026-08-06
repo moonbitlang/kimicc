@@ -21,7 +21,7 @@ parser's constant folder, the MIR lowering, and direct codegen alike.
 
 ## Importing
 
-```moonbit nocheck
+```
 import {
   "bobzhang/kimicc/ctype"
 }

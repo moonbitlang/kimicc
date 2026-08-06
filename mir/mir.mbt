@@ -910,7 +910,7 @@ fn Program::append_mir_file_scope_compound_literal_globals(
   self : Program,
   source_globals : Array[@parser.GlobalDecl],
 ) -> Unit {
-  let seen : Map[Int, Bool] = {}
+  let seen : Map[Int, Bool] = Map([])
   let generated : Array[MirGlobalDecl] = []
   for global in source_globals {
     match global.init {
@@ -1140,7 +1140,7 @@ fn Program::lower_mir_global_address_reloc_parts(
 /// }
 /// ```
 pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
-  let funcs : Map[String, FuncSig] = {}
+  let funcs : Map[String, FuncSig] = Map([])
   let decls : Array[MirFuncDecl] = []
   for decl in source.decls {
     let param_types : Array[@ctype.Type] = []
@@ -1172,7 +1172,7 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
       has_body: decl.body is Some(_),
     })
   }
-  let globals : Map[String, MirGlobalDecl] = {}
+  let globals : Map[String, MirGlobalDecl] = Map([])
   let global_decls : Array[MirGlobalDecl] = []
   for g in source.globals {
     let mir_global = MirGlobalDecl::from_parser(g)
@@ -1188,7 +1188,7 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
     }
     global_decls.push(mir_global)
   }
-  let aggregates : Map[String, MirAggregateDecl] = {}
+  let aggregates : Map[String, MirAggregateDecl] = Map([])
   let aggregate_decls : Array[MirAggregateDecl] = []
   for decl in source.structs {
     let fields : Array[MirAggregateField] = []

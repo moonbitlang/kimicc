@@ -2631,7 +2631,7 @@ fn dependency_file_content(
   let buf = StringBuilder::new()
   buf.write_string(dependency_target(opts, input_path, output_path))
   buf.write_string(":")
-  let seen : Map[String, Bool] = {}
+  let seen : Map[String, Bool] = Map([])
   for dep in dependencies {
     if !seen.contains(dep) {
       seen[dep] = true
@@ -2645,7 +2645,7 @@ fn dependency_file_content(
   }
   buf.write_char('\n')
   if opts.dependency_phony_targets {
-    let phony_seen : Map[String, Bool] = {}
+    let phony_seen : Map[String, Bool] = Map([])
     for dep in dependencies {
       if dep != input_path && !phony_seen.contains(dep) {
         phony_seen[dep] = true

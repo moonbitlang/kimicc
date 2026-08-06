@@ -31,4 +31,3 @@ pub fn Module::symbol_offset(Self, String) -> Int?
 // Type aliases
 
 // Traits
-

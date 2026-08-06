@@ -598,7 +598,7 @@ fn semantic_validate_global_init(
   ctx : SemanticContext,
   init : GlobalInit,
 ) -> Result[Unit, String] {
-  let locals : Map[String, Type] = {}
+  let locals : Map[String, Type] = Map([])
   match init {
     Scalar(expr) =>
       match semantic_expr_type(ctx, locals, expr) {
@@ -619,9 +619,9 @@ fn semantic_validate_global_init(
 
 ///|
 fn semantic_context(prog : Program) -> SemanticContext {
-  let funcs : Map[String, Type] = {}
-  let globals : Map[String, Type] = {}
-  let structs : Map[String, StructDecl] = {}
+  let funcs : Map[String, Type] = Map([])
+  let globals : Map[String, Type] = Map([])
+  let structs : Map[String, StructDecl] = Map([])
   for decl in prog.decls {
     if decl.name != "" {
       funcs[decl.name] = semantic_func_type(decl)
@@ -661,7 +661,7 @@ pub fn validate_semantics(prog : Program) -> Result[Unit, String] {
   for func in prog.decls {
     match func.body {
       Some(body) => {
-        let locals : Map[String, Type] = {}
+        let locals : Map[String, Type] = Map([])
         for param in func.params {
           if param.name != "" {
             locals[param.name] = param.ty

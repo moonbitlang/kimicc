@@ -11,7 +11,7 @@ entry point reports uncovered constructs instead of aborting.
 
 ## Importing
 
-```moonbit nocheck
+```
 import {
   "bobzhang/kimicc/mir_codegen",
   "bobzhang/kimicc/mir",

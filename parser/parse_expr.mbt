@@ -448,8 +448,7 @@ fn Parser::apply_postfix(self : Parser, expr_ : Expr) -> Expr {
             self.advance()
             expr = MemberAccess(expr, name)
           }
-          _ =>
-            abort("Expected field name after ., got " + self.token.to_string())
+          _ => abort("Expected field name after ., got \{self.token}")
         }
       }
       Arrow => {
@@ -671,7 +670,7 @@ fn Parser::parse_primary(self : Parser) -> Expr {
       }
       LabelAddr(label_name)
     }
-    _ => abort("Unexpected token in primary: " + self.token.to_string())
+    _ => abort("Unexpected token in primary: \{self.token}")
   }
 }
 

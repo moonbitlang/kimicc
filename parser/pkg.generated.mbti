@@ -242,4 +242,3 @@ pub using @ctype {type OffsetDesignator}
 pub using @ctype {type Type}
 
 // Traits
-
