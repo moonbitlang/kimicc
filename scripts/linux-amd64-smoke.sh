@@ -98,15 +98,17 @@ cd "$workdir"
 
 moon update
 moon build --target native
-kimicc="./_build/native/debug/build/cmd/main/main.exe"
-if [ ! -x "$kimicc" ]; then
-  echo "expected built compiler at $kimicc" >&2
+# The workspace namespaces build output by module, so locate the driver rather
+# than hard-coding a path that moves whenever the layout does.
+kimicc="$(find ./_build/native/debug/build -type f -path '*/cmd/main/main.exe' | head -n 1)"
+if [ -z "$kimicc" ] || [ ! -x "$kimicc" ]; then
+  echo "expected built compiler under ./_build/native/debug/build at */cmd/main/main.exe" >&2
   exit 1
 fi
-moon test target --target native
+moon test cfront/target --target native
 moon test codegen --target native
 moon test cmd/main --target native
-moon test preprocessor --target native
+moon test cfront/preprocessor --target native
 
 expect_compile_failure() {
   local label="$1"

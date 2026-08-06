@@ -12,8 +12,18 @@ You can browse and install extra skills here:
   blackbox test files (ending in `_test.mbt`) and whitebox test files (ending in
   `_wbtest.mbt`).
 
-- In the toplevel directory, there is a `moon.mod` file listing module
-  metadata.
+- The toplevel directory holds a `moon.work` workspace manifest with two member
+  modules, each with its own `moon.mod`:
+
+  - `bobzhang/cfront` under `cfront/` is the reusable C front end: `target`,
+    `ctype`, `preprocessor`, and `parser`. It must not depend on anything in
+    `kimicc`, and builds and tests standalone.
+  - `bobzhang/kimicc` at the root is the compiler: MIR, both code generators,
+    the JIT, and the driver. It depends on `cfront`.
+
+  Root `moon check`, `moon test`, `moon fmt`, and `moon info` cover both
+  modules. Package paths on the command line are prefixed by the owning
+  module, so the parser is `cfront/parser`, not `parser`.
 
 ## Target
 
@@ -35,7 +45,7 @@ The compiler reads C source code from command-line argument `args[1]`:
 moon run cmd/main --target native -- "$(cat input.c)" > out.s
 
 # Using the native binary directly
-_build/native/debug/build/cmd/main/main.exe "$(cat input.c)" > out.s
+_build/native/debug/build/bobzhang/kimicc/cmd/main/main.exe "$(cat input.c)" > out.s
 
 # Link with clang
 clang -o out out.s && ./out
