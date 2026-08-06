@@ -1,4 +1,4 @@
-# bobzhang/kimicc/preprocessor
+# bobzhang/cfront/preprocessor
 
 `preprocessor` is the `source -> source` front of the pipeline: it expands C
 preprocessing directives (`#include`, `#define`, `#if`, macros, …) into plain C
@@ -9,7 +9,7 @@ before parsing.
 
 ```
 import {
-  "bobzhang/kimicc/preprocessor"
+  "bobzhang/cfront/preprocessor"
 }
 ```
 

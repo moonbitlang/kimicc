@@ -1,9 +1,9 @@
 import {
-  "bobzhang/kimicc/ctype",
+  "bobzhang/cfront/ctype",
   "bobzhang/kimicc/mir",
-  "bobzhang/kimicc/target",
+  "bobzhang/cfront/target",
 }
 
 import {
-  "bobzhang/kimicc/parser",
+  "bobzhang/cfront/parser",
 } for "test"

@@ -2,9 +2,9 @@
 package "bobzhang/kimicc/mir"
 
 import {
-  "bobzhang/kimicc/ctype",
-  "bobzhang/kimicc/parser",
-  "bobzhang/kimicc/target",
+  "bobzhang/cfront/ctype",
+  "bobzhang/cfront/parser",
+  "bobzhang/cfront/target",
 }
 
 // Values

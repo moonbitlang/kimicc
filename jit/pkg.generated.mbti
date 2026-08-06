@@ -2,7 +2,7 @@
 package "bobzhang/kimicc/jit"
 
 import {
-  "bobzhang/kimicc/preprocessor",
+  "bobzhang/cfront/preprocessor",
 }
 
 // Values

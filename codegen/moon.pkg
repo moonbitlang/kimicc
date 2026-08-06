@@ -1,9 +1,9 @@
 import {
   "moonbitlang/core/buffer",
   "moonbitlang/core/string",
-  "bobzhang/kimicc/target",
-  "bobzhang/kimicc/ctype",
-  "bobzhang/kimicc/parser",
+  "bobzhang/cfront/target",
+  "bobzhang/cfront/ctype",
+  "bobzhang/cfront/parser",
 }
 
 import {

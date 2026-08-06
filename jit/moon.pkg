@@ -1,6 +1,6 @@
 import {
-  "bobzhang/kimicc/parser",
-  "bobzhang/kimicc/preprocessor",
+  "bobzhang/cfront/parser",
+  "bobzhang/cfront/preprocessor",
   "bobzhang/kimicc/codegen",
 }
 

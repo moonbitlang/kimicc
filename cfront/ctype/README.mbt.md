@@ -1,4 +1,4 @@
-# bobzhang/kimicc/ctype
+# bobzhang/cfront/ctype
 
 `ctype` is kimicc's foundational, parser-neutral model of the C type system and
 the compiler's built-in knowledge about constants and standard-library
@@ -23,7 +23,7 @@ parser's constant folder, the MIR lowering, and direct codegen alike.
 
 ```
 import {
-  "bobzhang/kimicc/ctype"
+  "bobzhang/cfront/ctype"
 }
 ```
 

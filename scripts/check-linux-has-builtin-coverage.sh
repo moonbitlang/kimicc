@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-support_file="${1:-preprocessor/macro_expand.mbt}"
-preprocessor_test="${2:-preprocessor/preprocessor_test.mbt}"
+support_file="${1:-cfront/preprocessor/macro_expand.mbt}"
+preprocessor_test="${2:-cfront/preprocessor/preprocessor_test.mbt}"
 linux_smoke="${3:-scripts/linux-amd64-smoke.sh}"
 
 for path in "${support_file}" "${preprocessor_test}" "${linux_smoke}"; do

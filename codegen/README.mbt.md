@@ -21,8 +21,8 @@ text.
 ```
 import {
   "bobzhang/kimicc/codegen",
-  "bobzhang/kimicc/parser",
-  "bobzhang/kimicc/target",
+  "bobzhang/cfront/parser",
+  "bobzhang/cfront/target",
 }
 ```
 

@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/kimicc/preprocessor"
+package "bobzhang/cfront/preprocessor"
 
 import {
-  "bobzhang/kimicc/parser",
-  "bobzhang/kimicc/target",
+  "bobzhang/cfront/parser",
+  "bobzhang/cfront/target",
 }
 
 // Values

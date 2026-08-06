@@ -17,8 +17,8 @@ re-exports and combines the two backends.
 ```
 import {
   "bobzhang/kimicc/mir_codegen_compat",
-  "bobzhang/kimicc/parser",
-  "bobzhang/kimicc/target",
+  "bobzhang/cfront/parser",
+  "bobzhang/cfront/target",
 }
 ```
 
