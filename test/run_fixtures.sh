@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-COMPILER="$PROJECT_DIR/_build/native/debug/build/cmd/main/main.exe"
+COMPILER="$(find "$PROJECT_DIR/_build/native/debug/build" -type f -path '*/cmd/main/main.exe' | head -n 1)"
 RUN_DIR="/tmp/kimicc_run_fixtures"
 
 mkdir -p "$RUN_DIR"

@@ -1,4 +1,4 @@
-# bobzhang/kimicc/target
+# bobzhang/cfront/target
 
 `target` names the compiler output targets supported by kimicc and exposes the
 small pieces of target metadata that the driver and code generators need:
@@ -19,7 +19,7 @@ experimental System V x86-64 backend.
 
 ```
 import {
-  "bobzhang/kimicc/target"
+  "bobzhang/cfront/target"
 }
 ```
 

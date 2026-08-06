@@ -1,12 +1,12 @@
 import {
-  "bobzhang/kimicc/parser",
+  "bobzhang/cfront/parser",
 }
 
 import {
   "bobzhang/kimicc/codegen",
   "bobzhang/kimicc/mir",
   "bobzhang/kimicc/mir_codegen",
-  "bobzhang/kimicc/target",
+  "bobzhang/cfront/target",
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/async",

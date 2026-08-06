@@ -7,19 +7,27 @@ selected C functions in memory through the native `jit` package. It also has an
 experimental Linux/amd64 assembly backend and driver target for smoke testing
 System V x86-64 code generation.
 
-## Package Layout
+## Workspace Layout
 
-The module exports five public packages:
+The repository is a `moon.work` workspace holding two modules:
+
+| Module | Contents |
+|---|---|
+| [`bobzhang/cfront`](cfront/) | The reusable C front end: `target`, `ctype`, `preprocessor`, and `parser`. It has no dependency on any backend and builds and tests standalone. |
+| `bobzhang/kimicc` | The compiler: MIR lowering, both code generators, the JIT, and the driver. It depends on `cfront`. |
+
+`kimicc` exports two public packages of its own:
 
 | Package | Purpose |
 |---|---|
-| `bobzhang/kimicc/target` | Names supported compiler output targets such as `darwin-arm64` and `linux-amd64`. |
-| `bobzhang/kimicc/preprocessor` | Expands C preprocessing directives into ordinary C source. |
-| `bobzhang/kimicc/parser` | Tokenizes and parses preprocessed C source into the public AST. |
 | `bobzhang/kimicc/codegen` | Converts the parser AST into target assembly, Darwin ARM64 Mach-O object bytes, or a JIT image. |
 | `bobzhang/kimicc/jit` | Native-only convenience API that compiles C source and calls `int` returning functions in memory. |
 
 The root package `bobzhang/kimicc` intentionally exports no values.
+
+Because the two modules are workspace members, `moon check`, `moon test`, and
+`moon fmt` at the repository root cover both. Package paths are prefixed by the
+owning module, so the parser is `cfront/parser` on the command line.
 
 ## Target And Toolchain
 
@@ -178,7 +186,7 @@ Import the preprocessor package from `moon.pkg`:
 
 ```
 import {
-  "bobzhang/kimicc/preprocessor"
+  "bobzhang/cfront/preprocessor"
 }
 ```
 
@@ -204,7 +212,7 @@ Import the parser package from `moon.pkg`:
 
 ```
 import {
-  "bobzhang/kimicc/parser"
+  "bobzhang/cfront/parser"
 }
 ```
 
@@ -280,9 +288,9 @@ Import the parser and codegen packages:
 
 ```
 import {
-  "bobzhang/kimicc/parser",
+  "bobzhang/cfront/parser",
   "bobzhang/kimicc/codegen",
-  "bobzhang/kimicc/target",
+  "bobzhang/cfront/target",
 }
 ```
 

@@ -2,9 +2,9 @@
 package "bobzhang/kimicc/mir_codegen_compat"
 
 import {
+  "bobzhang/cfront/parser",
+  "bobzhang/cfront/target",
   "bobzhang/kimicc/mir",
-  "bobzhang/kimicc/parser",
-  "bobzhang/kimicc/target",
 }
 
 // Values

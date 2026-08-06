@@ -15,8 +15,8 @@ entry point reports uncovered constructs instead of aborting.
 import {
   "bobzhang/kimicc/mir_codegen",
   "bobzhang/kimicc/mir",
-  "bobzhang/kimicc/parser",
-  "bobzhang/kimicc/target",
+  "bobzhang/cfront/parser",
+  "bobzhang/cfront/target",
 }
 ```
 

@@ -1,6 +1,6 @@
 import {
-  "bobzhang/kimicc/ctype",
-  "bobzhang/kimicc/target",
+  "bobzhang/cfront/ctype",
+  "bobzhang/cfront/target",
   "moonbitlang/core/double",
   "moonbitlang/core/string",
 }

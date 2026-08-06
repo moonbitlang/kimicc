@@ -1,4 +1,4 @@
-# bobzhang/kimicc/parser
+# bobzhang/cfront/parser
 
 `parser` turns an already-preprocessed C translation unit into kimicc's public
 AST. It is the `source -> cast` stage of both pipelines: the AST it produces is
@@ -13,9 +13,9 @@ The parser expects preprocessed source — run [`@preprocessor`](../preprocessor
 
 ```
 import {
-  "bobzhang/kimicc/parser",
-  "bobzhang/kimicc/ctype",
-  "bobzhang/kimicc/target",
+  "bobzhang/cfront/parser",
+  "bobzhang/cfront/ctype",
+  "bobzhang/cfront/target",
 }
 ```
 

@@ -1,6 +1,6 @@
-name = "bobzhang/kimicc"
+name = "bobzhang/cfront"
 
-version = "0.1.243"
+version = "0.1.0"
 
 readme = "README.md"
 
@@ -8,10 +8,9 @@ repository = "https://github.com/bobzhang/kimicc"
 
 license = "Apache-2.0"
 
-import {
-  "moonbitlang/async@0.19.2",
-  "bobzhang/cfront@0.1.0",
-}
+description = "Reusable C front end: preprocessor, parser, AST, and C type model."
+
+keywords = [ "c", "parser", "preprocessor", "frontend" ]
 
 preferred_target = "native"
 

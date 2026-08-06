@@ -21,9 +21,9 @@ Compared to the parser AST, MIR is:
 ```
 import {
   "bobzhang/kimicc/mir",
-  "bobzhang/kimicc/parser",
-  "bobzhang/kimicc/target",
-  "bobzhang/kimicc/ctype",
+  "bobzhang/cfront/parser",
+  "bobzhang/cfront/target",
+  "bobzhang/cfront/ctype",
 }
 ```
 

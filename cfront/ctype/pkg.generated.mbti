@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/kimicc/ctype"
+package "bobzhang/cfront/ctype"
 
 import {
   "moonbitlang/core/debug",

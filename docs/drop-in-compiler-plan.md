@@ -9,8 +9,8 @@ repeatable gates.
 ## Baseline
 
 - Target platform: native ARM64 macOS.
-- Front end: `bobzhang/kimicc/preprocessor` expands C preprocessing directives;
-  `bobzhang/kimicc/parser` consumes already preprocessed C translation units.
+- Front end: `bobzhang/cfront/preprocessor` expands C preprocessing directives;
+  `bobzhang/cfront/parser` consumes already preprocessed C translation units.
 - Back end: Darwin ARM64 assembly, Mach-O relocatable objects, and native JIT
   images.
 - Current external smoke gates include SQLite, QuickJS, TinyCC, and OCaml source

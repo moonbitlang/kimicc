@@ -1,7 +1,7 @@
 import {
-  "bobzhang/kimicc/target",
-  "bobzhang/kimicc/parser",
-  "bobzhang/kimicc/preprocessor",
+  "bobzhang/cfront/target",
+  "bobzhang/cfront/parser",
+  "bobzhang/cfront/preprocessor",
   "bobzhang/kimicc/codegen",
   "bobzhang/kimicc/mir",
   "bobzhang/kimicc/mir_codegen",

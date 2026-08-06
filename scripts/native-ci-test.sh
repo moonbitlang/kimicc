@@ -27,9 +27,9 @@ echo "==> check sqlite conformance plan"
 scripts/check-sqlite-conformance-plan.sh
 
 core_packages=(
-  target
-  parser
-  preprocessor
+  cfront/target
+  cfront/parser
+  cfront/preprocessor
   codegen
   mir_codegen
   cmd/main
