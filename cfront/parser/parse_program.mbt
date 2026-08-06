@@ -79,7 +79,6 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
 
 ///|
 fn Parser::parse_program(self : Parser) -> Program {
-  let structs = []
   let decls = []
   while self.token != EOF {
     while self.token == Ident("__extension__") {
@@ -117,7 +116,7 @@ fn Parser::parse_program(self : Parser) -> Program {
                 self.skip_attributes_packed()
               let pack = combine_pack(is_packed, pragma_pack)
               let decl = { name, fields, is_union, pack }
-              structs.push(decl)
+              self.aggregates.push(decl)
               self.struct_decls[name] = decl
               // Handle struct definition followed by variable declarations: struct Foo { ... } *ptr;
               if self.token != Semicolon {
@@ -177,12 +176,7 @@ fn Parser::parse_program(self : Parser) -> Program {
       known_decls[decl.name] = true
     }
   }
-  // Prepend anonymous structs
-  let all_structs = self.anonymous_structs
-  for s in structs {
-    all_structs.push(s)
-  }
-  { structs: all_structs, globals: self.globals, decls }
+  { structs: self.aggregates, globals: self.globals, decls }
 }
 
 ///|
