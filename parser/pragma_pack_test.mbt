@@ -47,8 +47,9 @@ test "packed attribute overrides a weaker pragma" {
 }
 
 ///|
-/// A `pop` with nothing pushed returns to natural alignment instead of
-/// underflowing, and unrecognized or malformed forms leave the cap untouched.
+/// A `pop` with nothing pushed leaves the cap alone rather than underflowing or
+/// reverting to natural alignment, matching clang, which warns and keeps the
+/// value in effect. Unrecognized and malformed forms are likewise inert.
 test "pragma pack tolerates unbalanced and malformed directives" {
   let source =
     #|#pragma pack(pop)
@@ -65,6 +66,49 @@ test "pragma pack tolerates unbalanced and malformed directives" {
   debug_inspect(prog.structs[1].pack, content="None")
   debug_inspect(prog.structs[2].pack, content="None")
   debug_inspect(prog.structs[3].pack, content="None")
+}
+
+///|
+/// An unmatched `pop` keeps whatever cap is already set instead of clearing it,
+/// so a later struct still packs.
+test "pragma pack unmatched pop keeps the current cap" {
+  let source =
+    #|#pragma pack(1)
+    #|#pragma pack(pop)
+    #|struct StillPacked { char c; long long v; };
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  debug_inspect(prog.structs[0].pack, content="Some(1)")
+}
+
+///|
+/// `#pragma pack(pop, N)` pops the stack and then sets the cap to `N`; a
+/// malformed `N` makes the whole directive inert.
+test "pragma pack pop with a value sets the cap" {
+  let source =
+    #|#pragma pack(push, 1)
+    #|struct Tight { char c; long long v; };
+    #|#pragma pack(pop, 4)
+    #|struct PoppedToFour { char c; long long v; };
+    #|#pragma pack(pop, 3)
+    #|struct AfterMalformedPop { char c; long long v; };
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  debug_inspect(prog.structs[0].pack, content="Some(1)")
+  debug_inspect(prog.structs[1].pack, content="Some(4)")
+  debug_inspect(prog.structs[2].pack, content="Some(4)")
+}
+
+///|
+/// A pack value too large to be valid is rejected rather than wrapping around
+/// into an accepted one.
+test "pragma pack rejects out-of-range values" {
+  let source =
+    #|#pragma pack(4294967297)
+    #|struct Unpacked { char c; long long v; };
+    #|int main(void) { return 0; }
+  let prog = @parser.parse(source)
+  debug_inspect(prog.structs[0].pack, content="None")
 }
 
 ///|

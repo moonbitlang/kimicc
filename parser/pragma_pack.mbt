@@ -29,6 +29,11 @@ struct PragmaPackTable {
 /// Unrecognized `pack` forms leave the cap unchanged. Directives inside string
 /// literals, character literals, and comments are ignored, since a `#` there is
 /// not a directive.
+///
+/// The `_Pragma("pack(...)")` operator is *not* recognized here. The
+/// preprocessor discards `_Pragma` entirely before this scanner runs, for every
+/// pragma rather than just `pack`, so honoring it needs the macro expander to
+/// emit line-structured output first.
 fn PragmaPackTable::scan(input : String) -> PragmaPackTable {
   let events : Array[(Int, Int?)] = []
   let stack : Array[Int?] = []
@@ -94,10 +99,20 @@ fn PragmaPackTable::scan(input : String) -> PragmaPackTable {
               }
             }
             PackPop =>
+              // A pop with an empty stack leaves the cap alone; clang warns
+              // under -Wignored-pragmas and keeps the value in effect rather
+              // than reverting to natural alignment.
               match stack.pop() {
                 Some(restored) => current = restored
-                None => current = None
+                None => ()
               }
+            PackPopSet(value) => {
+              match stack.pop() {
+                Some(restored) => current = restored
+                None => ()
+              }
+              current = Some(value)
+            }
           }
           events.push((end, current))
         }
@@ -143,6 +158,7 @@ priv enum PackAction {
   PackSet(Int?)
   PackPush(Int?)
   PackPop
+  PackPopSet(Int)
 }
 
 ///|
@@ -210,9 +226,16 @@ fn parse_pack_directive(input : String, start : Int, end : Int) -> PackAction? {
     return Some(PackPush(None))
   }
   if keyword is "pop" {
-    // `#pragma pack(pop, N)` also exists; the trailing value re-sets the cap
-    // after popping, but no supported header uses it, so treat it as a plain
-    // pop rather than guessing.
+    // `#pragma pack(pop, N)` pops and then sets the cap to `N`.
+    skip_spaces()
+    if i < end && input[i] is ',' {
+      i += 1
+      skip_spaces()
+      return match read_pack_number(input, i, end) {
+        Some(n) => Some(PackPopSet(n))
+        None => None
+      }
+    }
     return Some(PackPop)
   }
   None
@@ -226,6 +249,11 @@ fn read_pack_number(input : String, from : Int, end : Int) -> Int? {
   let mut value = 0
   let mut digits = 0
   while i < end && input[i] is ('0'..='9') {
+    // Bail before the multiply so a long digit run cannot wrap around into a
+    // value that passes the range and power-of-two checks below.
+    if value > 16 {
+      return None
+    }
     value = value * 10 + (input[i].to_int() - '0')
     digits += 1
     i += 1
