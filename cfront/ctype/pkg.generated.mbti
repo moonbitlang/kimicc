@@ -240,7 +240,7 @@ pub fn ObjectSizeFact::value(Self, Int64) -> Int
 pub(all) enum OffsetDesignator {
   OffsetField(String)
   OffsetIndex(Int64)
-} derive(Eq)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum Type {
   Void

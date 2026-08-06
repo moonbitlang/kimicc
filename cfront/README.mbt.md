@@ -1,7 +1,7 @@
 # bobzhang/cfront
 
 `cfront` is a reusable C front end written in MoonBit: it preprocesses C source,
-parses it into a public AST, and models C types. It carries no code generator and
+parses it into a public AST, models C types, and prints the AST back to C. It carries no code generator and
 no dependency on any backend, so it can be consumed on its own by tools that only
 need to read C.
 
@@ -16,9 +16,10 @@ extracted from, which is its main consumer.
 | `bobzhang/cfront/ctype` | The C type model plus ABI-flavored helpers, integer and floating constant folding, and the `__builtin_*` lowering tables. |
 | `bobzhang/cfront/preprocessor` | Expands `#include`, `#define`, conditionals and macros into ordinary C source. |
 | `bobzhang/cfront/parser` | Tokenizes and parses preprocessed C into the public AST. |
+| `bobzhang/cfront/printer` | Renders the AST back to canonical C source. |
 
 The dependency order is `target` and `ctype` at the bottom, then `parser`, then
-`preprocessor`.
+`preprocessor` and `printer`.
 
 ## Using It
 
@@ -50,7 +51,6 @@ These matter if you are building tooling rather than a compiler:
   error. Callers that need fault isolation have to parse in a separate process.
 - **The AST carries no source locations**, so diagnostics cannot point at source
   and no printer can preserve the original formatting.
-- **There is no printer.** The AST can be consumed but not rendered back to C.
 - **`preprocessor` uses a native C stub** for file existence and reading, so
   include resolution is native-only.
 - **`ctype` cannot size aggregates on its own.** `Type::size` aborts for

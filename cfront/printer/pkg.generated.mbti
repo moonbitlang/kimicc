@@ -1,0 +1,26 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/cfront/printer"
+
+import {
+  "bobzhang/cfront/ctype",
+  "bobzhang/cfront/parser",
+}
+
+// Values
+pub fn print_declaration(@ctype.Type, String) -> String
+
+pub fn print_expr(@parser.Expr) -> String
+
+pub fn print_program(@parser.Program) -> String
+
+pub fn print_stmt(@parser.Stmt) -> String
+
+pub fn print_type(@ctype.Type) -> String
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

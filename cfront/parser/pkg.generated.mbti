@@ -4,6 +4,7 @@ package "bobzhang/cfront/parser"
 import {
   "bobzhang/cfront/ctype",
   "bobzhang/cfront/target",
+  "moonbitlang/core/debug",
 }
 
 // Values
@@ -50,7 +51,7 @@ pub(all) enum Expr {
   DesignatedField(String, Expr)
   DesignatedIndex(Int64, Expr)
   DesignatedRange(Int64, Int64, Expr)
-} derive(Eq)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct FuncDecl {
   ret : @ctype.Type
@@ -66,7 +67,7 @@ pub(all) struct FuncDecl {
   is_constructor : Bool
   is_destructor : Bool
   body : Stmt?
-} derive(Eq)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct GlobalDecl {
   ty : @ctype.Type
@@ -78,12 +79,12 @@ pub(all) struct GlobalDecl {
   visibility : String?
   symbol_alias : String?
   section : String?
-} derive(Eq)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum GlobalInit {
   Scalar(Expr)
   Array(Array[Expr])
-} derive(Eq)
+} derive(Eq, @debug.Debug)
 
 pub struct Lexer {
   input : String
@@ -96,7 +97,7 @@ pub(all) struct Param {
   ty : @ctype.Type
   name : String
   bit_width : Int?
-} derive(Eq)
+} derive(Eq, @debug.Debug)
 
 pub struct Parser {
   lexer : Lexer
@@ -125,7 +126,7 @@ pub(all) struct Program {
   structs : Array[StructDecl]
   globals : Array[GlobalDecl]
   decls : Array[FuncDecl]
-}
+} derive(Eq, @debug.Debug)
 
 pub(all) enum Stmt {
   ExprStmt(Expr)
@@ -143,14 +144,14 @@ pub(all) enum Stmt {
   For(Stmt?, Expr, Expr?, Stmt)
   DoWhile(Expr, Stmt)
   ComputedGoto(Expr)
-} derive(Eq)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct StructDecl {
   name : String
   fields : Array[Param]
   is_union : Bool
   pack : Int?
-} derive(Eq)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum Token {
   EOF

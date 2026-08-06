@@ -39,7 +39,7 @@ pub(all) enum Expr {
   DesignatedField(String, Expr)
   DesignatedIndex(Int64, Expr)
   DesignatedRange(Int64, Int64, Expr)
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Compatibility alias for parser-neutral offsetof designators.
@@ -67,7 +67,7 @@ pub(all) enum Stmt {
   For(Stmt?, Expr, Expr?, Stmt)
   DoWhile(Expr, Stmt)
   ComputedGoto(Expr)
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Function parameter or aggregate field.
@@ -77,7 +77,7 @@ pub(all) struct Param {
   ty : Type
   name : String
   bit_width : Int?
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Struct or union declaration.
@@ -92,7 +92,7 @@ pub(all) struct StructDecl {
   fields : Array[Param]
   is_union : Bool
   pack : Int?
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Caps `natural` alignment by an aggregate's `pack` value.
@@ -125,7 +125,7 @@ pub(all) struct FuncDecl {
   is_constructor : Bool
   is_destructor : Bool
   body : Stmt?
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Global initializer representation.
@@ -135,7 +135,7 @@ pub(all) struct FuncDecl {
 pub(all) enum GlobalInit {
   Scalar(Expr)
   Array(Array[Expr])
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Global variable declaration or definition.
@@ -151,7 +151,7 @@ pub(all) struct GlobalDecl {
   visibility : String?
   symbol_alias : String?
   section : String?
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 /// Parsed C translation unit.
@@ -162,4 +162,4 @@ pub(all) struct Program {
   structs : Array[StructDecl]
   globals : Array[GlobalDecl]
   decls : Array[FuncDecl]
-}
+} derive(Eq, Debug)
