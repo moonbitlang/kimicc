@@ -79,6 +79,27 @@ Listed here only so they are not confused with the above.
 - `int * _Atomic pa = &target;` is dropped from the program entirely.
 - `1e400` lexes to `0.0` rather than infinity.
 
+## Settled decisions
+
+**The AST keeps the surface form; MIR desugars.** Where the parser currently
+lowers on the way in -- aggregate initializers, case labels, multi-declarator
+grouping, hoisting static locals out of function bodies -- the AST should record
+what was written, and the lowering moves into MIR. This is the principle behind
+Step 4, and it also answers the question Step 1 stopped at: a hoisted static
+local belongs where it was written, inside the function, and MIR lifts it.
+
+The consequence worth being explicit about is that the code generators consume
+the lowered shapes today, so each construct moved has to grow a lowering step in
+MIR at the same time. That is why Step 4 is sequenced last among the mechanical
+changes despite being the one that matters most for the printer.
+
+**Miscompiles are fixed on their own, not as a side effect.** Two items below
+are live compiler bugs rather than fidelity gaps: block-scoped tags collide
+because they are hoisted into one flat table, and literal suffixes are dropped
+so `sizeof(1L)` is already wrong before any printing happens. They get their own
+change, ahead of the fidelity steps, because they are wrong today for every user
+of the compiler and not just for round-tripping.
+
 ## Plan
 
 Ordered by value per unit of risk. Each step is independently shippable.
