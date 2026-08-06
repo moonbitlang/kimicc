@@ -401,7 +401,7 @@ test "mir owns aggregate declaration metadata" {
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   inspect(mir.aggregate_decls.length(), content="2")
   inspect(mir.aggregate_decls[0].name, content="S")
-  inspect(mir.aggregate_decls[0].is_packed, content="true")
+  debug_inspect(mir.aggregate_decls[0].pack, content="Some(1)")
   inspect(mir.aggregate_decls[0].is_union, content="false")
   inspect(mir.aggregate_decls[0].fields[0].name, content="c")
   inspect(mir.aggregate_decls[0].fields[0].ty, content="SChar")

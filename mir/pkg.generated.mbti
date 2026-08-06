@@ -24,7 +24,7 @@ pub(all) struct AggregateLayout {
   size : Int
   align : Int
   is_union : Bool
-  is_packed : Bool
+  pack : Int?
 } derive(Eq)
 
 pub(all) struct FieldLayout {
@@ -48,7 +48,7 @@ pub(all) struct MirAggregateDecl {
   name : String
   fields : Array[MirAggregateField]
   is_union : Bool
-  is_packed : Bool
+  pack : Int?
 } derive(Eq)
 
 pub(all) struct MirAggregateField {

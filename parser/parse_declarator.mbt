@@ -442,6 +442,7 @@ fn is_extended_float_type_name(name : String) -> Bool {
 ///|
 fn Parser::parse_struct_type_specifier(self : Parser) -> Type {
   self.expect(Struct)
+  let pragma_pack = self.current_pack()
   let leading_packed = self.skip_attributes_packed()
   match self.token {
     Ident(n) => {
@@ -454,7 +455,8 @@ fn Parser::parse_struct_type_specifier(self : Parser) -> Type {
         let is_packed = leading_packed ||
           after_name_packed ||
           self.skip_attributes_packed()
-        let decl = { name: n, fields, is_union: false, is_packed }
+        let pack = combine_pack(is_packed, pragma_pack)
+        let decl = { name: n, fields, is_union: false, pack }
         self.anonymous_structs.push(decl)
         self.struct_decls[n] = decl
         Struct(n)
@@ -467,9 +469,10 @@ fn Parser::parse_struct_type_specifier(self : Parser) -> Type {
       let fields = self.parse_struct_body()
       self.expect(RBrace)
       let is_packed = leading_packed || self.skip_attributes_packed()
+      let pack = combine_pack(is_packed, pragma_pack)
       let name = "__anon_struct_" + self.anon_counter.to_string()
       self.anon_counter += 1
-      let decl = { name, fields, is_union: false, is_packed }
+      let decl = { name, fields, is_union: false, pack }
       self.anonymous_structs.push(decl)
       self.struct_decls[name] = decl
       Struct(name)
@@ -481,6 +484,7 @@ fn Parser::parse_struct_type_specifier(self : Parser) -> Type {
 ///|
 fn Parser::parse_union_type_specifier(self : Parser) -> Type {
   self.expect(Union)
+  let pragma_pack = self.current_pack()
   let leading_packed = self.skip_attributes_packed()
   match self.token {
     Ident(n) => {
@@ -493,7 +497,8 @@ fn Parser::parse_union_type_specifier(self : Parser) -> Type {
         let is_packed = leading_packed ||
           after_name_packed ||
           self.skip_attributes_packed()
-        let decl = { name: n, fields, is_union: true, is_packed }
+        let pack = combine_pack(is_packed, pragma_pack)
+        let decl = { name: n, fields, is_union: true, pack }
         self.anonymous_structs.push(decl)
         self.struct_decls[n] = decl
         Union(n)
@@ -506,9 +511,10 @@ fn Parser::parse_union_type_specifier(self : Parser) -> Type {
       let fields = self.parse_struct_body()
       self.expect(RBrace)
       let is_packed = leading_packed || self.skip_attributes_packed()
+      let pack = combine_pack(is_packed, pragma_pack)
       let name = "__anon_union_" + self.anon_counter.to_string()
       self.anon_counter += 1
-      let decl = { name, fields, is_union: true, is_packed }
+      let decl = { name, fields, is_union: true, pack }
       self.anonymous_structs.push(decl)
       self.struct_decls[name] = decl
       Union(name)

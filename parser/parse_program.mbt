@@ -101,6 +101,7 @@ fn Parser::parse_program(self : Parser) -> Program {
         let saved_token = self.token
         let is_union = self.token == Union
         self.advance() // past struct/union
+        let pragma_pack = self.current_pack()
         let leading_packed = self.skip_attributes_packed()
         match self.token {
           Ident(name) => {
@@ -114,7 +115,8 @@ fn Parser::parse_program(self : Parser) -> Program {
               let is_packed = leading_packed ||
                 after_name_packed ||
                 self.skip_attributes_packed()
-              let decl = { name, fields, is_union, is_packed }
+              let pack = combine_pack(is_packed, pragma_pack)
+              let decl = { name, fields, is_union, pack }
               structs.push(decl)
               self.struct_decls[name] = decl
               // Handle struct definition followed by variable declarations: struct Foo { ... } *ptr;

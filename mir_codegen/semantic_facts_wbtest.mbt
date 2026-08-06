@@ -7,7 +7,7 @@ fn semantic_test_aggregate_decl() -> @mir.MirAggregateDecl {
       { name: "tail", ty: Array(SInt, 2), bit_width: None },
     ],
     is_union: false,
-    is_packed: false,
+    pack: None,
   }
 }
 
@@ -35,7 +35,7 @@ fn semantic_test_aggregate_layout() -> @mir.AggregateLayout {
     size: 12,
     align: 4,
     is_union: false,
-    is_packed: false,
+    pack: None,
   }
 }
 
