@@ -107,6 +107,9 @@ pub struct Parser {
   typedefs : Map[String, @ctype.Type]
   aggregates : Array[StructDecl]
   struct_decls : Map[String, StructDecl]
+  mut tag_aliases : Map[String, String]
+  used_tag_names : Map[String, Bool]
+  mut block_depth : Int
   local_func_decls : Array[FuncDecl]
   mut anon_counter : Int
   enum_constants : Map[String, Int64]

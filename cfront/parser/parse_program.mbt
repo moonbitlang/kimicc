@@ -116,6 +116,7 @@ fn Parser::parse_program(self : Parser) -> Program {
                 self.skip_attributes_packed()
               let pack = combine_pack(is_packed, pragma_pack)
               let decl = { name, fields, is_union, pack }
+              self.reserve_tag(name)
               self.aggregates.push(decl)
               self.struct_decls[name] = decl
               // Handle struct definition followed by variable declarations: struct Foo { ... } *ptr;

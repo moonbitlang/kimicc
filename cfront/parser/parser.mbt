@@ -16,6 +16,12 @@ pub struct Parser {
   // ahead of its first use.
   aggregates : Array[StructDecl]
   struct_decls : Map[String, StructDecl]
+  // Tag scoping: `tag_aliases` is the lexical view, saved and restored around
+  // each block; `used_tag_names` is global, so a block-scoped tag never reuses
+  // a name. See tag_scope.mbt.
+  mut tag_aliases : Map[String, String]
+  used_tag_names : Map[String, Bool]
+  mut block_depth : Int
   local_func_decls : Array[FuncDecl]
   mut anon_counter : Int
   enum_constants : Map[String, Int64]
@@ -47,6 +53,9 @@ pub fn Parser::new_for_target(lexer : Lexer, target : @target.Target) -> Parser 
     typedefs: {},
     aggregates: [],
     struct_decls: {},
+    tag_aliases: Map([]),
+    used_tag_names: Map([]),
+    block_depth: 0,
     local_func_decls: [],
     anon_counter: 0,
     enum_constants: {},
