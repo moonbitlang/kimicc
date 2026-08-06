@@ -1404,6 +1404,137 @@ fn deterministic_bitfield_differential_source(case_index : Int) -> String {
 }
 
 ///|
+/// Builds a program whose struct layouts only agree with clang if `#pragma
+/// pack` is honored: field offsets, aggregate sizes, `push`/`pop` nesting, and
+/// reads and writes through the resulting unaligned members.
+fn deterministic_pragma_pack_differential_source(case_index : Int) -> String {
+  let pack = [1, 2, 4, 8][case_index % 4]
+  let seed = case_index * 31 + 5
+  let source = StringBuilder::new()
+  source.write_string("#include <stdio.h>\n")
+  source.write_string("#pragma pack(")
+  source.write_string(pack.to_string())
+  source.write_string(")\n")
+  source.write_string(
+    "typedef struct Packed { char a; int b; char c; long long d; short e; } Packed;\n",
+  )
+  source.write_string("#pragma pack()\n")
+  source.write_string(
+    "typedef struct Natural { char a; int b; char c; long long d; short e; } Natural;\n",
+  )
+  source.write_string("#pragma pack(push, 1)\n")
+  source.write_string(
+    "typedef union Tight { char c; long long v; double d; } Tight;\n",
+  )
+  source.write_string(
+    "typedef struct TightBits { char lead; unsigned x : 5; unsigned y : 11; int tail; } TightBits;\n",
+  )
+  source.write_string("#pragma pack(push, 4)\n")
+  source.write_string(
+    "typedef struct Inner4 { char a; long long d; } Inner4;\n",
+  )
+  source.write_string("#pragma pack(pop)\n")
+  source.write_string(
+    "typedef struct BackToTight { char a; long long d; } BackToTight;\n",
+  )
+  source.write_string("#pragma pack(pop)\n")
+  source.write_string(
+    "typedef struct AfterAllPops { char a; long long d; } AfterAllPops;\n",
+  )
+  source.write_string("static unsigned long off(void *base, void *field) {\n")
+  source.write_string(
+    "  return (unsigned long)((char *)field - (char *)base);\n",
+  )
+  source.write_string("}\n")
+  source.write_string("int main(void) {\n")
+  source.write_string("  Packed p;\n")
+  source.write_string("  TightBits t;\n")
+  source.write_string("  Tight u;\n")
+  source.write_string("  long long acc = 0;\n")
+  source.write_string("  p.a = (char)(")
+  source.write_string(seed.to_string())
+  source.write_string(" & 127);\n")
+  source.write_string("  p.b = ")
+  source.write_string(seed.to_string())
+  source.write_string(" * 7 + 3;\n")
+  source.write_string("  p.c = (char)((")
+  source.write_string(seed.to_string())
+  source.write_string(" >> 2) & 63);\n")
+  source.write_string("  p.d = (long long)")
+  source.write_string(seed.to_string())
+  source.write_string(" * 1000003LL + 17LL;\n")
+  source.write_string("  p.e = (short)((")
+  source.write_string(seed.to_string())
+  source.write_string(" * 13) & 32767);\n")
+  source.write_string("  acc += p.a + p.b + p.c + p.d + p.e;\n")
+  source.write_string("  p.d = p.d * 3LL - (long long)p.b;\n")
+  source.write_string("  acc += p.d;\n")
+  source.write_string("  t.lead = (char)(")
+  source.write_string(seed.to_string())
+  source.write_string(" & 31);\n")
+  source.write_string("  t.x = (unsigned)(")
+  source.write_string(seed.to_string())
+  source.write_string(" & 31u);\n")
+  source.write_string("  t.y = (unsigned)((")
+  source.write_string(seed.to_string())
+  source.write_string(" * 5) & 2047u);\n")
+  source.write_string("  t.tail = ")
+  source.write_string(seed.to_string())
+  source.write_string(" * 11 - 4;\n")
+  source.write_string("  acc += t.lead + t.x + t.y + t.tail;\n")
+  source.write_string("  u.v = (long long)")
+  source.write_string(seed.to_string())
+  source.write_string(" * 65537LL;\n")
+  source.write_string("  acc += u.v + u.c;\n")
+  source.write_string(
+    "  printf(\"case=%d pack=%d packed=%lu natural=%lu tight=%lu bits=%lu inner4=%lu back=%lu after=%lu ob=%lu oc=%lu od=%lu oe=%lu acc=%lld\\n\",\n",
+  )
+  source.write_string("    ")
+  source.write_string(case_index.to_string())
+  source.write_string(", ")
+  source.write_string(pack.to_string())
+  source.write_string(",\n")
+  source.write_string(
+    "    (unsigned long)sizeof(Packed), (unsigned long)sizeof(Natural),\n",
+  )
+  source.write_string(
+    "    (unsigned long)sizeof(Tight), (unsigned long)sizeof(TightBits),\n",
+  )
+  source.write_string(
+    "    (unsigned long)sizeof(Inner4), (unsigned long)sizeof(BackToTight),\n",
+  )
+  source.write_string("    (unsigned long)sizeof(AfterAllPops),\n")
+  source.write_string(
+    "    off(&p, &p.b), off(&p, &p.c), off(&p, &p.d), off(&p, &p.e), acc);\n",
+  )
+  source.write_string("  return (int)((unsigned long long)acc & 127u);\n")
+  source.write_string("}\n")
+  source.to_string()
+}
+
+///|
+async test "e2e deterministic pragma pack differential corpus matches clang" {
+  for case_index in [0, 1, 2, 3, 4, 5] {
+    let result = run_source_against_clang_baseline(
+      deterministic_pragma_pack_differential_source(case_index),
+      "pragma_pack_differential_" + case_index.to_string(),
+    )
+    assert_true(result.output.contains("case=" + case_index.to_string()))
+  }
+}
+
+///|
+async test "e2e direct Mach-O pragma pack differential corpus matches clang" {
+  for case_index in [0, 1, 2, 3] {
+    let result = run_source_direct_object_against_clang_baseline(
+      deterministic_pragma_pack_differential_source(case_index),
+      "direct_pragma_pack_differential_" + case_index.to_string(),
+    )
+    assert_true(result.output.contains("case=" + case_index.to_string()))
+  }
+}
+
+///|
 async test "e2e deterministic bitfield differential corpus matches clang" {
   for case_index in [0, 1, 2, 3, 4, 5, 6, 7] {
     let result = run_source_against_clang_baseline(

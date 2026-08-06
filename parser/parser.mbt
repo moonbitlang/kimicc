@@ -7,6 +7,7 @@
 pub struct Parser {
   lexer : Lexer
   target : @target.Target
+  pragma_pack : PragmaPackTable
   mut token : Token
   typedefs : Map[String, Type]
   anonymous_structs : Array[StructDecl]
@@ -37,6 +38,7 @@ pub fn Parser::new_for_target(lexer : Lexer, target : @target.Target) -> Parser 
   let p = {
     lexer,
     target,
+    pragma_pack: PragmaPackTable::scan(lexer.input),
     token: EOF,
     typedefs: {},
     anonymous_structs: [],
