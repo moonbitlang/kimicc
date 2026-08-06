@@ -18,7 +18,7 @@ Compared to the parser AST, MIR is:
 
 ## Importing
 
-```moonbit nocheck
+```
 import {
   "bobzhang/kimicc/mir",
   "bobzhang/kimicc/parser",

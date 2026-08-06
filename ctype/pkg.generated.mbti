@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "bobzhang/kimicc/ctype"
 
+import {
+  "moonbitlang/core/debug",
+}
+
 // Values
 pub fn binary_expr_result_type(String, Type, Type, Bool, Bool) -> Type
 
@@ -265,7 +269,7 @@ pub(all) enum Type {
   Array(Type, Int)
   Atomic(Type)
   Aligned(Type, Int)
-} derive(Eq)
+} derive(Eq, @debug.Debug)
 pub fn Type::align(Self) -> Int
 pub fn Type::array_element(Self) -> Self?
 pub fn Type::atomic_target(Self) -> Self
@@ -297,4 +301,3 @@ pub impl Show for Type
 // Type aliases
 
 // Traits
-

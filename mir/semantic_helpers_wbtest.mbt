@@ -214,7 +214,7 @@ test "mir internal expression helpers fold constants with target layout" {
     scope,
     8L,
   )
-  let local_types : Map[String, @ctype.Type] = {}
+  let local_types : Map[String, @ctype.Type] = Map([])
   local_types["local_x"] = SInt
   local_types["local_buf"] = Array(SChar, 16)
   local_types["local_s"] = Struct("S")

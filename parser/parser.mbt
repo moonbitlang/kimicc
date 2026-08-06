@@ -63,7 +63,7 @@ fn Parser::advance(self : Parser) -> Unit {
 ///|
 fn Parser::expect(self : Parser, t : Token) -> Unit {
   if self.token != t {
-    abort("Expected " + t.to_string() + " but got " + self.token.to_string())
+    abort("Expected \{t} but got \{self.token}")
   }
   self.advance()
 }

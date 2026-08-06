@@ -11,7 +11,7 @@ The parser expects preprocessed source — run [`@preprocessor`](../preprocessor
 
 ## Importing
 
-```moonbit nocheck
+```
 import {
   "bobzhang/kimicc/parser",
   "bobzhang/kimicc/ctype",

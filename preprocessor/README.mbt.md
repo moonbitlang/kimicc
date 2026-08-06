@@ -7,7 +7,7 @@ before parsing.
 
 ## Importing
 
-```moonbit nocheck
+```
 import {
   "bobzhang/kimicc/preprocessor"
 }

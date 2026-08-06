@@ -176,7 +176,7 @@ coordinates used by `__FILE__` and `__LINE__`; GCC-style linemarkers such as
 
 Import the preprocessor package from `moon.pkg`:
 
-```moonbit nocheck
+```
 import {
   "bobzhang/kimicc/preprocessor"
 }
@@ -202,7 +202,7 @@ also needs the main file and resolved include paths read during preprocessing.
 
 Import the parser package from `moon.pkg`:
 
-```moonbit nocheck
+```
 import {
   "bobzhang/kimicc/parser"
 }
@@ -278,7 +278,7 @@ understand.
 
 Import the parser and codegen packages:
 
-```moonbit nocheck
+```
 import {
   "bobzhang/kimicc/parser",
   "bobzhang/kimicc/codegen",
@@ -361,7 +361,7 @@ so C functions normally appear with a leading underscore, for example
 The JIT package is native-only and uses a small C FFI stub. Add it to
 `moon.pkg` only for native builds:
 
-```moonbit nocheck
+```
 import {
   "bobzhang/kimicc/jit"
 }

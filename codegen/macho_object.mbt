@@ -2205,7 +2205,7 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
   let sections : Array[ObjectSection] = []
   let globals : Array[String] = []
   let defined_symbols : Array[String] = []
-  let symbols : Map[String, SymbolLocation] = {}
+  let symbols : Map[String, SymbolLocation] = Map([])
   let pending : Array[PendingBranch] = []
   let pending_cbz : Array[PendingCbz] = []
   let pending_cond : Array[PendingCondBranch] = []
@@ -3204,7 +3204,7 @@ fn build_symbol_layout(obj : AssembledObject) -> SymbolLayout {
     }
   }
   let entries : Array[SymbolEntry] = []
-  let indexes : Map[String, Int] = {}
+  let indexes : Map[String, Int] = Map([])
   for name in locals {
     indexes[name] = entries.length()
     let loc = obj.symbols[name]
@@ -3444,7 +3444,7 @@ fn layout_jit_sections(
     }
   }
   cursor = align_int(cursor, 4)
-  let branch_stub_offsets : Map[String, Int] = {}
+  let branch_stub_offsets : Map[String, Int] = Map([])
   for symbol in external_branch_symbols {
     branch_stub_offsets[symbol] = cursor
     cursor = cursor + 16
@@ -3461,7 +3461,7 @@ fn layout_jit_sections(
     }
   }
   cursor = align_int(cursor, 8)
-  let got_offsets : Map[String, Int] = {}
+  let got_offsets : Map[String, Int] = Map([])
   for symbol in got_symbols {
     got_offsets[symbol] = cursor
     cursor = cursor + 8

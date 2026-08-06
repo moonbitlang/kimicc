@@ -16,8 +16,8 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
       self.sret_scratch_size = 0
       self.pending_sret_offset = -1
       // Allocate space for params
-      let param_offsets : Map[String, Int] = {}
-      let param_types : Map[String, @parser.Type] = {}
+      let param_offsets : Map[String, Int] = Map([])
+      let param_types : Map[String, @parser.Type] = Map([])
       let mut param_stack_end = 0
       if self.is_indirect_aggregate(decl.ret) {
         self.sret_dest_offset = self.alloc_local(

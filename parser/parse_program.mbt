@@ -165,7 +165,7 @@ fn Parser::parse_program(self : Parser) -> Program {
       }
     }
   }
-  let known_decls : Map[String, Bool] = {}
+  let known_decls : Map[String, Bool] = Map([])
   for decl in decls {
     known_decls[decl.name] = true
   }

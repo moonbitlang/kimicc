@@ -25,4 +25,3 @@ pub fn generate_assembly_from_mir_strict(@mir.Program) -> Result[String, String]
 // Type aliases
 
 // Traits
-

@@ -7337,8 +7337,8 @@ fn X64Codegen::emit_function(
       self.continue_label = None
       self.emitted_labels = {}
       self.defined_labels = {}
-      let param_offsets : Map[String, Int] = {}
-      let param_types : Map[String, @parser.Type] = {}
+      let param_offsets : Map[String, Int] = Map([])
+      let param_types : Map[String, @parser.Type] = Map([])
       if self.is_memory_aggregate(decl.ret) {
         self.sret_dest_offset = self.alloc_local(
           "__kimicc_sret_dest",
@@ -8690,7 +8690,7 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
   let parser_globals = merge_global_decls(
     append_codegen_file_scope_compound_literal_globals(prog.globals),
   )
-  let parser_global_fallbacks : Map[String, @parser.GlobalDecl] = {}
+  let parser_global_fallbacks : Map[String, @parser.GlobalDecl] = Map([])
   for g in parser_globals {
     parser_global_fallbacks[g.name] = g
   }

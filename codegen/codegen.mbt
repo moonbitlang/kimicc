@@ -469,7 +469,7 @@ fn append_codegen_file_scope_compound_literal_globals(
   source_globals : Array[@parser.GlobalDecl],
 ) -> Array[@parser.GlobalDecl] {
   let result = source_globals.copy()
-  let seen : Map[Int, Bool] = {}
+  let seen : Map[Int, Bool] = Map([])
   let generated : Array[@parser.GlobalDecl] = []
   for global in source_globals {
     match global.init {
@@ -1641,13 +1641,13 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   }
   // Precompute function return types, variadic flags, and param counts
   self.register_parser_function_decls(prog.decls)
-  let inline_decls : Map[String, @parser.FuncDecl] = {}
+  let inline_decls : Map[String, @parser.FuncDecl] = Map([])
   for decl in prog.decls {
     if decl.is_inline {
       inline_decls[decl.name] = decl
     }
   }
-  let needed_inline : Map[String, Bool] = {}
+  let needed_inline : Map[String, Bool] = Map([])
   for decl in prog.decls {
     if !decl.is_inline {
       match decl.body {
@@ -1660,7 +1660,7 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   let parser_globals = merge_global_decls(
     append_codegen_file_scope_compound_literal_globals(prog.globals),
   )
-  let parser_global_fallbacks : Map[String, @parser.GlobalDecl] = {}
+  let parser_global_fallbacks : Map[String, @parser.GlobalDecl] = Map([])
   for g in parser_globals {
     parser_global_fallbacks[g.name] = g
   }
@@ -1668,7 +1668,7 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   self.register_parser_global_decls(parser_globals)
   let codegen_globals = codegen_global_decls_from_parser(parser_globals)
   let codegen_func_decls = codegen_func_decls_from_parser(prog.decls)
-  let func_label_maps : Map[String, Map[String, String]] = {}
+  let func_label_maps : Map[String, Map[String, String]] = Map([])
   for decl in prog.decls {
     if decl.is_inline && !needed_inline.contains(decl.name) {
       continue

@@ -17,7 +17,7 @@ experimental System V x86-64 backend.
 
 ## Importing
 
-```moonbit nocheck
+```
 import {
   "bobzhang/kimicc/target"
 }

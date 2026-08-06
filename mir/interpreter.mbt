@@ -438,7 +438,7 @@ fn interpreter_should_replace_global_decl(
 fn interpreter_merge_parser_globals(
   globals : Array[@parser.GlobalDecl],
 ) -> Map[String, @parser.GlobalDecl] {
-  let merged : Map[String, @parser.GlobalDecl] = {}
+  let merged : Map[String, @parser.GlobalDecl] = Map([])
   for g in globals {
     if !merged.contains(g.name) ||
       interpreter_should_replace_global_decl(merged[g.name], g) {
@@ -450,7 +450,7 @@ fn interpreter_merge_parser_globals(
 
 ///|
 fn Interpreter::init_globals(self : Interpreter) -> Unit {
-  let seen : Map[String, Bool] = {}
+  let seen : Map[String, Bool] = Map([])
   let parser_globals = interpreter_merge_parser_globals(
     self.program.source.globals,
   )
