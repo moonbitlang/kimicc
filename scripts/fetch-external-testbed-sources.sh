@@ -95,6 +95,29 @@ fetch_tarball() {
   echo "${name} sources ready: ${final}"
 }
 
+# Retried for the same reason as in fetch-external-parser-fixtures.sh: a
+# transient fetch failure should not fail the run.
+testbed_fetch_attempts="${FIXTURE_FETCH_ATTEMPTS:-3}"
+
+retry_fetch() {
+  local description="$1"
+  shift
+  local attempt=1
+  while true; do
+    if "$@"; then
+      return 0
+    fi
+    if [ "${attempt}" -ge "${testbed_fetch_attempts}" ]; then
+      echo "${description} failed after ${attempt} attempt(s)" >&2
+      return 1
+    fi
+    local delay=$((attempt * 5))
+    echo "${description} failed (attempt ${attempt}/${testbed_fetch_attempts}); retrying in ${delay}s" >&2
+    sleep "${delay}"
+    attempt=$((attempt + 1))
+  done
+}
+
 fetch_ref() {
   local url="$1"
   local ref="$2"
@@ -102,11 +125,20 @@ fetch_ref() {
 
   require_tool git
 
+  # The refs are pinned, so an existing checkout at the same commit is still
+  # valid and needs no network at all.
+  if [ -d "${dir}/.git" ] &&
+    [ "$(git -C "${dir}" rev-parse HEAD 2>/dev/null || true)" = "${ref}" ]; then
+    echo "reusing ${dir}, already at ${ref}" >&2
+    return 0
+  fi
+
   rm -rf "${dir}"
-  git init "${dir}"
+  git init -q "${dir}"
   git -C "${dir}" remote add origin "${url}"
-  git -C "${dir}" fetch --depth=1 origin "${ref}"
-  git -C "${dir}" checkout --detach FETCH_HEAD
+  retry_fetch "fetch of ${ref}" \
+    git -C "${dir}" fetch --quiet --depth=1 origin "${ref}"
+  git -C "${dir}" checkout -q --detach FETCH_HEAD
   test "$(git -C "${dir}" rev-parse HEAD)" = "${ref}"
 }
 
