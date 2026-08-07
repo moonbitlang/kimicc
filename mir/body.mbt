@@ -381,7 +381,7 @@ fn Program::lower_mir_post_step(
 ///|
 fn mir_body_reusable_addr_operand(expr : @parser.Expr) -> Bool {
   match expr {
-    Number(_, _) | Var(_) => true
+    Number(_, _, _) | Var(_) => true
     Cast(_, inner) => mir_body_reusable_addr_operand(inner)
     _ => false
   }
@@ -418,7 +418,7 @@ fn mir_body_floating_update_op(op : String) -> Bool {
 ///|
 fn mir_body_side_effect_free_expr(expr : @parser.Expr) -> Bool {
   match expr {
-    Number(_, _)
+    Number(_, _, _)
     | FloatLiteral(_, _)
     | String(_)
     | Var(_)
@@ -521,7 +521,7 @@ fn Program::lower_mir_array_init_stores_impl(
     return None
   }
   let items : Array[@parser.Expr] = match init {
-    Number(value, _) => if value == 0L { [] } else { return None }
+    Number(value, _, _) => if value == 0L { [] } else { return None }
     Array(values) | CompoundLiteral(_, values, _) => values
     String(_) => []
     _ => return None
@@ -1086,7 +1086,7 @@ fn Program::lower_mir_struct_init_stores_impl(
     None => ()
   }
   match init {
-    Number(_, _)
+    Number(_, _, _)
     | Array(_)
     | CompoundLiteral(_, _, _)
     | DesignatedField(_, _) => ()
@@ -1113,7 +1113,7 @@ fn Program::lower_mir_struct_init_stores_impl(
     }
   }
   let items : Array[@parser.Expr] = match init {
-    Number(value, _) => if value == 0L { [] } else { return None }
+    Number(value, _, _) => if value == 0L { [] } else { return None }
     Array(values) | CompoundLiteral(_, values, _) => values
     DesignatedField(_, _) => [init]
     _ => return None
@@ -1159,7 +1159,7 @@ fn Program::lower_mir_struct_init_stores_impl(
     let field = decl.fields[field_index]
     if !mir_body_scalar_type(field.ty) {
       match value_expr {
-        Number(0, _) => continue
+        Number(0, _, _) => continue
         Array(_)
         | CompoundLiteral(_, _, _)
         | DesignatedField(_, _)
@@ -3003,7 +3003,13 @@ fn Program::lower_mir_prefix_step(
   ctx : BodyLowerContext,
 ) -> MirValue? {
   match
-    self.lower_mir_bitfield_compound_update(expr, op, Number(1L, SInt), ty, ctx) {
+    self.lower_mir_bitfield_compound_update(
+      expr,
+      op,
+      @parser.int_literal(1L, SInt),
+      ty,
+      ctx,
+    ) {
     Some(value) => return Some(value)
     None => ()
   }
@@ -3110,7 +3116,7 @@ fn Program::lower_mir_call_arg(
         Some(addr) => Some(MirAggregateArg(addr, ty))
         None => {
           match arg {
-            Number(_, _) | Array(_) | CompoundLiteral(_, _, _) => {
+            Number(_, _, _) | Array(_) | CompoundLiteral(_, _, _) => {
               let temp = ctx.declare_temp(ty)
               let stores = match
                 self.lower_mir_struct_init_stores(
@@ -3897,7 +3903,7 @@ fn Program::lower_mir_expr(
   let scope = ctx.scope()
   let ty = self.expr_type(expr, scope)
   match expr {
-    Number(value, _) => Some(MirConst(value, ty))
+    Number(value, _, _) => Some(MirConst(value, ty))
     FloatLiteral(text, _) =>
       Some(
         MirConst(
@@ -4577,7 +4583,7 @@ fn Program::lower_mir_aggregate_branch_copy_stores(
     }
     None =>
       match expr {
-        Number(_, _) | Array(_) | CompoundLiteral(_, _, _) =>
+        Number(_, _, _) | Array(_) | CompoundLiteral(_, _, _) =>
           self.lower_mir_struct_init_stores(dest_addr, dest_ty, expr, ctx)
         _ =>
           match self.lower_mir_expr_for_target_type(dest_ty, expr, ctx) {

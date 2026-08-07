@@ -4,7 +4,7 @@
 /// ```mbt check
 /// test {
 ///   inspect(
-///     @printer.print_stmt(Return(Some(Number(0, SInt)))),
+///     @printer.print_stmt(Return(Some(@parser.int_literal(0, SInt)))),
 ///     content="return 0;",
 ///   )
 /// }

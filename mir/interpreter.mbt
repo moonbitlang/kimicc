@@ -395,7 +395,7 @@ fn Interpreter::init_local_string_array(
               zero_byte_string(length)
             }
           }
-        Some(Number(_, _)) => zero_byte_string(length)
+        Some(Number(_, _, _)) => zero_byte_string(length)
         None => zero_byte_string(length)
         Some(expr) => {
           self.eval_ignored_expr_side_effects(frame, expr)
@@ -2593,7 +2593,7 @@ fn Interpreter::eval_expr(
   }
   let scope = frame.scope()
   match expr {
-    Number(value, _) => value
+    Number(value, _, _) => value
     FloatLiteral(_, _) => {
       self.fail("unsupported MIR interpreter floating expression")
       0L

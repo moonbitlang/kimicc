@@ -546,7 +546,10 @@ fn Program::lower_mir_global_braced_scalar_init_for_type(
   exprs : Array[@parser.Expr],
 ) -> MirGlobalInit {
   if exprs.length() == 0 {
-    return self.lower_mir_global_scalar_init_for_type(ty, Number(0, SInt))
+    return self.lower_mir_global_scalar_init_for_type(
+      ty,
+      @parser.int_literal(0, SInt),
+    )
   }
   match exprs[0] {
     Array(nested) =>
@@ -761,7 +764,7 @@ fn Program::lower_mir_global_scalar_init(
   expr : @parser.Expr,
 ) -> MirGlobalInit {
   match expr {
-    Number(n, _) => MirGlobalScalarInt(n)
+    Number(n, _, _) => MirGlobalScalarInt(n)
     String(s) => MirGlobalString(s)
     LabelAddr(name) => MirGlobalLabelAddr(name)
     DesignatedField(_, _) | DesignatedIndex(_, _) | DesignatedRange(_, _, _) =>
@@ -894,7 +897,7 @@ fn Program::collect_mir_file_scope_compound_literal_globals_expr(
         )
       }
     SizeofExpr(_) | AlignofExpr(_) => ()
-    Number(_, _)
+    Number(_, _, _)
     | FloatLiteral(_, _)
     | String(_)
     | Var(_)
@@ -2034,7 +2037,7 @@ fn Program::global_expr_type(
   expr : @parser.Expr,
 ) -> @ctype.Type {
   match expr {
-    Number(_, ty) => ty
+    Number(_, _, ty) => ty
     // The AST records a `float`-suffixed literal's type, but the code
     // generators cannot yet hold a single-precision constant, so type inference
     // still reports `double` here. Flipping this to `ty` makes every float
@@ -2105,7 +2108,7 @@ fn Program::expr_type(
   scope : Scope,
 ) -> @ctype.Type {
   match expr {
-    Number(_, ty) => ty
+    Number(_, _, ty) => ty
     // The AST records a `float`-suffixed literal's type, but the code
     // generators cannot yet hold a single-precision constant, so type inference
     // still reports `double` here. Flipping this to `ty` makes every float
@@ -2129,7 +2132,7 @@ fn Program::expr_type(
       let rhs_ty = self.expr_type(rhs, scope)
       let force_wide_shift = if op == "<<" || op == ">>" {
         match (lhs, rhs) {
-          (Number(_, _), Number(shift, _)) => shift >= 32L
+          (Number(_, _, _), Number(shift, _, _)) => shift >= 32L
           _ => false
         }
       } else {
@@ -2468,7 +2471,7 @@ fn Program::fold_const_int(
   scope : Scope,
 ) -> @ctype.IntegerConstant? {
   match expr {
-    Number(n, _) =>
+    Number(n, _, _) =>
       Some(@ctype.integer_constant(n, @ctype.integer_constant_token_type(n)))
     Binary("+", a, b) =>
       match (self.fold_const_int(a, scope), self.fold_const_int(b, scope)) {
@@ -2771,7 +2774,7 @@ fn Program::fold_float_const(
   } else {
     match expr {
       FloatLiteral(text, ty) => Some(@ctype.floating_literal_value(text, ty))
-      Number(value, _) =>
+      Number(value, _, _) =>
         Some(@ctype.floating_constant_from_integer_bits(value))
       Binary("+", a, b) =>
         match

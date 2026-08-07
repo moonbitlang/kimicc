@@ -1423,7 +1423,7 @@ fn X64Codegen::emit_init_value_at_addr(
     match value {
       Array(init_exprs) | CompoundLiteral(_, init_exprs, _) =>
         self.emit_init_aggregate_at_addr(ty, init_exprs)
-      Number(0, _) => self.emit_zero_memory_at_rax(ty)
+      Number(0, _, _) => self.emit_zero_memory_at_rax(ty)
       Call(_, _) if ty.is_aggregate() && self.is_supported_small_aggregate(ty) => {
         self.emit_push_rax()
         self.gen_expr(value)
@@ -2495,8 +2495,8 @@ fn X64Codegen::emit_builtin_address_query(
     "frame_address" => {
       if args.length() > 0 {
         match args[0] {
-          Number(0L, _) => self.emit("\tmov\trax, rbp")
-          Number(_, _) => self.emit("\tmov\trax, 0")
+          Number(0L, _, _) => self.emit("\tmov\trax, rbp")
+          Number(_, _, _) => self.emit("\tmov\trax, 0")
           _ => {
             self.gen_expr(args[0])
             self.emit("\tcmp\trax, 0")
@@ -2513,8 +2513,8 @@ fn X64Codegen::emit_builtin_address_query(
     "return_address" => {
       if args.length() > 0 {
         match args[0] {
-          Number(0L, _) => self.emit("\tmov\trax, QWORD PTR [rbp + 8]")
-          Number(_, _) => self.emit("\tmov\trax, 0")
+          Number(0L, _, _) => self.emit("\tmov\trax, QWORD PTR [rbp + 8]")
+          Number(_, _, _) => self.emit("\tmov\trax, 0")
           _ => {
             self.gen_expr(args[0])
             self.emit("\tcmp\trax, 0")
@@ -4374,7 +4374,7 @@ fn X64Codegen::type_of(self : X64Codegen, expr : @parser.Expr) -> @parser.Type {
     _ => ()
   }
   match expr {
-    Number(value, _) => @ctype.integer_literal_type(value)
+    Number(value, _, _) => @ctype.integer_literal_type(value)
     // The AST records a `float`-suffixed literal's type, but the code
     // generators cannot yet hold a single-precision constant, so type inference
     // still reports `double` here. Flipping this to `ty` makes every float
@@ -4401,7 +4401,7 @@ fn X64Codegen::type_of(self : X64Codegen, expr : @parser.Expr) -> @parser.Type {
       let rhs_ty = self.type_of(rhs)
       if op == "<<" || op == ">>" {
         match (lhs, rhs) {
-          (Number(_, _), Number(shift, _)) =>
+          (Number(_, _, _), Number(shift, _, _)) =>
             if shift >= 32L {
               return ULongLong
             }
@@ -4496,7 +4496,7 @@ fn X64Codegen::global_expr_type(
   expr : @parser.Expr,
 ) -> @parser.Type {
   match expr {
-    Number(value, _) => @ctype.integer_literal_type(value)
+    Number(value, _, _) => @ctype.integer_literal_type(value)
     // The AST records a `float`-suffixed literal's type, but the code
     // generators cannot yet hold a single-precision constant, so type inference
     // still reports `double` here. Flipping this to `ty` makes every float
@@ -6805,7 +6805,7 @@ fn X64Codegen::emit_va_arg_aggregate_addr(
 ///|
 fn X64Codegen::gen_expr(self : X64Codegen, expr : @parser.Expr) -> Unit {
   match expr {
-    Number(value, _) => self.emit("\tmov\trax, " + value.to_string())
+    Number(value, _, _) => self.emit("\tmov\trax, " + value.to_string())
     FloatLiteral(text, ty) =>
       self.emit_load_fp_literal(@ctype.floating_literal_value(text, ty))
     String(value) => {
@@ -7618,7 +7618,7 @@ fn X64Codegen::fold_const_int(
   expr : @parser.Expr,
 ) -> @ctype.IntegerConstant? {
   match expr {
-    Number(n, _) =>
+    Number(n, _, _) =>
       Some(@ctype.integer_constant(n, @ctype.integer_constant_token_type(n)))
     Binary("+", a, b) =>
       match (self.fold_const_int(a), self.fold_const_int(b)) {
@@ -7909,7 +7909,7 @@ fn X64Codegen::fold_float_const(
   } else {
     match expr {
       FloatLiteral(text, ty) => Some(@ctype.floating_literal_value(text, ty))
-      Number(n, _) => Some(@ctype.floating_constant_from_integer_bits(n))
+      Number(n, _, _) => Some(@ctype.floating_constant_from_integer_bits(n))
       Binary("+", a, b) =>
         match (self.fold_float_const(a), self.fold_float_const(b)) {
           (Some(x), Some(y)) => @ctype.floating_constant_binary_arith("+", x, y)
@@ -8164,7 +8164,10 @@ fn X64Codegen::emit_global_scalar(
         match self.fold_float_const(expr) {
           Some(value) => {
             let converted = @ctype.integer_constant_from_floating(value, ty)
-            self.emit_global_scalar(ty, Number(converted.bits, SInt))
+            self.emit_global_scalar(
+              ty,
+              @parser.int_literal(converted.bits, SInt),
+            )
             return
           }
           None => ()
@@ -8186,11 +8189,11 @@ fn X64Codegen::emit_global_scalar(
     _ => ()
   }
   let folded_expr = match self.fold_const(expr) {
-    Some(value) => @parser.Expr::Number(value, SInt)
+    Some(value) => @parser.int_literal(value, SInt)
     None => expr
   }
   match folded_expr {
-    Number(value, _) =>
+    Number(value, _, _) =>
       match ty.core_type() {
         Bool | SChar | UChar => self.emit_global_int_by_size(1, value)
         SShort | UShort => self.emit_global_int_by_size(2, value)
@@ -8225,7 +8228,10 @@ fn X64Codegen::emit_global_scalar(
       } else {
         self.emit_global_scalar(
           ty,
-          Number(@ctype.floating_constant_to_integer_bits(value), SInt),
+          @parser.int_literal(
+            @ctype.floating_constant_to_integer_bits(value),
+            SInt,
+          ),
         )
       }
     }
@@ -8251,7 +8257,7 @@ fn X64Codegen::emit_global_scalar(
       } else if exprs.length() > 0 {
         self.emit_global_scalar(ty, exprs[0])
       } else {
-        self.emit_global_scalar(ty, Number(0, SInt))
+        self.emit_global_scalar(ty, @parser.int_literal(0, SInt))
       }
     Array(exprs) =>
       if ty.is_object_aggregate() {
@@ -8259,7 +8265,7 @@ fn X64Codegen::emit_global_scalar(
       } else if exprs.length() > 0 {
         self.emit_global_scalar(ty, exprs[0])
       } else {
-        self.emit_global_scalar(ty, Number(0, SInt))
+        self.emit_global_scalar(ty, @parser.int_literal(0, SInt))
       }
     Var(name) => self.emit("\t.quad\t" + name)
     _ => self.emit("\t.zero\t" + self.type_size(ty).to_string())

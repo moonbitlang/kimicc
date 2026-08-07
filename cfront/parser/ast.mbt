@@ -8,9 +8,13 @@ pub type Type = @ctype.Type
 /// Binary and unary operators are stored as source-level operator strings such
 /// as `"+"`, `"=="`, `"*"`, and `"!"`.
 pub(all) enum Expr {
-  // Literals carry the type their suffix selected. Dropping it made
-  // `sizeof(1L)` report 4 and `sizeof(1.0f)` report 8.
-  Number(Int64, Type)
+  // An integer literal keeps the text that was written, the value it denotes,
+  // and the type its suffix selected. The text is authoritative -- it is what
+  // distinguishes `0xff` from `255` and survives printing -- and the value is a
+  // cache for constant folding, which is hot enough that re-parsing at each
+  // fold would be wasteful. Build these with `int_literal` rather than by hand
+  // so the two cannot disagree.
+  Number(Int64, String, Type)
   // The text that was written, not a parsed value: `long double` can be wider
   // than `Double`, so parsing eagerly would silently truncate what the program
   // said. Use `@ctype.floating_literal_value` to convert.
@@ -168,3 +172,13 @@ pub(all) struct Program {
   globals : Array[GlobalDecl]
   decls : Array[FuncDecl]
 } derive(Eq, Debug)
+
+///|
+/// Builds an integer literal from a value, formatting the text canonically.
+///
+/// Prefer this to constructing `Number` directly: the text is authoritative and
+/// the value is a cache of it, so they must agree, and this is what guarantees
+/// that for a literal the compiler synthesises rather than reads from source.
+pub fn int_literal(value : Int64, ty : Type) -> Expr {
+  Number(value, value.to_string(), ty)
+}

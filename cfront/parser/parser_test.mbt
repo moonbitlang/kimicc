@@ -42,7 +42,7 @@ test "parse variable declaration" {
     Some(Compound(stmts)) => {
       inspect(stmts.length(), content="2")
       match stmts[0] {
-        VarDecl(SInt, "x", Some(Number(10, _))) => ()
+        VarDecl(SInt, "x", Some(Number(10, _, _))) => ()
         _ => fail("Expected VarDecl")
       }
     }
@@ -63,9 +63,9 @@ test "parse function pointer parameter types" {
     Some(
       Compound(
         [
-          VarDecl(fp_ty, "fp", Some(Number(0, SInt))),
-          VarDecl(vp_ty, "vp", Some(Number(0, SInt))),
-          Return(Some(Number(0, SInt))),
+          VarDecl(fp_ty, "fp", Some(Number(0, _, SInt))),
+          VarDecl(vp_ty, "vp", Some(Number(0, _, SInt))),
+          Return(Some(Number(0, _, SInt))),
         ]
       )
     ) => {
@@ -146,7 +146,7 @@ test "parse extended float spellings in sizeof and alignof type names" {
           VarDecl(Array(SInt, 8), "f64_align", None),
           VarDecl(Array(SInt, 8), "f32x_align", None),
           VarDecl(Array(SInt, 16), "f64x_align", None),
-          Return(Some(Number(0, SInt))),
+          Return(Some(Number(0, _, SInt))),
         ]
       )
     ) => ()
@@ -173,7 +173,7 @@ test "parse unsupported float128 layout constants for linux" {
         [
           VarDecl(Array(SInt, 16), "q_size", None),
           VarDecl(Array(SInt, 16), "q_align", None),
-          Return(Some(Number(0, SInt))),
+          Return(Some(Number(0, _, SInt))),
         ]
       )
     ) => ()
@@ -211,7 +211,7 @@ test "parse GNU mode attributes for linux integer typedef layout" {
           VarDecl(Array(SInt, 2), "spec_size", None),
           VarDecl(Array(SInt, 1), "byte_size", None),
           VarDecl(Array(SInt, 8), "pointer_size", None),
-          Return(Some(Number(0, SInt))),
+          Return(Some(Number(0, _, SInt))),
         ]
       )
     ) => ()
@@ -242,7 +242,10 @@ test "parse long double layout constants for selected target" {
   match darwin_prog.decls[0].body {
     Some(
       Compound(
-        [VarDecl(Array(SInt, 8), "slots", None), Return(Some(Number(0, SInt)))]
+        [
+          VarDecl(Array(SInt, 8), "slots", None),
+          Return(Some(Number(0, _, SInt))),
+        ]
       )
     ) => ()
     _ => fail("Expected Darwin long double size in array bound")
@@ -250,7 +253,10 @@ test "parse long double layout constants for selected target" {
   match linux_prog.decls[0].body {
     Some(
       Compound(
-        [VarDecl(Array(SInt, 16), "slots", None), Return(Some(Number(0, SInt)))]
+        [
+          VarDecl(Array(SInt, 16), "slots", None),
+          Return(Some(Number(0, _, SInt))),
+        ]
       )
     ) => ()
     _ => fail("Expected Linux long double size in array bound")
@@ -264,7 +270,7 @@ test "parse block-scope builtin va list declaration" {
   match prog.decls[0].body {
     Some(
       Compound(
-        [VarDecl(Pointer(SChar), "ap", None), Return(Some(Number(0, SInt)))]
+        [VarDecl(Pointer(SChar), "ap", None), Return(Some(Number(0, _, SInt)))]
       )
     ) => ()
     _ => fail("Expected __builtin_va_list declaration")
@@ -281,9 +287,9 @@ test "parse if statement" {
       Compound(
         [
           If(
-            Number(1, SInt),
-            Return(Some(Number(2, SInt))),
-            Some(Return(Some(Number(3, SInt))))
+            Number(1, _, SInt),
+            Return(Some(Number(2, _, SInt))),
+            Some(Return(Some(Number(3, _, SInt))))
           ),
         ]
       )
@@ -298,8 +304,9 @@ test "parse while statement" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([While(Number(1, SInt), Return(Some(Number(0, SInt))))])) =>
-      ()
+    Some(
+      Compound([While(Number(1, _, SInt), Return(Some(Number(0, _, SInt))))])
+    ) => ()
     _ => fail("Expected while statement")
   }
 }
@@ -326,7 +333,9 @@ test "parse comparison" {
   let decl = prog.decls[0]
   match decl.body {
     Some(
-      Compound([Return(Some(Binary("<", Number(1, SInt), Number(2, SInt))))])
+      Compound(
+        [Return(Some(Binary("<", Number(1, _, SInt), Number(2, _, SInt))))]
+      )
     ) => ()
     _ => fail("Expected comparison")
   }
@@ -352,7 +361,9 @@ test "parse comma operator" {
   let decl = prog.decls[0]
   match decl.body {
     Some(
-      Compound([Return(Some(Binary(",", Number(1, SInt), Number(2, SInt))))])
+      Compound(
+        [Return(Some(Binary(",", Number(1, _, SInt), Number(2, _, SInt))))]
+      )
     ) => ()
     _ => fail("Expected comma operator")
   }
@@ -367,14 +378,14 @@ test "parse ternary" {
     Some(
       Compound(
         [
-          VarDecl(SInt, "x", Some(Number(1, SInt))),
-          VarDecl(SInt, "y", Some(Number(2, SInt))),
+          VarDecl(SInt, "x", Some(Number(1, _, SInt))),
+          VarDecl(SInt, "y", Some(Number(2, _, SInt))),
           Return(
             Some(
               Ternary(
-                Binary(">", Var("x"), Number(0, SInt)),
+                Binary(">", Var("x"), Number(0, _, SInt)),
                 Var("y"),
-                Number(0, SInt)
+                Number(0, _, SInt)
               )
             )
           ),
@@ -394,7 +405,7 @@ test "parse do while" {
     Some(
       Compound(
         [
-          VarDecl(SInt, "i", Some(Number(0, SInt))),
+          VarDecl(SInt, "i", Some(Number(0, _, SInt))),
           DoWhile(_, _),
           Return(Some(Var("i"))),
         ]
@@ -435,9 +446,9 @@ test "parse goto and label" {
     Some(
       Compound(
         [
-          VarDecl(SInt, "x", Some(Number(0, SInt))),
+          VarDecl(SInt, "x", Some(Number(0, _, SInt))),
           Goto("end"),
-          ExprStmt(Assign(Var("x"), Number(1, SInt))),
+          ExprStmt(Assign(Var("x"), Number(1, _, SInt))),
           Label("end", Return(Some(Var("x")))),
         ]
       )
@@ -514,7 +525,7 @@ test "parse cast" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([Return(Some(Cast(SChar, Number(256, SInt))))])) => ()
+    Some(Compound([Return(Some(Cast(SChar, Number(256, _, SInt))))])) => ()
     _ => fail("Expected cast expression")
   }
 }
@@ -528,7 +539,7 @@ test "parse prefix increment" {
     Some(
       Compound(
         [
-          VarDecl(SInt, "x", Some(Number(5, SInt))),
+          VarDecl(SInt, "x", Some(Number(5, _, SInt))),
           Return(Some(PrefixInc(Var("x")))),
         ]
       )
@@ -546,7 +557,7 @@ test "parse postfix increment" {
     Some(
       Compound(
         [
-          VarDecl(SInt, "x", Some(Number(5, SInt))),
+          VarDecl(SInt, "x", Some(Number(5, _, SInt))),
           Return(Some(PostfixInc(Var("x")))),
         ]
       )
@@ -561,7 +572,7 @@ test "parse enum" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([Return(Some(Number(1, SInt)))])) => ()
+    Some(Compound([Return(Some(Number(1, _, SInt)))])) => ()
     _ => fail("Expected enum Green to be 1")
   }
 }
@@ -573,7 +584,9 @@ test "parse enum with values" {
   let decl = prog.decls[0]
   match decl.body {
     Some(
-      Compound([Return(Some(Binary("+", Number(11, SInt), Number(20, SInt))))])
+      Compound(
+        [Return(Some(Binary("+", Number(11, _, SInt), Number(20, _, SInt))))]
+      )
     ) => ()
     _ => fail("Expected B=11 and C=20")
   }
@@ -586,7 +599,9 @@ test "parse enum trailing comma" {
   let decl = prog.decls[0]
   match decl.body {
     Some(
-      Compound([Return(Some(Binary("+", Number(1, SInt), Number(5, SInt))))])
+      Compound(
+        [Return(Some(Binary("+", Number(1, _, SInt), Number(5, _, SInt))))]
+      )
     ) => ()
     _ => fail("Expected trailing-comma enum constants")
   }
@@ -602,12 +617,12 @@ test "parse for loop" {
       inspect(stmts.length(), content="3")
       // Stmt 1: var decl s=0
       match stmts[0] {
-        VarDecl(SInt, "s", Some(Number(0, _))) => ()
+        VarDecl(SInt, "s", Some(Number(0, _, _))) => ()
         _ => fail("Expected s declaration")
       }
       // Stmt 2: for loop as native For node
       match stmts[1] {
-        For(Some(VarDecl(SInt, "i", Some(Number(0, SInt)))), _, Some(_), _) =>
+        For(Some(VarDecl(SInt, "i", Some(Number(0, _, SInt)))), _, Some(_), _) =>
           ()
         _ => fail("Expected For AST node")
       }
@@ -626,7 +641,7 @@ test "parse assignment" {
       Compound(
         [
           VarDecl(SInt, "x", None),
-          ExprStmt(Assign(Var("x"), Number(5, SInt))),
+          ExprStmt(Assign(Var("x"), Number(5, _, SInt))),
           Return(Some(Var("x"))),
         ]
       )
@@ -645,11 +660,11 @@ test "parse compound assignment" {
       // Stmt 1: var decl
       // Stmt 2: x += 3
       match stmts[1] {
-        ExprStmt(CompoundAssign("+", Var("x"), Number(3, _))) => ()
+        ExprStmt(CompoundAssign("+", Var("x"), Number(3, _, _))) => ()
         _ => fail("Expected +=")
       }
       match stmts[3] {
-        ExprStmt(CompoundAssign("*", Var("x"), Number(2, _))) => ()
+        ExprStmt(CompoundAssign("*", Var("x"), Number(2, _, _))) => ()
         _ => fail("Expected *=")
       }
     }
@@ -692,7 +707,7 @@ test "parse empty for loop" {
   match decl.body {
     Some(
       Compound(
-        [For(None, Number(1, SInt), None, Return(Some(Number(42, SInt))))]
+        [For(None, Number(1, _, SInt), None, Return(Some(Number(42, _, SInt))))]
       )
     ) => ()
     _ => fail("Expected empty for loop")
@@ -827,7 +842,7 @@ test "parse struct definition and member access" {
     Some(Compound(stmts)) => {
       inspect(stmts.length(), content="4")
       match stmts[1] {
-        ExprStmt(Assign(MemberAccess(Var("p"), "x"), Number(10, _))) => ()
+        ExprStmt(Assign(MemberAccess(Var("p"), "x"), Number(10, _, _))) => ()
         _ => fail("Expected member access assignment")
       }
     }
@@ -910,7 +925,7 @@ test "parse GNU aligned attributes" {
         [
           VarDecl(Aligned(SInt, 32), "local", None),
           VarDecl(Aligned(SInt, 16), "default_local", None),
-          Return(Some(Number(0, SInt))),
+          Return(Some(Number(0, _, SInt))),
         ]
       )
     ) => ()
@@ -927,22 +942,22 @@ test "parse aligned local array initializer assignments" {
     #|}
   let prog = @parser.parse(source)
   match prog.decls[0].body {
-    Some(Compound([StmtList(inner), Return(Some(Number(0, SInt)))])) => {
+    Some(Compound([StmtList(inner), Return(Some(Number(0, _, SInt)))])) => {
       inspect(inner.length(), content="3")
       match inner[0] {
-        VarDecl(Aligned(Array(ULongLong, 4), 8), "acc", Some(Number(0, _))) =>
+        VarDecl(Aligned(Array(ULongLong, 4), 8), "acc", Some(Number(0, _, _))) =>
           ()
         _ => fail("Expected aligned local array zero declaration")
       }
       match inner[1] {
         ExprStmt(
-          Assign(ArrayAccess(Var("acc"), Number(0, SInt)), Number(10, _))
+          Assign(ArrayAccess(Var("acc"), Number(0, _, SInt)), Number(10, _, _))
         ) => ()
         _ => fail("Expected aligned acc[0]=10")
       }
       match inner[2] {
         ExprStmt(
-          Assign(ArrayAccess(Var("acc"), Number(1, SInt)), Number(20, _))
+          Assign(ArrayAccess(Var("acc"), Number(1, _, SInt)), Number(20, _, _))
         ) => ()
         _ => fail("Expected aligned acc[1]=20")
       }
@@ -1085,9 +1100,12 @@ test "parse array declaration and access" {
         [
           VarDecl(Array(SInt, 5), "a", None),
           ExprStmt(
-            Assign(ArrayAccess(Var("a"), Number(2, SInt)), Number(42, SInt))
+            Assign(
+              ArrayAccess(Var("a"), Number(2, _, SInt)),
+              Number(42, _, SInt)
+            )
           ),
-          Return(Some(ArrayAccess(Var("a"), Number(2, SInt)))),
+          Return(Some(ArrayAccess(Var("a"), Number(2, _, SInt)))),
         ]
       )
     ) => ()
@@ -1138,9 +1156,21 @@ test "parse comma separated initialized globals" {
   inspect(prog.globals.length(), content="3")
   match prog.globals {
     [
-      { name: "action_fd", init: Some(Scalar(Unary("-", Number(1, SInt)))), .. },
-      { name: "entry_fd", init: Some(Scalar(Unary("-", Number(1, SInt)))), .. },
-      { name: "text_fd", init: Some(Scalar(Unary("-", Number(1, SInt)))), .. },
+      {
+        name: "action_fd",
+        init: Some(Scalar(Unary("-", Number(1, _, SInt)))),
+        ..,
+      },
+      {
+        name: "entry_fd",
+        init: Some(Scalar(Unary("-", Number(1, _, SInt)))),
+        ..,
+      },
+      {
+        name: "text_fd",
+        init: Some(Scalar(Unary("-", Number(1, _, SInt)))),
+        ..,
+      },
     ] => ()
     _ => fail("Expected three initialized globals")
   }
@@ -1170,7 +1200,7 @@ test "parse string literal" {
       Compound(
         [
           VarDecl(Pointer(SChar), "s", Some(String("hello"))),
-          Return(Some(Number(0, SInt))),
+          Return(Some(Number(0, _, SInt))),
         ]
       )
     ) => ()
@@ -1188,7 +1218,7 @@ test "parse adjacent string concatenation" {
       Compound(
         [
           VarDecl(Pointer(SChar), "s", Some(String("hello"))),
-          Return(Some(Number(0, SInt))),
+          Return(Some(Number(0, _, SInt))),
         ]
       )
     ) => ()
@@ -1209,7 +1239,7 @@ test "parse comments" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([Return(Some(Number(42, SInt)))])) => ()
+    Some(Compound([Return(Some(Number(42, _, SInt)))])) => ()
     _ => fail("Expected return 42 after comments")
   }
 }
@@ -1226,24 +1256,33 @@ test "parse array initializer infers size" {
         StmtList(inner) => {
           inspect(inner.length(), content="4")
           match inner[0] {
-            VarDecl(Array(SInt, 3), "arr", Some(Number(0, _))) => ()
+            VarDecl(Array(SInt, 3), "arr", Some(Number(0, _, _))) => ()
             _ => fail("Expected Array(SInt, 3) var decl")
           }
           match inner[1] {
             ExprStmt(
-              Assign(ArrayAccess(Var("arr"), Number(0, SInt)), Number(1, _))
+              Assign(
+                ArrayAccess(Var("arr"), Number(0, _, SInt)),
+                Number(1, _, _)
+              )
             ) => ()
             _ => fail("Expected arr[0]=1")
           }
           match inner[2] {
             ExprStmt(
-              Assign(ArrayAccess(Var("arr"), Number(1, SInt)), Number(2, _))
+              Assign(
+                ArrayAccess(Var("arr"), Number(1, _, SInt)),
+                Number(2, _, _)
+              )
             ) => ()
             _ => fail("Expected arr[1]=2")
           }
           match inner[3] {
             ExprStmt(
-              Assign(ArrayAccess(Var("arr"), Number(2, SInt)), Number(3, _))
+              Assign(
+                ArrayAccess(Var("arr"), Number(2, _, SInt)),
+                Number(3, _, _)
+              )
             ) => ()
             _ => fail("Expected arr[2]=3")
           }
@@ -1267,8 +1306,8 @@ test "parse array initializer with expression element" {
           match inner[1] {
             ExprStmt(
               Assign(
-                ArrayAccess(Var("arr"), Number(0, SInt)),
-                Binary("+", Number(1, SInt), Number(1, _))
+                ArrayAccess(Var("arr"), Number(0, _, SInt)),
+                Binary("+", Number(1, _, SInt), Number(1, _, _))
               )
             ) => ()
             _ => fail("Expected arr[0]=1+1")
@@ -1289,27 +1328,29 @@ test "parse scalar brace initializer values" {
     #|}
   let prog = @parser.parse(source)
   match prog.globals[0].init {
-    Some(Scalar(Number(42, _))) => ()
+    Some(Scalar(Number(42, _, _))) => ()
     _ => fail("Expected scalar global brace initializer")
   }
   match prog.decls[0].body {
     Some(Compound([StmtList(inner), Return(Some(_))])) => {
       match inner[0] {
-        VarDecl(SInt, "x", Some(Number(19, _))) => ()
+        VarDecl(SInt, "x", Some(Number(19, _, _))) => ()
         _ => fail("Expected scalar local brace initializer")
       }
       match inner[1] {
-        VarDecl(SInt, "y", Some(Number(23, _))) => ()
+        VarDecl(SInt, "y", Some(Number(23, _, _))) => ()
         _ => fail("Expected nested scalar local brace initializer")
       }
       match inner[3] {
-        ExprStmt(Assign(ArrayAccess(Var("a"), Number(0, SInt)), Number(5, _))) =>
-          ()
+        ExprStmt(
+          Assign(ArrayAccess(Var("a"), Number(0, _, SInt)), Number(5, _, _))
+        ) => ()
         _ => fail("Expected scalar array element brace initializer")
       }
       match inner[4] {
-        ExprStmt(Assign(ArrayAccess(Var("a"), Number(1, SInt)), Number(37, _))) =>
-          ()
+        ExprStmt(
+          Assign(ArrayAccess(Var("a"), Number(1, _, SInt)), Number(37, _, _))
+        ) => ()
         _ => fail("Expected nested scalar array element brace initializer")
       }
     }
@@ -1327,21 +1368,21 @@ test "parse multiple vars one with array initializer" {
       match outer[0] {
         StmtList(inner) => {
           match inner[0] {
-            VarDecl(SInt, "a", Some(Number(1, _))) => ()
+            VarDecl(SInt, "a", Some(Number(1, _, _))) => ()
             _ => fail("Expected a=1")
           }
           match inner[1] {
-            VarDecl(Array(SInt, 1), "b", Some(Number(0, _))) => ()
+            VarDecl(Array(SInt, 1), "b", Some(Number(0, _, _))) => ()
             _ => fail("Expected b array decl")
           }
           match inner[2] {
             ExprStmt(
-              Assign(ArrayAccess(Var("b"), Number(0, SInt)), Number(2, _))
+              Assign(ArrayAccess(Var("b"), Number(0, _, SInt)), Number(2, _, _))
             ) => ()
             _ => fail("Expected b[0]=2")
           }
           match inner[3] {
-            VarDecl(SInt, "c", Some(Number(3, _))) => ()
+            VarDecl(SInt, "c", Some(Number(3, _, _))) => ()
             _ => fail("Expected c=3")
           }
         }
@@ -1361,7 +1402,7 @@ test "parse array initializer inferred size" {
       match stmts[0] {
         StmtList(inner) =>
           match inner[0] {
-            VarDecl(Array(SInt, 3), "arr", Some(Number(0, _))) => ()
+            VarDecl(Array(SInt, 3), "arr", Some(Number(0, _, _))) => ()
             _ => fail("Expected VarDecl with Array(SInt, 3)")
           }
         _ => fail("Expected StmtList from array init lowering")
@@ -1380,7 +1421,7 @@ test "parse array initializer explicit size" {
       match stmts[0] {
         StmtList(inner) =>
           match inner[0] {
-            VarDecl(Array(SInt, 5), "arr", Some(Number(0, _))) => ()
+            VarDecl(Array(SInt, 5), "arr", Some(Number(0, _, _))) => ()
             _ => fail("Expected VarDecl with Array(SInt, 5)")
           }
         _ => fail("Expected StmtList from array init lowering")
@@ -1418,11 +1459,11 @@ test "parse mixed nested initializer designators" {
         [
           DesignatedField(
             "pairs",
-            DesignatedIndex(1, DesignatedField("b", Number(5, SInt)))
+            DesignatedIndex(1, DesignatedField("b", Number(5, _, SInt)))
           ),
           DesignatedField(
             "pairs",
-            DesignatedIndex(0, DesignatedField("a", Number(37, SInt)))
+            DesignatedIndex(0, DesignatedField("a", Number(37, _, SInt)))
           ),
         ]
       )
@@ -1475,8 +1516,9 @@ test "parse __func__ builtin" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([Return(Some(ArrayAccess(String("main"), Number(0, SInt))))])) =>
-      ()
+    Some(
+      Compound([Return(Some(ArrayAccess(String("main"), Number(0, _, SInt))))])
+    ) => ()
     _ => fail("Expected __func__ as string literal")
   }
 }
@@ -1498,8 +1540,11 @@ test "parse static assertions at declaration scopes" {
   inspect(prog.structs[0].fields.length(), content="1")
   inspect(prog.decls.length(), content="1")
   match prog.decls[0].body {
-    Some(Compound([ExprStmt(Number(0, SInt)), Return(Some(Number(42, SInt)))])) =>
-      ()
+    Some(
+      Compound(
+        [ExprStmt(Number(0, _, SInt)), Return(Some(Number(42, _, SInt)))]
+      )
+    ) => ()
     _ => fail("Expected static assertion to parse as a no-op declaration")
   }
 }
@@ -1584,7 +1629,7 @@ test "parse struct compound literal assignment" {
       match rhs {
         CompoundLiteral(
           Struct(_),
-          [CompoundLiteral(Union(_), _, _), Number(4, SInt)],
+          [CompoundLiteral(Union(_), _, _), Number(4, _, SInt)],
           _
         ) => ()
         _ => fail("Expected compound literal assignment rhs")
@@ -1616,11 +1661,14 @@ test "parse mixed compound literal initializer designators" {
                 [
                   DesignatedField(
                     "pairs",
-                    DesignatedIndex(1, DesignatedField("b", Number(5, SInt)))
+                    DesignatedIndex(1, DesignatedField("b", Number(5, _, SInt)))
                   ),
                   DesignatedField(
                     "pairs",
-                    DesignatedIndex(0, DesignatedField("a", Number(37, SInt)))
+                    DesignatedIndex(
+                      0,
+                      DesignatedField("a", Number(37, _, SInt))
+                    )
                   ),
                 ],
                 _
@@ -1713,7 +1761,7 @@ test "parse generic selection chooses matching association" {
     #|}
   let prog = @parser.parse(source)
   match prog.decls[0].body {
-    Some(Compound([Return(Some(Number(2, SInt)))])) => ()
+    Some(Compound([Return(Some(Number(2, _, SInt)))])) => ()
     _ => fail("Expected generic selection to fold to selected expression")
   }
 }
@@ -1728,7 +1776,9 @@ test "parse builtin choose expr and types compatible fold constants" {
   let prog = @parser.parse(source)
   match prog.decls[0].body {
     Some(
-      Compound([Return(Some(Binary("+", Number(7, SInt), Number(5, SInt))))])
+      Compound(
+        [Return(Some(Binary("+", Number(7, _, SInt), Number(5, _, SInt))))]
+      )
     ) => ()
     _ => fail("Expected builtin compile-time selection to fold constants")
   }
@@ -1795,9 +1845,9 @@ test "parse GNU typeof type specifiers" {
     Some(
       Compound(
         [
-          VarDecl(SInt, "x", Some(Number(0, SInt))),
-          VarDecl(SInt, "y", Some(Number(7, SInt))),
-          VarDecl(ULong, "z", Some(Number(5, SInt))),
+          VarDecl(SInt, "x", Some(Number(0, _, SInt))),
+          VarDecl(SInt, "y", Some(Number(7, _, SInt))),
+          VarDecl(ULong, "z", Some(Number(5, _, SInt))),
           Return(Some(Binary("+", Var("y"), Cast(SInt, Var("z"))))),
         ]
       )
@@ -1821,7 +1871,7 @@ test "parse GNU typeof comma expression uses rhs type" {
       Compound(
         [
           VarDecl(Pointer(ULong), "p", None),
-          VarDecl(ULong, "y", Some(Number(5, SInt))),
+          VarDecl(ULong, "y", Some(Number(5, _, SInt))),
           Return(Some(Cast(SInt, Var("y")))),
         ]
       )
@@ -1845,7 +1895,7 @@ test "parse GNU auto type local declarations" {
     Some(
       Compound(
         [
-          VarDecl(ULong, "x", Some(Number(40, SInt))),
+          VarDecl(ULong, "x", Some(Number(40, _, SInt))),
           VarDecl(ULong, "y", Some(Var("x"))),
           VarDecl(Pointer(SInt), "p", None),
           VarDecl(Pointer(SInt), "q", Some(Var("p"))),
@@ -1879,7 +1929,7 @@ test "parse builtin classify type folds covered categories" {
     Some(
       Compound(
         [
-          VarDecl(SInt, "x", Some(Number(0, SInt))),
+          VarDecl(SInt, "x", Some(Number(0, _, SInt))),
           VarDecl(Double, "d", Some(FloatLiteral("0.0", Double))),
           VarDecl(Array(SInt, 2), "a", None),
           VarDecl(Struct("S"), "s", None),
@@ -1892,12 +1942,12 @@ test "parse builtin classify type folds covered categories" {
                   "+",
                   Binary(
                     "+",
-                    Binary("+", Number(1, SInt), Number(8, SInt)),
-                    Number(5, SInt)
+                    Binary("+", Number(1, _, SInt), Number(8, _, SInt)),
+                    Number(5, _, SInt)
                   ),
-                  Number(12, SInt)
+                  Number(12, _, SInt)
                 ),
-                Number(13, SInt)
+                Number(13, _, SInt)
               )
             )
           ),

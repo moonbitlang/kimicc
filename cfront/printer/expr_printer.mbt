@@ -85,8 +85,8 @@ fn binary_precedence(op : String) -> Int {
 ///     @printer.print_expr(
 ///       Binary(
 ///         "*",
-///         Binary("+", Number(1, SInt), Number(2, SInt)),
-///         Number(3, SInt),
+///         Binary("+", @parser.int_literal(1, SInt), @parser.int_literal(2, SInt)),
+///         @parser.int_literal(3, SInt),
 ///       ),
 ///     ),
 ///     content="(1 + 2) * 3",
@@ -113,7 +113,9 @@ fn print_expr_at(expr : @parser.Expr, min_prec : Int) -> String {
 /// Renders an expression and reports the precedence of its outermost operator.
 fn render_expr(expr : @parser.Expr) -> (String, Int) {
   match expr {
-    Number(value, ty) => (print_integer(value, ty), PREC_PRIMARY)
+    // Printed exactly as written, so `0xff` stays `0xff` and the suffix the
+    // text already carries is not reconstructed.
+    Number(_, text, _) => (text, PREC_PRIMARY)
     // The literal is printed exactly as it was written, which is the point
     // of keeping the text: no reformatting, no precision drift.
     FloatLiteral(text, ty) => (text + float_suffix(ty), PREC_PRIMARY)
@@ -269,36 +271,6 @@ fn print_designator_tail(expr : @parser.Expr) -> String {
 }
 
 ///|
-/// Hexadecimal digits, indexed by nibble value.
-let hex_digits : ReadOnlyArray[Char] = [
-  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
-]
-
-///|
-/// Renders an integer literal so that it reads back as the same 64-bit value.
-///
-/// C has no negative integer literals: `-5` is unary minus applied to `5`, and
-/// the parser does not fold that back into a literal, so printing a negative
-/// value as decimal would re-parse as `Unary("-", ...)` -- a different tree.
-///
-/// A negative value here is not a user-written negation anyway. It is the
-/// 64-bit pattern of a literal that overflowed the signed range, such as
-/// `10000000000000000000` or `0x8000000000000000`, so the honest spelling is
-/// the pattern itself: one hexadecimal token, same bits, no negation involved.
-fn print_integer(value : Int64, ty : @ctype.Type) -> String {
-  if value >= 0L {
-    return value.to_string() + integer_suffix(ty)
-  }
-  let buf = StringBuilder::new()
-  buf.write_string("0x")
-  for shift = 60; shift >= 0; shift = shift - 4 {
-    buf.write_char(hex_digits[((value >> shift) & 0xfL).to_int()])
-  }
-  buf.write_string(integer_suffix(ty))
-  buf.to_string()
-}
-
-///|
 /// Returns the suffix a floating literal needs to reparse with type `ty`.
 ///
 /// The text keeps whatever spelling was written, but not its suffix, which the
@@ -307,23 +279,6 @@ fn float_suffix(ty : @ctype.Type) -> String {
   match ty {
     Float => "f"
     LongDouble => "L"
-    _ => ""
-  }
-}
-
-///|
-/// Returns the suffix that makes a literal reparse with type `ty`.
-///
-/// A bare literal already takes the first type that can hold its value, so
-/// `int` and the widths a bare literal would select anyway need nothing. The
-/// rest have to say so, or the type is lost on the way back in.
-fn integer_suffix(ty : @ctype.Type) -> String {
-  match ty {
-    UInt => "u"
-    SLong => "L"
-    ULong => "uL"
-    SLongLong => "LL"
-    ULongLong => "uLL"
     _ => ""
   }
 }

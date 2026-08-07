@@ -9426,7 +9426,7 @@ test "generate negative large constant" {
   let prog = @parser.parse(source)
   let codegen = @codegen.Codegen::new()
   let assembly = codegen.generate(prog)
-  // Parsed as Unary("-", Number(1640562687, SInt)) → load then neg
+  // Parsed as Unary("-", Number(1640562687, _, SInt)) → load then neg
   // 1640562687 = 0x61C8FFFF: low=65535, high=25032
   inspect(assembly.contains("movz\tx9, #65535"), content="true")
   inspect(assembly.contains("movk\tx9, #25032, lsl #16"), content="true")
