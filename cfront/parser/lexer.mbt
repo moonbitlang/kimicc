@@ -7,7 +7,7 @@
 pub(all) enum Token {
   EOF
   Ident(String)
-  Number(Int64, @ctype.Type)
+  Number(Int64, String, @ctype.Type)
   FloatLiteral(String, @ctype.Type)
   String(String)
   Int
@@ -98,7 +98,7 @@ impl Show for Token with fn to_string(self) {
   match self {
     EOF => "EOF"
     Ident(s) => "Ident(" + s + ")"
-    Number(n, _) => "Number(" + n.to_string() + ")"
+    Number(_, text, _) => "Number(" + text + ")"
     FloatLiteral(text, _) => "FloatLiteral(" + text + ")"
     String(s) => "String(" + s + ")"
     Int => "int"
@@ -596,6 +596,7 @@ fn Lexer::read_number(self : Lexer) -> Token {
     let (is_unsigned, long_count) = self.read_integer_suffix()
     return Number(
       n,
+      self.input[start:self.pos].to_owned(),
       @ctype.integer_literal_suffix_type(n, is_unsigned, long_count),
     )
   }
@@ -637,7 +638,11 @@ fn Lexer::read_number(self : Lexer) -> Token {
     n = n * base + (ch.to_int() - '0'.to_int()).to_int64()
   }
 
-  Number(n, @ctype.integer_literal_suffix_type(n, is_unsigned, long_count))
+  Number(
+    n,
+    self.input[start:self.pos].to_owned(),
+    @ctype.integer_literal_suffix_type(n, is_unsigned, long_count),
+  )
 }
 
 ///|
@@ -800,6 +805,7 @@ fn Lexer::read_string(self : Lexer) -> Token {
 
 ///|
 fn Lexer::read_char(self : Lexer) -> Token {
+  let start = self.pos
   self.advance() // skip opening '
   let ch = self.peek()
   let mut value : Int64 = 0
@@ -815,7 +821,7 @@ fn Lexer::read_char(self : Lexer) -> Token {
   }
   self.advance() // skip closing '
   // A character constant has type `int` in C, not `char`.
-  Number(value, SInt)
+  Number(value, self.input[start:self.pos].to_owned(), SInt)
 }
 
 ///|

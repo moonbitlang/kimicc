@@ -566,9 +566,9 @@ fn Parser::parse_builtin_types_compatible_p(self : Parser) -> Expr {
   let rhs_ty = self.parse_type_name()
   self.expect(RParen)
   if @ctype.generic_types_compatible(lhs_ty, rhs_ty) {
-    Number(1, SInt)
+    int_literal(1, SInt)
   } else {
-    Number(0, SInt)
+    int_literal(0, SInt)
   }
 }
 
@@ -577,15 +577,20 @@ fn Parser::parse_builtin_classify_type(self : Parser) -> Expr {
   self.expect(LParen)
   let expr = self.parse_assign()
   self.expect(RParen)
-  Number(@ctype.builtin_classify_type_code(self.const_expr_type(expr)), SInt)
+  int_literal(
+    @ctype.builtin_classify_type_code(self.const_expr_type(expr)),
+    SInt,
+  )
 }
 
 ///|
 fn Parser::parse_primary(self : Parser) -> Expr {
   match self.token {
-    Number(n, ty) => {
+    Number(n, text, ty) => {
       self.advance()
-      Number(n, ty)
+      // Forward the token's text rather than reformatting from the value: the
+      // written spelling is the whole point of keeping it.
+      Number(n, text, ty)
     }
     FloatLiteral(v, ty) => {
       self.advance()
@@ -650,7 +655,7 @@ fn Parser::parse_primary(self : Parser) -> Expr {
         // An enumerator's value can exceed `int`, so its type follows the
         // value the way an unsuffixed literal's does.
         let value = self.enum_constants[name]
-        Number(value, @ctype.integer_constant_token_type(value))
+        int_literal(value, @ctype.integer_constant_token_type(value))
       } else {
         Var(resolved_name)
       }

@@ -69,7 +69,7 @@ test "mir internal expression helpers compute parser expression types" {
     current_func: "main",
   }
   inspect(
-    mir.expr_type(Binary("+", Var("p"), Number(1, SInt)), scope),
+    mir.expr_type(Binary("+", Var("p"), @parser.int_literal(1, SInt)), scope),
     content="Pointer(SInt)",
   )
   inspect(
@@ -77,7 +77,10 @@ test "mir internal expression helpers compute parser expression types" {
     content="SLong",
   )
   inspect(
-    mir.expr_type(Binary("<<", Number(1, SInt), Number(40, SInt)), scope),
+    mir.expr_type(
+      Binary("<<", @parser.int_literal(1, SInt), @parser.int_literal(40, SInt)),
+      scope,
+    ),
     content="ULongLong",
   )
   inspect(mir.expr_type(MemberAccess(Var("s"), "y"), scope), content="Double")
@@ -108,7 +111,10 @@ test "mir internal expression helpers fold constants with target layout" {
   expect_const(mir, AlignofExpr(String("abc")), scope, 1L)
   expect_const(
     mir,
-    Call(Var("__builtin_object_size"), [String("abc"), Number(0, SInt)]),
+    Call(Var("__builtin_object_size"), [
+      String("abc"),
+      @parser.int_literal(0, SInt),
+    ]),
     scope,
     4L,
   )
@@ -116,7 +122,7 @@ test "mir internal expression helpers fold constants with target layout" {
     mir,
     Call(Var("__builtin_dynamic_object_size"), [
       Cast(Pointer(SChar), String("abcd")),
-      Number(2, SInt),
+      @parser.int_literal(2, SInt),
     ]),
     scope,
     5L,
@@ -124,8 +130,8 @@ test "mir internal expression helpers fold constants with target layout" {
   expect_const(
     mir,
     Call(Var("__builtin_object_size"), [
-      Cast(Pointer(Void), Number(0, SInt)),
-      Number(0, SInt),
+      Cast(Pointer(Void), @parser.int_literal(0, SInt)),
+      @parser.int_literal(0, SInt),
     ]),
     scope,
     -1L,
@@ -133,8 +139,8 @@ test "mir internal expression helpers fold constants with target layout" {
   expect_const(
     mir,
     Call(Var("__builtin_dynamic_object_size"), [
-      Cast(Pointer(Void), Number(0, SInt)),
-      Number(2, SInt),
+      Cast(Pointer(Void), @parser.int_literal(0, SInt)),
+      @parser.int_literal(2, SInt),
     ]),
     scope,
     0L,
@@ -143,7 +149,7 @@ test "mir internal expression helpers fold constants with target layout" {
     mir,
     Call(Var("__builtin_object_size"), [
       AddrOf(Var("global_x")),
-      Number(0, SInt),
+      @parser.int_literal(0, SInt),
     ]),
     scope,
     4L,
@@ -152,7 +158,7 @@ test "mir internal expression helpers fold constants with target layout" {
     mir,
     Call(Var("__builtin_dynamic_object_size"), [
       Var("global_buf"),
-      Number(2, SInt),
+      @parser.int_literal(2, SInt),
     ]),
     scope,
     16L,
@@ -160,8 +166,8 @@ test "mir internal expression helpers fold constants with target layout" {
   expect_const(
     mir,
     Call(Var("__builtin_object_size"), [
-      AddrOf(ArrayAccess(Var("global_buf"), Number(3, SInt))),
-      Number(0, SInt),
+      AddrOf(ArrayAccess(Var("global_buf"), @parser.int_literal(3, SInt))),
+      @parser.int_literal(0, SInt),
     ]),
     scope,
     13L,
@@ -169,8 +175,8 @@ test "mir internal expression helpers fold constants with target layout" {
   expect_const(
     mir,
     Call(Var("__builtin_object_size"), [
-      AddrOf(ArrayAccess(Var("global_buf"), Number(3, SInt))),
-      Number(1, SInt),
+      AddrOf(ArrayAccess(Var("global_buf"), @parser.int_literal(3, SInt))),
+      @parser.int_literal(1, SInt),
     ]),
     scope,
     13L,
@@ -178,8 +184,8 @@ test "mir internal expression helpers fold constants with target layout" {
   expect_const(
     mir,
     Call(Var("__builtin_object_size"), [
-      Binary("+", Var("global_buf"), Number(3, SInt)),
-      Number(0, SInt),
+      Binary("+", Var("global_buf"), @parser.int_literal(3, SInt)),
+      @parser.int_literal(0, SInt),
     ]),
     scope,
     13L,
@@ -189,10 +195,10 @@ test "mir internal expression helpers fold constants with target layout" {
     Call(Var("__builtin_object_size"), [
       Binary(
         "+",
-        AddrOf(ArrayAccess(Var("global_buf"), Number(3, SInt))),
-        Number(2, SInt),
+        AddrOf(ArrayAccess(Var("global_buf"), @parser.int_literal(3, SInt))),
+        @parser.int_literal(2, SInt),
       ),
-      Number(1, SInt),
+      @parser.int_literal(1, SInt),
     ]),
     scope,
     11L,
@@ -201,7 +207,7 @@ test "mir internal expression helpers fold constants with target layout" {
     mir,
     Call(Var("__builtin_object_size"), [
       AddrOf(MemberAccess(Var("global_s"), "arr")),
-      Number(0, SInt),
+      @parser.int_literal(0, SInt),
     ]),
     scope,
     12L,
@@ -210,7 +216,7 @@ test "mir internal expression helpers fold constants with target layout" {
     mir,
     Call(Var("__builtin_dynamic_object_size"), [
       MemberAccess(Var("global_s"), "arr"),
-      Number(2, SInt),
+      @parser.int_literal(2, SInt),
     ]),
     scope,
     12L,
@@ -218,8 +224,13 @@ test "mir internal expression helpers fold constants with target layout" {
   expect_const(
     mir,
     Call(Var("__builtin_dynamic_object_size"), [
-      AddrOf(ArrayAccess(MemberAccess(Var("global_s"), "arr"), Number(1, SInt))),
-      Number(2, SInt),
+      AddrOf(
+        ArrayAccess(
+          MemberAccess(Var("global_s"), "arr"),
+          @parser.int_literal(1, SInt),
+        ),
+      ),
+      @parser.int_literal(2, SInt),
     ]),
     scope,
     8L,
@@ -231,7 +242,10 @@ test "mir internal expression helpers fold constants with target layout" {
   let local_scope : Scope = { locals: local_types, current_func: "main" }
   expect_const(
     mir,
-    Call(Var("__builtin_object_size"), [AddrOf(Var("local_x")), Number(0, SInt)]),
+    Call(Var("__builtin_object_size"), [
+      AddrOf(Var("local_x")),
+      @parser.int_literal(0, SInt),
+    ]),
     local_scope,
     4L,
   )
@@ -239,7 +253,7 @@ test "mir internal expression helpers fold constants with target layout" {
     mir,
     Call(Var("__builtin_dynamic_object_size"), [
       Var("local_buf"),
-      Number(2, SInt),
+      @parser.int_literal(2, SInt),
     ]),
     local_scope,
     16L,
@@ -247,8 +261,8 @@ test "mir internal expression helpers fold constants with target layout" {
   expect_const(
     mir,
     Call(Var("__builtin_object_size"), [
-      AddrOf(ArrayAccess(Var("local_buf"), Number(3, SInt))),
-      Number(0, SInt),
+      AddrOf(ArrayAccess(Var("local_buf"), @parser.int_literal(3, SInt))),
+      @parser.int_literal(0, SInt),
     ]),
     local_scope,
     13L,
@@ -257,7 +271,7 @@ test "mir internal expression helpers fold constants with target layout" {
     mir,
     Call(Var("__builtin_object_size"), [
       AddrOf(MemberAccess(Var("local_s"), "arr")),
-      Number(0, SInt),
+      @parser.int_literal(0, SInt),
     ]),
     local_scope,
     12L,
@@ -266,7 +280,7 @@ test "mir internal expression helpers fold constants with target layout" {
     mir,
     Call(Var("__builtin_dynamic_object_size"), [
       MemberAccess(Var("local_s"), "arr"),
-      Number(2, SInt),
+      @parser.int_literal(2, SInt),
     ]),
     local_scope,
     12L,
@@ -274,8 +288,13 @@ test "mir internal expression helpers fold constants with target layout" {
   expect_const(
     mir,
     Call(Var("__builtin_object_size"), [
-      AddrOf(ArrayAccess(MemberAccess(Var("local_s"), "arr"), Number(1, SInt))),
-      Number(1, SInt),
+      AddrOf(
+        ArrayAccess(
+          MemberAccess(Var("local_s"), "arr"),
+          @parser.int_literal(1, SInt),
+        ),
+      ),
+      @parser.int_literal(1, SInt),
     ]),
     local_scope,
     8L,
@@ -283,7 +302,7 @@ test "mir internal expression helpers fold constants with target layout" {
   expect_const(
     mir,
     Call(Var("__builtin_constant_p"), [
-      Binary("+", Number(1, SInt), Number(2, SInt)),
+      Binary("+", @parser.int_literal(1, SInt), @parser.int_literal(2, SInt)),
     ]),
     scope,
     1L,
@@ -296,47 +315,63 @@ test "mir internal expression helpers fold constants with target layout" {
   )
   expect_const(
     mir,
-    Call(Var("__builtin_abs"), [Unary("-", Number(7, SInt))]),
+    Call(Var("__builtin_abs"), [Unary("-", @parser.int_literal(7, SInt))]),
     scope,
     7L,
   )
   expect_const(
     mir,
-    Call(Var("__builtin_align_up"), [Number(33, SInt), Number(16, SInt)]),
+    Call(Var("__builtin_align_up"), [
+      @parser.int_literal(33, SInt),
+      @parser.int_literal(16, SInt),
+    ]),
     scope,
     48L,
   )
   expect_const(
     mir,
-    Call(Var("__builtin_popcount"), [Number(0xf0f0, SInt)]),
+    Call(Var("__builtin_popcount"), [@parser.int_literal(0xf0f0, SInt)]),
     scope,
     8L,
   )
   expect_const(
     mir,
-    Call(Var("__builtin_bswap32"), [Number(0x01020304, SInt)]),
+    Call(Var("__builtin_bswap32"), [@parser.int_literal(0x01020304, SInt)]),
     scope,
     0x04030201L,
   )
   expect_const(
     mir,
     Call(Var("__builtin_rotateleft32"), [
-      Number(0x12345678, SInt),
-      Number(8, SInt),
+      @parser.int_literal(0x12345678, SInt),
+      @parser.int_literal(8, SInt),
     ]),
     scope,
     0x34567812L,
   )
-  expect_const(mir, Binary("/", Number(1, SInt), Number(2, SInt)), scope, 0L)
   expect_const(
     mir,
-    Binary(">", Cast(ULong, Unary("-", Number(1, SInt))), Number(1, SInt)),
+    Binary("/", @parser.int_literal(1, SInt), @parser.int_literal(2, SInt)),
+    scope,
+    0L,
+  )
+  expect_const(
+    mir,
+    Binary(
+      ">",
+      Cast(ULong, Unary("-", @parser.int_literal(1, SInt))),
+      @parser.int_literal(1, SInt),
+    ),
     scope,
     1L,
   )
   expect_float_const(
     mir,
-    Binary("/", Cast(Double, Number(1, SInt)), Number(2, SInt)),
+    Binary(
+      "/",
+      Cast(Double, @parser.int_literal(1, SInt)),
+      @parser.int_literal(2, SInt),
+    ),
     scope,
     0.5,
   )
@@ -349,7 +384,7 @@ test "mir internal expression helpers fold constants with target layout" {
   expect_float_const(
     mir,
     Ternary(
-      Number(0, SInt),
+      @parser.int_literal(0, SInt),
       FloatLiteral("9.0", Double),
       Binary("+", FloatLiteral("1.25", Double), FloatLiteral("2.5", Double)),
     ),

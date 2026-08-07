@@ -8,6 +8,8 @@ import {
 }
 
 // Values
+pub fn int_literal(Int64, @ctype.Type) -> Expr
+
 pub fn packed_align(Int?, Int) -> Int
 
 pub fn parse(String) -> Program
@@ -20,7 +22,7 @@ pub fn validate_semantics(Program) -> Result[Unit, String]
 
 // Types and methods
 pub(all) enum Expr {
-  Number(Int64, @ctype.Type)
+  Number(Int64, String, @ctype.Type)
   FloatLiteral(String, @ctype.Type)
   String(String)
   Var(String)
@@ -159,7 +161,7 @@ pub(all) struct StructDecl {
 pub(all) enum Token {
   EOF
   Ident(String)
-  Number(Int64, @ctype.Type)
+  Number(Int64, String, @ctype.Type)
   FloatLiteral(String, @ctype.Type)
   String(String)
   Int

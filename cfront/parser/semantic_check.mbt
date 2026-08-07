@@ -142,7 +142,7 @@ fn semantic_find_field_type(
 ///|
 fn semantic_expr_preview(expr : Expr) -> String {
   match expr {
-    Number(n, _) => n.to_string()
+    Number(n, _, _) => n.to_string()
     FloatLiteral(n, _) => n.to_string()
     String(_) => "string literal"
     Var(name) => name
@@ -256,7 +256,7 @@ fn semantic_expr_type(
   expr : Expr,
 ) -> Result[Type, String] {
   match expr {
-    Number(_, _) => Ok(SInt)
+    Number(_, _, _) => Ok(SInt)
     FloatLiteral(_, _) => Ok(Double)
     String(_) => Ok(Pointer(SChar))
     Var(name) =>

@@ -453,7 +453,7 @@ fn collect_codegen_file_scope_compound_literal_globals_expr(
         )
       }
     SizeofExpr(_) | AlignofExpr(_) => ()
-    Number(_, _)
+    Number(_, _, _)
     | FloatLiteral(_, _)
     | String(_)
     | Var(_)
@@ -516,7 +516,7 @@ fn collect_static_inline_expr(
 ) -> Unit {
   match expr {
     Var(name) => mark_static_inline_needed(name, inline_decls, needed)
-    Number(_, _)
+    Number(_, _, _)
     | FloatLiteral(_, _)
     | String(_)
     | Sizeof(_)
@@ -637,7 +637,7 @@ fn Codegen::global_expr_type(
   expr : @parser.Expr,
 ) -> @parser.Type {
   match expr {
-    Number(value, _) => @ctype.integer_literal_type(value)
+    Number(value, _, _) => @ctype.integer_literal_type(value)
     // The AST records a `float`-suffixed literal's type, but the code
     // generators cannot yet hold a single-precision constant, so type inference
     // still reports `double` here. Flipping this to `ty` makes every float
@@ -748,7 +748,7 @@ fn Codegen::fold_const_int(
   expr : @parser.Expr,
 ) -> @ctype.IntegerConstant? {
   match expr {
-    Number(n, _) =>
+    Number(n, _, _) =>
       Some(@ctype.integer_constant(n, @ctype.integer_constant_token_type(n)))
     Binary("+", a, b) =>
       match (self.fold_const_int(a), self.fold_const_int(b)) {
@@ -996,7 +996,7 @@ fn Codegen::fold_float_const(self : Codegen, expr : @parser.Expr) -> Double? {
   } else {
     match expr {
       FloatLiteral(text, ty) => Some(@ctype.floating_literal_value(text, ty))
-      Number(n, _) => Some(@ctype.floating_constant_from_integer_bits(n))
+      Number(n, _, _) => Some(@ctype.floating_constant_from_integer_bits(n))
       Binary("+", a, b) =>
         match (self.fold_float_const(a), self.fold_float_const(b)) {
           (Some(x), Some(y)) => @ctype.floating_constant_binary_arith("+", x, y)
@@ -1290,7 +1290,7 @@ fn Codegen::emit_global_scalar(
       Some(v) => {
         self.emit_global_scalar(
           ty,
-          Number(@ctype.floating_constant_to_integer_bits(v), SInt),
+          @parser.int_literal(@ctype.floating_constant_to_integer_bits(v), SInt),
         )
         return
       }
@@ -1310,11 +1310,11 @@ fn Codegen::emit_global_scalar(
   }
   // Try constant-fold the expression first
   let folded_expr = match self.fold_const(expr) {
-    Some(n) => @parser.Expr::Number(n, SInt)
+    Some(n) => @parser.int_literal(n, SInt)
     None => expr
   }
   match folded_expr {
-    Number(n, _) =>
+    Number(n, _, _) =>
       match ty {
         Bool | SChar | UChar => self.emit("\t.byte\t" + n.to_string())
         SShort | UShort => self.emit("\t.short\t" + n.to_string())
@@ -1347,7 +1347,7 @@ fn Codegen::emit_global_scalar(
       } else {
         self.emit_global_scalar(
           ty,
-          Number(@ctype.floating_constant_to_integer_bits(v), SInt),
+          @parser.int_literal(@ctype.floating_constant_to_integer_bits(v), SInt),
         )
       }
     }
@@ -1376,7 +1376,7 @@ fn Codegen::emit_global_scalar(
       } else if exprs.length() > 0 {
         self.emit_global_scalar(ty, exprs[0])
       } else {
-        self.emit_global_scalar(ty, Number(0, SInt))
+        self.emit_global_scalar(ty, @parser.int_literal(0, SInt))
       }
     Array(nested) =>
       if is_aggregate_type(ty) {
@@ -1384,7 +1384,7 @@ fn Codegen::emit_global_scalar(
       } else if nested.length() > 0 {
         self.emit_global_scalar(ty, nested[0])
       } else {
-        self.emit_global_scalar(ty, Number(0, SInt))
+        self.emit_global_scalar(ty, @parser.int_literal(0, SInt))
       }
     _ => {
       // Non-constant expression: emit zero placeholder

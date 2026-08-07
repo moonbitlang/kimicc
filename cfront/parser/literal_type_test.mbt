@@ -3,7 +3,7 @@
 fn literal_type(expr : String) -> String {
   let program = @parser.parse("int f(void) { return " + expr + "; }")
   match program.decls[0].body {
-    Some(Compound([Return(Some(Number(_, ty)))])) => ty.to_string()
+    Some(Compound([Return(Some(Number(_, _, ty)))])) => ty.to_string()
     Some(Compound([Return(Some(FloatLiteral(_, ty)))])) => ty.to_string()
     _ => "unexpected"
   }
