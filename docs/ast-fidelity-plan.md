@@ -93,6 +93,32 @@ the lowered shapes today, so each construct moved has to grow a lowering step in
 MIR at the same time. That is why Step 4 is sequenced last among the mechanical
 changes despite being the one that matters most for the printer.
 
+**A `float` value is 32 bits throughout.** The C standard does not fix a width
+for `float`: it requires only that each floating type's value set be a subset of
+the next, with minimum range and precision floors. IEEE binary32 comes from
+Annex F, which is an optional conformance feature. Both supported targets are
+binary32 in practice -- `FLT_MANT_DIG` is 24 and `sizeof(float)` is 4 -- so 32
+bits is the right choice here even though the standard does not demand it.
+
+The standard also permits evaluating float operations at *greater* precision
+than the type, selected by `FLT_EVAL_METHOD`, which is why holding every
+floating value as a 64-bit double pattern -- what `mir/body_interpreter.mbt`
+does today at eight sites -- is a legal strategy rather than a bug. It is not
+the right strategy here: both targets report `FLT_EVAL_METHOD == 0`, so clang
+evaluates float arithmetic in single precision, and agreeing with clang is this
+project's correctness standard. Evaluating in double would produce legal C with
+answers that differ from the compiler the differential tests compare against.
+
+Note that storage width and evaluation width are independent in C -- `sizeof`
+reports the type's size regardless of how expressions are evaluated -- which
+suggests `sizeof(1.0f)` could be fixed separately and cheaply. It cannot, in
+this codebase: `expr_type` is recursive, so special-casing a bare literal would
+make `sizeof(1.0f)` report 4 while `sizeof(1.0f + 1.0f)` still reported 8.
+Uniformly wrong is easier to reason about than inconsistently right, and a
+parallel "declared type" function mirroring `expr_type` would cost more than
+the real fix. So `sizeof(1.0f)` waits for the representation change and comes
+along with it.
+
 **Miscompiles are fixed on their own, not as a side effect.** Two items below
 are live compiler bugs rather than fidelity gaps: block-scoped tags collide
 because they are hoisted into one flat table, and literal suffixes are dropped
