@@ -5,8 +5,13 @@ fn Codegen::type_of(
   frame_size : Int,
 ) -> @parser.Type {
   match expr {
-    Number(value) => @ctype.integer_literal_type(value)
-    FloatLiteral(_) => Double
+    Number(value, _) => @ctype.integer_literal_type(value)
+    // The AST records a `float`-suffixed literal's type, but the code
+    // generators cannot yet hold a single-precision constant, so type inference
+    // still reports `double` here. Flipping this to `ty` makes every float
+    // literal evaluate wrongly until the backends learn single precision; see
+    // docs/ast-fidelity-plan.md.
+    FloatLiteral(_, _) => Double
     String(_) => Pointer(SChar)
     Var(name) =>
       if self.var_types.contains(name) {
@@ -57,7 +62,7 @@ fn Codegen::type_of(
       }
       let force_wide_shift = if op == "<<" || op == ">>" {
         match (lhs, rhs) {
-          (Number(_), Number(shift)) => shift >= 32L
+          (Number(_, _), Number(shift, _)) => shift >= 32L
           _ => false
         }
       } else {
@@ -2534,8 +2539,8 @@ fn Codegen::emit_builtin_address_query(
     "frame_address" => {
       if args.length() > 0 {
         match args[0] {
-          Number(0L) => self.emit("\tmov\tx9, x29")
-          Number(_) => self.emit("\tmov\tx9, #0")
+          Number(0L, _) => self.emit("\tmov\tx9, x29")
+          Number(_, _) => self.emit("\tmov\tx9, #0")
           _ => {
             self.gen_expr(args[0], frame_size)
             self.emit("\tcmp\tx9, #0")
@@ -2551,8 +2556,8 @@ fn Codegen::emit_builtin_address_query(
     "return_address" => {
       if args.length() > 0 {
         match args[0] {
-          Number(0L) => self.emit("\tldr\tx9, [x29, #8]")
-          Number(_) => self.emit("\tmov\tx9, #0")
+          Number(0L, _) => self.emit("\tldr\tx9, [x29, #8]")
+          Number(_, _) => self.emit("\tmov\tx9, #0")
           _ => {
             self.gen_expr(args[0], frame_size)
             self.emit("\tcmp\tx9, #0")
@@ -3746,7 +3751,7 @@ fn Codegen::emit_init_value_at_addr(
         }
       CompoundLiteral(_, init_exprs, _) | Array(init_exprs) =>
         self.emit_init_aggregate_at_addr(ty, init_exprs, frame_size)
-      Number(0) => ()
+      Number(0, _) => ()
       Call(_, _) if self.is_register_aggregate(ty) => {
         self.emit("\tstr\tx9, [sp, #-16]!")
         self.gen_expr(value, frame_size)
@@ -3832,7 +3837,7 @@ fn Codegen::emit_init_string_array_at_addr(
         self.emit_add_offset_to_x9(i * elem_size)
         self.emit_init_scalar_at_addr(
           elem_ty,
-          Number(value[i].to_int().to_int64()),
+          Number(value[i].to_int().to_int64(), SInt),
           frame_size,
         )
       }
@@ -4215,8 +4220,8 @@ fn Codegen::gen_expr(
   frame_size : Int,
 ) -> Unit {
   match expr {
-    Number(n) => self.emit_load_int("x9", n)
-    FloatLiteral(v) => self.emit_load_float_literal(v)
+    Number(n, _) => self.emit_load_int("x9", n)
+    FloatLiteral(v, _) => self.emit_load_float_literal(v)
     String(s) => {
       let idx = self.strings.length()
       self.strings.push(s)
@@ -4438,7 +4443,7 @@ fn Codegen::gen_expr(
       let fp_ty : @parser.Type = if is_double { Double } else { Float }
       let force_wide_shift = if op == "<<" || op == ">>" {
         match (left, right) {
-          (Number(_), Number(shift)) => shift >= 32L
+          (Number(_, _), Number(shift, _)) => shift >= 32L
           _ => false
         }
       } else {
@@ -5820,7 +5825,7 @@ fn Codegen::gen_aggregate_addr(
         let init_expr = if init_exprs.length() > 0 {
           init_exprs[0]
         } else {
-          Number(0)
+          Number(0, SInt)
         }
         self.emit_init_scalar_at_addr(ty, init_expr, frame_size)
       }

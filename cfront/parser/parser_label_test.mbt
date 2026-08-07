@@ -4,12 +4,13 @@ test "parse compound with label after goto" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([For(None, Number(1), None, body)])) =>
+    Some(Compound([For(None, Number(1, SInt), None, body)])) =>
       match body {
         Compound(inner) => {
           inspect(inner.length(), content="2")
           match inner[1] {
-            Compound([Label("case_OP_push_i32", Return(Some(Number(1))))]) => ()
+            Compound([Label("case_OP_push_i32", Return(Some(Number(1, SInt))))]) =>
+              ()
             _ => fail("Expected inner compound with label")
           }
         }

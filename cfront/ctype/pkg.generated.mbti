@@ -110,6 +110,8 @@ pub fn count_trailing_zero_bits(Int64, Int) -> Int64
 
 pub fn first_set_bit(Int64, Int) -> Int64
 
+pub fn float_literal_suffix_type(Char?) -> Type
+
 pub fn floating_abs(Double) -> Double
 
 pub fn floating_builtin_classify(String, Double) -> Bool?
@@ -183,6 +185,8 @@ pub fn integer_constant_token_type(Int64) -> Type
 pub fn integer_constant_unary(String, IntegerConstant) -> IntegerConstant?
 
 pub fn integer_count_builtin_info(String) -> (String, Int)?
+
+pub fn integer_literal_suffix_type(Int64, Bool, Int) -> Type
 
 pub fn integer_literal_type(Int64) -> Type
 

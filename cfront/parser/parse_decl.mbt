@@ -240,11 +240,11 @@ fn Parser::parse_global_var_tail(
         (Array(elem_ty, 0), String(s)) => {
           let array_length = @ctype.string_literal_array_length(s)
           ty = Array(elem_ty, array_length)
-          let char_exprs = Array::make(array_length, Expr::Number(0))
+          let char_exprs = Array::make(array_length, Expr::Number(0, SInt))
           for i = 0; i < s.length(); i = i + 1 {
-            char_exprs[i] = Number(s[i].to_int().to_int64())
+            char_exprs[i] = Number(s[i].to_int().to_int64(), SInt)
           }
-          char_exprs[s.length()] = Number(0)
+          char_exprs[s.length()] = Number(0, SInt)
           init = Some(Array(char_exprs))
         }
         _ => init = Some(Scalar(expr))
@@ -289,11 +289,11 @@ fn Parser::parse_global_var_tail(
           (Array(elem_ty, 0), String(s)) => {
             let array_length = @ctype.string_literal_array_length(s)
             extra_ty = Array(elem_ty, array_length)
-            let char_exprs = Array::make(array_length, Expr::Number(0))
+            let char_exprs = Array::make(array_length, Expr::Number(0, SInt))
             for i = 0; i < s.length(); i = i + 1 {
-              char_exprs[i] = Number(s[i].to_int().to_int64())
+              char_exprs[i] = Number(s[i].to_int().to_int64(), SInt)
             }
-            char_exprs[s.length()] = Number(0)
+            char_exprs[s.length()] = Number(0, SInt)
             extra_init = Some(Array(char_exprs))
           }
           _ => extra_init = Some(Scalar(expr))

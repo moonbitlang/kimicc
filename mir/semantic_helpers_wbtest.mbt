@@ -48,7 +48,7 @@ test "mir internal expression helpers use target layout" {
   )
   let scope = Scope::empty()
   let long_double_builtin : @parser.Expr = Call(Var("__builtin_fabsl"), [
-    FloatLiteral(1.0),
+    FloatLiteral(1.0, Double),
   ])
   inspect(darwin.expr_type(long_double_builtin, scope), content="LongDouble")
   inspect(linux.expr_type(long_double_builtin, scope), content="LongDouble")
@@ -69,7 +69,7 @@ test "mir internal expression helpers compute parser expression types" {
     current_func: "main",
   }
   inspect(
-    mir.expr_type(Binary("+", Var("p"), Number(1)), scope),
+    mir.expr_type(Binary("+", Var("p"), Number(1, SInt)), scope),
     content="Pointer(SInt)",
   )
   inspect(
@@ -77,7 +77,7 @@ test "mir internal expression helpers compute parser expression types" {
     content="SLong",
   )
   inspect(
-    mir.expr_type(Binary("<<", Number(1), Number(40)), scope),
+    mir.expr_type(Binary("<<", Number(1, SInt), Number(40, SInt)), scope),
     content="ULongLong",
   )
   inspect(mir.expr_type(MemberAccess(Var("s"), "y"), scope), content="Double")
@@ -108,7 +108,7 @@ test "mir internal expression helpers fold constants with target layout" {
   expect_const(mir, AlignofExpr(String("abc")), scope, 1L)
   expect_const(
     mir,
-    Call(Var("__builtin_object_size"), [String("abc"), Number(0)]),
+    Call(Var("__builtin_object_size"), [String("abc"), Number(0, SInt)]),
     scope,
     4L,
   )
@@ -116,7 +116,7 @@ test "mir internal expression helpers fold constants with target layout" {
     mir,
     Call(Var("__builtin_dynamic_object_size"), [
       Cast(Pointer(SChar), String("abcd")),
-      Number(2),
+      Number(2, SInt),
     ]),
     scope,
     5L,
@@ -124,8 +124,8 @@ test "mir internal expression helpers fold constants with target layout" {
   expect_const(
     mir,
     Call(Var("__builtin_object_size"), [
-      Cast(Pointer(Void), Number(0)),
-      Number(0),
+      Cast(Pointer(Void), Number(0, SInt)),
+      Number(0, SInt),
     ]),
     scope,
     -1L,
@@ -133,29 +133,35 @@ test "mir internal expression helpers fold constants with target layout" {
   expect_const(
     mir,
     Call(Var("__builtin_dynamic_object_size"), [
-      Cast(Pointer(Void), Number(0)),
-      Number(2),
+      Cast(Pointer(Void), Number(0, SInt)),
+      Number(2, SInt),
     ]),
     scope,
     0L,
   )
   expect_const(
     mir,
-    Call(Var("__builtin_object_size"), [AddrOf(Var("global_x")), Number(0)]),
+    Call(Var("__builtin_object_size"), [
+      AddrOf(Var("global_x")),
+      Number(0, SInt),
+    ]),
     scope,
     4L,
   )
   expect_const(
     mir,
-    Call(Var("__builtin_dynamic_object_size"), [Var("global_buf"), Number(2)]),
+    Call(Var("__builtin_dynamic_object_size"), [
+      Var("global_buf"),
+      Number(2, SInt),
+    ]),
     scope,
     16L,
   )
   expect_const(
     mir,
     Call(Var("__builtin_object_size"), [
-      AddrOf(ArrayAccess(Var("global_buf"), Number(3))),
-      Number(0),
+      AddrOf(ArrayAccess(Var("global_buf"), Number(3, SInt))),
+      Number(0, SInt),
     ]),
     scope,
     13L,
@@ -163,8 +169,8 @@ test "mir internal expression helpers fold constants with target layout" {
   expect_const(
     mir,
     Call(Var("__builtin_object_size"), [
-      AddrOf(ArrayAccess(Var("global_buf"), Number(3))),
-      Number(1),
+      AddrOf(ArrayAccess(Var("global_buf"), Number(3, SInt))),
+      Number(1, SInt),
     ]),
     scope,
     13L,
@@ -172,8 +178,8 @@ test "mir internal expression helpers fold constants with target layout" {
   expect_const(
     mir,
     Call(Var("__builtin_object_size"), [
-      Binary("+", Var("global_buf"), Number(3)),
-      Number(0),
+      Binary("+", Var("global_buf"), Number(3, SInt)),
+      Number(0, SInt),
     ]),
     scope,
     13L,
@@ -181,8 +187,12 @@ test "mir internal expression helpers fold constants with target layout" {
   expect_const(
     mir,
     Call(Var("__builtin_object_size"), [
-      Binary("+", AddrOf(ArrayAccess(Var("global_buf"), Number(3))), Number(2)),
-      Number(1),
+      Binary(
+        "+",
+        AddrOf(ArrayAccess(Var("global_buf"), Number(3, SInt))),
+        Number(2, SInt),
+      ),
+      Number(1, SInt),
     ]),
     scope,
     11L,
@@ -191,7 +201,7 @@ test "mir internal expression helpers fold constants with target layout" {
     mir,
     Call(Var("__builtin_object_size"), [
       AddrOf(MemberAccess(Var("global_s"), "arr")),
-      Number(0),
+      Number(0, SInt),
     ]),
     scope,
     12L,
@@ -200,7 +210,7 @@ test "mir internal expression helpers fold constants with target layout" {
     mir,
     Call(Var("__builtin_dynamic_object_size"), [
       MemberAccess(Var("global_s"), "arr"),
-      Number(2),
+      Number(2, SInt),
     ]),
     scope,
     12L,
@@ -208,8 +218,8 @@ test "mir internal expression helpers fold constants with target layout" {
   expect_const(
     mir,
     Call(Var("__builtin_dynamic_object_size"), [
-      AddrOf(ArrayAccess(MemberAccess(Var("global_s"), "arr"), Number(1))),
-      Number(2),
+      AddrOf(ArrayAccess(MemberAccess(Var("global_s"), "arr"), Number(1, SInt))),
+      Number(2, SInt),
     ]),
     scope,
     8L,
@@ -221,21 +231,24 @@ test "mir internal expression helpers fold constants with target layout" {
   let local_scope : Scope = { locals: local_types, current_func: "main" }
   expect_const(
     mir,
-    Call(Var("__builtin_object_size"), [AddrOf(Var("local_x")), Number(0)]),
+    Call(Var("__builtin_object_size"), [AddrOf(Var("local_x")), Number(0, SInt)]),
     local_scope,
     4L,
   )
   expect_const(
     mir,
-    Call(Var("__builtin_dynamic_object_size"), [Var("local_buf"), Number(2)]),
+    Call(Var("__builtin_dynamic_object_size"), [
+      Var("local_buf"),
+      Number(2, SInt),
+    ]),
     local_scope,
     16L,
   )
   expect_const(
     mir,
     Call(Var("__builtin_object_size"), [
-      AddrOf(ArrayAccess(Var("local_buf"), Number(3))),
-      Number(0),
+      AddrOf(ArrayAccess(Var("local_buf"), Number(3, SInt))),
+      Number(0, SInt),
     ]),
     local_scope,
     13L,
@@ -244,7 +257,7 @@ test "mir internal expression helpers fold constants with target layout" {
     mir,
     Call(Var("__builtin_object_size"), [
       AddrOf(MemberAccess(Var("local_s"), "arr")),
-      Number(0),
+      Number(0, SInt),
     ]),
     local_scope,
     12L,
@@ -253,7 +266,7 @@ test "mir internal expression helpers fold constants with target layout" {
     mir,
     Call(Var("__builtin_dynamic_object_size"), [
       MemberAccess(Var("local_s"), "arr"),
-      Number(2),
+      Number(2, SInt),
     ]),
     local_scope,
     12L,
@@ -261,15 +274,17 @@ test "mir internal expression helpers fold constants with target layout" {
   expect_const(
     mir,
     Call(Var("__builtin_object_size"), [
-      AddrOf(ArrayAccess(MemberAccess(Var("local_s"), "arr"), Number(1))),
-      Number(1),
+      AddrOf(ArrayAccess(MemberAccess(Var("local_s"), "arr"), Number(1, SInt))),
+      Number(1, SInt),
     ]),
     local_scope,
     8L,
   )
   expect_const(
     mir,
-    Call(Var("__builtin_constant_p"), [Binary("+", Number(1), Number(2))]),
+    Call(Var("__builtin_constant_p"), [
+      Binary("+", Number(1, SInt), Number(2, SInt)),
+    ]),
     scope,
     1L,
   )
@@ -281,84 +296,90 @@ test "mir internal expression helpers fold constants with target layout" {
   )
   expect_const(
     mir,
-    Call(Var("__builtin_abs"), [Unary("-", Number(7))]),
+    Call(Var("__builtin_abs"), [Unary("-", Number(7, SInt))]),
     scope,
     7L,
   )
   expect_const(
     mir,
-    Call(Var("__builtin_align_up"), [Number(33), Number(16)]),
+    Call(Var("__builtin_align_up"), [Number(33, SInt), Number(16, SInt)]),
     scope,
     48L,
   )
   expect_const(
     mir,
-    Call(Var("__builtin_popcount"), [Number(0xf0f0)]),
+    Call(Var("__builtin_popcount"), [Number(0xf0f0, SInt)]),
     scope,
     8L,
   )
   expect_const(
     mir,
-    Call(Var("__builtin_bswap32"), [Number(0x01020304)]),
+    Call(Var("__builtin_bswap32"), [Number(0x01020304, SInt)]),
     scope,
     0x04030201L,
   )
   expect_const(
     mir,
-    Call(Var("__builtin_rotateleft32"), [Number(0x12345678), Number(8)]),
+    Call(Var("__builtin_rotateleft32"), [
+      Number(0x12345678, SInt),
+      Number(8, SInt),
+    ]),
     scope,
     0x34567812L,
   )
-  expect_const(mir, Binary("/", Number(1), Number(2)), scope, 0L)
+  expect_const(mir, Binary("/", Number(1, SInt), Number(2, SInt)), scope, 0L)
   expect_const(
     mir,
-    Binary(">", Cast(ULong, Unary("-", Number(1))), Number(1)),
+    Binary(">", Cast(ULong, Unary("-", Number(1, SInt))), Number(1, SInt)),
     scope,
     1L,
   )
   expect_float_const(
     mir,
-    Binary("/", Cast(Double, Number(1)), Number(2)),
+    Binary("/", Cast(Double, Number(1, SInt)), Number(2, SInt)),
     scope,
     0.5,
   )
   expect_float_const(
     mir,
-    Cast(Double, Cast(SInt, FloatLiteral(1.75))),
+    Cast(Double, Cast(SInt, FloatLiteral(1.75, Double))),
     scope,
     1.0,
   )
   expect_float_const(
     mir,
     Ternary(
-      Number(0),
-      FloatLiteral(9.0),
-      Binary("+", FloatLiteral(1.25), FloatLiteral(2.5)),
+      Number(0, SInt),
+      FloatLiteral(9.0, Double),
+      Binary("+", FloatLiteral(1.25, Double), FloatLiteral(2.5, Double)),
     ),
     scope,
     3.75,
   )
   expect_float_const(
     mir,
-    Call(Var("__builtin_fabs"), [FloatLiteral(-4.5)]),
+    Call(Var("__builtin_fabs"), [FloatLiteral(-4.5, Double)]),
     scope,
     4.5,
   )
   expect_float_const(
     mir,
-    Call(Var("__builtin_copysign"), [FloatLiteral(3.0), FloatLiteral(-1.0)]),
+    Call(Var("__builtin_copysign"), [
+      FloatLiteral(3.0, Double),
+      FloatLiteral(-1.0, Double),
+    ]),
     scope,
     -3.0,
   )
   expect_float_const(
     mir,
-    Call(Var("__builtin_sqrt"), [FloatLiteral(81.0)]),
+    Call(Var("__builtin_sqrt"), [FloatLiteral(81.0, Double)]),
     scope,
     9.0,
   )
   match
     mir.fold_float_const(
-      Call(Var("__builtin_sqrt"), [FloatLiteral(-1.0)]),
+      Call(Var("__builtin_sqrt"), [FloatLiteral(-1.0, Double)]),
       scope,
     ) {
     Some(value) => if value == value { abort("expected folded NaN") }

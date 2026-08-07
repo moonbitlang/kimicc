@@ -83,7 +83,11 @@ fn binary_precedence(op : String) -> Int {
 /// test {
 ///   inspect(
 ///     @printer.print_expr(
-///       Binary("*", Binary("+", Number(1), Number(2)), Number(3)),
+///       Binary(
+///         "*",
+///         Binary("+", Number(1, SInt), Number(2, SInt)),
+///         Number(3, SInt),
+///       ),
 ///     ),
 ///     content="(1 + 2) * 3",
 ///   )
@@ -109,8 +113,8 @@ fn print_expr_at(expr : @parser.Expr, min_prec : Int) -> String {
 /// Renders an expression and reports the precedence of its outermost operator.
 fn render_expr(expr : @parser.Expr) -> (String, Int) {
   match expr {
-    Number(value) => (print_integer(value), PREC_PRIMARY)
-    FloatLiteral(value) => (print_double(value), PREC_PRIMARY)
+    Number(value, ty) => (print_integer(value, ty), PREC_PRIMARY)
+    FloatLiteral(value, ty) => (print_double(value, ty), PREC_PRIMARY)
     String(value) => ("\"" + escape_string(value) + "\"", PREC_PRIMARY)
     Var(name) => (name, PREC_PRIMARY)
     Binary(op, lhs, rhs) => {
@@ -279,16 +283,34 @@ let hex_digits : ReadOnlyArray[Char] = [
 /// 64-bit pattern of a literal that overflowed the signed range, such as
 /// `10000000000000000000` or `0x8000000000000000`, so the honest spelling is
 /// the pattern itself: one hexadecimal token, same bits, no negation involved.
-fn print_integer(value : Int64) -> String {
+fn print_integer(value : Int64, ty : @ctype.Type) -> String {
   if value >= 0L {
-    return value.to_string()
+    return value.to_string() + integer_suffix(ty)
   }
   let buf = StringBuilder::new()
   buf.write_string("0x")
   for shift = 60; shift >= 0; shift = shift - 4 {
     buf.write_char(hex_digits[((value >> shift) & 0xfL).to_int()])
   }
+  buf.write_string(integer_suffix(ty))
   buf.to_string()
+}
+
+///|
+/// Returns the suffix that makes a literal reparse with type `ty`.
+///
+/// A bare literal already takes the first type that can hold its value, so
+/// `int` and the widths a bare literal would select anyway need nothing. The
+/// rest have to say so, or the type is lost on the way back in.
+fn integer_suffix(ty : @ctype.Type) -> String {
+  match ty {
+    UInt => "u"
+    SLong => "L"
+    ULong => "uL"
+    SLongLong => "LL"
+    ULongLong => "uLL"
+    _ => ""
+  }
 }
 
 ///|
@@ -342,7 +364,7 @@ fn print_offset_path(path : ArrayView[@ctype.OffsetDesignator]) -> String {
 /// MoonBit prints whole doubles without a fractional part, which C would lex as
 /// an integer constant, so a `.0` is appended when nothing marks it as
 /// floating.
-fn print_double(value : Double) -> String {
+fn print_double(value : Double, ty : @ctype.Type) -> String {
   let text = value.to_string()
   let mut floating = false
   for ch in text {
@@ -351,10 +373,11 @@ fn print_double(value : Double) -> String {
       break
     }
   }
-  if floating {
-    text
-  } else {
-    text + ".0"
+  let body = if floating { text } else { text + ".0" }
+  match ty {
+    Float => body + "f"
+    LongDouble => body + "L"
+    _ => body
   }
 }
 

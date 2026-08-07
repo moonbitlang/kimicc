@@ -147,13 +147,13 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
     LBrace => self.parse_compound_stmt()
     Semicolon => {
       self.advance()
-      ExprStmt(Number(0))
+      ExprStmt(Number(0, SInt))
     }
     Ident("_Static_assert")
     | Ident("__Static_assert")
     | Ident("static_assert") => {
       self.parse_static_assert_decl()
-      ExprStmt(Number(0))
+      ExprStmt(Number(0, SInt))
     }
     Int
     | Void
@@ -178,7 +178,7 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
     | Auto => self.parse_var_decl_stmt()
     Typedef => {
       self.parse_typedef()
-      ExprStmt(Number(0))
+      ExprStmt(Number(0, SInt))
     }
     Ident("_Alignas") | Ident("alignas") => self.parse_var_decl_stmt()
     Ident("_Atomic") => self.parse_var_decl_stmt()
@@ -239,7 +239,7 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
           }
         }
         self.expect(Semicolon)
-        return ExprStmt(Number(0))
+        return ExprStmt(Number(0, SInt))
       }
       // Handle __attribute__((...)); as a no-op statement
       if name == "__attribute__" || name == "__attribute" {
@@ -265,7 +265,7 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
           return self.parse_var_decl_stmt()
         }
         self.expect(Semicolon)
-        return ExprStmt(Number(0))
+        return ExprStmt(Number(0, SInt))
       }
       // Check if this is a label: name:
       let saved_pos = self.lexer.pos
@@ -276,7 +276,7 @@ fn Parser::parse_stmt(self : Parser) -> Stmt {
         // If labeled statement is case/default, don't consume it
         // Let parse_switch_stmt handle it
         if self.token == Case || self.token == Default {
-          return Label(name, ExprStmt(Number(0)))
+          return Label(name, ExprStmt(Number(0, SInt)))
         }
         let stmt = self.parse_stmt()
         return Label(name, stmt)
@@ -389,7 +389,7 @@ fn Parser::parse_for_stmt(self : Parser) -> Stmt {
   // Parse condition
   let cond = if self.token == Semicolon {
     self.advance()
-    Expr::Number(1) // always true
+    Expr::Number(1, SInt) // always true
   } else {
     let expr = self.parse_expr()
     self.expect(Semicolon)
@@ -642,11 +642,11 @@ fn Parser::parse_static_initializer(
         (Array(elem_ty, 0), String(s)) => {
           let len = s.length()
           let arr_ty = Type::Array(elem_ty, len + 1)
-          let init_exprs = Array::make(len + 1, Expr::Number(0))
+          let init_exprs = Array::make(len + 1, Expr::Number(0, SInt))
           for i = 0; i < len; i = i + 1 {
-            init_exprs[i] = Number(s[i].to_int().to_int64())
+            init_exprs[i] = Number(s[i].to_int().to_int64(), SInt)
           }
-          init_exprs[len] = Number(0)
+          init_exprs[len] = Number(0, SInt)
           (arr_ty, Some(Array(init_exprs)))
         }
         _ => (ty, Some(Scalar(expr)))
@@ -717,7 +717,7 @@ fn local_init_scalar_expr(expr : Expr) -> Expr {
 ///|
 fn local_init_scalar_brace_expr(init_exprs : Array[Expr]) -> Expr {
   if init_exprs.length() == 0 {
-    Number(0)
+    Number(0, SInt)
   } else {
     local_init_scalar_expr(init_exprs[0])
   }
@@ -783,8 +783,8 @@ fn Parser::push_struct_init_assignments(
         self.push_array_init_assignments_at(stmts, field_target, field.ty, [
           value,
         ])
-      (Struct(_) | Union(_), Number(0)) => ()
-      (Array(_, _), Number(0)) => ()
+      (Struct(_) | Union(_), Number(0, _)) => ()
+      (Array(_, _), Number(0, _)) => ()
       _ =>
         stmts.push(
           ExprStmt(Assign(field_target, local_init_scalar_expr(value))),
@@ -828,7 +828,7 @@ fn Parser::push_array_init_assignments_at(
       }
     }
     for i = start; i <= end; i = i + 1 {
-      let elem = Expr::ArrayAccess(target, Number(i.to_int64()))
+      let elem = Expr::ArrayAccess(target, Number(i.to_int64(), SInt))
       match (local_init_core_type(elem_ty), value) {
         (Struct(_) | Union(_), Array(field_exprs)) =>
           self.push_struct_init_assignments(stmts, elem, elem_ty, field_exprs)
@@ -839,8 +839,8 @@ fn Parser::push_array_init_assignments_at(
         (Array(_, _), DesignatedIndex(_, _))
         | (Array(_, _), DesignatedRange(_, _, _)) =>
           self.push_array_init_assignments_at(stmts, elem, elem_ty, [value])
-        (Struct(_) | Union(_), Number(0)) => ()
-        (Array(_, _), Number(0)) => ()
+        (Struct(_) | Union(_), Number(0, _)) => ()
+        (Array(_, _), Number(0, _)) => ()
         _ => stmts.push(ExprStmt(Assign(elem, local_init_scalar_expr(value))))
       }
     }
@@ -864,7 +864,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
   // Local struct/union/enum definition without variable: struct Foo { ... };
   if self.token == Semicolon {
     self.advance()
-    return ExprStmt(Number(0))
+    return ExprStmt(Number(0, SInt))
   }
   let stmts = []
   // Parse first declarator
@@ -941,7 +941,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
     })
     self.remember_value_type(decl.name, decl_ty)
     self.expect(Semicolon)
-    return ExprStmt(Number(0))
+    return ExprStmt(Number(0, SInt))
   }
   // Handle static / extern locals: promote to globals
   if spec.is_static || spec.is_extern {
@@ -1038,7 +1038,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
       self.remember_value_type(extra_decl.name, extra_ty)
     }
     self.expect(Semicolon)
-    return ExprStmt(Number(0))
+    return ExprStmt(Number(0, SInt))
   }
   // Handle initializer
   let ty = if self.token == Assign {
@@ -1049,7 +1049,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
         Struct(_) | Union(_) => {
           // Parse brace initializer expressions and create field assignments
           let init_exprs = self.parse_brace_init_exprs()
-          stmts.push(VarDecl(decl_ty, decl.name, Some(Number(0))))
+          stmts.push(VarDecl(decl_ty, decl.name, Some(Number(0, SInt))))
           self.push_struct_init_assignments(
             stmts,
             Var(decl.name),
@@ -1063,7 +1063,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
           let init_count = initializer_element_count(init_exprs)
           // Update array type if size was inferred
           let ty = local_init_infer_array_size(decl_ty, init_count)
-          stmts.push(VarDecl(ty, decl.name, Some(Number(0))))
+          stmts.push(VarDecl(ty, decl.name, Some(Number(0, SInt))))
           self.push_array_init_assignments(stmts, decl.name, ty, init_exprs)
           ty
         }
@@ -1092,8 +1092,8 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
             stmts.push(
               ExprStmt(
                 Assign(
-                  ArrayAccess(Var(decl.name), Number(i.to_int64())),
-                  Number(ch.to_int().to_int64()),
+                  ArrayAccess(Var(decl.name), Number(i.to_int64(), SInt)),
+                  Number(ch.to_int().to_int64(), SInt),
                 ),
               ),
             )
@@ -1102,8 +1102,8 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
           stmts.push(
             ExprStmt(
               Assign(
-                ArrayAccess(Var(decl.name), Number(len.to_int64())),
-                Number(0),
+                ArrayAccess(Var(decl.name), Number(len.to_int64(), SInt)),
+                Number(0, SInt),
               ),
             ),
           )
@@ -1135,7 +1135,9 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
       if self.token == LBrace {
         match local_init_core_type(extra_decl_ty) {
           Struct(_) | Union(_) => {
-            stmts.push(VarDecl(extra_decl_ty, extra_decl.name, Some(Number(0))))
+            stmts.push(
+              VarDecl(extra_decl_ty, extra_decl.name, Some(Number(0, SInt))),
+            )
             let init_exprs = self.parse_brace_init_exprs()
             self.push_struct_init_assignments(
               stmts,
@@ -1151,7 +1153,9 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
               extra_decl_ty, init_count,
             )
             remembered_extra_ty = extra_ty
-            stmts.push(VarDecl(extra_ty, extra_decl.name, Some(Number(0))))
+            stmts.push(
+              VarDecl(extra_ty, extra_decl.name, Some(Number(0, SInt))),
+            )
             self.push_array_init_assignments(
               stmts,
               extra_decl.name,
@@ -1183,8 +1187,11 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
               stmts.push(
                 ExprStmt(
                   Assign(
-                    ArrayAccess(Var(extra_decl.name), Number(i.to_int64())),
-                    Number(ch.to_int().to_int64()),
+                    ArrayAccess(
+                      Var(extra_decl.name),
+                      Number(i.to_int64(), SInt),
+                    ),
+                    Number(ch.to_int().to_int64(), SInt),
                   ),
                 ),
               )
@@ -1192,8 +1199,11 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
             stmts.push(
               ExprStmt(
                 Assign(
-                  ArrayAccess(Var(extra_decl.name), Number(len.to_int64())),
-                  Number(0),
+                  ArrayAccess(
+                    Var(extra_decl.name),
+                    Number(len.to_int64(), SInt),
+                  ),
+                  Number(0, SInt),
                 ),
               ),
             )

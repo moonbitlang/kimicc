@@ -3,7 +3,10 @@
 ///
 /// ```mbt check
 /// test {
-///   inspect(@printer.print_stmt(Return(Some(Number(0)))), content="return 0;")
+///   inspect(
+///     @printer.print_stmt(Return(Some(Number(0, SInt)))),
+///     content="return 0;",
+///   )
 /// }
 /// ```
 pub fn print_stmt(stmt : @parser.Stmt) -> String {

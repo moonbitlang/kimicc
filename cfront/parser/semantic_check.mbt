@@ -142,8 +142,8 @@ fn semantic_find_field_type(
 ///|
 fn semantic_expr_preview(expr : Expr) -> String {
   match expr {
-    Number(n) => n.to_string()
-    FloatLiteral(n) => n.to_string()
+    Number(n, _) => n.to_string()
+    FloatLiteral(n, _) => n.to_string()
     String(_) => "string literal"
     Var(name) => name
     Binary(op, _, _) => "binary " + op
@@ -256,8 +256,8 @@ fn semantic_expr_type(
   expr : Expr,
 ) -> Result[Type, String] {
   match expr {
-    Number(_) => Ok(SInt)
-    FloatLiteral(_) => Ok(Double)
+    Number(_, _) => Ok(SInt)
+    FloatLiteral(_, _) => Ok(Double)
     String(_) => Ok(Pointer(SChar))
     Var(name) =>
       match semantic_lookup_value(ctx, locals, name) {

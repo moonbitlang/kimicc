@@ -1087,7 +1087,7 @@ async test "external QuickJS strict MIR qjs runs language matrix when enabled" {
     #|assert(data.items.join(":") === "alpha:beta", "json roundtrip");
     #|
     #|let match = /([a-z]+)-(\d+)/.exec("ticket-42");
-    #|assert(match[1] === "ticket" && Number(match[2]) === 42, "regexp");
+    #|assert(match[1] === "ticket" && Number(match[2], SInt) === 42, "regexp");
     #|
     #|let mapped = [1, 2, 3, 4]
     #|  .map(x => x * x)
@@ -1098,7 +1098,7 @@ async test "external QuickJS strict MIR qjs runs language matrix when enabled" {
     #|let keys = Object.keys({ b: 1, a: 2 }).sort().join("");
     #|assert(keys === "ab", "object keys");
     #|
-    #|let big = typeof BigInt === "function" ? Number(BigInt(10) + BigInt(32)) : 42;
+    #|let big = typeof BigInt === "function" ? Number(BigInt(10) + BigInt(32), SInt) : 42;
     #|assert(big === 42, "bigint");
     #|
     #|console.log("quickjs-strict-mir-matrix", total + mapped + big);
@@ -1182,7 +1182,7 @@ async test "external QuickJS qjs runs language matrix when enabled" {
     #|assert(data.items.join(":") === "alpha:beta", "json roundtrip");
     #|
     #|let match = /([a-z]+)-(\d+)/.exec("ticket-42");
-    #|assert(match[1] === "ticket" && Number(match[2]) === 42, "regexp");
+    #|assert(match[1] === "ticket" && Number(match[2], SInt) === 42, "regexp");
     #|
     #|let mapped = [1, 2, 3, 4]
     #|  .map(x => x * x)
@@ -1193,7 +1193,7 @@ async test "external QuickJS qjs runs language matrix when enabled" {
     #|let keys = Object.keys({ b: 1, a: 2 }).sort().join("");
     #|assert(keys === "ab", "object keys");
     #|
-    #|let big = typeof BigInt === "function" ? Number(BigInt(10) + BigInt(32)) : 42;
+    #|let big = typeof BigInt === "function" ? Number(BigInt(10) + BigInt(32), SInt) : 42;
     #|assert(big === 42, "bigint");
     #|
     #|console.log("quickjs-matrix", total + mapped + big);

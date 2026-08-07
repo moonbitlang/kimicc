@@ -7,8 +7,8 @@
 pub(all) enum Token {
   EOF
   Ident(String)
-  Number(Int64)
-  FloatLiteral(Double)
+  Number(Int64, @ctype.Type)
+  FloatLiteral(Double, @ctype.Type)
   String(String)
   Int
   Void
@@ -98,8 +98,8 @@ impl Show for Token with fn to_string(self) {
   match self {
     EOF => "EOF"
     Ident(s) => "Ident(" + s + ")"
-    Number(n) => "Number(" + n.to_string() + ")"
-    FloatLiteral(v) => "FloatLiteral(" + v.to_string() + ")"
+    Number(n, _) => "Number(" + n.to_string() + ")"
+    FloatLiteral(v, _) => "FloatLiteral(" + v.to_string() + ")"
     String(s) => "String(" + s + ")"
     Int => "int"
     Void => "void"
@@ -351,7 +351,10 @@ pub fn Lexer::next_token(self : Lexer) -> Token {
         }
         let fs = self.input[fstart:fend]
         let v = @string.parse_double(fs) catch { _ => 0.0 }
-        FloatLiteral(v)
+        FloatLiteral(
+          v,
+          @ctype.float_literal_suffix_type(self.read_float_suffix()),
+        )
       } else {
         Dot
       }
@@ -642,14 +645,8 @@ fn Lexer::read_number(self : Lexer) -> Token {
         mantissa = mantissa + frac_part / frac_div
       }
       let v = mantissa * hex_float_pow2(exp)
-      // Skip float suffix
-      if self.peek() == 'f' ||
-        self.peek() == 'F' ||
-        self.peek() == 'l' ||
-        self.peek() == 'L' {
-        self.advance()
-      }
-      return FloatLiteral(v)
+      let suffix = self.read_float_suffix()
+      return FloatLiteral(v, @ctype.float_literal_suffix_type(suffix))
     }
     let s = self.input[hex_start:self.pos]
     let mut n = 0L
@@ -664,25 +661,11 @@ fn Lexer::read_number(self : Lexer) -> Token {
       }
       n = n * 16L + digit.to_int64()
     }
-    // Skip integer suffixes for hex literals too
-    if self.peek() == 'u' || self.peek() == 'U' {
-      self.advance()
-      if self.peek() == 'l' || self.peek() == 'L' {
-        self.advance()
-        if self.peek() == 'l' || self.peek() == 'L' {
-          self.advance()
-        }
-      }
-    } else if self.peek() == 'l' || self.peek() == 'L' {
-      self.advance()
-      if self.peek() == 'l' || self.peek() == 'L' {
-        self.advance()
-      }
-      if self.peek() == 'u' || self.peek() == 'U' {
-        self.advance()
-      }
-    }
-    return Number(n)
+    let (is_unsigned, long_count) = self.read_integer_suffix()
+    return Number(
+      n,
+      @ctype.integer_literal_suffix_type(n, is_unsigned, long_count),
+    )
   }
   while is_digit(self.peek()) {
     self.advance()
@@ -708,34 +691,12 @@ fn Lexer::read_number(self : Lexer) -> Token {
       }
     }
     let fend = self.pos
-    if self.peek() == 'f' ||
-      self.peek() == 'F' ||
-      self.peek() == 'l' ||
-      self.peek() == 'L' {
-      self.advance()
-    }
+    let suffix = self.read_float_suffix()
     let fs = self.input[start:fend]
     let v = @string.parse_double(fs) catch { _ => 0.0 }
-    return FloatLiteral(v)
+    return FloatLiteral(v, @ctype.float_literal_suffix_type(suffix))
   }
-  // Skip integer suffixes: u, U, l, L, ll, LL, ul, UL, lu, LU, ull, ULL, llu, LLU
-  if self.peek() == 'u' || self.peek() == 'U' {
-    self.advance()
-    if self.peek() == 'l' || self.peek() == 'L' {
-      self.advance()
-      if self.peek() == 'l' || self.peek() == 'L' {
-        self.advance()
-      }
-    }
-  } else if self.peek() == 'l' || self.peek() == 'L' {
-    self.advance()
-    if self.peek() == 'l' || self.peek() == 'L' {
-      self.advance()
-    }
-    if self.peek() == 'u' || self.peek() == 'U' {
-      self.advance()
-    }
-  }
+  let (is_unsigned, long_count) = self.read_integer_suffix()
   let base = if s.length() > 1 && s[0] == '0' { 8L } else { 10L }
   let mut n = 0L
   for i = 0; i < s.length(); i = i + 1 {
@@ -746,7 +707,7 @@ fn Lexer::read_number(self : Lexer) -> Token {
     n = n * base + (ch.to_int() - '0'.to_int()).to_int64()
   }
 
-  Number(n)
+  Number(n, @ctype.integer_literal_suffix_type(n, is_unsigned, long_count))
 }
 
 ///|
@@ -923,7 +884,8 @@ fn Lexer::read_char(self : Lexer) -> Token {
     abort("Unterminated character literal")
   }
   self.advance() // skip closing '
-  Number(value)
+  // A character constant has type `int` in C, not `char`.
+  Number(value, SInt)
 }
 
 ///|
@@ -959,4 +921,40 @@ fn is_hex_digit(ch : Char) -> Bool {
 ///|
 fn is_alpha(ch : Char) -> Bool {
   (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
+}
+
+///|
+/// Reads an integer literal suffix, returning whether it was unsigned and how
+/// many `l`/`L` it carried.
+///
+/// The suffix determines the literal's type, so it is consumed here rather than
+/// skipped: dropping it made `sizeof(1L)` report 4 instead of 8.
+fn Lexer::read_integer_suffix(self : Lexer) -> (Bool, Int) {
+  let mut is_unsigned = false
+  let mut long_count = 0
+  for ;; {
+    let ch = self.peek()
+    if ch is ('u' | 'U') && !is_unsigned {
+      is_unsigned = true
+      self.advance()
+    } else if ch is ('l' | 'L') && long_count < 2 {
+      long_count += 1
+      self.advance()
+    } else {
+      break
+    }
+  }
+  (is_unsigned, long_count)
+}
+
+///|
+/// Reads a floating literal suffix, returning the letter when present.
+fn Lexer::read_float_suffix(self : Lexer) -> Char? {
+  let ch = self.peek()
+  if ch is ('f' | 'F' | 'l' | 'L') {
+    self.advance()
+    Some(ch)
+  } else {
+    None
+  }
 }
