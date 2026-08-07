@@ -566,9 +566,9 @@ fn Parser::parse_builtin_types_compatible_p(self : Parser) -> Expr {
   let rhs_ty = self.parse_type_name()
   self.expect(RParen)
   if @ctype.generic_types_compatible(lhs_ty, rhs_ty) {
-    Number(1)
+    Number(1, SInt)
   } else {
-    Number(0)
+    Number(0, SInt)
   }
 }
 
@@ -577,19 +577,19 @@ fn Parser::parse_builtin_classify_type(self : Parser) -> Expr {
   self.expect(LParen)
   let expr = self.parse_assign()
   self.expect(RParen)
-  Number(@ctype.builtin_classify_type_code(self.const_expr_type(expr)))
+  Number(@ctype.builtin_classify_type_code(self.const_expr_type(expr)), SInt)
 }
 
 ///|
 fn Parser::parse_primary(self : Parser) -> Expr {
   match self.token {
-    Number(n) => {
+    Number(n, ty) => {
       self.advance()
-      Number(n)
+      Number(n, ty)
     }
-    FloatLiteral(v) => {
+    FloatLiteral(v, ty) => {
       self.advance()
-      FloatLiteral(v)
+      FloatLiteral(v, ty)
     }
     String(s) => {
       self.advance()
@@ -647,7 +647,10 @@ fn Parser::parse_primary(self : Parser) -> Expr {
           Var(resolved_name)
         }
       } else if self.enum_constants.contains(name) {
-        Number(self.enum_constants[name])
+        // An enumerator's value can exceed `int`, so its type follows the
+        // value the way an unsuffixed literal's does.
+        let value = self.enum_constants[name]
+        Number(value, @ctype.integer_constant_token_type(value))
       } else {
         Var(resolved_name)
       }

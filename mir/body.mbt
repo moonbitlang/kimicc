@@ -381,7 +381,7 @@ fn Program::lower_mir_post_step(
 ///|
 fn mir_body_reusable_addr_operand(expr : @parser.Expr) -> Bool {
   match expr {
-    Number(_) | Var(_) => true
+    Number(_, _) | Var(_) => true
     Cast(_, inner) => mir_body_reusable_addr_operand(inner)
     _ => false
   }
@@ -418,8 +418,8 @@ fn mir_body_floating_update_op(op : String) -> Bool {
 ///|
 fn mir_body_side_effect_free_expr(expr : @parser.Expr) -> Bool {
   match expr {
-    Number(_)
-    | FloatLiteral(_)
+    Number(_, _)
+    | FloatLiteral(_, _)
     | String(_)
     | Var(_)
     | Sizeof(_)
@@ -521,7 +521,7 @@ fn Program::lower_mir_array_init_stores_impl(
     return None
   }
   let items : Array[@parser.Expr] = match init {
-    Number(value) => if value == 0L { [] } else { return None }
+    Number(value, _) => if value == 0L { [] } else { return None }
     Array(values) | CompoundLiteral(_, values, _) => values
     String(_) => []
     _ => return None
@@ -1086,8 +1086,10 @@ fn Program::lower_mir_struct_init_stores_impl(
     None => ()
   }
   match init {
-    Number(_) | Array(_) | CompoundLiteral(_, _, _) | DesignatedField(_, _) =>
-      ()
+    Number(_, _)
+    | Array(_)
+    | CompoundLiteral(_, _, _)
+    | DesignatedField(_, _) => ()
     _ => {
       let src_addr = match self.lower_mir_object_addr(init, ctx) {
         Some(addr) => addr
@@ -1111,7 +1113,7 @@ fn Program::lower_mir_struct_init_stores_impl(
     }
   }
   let items : Array[@parser.Expr] = match init {
-    Number(value) => if value == 0L { [] } else { return None }
+    Number(value, _) => if value == 0L { [] } else { return None }
     Array(values) | CompoundLiteral(_, values, _) => values
     DesignatedField(_, _) => [init]
     _ => return None
@@ -1157,7 +1159,7 @@ fn Program::lower_mir_struct_init_stores_impl(
     let field = decl.fields[field_index]
     if !mir_body_scalar_type(field.ty) {
       match value_expr {
-        Number(0) => continue
+        Number(0, _) => continue
         Array(_)
         | CompoundLiteral(_, _, _)
         | DesignatedField(_, _)
@@ -3000,7 +3002,8 @@ fn Program::lower_mir_prefix_step(
   ty : @ctype.Type,
   ctx : BodyLowerContext,
 ) -> MirValue? {
-  match self.lower_mir_bitfield_compound_update(expr, op, Number(1L), ty, ctx) {
+  match
+    self.lower_mir_bitfield_compound_update(expr, op, Number(1L, SInt), ty, ctx) {
     Some(value) => return Some(value)
     None => ()
   }
@@ -3107,7 +3110,7 @@ fn Program::lower_mir_call_arg(
         Some(addr) => Some(MirAggregateArg(addr, ty))
         None => {
           match arg {
-            Number(_) | Array(_) | CompoundLiteral(_, _, _) => {
+            Number(_, _) | Array(_) | CompoundLiteral(_, _, _) => {
               let temp = ctx.declare_temp(ty)
               let stores = match
                 self.lower_mir_struct_init_stores(
@@ -3894,8 +3897,8 @@ fn Program::lower_mir_expr(
   let scope = ctx.scope()
   let ty = self.expr_type(expr, scope)
   match expr {
-    Number(value) => Some(MirConst(value, ty))
-    FloatLiteral(value) => Some(MirConst(value.reinterpret_as_int64(), ty))
+    Number(value, _) => Some(MirConst(value, ty))
+    FloatLiteral(value, _) => Some(MirConst(float_literal_bits(value, ty), ty))
     String(value) => Some(MirStringAddr(value))
     LabelAddr(name) => Some(MirLabelAddr(name))
     Var(name) =>
@@ -4568,7 +4571,7 @@ fn Program::lower_mir_aggregate_branch_copy_stores(
     }
     None =>
       match expr {
-        Number(_) | Array(_) | CompoundLiteral(_, _, _) =>
+        Number(_, _) | Array(_) | CompoundLiteral(_, _, _) =>
           self.lower_mir_struct_init_stores(dest_addr, dest_ty, expr, ctx)
         _ =>
           match self.lower_mir_expr_for_target_type(dest_ty, expr, ctx) {
@@ -4895,5 +4898,19 @@ fn Program::lower_mir_func_body(
       }
     }
     None => None
+  }
+}
+
+///|
+/// Returns the bit pattern to store for a floating literal of type `ty`.
+///
+/// The AST holds the value as a `Double`. A `float`-typed literal has to be
+/// rounded to single precision and stored as its 32-bit pattern, because the
+/// backend reads a `Float` constant as 32 bits -- handing it the 64-bit double
+/// pattern yields garbage.
+fn float_literal_bits(value : Double, ty : @ctype.Type) -> Int64 {
+  match ty.core_type() {
+    Float => Float::from_double(value).reinterpret_as_int().to_int64()
+    _ => value.reinterpret_as_int64()
   }
 }

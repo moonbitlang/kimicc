@@ -318,6 +318,46 @@ pub fn integer_literal_type(value : Int64) -> Type {
 /// The current lexer stores integer token bits in `Int64` and drops suffix
 /// metadata. Negative bit patterns therefore represent constants that overflow
 /// signed 64-bit storage, and are treated as unsigned long long.
+/// Returns the type of an integer literal carrying an explicit suffix.
+///
+/// `long_count` is how many `l`/`L` the suffix had, so 0 is unsuffixed, 1 is
+/// `l`, and 2 is `ll`. On the supported targets `long` and `long long` are both
+/// 64 bits, but they are distinct types and a literal keeps the one it was
+/// written with.
+///
+/// An unsuffixed literal falls back to the usual rule: the first type in the
+/// list that can represent the value.
+pub fn integer_literal_suffix_type(
+  bits : Int64,
+  is_unsigned : Bool,
+  long_count : Int,
+) -> Type {
+  if long_count >= 2 {
+    return if is_unsigned { ULongLong } else { SLongLong }
+  }
+  if long_count == 1 {
+    return if is_unsigned { ULong } else { SLong }
+  }
+  if is_unsigned {
+    // `u` alone is `unsigned int` when the value fits, else `unsigned long`.
+    return if bits >= 0L && bits <= 0xffffffffL { UInt } else { ULong }
+  }
+  integer_constant_token_type(bits)
+}
+
+///|
+/// Returns the type of a floating literal from its suffix letter.
+pub fn float_literal_suffix_type(suffix : Char?) -> Type {
+  match suffix {
+    Some('f') | Some('F') => Float
+    Some('l') | Some('L') => LongDouble
+    _ => Double
+  }
+}
+
+///|
+/// Returns the type of an unsuffixed integer literal: the first of `int`,
+/// `long`, `unsigned long` that can represent the value.
 pub fn integer_constant_token_type(bits : Int64) -> Type {
   if bits < 0L {
     ULongLong

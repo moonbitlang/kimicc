@@ -20,8 +20,8 @@ pub fn validate_semantics(Program) -> Result[Unit, String]
 
 // Types and methods
 pub(all) enum Expr {
-  Number(Int64)
-  FloatLiteral(Double)
+  Number(Int64, @ctype.Type)
+  FloatLiteral(Double, @ctype.Type)
   String(String)
   Var(String)
   Binary(String, Expr, Expr)
@@ -159,8 +159,8 @@ pub(all) struct StructDecl {
 pub(all) enum Token {
   EOF
   Ident(String)
-  Number(Int64)
-  FloatLiteral(Double)
+  Number(Int64, @ctype.Type)
+  FloatLiteral(Double, @ctype.Type)
   String(String)
   Int
   Void

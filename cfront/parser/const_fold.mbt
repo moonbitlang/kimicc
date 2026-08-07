@@ -216,11 +216,6 @@ fn Parser::float128_align(self : Parser) -> Int {
 }
 
 ///|
-fn const_number_type(bits : Int64) -> Type {
-  @ctype.integer_constant_token_type(bits)
-}
-
-///|
 fn Parser::fold_scalar_builtin_const(
   self : Parser,
   name : String,
@@ -248,7 +243,7 @@ fn Parser::fold_const_int(
   expr : Expr,
 ) -> @ctype.IntegerConstant? {
   match expr {
-    Number(n) => Some(@ctype.integer_constant(n, const_number_type(n)))
+    Number(n, ty) => Some(@ctype.integer_constant(n, ty))
     Binary("+", a, b) =>
       match (self.fold_const_int(a), self.fold_const_int(b)) {
         (Some(x), Some(y)) => @ctype.integer_constant_binary_arith("+", x, y)
@@ -826,8 +821,13 @@ fn Parser::const_member_type(self : Parser, ty : Type, field : String) -> Type? 
 ///|
 fn type_of_expr(expr : Expr) -> Type {
   match expr {
-    Number(_) => SInt
-    FloatLiteral(_) => Double
+    Number(_, ty) => ty
+    // The AST records a `float`-suffixed literal's type, but the code
+    // generators cannot yet hold a single-precision constant, so type inference
+    // still reports `double` here. Flipping this to `ty` makes every float
+    // literal evaluate wrongly until the backends learn single precision; see
+    // docs/ast-fidelity-plan.md.
+    FloatLiteral(_, _) => Double
     String(_) => Pointer(SChar)
     Var(_) => SInt // unknown, assume int
     Binary(_, _, _) => SInt
@@ -911,8 +911,13 @@ fn Parser::const_expr_type(self : Parser, expr : Expr) -> Type {
         None => SInt
       }
     String(s) => Array(SChar, @ctype.string_literal_array_length(s))
-    FloatLiteral(_) => Double
-    Number(_) => SInt
+    // The AST records a `float`-suffixed literal's type, but the code
+    // generators cannot yet hold a single-precision constant, so type inference
+    // still reports `double` here. Flipping this to `ty` makes every float
+    // literal evaluate wrongly until the backends learn single precision; see
+    // docs/ast-fidelity-plan.md.
+    FloatLiteral(_, _) => Double
+    Number(_, ty) => ty
     CompoundLiteral(ty, _, _) => ty
     Call(Var(name), args) =>
       match self.const_builtin_return_type(name, args) {

@@ -453,8 +453,8 @@ fn collect_codegen_file_scope_compound_literal_globals_expr(
         )
       }
     SizeofExpr(_) | AlignofExpr(_) => ()
-    Number(_)
-    | FloatLiteral(_)
+    Number(_, _)
+    | FloatLiteral(_, _)
     | String(_)
     | Var(_)
     | Sizeof(_)
@@ -516,8 +516,8 @@ fn collect_static_inline_expr(
 ) -> Unit {
   match expr {
     Var(name) => mark_static_inline_needed(name, inline_decls, needed)
-    Number(_)
-    | FloatLiteral(_)
+    Number(_, _)
+    | FloatLiteral(_, _)
     | String(_)
     | Sizeof(_)
     | Alignof(_)
@@ -637,8 +637,13 @@ fn Codegen::global_expr_type(
   expr : @parser.Expr,
 ) -> @parser.Type {
   match expr {
-    Number(value) => @ctype.integer_literal_type(value)
-    FloatLiteral(_) => Double
+    Number(value, _) => @ctype.integer_literal_type(value)
+    // The AST records a `float`-suffixed literal's type, but the code
+    // generators cannot yet hold a single-precision constant, so type inference
+    // still reports `double` here. Flipping this to `ty` makes every float
+    // literal evaluate wrongly until the backends learn single precision; see
+    // docs/ast-fidelity-plan.md.
+    FloatLiteral(_, _) => Double
     Var(name) =>
       if self.globals.contains(name) {
         self.globals[name].ty
@@ -743,7 +748,7 @@ fn Codegen::fold_const_int(
   expr : @parser.Expr,
 ) -> @ctype.IntegerConstant? {
   match expr {
-    Number(n) =>
+    Number(n, _) =>
       Some(@ctype.integer_constant(n, @ctype.integer_constant_token_type(n)))
     Binary("+", a, b) =>
       match (self.fold_const_int(a), self.fold_const_int(b)) {
@@ -990,8 +995,8 @@ fn Codegen::fold_float_const(self : Codegen, expr : @parser.Expr) -> Double? {
     }
   } else {
     match expr {
-      FloatLiteral(v) => Some(v)
-      Number(n) => Some(@ctype.floating_constant_from_integer_bits(n))
+      FloatLiteral(v, _) => Some(v)
+      Number(n, _) => Some(@ctype.floating_constant_from_integer_bits(n))
       Binary("+", a, b) =>
         match (self.fold_float_const(a), self.fold_float_const(b)) {
           (Some(x), Some(y)) => @ctype.floating_constant_binary_arith("+", x, y)
@@ -1285,7 +1290,7 @@ fn Codegen::emit_global_scalar(
       Some(v) => {
         self.emit_global_scalar(
           ty,
-          Number(@ctype.floating_constant_to_integer_bits(v)),
+          Number(@ctype.floating_constant_to_integer_bits(v), SInt),
         )
         return
       }
@@ -1305,11 +1310,11 @@ fn Codegen::emit_global_scalar(
   }
   // Try constant-fold the expression first
   let folded_expr = match self.fold_const(expr) {
-    Some(n) => @parser.Expr::Number(n)
+    Some(n) => @parser.Expr::Number(n, SInt)
     None => expr
   }
   match folded_expr {
-    Number(n) =>
+    Number(n, _) =>
       match ty {
         Bool | SChar | UChar => self.emit("\t.byte\t" + n.to_string())
         SShort | UShort => self.emit("\t.short\t" + n.to_string())
@@ -1335,13 +1340,13 @@ fn Codegen::emit_global_scalar(
         }
         _ => self.emit("\t.quad\t" + n.to_string())
       }
-    FloatLiteral(v) =>
+    FloatLiteral(v, _) =>
       if ty.is_floating() {
         self.emit_global_float(ty, v)
       } else {
         self.emit_global_scalar(
           ty,
-          Number(@ctype.floating_constant_to_integer_bits(v)),
+          Number(@ctype.floating_constant_to_integer_bits(v), SInt),
         )
       }
     String(s) =>
@@ -1369,7 +1374,7 @@ fn Codegen::emit_global_scalar(
       } else if exprs.length() > 0 {
         self.emit_global_scalar(ty, exprs[0])
       } else {
-        self.emit_global_scalar(ty, Number(0))
+        self.emit_global_scalar(ty, Number(0, SInt))
       }
     Array(nested) =>
       if is_aggregate_type(ty) {
@@ -1377,7 +1382,7 @@ fn Codegen::emit_global_scalar(
       } else if nested.length() > 0 {
         self.emit_global_scalar(ty, nested[0])
       } else {
-        self.emit_global_scalar(ty, Number(0))
+        self.emit_global_scalar(ty, Number(0, SInt))
       }
     _ => {
       // Non-constant expression: emit zero placeholder

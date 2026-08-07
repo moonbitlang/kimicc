@@ -8,8 +8,10 @@ pub type Type = @ctype.Type
 /// Binary and unary operators are stored as source-level operator strings such
 /// as `"+"`, `"=="`, `"*"`, and `"!"`.
 pub(all) enum Expr {
-  Number(Int64)
-  FloatLiteral(Double)
+  // Literals carry the type their suffix selected. Dropping it made
+  // `sizeof(1L)` report 4 and `sizeof(1.0f)` report 8.
+  Number(Int64, Type)
+  FloatLiteral(Double, Type)
   String(String)
   Var(String)
   Binary(String, Expr, Expr)

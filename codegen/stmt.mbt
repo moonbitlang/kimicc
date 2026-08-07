@@ -228,7 +228,7 @@ fn Codegen::gen_stmt(
       match init {
         Some(expr) =>
           match (ty, expr) {
-            (Struct(_) | Union(_) | Array(_, _), Number(0)) => {
+            (Struct(_) | Union(_) | Array(_, _), Number(0, _)) => {
               // Zero-initialize aggregate types properly
               let size = self.type_size(ty)
               self.emit_local_addr(offset, frame_size)
