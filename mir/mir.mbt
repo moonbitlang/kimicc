@@ -2770,7 +2770,7 @@ fn Program::fold_float_const(
     }
   } else {
     match expr {
-      FloatLiteral(value, _) => Some(value)
+      FloatLiteral(text, ty) => Some(@ctype.floating_literal_value(text, ty))
       Number(value, _) =>
         Some(@ctype.floating_constant_from_integer_bits(value))
       Binary("+", a, b) =>

@@ -3898,7 +3898,13 @@ fn Program::lower_mir_expr(
   let ty = self.expr_type(expr, scope)
   match expr {
     Number(value, _) => Some(MirConst(value, ty))
-    FloatLiteral(value, _) => Some(MirConst(float_literal_bits(value, ty), ty))
+    FloatLiteral(text, _) =>
+      Some(
+        MirConst(
+          @ctype.floating_literal_value(text, ty).reinterpret_as_int64(),
+          ty,
+        ),
+      )
     String(value) => Some(MirStringAddr(value))
     LabelAddr(name) => Some(MirLabelAddr(name))
     Var(name) =>
@@ -4898,19 +4904,5 @@ fn Program::lower_mir_func_body(
       }
     }
     None => None
-  }
-}
-
-///|
-/// Returns the bit pattern to store for a floating literal of type `ty`.
-///
-/// The AST holds the value as a `Double`. A `float`-typed literal has to be
-/// rounded to single precision and stored as its 32-bit pattern, because the
-/// backend reads a `Float` constant as 32 bits -- handing it the 64-bit double
-/// pattern yields garbage.
-fn float_literal_bits(value : Double, ty : @ctype.Type) -> Int64 {
-  match ty.core_type() {
-    Float => Float::from_double(value).reinterpret_as_int().to_int64()
-    _ => value.reinterpret_as_int64()
   }
 }

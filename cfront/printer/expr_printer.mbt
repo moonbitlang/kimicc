@@ -114,7 +114,9 @@ fn print_expr_at(expr : @parser.Expr, min_prec : Int) -> String {
 fn render_expr(expr : @parser.Expr) -> (String, Int) {
   match expr {
     Number(value, ty) => (print_integer(value, ty), PREC_PRIMARY)
-    FloatLiteral(value, ty) => (print_double(value, ty), PREC_PRIMARY)
+    // The literal is printed exactly as it was written, which is the point
+    // of keeping the text: no reformatting, no precision drift.
+    FloatLiteral(text, ty) => (text + float_suffix(ty), PREC_PRIMARY)
     String(value) => ("\"" + escape_string(value) + "\"", PREC_PRIMARY)
     Var(name) => (name, PREC_PRIMARY)
     Binary(op, lhs, rhs) => {
@@ -297,6 +299,19 @@ fn print_integer(value : Int64, ty : @ctype.Type) -> String {
 }
 
 ///|
+/// Returns the suffix a floating literal needs to reparse with type `ty`.
+///
+/// The text keeps whatever spelling was written, but not its suffix, which the
+/// type records instead.
+fn float_suffix(ty : @ctype.Type) -> String {
+  match ty {
+    Float => "f"
+    LongDouble => "L"
+    _ => ""
+  }
+}
+
+///|
 /// Returns the suffix that makes a literal reparse with type `ty`.
 ///
 /// A bare literal already takes the first type that can hold its value, so
@@ -356,29 +371,6 @@ fn print_offset_path(path : ArrayView[@ctype.OffsetDesignator]) -> String {
     first = false
   }
   buf.to_string()
-}
-
-///|
-/// Renders a floating literal so that it reads back as a `double`.
-///
-/// MoonBit prints whole doubles without a fractional part, which C would lex as
-/// an integer constant, so a `.0` is appended when nothing marks it as
-/// floating.
-fn print_double(value : Double, ty : @ctype.Type) -> String {
-  let text = value.to_string()
-  let mut floating = false
-  for ch in text {
-    if ch is ('.' | 'e' | 'E' | 'n' | 'i') {
-      floating = true
-      break
-    }
-  }
-  let body = if floating { text } else { text + ".0" }
-  match ty {
-    Float => body + "f"
-    LongDouble => body + "L"
-    _ => body
-  }
 }
 
 ///|

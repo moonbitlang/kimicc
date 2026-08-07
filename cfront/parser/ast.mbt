@@ -11,7 +11,10 @@ pub(all) enum Expr {
   // Literals carry the type their suffix selected. Dropping it made
   // `sizeof(1L)` report 4 and `sizeof(1.0f)` report 8.
   Number(Int64, Type)
-  FloatLiteral(Double, Type)
+  // The text that was written, not a parsed value: `long double` can be wider
+  // than `Double`, so parsing eagerly would silently truncate what the program
+  // said. Use `@ctype.floating_literal_value` to convert.
+  FloatLiteral(String, Type)
   String(String)
   Var(String)
   Binary(String, Expr, Expr)

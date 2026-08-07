@@ -995,7 +995,7 @@ fn Codegen::fold_float_const(self : Codegen, expr : @parser.Expr) -> Double? {
     }
   } else {
     match expr {
-      FloatLiteral(v, _) => Some(v)
+      FloatLiteral(text, ty) => Some(@ctype.floating_literal_value(text, ty))
       Number(n, _) => Some(@ctype.floating_constant_from_integer_bits(n))
       Binary("+", a, b) =>
         match (self.fold_float_const(a), self.fold_float_const(b)) {
@@ -1340,7 +1340,8 @@ fn Codegen::emit_global_scalar(
         }
         _ => self.emit("\t.quad\t" + n.to_string())
       }
-    FloatLiteral(v, _) =>
+    FloatLiteral(text, literal_ty) => {
+      let v = @ctype.floating_literal_value(text, literal_ty)
       if ty.is_floating() {
         self.emit_global_float(ty, v)
       } else {
@@ -1349,6 +1350,7 @@ fn Codegen::emit_global_scalar(
           Number(@ctype.floating_constant_to_integer_bits(v), SInt),
         )
       }
+    }
     String(s) =>
       match ty {
         Array(SChar, n) | Array(UChar, n) => {

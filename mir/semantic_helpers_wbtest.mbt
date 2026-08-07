@@ -48,7 +48,7 @@ test "mir internal expression helpers use target layout" {
   )
   let scope = Scope::empty()
   let long_double_builtin : @parser.Expr = Call(Var("__builtin_fabsl"), [
-    FloatLiteral(1.0, Double),
+    FloatLiteral("1.0", Double),
   ])
   inspect(darwin.expr_type(long_double_builtin, scope), content="LongDouble")
   inspect(linux.expr_type(long_double_builtin, scope), content="LongDouble")
@@ -342,7 +342,7 @@ test "mir internal expression helpers fold constants with target layout" {
   )
   expect_float_const(
     mir,
-    Cast(Double, Cast(SInt, FloatLiteral(1.75, Double))),
+    Cast(Double, Cast(SInt, FloatLiteral("1.75", Double))),
     scope,
     1.0,
   )
@@ -350,36 +350,36 @@ test "mir internal expression helpers fold constants with target layout" {
     mir,
     Ternary(
       Number(0, SInt),
-      FloatLiteral(9.0, Double),
-      Binary("+", FloatLiteral(1.25, Double), FloatLiteral(2.5, Double)),
+      FloatLiteral("9.0", Double),
+      Binary("+", FloatLiteral("1.25", Double), FloatLiteral("2.5", Double)),
     ),
     scope,
     3.75,
   )
   expect_float_const(
     mir,
-    Call(Var("__builtin_fabs"), [FloatLiteral(-4.5, Double)]),
+    Call(Var("__builtin_fabs"), [FloatLiteral("-4.5", Double)]),
     scope,
     4.5,
   )
   expect_float_const(
     mir,
     Call(Var("__builtin_copysign"), [
-      FloatLiteral(3.0, Double),
-      FloatLiteral(-1.0, Double),
+      FloatLiteral("3.0", Double),
+      FloatLiteral("-1.0", Double),
     ]),
     scope,
     -3.0,
   )
   expect_float_const(
     mir,
-    Call(Var("__builtin_sqrt"), [FloatLiteral(81.0, Double)]),
+    Call(Var("__builtin_sqrt"), [FloatLiteral("81.0", Double)]),
     scope,
     9.0,
   )
   match
     mir.fold_float_const(
-      Call(Var("__builtin_sqrt"), [FloatLiteral(-1.0, Double)]),
+      Call(Var("__builtin_sqrt"), [FloatLiteral("-1.0", Double)]),
       scope,
     ) {
     Some(value) => if value == value { abort("expected folded NaN") }

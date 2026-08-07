@@ -6806,7 +6806,8 @@ fn X64Codegen::emit_va_arg_aggregate_addr(
 fn X64Codegen::gen_expr(self : X64Codegen, expr : @parser.Expr) -> Unit {
   match expr {
     Number(value, _) => self.emit("\tmov\trax, " + value.to_string())
-    FloatLiteral(value, _) => self.emit_load_fp_literal(value)
+    FloatLiteral(text, ty) =>
+      self.emit_load_fp_literal(@ctype.floating_literal_value(text, ty))
     String(value) => {
       let id = self.strings.length()
       self.strings.push(value)
@@ -7907,7 +7908,7 @@ fn X64Codegen::fold_float_const(
     }
   } else {
     match expr {
-      FloatLiteral(v, _) => Some(v)
+      FloatLiteral(text, ty) => Some(@ctype.floating_literal_value(text, ty))
       Number(n, _) => Some(@ctype.floating_constant_from_integer_bits(n))
       Binary("+", a, b) =>
         match (self.fold_float_const(a), self.fold_float_const(b)) {
@@ -8213,7 +8214,8 @@ fn X64Codegen::emit_global_scalar(
           self.emit("\t.zero\t" + self.type_size(ty).to_string())
         _ => self.emit_global_int_by_size(8, value)
       }
-    FloatLiteral(value, _) =>
+    FloatLiteral(text, literal_ty) => {
+      let value = @ctype.floating_literal_value(text, literal_ty)
       if ty.core_type() == Float128 {
         abort("__float128 global initializer is not supported")
       } else if ty.core_type() == LongDouble {
@@ -8226,6 +8228,7 @@ fn X64Codegen::emit_global_scalar(
           Number(@ctype.floating_constant_to_integer_bits(value), SInt),
         )
       }
+    }
     String(value) =>
       match ty.core_type() {
         Array(SChar, n) | Array(UChar, n) => {

@@ -146,6 +146,8 @@ pub fn floating_constant_unary(String, Double) -> Double?
 
 pub fn floating_copysign(Double, Double) -> Double
 
+pub fn floating_literal_value(String, Type) -> Double
+
 pub fn floating_signbit(Double) -> Bool
 
 pub fn generic_selection_control_type(Type) -> Type

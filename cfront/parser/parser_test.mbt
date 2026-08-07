@@ -1880,7 +1880,7 @@ test "parse builtin classify type folds covered categories" {
       Compound(
         [
           VarDecl(SInt, "x", Some(Number(0, SInt))),
-          VarDecl(Double, "d", Some(FloatLiteral(0.0, Double))),
+          VarDecl(Double, "d", Some(FloatLiteral("0.0", Double))),
           VarDecl(Array(SInt, 2), "a", None),
           VarDecl(Struct("S"), "s", None),
           VarDecl(Union("U"), "u", None),

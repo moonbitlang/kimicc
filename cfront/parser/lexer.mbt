@@ -8,7 +8,7 @@ pub(all) enum Token {
   EOF
   Ident(String)
   Number(Int64, @ctype.Type)
-  FloatLiteral(Double, @ctype.Type)
+  FloatLiteral(String, @ctype.Type)
   String(String)
   Int
   Void
@@ -99,7 +99,7 @@ impl Show for Token with fn to_string(self) {
     EOF => "EOF"
     Ident(s) => "Ident(" + s + ")"
     Number(n, _) => "Number(" + n.to_string() + ")"
-    FloatLiteral(v, _) => "FloatLiteral(" + v.to_string() + ")"
+    FloatLiteral(text, _) => "FloatLiteral(" + text + ")"
     String(s) => "String(" + s + ")"
     Int => "int"
     Void => "void"
@@ -342,17 +342,9 @@ pub fn Lexer::next_token(self : Lexer) -> Token {
             self.advance()
           }
         }
-        let fend = self.pos
-        if self.peek() == 'f' ||
-          self.peek() == 'F' ||
-          self.peek() == 'l' ||
-          self.peek() == 'L' {
-          self.advance()
-        }
-        let fs = self.input[fstart:fend]
-        let v = @string.parse_double(fs) catch { _ => 0.0 }
+        let text = self.input[fstart:self.pos].to_owned()
         FloatLiteral(
-          v,
+          text,
           @ctype.float_literal_suffix_type(self.read_float_suffix()),
         )
       } else {
@@ -550,31 +542,6 @@ fn Lexer::skip_whitespace(self : Lexer) -> Unit {
 }
 
 ///|
-fn hex_float_pow2(exp : Int) -> Double {
-  if exp > 1023 {
-    return @double.infinity
-  }
-  if exp < -1074 {
-    return 0.0
-  }
-  let mut result = 1.0
-  let mut e = exp
-  let mut base = 2.0
-  if e < 0 {
-    e = -e
-    base = 0.5
-  }
-  while e > 0 {
-    if e.land(1) == 1 {
-      result = result * base
-    }
-    base = base * base
-    e = e / 2
-  }
-  result
-}
-
-///|
 fn Lexer::read_number(self : Lexer) -> Token {
   let start = self.pos
   // Check for hex prefix 0x or 0X
@@ -591,62 +558,27 @@ fn Lexer::read_number(self : Lexer) -> Token {
       self.peek() == 'P'
     if is_hex_float {
       // Parse hex float
-      let mut int_part = 0.0
-      let hex_int_str = self.input[hex_start:self.pos]
-      for i = 0; i < hex_int_str.length(); i = i + 1 {
-        let ch = hex_int_str[i]
-        let digit = if ch >= '0' && ch <= '9' {
-          ch.to_int() - '0'.to_int()
-        } else if ch >= 'a' && ch <= 'f' {
-          ch.to_int() - 'a'.to_int() + 10
-        } else {
-          ch.to_int() - 'A'.to_int() + 10
-        }
-        int_part = int_part * 16.0 + digit.to_double()
+      while is_hex_digit(self.peek()) {
+        self.advance()
       }
-      let mut frac_part = 0.0
-      let mut frac_div = 1.0
-      if self.peek() == '.' {
+      if self.peek() is '.' {
         self.advance()
         while is_hex_digit(self.peek()) {
-          let ch = self.peek()
-          let digit = if ch >= '0' && ch <= '9' {
-            ch.to_int() - '0'.to_int()
-          } else if ch >= 'a' && ch <= 'f' {
-            ch.to_int() - 'a'.to_int() + 10
-          } else {
-            ch.to_int() - 'A'.to_int() + 10
-          }
-          frac_part = frac_part * 16.0 + digit.to_double()
-          frac_div = frac_div * 16.0
           self.advance()
         }
       }
-      let mut exp = 0
-      if self.peek() == 'p' || self.peek() == 'P' {
+      if self.peek() is ('p' | 'P') {
         self.advance()
-        let mut neg = false
-        if self.peek() == '-' {
-          neg = true
-          self.advance()
-        } else if self.peek() == '+' {
+        if self.peek() is ('+' | '-') {
           self.advance()
         }
         while is_digit(self.peek()) {
-          exp = exp * 10 + (self.peek().to_int() - '0'.to_int())
           self.advance()
         }
-        if neg {
-          exp = -exp
-        }
       }
-      let mut mantissa = int_part
-      if frac_div > 1.0 {
-        mantissa = mantissa + frac_part / frac_div
-      }
-      let v = mantissa * hex_float_pow2(exp)
+      let text = self.input[start:self.pos].to_owned()
       let suffix = self.read_float_suffix()
-      return FloatLiteral(v, @ctype.float_literal_suffix_type(suffix))
+      return FloatLiteral(text, @ctype.float_literal_suffix_type(suffix))
     }
     let s = self.input[hex_start:self.pos]
     let mut n = 0L
@@ -690,11 +622,9 @@ fn Lexer::read_number(self : Lexer) -> Token {
         self.advance()
       }
     }
-    let fend = self.pos
+    let text = self.input[start:self.pos].to_owned()
     let suffix = self.read_float_suffix()
-    let fs = self.input[start:fend]
-    let v = @string.parse_double(fs) catch { _ => 0.0 }
-    return FloatLiteral(v, @ctype.float_literal_suffix_type(suffix))
+    return FloatLiteral(text, @ctype.float_literal_suffix_type(suffix))
   }
   let (is_unsigned, long_count) = self.read_integer_suffix()
   let base = if s.length() > 1 && s[0] == '0' { 8L } else { 10L }
