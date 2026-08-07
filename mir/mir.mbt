@@ -2042,7 +2042,7 @@ fn Program::global_expr_type(
     // generators cannot yet hold a single-precision constant, so type inference
     // still reports `double` here. Flipping this to `ty` makes every float
     // literal evaluate wrongly until the backends learn single precision; see
-    // docs/ast-fidelity-plan.md.
+    // docs/c-syntax-suite-plan.md.
     FloatLiteral(_, _) => Double
     Var(name) =>
       if self.globals.contains(name) {
@@ -2113,7 +2113,7 @@ fn Program::expr_type(
     // generators cannot yet hold a single-precision constant, so type inference
     // still reports `double` here. Flipping this to `ty` makes every float
     // literal evaluate wrongly until the backends learn single precision; see
-    // docs/ast-fidelity-plan.md.
+    // docs/c-syntax-suite-plan.md.
     FloatLiteral(_, _) => Double
     String(_) => Pointer(SChar)
     Var(name) =>
