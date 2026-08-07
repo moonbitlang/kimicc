@@ -4221,7 +4221,8 @@ fn Codegen::gen_expr(
 ) -> Unit {
   match expr {
     Number(n, _) => self.emit_load_int("x9", n)
-    FloatLiteral(v, _) => self.emit_load_float_literal(v)
+    FloatLiteral(text, ty) =>
+      self.emit_load_float_literal(@ctype.floating_literal_value(text, ty))
     String(s) => {
       let idx = self.strings.length()
       self.strings.push(s)
