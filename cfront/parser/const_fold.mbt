@@ -826,7 +826,7 @@ fn type_of_expr(expr : Expr) -> Type {
     // generators cannot yet hold a single-precision constant, so type inference
     // still reports `double` here. Flipping this to `ty` makes every float
     // literal evaluate wrongly until the backends learn single precision; see
-    // docs/ast-fidelity-plan.md.
+    // docs/c-syntax-suite-plan.md.
     FloatLiteral(_, _) => Double
     String(_) => Pointer(SChar)
     Var(_) => SInt // unknown, assume int
@@ -915,7 +915,7 @@ fn Parser::const_expr_type(self : Parser, expr : Expr) -> Type {
     // generators cannot yet hold a single-precision constant, so type inference
     // still reports `double` here. Flipping this to `ty` makes every float
     // literal evaluate wrongly until the backends learn single precision; see
-    // docs/ast-fidelity-plan.md.
+    // docs/c-syntax-suite-plan.md.
     FloatLiteral(_, _) => Double
     Number(_, _, ty) => ty
     CompoundLiteral(ty, _, _) => ty
