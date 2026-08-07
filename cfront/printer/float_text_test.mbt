@@ -3,7 +3,7 @@
 fn printed_initializer(expr : String) -> String {
   let program = @parser.parse("double g = " + expr + ";")
   let text = @printer.print_program(program)
-  text.trim_space().to_string()
+  text.trim().to_owned()
 }
 
 ///|
