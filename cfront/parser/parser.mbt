@@ -9,6 +9,7 @@ pub struct Parser {
   target : @target.Target
   pragma_pack : PragmaPackTable
   mut token : Token
+  mut token_start : Int
   typedefs : Map[String, Type]
   // Aggregate definitions in creation order, anonymous ones included. Order
   // matters: an anonymous aggregate is created while parsing the declaration
@@ -37,19 +38,23 @@ pub struct Parser {
 /// Creates a parser over an existing lexer and reads the first token.
 ///
 /// Prefer `parse(input)` unless you need to drive lexer/parser state manually.
-pub fn Parser::new(lexer : Lexer) -> Parser {
+pub fn Parser::new(lexer : Lexer) -> Parser raise ParseError {
   Parser::new_for_target(lexer, @target.Target::default())
 }
 
 ///|
 /// Creates a parser using target-specific layout assumptions for constant
 /// folding of target-sensitive types.
-pub fn Parser::new_for_target(lexer : Lexer, target : @target.Target) -> Parser {
+pub fn Parser::new_for_target(
+  lexer : Lexer,
+  target : @target.Target,
+) -> Parser raise ParseError {
   let p = {
     lexer,
     target,
     pragma_pack: PragmaPackTable::scan(lexer.input),
     token: EOF,
+    token_start: 0,
     typedefs: {},
     aggregates: [],
     struct_decls: {},
@@ -71,22 +76,21 @@ pub fn Parser::new_for_target(lexer : Lexer, target : @target.Target) -> Parser 
 }
 
 ///|
-/// Reads the next token.
+/// Reads the next token, remembering where it starts.
 ///
-/// The lexer reports malformed input by raising, but the parser above it still
-/// aborts, so the error is converted here. This shim goes away when the parser
-/// itself raises; until then it keeps the public behaviour unchanged while the
-/// error type gets real callers. See Step A in docs/c-syntax-suite-plan.md.
-fn Parser::advance(self : Parser) -> Unit {
-  self.token = self.lexer.next_token() catch {
-    error => abort(error.to_string())
-  }
+/// The start offset is what diagnostics report: by the time the parser objects
+/// to a token, the lexer has already advanced past it, so reporting
+/// `lexer.pos` would point at whatever follows.
+fn Parser::advance(self : Parser) -> Unit raise ParseError {
+  self.lexer.skip_whitespace()
+  self.token_start = self.lexer.pos
+  self.token = self.lexer.next_token()
 }
 
 ///|
-fn Parser::expect(self : Parser, t : Token) -> Unit {
+fn Parser::expect(self : Parser, t : Token) -> Unit raise ParseError {
   if self.token != t {
-    abort("Expected \{t} but got \{self.token}")
+    self.unexpected("\{t}")
   }
   self.advance()
 }
@@ -96,14 +100,17 @@ fn Parser::expect(self : Parser, t : Token) -> Unit {
 ///
 /// The parser does not run a C preprocessor. Invalid or unsupported syntax
 /// aborts instead of returning a structured error value.
-pub fn parse(input : String) -> Program {
+pub fn parse(input : String) -> Program raise ParseError {
   parse_for_target(input, @target.Target::default())
 }
 
 ///|
 /// Parses one complete C translation unit using target-specific layout
 /// assumptions where parsing must fold layout constants.
-pub fn parse_for_target(input : String, target : @target.Target) -> Program {
+pub fn parse_for_target(
+  input : String,
+  target : @target.Target,
+) -> Program raise ParseError {
   let lexer = Lexer::new(input)
   let parser = Parser::new_for_target(lexer, target)
   parser.parse_program()
@@ -114,4 +121,31 @@ fn Parser::remember_value_type(self : Parser, name : String, ty : Type) -> Unit 
   if name != "" {
     self.value_types[name] = ty
   }
+}
+
+///|
+/// Returns the parser's current position, for reporting.
+fn Parser::position(self : Parser) -> Position {
+  position_at(self.lexer.input, self.token_start)
+}
+
+///|
+/// Raises `Unexpected` at the current position.
+fn[T] Parser::unexpected(
+  self : Parser,
+  expected : String,
+) -> T raise ParseError {
+  raise Unexpected(position=self.position(), expected~, found="\{self.token}")
+}
+
+///|
+/// Raises `Unsupported` at the current position.
+fn[T] Parser::unsupported(self : Parser, what : String) -> T raise ParseError {
+  raise Unsupported(position=self.position(), what~)
+}
+
+///|
+/// Raises `Malformed` at the current position.
+fn[T] Parser::malformed(self : Parser, what : String) -> T raise ParseError {
+  raise Malformed(position=self.position(), what~)
 }

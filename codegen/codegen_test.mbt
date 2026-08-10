@@ -73,7 +73,9 @@ test "generate darwin arm64 lowers stack and zero-memory builtins" {
 }
 
 ///|
-fn generate_darwin_mir_fallback(source : String) -> String {
+fn generate_darwin_mir_fallback(
+  source : String,
+) -> String raise @parser.ParseError {
   @mir_codegen_compat.generate_assembly_for_target_with_parser_fallback(
     @parser.parse(source),
     @target.Target::default(),

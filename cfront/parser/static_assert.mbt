@@ -9,9 +9,9 @@ fn Parser::is_static_assert_token(self : Parser) -> Bool {
 }
 
 ///|
-fn Parser::parse_static_assert_decl(self : Parser) -> Unit {
+fn Parser::parse_static_assert_decl(self : Parser) -> Unit raise ParseError {
   if !self.is_static_assert_token() {
-    abort("Expected static assertion")
+    self.unexpected("a static assertion")
   }
   self.advance()
   self.expect(LParen)
@@ -37,9 +37,9 @@ fn Parser::parse_static_assert_decl(self : Parser) -> Unit {
   self.expect(Semicolon)
   if failed {
     if message == "" {
-      abort("static assertion failed")
+      self.malformed("static assertion failed")
     } else {
-      abort("static assertion failed: " + message)
+      self.malformed("program: static assertion failed: " + message)
     }
   }
 }

@@ -7,12 +7,14 @@ extern "c" fn moonbit_write_file(path : Bytes, content : Bytes) -> Int = "moonbi
 extern "c" fn moonbit_system(cmd : Bytes) -> Int = "moonbit_system"
 
 ///|
-fn compile(source : String) -> String {
+fn compile(source : String) -> String raise @parser.ParseError {
   compile_source_to_mir_assembly(source)
 }
 
 ///|
-fn compile_with_legacy_parser_codegen(source : String) -> String {
+fn compile_with_legacy_parser_codegen(
+  source : String,
+) -> String raise @parser.ParseError {
   let prog = @parser.parse(source)
   let codegen = @codegen.Codegen::new()
   codegen.generate(prog)
@@ -28,7 +30,7 @@ fn source_id(source : String) -> String {
 }
 
 ///|
-fn run_source(source : String) -> Int {
+fn run_source(source : String) -> Int raise @parser.ParseError {
   let assembly = compile(source)
   let id = source_id(source)
   let asm_path = "/tmp/kimicc_test_" + id + ".s"
@@ -44,7 +46,9 @@ fn run_source(source : String) -> Int {
 }
 
 ///|
-fn run_source_against_mir_oracle(source : String) -> Unit {
+fn run_source_against_mir_oracle(
+  source : String,
+) -> Unit raise @parser.ParseError {
   let program = @parser.parse(source)
   let expected = match
     @mir.lower(program, @target.Target::default()).interpret_i64("main", []) {
@@ -63,7 +67,7 @@ fn run_source_against_mir_oracle(source : String) -> Unit {
 }
 
 ///|
-fn run_source_async(source : String) -> Int {
+fn run_source_async(source : String) -> Int raise @parser.ParseError {
   run_source(source)
 }
 
@@ -302,7 +306,10 @@ async fn run_command_capture_tail(
 }
 
 ///|
-fn compile_source_to_object_path(source : String, tag : String) -> String {
+fn compile_source_to_object_path(
+  source : String,
+  tag : String,
+) -> String raise @parser.ParseError {
   let asm_path = temp_file_path(tag, source, ".s")
   let obj_path = temp_file_path(tag, source, ".o")
   let assembly = compile(source)
@@ -315,7 +322,9 @@ fn compile_source_to_object_path(source : String, tag : String) -> String {
 }
 
 ///|
-fn compile_source_to_mir_assembly(source : String) -> String {
+fn compile_source_to_mir_assembly(
+  source : String,
+) -> String raise @parser.ParseError {
   let target = @target.Target::default()
   let prog = @parser.parse_for_target(source, target)
   match @parser.validate_semantics(prog) {
@@ -332,7 +341,9 @@ fn compile_source_to_mir_assembly(source : String) -> String {
 }
 
 ///|
-fn compile_source_to_strict_mir_assembly(source : String) -> String {
+fn compile_source_to_strict_mir_assembly(
+  source : String,
+) -> String raise @parser.ParseError {
   compile_source_to_mir_assembly(source)
 }
 
@@ -340,7 +351,7 @@ fn compile_source_to_strict_mir_assembly(source : String) -> String {
 fn compile_source_to_strict_mir_object_path(
   source : String,
   tag : String,
-) -> String {
+) -> String raise @parser.ParseError {
   let asm_path = temp_file_path(tag, source, ".strict-mir.s")
   let obj_path = temp_file_path(tag, source, ".strict-mir.o")
   write_text_file(asm_path, compile_source_to_strict_mir_assembly(source))
@@ -355,7 +366,7 @@ fn compile_source_to_strict_mir_object_path(
 fn compile_source_to_direct_object_path(
   source : String,
   tag : String,
-) -> String {
+) -> String raise @parser.ParseError {
   let obj_path = temp_file_path(tag, source, ".direct.o")
   let prog = @parser.parse(source)
   write_binary_file(obj_path, @codegen.generate_macho_object(prog))
@@ -363,7 +374,10 @@ fn compile_source_to_direct_object_path(
 }
 
 ///|
-fn run_source_direct_object_async(source : String, tag : String) -> Int {
+fn run_source_direct_object_async(
+  source : String,
+  tag : String,
+) -> Int raise @parser.ParseError {
   let obj_path = compile_source_to_direct_object_path(source, tag)
   let bin_path = temp_file_path(tag + "_direct_bin", source, "")
   run_command_checked(

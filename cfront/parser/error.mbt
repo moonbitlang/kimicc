@@ -47,10 +47,12 @@ pub fn position_at(source : String, offset : Int) -> Position {
 /// `Unexpected`: the parser covers a subset of C, so a caller handing it
 /// real-world source meets constructs that are valid and simply not
 /// implemented, and that should be a diagnostic rather than a crash.
-/// Only `Malformed` exists so far, because only the lexer raises yet. The
-/// parser's own failures -- an unexpected token, a construct it does not
-/// implement -- gain their variants as it is converted.
 pub(all) suberror ParseError {
+  /// The parser expected one thing and found another.
+  Unexpected(position~ : Position, expected~ : String, found~ : String)
+  /// Valid C the parser does not implement. As common as `Unexpected` for a
+  /// caller feeding real-world source, since the parser covers a subset.
+  Unsupported(position~ : Position, what~ : String)
   /// A literal or token is malformed.
   Malformed(position~ : Position, what~ : String)
 } derive(Eq, Debug)
@@ -59,6 +61,10 @@ pub(all) suberror ParseError {
 /// Renders a diagnostic as `line:column: message`, the form editors parse.
 pub impl Show for ParseError with fn to_string(self) {
   match self {
+    Unexpected(position~, expected~, found~) =>
+      position.to_string() + ": expected " + expected + ", found " + found
+    Unsupported(position~, what~) =>
+      position.to_string() + ": unsupported " + what
     Malformed(position~, what~) => position.to_string() + ": malformed " + what
   }
 }

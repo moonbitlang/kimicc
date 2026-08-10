@@ -8,7 +8,7 @@ priv enum InitDesignator {
 ///|
 fn Parser::parse_initializer_designator_path(
   self : Parser,
-) -> Array[InitDesignator] {
+) -> Array[InitDesignator] raise ParseError {
   let path = []
   while self.token == Dot || self.token == LBracket {
     match self.token {
@@ -19,7 +19,7 @@ fn Parser::parse_initializer_designator_path(
             path.push(InitField(name))
             self.advance()
           }
-          _ => abort("Expected field name in designated initializer")
+          _ => self.unexpected("a field name in a designated initializer")
         }
       }
       LBracket => {
@@ -54,7 +54,7 @@ fn Parser::parse_initializer_designator_path(
 fn Parser::parse_initializer_value(
   self : Parser,
   compound_literal : Bool,
-) -> Expr {
+) -> Expr raise ParseError {
   if self.token == LBrace {
     if compound_literal {
       Array(self.parse_compound_literal_init_exprs())
@@ -70,7 +70,7 @@ fn Parser::parse_initializer_value(
 fn Parser::parse_designated_initializer(
   self : Parser,
   compound_literal : Bool,
-) -> Expr {
+) -> Expr raise ParseError {
   let path = self.parse_initializer_designator_path()
   self.expect(Assign)
   let mut value = self.parse_initializer_value(compound_literal)
@@ -86,7 +86,9 @@ fn Parser::parse_designated_initializer(
 
 ///|
 /// Parse expressions inside a brace initializer: { expr1, expr2, ... }
-fn Parser::parse_brace_init_exprs(self : Parser) -> Array[Expr] {
+fn Parser::parse_brace_init_exprs(
+  self : Parser,
+) -> Array[Expr] raise ParseError {
   let exprs = []
   self.expect(LBrace)
   while self.token != RBrace && self.token != EOF {
@@ -108,7 +110,9 @@ fn Parser::parse_brace_init_exprs(self : Parser) -> Array[Expr] {
 }
 
 ///|
-fn Parser::parse_compound_literal_init_exprs(self : Parser) -> Array[Expr] {
+fn Parser::parse_compound_literal_init_exprs(
+  self : Parser,
+) -> Array[Expr] raise ParseError {
   let exprs = []
   self.expect(LBrace)
   while self.token != RBrace && self.token != EOF {
@@ -129,7 +133,7 @@ fn Parser::parse_compound_literal_init_exprs(self : Parser) -> Array[Expr] {
 }
 
 ///|
-fn Parser::parse_stmt(self : Parser) -> Stmt {
+fn Parser::parse_stmt(self : Parser) -> Stmt raise ParseError {
   // Skip __extension__ before statements
   while self.token == Ident("__extension__") {
     self.advance()
@@ -343,7 +347,7 @@ fn Parser::is_stmt_decl_start(self : Parser) -> Bool {
 }
 
 ///|
-fn Parser::parse_if_stmt(self : Parser) -> Stmt {
+fn Parser::parse_if_stmt(self : Parser) -> Stmt raise ParseError {
   self.advance() // if
   self.expect(LParen)
   let cond = self.parse_expr()
@@ -362,7 +366,7 @@ fn Parser::parse_if_stmt(self : Parser) -> Stmt {
 }
 
 ///|
-fn Parser::parse_while_stmt(self : Parser) -> Stmt {
+fn Parser::parse_while_stmt(self : Parser) -> Stmt raise ParseError {
   self.advance() // while
   self.expect(LParen)
   let cond = self.parse_expr()
@@ -372,7 +376,7 @@ fn Parser::parse_while_stmt(self : Parser) -> Stmt {
 }
 
 ///|
-fn Parser::parse_for_stmt(self : Parser) -> Stmt {
+fn Parser::parse_for_stmt(self : Parser) -> Stmt raise ParseError {
   self.advance() // for
   self.expect(LParen)
   // Parse init: can be empty, a declaration, or an expression
@@ -403,7 +407,7 @@ fn Parser::parse_for_stmt(self : Parser) -> Stmt {
 }
 
 ///|
-fn Parser::parse_do_while_stmt(self : Parser) -> Stmt {
+fn Parser::parse_do_while_stmt(self : Parser) -> Stmt raise ParseError {
   self.advance() // do
   let body = self.parse_stmt()
   self.expect(While)
@@ -415,7 +419,7 @@ fn Parser::parse_do_while_stmt(self : Parser) -> Stmt {
 }
 
 ///|
-fn Parser::parse_continue_stmt(self : Parser) -> Stmt {
+fn Parser::parse_continue_stmt(self : Parser) -> Stmt raise ParseError {
   self.advance() // continue
   self.expect(Semicolon)
   Continue
@@ -508,7 +512,7 @@ fn collect_switch_cases(stmt : Stmt, cases : Array[(Int64?, String)]) -> Unit {
 }
 
 ///|
-fn Parser::parse_switch_stmt(self : Parser) -> Stmt {
+fn Parser::parse_switch_stmt(self : Parser) -> Stmt raise ParseError {
   self.advance() // switch
   self.expect(LParen)
   let expr = self.parse_expr()
@@ -526,14 +530,14 @@ fn Parser::parse_switch_stmt(self : Parser) -> Stmt {
 }
 
 ///|
-fn Parser::parse_break_stmt(self : Parser) -> Stmt {
+fn Parser::parse_break_stmt(self : Parser) -> Stmt raise ParseError {
   self.advance() // break
   self.expect(Semicolon)
   Break
 }
 
 ///|
-fn Parser::parse_goto_stmt(self : Parser) -> Stmt {
+fn Parser::parse_goto_stmt(self : Parser) -> Stmt raise ParseError {
   self.advance() // goto
   if self.token == Star {
     // Computed goto: goto *expr;
@@ -547,14 +551,14 @@ fn Parser::parse_goto_stmt(self : Parser) -> Stmt {
       self.advance()
       n
     }
-    _ => abort("Expected label name after goto")
+    _ => self.unexpected("a label name after goto")
   }
   self.expect(Semicolon)
   Goto(name)
 }
 
 ///|
-fn Parser::parse_return_stmt(self : Parser) -> Stmt {
+fn Parser::parse_return_stmt(self : Parser) -> Stmt raise ParseError {
   self.advance() // return
   let expr = if self.token == Semicolon {
     None
@@ -566,7 +570,7 @@ fn Parser::parse_return_stmt(self : Parser) -> Stmt {
 }
 
 ///|
-fn Parser::parse_compound_stmt(self : Parser) -> Stmt {
+fn Parser::parse_compound_stmt(self : Parser) -> Stmt raise ParseError {
   let saved_value_types = self.value_types.copy()
   let saved_tags = self.enter_tag_scope()
   self.expect(LBrace)
@@ -630,7 +634,7 @@ fn initializer_element_count(init_exprs : Array[Expr]) -> Int {
 fn Parser::parse_static_initializer(
   self : Parser,
   ty : Type,
-) -> (Type, GlobalInit?) {
+) -> (Type, GlobalInit?) raise ParseError {
   if self.token == Assign {
     self.advance()
     if self.token == LBrace {
@@ -859,7 +863,7 @@ fn Parser::push_array_init_assignments(
 }
 
 ///|
-fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
+fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt raise ParseError {
   let spec = self.parse_decl_specifiers()
   // Local struct/union/enum definition without variable: struct Foo { ... };
   if self.token == Semicolon {
@@ -886,7 +890,9 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt {
       spec.is_extern ||
       decl.name == "" ||
       decl.ptr_depth != 0 {
-      abort("__auto_type requires one initialized local identifier")
+      self.malformed(
+        "__auto_type declaration, which needs one initialized identifier",
+      )
     }
     self.expect(Assign)
     let expr = self.parse_assign()
@@ -1238,7 +1244,7 @@ fn auto_decl_type(ty : Type) -> Type {
 }
 
 ///|
-fn Parser::parse_expr_stmt(self : Parser) -> Stmt {
+fn Parser::parse_expr_stmt(self : Parser) -> Stmt raise ParseError {
   let expr = self.parse_expr()
   self.expect(Semicolon)
   ExprStmt(expr)

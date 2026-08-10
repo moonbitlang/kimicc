@@ -21,10 +21,13 @@ fn normalize_symbol_name(name : String) -> String {
 ///|
 /// Compiles C source to native memory and resolves relocations.
 ///
-/// Returns `None` if parsing/codegen succeeds but native image allocation,
+/// Returns `None` if parsing and codegen succeed but native image allocation,
 /// memory protection, base relocation, or external-symbol resolution fails.
+/// A source that cannot be parsed raises instead, so the caller gets the
+/// diagnostic rather than an information-free `None`.
+///
 /// The source must already be preprocessed.
-pub fn compile(source : String) -> Module? {
+pub fn compile(source : String) -> Module? raise @parser.ParseError {
   let prog = @parser.parse(source)
   let image = @codegen.generate_jit_image(prog)
   let memory = executable_memory_new(
@@ -48,7 +51,7 @@ pub fn compile(source : String) -> Module? {
 pub fn compile_c(
   source : String,
   options : @preprocessor.PreprocessOptions,
-) -> Result[Module?, @preprocessor.PreprocessError] {
+) -> Result[Module?, @preprocessor.PreprocessError] raise @parser.ParseError {
   match @preprocessor.preprocess(source, options) {
     Ok(preprocessed) => Ok(compile(preprocessed))
     Err(err) => Err(err)
@@ -136,7 +139,10 @@ pub fn Module::call_i32_3(
 /// Compiles `source` and calls an exported `int fn(void)` symbol once.
 ///
 /// For repeated calls, use `compile` and keep the returned `Module`.
-pub fn call_i32_0(source : String, name : String) -> Int? {
+pub fn call_i32_0(
+  source : String,
+  name : String,
+) -> Int? raise @parser.ParseError {
   match compile(source) {
     Some(module_) => module_.call_i32_0(name)
     None => None
@@ -152,7 +158,7 @@ pub fn call_i32_2(
   name : String,
   arg0 : Int,
   arg1 : Int,
-) -> Int? {
+) -> Int? raise @parser.ParseError {
   match compile(source) {
     Some(module_) => module_.call_i32_2(name, arg0, arg1)
     None => None
@@ -169,7 +175,7 @@ pub fn call_i32_3(
   arg0 : Int,
   arg1 : Int,
   arg2 : Int,
-) -> Int? {
+) -> Int? raise @parser.ParseError {
   match compile(source) {
     Some(module_) => module_.call_i32_3(name, arg0, arg1, arg2)
     None => None
@@ -180,7 +186,11 @@ pub fn call_i32_3(
 /// Compiles `source` and calls an exported `int fn(int)` symbol once.
 ///
 /// For repeated calls, use `compile` and keep the returned `Module`.
-pub fn call_i32_1(source : String, name : String, arg0 : Int) -> Int? {
+pub fn call_i32_1(
+  source : String,
+  name : String,
+  arg0 : Int,
+) -> Int? raise @parser.ParseError {
   match compile(source) {
     Some(module_) => module_.call_i32_1(name, arg0)
     None => None

@@ -1,6 +1,6 @@
 ///|
 /// Returns the printed form of `expr` used as a global initializer.
-fn printed_initializer(expr : String) -> String {
+fn printed_initializer(expr : String) -> String raise @parser.ParseError {
   let program = @parser.parse("double g = " + expr + ";")
   let text = @printer.print_program(program)
   text.trim().to_owned()

@@ -1,10 +1,10 @@
 ///|
-fn Parser::parse_expr(self : Parser) -> Expr {
+fn Parser::parse_expr(self : Parser) -> Expr raise ParseError {
   self.parse_comma()
 }
 
 ///|
-fn Parser::parse_comma(self : Parser) -> Expr {
+fn Parser::parse_comma(self : Parser) -> Expr raise ParseError {
   let mut left = self.parse_assign()
   while true {
     match self.token {
@@ -19,7 +19,7 @@ fn Parser::parse_comma(self : Parser) -> Expr {
 }
 
 ///|
-fn Parser::parse_assign(self : Parser) -> Expr {
+fn Parser::parse_assign(self : Parser) -> Expr raise ParseError {
   let expr = self.parse_ternary()
   let op = match self.token {
     Assign => "="
@@ -58,7 +58,7 @@ fn Parser::parse_assign(self : Parser) -> Expr {
         CompoundAssign(base_op, expr, rhs)
       }
     } else {
-      abort("Invalid assignment target")
+      self.malformed("assignment target")
     }
   } else {
     expr
@@ -66,7 +66,7 @@ fn Parser::parse_assign(self : Parser) -> Expr {
 }
 
 ///|
-fn Parser::parse_ternary(self : Parser) -> Expr {
+fn Parser::parse_ternary(self : Parser) -> Expr raise ParseError {
   let cond = self.parse_logical_or()
   if self.token == Question {
     self.advance()
@@ -80,7 +80,7 @@ fn Parser::parse_ternary(self : Parser) -> Expr {
 }
 
 ///|
-fn Parser::parse_logical_or(self : Parser) -> Expr {
+fn Parser::parse_logical_or(self : Parser) -> Expr raise ParseError {
   let mut left = self.parse_logical_and()
   while true {
     match self.token {
@@ -95,7 +95,7 @@ fn Parser::parse_logical_or(self : Parser) -> Expr {
 }
 
 ///|
-fn Parser::parse_logical_and(self : Parser) -> Expr {
+fn Parser::parse_logical_and(self : Parser) -> Expr raise ParseError {
   let mut left = self.parse_bitwise_or()
   while true {
     match self.token {
@@ -110,7 +110,7 @@ fn Parser::parse_logical_and(self : Parser) -> Expr {
 }
 
 ///|
-fn Parser::parse_bitwise_or(self : Parser) -> Expr {
+fn Parser::parse_bitwise_or(self : Parser) -> Expr raise ParseError {
   let mut left = self.parse_bitwise_xor()
   while true {
     match self.token {
@@ -125,7 +125,7 @@ fn Parser::parse_bitwise_or(self : Parser) -> Expr {
 }
 
 ///|
-fn Parser::parse_bitwise_xor(self : Parser) -> Expr {
+fn Parser::parse_bitwise_xor(self : Parser) -> Expr raise ParseError {
   let mut left = self.parse_bitwise_and()
   while true {
     match self.token {
@@ -140,7 +140,7 @@ fn Parser::parse_bitwise_xor(self : Parser) -> Expr {
 }
 
 ///|
-fn Parser::parse_bitwise_and(self : Parser) -> Expr {
+fn Parser::parse_bitwise_and(self : Parser) -> Expr raise ParseError {
   let mut left = self.parse_equality()
   while true {
     match self.token {
@@ -166,7 +166,7 @@ fn is_lvalue(expr : Expr) -> Bool {
 }
 
 ///|
-fn Parser::parse_equality(self : Parser) -> Expr {
+fn Parser::parse_equality(self : Parser) -> Expr raise ParseError {
   let mut left = self.parse_relational()
   while true {
     match self.token {
@@ -185,7 +185,7 @@ fn Parser::parse_equality(self : Parser) -> Expr {
 }
 
 ///|
-fn Parser::parse_relational(self : Parser) -> Expr {
+fn Parser::parse_relational(self : Parser) -> Expr raise ParseError {
   let mut left = self.parse_shift()
   while true {
     match self.token {
@@ -212,7 +212,7 @@ fn Parser::parse_relational(self : Parser) -> Expr {
 }
 
 ///|
-fn Parser::parse_shift(self : Parser) -> Expr {
+fn Parser::parse_shift(self : Parser) -> Expr raise ParseError {
   let mut left = self.parse_additive()
   while true {
     match self.token {
@@ -231,7 +231,7 @@ fn Parser::parse_shift(self : Parser) -> Expr {
 }
 
 ///|
-fn Parser::parse_additive(self : Parser) -> Expr {
+fn Parser::parse_additive(self : Parser) -> Expr raise ParseError {
   let mut left = self.parse_multiplicative()
   while true {
     match self.token {
@@ -250,7 +250,7 @@ fn Parser::parse_additive(self : Parser) -> Expr {
 }
 
 ///|
-fn Parser::parse_multiplicative(self : Parser) -> Expr {
+fn Parser::parse_multiplicative(self : Parser) -> Expr raise ParseError {
   let mut left = self.parse_unary()
   while true {
     match self.token {
@@ -273,7 +273,7 @@ fn Parser::parse_multiplicative(self : Parser) -> Expr {
 }
 
 ///|
-fn Parser::parse_unary(self : Parser) -> Expr {
+fn Parser::parse_unary(self : Parser) -> Expr raise ParseError {
   // Skip __extension__ before expressions
   while self.token == Ident("__extension__") {
     self.advance()
@@ -294,7 +294,7 @@ fn Parser::parse_unary(self : Parser) -> Expr {
       if is_lvalue(expr) {
         PrefixInc(expr)
       } else {
-        abort("++ requires an lvalue")
+        self.malformed("`++` operand, which must be an lvalue")
       }
     }
     MinusMinus => {
@@ -303,7 +303,7 @@ fn Parser::parse_unary(self : Parser) -> Expr {
       if is_lvalue(expr) {
         PrefixDec(expr)
       } else {
-        abort("-- requires an lvalue")
+        self.malformed("`--` operand, which must be an lvalue")
       }
     }
     BitNot => {
@@ -404,13 +404,16 @@ fn is_alignof_operator(name : String) -> Bool {
 }
 
 ///|
-fn Parser::parse_alignof_operator(self : Parser, name : String) -> Expr {
+fn Parser::parse_alignof_operator(
+  self : Parser,
+  name : String,
+) -> Expr raise ParseError {
   self.advance()
   if self.token != LParen {
     match name {
       "__alignof" | "__alignof__" | "_Alignof" =>
         return AlignofExpr(self.parse_unary())
-      _ => abort("expected '(' after alignof")
+      _ => self.unexpected("`(` after alignof")
     }
   }
   self.expect(LParen)
@@ -431,7 +434,7 @@ fn Parser::parse_alignof_operator(self : Parser, name : String) -> Expr {
 }
 
 ///|
-fn Parser::apply_postfix(self : Parser, expr_ : Expr) -> Expr {
+fn Parser::apply_postfix(self : Parser, expr_ : Expr) -> Expr raise ParseError {
   let mut expr = expr_
   while true {
     match self.token {
@@ -448,7 +451,7 @@ fn Parser::apply_postfix(self : Parser, expr_ : Expr) -> Expr {
             self.advance()
             expr = MemberAccess(expr, name)
           }
-          _ => abort("Expected field name after ., got \{self.token}")
+          _ => self.unexpected("a field name after `.`")
         }
       }
       Arrow => {
@@ -458,7 +461,7 @@ fn Parser::apply_postfix(self : Parser, expr_ : Expr) -> Expr {
             self.advance()
             expr = MemberAccess(Deref(expr), name)
           }
-          _ => abort("Expected field name after ->")
+          _ => self.unexpected("a field name after `->`")
         }
       }
       PlusPlus => {
@@ -466,7 +469,7 @@ fn Parser::apply_postfix(self : Parser, expr_ : Expr) -> Expr {
         if is_lvalue(expr) {
           expr = PostfixInc(expr)
         } else {
-          abort("++ requires an lvalue")
+          self.malformed("`++` operand, which must be an lvalue")
         }
       }
       MinusMinus => {
@@ -474,7 +477,7 @@ fn Parser::apply_postfix(self : Parser, expr_ : Expr) -> Expr {
         if is_lvalue(expr) {
           expr = PostfixDec(expr)
         } else {
-          abort("-- requires an lvalue")
+          self.malformed("`--` operand, which must be an lvalue")
         }
       }
       LParen => {
@@ -498,13 +501,13 @@ fn Parser::apply_postfix(self : Parser, expr_ : Expr) -> Expr {
 }
 
 ///|
-fn Parser::parse_postfix(self : Parser) -> Expr {
+fn Parser::parse_postfix(self : Parser) -> Expr raise ParseError {
   let expr = self.parse_primary()
   self.apply_postfix(expr)
 }
 
 ///|
-fn Parser::parse_generic_selection(self : Parser) -> Expr {
+fn Parser::parse_generic_selection(self : Parser) -> Expr raise ParseError {
   self.expect(LParen)
   let control = self.parse_assign()
   let control_ty = @ctype.generic_selection_control_type(
@@ -538,13 +541,16 @@ fn Parser::parse_generic_selection(self : Parser) -> Expr {
     None =>
       match default_expr {
         Some(expr) => expr
-        None => abort("_Generic selection has no matching association")
+        None =>
+          self.malformed(
+            "_Generic selection, which has no matching association",
+          )
       }
   }
 }
 
 ///|
-fn Parser::parse_builtin_choose_expr(self : Parser) -> Expr {
+fn Parser::parse_builtin_choose_expr(self : Parser) -> Expr raise ParseError {
   self.expect(LParen)
   let cond = self.parse_assign()
   self.expect(Comma)
@@ -554,12 +560,15 @@ fn Parser::parse_builtin_choose_expr(self : Parser) -> Expr {
   self.expect(RParen)
   match self.fold_const(cond) {
     Some(n) => if n != 0 { then_expr } else { else_expr }
-    None => abort("__builtin_choose_expr condition must be constant")
+    None =>
+      self.malformed("__builtin_choose_expr condition, which must be constant")
   }
 }
 
 ///|
-fn Parser::parse_builtin_types_compatible_p(self : Parser) -> Expr {
+fn Parser::parse_builtin_types_compatible_p(
+  self : Parser,
+) -> Expr raise ParseError {
   self.expect(LParen)
   let lhs_ty = self.parse_type_name()
   self.expect(Comma)
@@ -573,7 +582,7 @@ fn Parser::parse_builtin_types_compatible_p(self : Parser) -> Expr {
 }
 
 ///|
-fn Parser::parse_builtin_classify_type(self : Parser) -> Expr {
+fn Parser::parse_builtin_classify_type(self : Parser) -> Expr raise ParseError {
   self.expect(LParen)
   let expr = self.parse_assign()
   self.expect(RParen)
@@ -584,7 +593,7 @@ fn Parser::parse_builtin_classify_type(self : Parser) -> Expr {
 }
 
 ///|
-fn Parser::parse_primary(self : Parser) -> Expr {
+fn Parser::parse_primary(self : Parser) -> Expr raise ParseError {
   match self.token {
     Number(n, text, ty) => {
       self.advance()
@@ -678,19 +687,21 @@ fn Parser::parse_primary(self : Parser) -> Expr {
       }
       LabelAddr(label_name)
     }
-    _ => abort("Unexpected token in primary: \{self.token}")
+    _ => self.unexpected("an expression")
   }
 }
 
 ///|
-fn Parser::parse_offset_designators(self : Parser) -> Array[OffsetDesignator] {
+fn Parser::parse_offset_designators(
+  self : Parser,
+) -> Array[OffsetDesignator] raise ParseError {
   let path = []
   match self.token {
     Ident(name) => {
       path.push(@ctype.OffsetDesignator::OffsetField(name))
       self.advance()
     }
-    _ => abort("expected field name in __builtin_offsetof")
+    _ => self.unexpected("a field name in __builtin_offsetof")
   }
   while true {
     match self.token {
@@ -701,7 +712,7 @@ fn Parser::parse_offset_designators(self : Parser) -> Array[OffsetDesignator] {
             path.push(OffsetField(name))
             self.advance()
           }
-          _ => abort("expected field name after . in __builtin_offsetof")
+          _ => self.unexpected("a field name after `.` in __builtin_offsetof")
         }
       }
       LBracket => {
@@ -710,7 +721,10 @@ fn Parser::parse_offset_designators(self : Parser) -> Array[OffsetDesignator] {
         self.expect(RBracket)
         match self.fold_const(index) {
           Some(value) => path.push(OffsetIndex(value))
-          None => abort("array index in __builtin_offsetof must be constant")
+          None =>
+            self.malformed(
+              "array index in __builtin_offsetof, which must be constant",
+            )
         }
       }
       _ => return path

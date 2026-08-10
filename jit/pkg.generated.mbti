@@ -2,21 +2,22 @@
 package "bobzhang/kimicc/jit"
 
 import {
+  "bobzhang/cfront/parser",
   "bobzhang/cfront/preprocessor",
 }
 
 // Values
-pub fn call_i32_0(String, String) -> Int?
+pub fn call_i32_0(String, String) -> Int? raise @parser.ParseError
 
-pub fn call_i32_1(String, String, Int) -> Int?
+pub fn call_i32_1(String, String, Int) -> Int? raise @parser.ParseError
 
-pub fn call_i32_2(String, String, Int, Int) -> Int?
+pub fn call_i32_2(String, String, Int, Int) -> Int? raise @parser.ParseError
 
-pub fn call_i32_3(String, String, Int, Int, Int) -> Int?
+pub fn call_i32_3(String, String, Int, Int, Int) -> Int? raise @parser.ParseError
 
-pub fn compile(String) -> Module?
+pub fn compile(String) -> Module? raise @parser.ParseError
 
-pub fn compile_c(String, @preprocessor.PreprocessOptions) -> Result[Module?, @preprocessor.PreprocessError]
+pub fn compile_c(String, @preprocessor.PreprocessOptions) -> Result[Module?, @preprocessor.PreprocessError] raise @parser.ParseError
 
 // Errors
 

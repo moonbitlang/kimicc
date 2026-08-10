@@ -1,6 +1,6 @@
 ///|
 /// Returns the printed form of a global initialized with `expr`.
-fn printed_int(expr : String) -> String {
+fn printed_int(expr : String) -> String raise @parser.ParseError {
   let program = @parser.parse("int g = " + expr + ";")
   @printer.print_program(program).trim().to_owned()
 }

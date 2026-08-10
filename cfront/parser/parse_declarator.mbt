@@ -32,7 +32,7 @@ priv struct AbstractDeclaratorResult {
 }
 
 ///|
-fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
+fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec raise ParseError {
   let spec : DeclSpec = {
     base_type: SInt,
     is_static: false,
@@ -201,7 +201,7 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
         Long => {
           long_count += 1
           if long_count > 2 {
-            abort("Too many long specifiers")
+            self.malformed("declaration with too many `long` specifiers")
           }
           self.advance()
           saw_primitive = true
@@ -322,11 +322,11 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
             saw_primitive = true
             consumed = true
           } else if is_unsupported_extended_float_type(name) {
-            abort(name + " types are not supported")
+            self.unsupported(name + " types")
           } else if name == "_BitInt" {
-            abort("_BitInt types are not supported")
+            self.unsupported("_BitInt types")
           } else if name == "_Complex" || name == "__complex__" {
-            abort("_Complex types are not supported")
+            self.unsupported("_Complex types")
           } else if !saw_primitive &&
             !saw_typedef_name &&
             self.typedefs.contains(name) {
@@ -370,7 +370,7 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec {
   } else if has_double && long_count == 1 {
     spec.base_type = LongDouble
   } else if has_double && long_count > 1 {
-    abort("invalid long double specifier")
+    self.malformed("`long double` specifier")
   } else if has_double {
     spec.base_type = Double
   } else if has_int128 {
@@ -440,7 +440,7 @@ fn is_extended_float_type_name(name : String) -> Bool {
 }
 
 ///|
-fn Parser::parse_struct_type_specifier(self : Parser) -> Type {
+fn Parser::parse_struct_type_specifier(self : Parser) -> Type raise ParseError {
   self.expect(Struct)
   let pragma_pack = self.current_pack()
   let leading_packed = self.skip_attributes_packed()
@@ -478,12 +478,12 @@ fn Parser::parse_struct_type_specifier(self : Parser) -> Type {
       self.struct_decls[name] = decl
       Struct(name)
     }
-    _ => abort("Expected struct name or {\n")
+    _ => self.unexpected("a struct name or `{`")
   }
 }
 
 ///|
-fn Parser::parse_union_type_specifier(self : Parser) -> Type {
+fn Parser::parse_union_type_specifier(self : Parser) -> Type raise ParseError {
   self.expect(Union)
   let pragma_pack = self.current_pack()
   let leading_packed = self.skip_attributes_packed()
@@ -521,12 +521,12 @@ fn Parser::parse_union_type_specifier(self : Parser) -> Type {
       self.struct_decls[name] = decl
       Union(name)
     }
-    _ => abort("Expected union name or {\n")
+    _ => self.unexpected("a union name or `{`")
   }
 }
 
 ///|
-fn Parser::parse_enum_type_specifier(self : Parser) -> Type {
+fn Parser::parse_enum_type_specifier(self : Parser) -> Type raise ParseError {
   self.expect(Enum)
   self.skip_attributes()
   if self.token is Ident(_) {
@@ -571,7 +571,7 @@ fn Parser::parse_enum_type_specifier(self : Parser) -> Type {
             }
           }
         }
-        _ => abort("Expected enum constant name")
+        _ => self.unexpected("an enum constant name")
       }
     }
     self.expect(RBrace)
@@ -583,7 +583,7 @@ fn Parser::parse_enum_type_specifier(self : Parser) -> Type {
 }
 
 ///|
-fn Parser::parse_struct_body(self : Parser) -> Array[Param] {
+fn Parser::parse_struct_body(self : Parser) -> Array[Param] raise ParseError {
   let fields : Array[Param] = []
   while self.token != RBrace {
     self.skip_attributes()
@@ -603,7 +603,8 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] {
       self.advance()
       match self.fold_const(self.parse_assign()) {
         Some(n) => Some(n.to_int())
-        None => abort("Bit-field width must be a constant integer")
+        None =>
+          self.malformed("bit-field width, which must be a constant integer")
       }
     } else {
       None
@@ -623,7 +624,8 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] {
         self.advance()
         match self.fold_const(self.parse_assign()) {
           Some(n) => Some(n.to_int())
-          None => abort("Bit-field width must be a constant integer")
+          None =>
+            self.malformed("bit-field width, which must be a constant integer")
         }
       } else {
         None
@@ -638,7 +640,10 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] {
 // Declarator parsing following C grammar
 
 ///|
-fn Parser::parse_declarator(self : Parser, base_ty : Type) -> DeclaratorResult {
+fn Parser::parse_declarator(
+  self : Parser,
+  base_ty : Type,
+) -> DeclaratorResult raise ParseError {
   if self.token == Star || self.token == BitXor {
     self.advance()
     self.skip_qualifiers()
@@ -649,7 +654,10 @@ fn Parser::parse_declarator(self : Parser, base_ty : Type) -> DeclaratorResult {
 }
 
 ///|
-fn Parser::parse_abstract_declarator(self : Parser, base_ty : Type) -> Type {
+fn Parser::parse_abstract_declarator(
+  self : Parser,
+  base_ty : Type,
+) -> Type raise ParseError {
   self.parse_abstract_declarator_result(base_ty).ty
 }
 
@@ -657,7 +665,7 @@ fn Parser::parse_abstract_declarator(self : Parser, base_ty : Type) -> Type {
 fn Parser::parse_abstract_declarator_result(
   self : Parser,
   base_ty : Type,
-) -> AbstractDeclaratorResult {
+) -> AbstractDeclaratorResult raise ParseError {
   if self.token == Star || self.token == BitXor {
     self.advance()
     self.skip_qualifiers()
@@ -758,7 +766,7 @@ fn apply_decl_align(ty : Type, align : Int?) -> Type {
 fn Parser::parse_direct_declarator(
   self : Parser,
   base_ty : Type,
-) -> DeclaratorResult {
+) -> DeclaratorResult raise ParseError {
   self.skip_attributes()
   match self.token {
     Ident(name) => {
@@ -786,7 +794,7 @@ fn Parser::parse_direct_declarator(
 fn Parser::parse_direct_abstract_declarator_result(
   self : Parser,
   base_ty : Type,
-) -> AbstractDeclaratorResult {
+) -> AbstractDeclaratorResult raise ParseError {
   self.skip_attributes()
   match self.token {
     LParen =>
@@ -821,7 +829,9 @@ fn Parser::parse_direct_abstract_declarator_result(
 // or a function suffix (parameter list).
 // A parenthesized abstract declarator contains * or ( inside.
 // A function suffix contains parameter declarations or is empty.
-fn Parser::is_parenthesized_abstract_declarator(self : Parser) -> Bool {
+fn Parser::is_parenthesized_abstract_declarator(
+  self : Parser,
+) -> Bool raise ParseError {
   let saved_pos = self.lexer.pos
   let saved_token = self.token
   self.advance() // past (
@@ -867,14 +877,16 @@ fn Parser::is_array_parameter_qualifier(self : Parser) -> Bool {
 }
 
 ///|
-fn Parser::skip_array_parameter_qualifiers(self : Parser) -> Unit {
+fn Parser::skip_array_parameter_qualifiers(
+  self : Parser,
+) -> Unit raise ParseError {
   while self.is_array_parameter_qualifier() {
     self.advance()
   }
 }
 
 ///|
-fn Parser::parse_array_declarator_size(self : Parser) -> Int {
+fn Parser::parse_array_declarator_size(self : Parser) -> Int raise ParseError {
   self.advance()
   self.skip_array_parameter_qualifiers()
   let size = if self.token == RBracket {
@@ -901,7 +913,7 @@ fn Parser::parse_declarator_suffixes(
   name : String,
   push_mode : Bool,
   ptr_depth : Int,
-) -> DeclaratorResult {
+) -> DeclaratorResult raise ParseError {
   let mut ty = base_ty
   let mut pending_arrays : Array[Int] = []
   let mut func_params : Array[Param]? = None
@@ -946,7 +958,7 @@ fn Parser::parse_abstract_declarator_suffixes(
   ty : Type,
   push_mode : Bool,
   ptr_depth : Int,
-) -> Type {
+) -> Type raise ParseError {
   let mut result = ty
   let mut pending_arrays : Array[Int] = []
   while true {
@@ -1011,7 +1023,7 @@ fn apply_pending_array_suffixes(
 
 ///|
 // Parse a type-name (for casts and sizeof). Uses abstract declarator (no name required).
-fn Parser::parse_type_name(self : Parser) -> Type {
+fn Parser::parse_type_name(self : Parser) -> Type raise ParseError {
   let spec = self.parse_decl_specifiers()
   self.parse_abstract_declarator(spec.base_type)
 }

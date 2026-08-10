@@ -7,7 +7,10 @@ fn linux_target() -> @target.Target {
 }
 
 ///|
-fn expect_interp(source : String, expected : Int64) -> Unit {
+fn expect_interp(
+  source : String,
+  expected : Int64,
+) -> Unit raise @parser.ParseError {
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   match mir.interpret_i64("main", []) {
     Ok(value) =>
@@ -24,7 +27,10 @@ fn expect_interp(source : String, expected : Int64) -> Unit {
 }
 
 ///|
-fn expect_body_interp(source : String, expected : Int64) -> Unit {
+fn expect_body_interp(
+  source : String,
+  expected : Int64,
+) -> Unit raise @parser.ParseError {
   let mir = @mir.lower(@parser.parse(source), @target.Target::default())
   match mir.interpret_body_i64("main", []) {
     Ok(value) =>
