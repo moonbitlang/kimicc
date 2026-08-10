@@ -16,9 +16,15 @@ pub fn parse(String) -> Program
 
 pub fn parse_for_target(String, @target.Target) -> Program
 
+pub fn position_at(String, Int) -> Position
+
 pub fn validate_semantics(Program) -> Result[Unit, String]
 
 // Errors
+pub(all) suberror ParseError {
+  Malformed(position~ : Position, what~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for ParseError
 
 // Types and methods
 pub(all) enum Expr {
@@ -93,7 +99,7 @@ pub struct Lexer {
   mut pos : Int
 }
 pub fn Lexer::new(String) -> Self
-pub fn Lexer::next_token(Self) -> Token
+pub fn Lexer::next_token(Self) -> Token raise ParseError
 
 pub(all) struct Param {
   ty : @ctype.Type
@@ -124,6 +130,13 @@ pub struct Parser {
 }
 pub fn Parser::new(Lexer) -> Self
 pub fn Parser::new_for_target(Lexer, @target.Target) -> Self
+
+pub(all) struct Position {
+  offset : Int
+  line : Int
+  column : Int
+} derive(Eq, @debug.Debug)
+pub impl Show for Position
 
 type PragmaPackTable
 
