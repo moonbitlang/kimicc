@@ -205,7 +205,7 @@ pub fn Lexer::new(input : String) -> Lexer {
 /// Returns the next token and advances the lexer.
 ///
 /// End of input is reported as `EOF`. Invalid lexical forms abort.
-pub fn Lexer::next_token(self : Lexer) -> Token {
+pub fn Lexer::next_token(self : Lexer) -> Token raise ParseError {
   self.skip_whitespace()
   if self.pos >= self.input.length() {
     return EOF
@@ -320,12 +320,16 @@ pub fn Lexer::next_token(self : Lexer) -> Token {
     '.' => {
       self.advance()
       if self.peek() == '.' {
+        let dot_start = self.pos
         self.advance()
         if self.peek() == '.' {
           self.advance()
           Ellipsis
         } else {
-          abort("Unexpected token: ..")
+          raise Malformed(
+            position=position_at(self.input, dot_start),
+            what="`..`, which is not a C token",
+          )
         }
       } else if is_digit(self.peek()) {
         // Float literal starting with .: .5, .5e10
@@ -510,7 +514,10 @@ pub fn Lexer::next_token(self : Lexer) -> Token {
       } else if is_alpha(ch) || ch == '_' {
         self.read_ident()
       } else {
-        abort("Unexpected character: " + ch.to_string())
+        raise Malformed(
+          position=self.position(),
+          what="character `" + ch.to_string() + "`",
+        )
       }
   }
 }
@@ -542,7 +549,7 @@ fn Lexer::skip_whitespace(self : Lexer) -> Unit {
 }
 
 ///|
-fn Lexer::read_number(self : Lexer) -> Token {
+fn Lexer::read_number(self : Lexer) -> Token raise ParseError {
   let start = self.pos
   // Check for hex prefix 0x or 0X
   if self.peek() == '0' && (self.peek_next() == 'x' || self.peek_next() == 'X') {
@@ -633,7 +640,12 @@ fn Lexer::read_number(self : Lexer) -> Token {
   for i = 0; i < s.length(); i = i + 1 {
     let ch = s[i]
     if base == 8L && ch > '7' {
-      abort("Invalid octal digit")
+      // `start + i` is the offending digit; `self.pos` is already past the
+      // whole literal and any suffix by now.
+      raise Malformed(
+        position=position_at(self.input, start + i),
+        what="octal literal",
+      )
     }
     n = n * base + (ch.to_int() - '0'.to_int()).to_int64()
   }
@@ -782,7 +794,8 @@ fn Lexer::read_escape_value(self : Lexer) -> Int64 {
 }
 
 ///|
-fn Lexer::read_string(self : Lexer) -> Token {
+fn Lexer::read_string(self : Lexer) -> Token raise ParseError {
+  let start = self.pos
   self.advance() // skip opening "
   let buf = StringBuilder::new()
   while self.peek() != '"' && self.peek() != '\u0000' {
@@ -797,14 +810,17 @@ fn Lexer::read_string(self : Lexer) -> Token {
     }
   }
   if self.peek() != '"' {
-    abort("Unterminated string literal")
+    raise Malformed(
+      position=position_at(self.input, start),
+      what="unterminated string literal",
+    )
   }
   self.advance() // skip closing "
   String(buf.to_string())
 }
 
 ///|
-fn Lexer::read_char(self : Lexer) -> Token {
+fn Lexer::read_char(self : Lexer) -> Token raise ParseError {
   let start = self.pos
   self.advance() // skip opening '
   let ch = self.peek()
@@ -817,7 +833,10 @@ fn Lexer::read_char(self : Lexer) -> Token {
     self.advance()
   }
   if self.peek() != '\'' {
-    abort("Unterminated character literal")
+    raise Malformed(
+      position=position_at(self.input, start),
+      what="unterminated character literal",
+    )
   }
   self.advance() // skip closing '
   // A character constant has type `int` in C, not `char`.
@@ -893,4 +912,10 @@ fn Lexer::read_float_suffix(self : Lexer) -> Char? {
   } else {
     None
   }
+}
+
+///|
+/// Returns the lexer's current position, for reporting.
+fn Lexer::position(self : Lexer) -> Position {
+  position_at(self.input, self.pos)
 }

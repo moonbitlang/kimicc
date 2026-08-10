@@ -71,8 +71,16 @@ pub fn Parser::new_for_target(lexer : Lexer, target : @target.Target) -> Parser 
 }
 
 ///|
+/// Reads the next token.
+///
+/// The lexer reports malformed input by raising, but the parser above it still
+/// aborts, so the error is converted here. This shim goes away when the parser
+/// itself raises; until then it keeps the public behaviour unchanged while the
+/// error type gets real callers. See Step A in docs/c-syntax-suite-plan.md.
 fn Parser::advance(self : Parser) -> Unit {
-  self.token = self.lexer.next_token()
+  self.token = self.lexer.next_token() catch {
+    error => abort(error.to_string())
+  }
 }
 
 ///|
