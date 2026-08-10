@@ -1,6 +1,9 @@
 ///|
 // Parse variable declarations after a struct/union definition: struct Foo { ... } *ptr, arr[8];
-fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
+fn Parser::parse_struct_vars(
+  self : Parser,
+  base_ty : Type,
+) -> Unit raise ParseError {
   // Parse first declarator
   let decl = self.parse_declarator(base_ty)
   let post_decl_attrs = self.skip_attributes_info()
@@ -78,7 +81,7 @@ fn Parser::parse_struct_vars(self : Parser, base_ty : Type) -> Unit {
 }
 
 ///|
-fn Parser::parse_program(self : Parser) -> Program {
+fn Parser::parse_program(self : Parser) -> Program raise ParseError {
   let decls = []
   while self.token != EOF {
     while self.token == Ident("__extension__") {
@@ -181,7 +184,7 @@ fn Parser::parse_program(self : Parser) -> Program {
 }
 
 ///|
-fn Parser::parse_typedef(self : Parser) -> Unit {
+fn Parser::parse_typedef(self : Parser) -> Unit raise ParseError {
   self.parse_typedef_with_attrs(empty_attribute_info())
 }
 
@@ -189,7 +192,7 @@ fn Parser::parse_typedef(self : Parser) -> Unit {
 fn Parser::parse_typedef_with_attrs(
   self : Parser,
   leading_attrs : AttributeInfo,
-) -> Unit {
+) -> Unit raise ParseError {
   self.expect(Typedef)
   self.skip_attributes()
   self.skip_qualifiers()
@@ -220,7 +223,7 @@ fn Parser::parse_typedef_with_attrs(
 }
 
 ///|
-fn Parser::parse_enum(self : Parser) -> Unit {
+fn Parser::parse_enum(self : Parser) -> Unit raise ParseError {
   self.expect(Enum)
   // Optional enum name
   match self.token {
@@ -236,7 +239,7 @@ fn Parser::parse_enum(self : Parser) -> Unit {
         self.advance()
         n
       }
-      _ => abort("Expected enum constant name")
+      _ => self.unexpected("an enum constant name")
     }
     self.skip_attributes()
     let value = if self.token == Assign {

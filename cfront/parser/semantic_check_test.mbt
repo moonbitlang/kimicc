@@ -1,5 +1,5 @@
 ///|
-fn expect_semantic_ok(source : String) -> Unit {
+fn expect_semantic_ok(source : String) -> Unit raise ParseError {
   match @parser.validate_semantics(@parser.parse(source)) {
     Ok(_) => ()
     Err(err) => abort("expected semantic validation to pass: " + err)
@@ -7,7 +7,10 @@ fn expect_semantic_ok(source : String) -> Unit {
 }
 
 ///|
-fn expect_semantic_error(source : String, expected : String) -> Unit {
+fn expect_semantic_error(
+  source : String,
+  expected : String,
+) -> Unit raise ParseError {
   match @parser.validate_semantics(@parser.parse(source)) {
     Ok(_) => abort("expected semantic validation to fail")
     Err(err) =>

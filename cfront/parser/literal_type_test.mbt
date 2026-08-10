@@ -1,6 +1,6 @@
 ///|
 /// Returns the type the parser gives the literal in `return <expr>;`.
-fn literal_type(expr : String) -> String {
+fn literal_type(expr : String) -> String raise ParseError {
   let program = @parser.parse("int f(void) { return " + expr + "; }")
   match program.decls[0].body {
     Some(Compound([Return(Some(Number(_, _, ty)))])) => ty.to_string()

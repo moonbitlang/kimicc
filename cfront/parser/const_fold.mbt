@@ -8,7 +8,10 @@ fn const_literal_string_arg(expr : Expr) -> String? {
 }
 
 ///|
-fn Parser::const_object_size_lvalue_type(self : Parser, expr : Expr) -> Type? {
+fn Parser::const_object_size_lvalue_type(
+  self : Parser,
+  expr : Expr,
+) -> Type? raise ParseError {
   match expr {
     Var(name) =>
       if self.value_types.contains(name) {
@@ -34,7 +37,7 @@ fn Parser::const_object_size_lvalue_type(self : Parser, expr : Expr) -> Type? {
 fn Parser::const_object_size_var_fact(
   self : Parser,
   name : String,
-) -> @ctype.ObjectSizeFact? {
+) -> @ctype.ObjectSizeFact? raise ParseError {
   if self.value_types.contains(name) {
     let size = self.const_type_size(self.value_types[name])
     Some({ whole: size, subobject: size })
@@ -49,7 +52,7 @@ fn Parser::const_object_size_array_element_fact(
   base_ty : Type,
   index : Expr,
   base_fact : @ctype.ObjectSizeFact,
-) -> @ctype.ObjectSizeFact? {
+) -> @ctype.ObjectSizeFact? raise ParseError {
   match base_ty.core_type() {
     Array(elem, n) =>
       match self.fold_const(index) {
@@ -65,7 +68,7 @@ fn Parser::const_object_size_array_element_fact(
 fn Parser::const_object_size_lvalue_fact(
   self : Parser,
   expr : Expr,
-) -> @ctype.ObjectSizeFact? {
+) -> @ctype.ObjectSizeFact? raise ParseError {
   match expr {
     Var(name) => self.const_object_size_var_fact(name)
     ArrayAccess(base, index) =>
@@ -101,7 +104,7 @@ fn Parser::const_object_size_offset_expr_fact(
   self : Parser,
   base : Expr,
   offset_expr : Expr,
-) -> @ctype.ObjectSizeFact? {
+) -> @ctype.ObjectSizeFact? raise ParseError {
   match
     (
       self.const_object_size_expr_fact(base),
@@ -122,7 +125,7 @@ fn Parser::const_object_size_offset_expr_fact(
 fn Parser::const_object_size_expr_fact(
   self : Parser,
   expr : Expr,
-) -> @ctype.ObjectSizeFact? {
+) -> @ctype.ObjectSizeFact? raise ParseError {
   match expr {
     Cast(_, inner) => self.const_object_size_expr_fact(inner)
     AddrOf(inner) => self.const_object_size_lvalue_fact(inner)
@@ -159,7 +162,7 @@ fn Parser::const_builtin_object_size_value(
   self : Parser,
   args : Array[Expr],
   mode : Int64,
-) -> Int64 {
+) -> Int64 raise ParseError {
   if args.length() > 0 {
     match const_literal_string_arg(args[0]) {
       Some(value) => return @ctype.string_literal_object_size(value)
@@ -200,17 +203,17 @@ fn Parser::float16_align(_self : Parser) -> Int {
 }
 
 ///|
-fn Parser::float128_size(self : Parser) -> Int {
+fn Parser::float128_size(self : Parser) -> Int raise ParseError {
   match self.target {
-    DarwinArm64 => abort("__float128 size is not supported")
+    DarwinArm64 => self.unsupported("__float128 on this target")
     LinuxAmd64 => 16
   }
 }
 
 ///|
-fn Parser::float128_align(self : Parser) -> Int {
+fn Parser::float128_align(self : Parser) -> Int raise ParseError {
   match self.target {
-    DarwinArm64 => abort("__float128 alignment is not supported")
+    DarwinArm64 => self.unsupported("__float128 on this target")
     LinuxAmd64 => 16
   }
 }
@@ -220,7 +223,7 @@ fn Parser::fold_scalar_builtin_const(
   self : Parser,
   name : String,
   args : Array[Expr],
-) -> @ctype.IntegerConstant? {
+) -> @ctype.IntegerConstant? raise ParseError {
   let arg0 = if args.length() > 0 { self.fold_const_int(args[0]) } else { None }
   let arg1 = if args.length() > 1 { self.fold_const_int(args[1]) } else { None }
   let first_ty = if args.length() > 0 {
@@ -241,7 +244,7 @@ fn Parser::fold_scalar_builtin_const(
 fn Parser::fold_const_int(
   self : Parser,
   expr : Expr,
-) -> @ctype.IntegerConstant? {
+) -> @ctype.IntegerConstant? raise ParseError {
   match expr {
     Number(n, _, ty) => Some(@ctype.integer_constant(n, ty))
     Binary("+", a, b) =>
@@ -471,7 +474,7 @@ fn Parser::fold_const_int(
 }
 
 ///|
-fn Parser::fold_const(self : Parser, expr : Expr) -> Int64? {
+fn Parser::fold_const(self : Parser, expr : Expr) -> Int64? raise ParseError {
   match self.fold_const_int(expr) {
     Some(value) => Some(value.bits)
     None => None
@@ -479,7 +482,7 @@ fn Parser::fold_const(self : Parser, expr : Expr) -> Int64? {
 }
 
 ///|
-fn Parser::const_type_size(self : Parser, ty : Type) -> Int {
+fn Parser::const_type_size(self : Parser, ty : Type) -> Int raise ParseError {
   match ty {
     Void => 0
     Bool | SChar | UChar => 1
@@ -505,7 +508,7 @@ fn Parser::const_type_size(self : Parser, ty : Type) -> Int {
 }
 
 ///|
-fn Parser::const_type_align(self : Parser, ty : Type) -> Int {
+fn Parser::const_type_align(self : Parser, ty : Type) -> Int raise ParseError {
   match ty {
     Void => 1
     Bool | SChar | UChar => 1
@@ -538,7 +541,10 @@ fn Parser::const_type_align(self : Parser, ty : Type) -> Int {
 }
 
 ///|
-fn Parser::const_struct_size(self : Parser, name : String) -> Int {
+fn Parser::const_struct_size(
+  self : Parser,
+  name : String,
+) -> Int raise ParseError {
   if !self.struct_decls.contains(name) {
     return 8
   }
@@ -560,7 +566,10 @@ fn Parser::const_struct_size(self : Parser, name : String) -> Int {
 }
 
 ///|
-fn Parser::const_union_size(self : Parser, name : String) -> Int {
+fn Parser::const_union_size(
+  self : Parser,
+  name : String,
+) -> Int raise ParseError {
   if !self.struct_decls.contains(name) {
     return 8
   }
@@ -581,7 +590,10 @@ fn Parser::const_union_size(self : Parser, name : String) -> Int {
 }
 
 ///|
-fn Parser::const_struct_align(self : Parser, name : String) -> Int {
+fn Parser::const_struct_align(
+  self : Parser,
+  name : String,
+) -> Int raise ParseError {
   if !self.struct_decls.contains(name) {
     return 8
   }
@@ -597,7 +609,10 @@ fn Parser::const_struct_align(self : Parser, name : String) -> Int {
 }
 
 ///|
-fn Parser::const_union_align(self : Parser, name : String) -> Int {
+fn Parser::const_union_align(
+  self : Parser,
+  name : String,
+) -> Int raise ParseError {
   self.const_struct_align(name)
 }
 
@@ -606,7 +621,7 @@ fn Parser::const_flatten_anon_fields(
   self : Parser,
   ty : Type,
   base_offset : Int,
-) -> Array[(String, Type, Int, Int, Int, Int)] {
+) -> Array[(String, Type, Int, Int, Int, Int)] raise ParseError {
   let name = match ty {
     Struct(n) | Union(n) => n
     _ => return []
@@ -640,7 +655,7 @@ fn Parser::const_flatten_anon_fields(
 fn Parser::const_struct_layout(
   self : Parser,
   decl : StructDecl,
-) -> Array[(String, Type, Int, Int, Int, Int)] {
+) -> Array[(String, Type, Int, Int, Int, Int)] raise ParseError {
   let layout = []
   let mut offset = 0
   let mut in_bitfield_run = false
@@ -725,7 +740,7 @@ fn Parser::const_struct_layout(
 fn Parser::const_union_layout(
   self : Parser,
   decl : StructDecl,
-) -> Array[(String, Type, Int, Int, Int, Int)] {
+) -> Array[(String, Type, Int, Int, Int, Int)] raise ParseError {
   let layout = []
   for field in decl.fields {
     if field.name == "" && field.ty.is_anonymous_aggregate() {
@@ -751,7 +766,7 @@ fn Parser::const_field_layout(
   self : Parser,
   ty : Type,
   field : String,
-) -> (String, Type, Int, Int, Int, Int)? {
+) -> (String, Type, Int, Int, Int, Int)? raise ParseError {
   let name = match ty {
     Struct(n) | Union(n) => n
     Aligned(inner, _) | Atomic(inner) =>
@@ -780,7 +795,7 @@ fn Parser::const_offset_of(
   self : Parser,
   ty : Type,
   path : Array[OffsetDesignator],
-) -> Int? {
+) -> Int? raise ParseError {
   let mut current_ty = ty
   let mut offset = 0
   for designator in path {
@@ -807,7 +822,11 @@ fn Parser::const_offset_of(
 }
 
 ///|
-fn Parser::const_member_type(self : Parser, ty : Type, field : String) -> Type? {
+fn Parser::const_member_type(
+  self : Parser,
+  ty : Type,
+  field : String,
+) -> Type? raise ParseError {
   match ty {
     Pointer(inner) => self.const_member_type(inner, field)
     _ =>
@@ -865,7 +884,7 @@ fn Parser::const_builtin_return_type(
   self : Parser,
   name : String,
   args : Array[Expr],
-) -> Type? {
+) -> Type? raise ParseError {
   let arg_types : Array[Type] = []
   for arg in args {
     arg_types.push(self.const_expr_type(arg))
@@ -883,7 +902,7 @@ fn Parser::const_builtin_return_type(
 }
 
 ///|
-fn Parser::const_expr_type(self : Parser, expr : Expr) -> Type {
+fn Parser::const_expr_type(self : Parser, expr : Expr) -> Type raise ParseError {
   match expr {
     Sizeof(_) | SizeofExpr(_) | Alignof(_) | AlignofExpr(_) | OffsetOf(_, _) =>
       ULong

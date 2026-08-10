@@ -76,7 +76,7 @@ fn merge_section(lhs : String?, rhs : String?) -> String? {
 }
 
 ///|
-fn Parser::skip_qualifiers(self : Parser) -> Unit {
+fn Parser::skip_qualifiers(self : Parser) -> Unit raise ParseError {
   while self.token == Const ||
         self.token == Restrict ||
         self.token == Extern ||
@@ -107,7 +107,9 @@ fn Parser::skip_qualifiers(self : Parser) -> Unit {
 }
 
 ///|
-fn Parser::skip_attributes_info(self : Parser) -> AttributeInfo {
+fn Parser::skip_attributes_info(
+  self : Parser,
+) -> AttributeInfo raise ParseError {
   let info = empty_attribute_info()
   while self.token == Ident("__attribute__") ||
         self.token == Ident("__attribute") ||
@@ -176,8 +178,7 @@ fn Parser::skip_attributes_info(self : Parser) -> AttributeInfo {
           Ident("vector_size")
           | Ident("__vector_size__")
           | Ident("ext_vector_type")
-          | Ident("__ext_vector_type__") =>
-            abort("vector types are not supported")
+          | Ident("__ext_vector_type__") => self.unsupported("vector types")
           Ident("mode") | Ident("__mode__") => {
             self.advance()
             if self.token == LParen {
@@ -266,19 +267,27 @@ fn type_is_unsigned_integer(ty : Type) -> Bool {
 }
 
 ///|
-fn sized_integer_type(unsigned : Bool, bits : Int) -> Type {
+fn sized_integer_type(
+  unsigned : Bool,
+  bits : Int,
+  position : Position,
+) -> Type raise ParseError {
   match bits {
     8 => if unsigned { UChar } else { SChar }
     16 => if unsigned { UShort } else { SShort }
     32 => if unsigned { UInt } else { SInt }
     64 => if unsigned { ULong } else { SLong }
     128 => if unsigned { UInt128 } else { SInt128 }
-    _ => abort("unsupported mode integer width")
+    _ => raise Unsupported(position~, what="integer width in `mode` attribute")
   }
 }
 
 ///|
-fn Parser::apply_decl_mode(self : Parser, ty : Type, mode : String?) -> Type {
+fn Parser::apply_decl_mode(
+  self : Parser,
+  ty : Type,
+  mode : String?,
+) -> Type raise ParseError {
   match mode {
     None => ty
     Some(name) => {
@@ -287,20 +296,19 @@ fn Parser::apply_decl_mode(self : Parser, ty : Type, mode : String?) -> Type {
         DarwinArm64 | LinuxAmd64 => 64
       }
       match name {
-        "QI" | "byte" => sized_integer_type(unsigned, 8)
-        "HI" => sized_integer_type(unsigned, 16)
-        "SI" => sized_integer_type(unsigned, 32)
-        "DI" => sized_integer_type(unsigned, 64)
+        "QI" | "byte" => sized_integer_type(unsigned, 8, self.position())
+        "HI" => sized_integer_type(unsigned, 16, self.position())
+        "SI" => sized_integer_type(unsigned, 32, self.position())
+        "DI" => sized_integer_type(unsigned, 64, self.position())
         "word" | "unwind_word" | "pointer" =>
-          sized_integer_type(unsigned, word_bits)
-        "TI" => sized_integer_type(unsigned, 128)
+          sized_integer_type(unsigned, word_bits, self.position())
+        "TI" => sized_integer_type(unsigned, 128, self.position())
         "HF" => Float16
         "SF" => Float
         "DF" => Double
         "XF" => LongDouble
         "TF" => Float128
-        "HC" | "SC" | "DC" | "XC" | "TC" =>
-          abort("_Complex types are not supported")
+        "HC" | "SC" | "DC" | "XC" | "TC" => self.unsupported("_Complex types")
         "V2QI"
         | "V4QI"
         | "V8QI"
@@ -312,8 +320,8 @@ fn Parser::apply_decl_mode(self : Parser, ty : Type, mode : String?) -> Type {
         | "V4SI"
         | "V2DI"
         | "V4SF"
-        | "V2DF" => abort("vector types are not supported")
-        _ => abort("unsupported mode attribute: " + name)
+        | "V2DF" => self.unsupported("vector types")
+        _ => self.unsupported("`mode` attribute `" + name + "`")
       }
     }
   }
@@ -324,17 +332,17 @@ fn Parser::apply_decl_attrs(
   self : Parser,
   ty : Type,
   attrs : AttributeInfo,
-) -> Type {
+) -> Type raise ParseError {
   apply_decl_align(self.apply_decl_mode(ty, attrs.mode), attrs.align)
 }
 
 ///|
-fn Parser::skip_attributes_packed(self : Parser) -> Bool {
+fn Parser::skip_attributes_packed(self : Parser) -> Bool raise ParseError {
   self.skip_attributes_info().is_packed
 }
 
 ///|
-fn Parser::skip_attributes(self : Parser) -> Unit {
+fn Parser::skip_attributes(self : Parser) -> Unit raise ParseError {
   let _ = self.skip_attributes_info()
 }
 
@@ -383,10 +391,10 @@ fn Parser::is_type_name_start(self : Parser) -> Bool {
 }
 
 ///|
-fn Parser::parse_typeof_specifier(self : Parser) -> Type {
+fn Parser::parse_typeof_specifier(self : Parser) -> Type raise ParseError {
   match self.token {
     Ident("__typeof") | Ident("__typeof__") | Ident("typeof") => ()
-    _ => abort("Expected typeof specifier")
+    _ => self.unexpected("a typeof specifier")
   }
   self.advance()
   self.expect(LParen)
@@ -401,7 +409,7 @@ fn Parser::parse_typeof_specifier(self : Parser) -> Type {
 }
 
 ///|
-fn Parser::parse_alignas_specifier(self : Parser) -> Int? {
+fn Parser::parse_alignas_specifier(self : Parser) -> Int? raise ParseError {
   match self.token {
     Ident("_Alignas") | Ident("alignas") => ()
     _ => return None

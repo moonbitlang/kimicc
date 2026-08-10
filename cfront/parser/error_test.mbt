@@ -24,6 +24,7 @@ test "the lexer raises with a position" {
       inspect(what, content="unterminated string literal")
       inspect(position.line, content="1")
     }
+    other => fail("unexpected diagnostic: \{other}")
   } noraise {
     _ => fail("expected the unterminated string to be reported")
   }
@@ -74,5 +75,39 @@ fn lex_error(source : String) -> @parser.ParseError {
     Malformed(position=@parser.position_at(source, 0), what="nothing reported")
   } catch {
     error => error
+  }
+}
+
+///|
+/// The recoverable contract has no holes: a caller that catches `ParseError`
+/// must not be able to hit an `abort` instead. These are the paths review found
+/// still bypassing it -- a malformed literal after the first token, an
+/// unsupported construct, and a failing static assertion.
+test "no input reaches abort instead of a diagnostic" {
+  for
+    source in [
+      "int a;\nchar *s = \"oops;", "_Complex double z;", "int main(void) { _Static_assert(0, \"boom\"); return 0; }",
+      "int f(void) { return foo bar; }", "int a = 09;",
+    ] {
+    try {
+      ignore(@parser.parse(source))
+      fail("expected a diagnostic for: " + source)
+    } catch {
+      _ => ()
+    }
+  }
+}
+
+///|
+/// A diagnostic points at where the offending token starts, not at whatever
+/// follows it. The lexer has already advanced past the token by the time the
+/// parser objects, so this needs the token's start to be remembered.
+test "diagnostics point at the offending token" {
+  try {
+    ignore(@parser.parse("int f(void) { return foo bar; }"))
+    fail("expected a diagnostic")
+  } catch {
+    error =>
+      inspect(error.to_string(), content="1:26: expected ;, found Ident(bar)")
   }
 }

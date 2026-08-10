@@ -236,6 +236,22 @@ fn fail(message : String) -> Unit {
 }
 
 ///|
+/// Parses, reporting the diagnostic and exiting rather than propagating.
+///
+/// This is the boundary where the library's raised errors become the driver's
+/// behaviour: `cfront` reports, and the compiler front end turns that into an
+/// `error:` line and a non-zero exit.
+fn parse_or_report(source : String, target : @target.Target) -> @parser.Program {
+  @parser.parse_for_target(source, target) catch {
+    error => {
+      fail(error.to_string())
+      // `fail` exits the process; this only satisfies the type checker.
+      abort("unreachable after fail")
+    }
+  }
+}
+
+///|
 fn starts_with(value : String, prefix : String) -> Bool {
   value.length() >= prefix.length() &&
   value[0:prefix.length()].to_owned() == prefix
@@ -2844,7 +2860,7 @@ fn generate_assembly_from_preprocessed(
   parser_input : String,
   opts : DriverOptions,
 ) -> String {
-  let prog = @parser.parse_for_target(parser_input, opts.target)
+  let prog = parse_or_report(parser_input, opts.target)
   match @parser.validate_semantics(prog) {
     Ok(_) => ()
     Err(err) => {
@@ -3224,10 +3240,7 @@ fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
         ParserAstCodegen =>
           match opts.target {
             DarwinArm64 => {
-              let prog = @parser.parse_for_target(
-                preprocessed.text,
-                opts.target,
-              )
+              let prog = parse_or_report(preprocessed.text, opts.target)
               match @parser.validate_semantics(prog) {
                 Ok(_) => ()
                 Err(err) => {
@@ -3275,7 +3288,7 @@ fn compile_input(opts : DriverOptions, input_path : String) -> Unit {
       let preprocessed = preprocess_source_with_dependencies(
         source, input_path, opts,
       )
-      let prog = @parser.parse_for_target(preprocessed.text, opts.target)
+      let prog = parse_or_report(preprocessed.text, opts.target)
       match @parser.validate_semantics(prog) {
         Ok(_) => ()
         Err(err) => {

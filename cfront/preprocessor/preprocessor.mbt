@@ -1765,7 +1765,7 @@ pub fn preprocess(
 pub fn parse(
   source : String,
   options : PreprocessOptions,
-) -> Result[@parser.Program, PreprocessError] {
+) -> Result[@parser.Program, PreprocessError] raise @parser.ParseError {
   match preprocess(source, options) {
     Ok(text) => Ok(@parser.parse(text))
     Err(err) => Err(err)

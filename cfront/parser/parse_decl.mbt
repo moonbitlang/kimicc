@@ -1,5 +1,5 @@
 ///|
-fn Parser::parse_func_decl(self : Parser) -> FuncDecl {
+fn Parser::parse_func_decl(self : Parser) -> FuncDecl raise ParseError {
   let leading_attrs = self.skip_attributes_info()
   let mut leading_weak = leading_attrs.is_weak
   let mut leading_visibility = leading_attrs.visibility
@@ -216,7 +216,7 @@ fn Parser::parse_global_var_tail(
   spec : DeclSpec,
   decl : DeclaratorResult,
   post_decl_attrs : AttributeInfo,
-) -> Unit {
+) -> Unit raise ParseError {
   let mut ty = self.apply_decl_attrs(
     apply_decl_align(resolve_var_type(decl), spec.align),
     post_decl_attrs,
@@ -325,7 +325,7 @@ fn Parser::parse_global_var_tail(
 }
 
 ///|
-fn Parser::parse_param(self : Parser) -> Param {
+fn Parser::parse_param(self : Parser) -> Param raise ParseError {
   if self.token == Ellipsis {
     self.advance()
     return { ty: Void, name: "...", bit_width: None }
