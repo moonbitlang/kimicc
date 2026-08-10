@@ -47,14 +47,37 @@ down, so the README currently tells callers to parse in a separate process for
 fault isolation. That is a workable answer for a compiler binary and not one for
 a library.
 
-The parser should return a result carrying diagnostics instead. This is the
-single largest thing standing between `cfront` and being usable by anything
-other than `kimicc`, and no amount of AST fidelity substitutes for it.
+**Errors are raised, not returned.** MoonBit tracks checked errors in the
+signature, so a `suberror` with `raise` is the idiom here; `Result` would be the
+Rust habit rather than the MoonBit one.
 
-Worth noting that useful diagnostics want source locations, which is its own
-step below. The two can be done in either order -- errors without locations
-still beat aborting -- but doing locations first makes the diagnostics
-worth reading.
+The shape:
+
+```
+pub(all) struct Position { offset : Int; line : Int; column : Int }
+
+pub suberror ParseError {
+  Unexpected(position~ : Position, expected~ : String, found~ : String)
+  Unsupported(position~ : Position, what~ : String)
+  Malformed(position~ : Position, what~ : String)
+}
+```
+
+A diagnostic needs a position, and a *parse* diagnostic does not need positions
+on AST nodes -- the parser knows where it is from `Lexer::pos` at the moment it
+fails. Line and column are derived from that offset when an error is raised
+rather than tracked per token, since the parsing path never needs them. This is
+worth stating because the two are easy to conflate: locations *on nodes* are for
+semantic diagnostics and format preservation, and are Step D.
+
+**Scale, measured.** Converting a single site shows the shape of the work:
+making `Parser::expect` raise produces 110 compile errors, because every caller
+must then declare `raise ParseError` too. The change is mechanical -- the
+compiler names each function that needs the annotation -- but it propagates
+through the parser's whole call graph and then to the boundaries in `mir`,
+`codegen`, `jit`, and `cmd/main`, which must either propagate or handle. Expect
+a large diff of signature changes rather than logic changes, and a decision at
+each boundary about whether a caller reports or aborts.
 
 ### Step B — Stop lowering in the parser
 
@@ -103,12 +126,16 @@ compares meaning rather than spelling is possible; it has not been needed yet.
 
 ### Step D — Source locations
 
-A location on every node. Needed for diagnostics worth reading (Step A), and the
-prerequisite for any format-preserving output — a formatter, as opposed to the
-canonical printer that exists.
+A location on every node. Needed for *semantic* diagnostics -- an error about a
+type or a name, pointing at the construct responsible -- and the prerequisite
+for format-preserving output. Parse diagnostics do not need it; see Step A.
 
-This is the largest change on the list and has no partial credit: a location
-threaded through every constructor. It is also the one that would let the
+This is the largest change on the list and has no partial credit: roughly 995
+expression and 406 statement constructor uses across 12 files, and unlike the
+literal work the *matches* change shape too, since `Expr` would become a struct
+with a `kind` field. A cheaper variant worth weighing first is locations on
+statements and declarations only, which is about a quarter of the work for
+coarser messages. It is also the one that would let the
 literal *text* fields be recovered from source rather than stored, though that
 is a simplification to consider rather than a reason to wait.
 
