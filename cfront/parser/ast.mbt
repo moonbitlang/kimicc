@@ -60,6 +60,11 @@ pub type OffsetDesignator = @ctype.OffsetDesignator
 /// Compound statements contain nested statement arrays. `For(init, cond, inc,
 /// body)` stores the condition as an expression; parser-generated empty
 /// conditions are represented internally as a truthy expression.
+///
+/// `Case` and `Default` are labels rather than clauses: they wrap the single
+/// statement they label, exactly as C spells them, and the statements that
+/// follow are siblings the switch falls through into. `Case` holds the value
+/// its constant expression folds to, not the expression as written.
 pub(all) enum Stmt {
   ExprStmt(Expr)
   Return(Expr?)
@@ -70,7 +75,9 @@ pub(all) enum Stmt {
   VarDecl(Type, String, Expr?)
   Break
   Continue
-  Switch(Expr, Stmt, Array[(Int64?, String)])
+  Switch(Expr, Stmt)
+  Case(Int64, Stmt)
+  Default(Stmt)
   Goto(String)
   Label(String, Stmt)
   For(Stmt?, Expr, Expr?, Stmt)

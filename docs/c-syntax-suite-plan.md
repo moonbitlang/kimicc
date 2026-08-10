@@ -34,9 +34,10 @@ are untouched, which is why they lead the plan.
 
 Done, in order: aggregate definitions ordered by definition rather than hoisted;
 literals carrying the type their suffix selects; literals keeping the text that
-was written, so `0xff`, `0755`, and `1ull` survive printing; and two miscompiles
+was written, so `0xff`, `0755`, and `1ull` survive printing; two miscompiles
 fixed on the way (block-scoped tags colliding in a flat table, and `sizeof(1L)`
-reporting 4).
+reporting 4); and `case`/`default` as statements rather than synthetic labels,
+the first construct moved out of the parser under Step B.
 
 ## Plan
 
@@ -84,9 +85,10 @@ each boundary about whether a caller reports or aborts.
 The parser desugars on the way in, and the artifacts leak into what a suite user
 must know:
 
-- `case 3:` is stored as a label named `__kimicc_case_3_7`, with a counter baked
-  into the name. To emit a `switch`, a user would have to reproduce that
-  spelling.
+- `case 3:` was stored as a label named `__kimicc_case_3_7`, with a counter
+  baked into the name. Done: `Case` and `Default` are statements, `Switch`
+  carries no case table, and each backend synthesizes the labels its own
+  dispatch needs.
 - A local aggregate initializer becomes a `= 0` marker plus element assignments.
   There is no correct way to print that node, and no reasonable way to construct
   one.

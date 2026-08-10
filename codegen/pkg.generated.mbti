@@ -34,6 +34,7 @@ pub struct Codegen {
   strings : Array[String]
   mut break_label : String?
   mut continue_label : String?
+  switch_clauses : Array[SwitchClauses]
   globals : Map[String, CodegenGlobalDecl]
   mut emitted_labels : Map[String, String]
   mut defined_labels : Map[String, Bool]
@@ -60,6 +61,8 @@ pub struct JitSymbol {
   name : String
   offset : Int
 }
+
+type SwitchClauses
 
 // Type aliases
 

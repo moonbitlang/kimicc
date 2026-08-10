@@ -1601,10 +1601,7 @@ fn X64Codegen::emit_switch_case_compare(
 ///|
 fn X64Codegen::label_ref(self : X64Codegen, name : String) -> String {
   if !self.emitted_labels.contains(name) {
-    let label = if name == "default" ||
-      is_numeric_case_label(name) ||
-      name.has_prefix("__kimicc_case_") ||
-      name.has_prefix("__kimicc_default_") {
+    let label = if @mir.is_synthetic_switch_label(name) {
       self.new_label()
     } else {
       ".L" + self.func_name + "_label_" + sanitize_label(name)

@@ -170,41 +170,14 @@ fn Codegen::emit_store_typed(
 }
 
 ///|
-// Get or create the assembly label name for an AST label.
-
-///|
-fn is_digit_char(ch : UInt16) -> Bool {
-  ch >= '0'.to_int().to_uint16() && ch <= '9'.to_int().to_uint16()
-}
-
-///|
-fn is_numeric_case_label(name : String) -> Bool {
-  if !name.has_prefix("case_") {
-    return false
-  }
-  for i = 5; i < name.length(); i = i + 1 {
-    if !is_digit_char(name[i]) {
-      return false
-    }
-  }
-  true
-}
-
-///|
-// Case/default labels and regular labels both need stable assembly labels:
-// switch dispatch may reference a case label before its statement is emitted.
+// Get or create the assembly label name for a label the program wrote. A
+// `goto` may name a label before the statement carrying it is emitted, so the
+// mapping is memoised rather than derived at the definition.
 fn Codegen::label_ref(self : Codegen, name : String) -> String {
   match self.emitted_labels.get(name) {
     Some(label) => label
     None => {
-      let label = if name == "default" ||
-        is_numeric_case_label(name) ||
-        name.has_prefix("__kimicc_case_") ||
-        name.has_prefix("__kimicc_default_") {
-        self.new_label()
-      } else {
-        "_" + self.func_name + "_label_" + sanitize_label(name)
-      }
+      let label = "_" + self.func_name + "_label_" + sanitize_label(name)
       self.emitted_labels[name] = label
       label
     }

@@ -454,11 +454,11 @@ fn Codegen::collect_locals(self : Codegen, stmt : @parser.Stmt) -> Unit {
       self.collect_expr_locals(cond)
       self.collect_locals(body)
     }
-    Switch(expr, body, _) => {
+    Switch(expr, body) => {
       self.collect_expr_locals(expr)
       self.collect_locals(body)
     }
-    Label(_, s) => self.collect_locals(s)
+    Case(_, s) | Default(s) | Label(_, s) => self.collect_locals(s)
     VarDecl(ty, name, init) => {
       let _ = self.alloc_local(name, ty)
       match init {

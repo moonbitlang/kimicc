@@ -24,6 +24,8 @@ pub struct Codegen {
   strings : Array[String]
   mut break_label : String?
   mut continue_label : String?
+  // One entry per `switch` being emitted, innermost last.
+  switch_clauses : Array[SwitchClauses]
   globals : Map[String, CodegenGlobalDecl]
   mut emitted_labels : Map[String, String]
   mut defined_labels : Map[String, Bool]
@@ -610,11 +612,12 @@ fn collect_static_inline_stmt(
         Some(expr) => collect_static_inline_expr(expr, inline_decls, needed)
         None => ()
       }
-    Switch(expr, body, _) => {
+    Switch(expr, body) => {
       collect_static_inline_expr(expr, inline_decls, needed)
       collect_static_inline_stmt(body, inline_decls, needed)
     }
-    Label(_, body) => collect_static_inline_stmt(body, inline_decls, needed)
+    Case(_, body) | Default(body) | Label(_, body) =>
+      collect_static_inline_stmt(body, inline_decls, needed)
     For(init, cond, update, body) => {
       match init {
         Some(stmt) => collect_static_inline_stmt(stmt, inline_decls, needed)
@@ -1211,6 +1214,7 @@ pub fn Codegen::new() -> Codegen {
     struct_decls: {},
     strings: [],
     break_label: None,
+    switch_clauses: [],
     continue_label: None,
     globals: {},
     emitted_labels: {},

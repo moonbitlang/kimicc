@@ -477,22 +477,19 @@ test "parse switch" {
     Some(Compound(stmts)) => {
       inspect(stmts.length(), content="4")
       match stmts[2] {
-        Switch(_, body, cases) => {
-          assert_true(body is Compound(_))
-          inspect(cases.length(), content="3")
-          match cases[0] {
-            (Some(1), _) => ()
-            _ => fail("Expected case 1")
-          }
-          match cases[1] {
-            (Some(2), _) => ()
-            _ => fail("Expected case 2")
-          }
-          match cases[2] {
-            (None, _) => ()
-            _ => fail("Expected default")
-          }
-        }
+        Switch(
+          Var("x"),
+          Compound(
+            [
+              Case(1, ExprStmt(Assign(Var("r"), Number(10, _, SInt)))),
+              Break,
+              Case(2, ExprStmt(Assign(Var("r"), Number(20, _, SInt)))),
+              Break,
+              Default(ExprStmt(Assign(Var("r"), Number(30, _, SInt)))),
+              Break,
+            ]
+          )
+        ) => ()
         _ => fail("Expected switch statement")
       }
     }
@@ -513,8 +510,18 @@ test "parse fallthrough attribute statement as no-op" {
     #|}
   let prog = @parser.parse(source)
   match prog.decls[0].body {
-    Some(Compound([Switch(_, Compound(_), cases)])) =>
-      inspect(cases.length(), content="2")
+    Some(
+      Compound(
+        [
+          Switch(
+            _,
+            Compound(
+              [Case(0, ExprStmt(_)), Case(1, Return(Some(Number(42, _, SInt))))]
+            )
+          ),
+        ]
+      )
+    ) => ()
     _ => fail("Expected fallthrough attribute statement to parse in switch")
   }
 }

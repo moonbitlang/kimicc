@@ -128,9 +128,7 @@ fn write_stmt(buf : StringBuilder, stmt : @parser.Stmt, indent : Int) -> Unit {
       write_indent(buf, indent)
       buf.write_string("continue;")
     }
-    Switch(subject, body, _) => {
-      // The case table is derived from the labels in the body, so printing the
-      // body is enough for it to be rebuilt on reparse.
+    Switch(subject, body) => {
       write_indent(buf, indent)
       buf.write_string("switch (")
       buf.write_string(print_expr(subject))
@@ -152,57 +150,29 @@ fn write_stmt(buf : StringBuilder, stmt : @parser.Stmt, indent : Int) -> Unit {
       buf.write_string(print_expr_at(target, PREC_UNARY))
       buf.write_string(";")
     }
-    Label(name, body) => {
-      // Case and default labels are stored as synthetic label names; printing
-      // them back as `case`/`default` is what makes the output ordinary C.
-      write_indent(buf, indent)
-      buf.write_string(label_syntax(name))
-      buf.write_string("\n")
-      write_stmt(buf, body, indent)
-    }
+    Case(value, body) =>
+      write_label(buf, "case " + value.to_string() + ":", body, indent)
+    Default(body) => write_label(buf, "default:", body, indent)
+    Label(name, body) => write_label(buf, name + ":", body, indent)
   }
 }
 
 ///|
-/// Renders a label's leading syntax, translating the parser's synthetic case
-/// and default label names back into `case N:` and `default:`.
-fn label_syntax(name : String) -> String {
-  match case_label_value(name) {
-    Some(value) => "case " + value.to_string() + ":"
-    None => if is_default_label_name(name) { "default:" } else { name + ":" }
-  }
-}
-
-///|
-/// Extracts the case value from a synthetic case label name.
+/// Writes a label and the statement it labels, the label on its own line.
 ///
-/// The parser spells these `__kimicc_case_<value>_<counter>`, so the digits
-/// before the final underscore are the case value.
-fn case_label_value(name : String) -> Int64? {
-  let prefix = "__kimicc_case_"
-  guard name.has_prefix(prefix) else { return None }
-  let mut value : Int64 = 0
-  let mut negative = false
-  let mut digits = 0
-  for i = prefix.length(); i < name.length(); i = i + 1 {
-    let ch = name[i]
-    if ch is ('0'..='9') {
-      value = value * 10L + (ch.to_int() - '0').to_int64()
-      digits += 1
-    } else if ch is '-' && digits == 0 && !negative {
-      negative = true
-    } else {
-      break
-    }
-  }
-  guard digits > 0 else { return None }
-  Some(if negative { -value } else { value })
-}
-
-///|
-/// Reports whether a label name is the parser's spelling of `default:`.
-fn is_default_label_name(name : String) -> Bool {
-  name is "default" || name.has_prefix("__kimicc_default_")
+/// The labelled statement keeps the enclosing indentation rather than being
+/// nested under the label, since a `case` clause reads as a peer of the
+/// statements that follow it, not as a block.
+fn write_label(
+  buf : StringBuilder,
+  label : String,
+  body : @parser.Stmt,
+  indent : Int,
+) -> Unit {
+  write_indent(buf, indent)
+  buf.write_string(label)
+  buf.write_string("\n")
+  write_stmt(buf, body, indent)
 }
 
 ///|

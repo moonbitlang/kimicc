@@ -147,11 +147,58 @@ priv struct BodyLowerContext {
   locals : Array[MirLocal]
   mut next_id : Int
   current_func : String
+  // One entry per `switch` being lowered, innermost last. A `case` clause
+  // records itself in the innermost entry, which is what makes a nested switch
+  // own its own clauses without any traversal that has to know to stop.
+  switches : Array[Array[(Int64?, String)]]
+  mut next_switch_label : Int
 }
 
 ///|
 fn BodyLowerContext::new(current_func : String) -> BodyLowerContext {
-  { scopes: [{}], locals: [], next_id: 0, current_func }
+  {
+    scopes: [{}],
+    locals: [],
+    next_id: 0,
+    current_func,
+    switches: [],
+    next_switch_label: 0,
+  }
+}
+
+///|
+/// Starts collecting the clauses of a `switch` whose body is about to lower.
+fn BodyLowerContext::push_switch(self : BodyLowerContext) -> Unit {
+  self.switches.push([])
+}
+
+///|
+/// Finishes the innermost `switch`, returning its clauses in source order.
+fn BodyLowerContext::pop_switch(
+  self : BodyLowerContext,
+) -> Array[(Int64?, String)] {
+  match self.switches.pop() {
+    Some(cases) => cases
+    None => []
+  }
+}
+
+///|
+/// Records a `case` or `default` clause on the innermost `switch` and returns
+/// the label the dispatch will branch to.
+///
+/// Returns `None` for a clause outside any `switch`, which is invalid C the
+/// parser does not reject; lowering then bails out rather than inventing a
+/// target.
+fn BodyLowerContext::declare_switch_clause(
+  self : BodyLowerContext,
+  value : Int64?,
+) -> String? {
+  guard self.switches.last() is Some(cases) else { return None }
+  let label = SYNTHETIC_SWITCH_LABEL_PREFIX + self.next_switch_label.to_string()
+  self.next_switch_label += 1
+  cases.push((value, label))
+  Some(label)
 }
 
 ///|
@@ -3882,6 +3929,21 @@ fn mir_stmts_have_supported_switch_label(
 }
 
 ///|
+fn Program::lower_mir_labelled_stmt(
+  self : Program,
+  label : String,
+  body : @parser.Stmt,
+  ctx : BodyLowerContext,
+) -> Array[MirStmt]? {
+  guard self.lower_mir_stmt(body, ctx) is Some(body_values) else { return None }
+  let lowered : Array[MirStmt] = [MirLabel(label)]
+  for value in body_values {
+    lowered.push(value)
+  }
+  Some(lowered)
+}
+
+///|
 fn mir_switch_cases_are_supported(
   cases : Array[(Int64?, String)],
   body : Array[MirStmt],
@@ -4770,27 +4832,32 @@ fn Program::lower_mir_stmt(
           Some([MirDoWhile(cond_value, body_values)])
         _ => None
       }
-    Switch(expr, body, cases) =>
-      match (self.lower_mir_expr(expr, ctx), self.lower_mir_stmt(body, ctx)) {
-        (Some(control), Some(body_values)) =>
-          if mir_switch_cases_are_supported(cases, body_values) {
-            Some([MirSwitch(control, cases, body_values)])
-          } else {
-            None
-          }
-        _ => None
+    Switch(expr, body) => {
+      // The clauses are collected while the body lowers rather than by a
+      // separate walk of it, so the table and the labels in the body are the
+      // same objects and cannot drift apart.
+      guard self.lower_mir_expr(expr, ctx) is Some(control) else { return None }
+      ctx.push_switch()
+      let lowered = self.lower_mir_stmt(body, ctx)
+      let cases = ctx.pop_switch()
+      guard lowered is Some(body_values) else { return None }
+      if mir_switch_cases_are_supported(cases, body_values) {
+        Some([MirSwitch(control, cases, body_values)])
+      } else {
+        None
       }
-    Label(name, body) =>
-      match self.lower_mir_stmt(body, ctx) {
-        Some(body_values) => {
-          let lowered : Array[MirStmt] = [MirLabel(name)]
-          for value in body_values {
-            lowered.push(value)
-          }
-          Some(lowered)
-        }
-        None => None
+    }
+    Case(value, body) => {
+      guard ctx.declare_switch_clause(Some(value)) is Some(label) else {
+        return None
       }
+      self.lower_mir_labelled_stmt(label, body, ctx)
+    }
+    Default(body) => {
+      guard ctx.declare_switch_clause(None) is Some(label) else { return None }
+      self.lower_mir_labelled_stmt(label, body, ctx)
+    }
+    Label(name, body) => self.lower_mir_labelled_stmt(name, body, ctx)
     Goto(name) => Some([MirGoto(name)])
     ComputedGoto(expr) =>
       match self.lower_mir_expr_with_array_decay(expr, ctx) {

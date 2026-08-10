@@ -3251,3 +3251,186 @@ async test "e2e unsigned int128 supports wide limb arithmetic" {
   let exit_code = run_source_async(source)
   inspect(exit_code, content="42")
 }
+
+///|
+/// Builds a program whose `switch` statements exercise the shapes a case table
+/// can take: fallthrough between clauses, `default` written in the middle,
+/// nested switches whose clauses repeat the outer values, negative clause
+/// values, and clauses buried inside a block or a loop within the switch body.
+///
+/// The clause values move with `case_index` so that the corpus does not
+/// accidentally agree with clang only for one particular constant.
+fn deterministic_switch_clause_differential_source(case_index : Int) -> String {
+  let base = case_index * 7 + 2
+  let low = base.to_string()
+  let mid = (base + 1).to_string()
+  let high = (base + 2).to_string()
+  let source = StringBuilder::new()
+  source.write_string("#include <stdio.h>\n")
+  // Fallthrough, and a `default` that is neither first nor last.
+  source.write_string("static int clause_mix(int n) {\n")
+  source.write_string("  int total = 0;\n")
+  source.write_string("  switch (n) {\n")
+  source.write_string("    case " + low + ": total += 1;\n")
+  source.write_string("    case " + mid + ": total += 2; break;\n")
+  source.write_string("    default: total += 4; break;\n")
+  source.write_string("    case " + high + ": total += 8;\n")
+  source.write_string("  }\n")
+  source.write_string("  return total + 16;\n")
+  source.write_string("}\n")
+  // Inner switches reuse the outer clause values: each switch owns its own.
+  source.write_string("static int nested_dispatch(int outer, int inner) {\n")
+  source.write_string("  int r = 0;\n")
+  source.write_string("  switch (outer) {\n")
+  source.write_string("    case " + low + ":\n")
+  source.write_string("      switch (inner) {\n")
+  source.write_string("        case " + low + ": r = 11; break;\n")
+  source.write_string("        default: r = 19; break;\n")
+  source.write_string("        case " + mid + ": r = 12; break;\n")
+  source.write_string("      }\n")
+  source.write_string("      break;\n")
+  source.write_string("    case " + mid + ":\n")
+  source.write_string("      switch (inner) {\n")
+  source.write_string("        case " + low + ": r = 21;\n")
+  source.write_string("        case " + mid + ": r += 22; break;\n")
+  source.write_string("        default: r = 29;\n")
+  source.write_string("      }\n")
+  source.write_string("      break;\n")
+  source.write_string("    default: r = 99;\n")
+  source.write_string("  }\n")
+  source.write_string("  return r;\n")
+  source.write_string("}\n")
+  source.write_string("static long negative_span(long n) {\n")
+  source.write_string("  switch (n) {\n")
+  source.write_string("    case -" + low + ": return -1;\n")
+  source.write_string("    case -1: return -2;\n")
+  source.write_string("    case 0: return 3;\n")
+  source.write_string("    default: return 4;\n")
+  source.write_string("  }\n")
+  source.write_string("}\n")
+  // A clause inside a block of the switch body: control still enters it.
+  source.write_string("static int block_clause(unsigned n) {\n")
+  source.write_string("  int r = 0;\n")
+  source.write_string("  switch (n) {\n")
+  source.write_string("    case " + low + ": r = 1; break;\n")
+  source.write_string("    { case " + mid + ": r = 2; break; }\n")
+  source.write_string("    default: r = 3;\n")
+  source.write_string("  }\n")
+  source.write_string("  return r;\n")
+  source.write_string("}\n")
+  // A written label ahead of a clause, jumped back into from inside it.
+  source.write_string("static int label_before_clause(int n) {\n")
+  source.write_string("  int r = 0;\n")
+  source.write_string("  int again = 0;\n")
+  source.write_string("  switch (n) {\n")
+  source.write_string("    top:\n")
+  source.write_string("    case " + low + ":\n")
+  source.write_string("      r += 3;\n")
+  source.write_string("      if (again == 0) { again = 1; goto top; }\n")
+  source.write_string("      break;\n")
+  source.write_string("    default: r = 7;\n")
+  source.write_string("  }\n")
+  source.write_string("  return r;\n")
+  source.write_string("}\n")
+  source.write_string("static int char_clause(char c) {\n")
+  source.write_string("  switch (c) {\n")
+  source.write_string("    case 'a': return 1;\n")
+  source.write_string("    case 'z': return 26;\n")
+  source.write_string("    case '0': return 48;\n")
+  source.write_string("    default: return 0;\n")
+  source.write_string("  }\n")
+  source.write_string("}\n")
+  // Duff's device: clauses interleaved with a loop the dispatch jumps into.
+  source.write_string("static int duffs(int count) {\n")
+  source.write_string("  int out = 0;\n")
+  source.write_string("  int n = (count + 7) / 8;\n")
+  source.write_string("  switch (count % 8) {\n")
+  source.write_string("    case 0: do { out += 1;\n")
+  source.write_string("    case 7:      out += 2;\n")
+  source.write_string("    case 6:      out += 3;\n")
+  source.write_string("    case 5:      out += 4;\n")
+  source.write_string("    case 4:      out += 5;\n")
+  source.write_string("    case 3:      out += 6;\n")
+  source.write_string("    case 2:      out += 7;\n")
+  source.write_string("    case 1:      out += 8;\n")
+  source.write_string("            } while (--n > 0);\n")
+  source.write_string("  }\n")
+  source.write_string("  return out;\n")
+  source.write_string("}\n")
+  source.write_string("int main(void) {\n")
+  source.write_string("  long acc = 0;\n")
+  source.write_string(
+    "  for (int i = " + low + " - 2; i <= " + high + " + 1; i = i + 1) {\n",
+  )
+  source.write_string("    printf(\"mix %d=%d\\n\", i, clause_mix(i));\n")
+  source.write_string("    acc += clause_mix(i);\n")
+  source.write_string(
+    "    for (int j = " + low + " - 1; j <= " + mid + " + 1; j = j + 1) {\n",
+  )
+  source.write_string(
+    "      printf(\"nested %d,%d=%d\\n\", i, j, nested_dispatch(i, j));\n",
+  )
+  source.write_string("      acc += nested_dispatch(i, j);\n")
+  source.write_string("    }\n")
+  source.write_string(
+    "    printf(\"block %d=%d label %d=%d\\n\", i, block_clause((unsigned)i), i, label_before_clause(i));\n",
+  )
+  source.write_string(
+    "    acc += block_clause((unsigned)i) + label_before_clause(i);\n",
+  )
+  source.write_string("  }\n")
+  source.write_string("  for (long i = -" + high + "; i <= 1; i = i + 1) {\n")
+  source.write_string("    printf(\"neg %ld=%ld\\n\", i, negative_span(i));\n")
+  source.write_string("    acc += negative_span(i);\n")
+  source.write_string("  }\n")
+  source.write_string("  for (int i = 0; i < 4; i = i + 1) {\n")
+  source.write_string("    char c = \"az0q\"[i];\n")
+  source.write_string("    printf(\"char %c=%d\\n\", c, char_clause(c));\n")
+  source.write_string("    acc += char_clause(c);\n")
+  source.write_string("  }\n")
+  source.write_string("  for (int i = 1; i <= 19; i = i + 1) {\n")
+  source.write_string("    printf(\"duff %d=%d\\n\", i, duffs(i));\n")
+  source.write_string("    acc += duffs(i);\n")
+  source.write_string("  }\n")
+  source.write_string("  printf(\"case=%d acc=%ld\\n\", ")
+  source.write_string(case_index.to_string())
+  source.write_string(", acc);\n")
+  source.write_string("  return (int)(acc & 127);\n")
+  source.write_string("}\n")
+  source.to_string()
+}
+
+///|
+async test "e2e deterministic switch clause differential corpus matches clang" {
+  for case_index in [0, 1, 2, 3, 4, 5, 6, 7] {
+    let result = run_source_against_clang_baseline(
+      deterministic_switch_clause_differential_source(case_index),
+      "switch_clause_differential_" + case_index.to_string(),
+    )
+    assert_true(result.output.contains("case=" + case_index.to_string()))
+  }
+}
+
+///|
+async test "e2e direct Mach-O switch clause differential corpus matches clang" {
+  for case_index in [0, 1, 2, 3] {
+    let result = run_source_direct_object_against_clang_baseline(
+      deterministic_switch_clause_differential_source(case_index),
+      "direct_switch_clause_differential_" + case_index.to_string(),
+    )
+    assert_true(result.output.contains("case=" + case_index.to_string()))
+  }
+}
+
+///|
+/// The parser-direct code generator consumes the AST rather than MIR, so it
+/// synthesizes clause labels itself and needs its own differential.
+async test "e2e parser codegen switch clause differential matches strict MIR" {
+  for case_index in [0, 1, 2, 3] {
+    let result = run_source_strict_mir_against_parser_codegen(
+      deterministic_switch_clause_differential_source(case_index),
+      "parser_codegen_switch_clause_" + case_index.to_string(),
+    )
+    assert_true(result.output.contains("case=" + case_index.to_string()))
+  }
+}
