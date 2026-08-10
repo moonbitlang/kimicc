@@ -78,8 +78,9 @@ test "declarators read outward from the name" {
   as a negation.
 - **Designator chains.** `.u.float64 = x` is a nested designator in the AST and
   has to be printed as one chain with a single `=`.
-- **Case labels.** The parser stores `case 3:` as a synthetic label name; the
-  printer turns those back into ordinary `case` and `default` labels.
+- **Clause values.** `case 3:` is a `Case` node holding the value its constant
+  expression folded to, so it prints as a decimal literal rather than as the
+  expression that was written.
 
 ## Known limitations
 

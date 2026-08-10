@@ -552,7 +552,7 @@ fn semantic_validate_stmt(
       }
       Ok(())
     }
-    Switch(expr, body, _) => {
+    Switch(expr, body) => {
       let expr_ty = match semantic_expr_type(ctx, locals, expr) {
         Ok(ty) => ty
         Err(err) => return Err(err)
@@ -562,7 +562,8 @@ fn semantic_validate_stmt(
       }
       semantic_validate_stmt(ctx, locals.copy(), body)
     }
-    Label(_, body) => semantic_validate_stmt(ctx, locals.copy(), body)
+    Case(_, body) | Default(body) | Label(_, body) =>
+      semantic_validate_stmt(ctx, locals.copy(), body)
     For(init, cond, inc, body) => {
       let scoped = locals.copy()
       match init {

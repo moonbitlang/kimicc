@@ -188,31 +188,30 @@ fn Parser::parse_stmt(self : Parser) -> Stmt raise ParseError {
     Ident("_Atomic") => self.parse_var_decl_stmt()
     Case => {
       self.advance()
+      // Report against the start of the constant expression: by the time
+      // folding has failed the parser sits on the colon after it.
+      let value_start = self.token_start
       let expr = self.parse_assign()
       let value = match self.fold_const(expr) {
         Some(n) => n
         None =>
           match expr {
-            Var(name) =>
-              if self.enum_constants.contains(name) {
-                self.enum_constants[name]
-              } else {
-                0
-              }
-            _ => 0
+            Var(name) if self.enum_constants.contains(name) =>
+              self.enum_constants[name]
+            _ =>
+              raise Unsupported(
+                position=position_at(self.lexer.input, value_start),
+                what="case label that does not fold to an integer constant",
+              )
           }
       }
       self.expect(Colon)
-      let stmt = self.parse_stmt()
-      let label = self.fresh_case_label(value)
-      Label(label, stmt)
+      Case(value, self.parse_stmt())
     }
     Default => {
       self.advance()
       self.expect(Colon)
-      let stmt = self.parse_stmt()
-      let label = self.fresh_default_label()
-      Label(label, stmt)
+      Default(self.parse_stmt())
     }
     Ident(name) => {
       // Handle GCC inline assembly: asm volatile ("..." ::: "memory");
@@ -277,11 +276,6 @@ fn Parser::parse_stmt(self : Parser) -> Stmt raise ParseError {
       self.advance()
       if self.token == Colon {
         self.advance()
-        // If labeled statement is case/default, don't consume it
-        // Let parse_switch_stmt handle it
-        if self.token == Case || self.token == Default {
-          return Label(name, ExprStmt(int_literal(0, SInt)))
-        }
         let stmt = self.parse_stmt()
         return Label(name, stmt)
       }
@@ -426,92 +420,6 @@ fn Parser::parse_continue_stmt(self : Parser) -> Stmt raise ParseError {
 }
 
 ///|
-fn extract_case_value(name : String) -> Int64? {
-  let prefix_len = if name.has_prefix("__kimicc_case_") {
-    "__kimicc_case_".length()
-  } else if name.has_prefix("case_") {
-    5
-  } else {
-    return None
-  }
-  let mut case_value : Int64 = 0
-  let mut negative = false
-  let mut saw_digit = false
-  for i = prefix_len; i < name.length(); i = i + 1 {
-    let ch = name[i]
-    if ch >= '0' && ch <= '9' {
-      saw_digit = true
-      case_value = case_value * 10 + (ch.to_int() - '0'.to_int()).to_int64()
-    } else if ch == '-' && i == prefix_len {
-      negative = true
-    } else if saw_digit {
-      break
-    }
-  }
-  if negative {
-    case_value = -case_value
-  }
-  Some(case_value)
-}
-
-///|
-fn is_default_label(name : String) -> Bool {
-  name == "default" || name.has_prefix("__kimicc_default_")
-}
-
-///|
-fn Parser::fresh_case_label(self : Parser, value : Int64) -> String {
-  let label = "__kimicc_case_" +
-    value.to_string() +
-    "_" +
-    self.case_label_counter.to_string()
-  self.case_label_counter += 1
-  label
-}
-
-///|
-fn Parser::fresh_default_label(self : Parser) -> String {
-  let label = "__kimicc_default_" + self.case_label_counter.to_string()
-  self.case_label_counter += 1
-  label
-}
-
-///|
-fn collect_switch_cases(stmt : Stmt, cases : Array[(Int64?, String)]) -> Unit {
-  match stmt {
-    Label(name, body) => {
-      match extract_case_value(name) {
-        Some(value) => cases.push((Some(value), name))
-        None => if is_default_label(name) { cases.push((None, name)) }
-      }
-      collect_switch_cases(body, cases)
-    }
-    Compound(stmts) | StmtList(stmts) =>
-      for s in stmts {
-        collect_switch_cases(s, cases)
-      }
-    If(_, then_, else_) => {
-      collect_switch_cases(then_, cases)
-      match else_ {
-        Some(s) => collect_switch_cases(s, cases)
-        None => ()
-      }
-    }
-    While(_, body) | DoWhile(_, body) => collect_switch_cases(body, cases)
-    For(init, _, _, body) => {
-      match init {
-        Some(s) => collect_switch_cases(s, cases)
-        None => ()
-      }
-      collect_switch_cases(body, cases)
-    }
-    // A nested switch owns its own case/default labels.
-    Switch(_, _, _) => ()
-    _ => ()
-  }
-}
-
-///|
 fn Parser::parse_switch_stmt(self : Parser) -> Stmt raise ParseError {
   self.advance() // switch
   self.expect(LParen)
@@ -523,10 +431,7 @@ fn Parser::parse_switch_stmt(self : Parser) -> Stmt raise ParseError {
     stmts.push(self.parse_stmt())
   }
   self.expect(RBrace)
-  let body = Compound(stmts)
-  let cases = []
-  collect_switch_cases(body, cases)
-  Switch(expr, body, cases)
+  Switch(expr, Compound(stmts))
 }
 
 ///|

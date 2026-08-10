@@ -178,39 +178,42 @@ fn Codegen::gen_stmt(
         Some(label) => self.emit("\tb\t" + label)
         None => abort("continue outside of loop")
       }
-    Switch(expr, body, cases) => {
+    Switch(expr, body) => {
       let end_label = self.new_label()
       let old_break = self.break_label
       self.break_label = Some(end_label)
+      let values : Array[Int64?] = []
+      collect_switch_clauses(body, values)
+      let labels = ReadOnlyArray::makei(values.length(), _ => self.new_label())
       let control_ty = switch_control_type(self.type_of(expr, frame_size))
       self.gen_expr(expr, frame_size)
       self.emit_scalar_conversion_to(control_ty)
       // Generate comparison and branch for each case
-      for c in cases {
-        match c.0 {
-          Some(n) => {
-            self.emit_switch_case_compare(n, control_ty)
-            self.emit("\tb.eq\t" + self.label_ref(c.1))
-          }
-          None => () // default handled after all cases
+      for i, value in values {
+        if value is Some(n) {
+          self.emit_switch_case_compare(n, control_ty)
+          self.emit("\tb.eq\t" + labels[i])
         }
       }
       // Branch to default or end. The default clause may appear anywhere in
       // source order; fallthrough still follows the emitted case body order.
       let mut default_label = end_label
-      for c in cases {
-        match c.0 {
-          None => {
-            default_label = self.label_ref(c.1)
-            break
-          }
-          Some(_) => ()
+      for i, value in values {
+        if value is None {
+          default_label = labels[i]
+          break
         }
       }
       self.emit("\tb\t" + default_label)
+      self.switch_clauses.push({ labels, emitted: 0 })
       self.gen_stmt(body, frame_size)
+      check_switch_clauses_emitted(self.switch_clauses.pop())
       self.emit(end_label + ":")
       self.break_label = old_break
+    }
+    Case(_, stmt) | Default(stmt) => {
+      self.emit(self.next_switch_clause_label() + ":")
+      self.gen_stmt(stmt, frame_size)
     }
     Goto(name) => self.emit("\tb\t" + self.label_ref(name))
     ComputedGoto(expr) => {

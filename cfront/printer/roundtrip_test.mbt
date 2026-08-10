@@ -115,6 +115,81 @@ test "roundtrip switch statements" {
 }
 
 ///|
+/// The shapes a case table can take, all of which the printer has to write back
+/// as ordinary C: fallthrough, `default` in the middle, a nested switch whose
+/// clauses repeat the outer values, a negative value, and clauses buried in a
+/// block or a loop.
+test "roundtrip switch clause shapes" {
+  let source =
+    #|int shapes(int a, int b) {
+    #|  int r = 0;
+    #|  switch (a) {
+    #|    case -3:
+    #|      r = 1;
+    #|    case 0:
+    #|      r += 2;
+    #|      break;
+    #|    default:
+    #|      r = 3;
+    #|      break;
+    #|    case 1:
+    #|      switch (b) {
+    #|        case -3:
+    #|          r = 4;
+    #|          break;
+    #|        default:
+    #|          r = 5;
+    #|      }
+    #|      break;
+    #|    {
+    #|      case 2:
+    #|        r = 6;
+    #|        break;
+    #|    }
+    #|    top:
+    #|    case 3:
+    #|      r += 7;
+    #|      if (r < 20) goto top;
+    #|      break;
+    #|    case 4:
+    #|      while (r < 30) {
+    #|        case 5:
+    #|          r += 8;
+    #|      }
+    #|      break;
+    #|  }
+    #|  return r;
+    #|}
+  assert_roundtrips(source)
+}
+
+///|
+/// A clause prints as the C that produced it, not as the label the parser used
+/// to record it with.
+test "clauses print as case and default" {
+  let source =
+    #|int f(int n) {
+    #|  switch (n) {
+    #|    case -1: return 1;
+    #|    default: return 2;
+    #|  }
+    #|}
+  inspect(
+    @printer.print_program(@parser.parse(source)).trim().to_owned(),
+    content=(
+      #|int f(int n) {
+      #|  switch (n) {
+      #|    case -1:
+      #|    return 1;
+      #|    default:
+      #|    return 2;
+      #|  }
+      #|}
+    ),
+  )
+}
+
+///|
 test "roundtrip structs unions and bit-fields" {
   let source =
     #|struct Point { int x; int y; };

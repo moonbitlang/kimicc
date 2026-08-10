@@ -128,7 +128,6 @@ pub struct Parser {
   mut value_types : Map[String, @ctype.Type]
   mut current_func_name : String
   mut static_locals : Map[String, String]
-  mut case_label_counter : Int
   mut compound_literal_counter : Int
 }
 pub fn Parser::new(Lexer) -> Self raise ParseError
@@ -159,7 +158,9 @@ pub(all) enum Stmt {
   VarDecl(@ctype.Type, String, Expr?)
   Break
   Continue
-  Switch(Expr, Stmt, Array[(Int64?, String)])
+  Switch(Expr, Stmt)
+  Case(Int64, Stmt)
+  Default(Stmt)
   Goto(String)
   Label(String, Stmt)
   For(Stmt?, Expr, Expr?, Stmt)

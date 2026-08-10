@@ -30,7 +30,6 @@ pub struct Parser {
   mut value_types : Map[String, Type]
   mut current_func_name : String
   mut static_locals : Map[String, String]
-  mut case_label_counter : Int
   mut compound_literal_counter : Int
 }
 
@@ -68,7 +67,6 @@ pub fn Parser::new_for_target(
     value_types: {},
     current_func_name: "",
     static_locals: {},
-    case_label_counter: 0,
     compound_literal_counter: 0,
   }
   p.advance()

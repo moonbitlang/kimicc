@@ -2920,26 +2920,84 @@ fn Interpreter::exec_for(
 }
 
 ///|
-fn switch_stmt_label(stmt : @parser.Stmt) -> String? {
+/// Which clause of a `switch` control transfers to.
+priv enum SwitchTarget {
+  /// The control value, already cast to the promoted control type.
+  CaseValue(Int64)
+  DefaultClause
+}
+
+///|
+/// Collects the clauses one `switch` owns, in source order: `Some(value)` for
+/// `case value:` and `None` for `default:`.
+///
+/// A nested `switch` owns its own clauses, so the walk stops there.
+fn collect_switch_clauses(stmt : @parser.Stmt, out : Array[Int64?]) -> Unit {
   match stmt {
-    Label(name, _) => Some(name)
-    _ => None
+    Case(value, body) => {
+      out.push(Some(value))
+      collect_switch_clauses(body, out)
+    }
+    Default(body) => {
+      out.push(None)
+      collect_switch_clauses(body, out)
+    }
+    Label(_, body) => collect_switch_clauses(body, out)
+    Compound(stmts) | StmtList(stmts) =>
+      for nested in stmts {
+        collect_switch_clauses(nested, out)
+      }
+    If(_, then_, else_) => {
+      collect_switch_clauses(then_, out)
+      if else_ is Some(alternative) {
+        collect_switch_clauses(alternative, out)
+      }
+    }
+    While(_, body) | DoWhile(_, body) => collect_switch_clauses(body, out)
+    For(init, _, _, body) => {
+      if init is Some(nested) {
+        collect_switch_clauses(nested, out)
+      }
+      collect_switch_clauses(body, out)
+    }
+    Switch(_, _) => ()
+    _ => ()
   }
 }
 
 ///|
+/// Reports whether `stmt` is the clause `target` selects.
+fn Interpreter::stmt_starts_switch_target(
+  self : Interpreter,
+  stmt : @parser.Stmt,
+  target : SwitchTarget,
+  control_ty : @ctype.Type,
+) -> Bool {
+  match (stmt, target) {
+    (Case(value, _), CaseValue(wanted)) =>
+      self.program.runtime_cast_int(value, control_ty) == wanted
+    (Default(_), DefaultClause) => true
+    _ => false
+  }
+}
+
+///|
+/// Executes `stmt` from whichever of its leading labels `matches` selects.
+///
+/// Only leading labels count: control enters a clause at its own label, and a
+/// statement reached by falling through carries no label of its own.
 fn Interpreter::exec_stmt_from_leading_label(
   self : Interpreter,
   frame : InterpFrame,
   stmt : @parser.Stmt,
-  target : String,
+  matches : (@parser.Stmt) -> Bool,
 ) -> (Bool, ExecFlow) {
   match stmt {
-    Label(name, body) =>
-      if name == target {
+    Case(_, body) | Default(body) | Label(_, body) =>
+      if matches(stmt) {
         (true, self.exec_stmt(frame, body))
       } else {
-        self.exec_stmt_from_leading_label(frame, body, target)
+        self.exec_stmt_from_leading_label(frame, body, matches)
       }
     _ => (false, Normal)
   }
@@ -2950,7 +3008,8 @@ fn Interpreter::exec_switch_body(
   self : Interpreter,
   frame : InterpFrame,
   body : @parser.Stmt,
-  target : String?,
+  target : SwitchTarget,
+  control_ty : @ctype.Type,
 ) -> ExecFlow {
   let stmts = match body {
     Compound(stmts) | StmtList(stmts) => stmts
@@ -2959,32 +3018,29 @@ fn Interpreter::exec_switch_body(
       return Normal
     }
   }
-  let mut active = target is None
-  let mut found = target is None
+  let matches = stmt => self.stmt_starts_switch_target(stmt, target, control_ty)
+  let mut active = false
+  let mut found = false
   for stmt in stmts {
     if !active {
-      match (target, switch_stmt_label(stmt)) {
-        (Some(want), Some(got)) if want == got => {
+      if matches(stmt) {
+        active = true
+        found = true
+      } else {
+        let (nested_found, flow) = self.exec_stmt_from_leading_label(
+          frame, stmt, matches,
+        )
+        if nested_found {
           active = true
           found = true
-        }
-        (Some(want), _) => {
-          let (nested_found, flow) = self.exec_stmt_from_leading_label(
-            frame, stmt, want,
-          )
-          if nested_found {
-            active = true
-            found = true
-            match flow {
-              Normal => continue
-              Broke => return Normal
-              flow => return flow
-            }
-          } else {
-            continue
+          match flow {
+            Normal => continue
+            Broke => return Normal
+            flow => return flow
           }
+        } else {
+          continue
         }
-        _ => continue
       }
     }
     match self.exec_stmt(frame, stmt) {
@@ -2994,6 +3050,9 @@ fn Interpreter::exec_switch_body(
     }
   }
   if !found {
+    // The clause exists -- it was found by the walk in `exec_switch` -- but it
+    // is nested somewhere control cannot enter from here, such as inside a
+    // block or a loop within the switch body.
     self.fail("unsupported nested MIR interpreter switch label")
   }
   Normal
@@ -3005,7 +3064,6 @@ fn Interpreter::exec_switch(
   frame : InterpFrame,
   expr : @parser.Expr,
   body : @parser.Stmt,
-  cases : Array[(Int64?, String)],
 ) -> ExecFlow {
   let control_ty = self.program.switch_control_type(
     self.program.expr_type(expr, frame.scope()),
@@ -3014,25 +3072,21 @@ fn Interpreter::exec_switch(
     self.eval_expr(frame, expr),
     control_ty,
   )
-  let mut target : String? = None
-  let mut default_target : String? = None
-  for c in cases {
-    match c.0 {
-      Some(value) => {
-        let case_value = self.program.runtime_cast_int(value, control_ty)
-        if target is None && case_value == control_value {
-          target = Some(c.1)
-        }
-      }
-      None => if default_target is None { default_target = Some(c.1) }
+  let clauses : Array[Int64?] = []
+  collect_switch_clauses(body, clauses)
+  let mut target : SwitchTarget? = None
+  for clause in clauses {
+    if clause is Some(value) &&
+      self.program.runtime_cast_int(value, control_ty) == control_value {
+      target = Some(CaseValue(control_value))
+      break
     }
   }
-  match target {
-    Some(_) => ()
-    None => target = default_target
+  if target is None && clauses.iter().any(clause => clause is None) {
+    target = Some(DefaultClause)
   }
   match target {
-    Some(_) => self.exec_switch_body(frame, body, target)
+    Some(selected) => self.exec_switch_body(frame, body, selected, control_ty)
     None => Normal
   }
 }
@@ -3073,13 +3127,14 @@ fn Interpreter::exec_stmt(
     }
     Break => Broke
     Continue => Continued
-    Switch(expr, body, cases) => self.exec_switch(frame, expr, body, cases)
+    Switch(expr, body) => self.exec_switch(frame, expr, body)
     Goto(name) => Jump(name)
     ComputedGoto(_) => {
       self.fail("unsupported MIR interpreter control statement")
       Normal
     }
-    Label(_, body) => self.exec_stmt(frame, body)
+    Case(_, body) | Default(body) | Label(_, body) =>
+      self.exec_stmt(frame, body)
     For(init, cond, inc, body) => self.exec_for(frame, init, cond, inc, body)
     DoWhile(cond, body) => self.exec_do_while(frame, cond, body)
   }
@@ -3099,29 +3154,29 @@ fn Interpreter::exec_func_body_from_label(
       return Normal
     }
   }
+  let matches = (stmt : @parser.Stmt) => {
+    stmt is Label(name, _) && name == target
+  }
   let mut active = false
   let mut found = false
   for stmt in stmts {
     if !active {
-      match switch_stmt_label(stmt) {
-        Some(got) if got == target => {
+      if matches(stmt) {
+        active = true
+        found = true
+      } else {
+        let (nested_found, flow) = self.exec_stmt_from_leading_label(
+          frame, stmt, matches,
+        )
+        if nested_found {
           active = true
           found = true
-        }
-        _ => {
-          let (nested_found, flow) = self.exec_stmt_from_leading_label(
-            frame, stmt, target,
-          )
-          if nested_found {
-            active = true
-            found = true
-            match flow {
-              Normal => continue
-              flow => return flow
-            }
-          } else {
-            continue
+          match flow {
+            Normal => continue
+            flow => return flow
           }
+        } else {
+          continue
         }
       }
     }

@@ -36,6 +36,8 @@ priv struct X64Codegen {
   mut va_arg_scratch_align : Int
   mut break_label : String?
   mut continue_label : String?
+  // One entry per `switch` being emitted, innermost last.
+  switch_clauses : Array[SwitchClauses]
   mut emitted_labels : Map[String, String]
   mut defined_labels : Map[String, Bool]
 }
@@ -75,6 +77,7 @@ fn X64Codegen::new() -> X64Codegen {
     va_arg_scratch_size: 0,
     va_arg_scratch_align: 1,
     break_label: None,
+    switch_clauses: [],
     continue_label: None,
     emitted_labels: {},
     defined_labels: {},
@@ -7110,11 +7113,12 @@ fn X64Codegen::collect_stmt_locals(
       }
       self.collect_stmt_locals(body)
     }
-    Switch(expr, body, _) => {
+    Switch(expr, body) => {
       self.collect_expr_locals(expr)
       self.collect_stmt_locals(body)
     }
-    Label(_, stmt) => self.collect_stmt_locals(stmt)
+    Case(_, stmt) | Default(stmt) | Label(_, stmt) =>
+      self.collect_stmt_locals(stmt)
     ComputedGoto(expr) => self.collect_expr_locals(expr)
     Break | Continue | Goto(_) => ()
   }
@@ -7123,15 +7127,10 @@ fn X64Codegen::collect_stmt_locals(
 ///|
 fn X64Codegen::label_ref(self : X64Codegen, name : String) -> String {
   if !self.emitted_labels.contains(name) {
-    let label = if name == "default" ||
-      is_numeric_case_label(name) ||
-      name.has_prefix("__kimicc_case_") ||
-      name.has_prefix("__kimicc_default_") {
-      self.new_label()
-    } else {
-      ".L" + self.func_name + "_label_" + sanitize_label(name)
-    }
-    self.emitted_labels[name] = label
+    self.emitted_labels[name] = ".L" +
+      self.func_name +
+      "_label_" +
+      sanitize_label(name)
   }
   self.emitted_labels[name]
 }
@@ -7281,35 +7280,38 @@ fn X64Codegen::gen_stmt(self : X64Codegen, stmt : @parser.Stmt) -> Unit {
       self.emit(label + ":")
       self.gen_stmt(stmt)
     }
-    Switch(expr, body, cases) => {
+    Switch(expr, body) => {
       let end_label = self.new_label()
       let old_break = self.break_label
       self.break_label = Some(end_label)
+      let values : Array[Int64?] = []
+      collect_switch_clauses(body, values)
+      let labels = ReadOnlyArray::makei(values.length(), _ => self.new_label())
       let control_ty = switch_control_type(self.type_of(expr))
       self.gen_expr_as_scalar(expr, control_ty)
-      for c in cases {
-        match c.0 {
-          Some(value) => {
-            self.emit_switch_case_compare(value, control_ty)
-            self.emit("\tje\t" + self.label_ref(c.1))
-          }
-          None => ()
+      for i, value in values {
+        if value is Some(n) {
+          self.emit_switch_case_compare(n, control_ty)
+          self.emit("\tje\t" + labels[i])
         }
       }
       let mut default_label = end_label
-      for c in cases {
-        match c.0 {
-          None => {
-            default_label = self.label_ref(c.1)
-            break
-          }
-          Some(_) => ()
+      for i, value in values {
+        if value is None {
+          default_label = labels[i]
+          break
         }
       }
       self.emit("\tjmp\t" + default_label)
+      self.switch_clauses.push({ labels, emitted: 0 })
       self.gen_stmt(body)
+      check_switch_clauses_emitted(self.switch_clauses.pop())
       self.emit(end_label + ":")
       self.break_label = old_break
+    }
+    Case(_, stmt) | Default(stmt) => {
+      self.emit(self.next_switch_clause_label() + ":")
+      self.gen_stmt(stmt)
     }
     ComputedGoto(expr) => {
       self.gen_expr(expr)
