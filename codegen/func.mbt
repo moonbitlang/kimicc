@@ -423,10 +423,6 @@ fn Codegen::collect_locals(self : Codegen, stmt : @parser.Stmt) -> Unit {
       for s in stmts {
         self.collect_locals(s)
       }
-    StmtList(stmts) =>
-      for s in stmts {
-        self.collect_locals(s)
-      }
     ExprStmt(expr) => self.collect_expr_locals(expr)
     Return(expr) =>
       match expr {
@@ -446,9 +442,8 @@ fn Codegen::collect_locals(self : Codegen, stmt : @parser.Stmt) -> Unit {
       self.collect_locals(body)
     }
     For(init, cond, update, body) => {
-      match init {
-        Some(i) => self.collect_locals(i)
-        None => ()
+      for i in init {
+        self.collect_locals(i)
       }
       self.collect_expr_locals(cond)
       match update {

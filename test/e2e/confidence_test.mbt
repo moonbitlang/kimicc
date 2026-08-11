@@ -3682,3 +3682,99 @@ async test "e2e parser codegen local aggregate initializers match strict MIR" {
   )
   assert_true(result.output.contains("total "))
 }
+
+///|
+/// Builds a program whose declarations exercise the grouping C writes with one
+/// specifier and the AST records one name at a time: several declarators in a
+/// block, several in a `for` initializer, unlike declarators sharing a
+/// specifier, comma-expression initializers, and a labelled declaration.
+///
+/// The `for` initializer is the reason any of this needs care. C accepts one
+/// declaration there and nothing else, so two `VarDecl`s have to come back out
+/// as `int i = 0, n = len` rather than as two statements -- which would not be
+/// C at all. Everywhere else the two spellings mean the same thing and the
+/// printer is free to write them apart.
+fn deterministic_declaration_group_differential_source() -> String {
+  let source =
+    #|#include <stdio.h>
+    #|static int use(int v) { return v; }
+    #|static int blocks(int seed) {
+    #|  int a = seed, b = 2, c[2] = { 7, 8 };
+    #|  int *p = &a, q = 9;
+    #|  char x = 'x', buf[4] = "hi";
+    #|  _Alignas(16) int aligned = seed, also_aligned = 2;
+    #|  int acc = a + b + c[0] + c[1] + *p + q + x + buf[0] + buf[3];
+    #|  acc += aligned + also_aligned;
+    #|  printf("blocks %d\n", acc);
+    #|  return acc;
+    #|}
+    #|static int loops(int seed) {
+    #|  int acc = 0;
+    #|  int len = 4;
+    #|  int head = seed;
+    #|  for (int i = 0, n = len; i < n; i++) acc += use(i) + seed;
+    #|  for (int i = 0, *walk = &head, pair[2] = { seed, 2 }; i < len; i++) {
+    #|    acc += pair[0] + pair[1] + *walk;
+    #|  }
+    #|  int a, b;
+    #|  for (a = 0, b = len; a < b; a++) acc += a;
+    #|  for (;;) { acc += 1; break; }
+    #|  for (int i = 0; i < 2; i++)
+    #|    for (int j = 0, k = 2; j < k; j++) acc += i * j;
+    #|  printf("loops %d\n", acc);
+    #|  return acc;
+    #|}
+    #|static int labelled(int seed) {
+    #|  int acc = 0;
+    #|  int n = 0;
+    #|top:
+    #|  n++;
+    #|  if (n < 3) goto top;
+    #|  switch (n + seed) {
+    #|    case 3: { int u = 1, v = 2; acc += u + v; break; }
+    #|    case 4: acc += 40; break;
+    #|    default: acc += 7;
+    #|  }
+    #|  acc += n;
+    #|  printf("labelled %d\n", acc);
+    #|  return acc;
+    #|}
+    #|int main(void) {
+    #|  long acc = 0;
+    #|  for (int seed = -2; seed <= 3; seed++) {
+    #|    acc += blocks(seed) + loops(seed) + labelled(seed);
+    #|  }
+    #|  printf("total %ld\n", acc);
+    #|  return (int)(acc & 127);
+    #|}
+  source
+}
+
+///|
+async test "e2e declaration group differential corpus matches clang" {
+  let result = run_source_against_clang_baseline(
+    deterministic_declaration_group_differential_source(),
+    "declaration_group_differential",
+  )
+  assert_true(result.output.contains("total "))
+}
+
+///|
+async test "e2e direct Mach-O declaration group corpus matches clang" {
+  let result = run_source_direct_object_against_clang_baseline(
+    deterministic_declaration_group_differential_source(),
+    "direct_declaration_group_differential",
+  )
+  assert_true(result.output.contains("total "))
+}
+
+///|
+/// The parser-direct code generator walks the AST rather than MIR, so it sees
+/// the spliced declarations and the `for` initializer list directly.
+async test "e2e parser codegen declaration groups match strict MIR" {
+  let result = run_source_strict_mir_against_parser_codegen(
+    deterministic_declaration_group_differential_source(),
+    "parser_codegen_declaration_group",
+  )
+  assert_true(result.output.contains("total "))
+}

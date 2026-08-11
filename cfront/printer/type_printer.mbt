@@ -151,3 +151,41 @@ fn declared_parameter_list(
   }
   parts.join(", ")
 }
+
+///|
+/// Splits a declaration into the specifier a group of names shares and the
+/// declarator that distinguishes this one.
+///
+/// `int *p` splits as `("int", "*p")` and `char buf[8]` as `("char", "buf[8]")`.
+/// This is what lets several names declared together be written the way C
+/// writes them -- `int i = 0, *p = q` -- from an AST that records one
+/// declaration per name. `_Atomic` and `_Alignas` belong to the specifier,
+/// since C writes them once for the whole declaration.
+pub fn split_declaration(ty : @ctype.Type, name : String) -> (String, String) {
+  match ty {
+    Pointer(pointee) => {
+      let inner = "*" + name
+      match pointee {
+        Array(_, _) | FuncPtr(_, _, _) =>
+          split_declaration(pointee, "(" + inner + ")")
+        _ => split_declaration(pointee, inner)
+      }
+    }
+    Array(element, length) =>
+      split_declaration(element, name + "[" + length.to_string() + "]")
+    FuncPtr(ret, params, variadic) =>
+      split_declaration(
+        ret,
+        "(*" + name + ")(" + parameter_list(params, variadic) + ")",
+      )
+    Atomic(inner) => {
+      let (specifier, declarator) = split_declaration(inner, name)
+      ("_Atomic " + specifier, declarator)
+    }
+    Aligned(inner, alignment) => {
+      let (specifier, declarator) = split_declaration(inner, name)
+      ("_Alignas(" + alignment.to_string() + ") " + specifier, declarator)
+    }
+    _ => (base_specifier(ty), name)
+  }
+}

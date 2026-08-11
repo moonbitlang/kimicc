@@ -543,15 +543,6 @@ fn semantic_validate_stmt(
       }
       Ok(())
     }
-    StmtList(stmts) => {
-      for item in stmts {
-        match semantic_validate_stmt(ctx, locals, item) {
-          Ok(_) => ()
-          Err(err) => return Err(err)
-        }
-      }
-      Ok(())
-    }
     Switch(expr, body) => {
       let expr_ty = match semantic_expr_type(ctx, locals, expr) {
         Ok(ty) => ty
@@ -566,13 +557,11 @@ fn semantic_validate_stmt(
       semantic_validate_stmt(ctx, locals.copy(), body)
     For(init, cond, inc, body) => {
       let scoped = locals.copy()
-      match init {
-        Some(stmt) =>
-          match semantic_validate_stmt(ctx, scoped, stmt) {
-            Ok(_) => ()
-            Err(err) => return Err(err)
-          }
-        None => ()
+      for stmt in init {
+        match semantic_validate_stmt(ctx, scoped, stmt) {
+          Ok(_) => ()
+          Err(err) => return Err(err)
+        }
       }
       let cond_ty = match semantic_expr_type(ctx, scoped, cond) {
         Ok(ty) => ty

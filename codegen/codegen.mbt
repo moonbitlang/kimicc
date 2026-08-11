@@ -603,7 +603,7 @@ fn collect_static_inline_stmt(
       collect_static_inline_expr(cond, inline_decls, needed)
       collect_static_inline_stmt(body, inline_decls, needed)
     }
-    Compound(stmts) | StmtList(stmts) =>
+    Compound(stmts) =>
       for child in stmts {
         collect_static_inline_stmt(child, inline_decls, needed)
       }
@@ -619,9 +619,8 @@ fn collect_static_inline_stmt(
     Case(_, body) | Default(body) | Label(_, body) =>
       collect_static_inline_stmt(body, inline_decls, needed)
     For(init, cond, update, body) => {
-      match init {
-        Some(stmt) => collect_static_inline_stmt(stmt, inline_decls, needed)
-        None => ()
+      for stmt in init {
+        collect_static_inline_stmt(stmt, inline_decls, needed)
       }
       collect_static_inline_expr(cond, inline_decls, needed)
       match update {

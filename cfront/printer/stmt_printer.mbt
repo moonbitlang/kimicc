@@ -76,12 +76,7 @@ fn write_stmt(buf : StringBuilder, stmt : @parser.Stmt, indent : Int) -> Unit {
     For(init, cond, step, body) => {
       write_indent(buf, indent)
       buf.write_string("for (")
-      match init {
-        // The initializer is written inline, so its own indentation and
-        // terminator are stripped by rendering it at level zero.
-        Some(stmt) => buf.write_string(print_stmt(stmt))
-        None => buf.write_string(";")
-      }
+      write_for_init(buf, init)
       buf.write_string(" ")
       buf.write_string(print_expr(cond))
       buf.write_string(";")
@@ -96,18 +91,6 @@ fn write_stmt(buf : StringBuilder, stmt : @parser.Stmt, indent : Int) -> Unit {
       write_branch(buf, body, indent)
     }
     Compound(body) => write_block(buf, body, indent)
-    StmtList(body) => {
-      // A statement list is a parser grouping with no braces of its own, so its
-      // members are written at the enclosing level.
-      let mut first = true
-      for inner in body {
-        if !first {
-          buf.write_string("\n")
-        }
-        write_stmt(buf, inner, indent)
-        first = false
-      }
-    }
     VarDecl(ty, name, init) => {
       write_indent(buf, indent)
       buf.write_string(print_declaration(ty, name))
@@ -208,5 +191,78 @@ fn write_branch(buf : StringBuilder, stmt : @parser.Stmt, indent : Int) -> Unit 
       buf.write_string("\n")
       write_stmt(buf, other, indent + 1)
     }
+  }
+}
+
+///|
+/// Writes a `for` initializer clause, including its terminating `;`.
+///
+/// C's `for` init is grammatically one declaration or one expression, but the
+/// AST records `for (int i = 0, n = len; ...)` as one `VarDecl` per name, the
+/// same as in a block. Rejoining them is this function's job: names sharing a
+/// specifier are written as C writes them, and expressions are joined with the
+/// comma operator, which is the other way C puts several things in this clause.
+///
+/// A group C has no spelling for -- names whose specifiers differ, or a mix of
+/// declarations and expressions -- can only be built by hand, never parsed.
+/// Each part is written in full so that what was built is visible, rather than
+/// silently dropping the parts that do not fit.
+fn write_for_init(buf : StringBuilder, init : Array[@parser.Stmt]) -> Unit {
+  if init.length() == 0 {
+    buf.write_string(";")
+    return
+  }
+  let specifiers = []
+  let declarators = []
+  for stmt in init {
+    match stmt {
+      VarDecl(ty, name, value) => {
+        let (specifier, declarator) = split_declaration(ty, name)
+        specifiers.push(specifier)
+        declarators.push(
+          match value {
+            Some(expr) => declarator + " = " + print_expr(expr)
+            None => declarator
+          },
+        )
+      }
+      _ => ()
+    }
+  }
+  if declarators.length() == init.length() &&
+    specifiers.iter().all(specifier => specifier == specifiers[0]) {
+    buf.write_string(specifiers[0])
+    buf.write_string(" ")
+    for i, declarator in declarators {
+      if i > 0 {
+        buf.write_string(", ")
+      }
+      buf.write_string(declarator)
+    }
+    buf.write_string(";")
+    return
+  }
+  let exprs = []
+  for stmt in init {
+    match stmt {
+      ExprStmt(expr) => exprs.push(expr)
+      _ => ()
+    }
+  }
+  if exprs.length() == init.length() {
+    for i, expr in exprs {
+      if i > 0 {
+        buf.write_string(", ")
+      }
+      buf.write_string(print_expr(expr))
+    }
+    buf.write_string(";")
+    return
+  }
+  for i, stmt in init {
+    if i > 0 {
+      buf.write_string(" ")
+    }
+    buf.write_string(print_stmt(stmt))
   }
 }

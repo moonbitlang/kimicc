@@ -132,19 +132,18 @@ test "later declarators record their initializers too" {
   let stmts = initializer_body_stmts(
     "int f(void) { int a = 1, b[] = {7, 8}, c = 3; return a; }",
   )
-  guard stmts[0]
-    is StmtList(
-      [
-        VarDecl(SInt, "a", Some(Number(1, _, _))),
-        VarDecl(
-          Array(SInt, 2),
-          "b",
-          Some(Array([Number(7, _, _), Number(8, _, _)]))
-        ),
-        VarDecl(SInt, "c", Some(Number(3, _, _))),
-      ]
-    ) else {
-    fail("expected three declarations: \{Repr(stmts[0])}")
+  guard stmts
+    is [
+      VarDecl(SInt, "a", Some(Number(1, _, _))),
+      VarDecl(
+        Array(SInt, 2),
+        "b",
+        Some(Array([Number(7, _, _), Number(8, _, _)]))
+      ),
+      VarDecl(SInt, "c", Some(Number(3, _, _))),
+      ..,
+    ] else {
+    fail("expected three sibling declarations: \{Repr(stmts)}")
   }
 }
 

@@ -629,8 +629,7 @@ test "parse for loop" {
       }
       // Stmt 2: for loop as native For node
       match stmts[1] {
-        For(Some(VarDecl(SInt, "i", Some(Number(0, _, SInt)))), _, Some(_), _) =>
-          ()
+        For([VarDecl(SInt, "i", Some(Number(0, _, SInt)))], _, Some(_), _) => ()
         _ => fail("Expected For AST node")
       }
     }
@@ -714,7 +713,7 @@ test "parse empty for loop" {
   match decl.body {
     Some(
       Compound(
-        [For(None, Number(1, _, SInt), None, Return(Some(Number(42, _, SInt))))]
+        [For([], Number(1, _, SInt), None, Return(Some(Number(42, _, SInt))))]
       )
     ) => ()
     _ => fail("Expected empty for loop")
@@ -1303,8 +1302,10 @@ test "parse scalar brace initializer values" {
     Some(Scalar(Number(42, _, _))) => ()
     _ => fail("Expected scalar global brace initializer")
   }
+  // Three declarators, three statements: the declaration that grouped them
+  // carries nothing a consumer could act on once each name has its own type.
   match prog.decls[0].body {
-    Some(Compound([StmtList(inner), Return(Some(_))])) => {
+    Some(Compound(inner)) => {
       match inner[0] {
         VarDecl(SInt, "x", Some(Number(19, _, _))) => ()
         _ => fail("Expected scalar local brace initializer")
@@ -1324,7 +1325,7 @@ test "parse scalar brace initializer values" {
         ) => ()
         _ => fail("Expected array initializer recorded as written")
       }
-      assert_eq(inner.length(), 3)
+      assert_eq(inner.length(), 4)
     }
     _ => fail("Expected scalar brace initializer body")
   }
@@ -1354,21 +1355,19 @@ test "parse multiple vars one with array initializer" {
   let source = "int main() { int a = 1, b[] = {2}, c = 3; return 0; }"
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
+  // One declaration, three declarators, three sibling statements.
   match decl.body {
-    Some(Compound(outer)) =>
-      match outer[0] {
-        // `StmtList` still groups the three declarators, which is the one
-        // parser-internal grouping this step has not yet removed.
-        StmtList(
-          [
-            VarDecl(SInt, "a", Some(Number(1, _, _))),
-            VarDecl(Array(SInt, 1), "b", Some(Array([Number(2, _, _)]))),
-            VarDecl(SInt, "c", Some(Number(3, _, _))),
-          ]
-        ) => ()
-        _ => fail("Expected three declarators recorded as written")
-      }
-    _ => fail("Expected compound body")
+    Some(
+      Compound(
+        [
+          VarDecl(SInt, "a", Some(Number(1, _, _))),
+          VarDecl(Array(SInt, 1), "b", Some(Array([Number(2, _, _)]))),
+          VarDecl(SInt, "c", Some(Number(3, _, _))),
+          ..,
+        ]
+      )
+    ) => ()
+    _ => fail("Expected three sibling declarations")
   }
 }
 
@@ -1506,13 +1505,12 @@ test "parse static assertions at declaration scopes" {
   inspect(prog.structs.length(), content="1")
   inspect(prog.structs[0].fields.length(), content="1")
   inspect(prog.decls.length(), content="1")
+  // A declaration that declares nothing leaves nothing behind. It used to
+  // leave `ExprStmt(0)`, a statement the source never wrote and a consumer
+  // would have to know to ignore.
   match prog.decls[0].body {
-    Some(
-      Compound(
-        [ExprStmt(Number(0, _, SInt)), Return(Some(Number(42, _, SInt)))]
-      )
-    ) => ()
-    _ => fail("Expected static assertion to parse as a no-op declaration")
+    Some(Compound([Return(Some(Number(42, _, SInt)))])) => ()
+    _ => fail("Expected the static assertion to leave no statement")
   }
 }
 
@@ -1552,7 +1550,7 @@ test "parse builtin 128-bit declarations in block scope" {
       Compound(
         [
           VarDecl(UInt128, "wide", Some(_)),
-          For(Some(_), _, _, _),
+          For([_, ..], _, _, _),
           Return(Some(_)),
         ]
       )

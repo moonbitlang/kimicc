@@ -357,3 +357,32 @@ test "roundtrip char array string initializers" {
     #|}
   assert_roundtrips(source)
 }
+
+///|
+/// Declarations that C groups under one specifier. The AST records one per
+/// name, so the round-trip proves the printer regroups them wherever C insists
+/// on the grouping -- which is the `for` initializer and nowhere else.
+test "roundtrip declaration groups" {
+  let source =
+    #|int shapes(int len, int *head) {
+    #|  int a = 1, b = 2, c[2] = { 7, 8 };
+    #|  int *p = &a, q = 9;
+    #|  char x = 'x', buf[4] = "hi";
+    #|  _Alignas(16) int aligned = 1, also_aligned = 2;
+    #|  int total = 0;
+    #|  for (int i = 0, n = len; i < n; i++) {
+    #|    total += i;
+    #|  }
+    #|  for (int i = 0, *walk = head, pair[2]; i < len; i++) {
+    #|    total += pair[0] + (walk != 0);
+    #|  }
+    #|  for (a = 0, b = len; a < b; a++) {
+    #|    total += a;
+    #|  }
+    #|  for (;;) {
+    #|    break;
+    #|  }
+    #|  return total + b + c[0] + q + x + buf[0] + aligned + also_aligned + *p;
+    #|}
+  assert_roundtrips(source)
+}

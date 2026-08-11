@@ -156,7 +156,6 @@ pub(all) enum Stmt {
   If(Expr, Stmt, Stmt?)
   While(Expr, Stmt)
   Compound(Array[Stmt])
-  StmtList(Array[Stmt])
   VarDecl(@ctype.Type, String, Expr?)
   Break
   Continue
@@ -165,7 +164,7 @@ pub(all) enum Stmt {
   Default(Stmt)
   Goto(String)
   Label(String, Stmt)
-  For(Stmt?, Expr, Expr?, Stmt)
+  For(Array[Stmt], Expr, Expr?, Stmt)
   DoWhile(Expr, Stmt)
   ComputedGoto(Expr)
 } derive(Eq, @debug.Debug)

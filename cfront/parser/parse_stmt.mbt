@@ -133,32 +133,39 @@ fn Parser::parse_compound_literal_init_exprs(
 }
 
 ///|
-fn Parser::parse_stmt(self : Parser) -> Stmt raise ParseError {
+/// Parses one statement, appending it to `into`.
+///
+/// A declaration is the reason this appends rather than returns: `int a, b;`
+/// is two `VarDecl`s, and a label or clause in front of one labels the first
+/// with the rest following as siblings, which is what C means by it. A
+/// declaration that declares nothing -- a `typedef`, a `_Static_assert`, a
+/// local prototype -- appends nothing at all rather than a placeholder.
+fn Parser::parse_stmt_into(
+  self : Parser,
+  into : Array[Stmt],
+) -> Unit raise ParseError {
   // Skip __extension__ before statements
   while self.token == Ident("__extension__") {
     self.advance()
   }
   match self.token {
-    If => self.parse_if_stmt()
-    While => self.parse_while_stmt()
-    For => self.parse_for_stmt()
-    Do => self.parse_do_while_stmt()
-    Switch => self.parse_switch_stmt()
-    Break => self.parse_break_stmt()
-    Continue => self.parse_continue_stmt()
-    Goto => self.parse_goto_stmt()
-    Return => self.parse_return_stmt()
-    LBrace => self.parse_compound_stmt()
+    If => into.push(self.parse_if_stmt())
+    While => into.push(self.parse_while_stmt())
+    For => into.push(self.parse_for_stmt())
+    Do => into.push(self.parse_do_while_stmt())
+    Switch => into.push(self.parse_switch_stmt())
+    Break => into.push(self.parse_break_stmt())
+    Continue => into.push(self.parse_continue_stmt())
+    Goto => into.push(self.parse_goto_stmt())
+    Return => into.push(self.parse_return_stmt())
+    LBrace => into.push(self.parse_compound_stmt())
     Semicolon => {
       self.advance()
-      ExprStmt(int_literal(0, SInt))
+      into.push(ExprStmt(int_literal(0, SInt)))
     }
     Ident("_Static_assert")
     | Ident("__Static_assert")
-    | Ident("static_assert") => {
-      self.parse_static_assert_decl()
-      ExprStmt(int_literal(0, SInt))
-    }
+    | Ident("static_assert") => self.parse_static_assert_decl()
     Int
     | Void
     | Char
@@ -179,13 +186,11 @@ fn Parser::parse_stmt(self : Parser) -> Stmt raise ParseError {
     | Static
     | Inline
     | Register
-    | Auto => self.parse_var_decl_stmt()
-    Typedef => {
-      self.parse_typedef()
-      ExprStmt(int_literal(0, SInt))
-    }
-    Ident("_Alignas") | Ident("alignas") => self.parse_var_decl_stmt()
-    Ident("_Atomic") => self.parse_var_decl_stmt()
+    | Auto => self.extend_stmts(into, self.parse_var_decl_stmts())
+    Typedef => self.parse_typedef()
+    Ident("_Alignas") | Ident("alignas") =>
+      self.extend_stmts(into, self.parse_var_decl_stmts())
+    Ident("_Atomic") => self.extend_stmts(into, self.parse_var_decl_stmts())
     Case => {
       self.advance()
       // Report against the start of the constant expression: by the time
@@ -206,12 +211,12 @@ fn Parser::parse_stmt(self : Parser) -> Stmt raise ParseError {
           }
       }
       self.expect(Colon)
-      Case(value, self.parse_stmt())
+      self.push_labelled(into, stmt => Case(value, stmt))
     }
     Default => {
       self.advance()
       self.expect(Colon)
-      Default(self.parse_stmt())
+      self.push_labelled(into, stmt => Default(stmt))
     }
     Ident(name) => {
       // Handle GCC inline assembly: asm volatile ("..." ::: "memory");
@@ -242,7 +247,7 @@ fn Parser::parse_stmt(self : Parser) -> Stmt raise ParseError {
           }
         }
         self.expect(Semicolon)
-        return ExprStmt(int_literal(0, SInt))
+        return
       }
       // Handle __attribute__((...)); as a no-op statement
       if name == "__attribute__" || name == "__attribute" {
@@ -265,10 +270,11 @@ fn Parser::parse_stmt(self : Parser) -> Stmt raise ParseError {
           }
         }
         if self.is_stmt_decl_start() {
-          return self.parse_var_decl_stmt()
+          self.extend_stmts(into, self.parse_var_decl_stmts())
+          return
         }
         self.expect(Semicolon)
-        return ExprStmt(int_literal(0, SInt))
+        return
       }
       // Check if this is a label: name:
       let saved_pos = self.lexer.pos
@@ -276,19 +282,77 @@ fn Parser::parse_stmt(self : Parser) -> Stmt raise ParseError {
       self.advance()
       if self.token == Colon {
         self.advance()
-        let stmt = self.parse_stmt()
-        return Label(name, stmt)
+        self.push_labelled(into, stmt => Label(name, stmt))
+        return
       }
       self.lexer.pos = saved_pos
       self.token = saved_token
       // Check if this is a typedef'd or builtin type used for variable declaration
       if self.is_stmt_decl_start() {
-        self.parse_var_decl_stmt()
+        self.extend_stmts(into, self.parse_var_decl_stmts())
       } else {
-        self.parse_expr_stmt()
+        into.push(self.parse_expr_stmt())
       }
     }
-    _ => self.parse_expr_stmt()
+    _ => into.push(self.parse_expr_stmt())
+  }
+}
+
+///|
+fn Parser::extend_stmts(
+  self : Parser,
+  into : Array[Stmt],
+  stmts : Array[Stmt],
+) -> Unit {
+  ignore(self)
+  for stmt in stmts {
+    into.push(stmt)
+  }
+}
+
+///|
+/// Parses the statement a label, `case`, or `default` introduces, and appends
+/// it wrapped by `wrap`.
+///
+/// The label takes the first statement parsed and any others follow it as
+/// siblings, which is what `foo: int a, b;` means: the label marks the
+/// declaration of `a`, and `b` is declared next to it in the same scope. A
+/// label with no statement after it -- `foo: }` at the end of a block, or a
+/// label on a `typedef` -- wraps an empty statement so that the label survives
+/// and stays jumpable.
+fn Parser::push_labelled(
+  self : Parser,
+  into : Array[Stmt],
+  wrap : (Stmt) -> Stmt,
+) -> Unit raise ParseError {
+  let labelled : Array[Stmt] = []
+  if self.token != RBrace && self.token != EOF {
+    self.parse_stmt_into(labelled)
+  }
+  if labelled.length() == 0 {
+    into.push(wrap(ExprStmt(int_literal(0, SInt))))
+    return
+  }
+  into.push(wrap(labelled[0]))
+  for i in 1..<labelled.length() {
+    into.push(labelled[i])
+  }
+}
+
+///|
+/// Parses one statement where C allows exactly one -- the body of an `if`,
+/// loop, or `else`.
+///
+/// A declaration is not a statement in C and cannot appear in those positions,
+/// so the multi-statement case does not arise for valid input; a block keeps
+/// anything that does arrive together rather than dropping it.
+fn Parser::parse_stmt(self : Parser) -> Stmt raise ParseError {
+  let stmts : Array[Stmt] = []
+  self.parse_stmt_into(stmts)
+  match stmts.length() {
+    1 => stmts[0]
+    0 => ExprStmt(int_literal(0, SInt))
+    _ => Compound(stmts)
   }
 }
 
@@ -373,16 +437,17 @@ fn Parser::parse_while_stmt(self : Parser) -> Stmt raise ParseError {
 fn Parser::parse_for_stmt(self : Parser) -> Stmt raise ParseError {
   self.advance() // for
   self.expect(LParen)
-  // Parse init: can be empty, a declaration, or an expression
-  let init = if self.token == Semicolon {
+  // Parse init: can be empty, a declaration of one or more names, or an
+  // expression. `for (int i = 0, n = len; ...)` is why this is a list.
+  let init : Array[Stmt] = if self.token == Semicolon {
     self.advance()
-    None
+    []
   } else if self.is_stmt_decl_start() {
-    Some(self.parse_var_decl_stmt())
+    self.parse_var_decl_stmts()
   } else {
     let expr = self.parse_expr()
     self.expect(Semicolon)
-    Some(ExprStmt(expr))
+    [ExprStmt(expr)]
   }
   // Parse condition
   let cond = if self.token == Semicolon {
@@ -428,7 +493,7 @@ fn Parser::parse_switch_stmt(self : Parser) -> Stmt raise ParseError {
   self.expect(LBrace)
   let stmts = []
   while self.token != RBrace {
-    stmts.push(self.parse_stmt())
+    self.parse_stmt_into(stmts)
   }
   self.expect(RBrace)
   Switch(expr, Compound(stmts))
@@ -481,7 +546,7 @@ fn Parser::parse_compound_stmt(self : Parser) -> Stmt raise ParseError {
   self.expect(LBrace)
   let stmts = []
   while self.token != RBrace {
-    stmts.push(self.parse_stmt())
+    self.parse_stmt_into(stmts)
   }
   self.expect(RBrace)
   self.value_types = saved_value_types
@@ -681,12 +746,18 @@ fn Parser::parse_local_declarator_init(
 }
 
 ///|
-fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt raise ParseError {
+/// Parses one declaration, which may introduce several names.
+///
+/// Each declarator becomes its own `VarDecl`. C groups them under one type
+/// specifier, but the grouping means nothing once the type is resolved per
+/// name -- `int *a, b` declares a pointer and an int -- and a generator
+/// emitting a declaration would never build the group.
+fn Parser::parse_var_decl_stmts(self : Parser) -> Array[Stmt] raise ParseError {
   let spec = self.parse_decl_specifiers()
   // Local struct/union/enum definition without variable: struct Foo { ... };
   if self.token == Semicolon {
     self.advance()
-    return ExprStmt(int_literal(0, SInt))
+    return []
   }
   let stmts = []
   // Parse first declarator
@@ -718,7 +789,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt raise ParseError {
     let ty = self.apply_decl_attrs(inferred_ty, post_decl_attrs)
     self.expect(Semicolon)
     self.remember_value_type(decl.name, ty)
-    return VarDecl(ty, decl.name, Some(expr))
+    return [VarDecl(ty, decl.name, Some(expr))]
   }
   // Local function prototype inside a function body: int foo(void);
   if decl.is_func_decl && self.token == Semicolon {
@@ -765,7 +836,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt raise ParseError {
     })
     self.remember_value_type(decl.name, decl_ty)
     self.expect(Semicolon)
-    return ExprStmt(int_literal(0, SInt))
+    return []
   }
   // Handle static / extern locals: promote to globals
   if spec.is_static || spec.is_extern {
@@ -862,7 +933,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt raise ParseError {
       self.remember_value_type(extra_decl.name, extra_ty)
     }
     self.expect(Semicolon)
-    return ExprStmt(int_literal(0, SInt))
+    return []
   }
   // Handle initializer
   let (ty, decl_stmt) = self.parse_local_declarator_init(decl_ty, decl.name)
@@ -885,11 +956,7 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt raise ParseError {
     self.remember_value_type(extra_decl.name, extra_ty)
   }
   self.expect(Semicolon)
-  if stmts.length() == 1 {
-    stmts[0]
-  } else {
-    StmtList(stmts)
-  }
+  stmts
 }
 
 ///|

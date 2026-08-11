@@ -59,7 +59,14 @@ pub type OffsetDesignator = @ctype.OffsetDesignator
 ///
 /// Compound statements contain nested statement arrays. `For(init, cond, inc,
 /// body)` stores the condition as an expression; parser-generated empty
-/// conditions are represented internally as a truthy expression.
+/// conditions are represented internally as a truthy expression, and `init`
+/// is empty for `for (;;)`.
+///
+/// `VarDecl` declares one name. C lets one declaration introduce several --
+/// `int a, b;` -- and those are recorded as one `VarDecl` each, side by side in
+/// the enclosing block, because the grouping carries no meaning a consumer
+/// could act on and nothing a generator would want to build. The declared type
+/// is per-name already, since `int *a, b` declares a pointer and an int.
 ///
 /// `Case` and `Default` are labels rather than clauses: they wrap the single
 /// statement they label, exactly as C spells them, and the statements that
@@ -71,7 +78,6 @@ pub(all) enum Stmt {
   If(Expr, Stmt, Stmt?)
   While(Expr, Stmt)
   Compound(Array[Stmt])
-  StmtList(Array[Stmt])
   VarDecl(Type, String, Expr?)
   Break
   Continue
@@ -80,7 +86,7 @@ pub(all) enum Stmt {
   Default(Stmt)
   Goto(String)
   Label(String, Stmt)
-  For(Stmt?, Expr, Expr?, Stmt)
+  For(Array[Stmt], Expr, Expr?, Stmt)
   DoWhile(Expr, Stmt)
   ComputedGoto(Expr)
 } derive(Eq, Debug)
