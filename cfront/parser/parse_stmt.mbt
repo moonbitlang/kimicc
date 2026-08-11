@@ -582,23 +582,8 @@ fn global_brace_initializer_for_type(
 }
 
 ///|
-fn find_struct_init_field_index(fields : Array[Param], name : String) -> Int {
-  for i = 0; i < fields.length(); i = i + 1 {
-    if fields[i].name == name {
-      return i
-    }
-  }
-  -1
-}
-
-///|
 fn local_init_core_type(ty : Type) -> Type {
   ty.core_type()
-}
-
-///|
-fn local_init_array_elem_type(ty : Type) -> Type? {
-  ty.array_element()
 }
 
 ///|
@@ -613,158 +598,86 @@ fn local_init_infer_array_size(ty : Type, count : Int) -> Type {
 }
 
 ///|
-fn local_init_scalar_expr(expr : Expr) -> Expr {
+/// The value an initializer denotes when its destination is a scalar.
+///
+/// C lets braces wrap a scalar initializer -- `int x = {5}` and `int a[2] =
+/// {{5}, {37}}` are both legal -- and lets a designator carry one. The AST
+/// records each of those as written, so every consumer that finally stores a
+/// scalar has to read through them, and this is the one rule for doing it.
+/// Empty braces denote zero. A `CompoundLiteral` is deliberately left alone:
+/// unlike a brace list it is an expression in its own right.
+pub fn scalar_initializer_value(expr : Expr) -> Expr {
   match expr {
-    Array(values) => local_init_scalar_brace_expr(values)
+    Array(values) =>
+      if values.length() == 0 {
+        int_literal(0, SInt)
+      } else {
+        scalar_initializer_value(values[0])
+      }
     DesignatedField(_, value)
     | DesignatedIndex(_, value)
-    | DesignatedRange(_, _, value) => local_init_scalar_expr(value)
+    | DesignatedRange(_, _, value) => scalar_initializer_value(value)
     _ => expr
   }
 }
 
 ///|
 fn local_init_scalar_brace_expr(init_exprs : Array[Expr]) -> Expr {
-  if init_exprs.length() == 0 {
-    int_literal(0, SInt)
-  } else {
-    local_init_scalar_expr(init_exprs[0])
-  }
+  scalar_initializer_value(Array(init_exprs))
 }
 
 ///|
-fn Parser::push_struct_init_assignments(
+/// Parses a local declarator's `= <initializer>` and returns the declared type
+/// together with the statement that declares it.
+///
+/// The initializer is recorded as it was written. A brace list stays an `Array`
+/// expression carrying its designators, and a string initializing a `char`
+/// array stays a `String`; expanding either into element stores is MIR's job
+/// and each code generator's, not the parser's. The one thing that cannot wait
+/// is an array size the braces imply, since the size is part of the type this
+/// returns.
+fn Parser::parse_local_declarator_init(
   self : Parser,
-  stmts : Array[Stmt],
-  target : Expr,
   ty : Type,
-  init_exprs : Array[Expr],
-) -> Unit {
-  let struct_name = match local_init_core_type(ty) {
-    Struct(n) | Union(n) => n
-    _ => return
-  }
-  let fields = if self.struct_decls.contains(struct_name) {
-    self.struct_decls[struct_name].fields
-  } else {
-    []
-  }
-  let mut positional = 0
-  for init_expr in init_exprs {
-    let (field_index, value) = match init_expr {
-      DesignatedField(field_name, e) => {
-        let idx = find_struct_init_field_index(fields, field_name)
-        if idx >= 0 {
-          positional = idx + 1
-        }
-        (idx, e)
-      }
-      _ => {
-        let idx = positional
-        positional += 1
-        (idx, init_expr)
-      }
-    }
-    if field_index < 0 || field_index >= fields.length() {
-      continue
-    }
-    let field = fields[field_index]
-    let field_target = Expr::MemberAccess(target, field.name)
-    match (local_init_core_type(field.ty), value) {
-      (Struct(_) | Union(_), Array(field_exprs)) =>
-        self.push_struct_init_assignments(
-          stmts,
-          field_target,
-          field.ty,
-          field_exprs,
-        )
-      (Struct(_) | Union(_), DesignatedField(_, _)) =>
-        self.push_struct_init_assignments(stmts, field_target, field.ty, [value])
-      (Array(_, _), Array(elem_exprs)) =>
-        self.push_array_init_assignments_at(
-          stmts,
-          field_target,
-          field.ty,
-          elem_exprs,
-        )
-      (Array(_, _), DesignatedIndex(_, _))
-      | (Array(_, _), DesignatedRange(_, _, _)) =>
-        self.push_array_init_assignments_at(stmts, field_target, field.ty, [
-          value,
-        ])
-      (Struct(_) | Union(_), Number(0, _, _)) => ()
-      (Array(_, _), Number(0, _, _)) => ()
-      _ =>
-        stmts.push(
-          ExprStmt(Assign(field_target, local_init_scalar_expr(value))),
-        )
-    }
-  }
-}
-
-///|
-fn Parser::push_array_init_assignments_at(
-  self : Parser,
-  stmts : Array[Stmt],
-  target : Expr,
-  ty : Type,
-  init_exprs : Array[Expr],
-) -> Unit {
-  let elem_ty = match local_init_array_elem_type(ty) {
-    Some(elem) => elem
-    None => return
-  }
-  let mut cursor = 0
-  for init_expr in init_exprs {
-    let mut start = cursor
-    let mut end = cursor
-    let value = match init_expr {
-      DesignatedIndex(index, e) => {
-        start = index.to_int()
-        end = start
-        cursor = start + 1
-        e
-      }
-      DesignatedRange(first, last, e) => {
-        start = first.to_int()
-        end = last.to_int()
-        cursor = end + 1
-        e
-      }
-      _ => {
-        cursor += 1
-        init_expr
-      }
-    }
-    for i = start; i <= end; i = i + 1 {
-      let elem = Expr::ArrayAccess(target, int_literal(i.to_int64(), SInt))
-      match (local_init_core_type(elem_ty), value) {
-        (Struct(_) | Union(_), Array(field_exprs)) =>
-          self.push_struct_init_assignments(stmts, elem, elem_ty, field_exprs)
-        (Struct(_) | Union(_), DesignatedField(_, _)) =>
-          self.push_struct_init_assignments(stmts, elem, elem_ty, [value])
-        (Array(_, _), Array(elem_exprs)) =>
-          self.push_array_init_assignments_at(stmts, elem, elem_ty, elem_exprs)
-        (Array(_, _), DesignatedIndex(_, _))
-        | (Array(_, _), DesignatedRange(_, _, _)) =>
-          self.push_array_init_assignments_at(stmts, elem, elem_ty, [value])
-        (Struct(_) | Union(_), Number(0, _, _)) => ()
-        (Array(_, _), Number(0, _, _)) => ()
-        _ => stmts.push(ExprStmt(Assign(elem, local_init_scalar_expr(value))))
-      }
-    }
-  }
-}
-
-///|
-fn Parser::push_array_init_assignments(
-  self : Parser,
-  stmts : Array[Stmt],
   name : String,
-  ty : Type,
-  init_exprs : Array[Expr],
-) -> Unit {
-  self.push_array_init_assignments_at(stmts, Var(name), ty, init_exprs)
+) -> (Type, Stmt) raise ParseError {
+  if self.token != Assign {
+    return (ty, VarDecl(ty, name, None))
+  }
+  self.advance()
+  if self.token == LBrace {
+    let init_exprs = self.parse_brace_init_exprs()
+    match local_init_core_type(ty) {
+      Struct(_) | Union(_) => (ty, VarDecl(ty, name, Some(Array(init_exprs))))
+      Array(_, _) => {
+        let sized = local_init_infer_array_size(
+          ty,
+          initializer_element_count(init_exprs),
+        )
+        (sized, VarDecl(sized, name, Some(Array(init_exprs))))
+      }
+      // Braces around a scalar initializer denote the value itself, matching
+      // what a global initializer records for the same declaration.
+      _ =>
+        (ty, VarDecl(ty, name, Some(local_init_scalar_brace_expr(init_exprs))))
+    }
+  } else {
+    let expr = self.parse_assign()
+    match (local_init_core_type(ty), expr) {
+      // `char s[] = "abc"` sizes the array from the literal, terminator
+      // included; the initializer itself stays the string that was written.
+      // The size goes back inside any `_Atomic` or `_Alignas` wrapper, the
+      // same way the brace path puts it there.
+      (Array(_, 0), String(text)) => {
+        let sized = local_init_infer_array_size(
+          ty,
+          @ctype.string_literal_array_length(text),
+        )
+        (sized, VarDecl(sized, name, Some(expr)))
+      }
+      _ => (ty, VarDecl(ty, name, Some(expr)))
+    }
+  }
 }
 
 ///|
@@ -952,84 +865,8 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt raise ParseError {
     return ExprStmt(int_literal(0, SInt))
   }
   // Handle initializer
-  let ty = if self.token == Assign {
-    self.advance()
-    if self.token == LBrace {
-      // For struct/union types, lower brace initializers into field assignments.
-      match local_init_core_type(decl_ty) {
-        Struct(_) | Union(_) => {
-          // Parse brace initializer expressions and create field assignments
-          let init_exprs = self.parse_brace_init_exprs()
-          stmts.push(VarDecl(decl_ty, decl.name, Some(int_literal(0, SInt))))
-          self.push_struct_init_assignments(
-            stmts,
-            Var(decl.name),
-            decl_ty,
-            init_exprs,
-          )
-          decl_ty
-        }
-        Array(_, _) => {
-          let init_exprs = self.parse_brace_init_exprs()
-          let init_count = initializer_element_count(init_exprs)
-          // Update array type if size was inferred
-          let ty = local_init_infer_array_size(decl_ty, init_count)
-          stmts.push(VarDecl(ty, decl.name, Some(int_literal(0, SInt))))
-          self.push_array_init_assignments(stmts, decl.name, ty, init_exprs)
-          ty
-        }
-        _ => {
-          let init_exprs = self.parse_brace_init_exprs()
-          stmts.push(
-            VarDecl(
-              decl_ty,
-              decl.name,
-              Some(local_init_scalar_brace_expr(init_exprs)),
-            ),
-          )
-          decl_ty
-        }
-      }
-    } else {
-      let expr = self.parse_assign()
-      // Handle string literal initializer for char arrays: char s[] = "abc"
-      match (decl_ty, expr) {
-        (Array(elem_ty, 0), String(s)) => {
-          let len = s.length()
-          let arr_ty = Type::Array(elem_ty, len + 1) // +1 for null terminator
-          stmts.push(VarDecl(arr_ty, decl.name, None))
-          for i = 0; i < len; i = i + 1 {
-            let ch = s[i]
-            stmts.push(
-              ExprStmt(
-                Assign(
-                  ArrayAccess(Var(decl.name), int_literal(i.to_int64(), SInt)),
-                  int_literal(ch.to_int().to_int64(), SInt),
-                ),
-              ),
-            )
-          }
-          // Null terminator
-          stmts.push(
-            ExprStmt(
-              Assign(
-                ArrayAccess(Var(decl.name), int_literal(len.to_int64(), SInt)),
-                int_literal(0, SInt),
-              ),
-            ),
-          )
-          arr_ty
-        }
-        _ => {
-          stmts.push(VarDecl(decl_ty, decl.name, Some(expr)))
-          decl_ty
-        }
-      }
-    }
-  } else {
-    stmts.push(VarDecl(decl_ty, decl.name, None))
-    decl_ty
-  }
+  let (ty, decl_stmt) = self.parse_local_declarator_init(decl_ty, decl.name)
+  stmts.push(decl_stmt)
   self.remember_value_type(decl.name, ty)
   // Parse additional variables: int a, *b, c[8], (*fp)(void);
   while self.token == Comma {
@@ -1040,96 +877,12 @@ fn Parser::parse_var_decl_stmt(self : Parser) -> Stmt raise ParseError {
       apply_decl_align(resolve_var_type(extra_decl), spec.align),
       extra_post_decl_attrs,
     )
-    let mut remembered_extra_ty = extra_decl_ty
-    if self.token == Assign {
-      self.advance()
-      if self.token == LBrace {
-        match local_init_core_type(extra_decl_ty) {
-          Struct(_) | Union(_) => {
-            stmts.push(
-              VarDecl(
-                extra_decl_ty,
-                extra_decl.name,
-                Some(int_literal(0, SInt)),
-              ),
-            )
-            let init_exprs = self.parse_brace_init_exprs()
-            self.push_struct_init_assignments(
-              stmts,
-              Var(extra_decl.name),
-              extra_decl_ty,
-              init_exprs,
-            )
-          }
-          Array(_, _) => {
-            let init_exprs = self.parse_brace_init_exprs()
-            let init_count = initializer_element_count(init_exprs)
-            let extra_ty = local_init_infer_array_size(
-              extra_decl_ty, init_count,
-            )
-            remembered_extra_ty = extra_ty
-            stmts.push(
-              VarDecl(extra_ty, extra_decl.name, Some(int_literal(0, SInt))),
-            )
-            self.push_array_init_assignments(
-              stmts,
-              extra_decl.name,
-              extra_ty,
-              init_exprs,
-            )
-          }
-          _ => {
-            let init_exprs = self.parse_brace_init_exprs()
-            stmts.push(
-              VarDecl(
-                extra_decl_ty,
-                extra_decl.name,
-                Some(local_init_scalar_brace_expr(init_exprs)),
-              ),
-            )
-          }
-        }
-      } else {
-        let expr = self.parse_assign()
-        match (extra_decl_ty, expr) {
-          (Array(elem_ty, 0), String(s)) => {
-            let len = s.length()
-            let arr_ty = Type::Array(elem_ty, len + 1)
-            remembered_extra_ty = arr_ty
-            stmts.push(VarDecl(arr_ty, extra_decl.name, None))
-            for i = 0; i < len; i = i + 1 {
-              let ch = s[i]
-              stmts.push(
-                ExprStmt(
-                  Assign(
-                    ArrayAccess(
-                      Var(extra_decl.name),
-                      int_literal(i.to_int64(), SInt),
-                    ),
-                    int_literal(ch.to_int().to_int64(), SInt),
-                  ),
-                ),
-              )
-            }
-            stmts.push(
-              ExprStmt(
-                Assign(
-                  ArrayAccess(
-                    Var(extra_decl.name),
-                    int_literal(len.to_int64(), SInt),
-                  ),
-                  int_literal(0, SInt),
-                ),
-              ),
-            )
-          }
-          _ => stmts.push(VarDecl(extra_decl_ty, extra_decl.name, Some(expr)))
-        }
-      }
-    } else {
-      stmts.push(VarDecl(extra_decl_ty, extra_decl.name, None))
-    }
-    self.remember_value_type(extra_decl.name, remembered_extra_ty)
+    let (extra_ty, extra_stmt) = self.parse_local_declarator_init(
+      extra_decl_ty,
+      extra_decl.name,
+    )
+    stmts.push(extra_stmt)
+    self.remember_value_type(extra_decl.name, extra_ty)
   }
   self.expect(Semicolon)
   if stmts.length() == 1 {

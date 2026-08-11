@@ -361,7 +361,14 @@ fn Codegen::collect_expr_locals(self : Codegen, expr : @parser.Expr) -> Unit {
     | PrefixDec(e)
     | PostfixInc(e)
     | PostfixDec(e)
-    | DesignatedField(_, e) => self.collect_expr_locals(e)
+    // Every designator wraps an expression this prepass still has to reach.
+    // Only `DesignatedField` was traversed, which went unnoticed while the
+    // parser unwrapped local designators during lowering: a call needing an
+    // aggregate temporary behind `[0] =` never reserved sret scratch, and the
+    // emitted code then read from offset -1.
+    | DesignatedField(_, e)
+    | DesignatedIndex(_, e)
+    | DesignatedRange(_, _, e) => self.collect_expr_locals(e)
     Call(func, args) => {
       let ret_ty = self.call_return_type(func, args, 0)
       if ret_ty.is_object_aggregate() {

@@ -36,8 +36,9 @@ Done, in order: aggregate definitions ordered by definition rather than hoisted;
 literals carrying the type their suffix selects; literals keeping the text that
 was written, so `0xff`, `0755`, and `1ull` survive printing; two miscompiles
 fixed on the way (block-scoped tags colliding in a flat table, and `sizeof(1L)`
-reporting 4); and `case`/`default` as statements rather than synthetic labels,
-the first construct moved out of the parser under Step B.
+reporting 4); `case`/`default` as statements rather than synthetic labels, the
+first construct moved out of the parser under Step B; and local aggregate
+initializers recorded as written, the second.
 
 ## Plan
 
@@ -89,9 +90,12 @@ must know:
   baked into the name. Done: `Case` and `Default` are statements, `Switch`
   carries no case table, and each backend synthesizes the labels its own
   dispatch needs.
-- A local aggregate initializer becomes a `= 0` marker plus element assignments.
-  There is no correct way to print that node, and no reasonable way to construct
-  one.
+- A local aggregate initializer became a `= 0` marker plus element assignments,
+  which had no correct printed form and no reasonable constructed one. Done: a
+  brace initializer is recorded as the `Array` expression it was written as,
+  designators included, and `char s[] = "abc"` keeps the string. The parser
+  still decides the size the braces imply, because that size is part of the
+  type the declaration carries.
 - `int a, b;` becomes a `StmtList` grouping that exists only to hold the two
   declarations together.
 - An anonymous `union { ... };` member becomes a field with an empty name whose
@@ -107,6 +111,41 @@ shapes today, so each construct moved needs its MIR lowering added in the same
 change. Parser and MIR cannot be split across pull requests without breaking the
 build in between, so this is a series of medium changes -- one construct at a
 time -- rather than one large one. That is better for review anyway.
+
+The initializer step showed what that constraint understates. MIR and both code
+generators already walked brace initializers for compound literals and aggregate
+members, so no new walk had to be written -- but the parser's expansion had been
+quietly supplying behaviour those walks never needed, and each gap only appeared
+once the expansion stopped. Seven of them.
+
+Three were in MIR, all because the expansion's assignments met MIR on its
+assignment path: placing an object into an aggregate member (`struct ctx c = {
+..., argv[0] }`, which QuickJS writes), decaying an array to a pointer inside an
+initializer (sqlite's `sqlite3WindowUpdate` over its `static const char[]`
+names), and filling a `char` array member from a string.
+
+Four were in the parser-direct code generators, and all four were those walkers
+diverging from MIR rather than MIR being incomplete: matching the written type
+instead of the core type, so `_Alignas` aggregates missed the aggregate path in
+three places; no path at all on x86-64 for a string filling a `char` array, which
+aborted; a prepass that reserved aggregate return scratch while walking into
+`.field` but not `[index]`, so a call behind a designator read from a negative
+frame offset; and struct and union walkers that handed the designator selecting a
+member down to the member's own walker, which read it again whenever the member's
+type had a field of the same name.
+
+Two lessons for the constructs still to move. The question is not "does a lowering
+exist for this shape" but "what did the expansion do that nothing else does" --
+and compiling the sqlite and QuickJS fixtures directly answers it in seconds,
+where a full test run surfaces one gap per cycle. Then: when the parser-direct
+walkers and MIR disagree about an initializer, MIR has been right every time, so
+the diff between them is where to look first.
+
+The other cost was the rule for reading *through* braces: `int a[2] = {{5}, {37}}`
+is legal C, the parser used to fold those inner braces away while lowering, and
+each walker now has to do it at the point it stores a scalar. That rule is
+`@parser.scalar_initializer_value`, one function all three call, rather than
+three chances to disagree.
 
 ### Step C — A construction API
 
@@ -161,6 +200,16 @@ not gate anything above and should not be confused with it.
 - **Enum constant names** are folded to values, so they print as integers.
 
 ### Parser bugs, tracked separately
+
+- **Brace elision is unsupported.** `int m[2][3] = {1, 2, 3, 4, 5, 6}` and any
+  other initializer that leaves out the braces for a subobject is rejected
+  rather than compiled. It was rejected before the initializer move too, by the
+  semantic check catching the assignment to `m[0]` that the parser's expansion
+  produced; now each backend declines it, since the parser no longer produces
+  anything for the check to catch. Supporting it means turning three initializer
+  walkers from "one item per subobject" into a cursor over a flat item list,
+  which changes the shared path compound literals and global initializers take
+  as well, so it is its own change rather than part of this one.
 
 - A function returning a function pointer does not reparse: `void (*f(int))(void)`
   is read back as `void *f(int)`. Affects the tinycc and sqlite3 fixtures, and is

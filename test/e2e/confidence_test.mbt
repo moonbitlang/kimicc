@@ -3434,3 +3434,251 @@ async test "e2e parser codegen switch clause differential matches strict MIR" {
     assert_true(result.output.contains("case=" + case_index.to_string()))
   }
 }
+
+///|
+/// Builds a program whose local aggregate initializers cover the shapes the
+/// parser used to expand into element assignments: partial and inferred array
+/// initializers, designated indices and GNU ranges, positional and designated
+/// struct and union initializers, aggregates nested inside aggregates, arrays
+/// of structs, strings initializing `char` arrays both as a whole declaration
+/// and as a member, braces around a scalar element, and a copy-initialized
+/// struct.
+///
+/// The seed threads through every initializer so that the corpus cannot agree
+/// with clang only for one constant, and `trace` pins the evaluation order of
+/// initializer elements, which the old lowering fixed by construction and the
+/// backends now have to get right themselves.
+///
+/// `aligned` covers the same shapes behind an `_Alignas`, which is where the
+/// parser-direct backend was matching the written type rather than reading
+/// through the wrapper: it placed nothing at all for an aligned aggregate and
+/// took the scalar path for an aligned `char` array.
+///
+/// `members_from_expressions` covers an aggregate member initialized from
+/// another object rather than from braces, which is the shape QuickJS writes
+/// as `struct array_sort_context asc = { ctx, 0, 0, argv[0] }`. The parser
+/// used to turn that into an assignment, so MIR met it on its assignment path
+/// and never had to place an object into a member itself.
+///
+/// `decayed_names` covers a pointer member or element initialized from an
+/// array, which sqlite writes in `sqlite3WindowUpdate` over its `static const
+/// char row_numberName[]` constants. It is the same story: the decay came free
+/// on the assignment path, and the initializer path had to ask for it.
+///
+/// `designated_aggregate_calls` covers a call returning a large aggregate
+/// behind a designator. The parser-direct backend reserves its return-slot
+/// scratch in a prepass over the body, and that prepass walked into
+/// `DesignatedField` but not `DesignatedIndex`, so `[1] = make_big(seed)`
+/// reserved nothing and the emitted code read from a negative frame offset.
+/// Local designators only started reaching it once the parser stopped
+/// unwrapping them.
+///
+/// `shadowed_designators` covers a member whose own type has a field of the
+/// same name. The parser-direct walkers selected the member with `.i` and then
+/// handed the whole designator to the nested walker, which read `.i` a second
+/// time inside the member -- so `{ .i = src }` dropped `src.j`. A designator
+/// nested in the value, `{ .i.j = seed }`, must still be consumed there, so
+/// both spellings are covered.
+fn deterministic_local_initializer_differential_source() -> String {
+  let source =
+    #|#include <stdio.h>
+    #|struct Point { int x; int y; };
+    #|struct Nest { struct Point p; int tail; };
+    #|struct Named { char name[8]; int id; };
+    #|struct Holder { int v[3]; int t; };
+    #|union Tagged { int i; char c[4]; };
+    #|static int trace(int v) { printf("t%d ", v); return v; }
+    #|static int arrays(int seed) {
+    #|  int partial[5] = { seed, 2, 3 };
+    #|  int inferred[] = { seed, 2, 3 };
+    #|  int zeroed[4] = { 0 };
+    #|  int indexed[6] = { [2] = seed, [4] = 9 };
+    #|  int ranged[6] = { [1 ... 3] = seed };
+    #|  int braced[2] = { { 5 }, { seed } };
+    #|  int matrix[2][3] = { { seed, 2, 3 }, { 4, 5, 6 } };
+    #|  int acc = 0;
+    #|  for (int i = 0; i < 5; i++) acc += partial[i];
+    #|  for (int i = 0; i < 3; i++) acc += inferred[i] * 2;
+    #|  for (int i = 0; i < 4; i++) acc += zeroed[i];
+    #|  for (int i = 0; i < 6; i++) acc += indexed[i] * 3 + ranged[i] * 5;
+    #|  for (int i = 0; i < 2; i++)
+    #|    for (int j = 0; j < 3; j++) acc += matrix[i][j] * 7;
+    #|  acc += braced[0] + braced[1];
+    #|  printf("arrays %d sizes %zu %zu\n", acc, sizeof(inferred), sizeof(partial));
+    #|  return acc;
+    #|}
+    #|static int aggregates(int seed) {
+    #|  struct Point positional = { seed, 2 };
+    #|  struct Point designated = { .y = seed };
+    #|  struct Point structs[3] = { { 1, seed }, { 3, 4 } };
+    #|  struct Nest nested = { { seed, 2 }, 3 };
+    #|  struct Nest deep = { .p = { .y = seed }, .tail = 3 };
+    #|  struct Holder holder = { { 1, 2, seed }, 4 };
+    #|  union Tagged tagged = { .i = seed };
+    #|  struct Point copy = positional;
+    #|  int acc = positional.x + positional.y + designated.x + designated.y;
+    #|  for (int i = 0; i < 3; i++) acc += structs[i].x * 2 + structs[i].y * 3;
+    #|  acc += nested.p.x + nested.p.y + nested.tail;
+    #|  acc += deep.p.x + deep.p.y + deep.tail;
+    #|  acc += holder.v[0] + holder.v[1] + holder.v[2] + holder.t;
+    #|  acc += tagged.i + tagged.c[0];
+    #|  acc += copy.x + copy.y;
+    #|  printf("aggregates %d\n", acc);
+    #|  return acc;
+    #|}
+    #|static int strings(int seed) {
+    #|  char inferred[] = "abc";
+    #|  char padded[8] = "hi";
+    #|  char exact[3] = "abc";
+    #|  char escaped[] = "a\tb\\c";
+    #|  struct Named member = { "hi", seed };
+    #|  _Alignas(16) char aligned_inferred[] = "abcd";
+    #|  int acc = (int)sizeof(aligned_inferred) + aligned_inferred[1];
+    #|  for (int i = 0; i < (int)sizeof(inferred); i++) acc += inferred[i];
+    #|  for (int i = 0; i < (int)sizeof(padded); i++) acc += padded[i] * 2;
+    #|  for (int i = 0; i < (int)sizeof(exact); i++) acc += exact[i] * 3;
+    #|  for (int i = 0; i < (int)sizeof(escaped); i++) acc += escaped[i];
+    #|  for (int i = 0; i < 8; i++) acc += member.name[i] * 5;
+    #|  acc += member.id;
+    #|  printf("strings %d %s|%s|%zu\n", acc, inferred, padded, sizeof(escaped));
+    #|  return acc;
+    #|}
+    #|static int aligned(int seed) {
+    #|  _Alignas(16) unsigned long long wide[4] = { 10ull, (unsigned long long)seed };
+    #|  _Alignas(32) struct Point point = { .y = seed };
+    #|  _Alignas(16) char text[8] = "hi";
+    #|  _Alignas(64) struct Nest nest = { { seed, 2 }, 3 };
+    #|  _Alignas(16) int indexed[6] = { [2] = seed, [4] = 9 };
+    #|  int acc = 0;
+    #|  for (int i = 0; i < 4; i++) acc += (int)wide[i];
+    #|  acc += point.x + point.y;
+    #|  for (int i = 0; i < 8; i++) acc += text[i] * 2;
+    #|  acc += nest.p.x + nest.p.y + nest.tail;
+    #|  for (int i = 0; i < 6; i++) acc += indexed[i] * 3;
+    #|  printf("aligned %d %s\n", acc, text);
+    #|  return acc;
+    #|}
+    #|static const char row_name[] = "row_number";
+    #|static const char rank_name[] = "rank";
+    #|static int decayed_names(int seed) {
+    #|  struct Entry { const char *label; int a; int b; };
+    #|  struct Entry table[] = {
+    #|    { row_name,  seed, 91 },
+    #|    { rank_name, 86,   seed },
+    #|  };
+    #|  const char *direct[2] = { row_name, rank_name };
+    #|  int acc = table[0].a + table[0].b + table[1].a + table[1].b;
+    #|  acc += table[0].label[0] + table[1].label[0];
+    #|  acc += direct[0][1] + direct[1][1];
+    #|  printf("decayed %d %s %s\n", acc, table[0].label, direct[1]);
+    #|  return acc;
+    #|}
+    #|static struct Point make_point(int v) {
+    #|  struct Point p = { v, v + 1 };
+    #|  return p;
+    #|}
+    #|static int members_from_expressions(int seed) {
+    #|  struct Point src = { seed, 8 };
+    #|  struct Point list[2] = { { 1, 2 }, { 3, 4 } };
+    #|  struct Nest from_local = { src, 5 };
+    #|  struct Nest from_call = { make_point(seed), 6 };
+    #|  struct Nest from_element = { list[1], 7 };
+    #|  struct Point copied[2] = { src, list[0] };
+    #|  int acc = from_local.p.x + from_local.p.y + from_local.tail;
+    #|  acc += from_call.p.x + from_call.p.y + from_call.tail;
+    #|  acc += from_element.p.x + from_element.p.y + from_element.tail;
+    #|  for (int i = 0; i < 2; i++) acc += copied[i].x * 2 + copied[i].y * 3;
+    #|  printf("members %d\n", acc);
+    #|  return acc;
+    #|}
+    #|struct Big { long a; long b; long c; long d; };
+    #|static struct Big make_big(int v) {
+    #|  struct Big r = { v, v + 1, v + 2, v + 3 };
+    #|  return r;
+    #|}
+    #|static int designated_aggregate_calls(int seed) {
+    #|  struct Big at_index[2] = { [1] = make_big(seed) };
+    #|  struct Big positional[2] = { make_big(seed), make_big(seed + 1) };
+    #|  struct Nest field_call = { .p = make_point(seed), .tail = 4 };
+    #|  int acc = (int)(at_index[1].a + at_index[1].d + at_index[0].a);
+    #|  acc += (int)(positional[0].b + positional[1].c);
+    #|  acc += field_call.p.x + field_call.p.y + field_call.tail;
+    #|  printf("desig_calls %d\n", acc);
+    #|  return acc;
+    #|}
+    #|struct Shadow { int i; int j; };
+    #|struct Outer { struct Shadow i; int k; };
+    #|static int shadowed_designators(int seed) {
+    #|  struct Shadow src = { seed, 22 };
+    #|  struct Outer copied = { .i = src, .k = 5 };
+    #|  struct Outer braced = { .i = { seed, 44 }, .k = 7 };
+    #|  struct Outer nested = { .i.j = seed, .k = 9 };
+    #|  int acc = copied.i.i + copied.i.j + copied.k;
+    #|  acc += braced.i.i + braced.i.j + braced.k;
+    #|  acc += nested.i.i + nested.i.j + nested.k;
+    #|  printf("shadowed %d\n", acc);
+    #|  return acc;
+    #|}
+    #|static int ordering(int seed) {
+    #|  int side[3] = { trace(seed), trace(2), trace(3) };
+    #|  int later = side[0], list[2] = { side[1], side[2] }, tail = seed;
+    #|  int acc = side[0] + side[1] + side[2] + later + list[0] + list[1] + tail;
+    #|  printf("| ordering %d\n", acc);
+    #|  return acc;
+    #|}
+    #|static int scoped(int seed) {
+    #|  int acc = 0;
+    #|  for (int i = 0; i < 3; i++) {
+    #|    int fresh[3] = { i, seed, 0 };
+    #|    fresh[2] = fresh[0] + fresh[1];
+    #|    acc += fresh[2];
+    #|    {
+    #|      struct Point inner = { .y = i };
+    #|      acc += inner.x + inner.y;
+    #|    }
+    #|  }
+    #|  printf("scoped %d\n", acc);
+    #|  return acc;
+    #|}
+    #|int main(void) {
+    #|  long acc = 0;
+    #|  for (int seed = -2; seed <= 3; seed++) {
+    #|    acc += arrays(seed) + aggregates(seed) + strings(seed) +
+    #|        aligned(seed) + members_from_expressions(seed) +
+    #|        decayed_names(seed) + designated_aggregate_calls(seed) +
+    #|        shadowed_designators(seed) + ordering(seed) + scoped(seed);
+    #|  }
+    #|  printf("total %ld\n", acc);
+    #|  return (int)(acc & 127);
+    #|}
+  source
+}
+
+///|
+async test "e2e local aggregate initializer differential corpus matches clang" {
+  let result = run_source_against_clang_baseline(
+    deterministic_local_initializer_differential_source(),
+    "local_initializer_differential",
+  )
+  assert_true(result.output.contains("total "))
+}
+
+///|
+async test "e2e direct Mach-O local aggregate initializer corpus matches clang" {
+  let result = run_source_direct_object_against_clang_baseline(
+    deterministic_local_initializer_differential_source(),
+    "direct_local_initializer_differential",
+  )
+  assert_true(result.output.contains("total "))
+}
+
+///|
+/// The parser-direct code generator consumes the AST rather than MIR, so it
+/// walks the initializer itself and needs its own differential.
+async test "e2e parser codegen local aggregate initializers match strict MIR" {
+  let result = run_source_strict_mir_against_parser_codegen(
+    deterministic_local_initializer_differential_source(),
+    "parser_codegen_local_initializer",
+  )
+  assert_true(result.output.contains("total "))
+}

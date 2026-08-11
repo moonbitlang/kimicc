@@ -3700,6 +3700,9 @@ fn Codegen::emit_init_scalar_at_addr(
   init_expr : @parser.Expr,
   frame_size : Int,
 ) -> Unit {
+  // Braces may wrap a scalar initializer, so read through them to the value
+  // they denote before generating it.
+  let init_expr = @parser.scalar_initializer_value(init_expr)
   self.emit("\tstr\tx9, [sp, #-16]!")
   self.gen_expr(init_expr, frame_size)
   self.emit_numeric_conversion(self.type_of(init_expr, frame_size), ty)
@@ -3742,7 +3745,8 @@ fn Codegen::emit_init_value_at_addr(
     }
     match value {
       String(s) =>
-        match ty {
+        // Read through `_Atomic` and `_Alignas` to find the array underneath.
+        match ty.core_type() {
           Array(_, _) => {
             self.emit_init_string_array_at_addr(ty, s, frame_size)
             return
@@ -3761,6 +3765,18 @@ fn Codegen::emit_init_value_at_addr(
         self.emit("\tadd\tsp, sp, #16")
       }
       _ => {
+        // What remains is a copy from another object of the same shape. A
+        // scalar here means the braces elided a level -- `int m[2][3] = {1,
+        // 2, 3, 4, 5, 6}` hands `1` to a whole `int[3]` -- which this walker
+        // cannot place, and `gen_aggregate_addr` would quietly leave the
+        // destination address in x9 and copy the object over itself.
+        if !is_aggregate_type(self.type_of(value, frame_size)) {
+          abort(
+            "Darwin ARM64 backend cannot initialize " +
+            ty.to_string() +
+            " from a scalar initializer; brace elision is not supported",
+          )
+        }
         self.emit("\tstr\tx9, [sp, #-16]!")
         self.gen_aggregate_addr(value, frame_size)
         self.emit("\tstr\tx9, [sp, #-16]!")
@@ -3782,12 +3798,7 @@ fn Codegen::emit_init_bitfield_at_addr(
   init_expr : @parser.Expr,
   frame_size : Int,
 ) -> Unit {
-  let value = match init_expr {
-    DesignatedField(_, e) => e
-    DesignatedIndex(_, e) => e
-    DesignatedRange(_, _, e) => e
-    _ => init_expr
-  }
+  let value = @parser.scalar_initializer_value(init_expr)
   self.emit("\tstr\tx9, [sp, #-16]!")
   self.gen_expr(value, frame_size)
   self.emit_numeric_conversion(self.type_of(value, frame_size), field_ty)
@@ -3823,7 +3834,7 @@ fn Codegen::emit_init_string_array_at_addr(
   value : String,
   frame_size : Int,
 ) -> Unit {
-  match ty {
+  match ty.core_type() {
     Array(elem_ty, n) => {
       self.emit("\tstr\tx9, [sp, #-16]!")
       self.emit("\tldr\tx0, [sp]")
@@ -3873,7 +3884,10 @@ fn Codegen::emit_init_aggregate_at_addr_with_zero(
     self.emit_load_int("x2", size.to_int64())
     self.emit("\tbl\t_memset")
   }
-  match ty {
+  // The x86-64 walker already reads through `_Atomic` and `_Alignas` here;
+  // this one matched the written type and placed nothing when it found a
+  // wrapper.
+  match ty.core_type() {
     Struct(name) => {
       let layout = if self.struct_layouts.contains(name) {
         self.struct_layouts[name]
@@ -3908,12 +3922,13 @@ fn Codegen::emit_init_aggregate_at_addr_with_zero(
           Some((_, field_ty, field_offset, field_size, bit_offset, bit_width)) => {
             self.emit("\tldr\tx9, [sp]")
             self.emit_add_offset_to_x9(field_offset)
+            let member_init = designated_member_value(init_expr)
             if bit_width > 0 {
               self.emit_init_bitfield_at_addr(
-                field_ty, field_size, bit_offset, bit_width, init_expr, frame_size,
+                field_ty, field_size, bit_offset, bit_width, member_init, frame_size,
               )
             } else {
-              self.emit_init_value_at_addr(field_ty, init_expr, frame_size)
+              self.emit_init_value_at_addr(field_ty, member_init, frame_size)
             }
           }
           None => ()
@@ -3941,17 +3956,13 @@ fn Codegen::emit_init_aggregate_at_addr_with_zero(
           if init_exprs.length() > 0 {
             self.emit("\tldr\tx9, [sp]")
             self.emit_add_offset_to_x9(field_offset)
+            let member_init = designated_member_value(init_exprs[0])
             if bit_width > 0 {
               self.emit_init_bitfield_at_addr(
-                field_ty,
-                field_size,
-                bit_offset,
-                bit_width,
-                init_exprs[0],
-                frame_size,
+                field_ty, field_size, bit_offset, bit_width, member_init, frame_size,
               )
             } else {
-              self.emit_init_value_at_addr(field_ty, init_exprs[0], frame_size)
+              self.emit_init_value_at_addr(field_ty, member_init, frame_size)
             }
           }
         None => ()

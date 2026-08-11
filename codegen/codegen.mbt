@@ -1060,6 +1060,28 @@ fn Codegen::emit_global_float(
 }
 
 ///|
+/// The initializer left for a member once the designator that selected it has
+/// been consumed.
+///
+/// Descending with the designator still attached lets the nested walker read it
+/// a second time whenever the member's own type has a field of the same name:
+/// `struct I { int i; int j; }; struct O { struct I i; }` makes `{ .i = src }`
+/// select `O.i` and then read `.i` again inside `struct I`, so `src.j` is never
+/// copied. A designator nested *inside* the value -- `{ .i.j = 5 }` -- is a
+/// different thing and stays, because there the nested walker is the one that
+/// consumes it.
+///
+/// The array branch of the same walkers already descends with the value, and
+/// MIR unwraps when it selects the field; this is the struct and union path
+/// catching up.
+fn designated_member_value(init_expr : @parser.Expr) -> @parser.Expr {
+  match init_expr {
+    DesignatedField(_, value) => value
+    _ => init_expr
+  }
+}
+
+///|
 fn Codegen::designator_matches_type(
   self : Codegen,
   ty : @parser.Type,

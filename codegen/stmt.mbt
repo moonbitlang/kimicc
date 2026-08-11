@@ -230,38 +230,42 @@ fn Codegen::gen_stmt(
       let offset = self.alloc_local(name, ty)
       match init {
         Some(expr) =>
-          match (ty, expr) {
-            (Struct(_) | Union(_) | Array(_, _), Number(0, _, _)) => {
-              // Zero-initialize aggregate types properly
-              let size = self.type_size(ty)
-              self.emit_local_addr(offset, frame_size)
-              self.emit("\tmov\tx0, x9")
-              self.emit("\tmov\tx1, #0")
-              self.emit_load_int("x2", size.to_int64())
-              self.emit("\tbl\t_memset")
-            }
-            (Struct(_) | Union(_) | Array(_, _), rhs) => {
-              self.emit_local_addr(offset, frame_size)
-              self.emit_init_value_at_addr(ty, rhs, frame_size)
-            }
-            _ => {
-              self.gen_expr(expr, frame_size)
-              self.emit_numeric_conversion(self.type_of(expr, frame_size), ty)
-              self.emit_scalar_conversion_to(ty)
-              match ty {
-                Float => self.emit_store_local("w9", offset, frame_size)
-                SInt128 | UInt128 => {
-                  self.emit("\tstr\tx9, [sp, #-16]!")
-                  self.emit("\tstr\tx10, [sp, #8]")
-                  self.emit_local_addr(offset, frame_size)
-                  self.emit("\tmov\tx11, x9")
-                  self.emit("\tldr\tx9, [sp]")
-                  self.emit("\tldr\tx10, [sp, #8]")
-                  self.emit("\tadd\tsp, sp, #16")
-                  self.emit_store_typed("x9", "x11", ty)
-                }
-                _ => self.emit_store_local("x9", offset, frame_size)
+          // `is_aggregate_type` reads through the `_Atomic` and `_Alignas`
+          // wrappers that a match on the written type misses, which is what
+          // sent `_Alignas(16) char s[8] = "hi"` down the scalar path.
+          if is_aggregate_type(ty) {
+            match expr {
+              Number(0, _, _) => {
+                // Zero-initialize aggregate types properly
+                let size = self.type_size(ty)
+                self.emit_local_addr(offset, frame_size)
+                self.emit("\tmov\tx0, x9")
+                self.emit("\tmov\tx1, #0")
+                self.emit_load_int("x2", size.to_int64())
+                self.emit("\tbl\t_memset")
               }
+              rhs => {
+                self.emit_local_addr(offset, frame_size)
+                self.emit_init_value_at_addr(ty, rhs, frame_size)
+              }
+            }
+          } else {
+            self.gen_expr(expr, frame_size)
+            self.emit_numeric_conversion(self.type_of(expr, frame_size), ty)
+            self.emit_scalar_conversion_to(ty)
+            match ty {
+              Float => self.emit_store_local("w9", offset, frame_size)
+              SInt128 | UInt128 => {
+                self.emit("\tstr\tx9, [sp, #-16]!")
+                self.emit("\tstr\tx10, [sp, #8]")
+                self.emit_local_addr(offset, frame_size)
+                self.emit("\tmov\tx11, x9")
+                self.emit("\tldr\tx9, [sp]")
+                self.emit("\tldr\tx10, [sp, #8]")
+                self.emit("\tadd\tsp, sp, #16")
+                self.emit_store_typed("x9", "x11", ty)
+              }
+              _ => self.emit_store_local("x9", offset, frame_size)
             }
           }
         None => ()
