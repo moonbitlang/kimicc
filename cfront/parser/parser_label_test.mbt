@@ -4,7 +4,7 @@ test "parse compound with label after goto" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound([For(None, Number(1, _, SInt), None, body)])) =>
+    Some(Compound([For([], Number(1, _, SInt), None, body)])) =>
       match body {
         Compound(inner) => {
           inspect(inner.length(), content="2")

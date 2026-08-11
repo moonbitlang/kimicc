@@ -96,8 +96,14 @@ must know:
   designators included, and `char s[] = "abc"` keeps the string. The parser
   still decides the size the braces imply, because that size is part of the
   type the declaration carries.
-- `int a, b;` becomes a `StmtList` grouping that exists only to hold the two
-  declarations together.
+- `int a, b;` became a `StmtList` grouping that existed only to hold the two
+  declarations together. Done: one `VarDecl` per name, side by side in the
+  block, since the grouping carries nothing a consumer could act on once each
+  name has its own type. `For` took an init list in the same change, because
+  `for (int i = 0, n = len; ...)` is the one place C requires the grouping and
+  the printer now rebuilds it there from `split_declaration`. Declarations that
+  declare nothing -- a `typedef`, a `_Static_assert`, a local prototype, an
+  `asm` statement -- stopped leaving an `ExprStmt(0)` placeholder behind.
 - An anonymous `union { ... };` member becomes a field with an empty name whose
   type is a synthetic `__anon_union_0` tag.
 

@@ -46,10 +46,6 @@ fn Codegen::gen_stmt(
       self.local_offsets = saved_offsets
       self.var_types = saved_types
     }
-    StmtList(stmts) =>
-      for s in stmts {
-        self.gen_stmt(s, frame_size)
-      }
     ExprStmt(expr) => self.gen_expr(expr, frame_size)
     Return(None) => {
       self.emit("\tmov\tx0, #0")
@@ -133,9 +129,8 @@ fn Codegen::gen_stmt(
       self.break_label = Some(end_label)
       self.continue_label = Some(continue_label)
       // init
-      match init {
-        Some(i) => self.gen_stmt(i, frame_size)
-        None => ()
+      for i in init {
+        self.gen_stmt(i, frame_size)
       }
       self.emit(start_label + ":")
       self.gen_expr(cond, frame_size)

@@ -17,6 +17,8 @@ pub fn print_stmt(@parser.Stmt) -> String
 
 pub fn print_type(@ctype.Type) -> String
 
+pub fn split_declaration(@ctype.Type, String) -> (String, String)
+
 // Errors
 
 // Types and methods

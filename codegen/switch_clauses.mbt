@@ -70,7 +70,7 @@ fn collect_switch_clauses(stmt : @parser.Stmt, out : Array[Int64?]) -> Unit {
       collect_switch_clauses(body, out)
     }
     Label(_, body) => collect_switch_clauses(body, out)
-    Compound(stmts) | StmtList(stmts) =>
+    Compound(stmts) =>
       for nested in stmts {
         collect_switch_clauses(nested, out)
       }
@@ -82,7 +82,7 @@ fn collect_switch_clauses(stmt : @parser.Stmt, out : Array[Int64?]) -> Unit {
     }
     While(_, body) | DoWhile(_, body) => collect_switch_clauses(body, out)
     For(init, _, _, body) => {
-      if init is Some(stmt) {
+      for stmt in init {
         collect_switch_clauses(stmt, out)
       }
       collect_switch_clauses(body, out)

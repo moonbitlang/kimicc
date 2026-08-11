@@ -2891,18 +2891,16 @@ fn Interpreter::exec_do_while(
 fn Interpreter::exec_for(
   self : Interpreter,
   frame : InterpFrame,
-  init : @parser.Stmt?,
+  init : Array[@parser.Stmt],
   cond : @parser.Expr,
   inc : @parser.Expr?,
   body : @parser.Stmt,
 ) -> ExecFlow {
-  match init {
-    Some(stmt) =>
-      match self.exec_stmt(frame, stmt) {
-        Normal => ()
-        flow => return flow
-      }
-    None => ()
+  for stmt in init {
+    match self.exec_stmt(frame, stmt) {
+      Normal => ()
+      flow => return flow
+    }
   }
   while !self.failed() && self.eval_expr(frame, cond) != 0L {
     match self.exec_stmt(frame, body) {
@@ -2943,7 +2941,7 @@ fn collect_switch_clauses(stmt : @parser.Stmt, out : Array[Int64?]) -> Unit {
       collect_switch_clauses(body, out)
     }
     Label(_, body) => collect_switch_clauses(body, out)
-    Compound(stmts) | StmtList(stmts) =>
+    Compound(stmts) =>
       for nested in stmts {
         collect_switch_clauses(nested, out)
       }
@@ -2955,7 +2953,7 @@ fn collect_switch_clauses(stmt : @parser.Stmt, out : Array[Int64?]) -> Unit {
     }
     While(_, body) | DoWhile(_, body) => collect_switch_clauses(body, out)
     For(init, _, _, body) => {
-      if init is Some(nested) {
+      for nested in init {
         collect_switch_clauses(nested, out)
       }
       collect_switch_clauses(body, out)
@@ -3012,7 +3010,7 @@ fn Interpreter::exec_switch_body(
   control_ty : @ctype.Type,
 ) -> ExecFlow {
   let stmts = match body {
-    Compound(stmts) | StmtList(stmts) => stmts
+    Compound(stmts) => stmts
     _ => {
       self.fail("unsupported MIR interpreter switch body")
       return Normal
@@ -3120,7 +3118,7 @@ fn Interpreter::exec_stmt(
         }
       }
     While(cond, body) => self.exec_while(frame, cond, body)
-    Compound(stmts) | StmtList(stmts) => self.exec_block(frame, stmts)
+    Compound(stmts) => self.exec_block(frame, stmts)
     VarDecl(ty, name, init) => {
       self.declare_local(frame, ty, name, init)
       Normal
@@ -3148,7 +3146,7 @@ fn Interpreter::exec_func_body_from_label(
   target : String,
 ) -> ExecFlow {
   let stmts = match body {
-    Compound(stmts) | StmtList(stmts) => stmts
+    Compound(stmts) => stmts
     _ => {
       self.fail("unsupported MIR interpreter goto body")
       return Normal

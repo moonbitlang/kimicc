@@ -7127,7 +7127,7 @@ fn X64Codegen::collect_stmt_locals(
         None => ()
       }
     }
-    Compound(stmts) | StmtList(stmts) =>
+    Compound(stmts) =>
       for s in stmts {
         self.collect_stmt_locals(s)
       }
@@ -7147,9 +7147,8 @@ fn X64Codegen::collect_stmt_locals(
       self.collect_stmt_locals(body)
     }
     For(init, cond, inc, body) => {
-      match init {
-        Some(stmt) => self.collect_stmt_locals(stmt)
-        None => ()
+      for stmt in init {
+        self.collect_stmt_locals(stmt)
       }
       self.collect_expr_locals(cond)
       match inc {
@@ -7192,10 +7191,6 @@ fn X64Codegen::gen_stmt(self : X64Codegen, stmt : @parser.Stmt) -> Unit {
       self.local_offsets = saved_offsets
       self.var_types = saved_types
     }
-    StmtList(stmts) =>
-      for s in stmts {
-        self.gen_stmt(s)
-      }
     ExprStmt(expr) => self.gen_expr(expr)
     Return(None) => {
       self.emit("\tmov\trax, 0")
@@ -7291,9 +7286,8 @@ fn X64Codegen::gen_stmt(self : X64Codegen, stmt : @parser.Stmt) -> Unit {
       let old_continue = self.continue_label
       self.break_label = Some(end_label)
       self.continue_label = Some(continue_label)
-      match init {
-        Some(stmt) => self.gen_stmt(stmt)
-        None => ()
+      for stmt in init {
+        self.gen_stmt(stmt)
       }
       self.emit(start_label + ":")
       self.gen_cond_jump_false(cond, end_label)

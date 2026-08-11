@@ -16,11 +16,16 @@ point:
 Concretely, `parse(print(p))` is structurally equal to `p` for anything you
 build or transform, so a generate/print/parse cycle does not drift.
 
-The first print may canonicalize. The one canonicalization that changes the AST
-is declaration grouping: the parser records `int a, b;` as a `StmtList` holding
-two `VarDecl`s, and the printer emits one declarator per statement, which
-erases the grouping. That grouping carries no meaning, and one declarator per
-statement is the friendlier shape to generate and to consume.
+The first print no longer canonicalizes anything. `int a, b;` used to parse to a
+`StmtList` grouping that the printer erased; the parser now records one
+`VarDecl` per name and the printer writes one declaration per name, so the two
+agree.
+
+The `for` initializer is the one place C insists on the grouping -- `for (int i
+= 0; int n = len; ...)` is not C -- so several names declared there are written
+back as one declaration, `for (int i = 0, n = len; ...)`, using
+`split_declaration` to share the specifier. Several expressions there join with
+the comma operator instead.
 
 What the printer does *not* preserve is the original text: comments, spacing,
 macro spellings, and redundant parentheses are all gone, because the AST does
