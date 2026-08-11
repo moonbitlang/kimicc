@@ -18,6 +18,8 @@ pub fn parse_for_target(String, @target.Target) -> Program raise ParseError
 
 pub fn position_at(String, Int) -> Position
 
+pub fn scalar_initializer_value(Expr) -> Expr
+
 pub fn validate_semantics(Program) -> Result[Unit, String]
 
 // Errors

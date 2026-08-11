@@ -1371,7 +1371,9 @@ fn X64Codegen::emit_init_scalar_at_addr(
   ty : @parser.Type,
   init_expr : @parser.Expr,
 ) -> Unit {
-  let value = x64_initializer_value(init_expr)
+  // Braces may wrap a scalar initializer, so read through them to the value
+  // they denote before generating it.
+  let value = @parser.scalar_initializer_value(init_expr)
   x64_reject_unsupported_scalar(ty)
   self.emit_push_rax()
   self.gen_expr_as_scalar(value, ty)
@@ -1389,7 +1391,7 @@ fn X64Codegen::emit_init_bitfield_at_addr(
   bit_width : Int,
   init_expr : @parser.Expr,
 ) -> Unit {
-  let value = x64_initializer_value(init_expr)
+  let value = @parser.scalar_initializer_value(init_expr)
   self.emit_push_rax()
   self.gen_expr_as_scalar(value, field_ty)
   self.emit("\tmov\tr10, QWORD PTR [rsp]")
@@ -1426,6 +1428,12 @@ fn X64Codegen::emit_init_value_at_addr(
     match value {
       Array(init_exprs) | CompoundLiteral(_, init_exprs, _) =>
         self.emit_init_aggregate_at_addr(ty, init_exprs)
+      // A string initializing a `char` array initializes the array itself.
+      // Copying `type_size(ty)` bytes from the string constant instead -- what
+      // the fallthrough below would do -- reads past the constant whenever the
+      // array is longer than the literal, and leaves the tail unzeroed.
+      String(text) if ty.core_type() is Array(_, _) =>
+        self.emit_init_string_array_at_addr(ty, text)
       Number(0, _, _) => self.emit_zero_memory_at_rax(ty)
       Call(_, _) if ty.is_aggregate() && self.is_supported_small_aggregate(ty) => {
         self.emit_push_rax()
@@ -1433,6 +1441,18 @@ fn X64Codegen::emit_init_value_at_addr(
         self.emit_store_aggregate_call_result_to_pushed_addr(ty)
       }
       _ => {
+        // What remains is a copy from another object of the same shape. A
+        // scalar here means the braces elided a level -- `int m[2][3] = {1,
+        // 2, 3, 4, 5, 6}` hands `1` to a whole `int[3]` -- which this walker
+        // cannot place, and `gen_aggregate_addr` would quietly leave the
+        // destination address in rax and copy the object over itself.
+        if !self.type_of(value).is_object_aggregate() {
+          abort(
+            "x86-64 backend cannot initialize " +
+            ty.to_string() +
+            " from a scalar initializer; brace elision is not supported",
+          )
+        }
         self.emit_push_rax()
         self.gen_aggregate_addr(value)
         self.emit("\tmov\tr11, rax")
@@ -1444,6 +1464,33 @@ fn X64Codegen::emit_init_value_at_addr(
   } else {
     self.emit_init_scalar_at_addr(ty, value)
   }
+}
+
+///|
+/// Stores a string literal into the `char` array at `rax`, zeroing the whole
+/// object first so a literal shorter than the array pads with NULs and one
+/// exactly as long as it -- `char s[3] = "abc"` -- stores no terminator.
+fn X64Codegen::emit_init_string_array_at_addr(
+  self : X64Codegen,
+  ty : @parser.Type,
+  value : String,
+) -> Unit {
+  guard ty.core_type() is Array(elem_ty, n) else { return }
+  self.emit_zero_memory_at_rax(ty)
+  self.emit_push_rax()
+  let elem_size = self.type_size(elem_ty)
+  let count = if value.length() < n { value.length() } else { n }
+  for i = 0; i < count; i = i + 1 {
+    self.emit("\tmov\trax, QWORD PTR [rsp]")
+    if i * elem_size != 0 {
+      self.emit("\tadd\trax, " + (i * elem_size).to_string())
+    }
+    self.emit_init_scalar_at_addr(
+      elem_ty,
+      @parser.int_literal(value[i].to_int().to_int64(), SInt),
+    )
+  }
+  self.emit("\tadd\trsp, 8")
 }
 
 ///|
@@ -1500,12 +1547,13 @@ fn X64Codegen::emit_init_aggregate_at_addr_with_zero(
             if field_offset != 0 {
               self.emit("\tadd\trax, " + field_offset.to_string())
             }
+            let member_init = designated_member_value(init_expr)
             if bit_width > 0 {
               self.emit_init_bitfield_at_addr(
-                field_ty, field_size, bit_offset, bit_width, init_expr,
+                field_ty, field_size, bit_offset, bit_width, member_init,
               )
             } else {
-              self.emit_init_value_at_addr(field_ty, init_expr)
+              self.emit_init_value_at_addr(field_ty, member_init)
             }
           }
           None => ()
@@ -1534,16 +1582,13 @@ fn X64Codegen::emit_init_aggregate_at_addr_with_zero(
             if field_offset != 0 {
               self.emit("\tadd\trax, " + field_offset.to_string())
             }
+            let member_init = designated_member_value(init_exprs[0])
             if bit_width > 0 {
               self.emit_init_bitfield_at_addr(
-                field_ty,
-                field_size,
-                bit_offset,
-                bit_width,
-                init_exprs[0],
+                field_ty, field_size, bit_offset, bit_width, member_init,
               )
             } else {
-              self.emit_init_value_at_addr(field_ty, init_exprs[0])
+              self.emit_init_value_at_addr(field_ty, member_init)
             }
           }
         None => ()

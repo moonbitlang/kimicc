@@ -512,12 +512,7 @@ fn mir_body_literal_string_arg(expr : @parser.Expr) -> String? {
 
 ///|
 fn mir_body_scalar_initializer_expr(expr : @parser.Expr) -> @parser.Expr {
-  match expr {
-    DesignatedField(_, value)
-    | DesignatedIndex(_, value)
-    | DesignatedRange(_, _, value) => mir_body_scalar_initializer_expr(value)
-    _ => expr
-  }
+  @parser.scalar_initializer_value(expr)
 }
 
 ///|
@@ -682,8 +677,15 @@ fn Program::lower_mir_array_init_stores_impl(
           None => return None
         }
       } else {
+        // Lower against the element type so an array initializing a pointer
+        // element decays to its address. The parser used to emit an assignment
+        // here, which got the decay from the assignment path.
         let value = match
-          self.lower_mir_expr(mir_body_scalar_initializer_expr(value_expr), ctx) {
+          self.lower_mir_expr_for_target_type(
+            elem_ty,
+            mir_body_scalar_initializer_expr(value_expr),
+            ctx,
+          ) {
           Some(value) => value
           None => return None
         }
@@ -1207,11 +1209,15 @@ fn Program::lower_mir_struct_init_stores_impl(
     if !mir_body_scalar_type(field.ty) {
       match value_expr {
         Number(0, _, _) => continue
-        Array(_)
-        | CompoundLiteral(_, _, _)
-        | DesignatedField(_, _)
-        | DesignatedIndex(_, _)
-        | DesignatedRange(_, _, _) => {
+        // Everything else initializes the member as an object of its own, so
+        // it goes to the lowering for the member's type and that decides what
+        // it can place. Braces and designators describe the member's contents;
+        // a string fills a `char` array member (a pointer member is scalar, so
+        // the test above has already routed that away); and any other
+        // expression is an object of the same shape to copy from, which is how
+        // `struct { ...; JSValue method; } c = { ..., argv[0] }` is written.
+        // That last one used to arrive as an assignment the parser emitted.
+        _ => {
           let layout = match self.field_layout(ty, field.name) {
             Some(layout) => layout
             None => return None
@@ -1255,11 +1261,19 @@ fn Program::lower_mir_struct_init_stores_impl(
           }
           continue
         }
-        _ => return None
       }
     }
+    // Lower against the member type so an array initializing a pointer member
+    // decays to its address -- `struct { const char *z; ... } a[] = { { name,
+    // ... } }` over a `static const char name[]`, which sqlite writes in
+    // `sqlite3WindowUpdate`. The parser used to emit an assignment here, which
+    // got the decay from the assignment path.
     let value = match
-      self.lower_mir_expr(mir_body_scalar_initializer_expr(value_expr), ctx) {
+      self.lower_mir_expr_for_target_type(
+        field.ty,
+        mir_body_scalar_initializer_expr(value_expr),
+        ctx,
+      ) {
       Some(value) => value
       None => return None
     }

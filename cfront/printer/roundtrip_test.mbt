@@ -308,3 +308,52 @@ test "printing is idempotent" {
   assert_eq(once, twice)
   assert_eq(twice, thrice)
 }
+
+///|
+/// Local aggregate initializers, which the parser used to lower into a `= 0`
+/// marker plus element assignments. That shape had no printable form -- the
+/// assignments were ordinary statements by the time the printer saw them, so a
+/// declaration came back out as several -- and these round-trip only because
+/// the AST now records the braces that were written.
+test "roundtrip local aggregate initializers" {
+  let source =
+    #|struct P { int x; int y; };
+    #|struct Nest { struct P p; int tail; };
+    #|union U { int i; char c[4]; };
+    #|int shapes(void) {
+    #|  int partial[5] = { 1, 2, 3 };
+    #|  int inferred[] = { 1, 2, 3 };
+    #|  int empty[3] = { 0 };
+    #|  int indexed[6] = { [2] = 7, [4] = 9 };
+    #|  int ranged[6] = { [1 ... 3] = 9 };
+    #|  struct P positional = { 1, 2 };
+    #|  struct P designated = { .y = 5 };
+    #|  struct P structs[2] = { { 1, 2 }, { 3, 4 } };
+    #|  struct Nest nested = { { 1, 2 }, 3 };
+    #|  struct Nest deep = { .p = { .y = 7 }, .tail = 3 };
+    #|  union U tagged = { .i = 42 };
+    #|  int matrix[2][3] = { { 1, 2, 3 }, { 4, 5, 6 } };
+    #|  int braced[2] = { { 5 }, { 37 } };
+    #|  return partial[0] + inferred[0] + empty[0] + indexed[2] + ranged[1] +
+    #|      positional.x + designated.y + structs[1].x + nested.tail + deep.p.y +
+    #|      tagged.i + matrix[1][2] + braced[0];
+    #|}
+  assert_roundtrips(source)
+}
+
+///|
+/// A string initializing a `char` array is the other construct the parser used
+/// to expand, one element assignment per byte plus the terminator.
+test "roundtrip char array string initializers" {
+  let source =
+    #|struct Named { char name[8]; int id; };
+    #|int strings(void) {
+    #|  char inferred[] = "abc";
+    #|  char padded[8] = "hi";
+    #|  char exact[3] = "abc";
+    #|  char escaped[] = "a\tb\\c";
+    #|  struct Named member = { "hi", 5 };
+    #|  return inferred[0] + padded[1] + exact[2] + escaped[0] + member.id;
+    #|}
+  assert_roundtrips(source)
+}

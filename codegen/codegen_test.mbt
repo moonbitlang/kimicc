@@ -9763,3 +9763,58 @@ test "generate builtin huge_valf" {
   let assembly = codegen.generate(prog)
   inspect(assembly.contains("movz\tw9, #0x7F80, lsl #16"), content="true")
 }
+
+///|
+/// Brace elision -- `int m[2][3] = {1, 2, 3, 4, 5, 6}`, where the braces for
+/// each row are left out -- is not supported. What matters is that it stays a
+/// compile error: the parser used to expand a local initializer into element
+/// assignments and this program was rejected by the semantic check, because
+/// assigning to `m[0]` assigns to an array. The initializer now reaches the
+/// backends intact, and each has to decline it rather than place `1` into a
+/// whole `int[3]` and silently produce zeros.
+test "strict MIR rejects brace elision rather than miscompiling it" {
+  let source =
+    #|int main(void) {
+    #|  int m[2][3] = { 1, 2, 3, 4, 5, 6 };
+    #|  return m[1][0];
+    #|}
+  let mir = @mir.lower(@parser.parse(source), @target.Target::default())
+  match @mir_codegen.generate_assembly_from_mir_module_strict(mir.to_module()) {
+    Ok(_) => abort("expected brace elision to be rejected")
+    Err(err) =>
+      inspect(err.contains("missing MIR body for main"), content="true")
+  }
+}
+
+///|
+/// A string initializing a `char` array becomes element stores on x86-64, not
+/// a block copy from the string constant.
+///
+/// The parser used to expand `char s[] = "abc"` itself, so this backend saw a
+/// string only for an explicitly sized array -- and aborted on it, with
+/// "expression is not addressable", because the fallthrough asks for the
+/// address of an object to copy from and a string literal is not one. The
+/// parser change routes the inferred-size form here too, so both spellings
+/// needed this path rather than one of them keeping a latent abort.
+test "x86-64 expands a char array string initializer into stores" {
+  let target = match @target.Target::parse("linux-amd64") {
+    Some(target) => target
+    None => abort("target parse failed")
+  }
+  let source =
+    #|int main(void) {
+    #|  char s[8] = "hi";
+    #|  return s[0] + s[7];
+    #|}
+  let assembly = @codegen.generate_assembly_for_target(
+    @parser.parse_for_target(source, target),
+    target,
+  )
+  // The two characters are stored as immediates...
+  inspect(assembly.contains("\tmov\trax, 104"), content="true")
+  inspect(assembly.contains("\tmov\trax, 105"), content="true")
+  // ...the whole object is zeroed first, so the six trailing bytes are NUL...
+  inspect(assembly.contains("\tmov\tQWORD PTR [rax], 0"), content="true")
+  // ...and no string constant is emitted to copy from.
+  inspect(assembly.contains(".asciz"), content="false")
+}

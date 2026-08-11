@@ -948,28 +948,21 @@ test "parse aligned local array initializer assignments" {
     #|  return 0;
     #|}
   let prog = @parser.parse(source)
+  // The alignment wrapper stays outside the element count the braces imply.
   match prog.decls[0].body {
-    Some(Compound([StmtList(inner), Return(Some(Number(0, _, SInt)))])) => {
-      inspect(inner.length(), content="3")
-      match inner[0] {
-        VarDecl(Aligned(Array(ULongLong, 4), 8), "acc", Some(Number(0, _, _))) =>
-          ()
-        _ => fail("Expected aligned local array zero declaration")
-      }
-      match inner[1] {
-        ExprStmt(
-          Assign(ArrayAccess(Var("acc"), Number(0, _, SInt)), Number(10, _, _))
-        ) => ()
-        _ => fail("Expected aligned acc[0]=10")
-      }
-      match inner[2] {
-        ExprStmt(
-          Assign(ArrayAccess(Var("acc"), Number(1, _, SInt)), Number(20, _, _))
-        ) => ()
-        _ => fail("Expected aligned acc[1]=20")
-      }
-    }
-    _ => fail("Expected lowered aligned local array initializer")
+    Some(
+      Compound(
+        [
+          VarDecl(
+            Aligned(Array(ULongLong, 4), 8),
+            "acc",
+            Some(Array([Number(10, _, _), Number(20, _, _)]))
+          ),
+          Return(Some(Number(0, _, SInt))),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected aligned local array initializer recorded as written")
   }
 }
 
@@ -1256,48 +1249,22 @@ test "parse array initializer infers size" {
   let source = "int main() { int arr[] = {1, 2, 3}; return 0; }"
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
+  // One declarator is one statement: there is no grouping left to hold
+  // element assignments that the parser no longer emits.
   match decl.body {
-    Some(Compound(outer)) => {
-      inspect(outer.length(), content="2")
-      match outer[0] {
-        StmtList(inner) => {
-          inspect(inner.length(), content="4")
-          match inner[0] {
-            VarDecl(Array(SInt, 3), "arr", Some(Number(0, _, _))) => ()
-            _ => fail("Expected Array(SInt, 3) var decl")
-          }
-          match inner[1] {
-            ExprStmt(
-              Assign(
-                ArrayAccess(Var("arr"), Number(0, _, SInt)),
-                Number(1, _, _)
-              )
-            ) => ()
-            _ => fail("Expected arr[0]=1")
-          }
-          match inner[2] {
-            ExprStmt(
-              Assign(
-                ArrayAccess(Var("arr"), Number(1, _, SInt)),
-                Number(2, _, _)
-              )
-            ) => ()
-            _ => fail("Expected arr[1]=2")
-          }
-          match inner[3] {
-            ExprStmt(
-              Assign(
-                ArrayAccess(Var("arr"), Number(2, _, SInt)),
-                Number(3, _, _)
-              )
-            ) => ()
-            _ => fail("Expected arr[2]=3")
-          }
-        }
-        _ => fail("Expected inner compound")
-      }
-    }
-    _ => fail("Expected compound body")
+    Some(
+      Compound(
+        [
+          VarDecl(
+            Array(SInt, 3),
+            "arr",
+            Some(Array([Number(1, _, _), Number(2, _, _), Number(3, _, _)]))
+          ),
+          Return(Some(_)),
+        ]
+      )
+    ) => ()
+    _ => fail("Expected array initializer recorded as written")
   }
 }
 
@@ -1307,21 +1274,19 @@ test "parse array initializer with expression element" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound(outer)) =>
-      match outer[0] {
-        StmtList(inner) =>
-          match inner[1] {
-            ExprStmt(
-              Assign(
-                ArrayAccess(Var("arr"), Number(0, _, SInt)),
-                Binary("+", Number(1, _, SInt), Number(1, _, _))
-              )
-            ) => ()
-            _ => fail("Expected arr[0]=1+1")
-          }
-        _ => fail("Expected inner StmtList")
-      }
-    _ => fail("Expected compound body")
+    Some(
+      Compound(
+        [
+          VarDecl(
+            Array(SInt, 1),
+            "arr",
+            Some(Array([Binary("+", Number(1, _, SInt), Number(1, _, _))]))
+          ),
+          ..,
+        ]
+      )
+    ) => ()
+    _ => fail("Expected unfolded element expression in the initializer")
   }
 }
 
@@ -1348,21 +1313,40 @@ test "parse scalar brace initializer values" {
         VarDecl(SInt, "y", Some(Number(23, _, _))) => ()
         _ => fail("Expected nested scalar local brace initializer")
       }
-      match inner[3] {
-        ExprStmt(
-          Assign(ArrayAccess(Var("a"), Number(0, _, SInt)), Number(5, _, _))
+      // Braces around each element survive into the AST; reading through them
+      // to the scalar they denote is `scalar_initializer_value`'s job, not the
+      // parser's.
+      match inner[2] {
+        VarDecl(
+          Array(SInt, 2),
+          "a",
+          Some(Array([Array([Number(5, _, _)]), Array([Number(37, _, _)])]))
         ) => ()
-        _ => fail("Expected scalar array element brace initializer")
+        _ => fail("Expected array initializer recorded as written")
       }
-      match inner[4] {
-        ExprStmt(
-          Assign(ArrayAccess(Var("a"), Number(1, _, SInt)), Number(37, _, _))
-        ) => ()
-        _ => fail("Expected nested scalar array element brace initializer")
-      }
+      assert_eq(inner.length(), 3)
     }
-    _ => fail("Expected lowered scalar brace initializer body")
+    _ => fail("Expected scalar brace initializer body")
   }
+}
+
+///|
+test "scalar_initializer_value reads through braces and designators" {
+  let five = @parser.int_literal(5, SInt)
+  assert_true(
+    @parser.scalar_initializer_value(Array([Array([five])])) is Number(5, _, _),
+  )
+  assert_true(
+    @parser.scalar_initializer_value(DesignatedField("f", Array([five])))
+    is Number(5, _, _),
+  )
+  // Empty braces denote zero.
+  assert_true(@parser.scalar_initializer_value(Array([])) is Number(0, _, _))
+  // A compound literal is an expression in its own right, so it is left alone.
+  assert_true(
+    @parser.scalar_initializer_value(CompoundLiteral(SInt, [five], 0))
+    is CompoundLiteral(_, _, _),
+  )
 }
 
 ///|
@@ -1373,27 +1357,16 @@ test "parse multiple vars one with array initializer" {
   match decl.body {
     Some(Compound(outer)) =>
       match outer[0] {
-        StmtList(inner) => {
-          match inner[0] {
-            VarDecl(SInt, "a", Some(Number(1, _, _))) => ()
-            _ => fail("Expected a=1")
-          }
-          match inner[1] {
-            VarDecl(Array(SInt, 1), "b", Some(Number(0, _, _))) => ()
-            _ => fail("Expected b array decl")
-          }
-          match inner[2] {
-            ExprStmt(
-              Assign(ArrayAccess(Var("b"), Number(0, _, SInt)), Number(2, _, _))
-            ) => ()
-            _ => fail("Expected b[0]=2")
-          }
-          match inner[3] {
-            VarDecl(SInt, "c", Some(Number(3, _, _))) => ()
-            _ => fail("Expected c=3")
-          }
-        }
-        _ => fail("Expected inner compound")
+        // `StmtList` still groups the three declarators, which is the one
+        // parser-internal grouping this step has not yet removed.
+        StmtList(
+          [
+            VarDecl(SInt, "a", Some(Number(1, _, _))),
+            VarDecl(Array(SInt, 1), "b", Some(Array([Number(2, _, _)]))),
+            VarDecl(SInt, "c", Some(Number(3, _, _))),
+          ]
+        ) => ()
+        _ => fail("Expected three declarators recorded as written")
       }
     _ => fail("Expected compound body")
   }
@@ -1405,16 +1378,9 @@ test "parse array initializer inferred size" {
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
   match decl.body {
-    Some(Compound(stmts)) =>
-      match stmts[0] {
-        StmtList(inner) =>
-          match inner[0] {
-            VarDecl(Array(SInt, 3), "arr", Some(Number(0, _, _))) => ()
-            _ => fail("Expected VarDecl with Array(SInt, 3)")
-          }
-        _ => fail("Expected StmtList from array init lowering")
-      }
-    _ => fail("Expected compound body")
+    Some(Compound([VarDecl(Array(SInt, 3), "arr", Some(Array(items))), ..])) =>
+      assert_eq(items.length(), 3)
+    _ => fail("Expected VarDecl with Array(SInt, 3)")
   }
 }
 
@@ -1423,17 +1389,11 @@ test "parse array initializer explicit size" {
   let source = "int main(){int arr[5]={1,2}; return 0;}"
   let prog = @parser.parse(source)
   let decl = prog.decls[0]
+  // An explicit size wins over the two elements the braces supply.
   match decl.body {
-    Some(Compound(stmts)) =>
-      match stmts[0] {
-        StmtList(inner) =>
-          match inner[0] {
-            VarDecl(Array(SInt, 5), "arr", Some(Number(0, _, _))) => ()
-            _ => fail("Expected VarDecl with Array(SInt, 5)")
-          }
-        _ => fail("Expected StmtList from array init lowering")
-      }
-    _ => fail("Expected compound body")
+    Some(Compound([VarDecl(Array(SInt, 5), "arr", Some(Array(items))), ..])) =>
+      assert_eq(items.length(), 2)
+    _ => fail("Expected VarDecl with Array(SInt, 5)")
   }
 }
 
@@ -1708,16 +1668,11 @@ test "check ast for array init locals" {
       inspect(stmts.length(), content="7")
       assert_true(stmts[0] is VarDecl(_, "buf", _))
       assert_true(stmts[1] is VarDecl(_, "p", _))
-      match stmts[2] {
-        StmtList(inner) => {
-          inspect(inner.length(), content="6")
-          assert_true(inner[0] is VarDecl(_, "src", _))
-          for i = 1; i < inner.length(); i = i + 1 {
-            assert_true(inner[i] is ExprStmt(_))
-          }
-        }
-        _ => fail("Expected lowered char array initializer")
-      }
+      // `char src[] = "abcd"` keeps the string it was written with, sized to
+      // include the terminator, rather than five element assignments.
+      assert_true(
+        stmts[2] is VarDecl(Array(SChar, 5), "src", Some(String("abcd"))),
+      )
       assert_true(stmts[3] is VarDecl(_, "dst", _))
       assert_true(stmts[4] is VarDecl(_, "buf2", _))
       assert_true(stmts[5] is VarDecl(_, "buf3", _))
