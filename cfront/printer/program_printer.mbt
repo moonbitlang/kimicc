@@ -584,9 +584,11 @@ fn write_func_decl(buf : StringBuilder, decl : @parser.FuncDecl) -> Unit {
       buf.write_string("\n\n")
     }
     Some(other) => {
-      buf.write_string(" {\n")
-      buf.write_string(print_stmt(other))
-      buf.write_string("\n}\n\n")
+      buf <+
+        $| {
+        $|\{print_stmt(other)}
+        $|}
+      buf.write_string("\n\n")
     }
     None => buf.write_string(";\n\n")
   }
