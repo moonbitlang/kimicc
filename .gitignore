@@ -6,3 +6,4 @@ test/debug_ast.mbt
 testdir/
 -.s
 a.out
+.repos/
