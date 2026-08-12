@@ -77,3 +77,38 @@ test "an open if behind a switch is braced before an else" {
   // The then-branch is braced, so the else stays with the outer if.
   assert_true(printed.contains("} else"))
 }
+
+///|
+/// Floating literals over random finite doubles: the text `double_literal`
+/// formats survives print and parse, and the value it denotes is exactly the
+/// input -- `@ctype.floating_literal_value` reads the text back.
+test "double literals round-trip over random values" {
+  let state = @splitmix.new(seed=20260812)
+  let mut checked = 0
+  while checked < 2000 {
+    let bits = state.next_int64()
+    let value = bits.reinterpret_as_double()
+    // Non-finite values have no C literal; skip NaN and the infinities.
+    if value != value ||
+      value == @double.infinity ||
+      value == @double.neg_infinity {
+      continue
+    }
+    let literal = @parser.double_literal(value)
+    let program = @build.program(globals=[
+      @build.global(Double, "k", init=Scalar(literal)),
+    ])
+    let printed = @printer.print_program(program)
+    let reparsed = @parser.parse(printed)
+    assert_eq(reparsed, program)
+    // The denoted value is bit-exact.
+    match reparsed.globals[0].init {
+      Some(Scalar(FloatLiteral(text, _))) =>
+        assert_eq(@ctype.floating_literal_value(text, Double), value)
+      Some(Scalar(Unary("-", FloatLiteral(text, _)))) =>
+        assert_eq(-@ctype.floating_literal_value(text, Double), value)
+      other => fail("unexpected init shape: \{Repr(other)}")
+    }
+    checked += 1
+  }
+}

@@ -1,0 +1,57 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/cfront/build"
+
+import {
+  "bobzhang/cfront/ctype",
+  "bobzhang/cfront/parser",
+}
+
+// Values
+pub fn add_assign(@parser.Expr, @parser.Expr) -> @parser.Stmt
+
+pub fn aggregate(String, Array[@parser.Param], is_union? : Bool, pack? : Int) -> @parser.StructDecl
+
+pub fn assign(@parser.Expr, @parser.Expr) -> @parser.Stmt
+
+pub fn call(String, Array[@parser.Expr]) -> @parser.Expr
+
+pub fn cast(@ctype.Type, @parser.Expr) -> @parser.Expr
+
+pub fn decl(@ctype.Type, String, init? : @parser.Expr) -> @parser.Stmt
+
+pub fn field(@ctype.Type, String) -> @parser.Param
+
+pub fn for_range(String, @parser.Expr, Array[@parser.Stmt]) -> @parser.Stmt
+
+pub fn func(@ctype.Type, String, Array[@parser.Param], Array[@parser.Stmt], variadic? : Bool, is_static? : Bool, is_inline? : Bool) -> @parser.FuncDecl
+
+pub fn global(@ctype.Type, String, init? : @parser.GlobalInit, is_static? : Bool, is_extern? : Bool) -> @parser.GlobalDecl
+
+pub fn mul_assign(@parser.Expr, @parser.Expr) -> @parser.Stmt
+
+pub fn ordered_program(Array[Item]) -> @parser.Program
+
+pub fn param(@ctype.Type, String) -> @parser.Param
+
+pub fn program(structs? : Array[@parser.StructDecl], globals? : Array[@parser.GlobalDecl], decls? : Array[@parser.FuncDecl]) -> @parser.Program
+
+pub fn prototype(@ctype.Type, String, Array[@parser.Param], variadic? : Bool, is_static? : Bool) -> @parser.FuncDecl
+
+pub fn ret(value? : @parser.Expr) -> @parser.Stmt
+
+pub fn sub_assign(@parser.Expr, @parser.Expr) -> @parser.Stmt
+
+pub fn v(String) -> @parser.Expr
+
+// Errors
+
+// Types and methods
+pub(all) enum Item {
+  Aggregate(@parser.StructDecl)
+  Global(@parser.GlobalDecl)
+  Func(@parser.FuncDecl)
+}
+
+// Type aliases
+
+// Traits

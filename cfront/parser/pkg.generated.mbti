@@ -8,6 +8,14 @@ import {
 }
 
 // Values
+pub fn double_literal(Double) -> Expr
+
+pub fn float_literal(Float) -> Expr
+
+pub fn infer_global_array_type(@ctype.Type, GlobalInit?) -> @ctype.Type
+
+pub fn infer_local_array_type(@ctype.Type, Expr?) -> @ctype.Type
+
 pub fn int_literal(Int64, @ctype.Type) -> Expr
 
 pub fn packed_align(Int?, Int) -> Int
@@ -64,6 +72,20 @@ pub(all) enum Expr {
   DesignatedIndex(Int64, Expr)
   DesignatedRange(Int64, Int64, Expr)
 } derive(Eq, @debug.Debug)
+pub fn Expr::eq_expr(Self, Self) -> Self
+pub fn Expr::ge(Self, Self) -> Self
+pub fn Expr::gt(Self, Self) -> Self
+#alias("_[_]")
+pub fn Expr::index(Self, Self) -> Self
+pub fn Expr::le(Self, Self) -> Self
+pub fn Expr::lt(Self, Self) -> Self
+pub fn Expr::ne_expr(Self, Self) -> Self
+pub fn Expr::rem(Self, Self) -> Self
+pub impl Add for Expr
+pub impl Div for Expr
+pub impl Mul for Expr
+pub impl Neg for Expr
+pub impl Sub for Expr
 
 pub(all) struct FuncDecl {
   ret : @ctype.Type
