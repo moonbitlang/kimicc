@@ -49,13 +49,24 @@ fn write_stmt(buf : StringBuilder, stmt : @parser.Stmt, indent : Int) -> Unit {
       buf.write_string("if (")
       buf.write_string(print_expr(cond))
       buf.write_string(") ")
-      write_branch(buf, then_branch, indent)
+      // A then-branch whose trailing substatement is an `if` without an
+      // `else` would capture this statement's `else` on reparse -- the
+      // dangling-else rule binds it to the nearest open `if` -- so such a
+      // branch is braced regardless of what was written.
       match else_branch {
         Some(alternative) => {
+          if branch_captures_else(then_branch) {
+            match then_branch {
+              Compound(body) => write_block(buf, body, indent)
+              other => write_block(buf, [other], indent)
+            }
+          } else {
+            write_branch(buf, then_branch, indent)
+          }
           buf.write_string(" else ")
           write_branch(buf, alternative, indent)
         }
-        None => ()
+        None => write_branch(buf, then_branch, indent)
       }
     }
     While(cond, body) => {
@@ -176,6 +187,23 @@ fn write_block(
   }
   write_indent(buf, indent)
   buf.write_string("}")
+}
+
+///|
+/// Whether a statement's trailing substatement is an `if` with no `else`,
+/// which would capture an `else` written after it. The walk follows every
+/// construct whose last token can be a substatement: the open `if` may hide
+/// at the end of a loop body or behind a label.
+fn branch_captures_else(stmt : @parser.Stmt) -> Bool {
+  match stmt {
+    If(_, _, None) => true
+    If(_, _, Some(alternative)) => branch_captures_else(alternative)
+    While(_, body) | For(_, _, _, body) | Switch(_, body) =>
+      branch_captures_else(body)
+    Case(_, inner) | Default(inner) | Label(_, inner) =>
+      branch_captures_else(inner)
+    _ => false
+  }
 }
 
 ///|
