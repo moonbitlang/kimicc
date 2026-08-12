@@ -9,11 +9,13 @@
 /// The checkpoint is 60MB and not fetched by CI; the test skips when
 /// `.repos/stories15M.bin` is absent and runs wherever it exists.
 async test "generated engine matches llama2.c on stories15M" {
+  // A single command, so the capture's output redirect applies to it as a
+  // whole: a `&&` chain would bind the redirect to its last link only, and
+  // the absent case would produce no output file at all.
   let have = run_command_capture(
-    "test -f .repos/stories15M.bin && test -f .repos/llama2.c/run.c && echo yes",
-    "real_model_present",
+    "ls .repos/stories15M.bin .repos/llama2.c/run.c", "real_model_present",
   )
-  if !have.output.contains("yes") {
+  if have.code != 0 {
     println("skipped: .repos/stories15M.bin or llama2.c not present")
     return
   }
