@@ -13,8 +13,7 @@ async test "generated engine matches llama2.c on stories15M" {
   // whole: a `&&` chain would bind the redirect to its last link only, and
   // the absent case would produce no output file at all.
   let have = run_command_capture(
-    "ls .repos/stories15M.bin .repos/llama2.c/run.c",
-    "real_model_present",
+    "ls .repos/stories15M.bin .repos/llama2.c/run.c", "real_model_present",
   )
   if have.code != 0 {
     println("skipped: .repos/stories15M.bin or llama2.c not present")
