@@ -4,6 +4,16 @@
 output half of the front end: build or transform a `Program` in MoonBit, print
 it, and hand the text to any C compiler.
 
+"Any C compiler" is tested literally: CI prints the QuickJS and sqlite fixtures
+and hands the results to clang. Three things make the output land as valid C
+rather than merely reparseable text. Top-level entries print in source order
+(`Program::items`), because C requires declaration before use at file scope.
+Every tag is forward-declared at the top -- including tags the program never
+defines -- so no tag's first mention sits inside a prototype's parameter list,
+where it would have prototype scope and be a different type. And an anonymous
+member prints as the untagged inline definition C11 requires for its members to
+reach through, its synthetic `__anon_` tag appearing nowhere in the output.
+
 ## Round-trip guarantee
 
 Printing is **canonical**, not source-preserving. The property it does

@@ -24,11 +24,17 @@ Four capabilities, in the order they gate each other.
    records, and a user can only reason about constructs the AST names honestly.
 3. **Build an AST by hand.** Meta-programming is mostly *construction*, not
    parsing, and the construction API is what a user actually touches.
-4. **Write C back out.** Done: `cfront/printer`, round-tripped against a
-   megabyte of preprocessed QuickJS on every CI run.
+4. **Write C back out.** `cfront/printer`, round-tripped against a megabyte of
+   preprocessed QuickJS on every CI run -- and, since the ordering and
+   anonymous-member work, *compiled* by clang on every CI run, which is the
+   test the round-trip could not make: the round-trip reparses printed output
+   with this project's own parser, which accepts what it itself printed, so a
+   fixed point over invalid C passes it. The printed QuickJS fixture once drew
+   1,174 clang errors while the round-trip was green.
 
-Capability 4 exists. Capability 2 is most of the way there. Capabilities 1 and 3
-are untouched, which is why they lead the plan.
+Capability 4 exists and is now tested against the objective's own words --
+"C another compiler accepts". Capability 2 is most of the way there.
+Capabilities 1 and 3 are untouched, which is why they lead the plan.
 
 ## Where things stand
 
@@ -105,7 +111,16 @@ must know:
   declare nothing -- a `typedef`, a `_Static_assert`, a local prototype, an
   `asm` statement -- stopped leaving an `ExprStmt(0)` placeholder behind.
 - An anonymous `union { ... };` member becomes a field with an empty name whose
-  type is a synthetic `__anon_union_0` tag.
+  type is a synthetic `__anon_union_0` tag. Done: anonymity is first-class on
+  `StructDecl` as `is_anonymous` -- provenance the spelling cannot carry, since
+  real headers write `__anon_` tags of their own -- and it is part of equality,
+  because an empty-named field of an anonymous type is a member whose fields
+  reach through while the same field with a written tag declares nothing.
+  Anonymous definitions print tagless wherever a member site consumes them; the
+  synthesized tag is spelled out only where something else references it, and
+  anonymity may decay true-to-false across such a print, never appear. The
+  synthetic name remains the type's identity in the AST, and tag synthesis
+  skips taken numbers so a reparse lands on the same names.
 
 Each of these is a parser internal that a user of the suite should never see.
 Moving them into MIR lowering is what turns the AST from *faithful* into
@@ -219,7 +234,10 @@ not gate anything above and should not be confused with it.
 
 - A function returning a function pointer does not reparse: `void (*f(int))(void)`
   is read back as `void *f(int)`. Affects the tinycc and sqlite3 fixtures, and is
-  why the tinycc fixture is not round-tripped in CI.
+  why the tinycc fixture is not round-tripped in CI. It is also the whole
+  residue of "printed sqlite compiles under clang": thirteen diagnostics, all
+  tracing to `xDlSym` and calls through it, allowed by pattern in the e2e gate
+  until this parse is fixed.
 - `int *(*p)[2]` is misparsed as `Pointer(Pointer(Array))`.
 - `int * _Atomic pa = &target;` is dropped from the program entirely.
 - `1e400` lexes to `0.0` rather than infinity.
@@ -233,7 +251,12 @@ not gate anything above and should not be confused with it.
 **The AST keeps the surface form; MIR desugars.** Where the parser lowers on the
 way in, the AST should record what was written and the lowering moves into MIR.
 This is the principle behind Step B, and it answers where a hoisted static local
-belongs: where it was written, inside the function, with MIR lifting it.
+belongs: where it was written, inside the function, with MIR lifting it. The
+hoisting is now also the whole residue of "printed QuickJS compiles under
+clang": the interpreter's computed-goto dispatch table is a static local full
+of `&&label` addresses, and hoisted to file scope those are outside any
+function. Two diagnostics, allowed by pattern in the e2e gate until statics
+stop being hoisted.
 
 **Literals keep the text that was written.** `0xff` and `255` denote the same
 value but are not the same program text, and a printer working from the value

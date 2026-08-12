@@ -19,9 +19,12 @@ test "generated sibling declarations print as C" {
     VarDecl(Array(SChar, 4), "buf", Some(String("hi"))),
     Return(Some(Deref(Var("p")))),
   ]
+  // `items` stays empty: a hand-built program may skip the ordered view and
+  // print in grouped order.
   let program : @parser.Program = {
     structs: [],
     globals: [],
+    items: [],
     decls: [
       {
         ret: SInt,

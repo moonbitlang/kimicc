@@ -543,6 +543,11 @@ fn Parser::parse_return_stmt(self : Parser) -> Stmt raise ParseError {
 fn Parser::parse_compound_stmt(self : Parser) -> Stmt raise ParseError {
   let saved_value_types = self.value_types.copy()
   let saved_tags = self.enter_tag_scope()
+  // Statics bind lexically like everything else: a nested block's shadowing
+  // `static int x` gets its own symbol, and when the block ends, references
+  // to `x` must go back to the outer object's symbol rather than stay bound
+  // to the inner one.
+  let saved_static_locals = self.static_locals.copy()
   self.expect(LBrace)
   let stmts = []
   while self.token != RBrace {
@@ -551,6 +556,7 @@ fn Parser::parse_compound_stmt(self : Parser) -> Stmt raise ParseError {
   self.expect(RBrace)
   self.value_types = saved_value_types
   self.exit_tag_scope(saved_tags)
+  self.static_locals = saved_static_locals
   Compound(stmts)
 }
 
@@ -558,13 +564,35 @@ fn Parser::parse_compound_stmt(self : Parser) -> Stmt raise ParseError {
 /// Helper to register a function-local static variable as a global.
 /// Returns the mangled global name and adds the mapping to static_locals.
 fn Parser::register_static_local(self : Parser, name : String) -> String {
-  let mangled = if self.current_func_name == "" {
+  let base = if self.current_func_name == "" {
     name
   } else {
     "_" + self.current_func_name + "_" + name
   }
+  // Distinct blocks of one function may each declare a static with the same
+  // name -- sqlite's `iLn` counters do -- and each is its own object with its
+  // own storage. A shared mangled name would emit one global several times
+  // over, so later ones take a numbered suffix. References resolve through
+  // `static_locals`, which now points at the newest, matching the lexical
+  // scope the reference sits in for straight-line code.
+  let mut mangled = base
+  let mut attempt = 2
+  while self.global_name_taken(mangled) {
+    mangled = base + "_" + attempt.to_string()
+    attempt += 1
+  }
   self.static_locals[name] = mangled
   mangled
+}
+
+///|
+fn Parser::global_name_taken(self : Parser, name : String) -> Bool {
+  for global in self.globals {
+    if global.name == name {
+      return true
+    }
+  }
+  false
 }
 
 ///|
@@ -761,7 +789,10 @@ fn Parser::parse_var_decl_stmts(self : Parser) -> Array[Stmt] raise ParseError {
   }
   let stmts = []
   // Parse first declarator
-  let decl = self.parse_declarator(spec.base_type)
+  let decl = self.parse_declarator(
+    spec.base_type,
+    base_is_function=spec.base_is_function,
+  )
   let post_decl_attrs = self.skip_attributes_info()
   let decl_ty = self.apply_decl_attrs(
     apply_decl_align(resolve_var_type(decl), spec.align),
@@ -849,7 +880,7 @@ fn Parser::parse_var_decl_stmts(self : Parser) -> Array[Stmt] raise ParseError {
     }
     let (final_ty, init) = self.parse_static_initializer(decl_ty)
     if spec.is_static {
-      self.globals.push({
+      self.add_global({
         ty: final_ty,
         name: mangled,
         init,
@@ -861,7 +892,7 @@ fn Parser::parse_var_decl_stmts(self : Parser) -> Array[Stmt] raise ParseError {
         section: None,
       })
     } else {
-      self.globals.push({
+      self.add_global({
         ty: final_ty,
         name: mangled,
         init: None,
@@ -878,7 +909,10 @@ fn Parser::parse_var_decl_stmts(self : Parser) -> Array[Stmt] raise ParseError {
     // Parse additional static/extern variables
     while self.token == Comma {
       self.advance()
-      let extra_decl = self.parse_declarator(spec.base_type)
+      let extra_decl = self.parse_declarator(
+        spec.base_type,
+        base_is_function=spec.base_is_function,
+      )
       let extra_post_decl_attrs = self.skip_attributes_info()
       let extra_decl_ty = self.apply_decl_attrs(
         apply_decl_align(resolve_var_type(extra_decl), spec.align),
@@ -905,7 +939,7 @@ fn Parser::parse_var_decl_stmts(self : Parser) -> Array[Stmt] raise ParseError {
       }
       let (extra_ty, extra_init) = self.parse_static_initializer(extra_decl_ty)
       if spec.is_static {
-        self.globals.push({
+        self.add_global({
           ty: extra_ty,
           name: extra_mangled,
           init: extra_init,
@@ -917,7 +951,7 @@ fn Parser::parse_var_decl_stmts(self : Parser) -> Array[Stmt] raise ParseError {
           section: None,
         })
       } else {
-        self.globals.push({
+        self.add_global({
           ty: extra_ty,
           name: extra_mangled,
           init: None,
@@ -942,7 +976,10 @@ fn Parser::parse_var_decl_stmts(self : Parser) -> Array[Stmt] raise ParseError {
   // Parse additional variables: int a, *b, c[8], (*fp)(void);
   while self.token == Comma {
     self.advance()
-    let extra_decl = self.parse_declarator(spec.base_type)
+    let extra_decl = self.parse_declarator(
+      spec.base_type,
+      base_is_function=spec.base_is_function,
+    )
     let extra_post_decl_attrs = self.skip_attributes_info()
     let extra_decl_ty = self.apply_decl_attrs(
       apply_decl_align(resolve_var_type(extra_decl), spec.align),

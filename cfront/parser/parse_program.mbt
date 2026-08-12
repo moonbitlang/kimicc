@@ -26,7 +26,7 @@ fn Parser::parse_struct_vars(
         init = Some(Scalar(self.parse_assign()))
       }
     }
-    self.globals.push({
+    self.add_global({
       ty: decl_ty,
       name: decl.name,
       init,
@@ -63,7 +63,7 @@ fn Parser::parse_struct_vars(
           extra_init = Some(Scalar(self.parse_assign()))
         }
       }
-      self.globals.push({
+      self.add_global({
         ty: extra_ty,
         name: extra.name,
         init: extra_init,
@@ -118,9 +118,9 @@ fn Parser::parse_program(self : Parser) -> Program raise ParseError {
                 after_name_packed ||
                 self.skip_attributes_packed()
               let pack = combine_pack(is_packed, pragma_pack)
-              let decl = { name, fields, is_union, pack }
+              let decl = { name, fields, is_union, pack, is_anonymous: false }
               self.reserve_tag(name)
-              self.aggregates.push(decl)
+              self.add_aggregate(decl)
               self.struct_decls[name] = decl
               // Handle struct definition followed by variable declarations: struct Foo { ... } *ptr;
               if self.token != Semicolon {
@@ -144,6 +144,7 @@ fn Parser::parse_program(self : Parser) -> Program raise ParseError {
               let decl = self.parse_func_decl()
               if decl.name != "" {
                 decls.push(decl)
+                self.items.push(Func(decls.length() - 1))
               }
             }
           }
@@ -153,6 +154,7 @@ fn Parser::parse_program(self : Parser) -> Program raise ParseError {
             let decl = self.parse_func_decl()
             if decl.name != "" {
               decls.push(decl)
+              self.items.push(Func(decls.length() - 1))
             }
           }
         }
@@ -166,6 +168,7 @@ fn Parser::parse_program(self : Parser) -> Program raise ParseError {
         let decl = self.parse_func_decl()
         if decl.name != "" {
           decls.push(decl)
+          self.items.push(Func(decls.length() - 1))
         }
       }
     }
@@ -174,13 +177,39 @@ fn Parser::parse_program(self : Parser) -> Program raise ParseError {
   for decl in decls {
     known_decls[decl.name] = true
   }
+  // Prototypes declared inside function bodies must precede the function
+  // that declared them -- its body may call through them -- so they move to
+  // the front of `decls` and take items entries ahead of the earliest
+  // function. Keeping `decls` and `items` in the same order is what makes
+  // the printed program reparse to the same views: a reparse reads the
+  // prototypes first, so the first parse must store them first too.
+  let promoted : Array[FuncDecl] = []
   for decl in self.local_func_decls {
     if decl.name != "" && !known_decls.contains(decl.name) {
-      decls.push(decl)
+      promoted.push(decl)
       known_decls[decl.name] = true
     }
   }
-  { structs: self.aggregates, globals: self.globals, decls }
+  if promoted.length() > 0 {
+    for i, item in self.items {
+      match item {
+        Func(index) => self.items[i] = Func(index + promoted.length())
+        _ => ()
+      }
+    }
+    let mut at = self.items.length()
+    for i, item in self.items {
+      if item is Func(_) {
+        at = i
+        break
+      }
+    }
+    for offset, decl in promoted {
+      decls.insert(offset, decl)
+      self.items.insert(at + offset, Func(offset))
+    }
+  }
+  { structs: self.aggregates, globals: self.globals, decls, items: self.items }
 }
 
 ///|
@@ -204,9 +233,13 @@ fn Parser::parse_typedef_with_attrs(
   let decl = self.parse_declarator(spec.base_type)
   let post_decl_attrs = self.skip_attributes_info()
   self.typedefs[decl.name] = self.apply_decl_attrs(
-    apply_decl_align(decl.ty, spec.align),
+    apply_decl_align(
+      typedef_type_over_function_base(decl, spec.base_is_function),
+      spec.align,
+    ),
     post_decl_attrs,
   )
+  self.remember_function_typedef(decl, spec.base_is_function)
   // Handle comma-separated typedef names: typedef int a, b, c;
   while self.token == Comma {
     self.advance()
@@ -215,11 +248,62 @@ fn Parser::parse_typedef_with_attrs(
     let extra_decl = self.parse_declarator(spec.base_type)
     let extra_post_decl_attrs = self.skip_attributes_info()
     self.typedefs[extra_decl.name] = self.apply_decl_attrs(
-      apply_decl_align(extra_decl.ty, spec.align),
+      apply_decl_align(
+        typedef_type_over_function_base(extra_decl, spec.base_is_function),
+        spec.align,
+      ),
       extra_post_decl_attrs,
     )
+    self.remember_function_typedef(extra_decl, spec.base_is_function)
   }
   self.expect(Semicolon)
+}
+
+///|
+/// Records whether a typedef names a bare function type.
+///
+/// `typedef void F(int)` and `typedef char *F(int)` do: a direct function
+/// declarator's stars belong to the return type, however many there are. So
+/// does `typedef F G` over an existing function typedef. `typedef void
+/// (*F)(int)` does not -- the parenthesized star made it a pointer, and the
+/// declarator is not a direct function declarator -- and neither does
+/// `typedef F *P`, whose star turns the function type into the pointer.
+fn Parser::remember_function_typedef(
+  self : Parser,
+  decl : DeclaratorResult,
+  base_is_function : Bool,
+) -> Unit {
+  if decl.is_func_decl || (base_is_function && decl.ptr_depth == 0) {
+    self.function_typedefs[decl.name] = true
+  } else {
+    // A typedef that reuses the name for a non-function type must also
+    // retire the marker, or `F *p` after `typedef int F;` would keep
+    // absorbing its star as if `F` still named a function.
+    self.function_typedefs.remove(decl.name)
+  }
+}
+
+///|
+/// The type a typedef declarator denotes when its base is a bare function
+/// type.
+///
+/// The declarator's stars were applied as pointer wraps, but the first star
+/// over a function type is the pointer the `FuncPtr` spelling already
+/// carries: `typedef F *P` is one function pointer, not a pointer to one.
+/// Peeling one wrap when any were applied is that rule; a starless declarator
+/// or a base that is not a function type passes through unchanged.
+fn typedef_type_over_function_base(
+  decl : DeclaratorResult,
+  base_is_function : Bool,
+) -> Type {
+  if base_is_function && decl.ptr_depth > 0 && !decl.is_func_decl {
+    match decl.ty {
+      Pointer(inner) => inner
+      other => other
+    }
+  } else {
+    decl.ty
+  }
 }
 
 ///|

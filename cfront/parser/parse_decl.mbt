@@ -35,7 +35,10 @@ fn Parser::parse_func_decl(self : Parser) -> FuncDecl raise ParseError {
   spec.section = merge_section(spec.section, leading_section)
   spec.is_constructor = spec.is_constructor || leading_constructor
   spec.is_destructor = spec.is_destructor || leading_destructor
-  let decl = self.parse_declarator(spec.base_type)
+  let decl = self.parse_declarator(
+    spec.base_type,
+    base_is_function=spec.base_is_function,
+  )
   let post_decl_attrs = self.skip_attributes_info()
   // If no name and no function suffix, skip to semicolon
   if decl.name == "" && decl.func_params is None {
@@ -251,7 +254,7 @@ fn Parser::parse_global_var_tail(
       }
     }
   }
-  self.globals.push({
+  self.add_global({
     ty,
     name,
     init,
@@ -267,7 +270,10 @@ fn Parser::parse_global_var_tail(
   // Handle additional variables separated by comma
   while self.token == Comma {
     self.advance()
-    let extra_decl = self.parse_declarator(spec.base_type)
+    let extra_decl = self.parse_declarator(
+      spec.base_type,
+      base_is_function=spec.base_is_function,
+    )
     let extra_post_decl_attrs = self.skip_attributes_info()
     let mut extra_ty = self.apply_decl_attrs(
       apply_decl_align(resolve_var_type(extra_decl), spec.align),
@@ -300,7 +306,7 @@ fn Parser::parse_global_var_tail(
         }
       }
     }
-    self.globals.push({
+    self.add_global({
       ty: extra_ty,
       name: extra_decl.name,
       init: extra_init,
@@ -331,7 +337,10 @@ fn Parser::parse_param(self : Parser) -> Param raise ParseError {
     return { ty: Void, name: "...", bit_width: None }
   }
   let spec = self.parse_decl_specifiers()
-  let decl = self.parse_declarator(spec.base_type)
+  let decl = self.parse_declarator(
+    spec.base_type,
+    base_is_function=spec.base_is_function,
+  )
   let post_decl_attrs = self.skip_attributes_info()
   {
     ty: self.apply_decl_attrs(

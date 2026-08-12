@@ -11,11 +11,20 @@ pub struct Parser {
   mut token : Token
   mut token_start : Int
   typedefs : Map[String, Type]
+  // Typedef names that denote a bare function type, like `typedef void F(int)`.
+  // The type model spells every function as a pointer, so the map is what
+  // remembers that `F *` adds no second level: pointer-to-function-type is the
+  // function pointer itself. `typedef void (*F)(int)` is not in this map.
+  function_typedefs : Map[String, Bool]
   // Aggregate definitions in creation order, anonymous ones included. Order
   // matters: an anonymous aggregate is created while parsing the declaration
   // that introduces it, so appending as they are built puts every definition
   // ahead of its first use.
   aggregates : Array[StructDecl]
+  // Top-level entries in source order; see `Program::items`. Aggregates and
+  // globals are appended here by the same helpers that append to the grouped
+  // arrays, and functions are appended by `parse_program` as they complete.
+  items : Array[TopLevel]
   struct_decls : Map[String, StructDecl]
   // Tag scoping: `tag_aliases` is the lexical view, saved and restored around
   // each block; `used_tag_names` is global, so a block-scoped tag never reuses
@@ -23,6 +32,10 @@ pub struct Parser {
   mut tag_aliases : Map[String, String]
   used_tag_names : Map[String, Bool]
   mut block_depth : Int
+  // Depth of struct/union body nesting. A definition written inside another
+  // aggregate's member list is not a top-level entry -- it prints inside its
+  // parent -- so `add_aggregate` skips the items tape while this is nonzero.
+  mut struct_body_depth : Int
   local_func_decls : Array[FuncDecl]
   mut anon_counter : Int
   enum_constants : Map[String, Int64]
@@ -55,11 +68,14 @@ pub fn Parser::new_for_target(
     token: EOF,
     token_start: 0,
     typedefs: {},
+    function_typedefs: {},
     aggregates: [],
+    items: [],
     struct_decls: {},
     tag_aliases: Map([]),
     used_tag_names: Map([]),
     block_depth: 0,
+    struct_body_depth: 0,
     local_func_decls: [],
     anon_counter: 0,
     enum_constants: {},
@@ -146,4 +162,31 @@ fn[T] Parser::unsupported(self : Parser, what : String) -> T raise ParseError {
 /// Raises `Malformed` at the current position.
 fn[T] Parser::malformed(self : Parser, what : String) -> T raise ParseError {
   raise Malformed(position=self.position(), what~)
+}
+
+///|
+/// Registers an aggregate definition in both the grouped array and the source-
+/// order tape, sharing one value.
+fn Parser::add_aggregate(self : Parser, decl : StructDecl) -> Unit {
+  self.aggregates.push(decl)
+  // A definition inside another aggregate's member list prints inside that
+  // parent, so it takes no place of its own in the top-level order. Keeping it
+  // out of `items` is also what keeps the grouped array's creation order a
+  // fixed point: printed inline, it is re-created at the same member position
+  // on reparse rather than ahead of its parent as a hoisted definition.
+  if self.struct_body_depth == 0 {
+    self.items.push(Aggregate(self.aggregates.length() - 1))
+  }
+}
+
+///|
+/// Registers a global in both the grouped array and the source-order tape.
+///
+/// Statics and externs promoted out of a function body come through here too,
+/// while the body is still being parsed -- so they land ahead of the function
+/// that contains them, which is where their references must sit for a printed
+/// program to compile.
+fn Parser::add_global(self : Parser, decl : GlobalDecl) -> Unit {
+  self.globals.push(decl)
+  self.items.push(Global(self.globals.length() - 1))
 }

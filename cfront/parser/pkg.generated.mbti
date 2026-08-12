@@ -118,11 +118,14 @@ pub struct Parser {
   mut token : Token
   mut token_start : Int
   typedefs : Map[String, @ctype.Type]
+  function_typedefs : Map[String, Bool]
   aggregates : Array[StructDecl]
+  items : Array[TopLevel]
   struct_decls : Map[String, StructDecl]
   mut tag_aliases : Map[String, String]
   used_tag_names : Map[String, Bool]
   mut block_depth : Int
+  mut struct_body_depth : Int
   local_func_decls : Array[FuncDecl]
   mut anon_counter : Int
   enum_constants : Map[String, Int64]
@@ -148,6 +151,7 @@ pub(all) struct Program {
   structs : Array[StructDecl]
   globals : Array[GlobalDecl]
   decls : Array[FuncDecl]
+  items : Array[TopLevel]
 } derive(Eq, @debug.Debug)
 
 pub(all) enum Stmt {
@@ -174,6 +178,7 @@ pub(all) struct StructDecl {
   fields : Array[Param]
   is_union : Bool
   pack : Int?
+  is_anonymous : Bool
 } derive(Eq, @debug.Debug)
 
 pub(all) enum Token {
@@ -264,6 +269,12 @@ pub(all) enum Token {
   Question
   Ampersand
 } derive(Eq)
+
+pub(all) enum TopLevel {
+  Aggregate(Int)
+  Global(Int)
+  Func(Int)
+} derive(Eq, @debug.Debug)
 
 // Type aliases
 pub using @ctype {type OffsetDesignator}
