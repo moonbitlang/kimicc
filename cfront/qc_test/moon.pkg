@@ -1,0 +1,10 @@
+import {
+  "bobzhang/cfront/parser",
+  "bobzhang/cfront/printer",
+  "moonbitlang/core/quickcheck",
+  "moonbitlang/core/quickcheck/splitmix",
+  "moonbitlang/core/quickcheck/shrink",
+  "moonbitlang/core/debug",
+} for "test"
+
+supported_targets = "+native"

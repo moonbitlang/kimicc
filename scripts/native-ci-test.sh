@@ -31,6 +31,7 @@ core_packages=(
   cfront/parser
   cfront/preprocessor
   cfront/printer
+  cfront/qc_test
   codegen
   mir_codegen
   cmd/main
