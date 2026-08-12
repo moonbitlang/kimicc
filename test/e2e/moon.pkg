@@ -9,6 +9,7 @@ import {
   "bobzhang/cfront/target",
   "bobzhang/cfront/printer",
   "bobzhang/cfront/build",
+  "bobzhang/kimicc/experiments/llama_forward",
   "bobzhang/cfront/ctype",
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
