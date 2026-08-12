@@ -109,11 +109,21 @@ pub(all) struct Param {
 /// `pack` caps the alignment of every field, covering both the GNU `packed`
 /// attribute (equivalent to `Some(1)`) and `#pragma pack(N)` (`Some(n)`).
 /// `None` means fields keep their natural alignment.
+///
+/// `is_anonymous` records that the definition was written without a tag and
+/// `name` was synthesized by the parser. It is semantics, not merely
+/// provenance: an empty-named field whose type is anonymous is a C11
+/// anonymous member, whose members reach through to the parent, while the
+/// same field with a written tag is a tag declaration that declares no
+/// member at all -- and no inspection of the name can tell the two apart,
+/// since real headers write `__anon_` tags of their own. Equality therefore
+/// includes it.
 pub(all) struct StructDecl {
   name : String
   fields : Array[Param]
   is_union : Bool
   pack : Int?
+  is_anonymous : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -176,14 +186,43 @@ pub(all) struct GlobalDecl {
 } derive(Eq, Debug)
 
 ///|
+/// One top-level entry of a translation unit, in the order it was written,
+/// as an index into the matching grouped array.
+///
+/// The grouped arrays on `Program` answer "what aggregates exist" without a
+/// walk; this is the other view, the document itself. C requires declaration
+/// before use at file scope, so a printer working from the groups alone emits
+/// every global before every function and breaks any initializer that names a
+/// function declared later. The order is data the source carried, and this is
+/// where it is kept.
+///
+/// Entries are indices rather than values so the grouped arrays stay
+/// authoritative: replacing `program.globals[0]` with a transformed
+/// declaration is the ordinary way to edit a program, and a value here would
+/// keep printing the original. `Aggregate(i)` names `structs[i]`, and not
+/// every aggregate has an entry -- a definition written inside another
+/// aggregate's member list prints inside its parent and takes no top-level
+/// place of its own.
+pub(all) enum TopLevel {
+  Aggregate(Int)
+  Global(Int)
+  Func(Int)
+} derive(Eq, Debug)
+
+///|
 /// Parsed C translation unit.
 ///
 /// `structs` stores aggregate declarations, `globals` stores global variables,
-/// and `decls` stores function declarations and definitions.
+/// and `decls` stores function declarations and definitions -- grouped views
+/// for consumers that ask by kind. `items` holds the same entries in source
+/// order as indices into the groups, and is what the printer walks. A
+/// hand-built `Program` may leave `items` empty, in which case printing falls
+/// back to the grouped order: aggregates, then globals, then functions.
 pub(all) struct Program {
   structs : Array[StructDecl]
   globals : Array[GlobalDecl]
   decls : Array[FuncDecl]
+  items : Array[TopLevel]
 } derive(Eq, Debug)
 
 ///|

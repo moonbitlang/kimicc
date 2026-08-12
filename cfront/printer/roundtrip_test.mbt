@@ -25,8 +25,10 @@ fn assert_roundtrips(source : String) -> Unit raise {
   // Text is a fixed point immediately. Comparing text first makes a failure a
   // readable diff rather than "these trees differ".
   assert_eq(printed, reprinted)
-  // Aggregates and globals round-trip exactly on the first print.
-  assert_eq(first.structs, second.structs)
+  // Aggregates and globals round-trip on the first print; anonymity may be
+  // consumed where a synthesized tag had to be spelled, and nothing else may
+  // change. See `structs_roundtrip_equal`.
+  assert_true(structs_roundtrip_equal(first.structs, second.structs))
   assert_eq(first.globals, second.globals)
   // Nothing may be dropped or invented.
   assert_eq(first.decls.length(), second.decls.length())
@@ -385,4 +387,34 @@ test "roundtrip declaration groups" {
     #|  return total + b + c[0] + q + x + buf[0] + aligned + also_aligned + *p;
     #|}
   assert_roundtrips(source)
+}
+
+///|
+/// Structural equality across one print/reparse, allowing anonymity to be
+/// consumed. A definition whose synthesized tag had to be spelled out --
+/// typedef'd anonymous types have no member site, and a `typeof`-recovered
+/// tag must resolve -- reparses with a written tag, so `is_anonymous` may go
+/// from true to false across a round-trip. It can never appear: printing
+/// cannot make a written tag anonymous. Everything else must match exactly.
+fn structs_roundtrip_equal(
+  first : Array[@parser.StructDecl],
+  second : Array[@parser.StructDecl],
+) -> Bool {
+  if first.length() != second.length() {
+    return false
+  }
+  for i in 0..<first.length() {
+    let a = first[i]
+    let b = second[i]
+    if a.name != b.name ||
+      a.fields != b.fields ||
+      a.is_union != b.is_union ||
+      a.pack != b.pack {
+      return false
+    }
+    if a.is_anonymous != b.is_anonymous && !a.is_anonymous {
+      return false
+    }
+  }
+  true
 }

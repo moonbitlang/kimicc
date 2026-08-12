@@ -165,3 +165,60 @@ test "a static local initializer is still a global initializer" {
     fail("expected the inferred size on the global")
   }
 }
+
+///|
+/// Two blocks of one function may each declare a static with the same name;
+/// each is its own object. A shared mangled name used to emit one global per
+/// declaration -- the same symbol several times over.
+test "same-named statics in one function get distinct globals" {
+  let source =
+    #|int f(void) {
+    #|  { static int iLn = 1; iLn += 1; }
+    #|  { static int iLn = 2; iLn += 2; }
+    #|  return 0;
+    #|}
+  let program = @parser.parse(source)
+  assert_eq(program.globals.length(), 2)
+  assert_true(program.globals[0].name != program.globals[1].name)
+  guard program.globals[0].init is Some(Scalar(Number(1, _, _))) else {
+    fail("expected the first static's initializer")
+  }
+  guard program.globals[1].init is Some(Scalar(Number(2, _, _))) else {
+    fail("expected the second static's initializer")
+  }
+}
+
+///|
+/// A nested block's shadowing static is its own object, and leaving the block
+/// restores the outer binding: `x += 100` after the inner block updates the
+/// outer static, not the inner one.
+test "static shadowing restores the outer binding at block exit" {
+  let source =
+    #|int f(void) {
+    #|  static int x = 1;
+    #|  { static int x = 2; x += 10; }
+    #|  x += 100;
+    #|  return x;
+    #|}
+  let program = @parser.parse(source)
+  assert_eq(program.globals.length(), 2)
+  let outer = program.globals[0].name
+  let inner = program.globals[1].name
+  assert_true(outer != inner)
+  // The static declarations leave no statements -- they are promoted -- so
+  // the body is the inner block, the post-block assignment, and the return.
+  guard program.decls[0].body
+    is Some(
+      Compound(
+        [
+          Compound([ExprStmt(CompoundAssign("+", Var(inside_block), _))]),
+          ExprStmt(CompoundAssign("+", Var(after_block), Number(100, _, _))),
+          Return(_),
+        ]
+      )
+    ) else {
+    fail("expected the post-block assignment: \{Repr(program.decls[0].body)}")
+  }
+  assert_eq(inside_block, inner)
+  assert_eq(after_block, outer)
+}

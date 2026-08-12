@@ -1,6 +1,9 @@
 ///|
 priv struct DeclSpec {
   mut base_type : Type
+  // The base names a bare function type (via a function typedef), so the
+  // declarator's first `*` is the pointer the `FuncPtr` base already carries.
+  mut base_is_function : Bool
   mut is_static : Bool
   mut is_extern : Bool
   mut is_inline : Bool
@@ -35,6 +38,7 @@ priv struct AbstractDeclaratorResult {
 fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec raise ParseError {
   let spec : DeclSpec = {
     base_type: SInt,
+    base_is_function: false,
     is_static: false,
     is_extern: false,
     is_inline: false,
@@ -332,6 +336,7 @@ fn Parser::parse_decl_specifiers(self : Parser) -> DeclSpec raise ParseError {
             self.typedefs.contains(name) {
             has_typedef_name = true
             typedef_type = self.typedefs[name]
+            spec.base_is_function = self.function_typedefs.contains(name)
             self.advance()
             saw_typedef_name = true
             consumed = true
@@ -440,6 +445,31 @@ fn is_extended_float_type_name(name : String) -> Bool {
 }
 
 ///|
+/// Synthesizes a tag for a tagless aggregate definition.
+///
+/// The counter skips values whose name -- struct or union spelling alike -- is
+/// already taken. That keeps numbering stable across a print/reparse cycle:
+/// an anonymous definition the printer wrote back out *tagged* occupies its
+/// number as an explicit tag rather than by consuming the counter, and an
+/// anonymous member the printer wrote back *inline* re-synthesizes here. With
+/// both kinds present in one file, skipping taken numbers is what makes the
+/// re-synthesized names land on the numbers they had before printing.
+fn Parser::synthesize_anon_tag(self : Parser, is_union : Bool) -> String {
+  while self.struct_decls.contains(
+          "__anon_struct_" + self.anon_counter.to_string(),
+        ) ||
+        self.struct_decls.contains(
+          "__anon_union_" + self.anon_counter.to_string(),
+        ) {
+    self.anon_counter += 1
+  }
+  let prefix = if is_union { "__anon_union_" } else { "__anon_struct_" }
+  let name = prefix + self.anon_counter.to_string()
+  self.anon_counter += 1
+  name
+}
+
+///|
 fn Parser::parse_struct_type_specifier(self : Parser) -> Type raise ParseError {
   self.expect(Struct)
   let pragma_pack = self.current_pack()
@@ -457,8 +487,14 @@ fn Parser::parse_struct_type_specifier(self : Parser) -> Type raise ParseError {
           self.skip_attributes_packed()
         let pack = combine_pack(is_packed, pragma_pack)
         let tag = self.define_tag(n)
-        let decl = { name: tag, fields, is_union: false, pack }
-        self.aggregates.push(decl)
+        let decl = {
+          name: tag,
+          fields,
+          is_union: false,
+          pack,
+          is_anonymous: false,
+        }
+        self.add_aggregate(decl)
         self.struct_decls[tag] = decl
         Struct(tag)
       } else {
@@ -471,10 +507,9 @@ fn Parser::parse_struct_type_specifier(self : Parser) -> Type raise ParseError {
       self.expect(RBrace)
       let is_packed = leading_packed || self.skip_attributes_packed()
       let pack = combine_pack(is_packed, pragma_pack)
-      let name = "__anon_struct_" + self.anon_counter.to_string()
-      self.anon_counter += 1
-      let decl = { name, fields, is_union: false, pack }
-      self.aggregates.push(decl)
+      let name = self.synthesize_anon_tag(false)
+      let decl = { name, fields, is_union: false, pack, is_anonymous: true }
+      self.add_aggregate(decl)
       self.struct_decls[name] = decl
       Struct(name)
     }
@@ -500,8 +535,14 @@ fn Parser::parse_union_type_specifier(self : Parser) -> Type raise ParseError {
           self.skip_attributes_packed()
         let pack = combine_pack(is_packed, pragma_pack)
         let tag = self.define_tag(n)
-        let decl = { name: tag, fields, is_union: true, pack }
-        self.aggregates.push(decl)
+        let decl = {
+          name: tag,
+          fields,
+          is_union: true,
+          pack,
+          is_anonymous: false,
+        }
+        self.add_aggregate(decl)
         self.struct_decls[tag] = decl
         Union(tag)
       } else {
@@ -514,10 +555,9 @@ fn Parser::parse_union_type_specifier(self : Parser) -> Type raise ParseError {
       self.expect(RBrace)
       let is_packed = leading_packed || self.skip_attributes_packed()
       let pack = combine_pack(is_packed, pragma_pack)
-      let name = "__anon_union_" + self.anon_counter.to_string()
-      self.anon_counter += 1
-      let decl = { name, fields, is_union: true, pack }
-      self.aggregates.push(decl)
+      let name = self.synthesize_anon_tag(true)
+      let decl = { name, fields, is_union: true, pack, is_anonymous: true }
+      self.add_aggregate(decl)
       self.struct_decls[name] = decl
       Union(name)
     }
@@ -584,6 +624,7 @@ fn Parser::parse_enum_type_specifier(self : Parser) -> Type raise ParseError {
 
 ///|
 fn Parser::parse_struct_body(self : Parser) -> Array[Param] raise ParseError {
+  self.struct_body_depth += 1
   let fields : Array[Param] = []
   while self.token != RBrace {
     self.skip_attributes()
@@ -593,7 +634,10 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] raise ParseError {
     }
     self.skip_qualifiers()
     let spec = self.parse_decl_specifiers()
-    let decl = self.parse_declarator(spec.base_type)
+    let decl = self.parse_declarator(
+      spec.base_type,
+      base_is_function=spec.base_is_function,
+    )
     let post_decl_attrs = self.skip_attributes_info()
     let field_ty = self.apply_decl_attrs(
       apply_decl_align(decl.ty, spec.align),
@@ -614,7 +658,10 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] raise ParseError {
       self.advance()
       self.skip_attributes()
       self.skip_qualifiers()
-      let extra = self.parse_declarator(spec.base_type)
+      let extra = self.parse_declarator(
+        spec.base_type,
+        base_is_function=spec.base_is_function,
+      )
       let extra_post_decl_attrs = self.skip_attributes_info()
       let extra_ty = self.apply_decl_attrs(
         apply_decl_align(extra.ty, spec.align),
@@ -634,6 +681,7 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] raise ParseError {
     }
     self.expect(Semicolon)
   }
+  self.struct_body_depth -= 1
   fields
 }
 
@@ -643,10 +691,16 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] raise ParseError {
 fn Parser::parse_declarator(
   self : Parser,
   base_ty : Type,
+  base_is_function? : Bool = false,
 ) -> DeclaratorResult raise ParseError {
   if self.token == Star || self.token == BitXor {
     self.advance()
     self.skip_qualifiers()
+    if base_is_function {
+      // `F *x` over a function typedef declares the function pointer the base
+      // already is; the star is spelling, not another level of indirection.
+      return self.parse_declarator(base_ty)
+    }
     let decl = self.parse_declarator(Pointer(base_ty))
     return { ..decl, ptr_depth: decl.ptr_depth + 1 }
   }
@@ -657,18 +711,23 @@ fn Parser::parse_declarator(
 fn Parser::parse_abstract_declarator(
   self : Parser,
   base_ty : Type,
+  base_is_function? : Bool = false,
 ) -> Type raise ParseError {
-  self.parse_abstract_declarator_result(base_ty).ty
+  self.parse_abstract_declarator_result(base_ty, base_is_function~).ty
 }
 
 ///|
 fn Parser::parse_abstract_declarator_result(
   self : Parser,
   base_ty : Type,
+  base_is_function? : Bool = false,
 ) -> AbstractDeclaratorResult raise ParseError {
   if self.token == Star || self.token == BitXor {
     self.advance()
     self.skip_qualifiers()
+    if base_is_function {
+      return self.parse_abstract_declarator_result(base_ty)
+    }
     let decl = self.parse_abstract_declarator_result(Pointer(base_ty))
     return { ..decl, ptr_depth: decl.ptr_depth + 1 }
   }
@@ -1025,5 +1084,8 @@ fn apply_pending_array_suffixes(
 // Parse a type-name (for casts and sizeof). Uses abstract declarator (no name required).
 fn Parser::parse_type_name(self : Parser) -> Type raise ParseError {
   let spec = self.parse_decl_specifiers()
-  self.parse_abstract_declarator(spec.base_type)
+  self.parse_abstract_declarator(
+    spec.base_type,
+    base_is_function=spec.base_is_function,
+  )
 }
