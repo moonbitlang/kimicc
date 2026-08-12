@@ -1,16 +1,16 @@
 name = "bobzhang/cfront"
 
-version = "0.1.0"
+version = "0.2.0"
 
 readme = "README.md"
 
-repository = "https://github.com/bobzhang/kimicc"
+repository = "https://github.com/moonbitlang/kimicc"
 
 license = "Apache-2.0"
 
-description = "Reusable C front end: preprocessor, parser, AST, and C type model."
+description = "C syntax suite for meta-programming: parse C to an AST, build or transform it from MoonBit, and print it back as C another compiler accepts."
 
-keywords = [ "c", "parser", "preprocessor", "frontend" ]
+keywords = [ "c", "parser", "printer", "codegen", "metaprogramming" ]
 
 preferred_target = "native"
 

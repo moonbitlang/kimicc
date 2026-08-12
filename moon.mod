@@ -10,7 +10,7 @@ license = "Apache-2.0"
 
 import {
   "moonbitlang/async@0.19.2",
-  "bobzhang/cfront@0.1.0",
+  "bobzhang/cfront@0.2.0",
 }
 
 preferred_target = "native"
