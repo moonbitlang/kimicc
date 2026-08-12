@@ -1,0 +1,22 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/kimicc/experiments/llama_forward"
+
+// Values
+pub fn generate_forward(Config) -> String
+
+// Errors
+
+// Types and methods
+pub(all) struct Config {
+  dim : Int
+  hidden : Int
+  n_layers : Int
+  n_heads : Int
+  n_kv_heads : Int
+  vocab : Int
+  seq : Int
+}
+
+// Type aliases
+
+// Traits
