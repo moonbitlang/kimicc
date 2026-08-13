@@ -288,6 +288,105 @@ consumes it, so the AST changes shape without compatibility shims. At publish
 time `cfront` goes first, and its version and the pin in `kimicc`'s `moon.mod`
 move together.
 
+## ds4 generation: gap list and verification ladder
+
+Surveyed 2026-08-13 against `~/git/ds4` — a built Metal checkout with the real
+model attached: DeepSeek-V4-Flash, 81GB GGUF, mixed quantization (IQ2_XXS
+routed gate/up experts, Q2_K down experts, Q8_0 attention projections / shared
+experts / output, Q8_K activation blocks). The machine is an M2 Ultra with
+192GB, so the model runs fully resident. ds4's own shape constants
+(`DS4_N_LAYER` etc.) resolve to runtime globals (`g_ds4_shape`) — the engine is
+generic across the DeepSeek family, which is exactly the specialization
+headroom the generator thesis needs.
+
+**What the hot path actually uses.** All CPU compute funnels through ~30 worker
+functions of shape `(void *ctx, uint64_t lo, uint64_t hi)` dispatched by a
+hand-written pthread pool. Kernels are `static inline` dots over 34-byte q8_0
+blocks and 256-element QK_K super-blocks, with NEON `vdotq_s32`/`vld1q_s8`/
+`vfmaq_n_f32` fast paths behind `#if defined(__ARM_FEATURE_DOTPROD)`, `memcpy`
+for unaligned f16 scale loads, bit-twiddled f16→f32, and — for IQ2_XXS — a
+codebook table built at runtime by `pthread_once`. Notably ds4 uses zero
+`restrict` and no C11 atomics in kernels, and ships its own `_f32_ref`
+reference kernels alongside the fast ones.
+
+**True gaps, ranked:**
+
+1. **`Named(String)` type variant** — the only blocker for the NEON rung.
+   Vector-typed locals (`float32x4_t`, `int32x4_t`) cannot be declared today;
+   every intrinsic is already an ordinary `call` once they can. The same
+   variant covers Metal's `uint3`/`half` and lets output spell `uint8_t`.
+   Printer prints the name; parser maps unknown typedef names to `Named`;
+   kimicc backends reject it. Round-trip quickcheck extends with a fixed name
+   pool.
+2. **Attribute surface for GPU functions and parameters** — blocks only the
+   Metal rung: `kernel` qualifiers, address spaces (`device`, `constant`,
+   `threadgroup`), and `[[buffer(0)]]`-style attributes. Design as opaque
+   attribute strings on FuncDecl/Param rather than modeling MSL — the same
+   surface later serves CUDA `__global__`. ds4 compiles its 22,851 lines of
+   MSL from source at runtime (`newLibraryWithSource`), so generated kernels
+   drop in as strings with no `.metallib` step.
+3. **Micro-gaps, minutes each:** `for_range` hardcodes `int` counters (ds4
+   loops on `uint64_t`); a u-suffix literal helper; optional typedef emission
+   (writing `struct block_q2_K` spelling avoids it).
+
+**Explicitly not gaps:** the pthread pool and MoE routing are host-side by the
+seam rule; `#if` target dispatch is resolved at generation time (the generator
+is the preprocessor); `pthread_once` table init is replaced by baking the
+expanded 262KB IQ2_XXS grid as a static initializer — generation-time folding
+is the thesis, and aggregate initializers already landed; `const` retention
+would break the canonical-form contract for cosmetic benefit (ds4's kernels
+compile identically without it) and is deferred.
+
+**Verification ladder,** each rung reusing the llama2 referee pattern
+(differential test that skips when the fixture is absent):
+
+- **L0 (exists):** printed-output-compiles clang gate; quickcheck round-trip,
+  extended alongside each AST addition.
+- **L1 — random-block differential:** a driver that `#include "ds4.c"` (the
+  `DS4_NO_GPU -DDS4_TEST_HOOKS` build from ds4's own Makefile reaches statics)
+  and compares generated kernels against ds4's on random blocks: scalar vs
+  scalar bit-exact, NEON vs ds4-NEON bit-exact by mirroring accumulation
+  order. The baked IQ2_XXS table is `memcmp`'d against the `pthread_once`
+  product.
+- **L2 — real-tensor differential:** mmap the 81GB GGUF read-only, locate one
+  tensor per quant format from the header, run row dots against a random
+  activation vector. Catches layout misreads that self-generated random
+  blocks structurally cannot.
+- **L3 — drop-in A/B:** patch ds4's static workers to call extern generated
+  ones, rebuild `make cpu`, and referee with `ds4-bench --cpu
+  --dump-frontier-logits-dir` stock vs patched: logits identical, then tok/s
+  from `--csv`. This is the thesis measurement — baked shapes and tables
+  against runtime-shape stock.
+- **L4 — Metal:** `xcrun metal -fsyntax-only` as the compile gate analog, a
+  small ObjC harness dispatching generated kernels on random buffers against
+  CPU scalar referees, then source-string drop-in into ds4's runtime shader
+  compile and the same logits/tok-s A/B under `--metal`.
+
+Order of work: L1 harness with today's framework (scalar q8_0 + Q2_K +
+IQ2_XXS — zero missing features), then `Named` + NEON under the same harness,
+then L3, and only then the Metal rung.
+
+**Status: L1 and L2 landed.** `experiments/ds4_kernels` generates the three
+scalar kernels with all offsets, group shifts, and the 262KB IQ2_XXS sign
+table baked (the table reconstructed from the 256-entry codebook plus the
+parity structure of `ksigns_iq2xs`, not transcribed). The referee
+(`test/e2e/ds4_kernels_real_test.mbt`) confirmed on first run: baked table
+memcmp-identical to ds4's runtime expansion, 800 random-block comparisons
+bit-exact against ds4's own kernels, 24 real rows from the 81GB checkpoint
+bit-exact across all three formats. One toolkit lesson recorded: compound
+assignment ops are stored without the `=` (the printer appends it), and
+`SChar` prints as `char` — the canonical spelling callers must match.
+
+Codex (xhigh) then made the referee honest about deployment: under ds4's
+real `-O3 -ffast-math` flags the compiler reassociates the generated
+unrolled reductions differently from ds4's rolled loops — 369 bit
+mismatches that the strict-flags build never sees. The referee now runs
+twice: strict flags hold the kernels to bit equality (semantics), ds4's
+production flags hold them to reassociation-level relative error, 1e-4
+against ~1e-6 observed drift (deployment). Fast-math waives
+bit-determinism by definition, so that second standard — tolerance plus
+token agreement, not bits — is also what the L3 drop-in referee inherits.
+
 ## What stays out of scope
 
 Printing is canonical, not format-preserving. Even with every step above, the
