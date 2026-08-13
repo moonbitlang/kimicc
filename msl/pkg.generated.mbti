@@ -1,0 +1,40 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/kimicc/msl"
+
+import {
+  "bobzhang/cfront/parser",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn decor(String, attr? : String) -> ParamDecor
+
+pub fn parse_kernel(String, Array[String]) -> Kernel raise
+
+pub fn plain() -> ParamDecor
+
+pub fn print_kernel(Kernel) -> String
+
+pub fn print_kernels(Array[Kernel], prelude? : String) -> String
+
+// Errors
+pub(all) suberror MslParseError {
+  NotAKernel(String)
+} derive(@debug.Debug)
+pub impl Show for MslParseError
+
+// Types and methods
+pub(all) struct Kernel {
+  qualifier : String
+  decl : @parser.FuncDecl
+  decor : Array[ParamDecor]
+} derive(Eq, @debug.Debug)
+
+pub(all) struct ParamDecor {
+  space : String
+  attr : String
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits
