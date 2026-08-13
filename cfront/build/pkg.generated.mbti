@@ -21,7 +21,7 @@ pub fn decl(@ctype.Type, String, init? : @parser.Expr) -> @parser.Stmt
 
 pub fn field(@ctype.Type, String) -> @parser.Param
 
-pub fn for_range(String, @parser.Expr, Array[@parser.Stmt]) -> @parser.Stmt
+pub fn for_range(String, @parser.Expr, Array[@parser.Stmt], ty? : @ctype.Type) -> @parser.Stmt
 
 pub fn func(@ctype.Type, String, Array[@parser.Param], Array[@parser.Stmt], variadic? : Bool, is_static? : Bool, is_inline? : Bool) -> @parser.FuncDecl
 

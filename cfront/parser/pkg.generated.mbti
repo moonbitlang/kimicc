@@ -18,11 +18,15 @@ pub fn infer_local_array_type(@ctype.Type, Expr?) -> @ctype.Type
 
 pub fn int_literal(Int64, @ctype.Type) -> Expr
 
+pub fn named_abi_violation(Program) -> String?
+
 pub fn packed_align(Int?, Int) -> Int
 
 pub fn parse(String) -> Program raise ParseError
 
 pub fn parse_for_target(String, @target.Target) -> Program raise ParseError
+
+pub fn parse_with_named_types(String, Array[String], target? : @target.Target) -> Program raise ParseError
 
 pub fn position_at(String, Int) -> Position
 

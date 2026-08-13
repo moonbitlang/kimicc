@@ -9,7 +9,7 @@ test "generated programs round-trip through print and parse" {
       // A parse error propagates as an exceptional counterexample:
       // printing something the parser rejects is its own failure.
       let printed = @printer.print_program(p.0)
-      let second = @parser.parse(printed)
+      let second = @parser.parse_with_named_types(printed, named_type_pool)
       second == p.0 && @printer.print_program(second) == printed
     },
     count=300,
@@ -25,7 +25,7 @@ test "generated programs round-trip under a second seed" {
   @quickcheck.check(
     (p : GenProgram) => {
       let printed = @printer.print_program(p.0)
-      let second = @parser.parse(printed)
+      let second = @parser.parse_with_named_types(printed, named_type_pool)
       second == p.0 && @printer.print_program(second) == printed
     },
     count=300,

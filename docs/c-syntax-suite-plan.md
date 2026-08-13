@@ -311,13 +311,17 @@ reference kernels alongside the fast ones.
 
 **True gaps, ranked:**
 
-1. **`Named(String)` type variant** — the only blocker for the NEON rung.
-   Vector-typed locals (`float32x4_t`, `int32x4_t`) cannot be declared today;
-   every intrinsic is already an ordinary `call` once they can. The same
-   variant covers Metal's `uint3`/`half` and lets output spell `uint8_t`.
-   Printer prints the name; parser maps unknown typedef names to `Named`;
-   kimicc backends reject it. Round-trip quickcheck extends with a fixed name
-   pool.
+1. **`Named(String)` type variant** — **done** (cfront@0.3.0). The printer
+   emits the spelling verbatim; `parse_with_named_types` seeds the typedef
+   table with registered spellings, which is the reading half of the round
+   trip — an unregistered spelling stays a parse error rather than a silent
+   misread. Layout queries (`size`, `align`, sizeof folds) and both code
+   generators reject it by construction, enumerated by the compiler when the
+   variant landed. The quickcheck corpus now declares Named-typed locals
+   from a fixed pool. Riding along: `for_range` takes a counter type, and
+   `int_literal` synthesizes the suffix its type demands (`5u`, `5L`,
+   `5uLL`) — a bare synthesized `5L`-value used to reparse as `SInt`, a
+   latent round-trip asymmetry nothing had exercised.
 2. **Attribute surface for GPU functions and parameters** — blocks only the
    Metal rung: `kernel` qualifiers, address spaces (`device`, `constant`,
    `threadgroup`), and `[[buffer(0)]]`-style attributes. Design as opaque

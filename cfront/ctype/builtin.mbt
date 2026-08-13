@@ -139,6 +139,8 @@ pub fn builtin_classify_type_code(ty : Type) -> Int64 {
     Pointer(_) | Array(_, _) | FuncPtr(_, _, _) => 5
     Struct(_) => 12
     Union(_) => 13
+    Named(name) =>
+      abort("Cannot classify a named type without its layout: " + name)
     SChar
     | UChar
     | SShort

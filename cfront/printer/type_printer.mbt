@@ -108,6 +108,8 @@ fn base_specifier(ty : @ctype.Type) -> String {
     LongDouble => "long double"
     Struct(name) => "struct " + name
     Union(name) => "union " + name
+    // A named type's spelling is its entire identity: print it verbatim.
+    Named(name) => name
     Pointer(inner) | Array(inner, _) | Atomic(inner) | Aligned(inner, _) =>
       base_specifier(inner)
     FuncPtr(ret, _, _) => base_specifier(ret)

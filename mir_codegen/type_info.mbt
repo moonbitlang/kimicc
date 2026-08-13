@@ -27,6 +27,7 @@ fn Codegen::type_size(self : Codegen, ty : @ctype.Type) -> Int {
         Some(layout) => layout.size
         None => 8
       }
+    Named(name) => abort("named type has no layout known to codegen: " + name)
   }
 }
 
@@ -67,6 +68,8 @@ fn Codegen::type_align(self : Codegen, ty : @ctype.Type) -> Int {
         Some(layout) => layout.align
         None => 8
       }
+    Named(name) =>
+      abort("named type has no alignment known to codegen: " + name)
   }
 }
 

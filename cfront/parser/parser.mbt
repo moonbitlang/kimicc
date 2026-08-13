@@ -131,6 +131,31 @@ pub fn parse_for_target(
 }
 
 ///|
+/// Parses a translation unit that mentions types known only by their
+/// spelling -- vector types like `float32x4_t`, GPU types like `uint3` --
+/// by seeding the typedef table with a `Named` entry per spelling before
+/// parsing begins.
+///
+/// This is the reading half of the `Named` round trip: the printer emits
+/// the spelling verbatim, and the caller that emitted it knows which
+/// spellings it used and hands them back here. Seeding a name the input
+/// never mentions is harmless; the entry just goes unused. `sizeof` or
+/// `_Alignof` over a named type raises `Unsupported`, since nothing here
+/// knows its layout.
+pub fn parse_with_named_types(
+  input : String,
+  type_names : Array[String],
+  target? : @target.Target = @target.Target::default(),
+) -> Program raise ParseError {
+  let lexer = Lexer::new(input)
+  let parser = Parser::new_for_target(lexer, target)
+  for name in type_names {
+    parser.typedefs[name] = Named(name)
+  }
+  parser.parse_program()
+}
+
+///|
 fn Parser::remember_value_type(self : Parser, name : String, ty : Type) -> Unit {
   if name != "" {
     self.value_types[name] = ty

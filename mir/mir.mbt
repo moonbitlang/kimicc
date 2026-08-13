@@ -1143,6 +1143,13 @@ fn Program::lower_mir_global_address_reloc_parts(
 /// }
 /// ```
 pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
+  // A named type is a spelling with no layout; anywhere the program would
+  // need its ABI, the fallthrough would be the integer path, silently
+  // wrong. One walk over the whole program closes both MIR backends.
+  match @parser.named_abi_violation(source) {
+    Some(msg) => abort(msg)
+    None => ()
+  }
   let funcs : Map[String, FuncSig] = Map([])
   let decls : Array[MirFuncDecl] = []
   for decl in source.decls {
@@ -1370,6 +1377,7 @@ pub fn Program::type_size(self : Program, ty : @ctype.Type) -> Int {
         SInt128 | UInt128 => 16
         Array(elem, n) => self.type_size(elem) * n
         Struct(name) | Union(name) => self.aggregate_layout_by_name(name).size
+        Named(name) => abort("named type has no layout known to MIR: " + name)
         Atomic(_) | Aligned(_, _) => abort("unreachable wrapped type")
       }
   }
@@ -1437,6 +1445,7 @@ pub fn Program::type_align(self : Program, ty : @ctype.Type) -> Int {
         SInt128 | UInt128 => 16
         Array(elem, _) => self.type_align(elem)
         Struct(name) | Union(name) => self.aggregate_layout_by_name(name).align
+        Named(name) => abort("named type has no layout known to MIR: " + name)
         Atomic(_) | Aligned(_, _) => abort("unreachable wrapped type")
       }
   }
@@ -1856,6 +1865,7 @@ pub fn MirModule::type_size(self : MirModule, ty : @ctype.Type) -> Int {
         SInt128 | UInt128 => 16
         Array(elem, n) => self.type_size(elem) * n
         Struct(name) | Union(name) => self.aggregate_layout_by_name(name).size
+        Named(name) => abort("named type has no layout known to MIR: " + name)
         Atomic(_) | Aligned(_, _) => abort("unreachable wrapped type")
       }
   }
@@ -1907,6 +1917,7 @@ pub fn MirModule::type_align(self : MirModule, ty : @ctype.Type) -> Int {
         SInt128 | UInt128 => 16
         Array(elem, _) => self.type_align(elem)
         Struct(name) | Union(name) => self.aggregate_layout_by_name(name).align
+        Named(name) => abort("named type has no layout known to MIR: " + name)
         Atomic(_) | Aligned(_, _) => abort("unreachable wrapped type")
       }
   }

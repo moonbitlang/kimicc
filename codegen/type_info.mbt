@@ -30,6 +30,7 @@ fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
     Array(elem, n) => self.type_size(elem) * n
     Atomic(ty) => self.type_size(ty)
     Aligned(ty, _) => self.type_size(ty)
+    Named(name) => abort("named type has no layout known to codegen: " + name)
     Struct(name) => {
       if !self.struct_layouts.contains(name) {
         if self.struct_decls.contains(name) {
@@ -113,6 +114,8 @@ fn Codegen::type_align(self : Codegen, ty : @parser.Type) -> Int {
         inner
       }
     }
+    Named(name) =>
+      abort("named type has no alignment known to codegen: " + name)
     Struct(name) => {
       if !self.struct_layouts.contains(name) {
         if self.struct_decls.contains(name) {
