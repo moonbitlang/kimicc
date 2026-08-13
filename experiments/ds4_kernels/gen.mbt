@@ -508,3 +508,185 @@ pub fn generate_kernels(cfg : Config) -> String {
   }
   @printer.print_program(@build.ordered_program(items))
 }
+
+///|
+/// The spellings the NEON kernels depend on; a consumer parsing the
+/// emitted source registers exactly these via `parse_with_named_types`.
+pub let neon_type_names : Array[String] = [
+  "float32x4_t", "int32x4_t", "int8_t", "float16x4_t",
+]
+
+///|
+fn named_ptr(name : String) -> @ctype.Type {
+  Pointer(Named(name))
+}
+
+///|
+/// One NEON q8_0 block-pair half: the f16 scale load, the quant pointer,
+/// two `vdotq_s32` steps over 32 int8 lanes, and the fused
+/// multiply-accumulate into one float32x4 accumulator -- ds4's fast path
+/// statement for statement. `b` is the pair base plus 0 or 1.
+fn q8_neon_half(
+  suffix : String,
+  b : @parser.Expr,
+  acc : String,
+) -> Array[@parser.Stmt] {
+  let scale_bits = "scale_bits" + suffix
+  let qs = "qs" + suffix
+  let xqp = "xq" + suffix
+  let dot = "dot" + suffix
+  let row = @build.v("row")
+  let xq = @build.v("xq")
+  let xscale = @build.v("xscale")
+  [
+    @build.decl(UShort, scale_bits),
+    load_into(scale_bits, row + b * lit(34), UShort),
+    @build.decl(
+      named_ptr("int8_t"),
+      qs,
+      init=@build.cast(named_ptr("int8_t"), row + b * lit(34) + lit(2)),
+    ),
+    @build.decl(named_ptr("int8_t"), xqp, init=xq + b * lit(32)),
+    @build.decl(
+      Named("int32x4_t"),
+      dot,
+      init=@build.call("vdupq_n_s32", [lit(0)]),
+    ),
+    @build.assign(
+      @build.v(dot),
+      @build.call("vdotq_s32", [
+        @build.v(dot),
+        @build.call("vld1q_s8", [@build.v(qs)]),
+        @build.call("vld1q_s8", [@build.v(xqp)]),
+      ]),
+    ),
+    @build.assign(
+      @build.v(dot),
+      @build.call("vdotq_s32", [
+        @build.v(dot),
+        @build.call("vld1q_s8", [@build.v(qs) + lit(16)]),
+        @build.call("vld1q_s8", [@build.v(xqp) + lit(16)]),
+      ]),
+    ),
+    @build.assign(
+      @build.v(acc),
+      @build.call("vfmaq_n_f32", [
+        @build.v(acc),
+        @build.call("vcvtq_f32_s32", [@build.v(dot)]),
+        @build.call("gen_f16_to_f32_vcvt", [@build.v(scale_bits)]) * xscale[b],
+      ]),
+    ),
+  ]
+}
+
+///|
+/// `float gen_dot_q8_0_row_neon_<d>(unsigned char *row, int8_t *xq,
+/// float *xscale)` -- ds4's `__ARM_FEATURE_DOTPROD` fast path with the
+/// block count baked: two-block unrolled pairs into two accumulators, an
+/// odd-block tail when the count demands one, and the same final
+/// `vaddvq_f32(vaddq_f32(...))` reduction. The accumulation order
+/// mirrors ds4's exactly, so the native-flags referee can hold the
+/// comparison to bit equality.
+fn dot_q8_0_row_neon_fn(d : Int) -> @parser.FuncDecl {
+  let blocks = d / 32
+  let b = @build.v("b")
+  let body : Array[@parser.Stmt] = [
+    @build.decl(
+      Named("float32x4_t"),
+      "accv0",
+      init=@build.call("vdupq_n_f32", [flit(0.0)]),
+    ),
+    @build.decl(
+      Named("float32x4_t"),
+      "accv1",
+      init=@build.call("vdupq_n_f32", [flit(0.0)]),
+    ),
+    For(
+      [VarDecl(SInt, "b", Some(@parser.int_literal(0, SInt)))],
+      Binary("<", Binary("+", b, lit(1)), lit(blocks)),
+      Some(CompoundAssign("+", b, lit(2))),
+      Compound(
+        q8_neon_half("0", b, "accv0") +
+        q8_neon_half("1", Binary("+", b, lit(1)), "accv1"),
+      ),
+    ),
+  ]
+  if blocks % 2 == 1 {
+    body.push(Compound(q8_neon_half("t", lit(blocks - 1), "accv0")))
+  }
+  body.push(
+    @build.ret(
+      value=@build.call("vaddvq_f32", [
+        @build.call("vaddq_f32", [@build.v("accv0"), @build.v("accv1")]),
+      ]),
+    ),
+  )
+  @build.func(
+    Float,
+    "gen_dot_q8_0_row_neon_" + d.to_string(),
+    [
+      @build.param(Pointer(UChar), "row"),
+      @build.param(named_ptr("int8_t"), "xq"),
+      @build.param(Pointer(Float), "xscale"),
+    ],
+    body,
+    is_static=true,
+  )
+}
+
+///|
+/// The hardware half-to-float conversion ds4's NEON build uses: on every
+/// finite input it returns the same bits as the scalar port, but in one
+/// `vcvt` instead of a shift-and-mask cascade -- which matters when it
+/// runs once per 34-byte block. Emitted alongside the NEON kernels, which
+/// are the only callers.
+fn f16_to_f32_vcvt_fn() -> @parser.FuncDecl {
+  @build.func(
+    Float,
+    "gen_f16_to_f32_vcvt",
+    [@build.param(UShort, "h")],
+    [
+      @build.ret(
+        value=@build.call("vgetq_lane_f32", [
+          @build.call("vcvt_f32_f16", [
+            @build.call("vreinterpret_f16_u16", [
+              @build.call("vdup_n_u16", [@build.v("h")]),
+            ]),
+          ]),
+          lit(0),
+        ]),
+      ),
+    ],
+    is_static=true,
+  )
+}
+
+///|
+/// NEON q8_0 kernels for the given row widths, emitted separately from
+/// `generate_kernels` so a referee can inject them only into translation
+/// units compiled with dotprod available. The output calls
+/// `gen_f16_to_f32`, so it composes after a `generate_kernels` result in
+/// the same unit. Widths must be positive multiples of 32, ds4's own
+/// precondition for taking this path.
+pub fn generate_q8_neon_kernels(dims : Array[Int]) -> String {
+  let items : Array[@build.Item] = [Func(f16_to_f32_vcvt_fn())]
+  for i in 0..<dims.length() {
+    let d = dims[i]
+    if d <= 0 || d % 32 != 0 {
+      abort(
+        "generate_q8_neon_kernels: width must be a positive multiple of 32; got " +
+        d.to_string(),
+      )
+    }
+    // A width names its kernel, so a repeat would emit two definitions of
+    // the same static function -- uncompilable output, same rule as
+    // generate_kernels.
+    for k in 0..<i {
+      if dims[k] == d {
+        abort("generate_q8_neon_kernels: duplicate width " + d.to_string())
+      }
+    }
+    items.push(Func(dot_q8_0_row_neon_fn(d)))
+  }
+  @printer.print_program(@build.ordered_program(items))
+}

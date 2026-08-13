@@ -54,3 +54,35 @@ test "ds4 kernels round-trip through print and parse for arbitrary widths" {
     }
   }
 }
+
+///|
+/// The NEON q8_0 kernels: canonical round trip with the named-type pool
+/// registered, and a cross-target clang gate -- `-target
+/// aarch64-linux-gnu` with the dotprod feature -- so the intrinsics
+/// source is syntax-checked on every CI host, x86 included. The gate is
+/// freestanding (clang's builtin arm_neon.h, a hand prototype for
+/// memcpy) because a cross libc sysroot is not available.
+async test "generated NEON q8_0 kernels round-trip and pass the cross clang gate" {
+  let base = @ds4_kernels.generate_kernels({
+    q8_dims: [],
+    q2k_dims: [],
+    iq2_dims: [],
+  })
+  let neon = @ds4_kernels.generate_q8_neon_kernels([64, 96])
+  let program = @parser.parse_with_named_types(
+    neon, @ds4_kernels.neon_type_names,
+  )
+  assert_eq(@printer.print_program(program), neon)
+  let full = "#include <arm_neon.h>\n" +
+    "extern void *memcpy(void *, const void *, unsigned long);\n" +
+    base +
+    neon
+  let path = temp_file_path("ds4_neon_gate", full, ".c")
+  write_text_file(path, full)
+  run_command_checked(
+    "clang -target aarch64-linux-gnu -march=armv8.2-a+dotprod " +
+    "-fsyntax-only -ferror-limit=0 " +
+    path,
+    "cross clang gate on generated NEON kernels",
+  )
+}
