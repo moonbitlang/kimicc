@@ -1,0 +1,18 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/kimicc/experiments/ds4_kernels"
+
+// Values
+pub fn generate_kernels(Config) -> String
+
+// Errors
+
+// Types and methods
+pub(all) struct Config {
+  q8_dims : Array[Int]
+  q2k_dims : Array[Int]
+  iq2_dims : Array[Int]
+}
+
+// Type aliases
+
+// Traits
