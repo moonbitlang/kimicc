@@ -66,7 +66,11 @@ async test "generated ds4 kernels match ds4 bit for bit" {
     iq2_dims: [4096, 256],
   }
   let generated = @ds4_kernels.generate_kernels(cfg)
-  let neon = @ds4_kernels.generate_q8_neon_kernels([4096, 256])
+  // Every width the L3 drop-in dispatches is refereed here individually
+  // -- the A/B's frontier logits are dumped after prefill, which
+  // exercises mostly width 4096, so width attribution lives in these
+  // per-kernel bit comparisons, not there.
+  let neon = @ds4_kernels.generate_q8_neon_kernels([4096, 8192, 2048, 1024, 256])
   let driver =
     #|
     #|/* ---- referee driver (hand-written) ---- */
@@ -345,6 +349,9 @@ async test "generated ds4 kernels match ds4 bit for bit" {
     #|#endif
     #|#if defined(__ARM_FEATURE_DOTPROD)
     #|    drv_test_q8_neon("q8neon/4096", 4096, gen_dot_q8_0_row_neon_4096);
+    #|    drv_test_q8_neon("q8neon/8192", 8192, gen_dot_q8_0_row_neon_8192);
+    #|    drv_test_q8_neon("q8neon/2048", 2048, gen_dot_q8_0_row_neon_2048);
+    #|    drv_test_q8_neon("q8neon/1024", 1024, gen_dot_q8_0_row_neon_1024);
     #|    drv_test_q8_neon("q8neon/256", 256, gen_dot_q8_0_row_neon_256);
     #|#endif
     #|    if (argc > 1) {

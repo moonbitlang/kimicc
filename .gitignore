@@ -7,3 +7,4 @@ testdir/
 -.s
 a.out
 .repos/
+__pycache__/
