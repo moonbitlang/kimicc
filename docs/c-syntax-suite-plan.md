@@ -406,6 +406,24 @@ empty loop), and the f16 conversion choice is worth 2x — the scalar
 bit-cascade port cost 204 ns/row until the NEON kernels switched to the
 `vcvt` helper ds4's own build uses.
 
+**Status: L3 drop-in landed.** `scripts/ds4-dropin-patch.py` splices the
+generated NEON kernels into a scratch copy of ds4.c and inserts a
+dispatch chain at the top of `dot_q8_0_row` for the model's four q8_0
+widths (1024/2048/4096/8192), everything else falling through to ds4's
+original body — the seam stays a function boundary. The A/B on the real
+checkpoint (2026-08-13): frontier logits over the 129,280-token
+vocabulary were **bit-identical** — the intrinsic sequence pins the
+arithmetic even under ds4's `-ffast-math` — and a canary build with a
+deliberately broken kernel moved the argmax and 39 logit units, proving
+the dispatch executes. Throughput: 5.83 vs 5.87 gen tok/s, 11.28 vs
+11.27 prefill — parity, and honestly so: q8_0 attention and shared-
+expert dots are a minor slice of MoE decode. The dominant cost is the
+IQ2_XXS/Q2_K expert matvecs over q8_K activations, which the generator
+does not cover yet — that, not more q8_0, is the next performance lever,
+and it is also where fixed-model specialization has real room (per-
+expert dispatch, baked expert strides, the MoE variant explosion the
+generator exists to manage).
+
 ## What stays out of scope
 
 Printing is canonical, not format-preserving. Even with every step above, the
