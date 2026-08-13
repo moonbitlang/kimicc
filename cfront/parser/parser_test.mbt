@@ -1917,3 +1917,111 @@ test "parse builtin classify type folds covered categories" {
     _ => fail("Expected __builtin_classify_type to fold covered categories")
   }
 }
+
+///|
+/// A `Named` type is a spelling the parser can only know by registration:
+/// `parse_with_named_types` seeds the typedef table and the declaration
+/// parses like any typedef'd type. (The print half of the round trip
+/// lives in `qc_test`, which can see the printer.)
+test "a registered named type parses as Named" {
+  let source =
+    #|static float sum4(float *x) {
+    #|  float32x4_t acc = vdupq_n_f32(0.0f);
+    #|  return vaddvq_f32(acc);
+    #|}
+    #|
+  let program = @parser.parse_with_named_types(source, ["float32x4_t"])
+  match program.decls[0].body {
+    Some(Compound([VarDecl(Named("float32x4_t"), "acc", Some(_)), ..])) => ()
+    other => fail("expected a Named-typed declaration, got \{Repr(other)}")
+  }
+}
+
+///|
+/// Without registration the spelling is just an undeclared identifier, and
+/// the declaration fails to parse: a diagnostic, not a silent misread.
+test "an unregistered named type is a parse error" {
+  let source = "void f(void) { float32x4_t acc; }"
+  try @parser.parse(source) |> ignore catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected a parse error for the unregistered type name")
+  }
+}
+
+///|
+/// Synthesized integer literals carry the suffix their type demands, so
+/// the reparse recovers the same type: a bare `5` reads back `SInt`, and
+/// exact AST equality is the round-trip contract.
+test "int_literal synthesizes the canonical suffix for its type" {
+  match @parser.int_literal(5, UInt) {
+    Number(5, "5u", UInt) => ()
+    other => fail("unexpected UInt literal shape: \{Repr(other)}")
+  }
+  match @parser.int_literal(5, SLong) {
+    Number(5, "5L", SLong) => ()
+    other => fail("unexpected SLong literal shape: \{Repr(other)}")
+  }
+  match @parser.int_literal(5, ULongLong) {
+    Number(5, "5uLL", ULongLong) => ()
+    other => fail("unexpected ULongLong literal shape: \{Repr(other)}")
+  }
+  // The synthesized text lexes back to the same value and type.
+  let program = @parser.parse("long k = 5L;")
+  match program.globals[0].init {
+    Some(Scalar(Number(5, "5L", SLong))) => ()
+    other => fail("unexpected reparse of 5L: \{Repr(other)}")
+  }
+}
+
+///|
+/// The ABI walk finds named types anywhere a backend would need their
+/// layout -- including codex's counterexample: a callback carrying a
+/// named return hidden inside a struct field, reached only through a
+/// pointer. Plain opaque-pointer uses stay legal.
+test "named_abi_violation walks fields, locals, casts, and callbacks" {
+  let names = ["float32x4_t"]
+  // Legal: named types behind plain pointers only.
+  let ok = @parser.parse_with_named_types(
+    "void f(float32x4_t *p) { float32x4_t **q = &p; }", names,
+  )
+  assert_eq(@parser.named_abi_violation(ok), None)
+  // A struct field whose function-pointer signature returns one by value.
+  let field_source =
+    #|struct S { float32x4_t (*cb)(void); };
+    #|int f(struct S *s) { return 0; }
+    #|
+  let field = @parser.parse_with_named_types(field_source, names)
+  match @parser.named_abi_violation(field) {
+    Some(msg) => assert_true(msg.contains("S.cb"))
+    None => fail("expected the struct-field callback to be a violation")
+  }
+  // A cast to a callback type with a named parameter.
+  let cast = @parser.parse_with_named_types(
+    "void f(void *x) { void (*g)(void) = (void (*)(float32x4_t))x; }", names,
+  )
+  match @parser.named_abi_violation(cast) {
+    Some(_) => ()
+    None => fail("expected the cast target to be a violation")
+  }
+  // A local declared by value.
+  let local_decl = @parser.parse_with_named_types(
+    "void f(void) { float32x4_t v; }", names,
+  )
+  match @parser.named_abi_violation(local_decl) {
+    Some(msg) => assert_true(msg.contains("local `v`"))
+    None => fail("expected the by-value local to be a violation")
+  }
+}
+
+///|
+/// A negative value never takes a suffix: the sign is not part of the
+/// integer token, so `-1uLL` would parse as negation of unsigned `1uLL`
+/// and flip comparisons. Enumerator substitution is where negatives
+/// reach `int_literal`.
+test "int_literal leaves negative values unsuffixed" {
+  match @parser.int_literal(-1, ULongLong) {
+    Number(value, "-1", ULongLong) => assert_eq(value, -1L)
+    other => fail("unexpected negative literal shape: \{Repr(other)}")
+  }
+}

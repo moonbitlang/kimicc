@@ -30,6 +30,13 @@ pub(all) enum Type {
   Array(Type, Int)
   Atomic(Type)
   Aligned(Type, Int)
+  /// A type known only by its spelling -- vector types like
+  /// `float32x4_t`, GPU types like `uint3` -- for code that is generated
+  /// and printed but never compiled by this workspace's backends. The
+  /// printer emits the name; the parser resolves it only when the caller
+  /// registers the spelling; layout queries and both code generators
+  /// reject it, since nothing here knows its size.
+  Named(String)
 } derive(Eq, Debug)
 
 ///|
@@ -67,6 +74,7 @@ pub impl Show for Type with fn to_string(self) {
     Double => "Double"
     LongDouble => "LongDouble"
     Struct(name) => "Struct(" + name + ")"
+    Named(name) => "Named(" + name + ")"
     Union(name) => "Union(" + name + ")"
     FuncPtr(ret, params, variadic) =>
       "FuncPtr(" +
@@ -678,6 +686,8 @@ pub fn Type::size(self : Type) -> Int {
     Array(elem, n) => elem.size() * n
     Atomic(ty) => ty.size()
     Aligned(ty, _) => ty.size()
+    Named(name) =>
+      abort("Cannot compute size of a named type without its layout: " + name)
   }
 }
 
@@ -717,6 +727,10 @@ pub fn Type::align(self : Type) -> Int {
         inner
       }
     }
+    Named(name) =>
+      abort(
+        "Cannot compute alignment of a named type without its layout: " + name,
+      )
   }
 }
 

@@ -223,10 +223,19 @@ pub fn for_range(
   name : String,
   bound : @parser.Expr,
   body : Array[@parser.Stmt],
+  ty? : @ctype.Type = SInt,
 ) -> @parser.Stmt {
   let counter : @parser.Expr = Var(name)
+  // The zero initializer's literal type must be one a suffix can spell:
+  // `unsigned char i = 0` parses its `0` as `SInt`, so a literal typed
+  // `UChar` would print bare and reparse differently, breaking the exact
+  // round trip. Suffix-spellable counter types keep their own literal.
+  let literal_ty : @ctype.Type = match ty {
+    SInt | UInt | SLong | ULong | SLongLong | ULongLong => ty
+    _ => SInt
+  }
   For(
-    [VarDecl(SInt, name, Some(@parser.int_literal(0, SInt)))],
+    [VarDecl(ty, name, Some(@parser.int_literal(0, literal_ty)))],
     counter.lt(bound),
     Some(PostfixInc(counter)),
     Compound(body),

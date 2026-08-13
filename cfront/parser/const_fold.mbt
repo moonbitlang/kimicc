@@ -504,6 +504,11 @@ fn Parser::const_type_size(self : Parser, ty : Type) -> Int raise ParseError {
     Aligned(inner, _) => self.const_type_size(inner)
     Struct(name) => self.const_struct_size(name)
     Union(name) => self.const_union_size(name)
+    Named(name) =>
+      raise Unsupported(
+        position=self.position(),
+        what="sizeof a named type with unknown layout: " + name,
+      )
   }
 }
 
@@ -537,6 +542,11 @@ fn Parser::const_type_align(self : Parser, ty : Type) -> Int raise ParseError {
     }
     Struct(name) => self.const_struct_align(name)
     Union(name) => self.const_union_align(name)
+    Named(name) =>
+      raise Unsupported(
+        position=self.position(),
+        what="alignof a named type with unknown layout: " + name,
+      )
   }
 }
 

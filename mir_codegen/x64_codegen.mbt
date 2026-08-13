@@ -272,6 +272,8 @@ fn X64Codegen::type_size(self : X64Codegen, ty : @ctype.Type) -> Int {
         Some(layout) => layout.size
         None => 8
       }
+    Named(name) =>
+      abort("named type has no layout known to x86-64 codegen: " + name)
   }
 }
 
@@ -312,6 +314,8 @@ fn X64Codegen::type_align(self : X64Codegen, ty : @ctype.Type) -> Int {
             Some(layout) => layout.align
             None => 8
           }
+        Named(name) =>
+          abort("named type has no alignment known to x86-64 codegen: " + name)
         Atomic(_) | Aligned(_, _) => abort("unreachable x86-64 wrapped type")
       }
   }
@@ -443,6 +447,7 @@ fn X64Codegen::emit_load_indirect(self : X64Codegen, ty : @ctype.Type) -> Unit {
     }
     Array(_, _) | Struct(_) | Union(_) => ()
     Void => ()
+    Named(name) => abort("named type load is not supported: " + name)
     Atomic(inner) | Aligned(inner, _) => self.emit_load_indirect(inner)
   }
 }
@@ -465,6 +470,7 @@ fn X64Codegen::emit_store_indirect(self : X64Codegen, ty : @ctype.Type) -> Unit 
       self.emit("\tmov\tQWORD PTR [r10 + 8], rdx")
     }
     Array(_, _) | Struct(_) | Union(_) | Void => ()
+    Named(name) => abort("named type store is not supported: " + name)
     Atomic(inner) | Aligned(inner, _) => self.emit_store_indirect(inner)
   }
 }

@@ -181,6 +181,8 @@ fn x64_reject_unsupported_scalar(ty : @parser.Type) -> Unit {
     Float16 => abort("_Float16 ABI lowering is not supported")
     Float128 => abort("__float128 ABI lowering is not supported")
     LongDouble => abort("long double x87 ABI lowering is not supported")
+    Named(name) =>
+      abort("named type `" + name + "` has no ABI known to x86-64 codegen")
     Pointer(_) | FuncPtr(_, _, _) => ()
     Array(elem, _) | Atomic(elem) | Aligned(elem, _) =>
       x64_reject_unsupported_scalar(elem)
@@ -321,6 +323,8 @@ fn X64Codegen::type_size(self : X64Codegen, ty : @parser.Type) -> Int {
           }
           x64_align_to(max_size, max_align)
         }
+        Named(name) =>
+          abort("named type has no layout known to x86-64 codegen: " + name)
         Atomic(_) | Aligned(_, _) => abort("unreachable x86-64 wrapped type")
       }
   }
@@ -367,6 +371,8 @@ fn X64Codegen::type_align(self : X64Codegen, ty : @parser.Type) -> Int {
           }
           max_align
         }
+        Named(name) =>
+          abort("named type has no layout known to x86-64 codegen: " + name)
         Atomic(_) | Aligned(_, _) => abort("unreachable x86-64 wrapped type")
       }
   }
@@ -564,6 +570,7 @@ fn X64Codegen::emit_load_indirect(self : X64Codegen, ty : @parser.Type) -> Unit 
     }
     Array(_, _) | Struct(_) | Union(_) => ()
     Void => ()
+    Named(name) => abort("named type load is not supported: " + name)
     Atomic(inner) | Aligned(inner, _) => self.emit_load_indirect(inner)
   }
 }
@@ -589,6 +596,7 @@ fn X64Codegen::emit_store_indirect(
       self.emit("\tmov\tQWORD PTR [r10 + 8], rdx")
     }
     Array(_, _) | Struct(_) | Union(_) | Void => ()
+    Named(name) => abort("named type store is not supported: " + name)
     Atomic(inner) | Aligned(inner, _) => self.emit_store_indirect(inner)
   }
 }
@@ -8751,6 +8759,10 @@ fn X64Codegen::generate(self : X64Codegen, prog : @parser.Program) -> String {
     self.compute_struct_layout(sdecl)
   }
   self.register_parser_function_decls(prog.decls)
+  match @parser.named_abi_violation(prog) {
+    Some(msg) => abort(msg)
+    None => ()
+  }
   let parser_globals = merge_global_decls(
     append_codegen_file_scope_compound_literal_globals(prog.globals),
   )

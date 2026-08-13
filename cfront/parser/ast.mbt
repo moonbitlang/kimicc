@@ -231,6 +231,29 @@ pub(all) struct Program {
 /// Prefer this to constructing `Number` directly: the text is authoritative and
 /// the value is a cache of it, so they must agree, and this is what guarantees
 /// that for a literal the compiler synthesises rather than reads from source.
+///
+/// The text carries the suffix the type demands -- `5u`, `5L`, `5uLL` --
+/// because the reparse recovers the type from the text alone: a synthesized
+/// `SLong` literal spelled bare `5` would come back `SInt`, and the
+/// round-trip contract is exact AST equality.
+///
+/// A negative value never takes a suffix: the sign is not part of the
+/// integer token, so `-1uLL` would parse as negation of `1uLL` -- an
+/// unsigned expression, flipping comparisons like `-1uLL < 0` to false.
+/// Negative literals reach here from enumerator substitution; canonical
+/// trees spell negation as `Unary("-", ...)` over a non-negative literal.
 pub fn int_literal(value : Int64, ty : Type) -> Expr {
-  Number(value, value.to_string(), ty)
+  let suffix = if value < 0L {
+    ""
+  } else {
+    match ty {
+      UInt => "u"
+      SLong => "L"
+      ULong => "uL"
+      SLongLong => "LL"
+      ULongLong => "uLL"
+      _ => ""
+    }
+  }
+  Number(value, value.to_string() + suffix, ty)
 }

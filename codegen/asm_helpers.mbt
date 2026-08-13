@@ -138,6 +138,7 @@ fn Codegen::emit_load_typed(
       }
     Atomic(inner) => self.emit_load_typed(reg, addr_reg, inner)
     Aligned(inner, _) => self.emit_load_typed(reg, addr_reg, inner)
+    Named(name) => abort("named type load is not supported: " + name)
     _ => self.emit("\tldr\t" + reg + ", [" + addr_reg + "]")
   }
 }
@@ -165,6 +166,7 @@ fn Codegen::emit_store_typed(
     }
     Atomic(inner) => self.emit_store_typed(value_reg, addr_reg, inner)
     Aligned(inner, _) => self.emit_store_typed(value_reg, addr_reg, inner)
+    Named(name) => abort("named type store is not supported: " + name)
     _ => self.emit("\tstr\t" + value_reg + ", [" + addr_reg + "]")
   }
 }

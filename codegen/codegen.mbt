@@ -1673,6 +1673,12 @@ pub fn Codegen::generate(self : Codegen, prog : @parser.Program) -> String {
   }
   // Precompute function return types, variadic flags, and param counts
   self.register_parser_function_decls(prog.decls)
+  // A named type used anywhere its ABI would matter is a hard error; one
+  // walk over the whole program, shared with every other backend entry.
+  match @parser.named_abi_violation(prog) {
+    Some(msg) => abort(msg)
+    None => ()
+  }
   let inline_decls : Map[String, @parser.FuncDecl] = Map([])
   for decl in prog.decls {
     if decl.is_inline {

@@ -21,7 +21,15 @@
 ///   dangling-else rule means no source ever parses to the bare form, so the
 ///   braces are part of the canonical tree; the printer braces such a branch
 ///   itself when handed one, preserving meaning at the cost of the shape.
+/// - `Named` types appear only where the reparse can recover them: the
+///   round-trip harness seeds `parse_with_named_types` with this pool, the
+///   same contract a generator that emits vector types lives by.
 struct GenProgram(@parser.Program)
+
+///|
+/// The named-type spellings the generator may use. Shared with the
+/// round-trip tests, which seed the parser with exactly this pool.
+let named_type_pool : Array[String] = ["float32x4_t", "int32x4_t", "uint3"]
 
 ///|
 impl @quickcheck.Arbitrary for GenProgram with fn arbitrary(size, state) {
@@ -185,8 +193,22 @@ fn gen_stmts(
       0 | 1 => {
         let name = "v" + next_name.val.to_string()
         next_name.val += 1
-        stmts.push(VarDecl(SInt, name, Some(gen_expr(depth, vars, state))))
-        vars.push(name)
+        // Mostly int locals the expression pool can use; occasionally a
+        // Named-typed local, declared but never mixed into int arithmetic,
+        // so the printer's verbatim spelling and the seeded reparse are
+        // both exercised.
+        if pick(state, 8) == 0 {
+          stmts.push(
+            VarDecl(
+              Named(named_type_pool[pick(state, named_type_pool.length())]),
+              name,
+              None,
+            ),
+          )
+        } else {
+          stmts.push(VarDecl(SInt, name, Some(gen_expr(depth, vars, state))))
+          vars.push(name)
+        }
       }
       2 =>
         if vars.length() > 0 {
