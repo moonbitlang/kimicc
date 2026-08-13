@@ -11,6 +11,7 @@ import {
   "bobzhang/cfront/build",
   "bobzhang/kimicc/experiments/llama_forward",
   "bobzhang/kimicc/experiments/ds4_kernels",
+  "bobzhang/kimicc/msl",
   "bobzhang/cfront/ctype",
   "moonbitlang/core/quickcheck/splitmix",
   "moonbitlang/core/env",

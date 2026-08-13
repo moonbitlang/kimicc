@@ -322,13 +322,41 @@ reference kernels alongside the fast ones.
    `int_literal` synthesizes the suffix its type demands (`5u`, `5L`,
    `5uLL`) — a bare synthesized `5L`-value used to reparse as `SInt`, a
    latent round-trip asymmetry nothing had exercised.
-2. **Attribute surface for GPU functions and parameters** — blocks only the
-   Metal rung: `kernel` qualifiers, address spaces (`device`, `constant`,
-   `threadgroup`), and `[[buffer(0)]]`-style attributes. Design as opaque
-   attribute strings on FuncDecl/Param rather than modeling MSL — the same
-   surface later serves CUDA `__global__`. ds4 compiles its 22,851 lines of
-   MSL from source at runtime (`newLibraryWithSource`), so generated kernels
-   drop in as strings with no `.metallib` step.
+2. **Attribute surface for GPU functions and parameters** — **done, and
+   deliberately NOT in cfront**: the `msl` package is a dialect layer that
+   wraps `@parser.FuncDecl` with a function qualifier and per-parameter
+   decoration strings (address space, `[[...]]` attribute). cfront's
+   round-trip contract stays unqualified — a decorated signature is not C,
+   so it never enters the C AST. The dialect has its own round trip: the
+   parser half is a decoration bridge (strip decorations lexically, parse
+   the C core with cfront seeded with named types, reattach), exact for
+   everything the package prints and a diagnostic for everything it does
+   not (references, templates, `constexpr`/`auto` — measured in ds4's
+   shaders at 249/204/281 uses, concentrated in dense.metal and
+   moe.metal; parsing *those* is a separately-sized phase 2 whose payoff
+   is specialization-by-transformation of antirez's own kernels). The
+   compile gate is the runtime Metal compiler itself
+   (`newLibraryWithSource` via a small ObjC probe) — the same compiler
+   ds4 uses in production, needing no offline toolchain; it skips on
+   Linux CI and GPU-less machines. The same wrapper pattern later serves
+   CUDA (`__global__`, `__shared__`).
+
+   The bridge was hardened through sixteen codex xhigh rounds, which
+   drove it from per-counterexample patches to structural rules: one
+   comment-and-literal-blanked scan text (length-preserving, non-BMP
+   aware) feeds every structural scan; parameters are closed over the
+   shapes real MSL kernels take (values and pointer chains, `void *`
+   included — no arrays, atomics, function pointers, or `_Alignas`); the
+   address-space vocabulary is closed over what the bridge strips; and
+   every accepted parse is printable by construction. One codex finding
+   was refuted by evidence: `[[buffer(n)]]` bindings are optional — the
+   gate passes on real hardware without them, and ds4's own shaders omit
+   them (Metal auto-assigns in declaration order). Residue, recorded:
+   the bridge is a lexical approximation, and adversarial hand-written
+   MSL beyond its diagnostics is the province of the phase-2 grammar
+   parser, which owns templates, `constexpr`/`auto`, and references —
+   the dense.metal/moe.metal subset whose payoff is
+   specialization-by-transformation of ds4's own kernels.
 3. **Micro-gaps, minutes each:** `for_range` hardcodes `int` counters (ds4
    loops on `uint64_t`); a u-suffix literal helper; optional typedef emission
    (writing `struct block_q2_K` spelling avoids it).
