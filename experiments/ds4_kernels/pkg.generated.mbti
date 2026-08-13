@@ -4,6 +4,10 @@ package "bobzhang/kimicc/experiments/ds4_kernels"
 // Values
 pub fn generate_kernels(Config) -> String
 
+pub fn generate_q8_neon_kernels(Array[Int]) -> String
+
+pub let neon_type_names : Array[String]
+
 // Errors
 
 // Types and methods

@@ -391,6 +391,21 @@ against ~1e-6 observed drift (deployment). Fast-math waives
 bit-determinism by definition, so that second standard — tolerance plus
 token agreement, not bits — is also what the L3 drop-in referee inherits.
 
+**Status: NEON rung landed.** With `Named` types in cfront@0.3.0,
+`generate_q8_neon_kernels` emits ds4's dotprod fast path — `vdotq_s32`
+pairs into two `float32x4_t` accumulators, hardware `vcvt` scale
+conversion, the same reduction — with the block count baked. A third
+referee binary (native flags, strict FP) holds generated-NEON against
+ds4-NEON to bit equality: identical on random blocks and real rows.
+The cache-hot single-row bench at production flags reads **ds4 89.2 /
+generated-NEON 94.3 / generated-scalar 1279 ns per 4096-wide dot** —
+parity with the hand-written kernel within ~6%, SIMD worth 14x over
+scalar. Two bench lessons paid for: a pure call over unchanging inputs
+hoists out of a `-O3` timing loop entirely (the first numbers timed an
+empty loop), and the f16 conversion choice is worth 2x — the scalar
+bit-cascade port cost 204 ns/row until the NEON kernels switched to the
+`vcvt` helper ds4's own build uses.
+
 ## What stays out of scope
 
 Printing is canonical, not format-preserving. Even with every step above, the
