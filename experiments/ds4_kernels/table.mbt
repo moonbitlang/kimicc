@@ -4,7 +4,7 @@
 /// generation time. The referee driver `memcmp`s the baked expansion
 /// against the table ds4 builds at runtime, so a transcription error here
 /// cannot pass silently.
-let iq2xxs_grid : Array[UInt64] = [
+pub let iq2xxs_grid : Array[UInt64] = [
   0x0808080808080808UL, 0x080808080808082bUL, 0x0808080808081919UL, 0x0808080808082b08UL,
   0x0808080808082b2bUL, 0x0808080808190819UL, 0x0808080808191908UL, 0x08080808082b0808UL,
   0x08080808082b082bUL, 0x08080808082b2b08UL, 0x08080808082b2b2bUL, 0x0808080819080819UL,

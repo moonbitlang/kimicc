@@ -12,6 +12,7 @@ import {
   "bobzhang/kimicc/experiments/llama_forward",
   "bobzhang/kimicc/experiments/ds4_kernels",
   "bobzhang/kimicc/msl",
+  "bobzhang/kimicc/experiments/ds4_metal",
   "bobzhang/cfront/ctype",
   "moonbitlang/core/quickcheck/splitmix",
   "moonbitlang/core/env",

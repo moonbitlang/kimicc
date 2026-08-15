@@ -6,6 +6,10 @@ pub fn generate_kernels(Config) -> String
 
 pub fn generate_q8_neon_kernels(Array[Int]) -> String
 
+pub let iq2xxs_grid : Array[UInt64]
+
+pub fn ksigns(Int) -> Int
+
 pub let neon_type_names : Array[String]
 
 // Errors

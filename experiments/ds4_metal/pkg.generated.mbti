@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/kimicc/experiments/ds4_metal"
+
+// Values
+pub fn generate(Config) -> String
+
+// Errors
+
+// Types and methods
+pub(all) struct Config {
+  in_dim : Int
+  out_rows : Int
+  nr0 : Int
+  nsg : Int
+}
+
+// Type aliases
+
+// Traits

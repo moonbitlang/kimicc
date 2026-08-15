@@ -408,7 +408,7 @@ fn dot_iq2_xxs_fn(d : Int) -> @parser.FuncDecl {
 /// `j` (ds4 stores the same 128 bytes as a literal table). The referee
 /// memcmp against ds4's expansion is what makes this reconstruction safe
 /// to rely on.
-fn ksigns(s : Int) -> Int {
+pub fn ksigns(s : Int) -> Int {
   let mut parity = 0
   for j in 0..<7 {
     parity = parity ^ ((s >> j) & 1)
