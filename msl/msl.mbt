@@ -18,12 +18,17 @@
 /// exact -- `parse_kernel(print_kernel(k)) == k` -- which restores the
 /// same print/parse discipline the C side runs under quickcheck.
 ///
-/// Phase-1 limits, deliberate: no references (`constant T &x` -- emitted
-/// kernels pass pointers, which bind buffers identically), no templates,
-/// no `constexpr`/`auto` (generated kernels are concrete-typed by
-/// thesis), and attributes may not appear inside bodies. Parsing ds4's
-/// own hand-written shaders needs those and is a later, separately-sized
-/// phase.
+/// Reference parameters are supported, because every real MSL kernel
+/// takes its uniform block that way (`constant Args &args`) and a
+/// drop-in must match the signature the host binds against. `&` is a
+/// decoration for the same reason an address space is: C has no such
+/// declarator, so it never enters the C AST.
+///
+/// Phase-1 limits, deliberate: no templates, no `constexpr`/`auto`
+/// (generated kernels are concrete-typed by thesis), no rvalue
+/// references or references to pointers, and attributes may not appear
+/// inside bodies. Parsing ds4's own hand-written shaders needs those and
+/// is a later, separately-sized phase.
 pub(all) struct ParamDecor {
   /// Address-space and qualifier prefix printed before the C type:
   /// "device", "device const", "constant", "threadgroup". Empty for a
@@ -32,6 +37,11 @@ pub(all) struct ParamDecor {
   /// Bracketed attribute printed after the parameter name:
   /// "[[thread_position_in_grid]]", "[[buffer(0)]]". Empty for none.
   attr : String
+  /// A C++ reference parameter -- `constant Args &args`, the idiom every
+  /// real MSL kernel uses for its uniform block. Reference-ness is a
+  /// decoration for the same reason an address space is: C has no such
+  /// declarator, so it never enters the C AST.
+  by_ref : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -50,14 +60,18 @@ pub(all) struct Kernel {
 ///|
 /// A parameter with no MSL decoration.
 pub fn plain() -> ParamDecor {
-  { space: "", attr: "" }
+  { space: "", attr: "", by_ref: false }
 }
 
 ///|
 /// A decorated parameter: `decor("device const")`,
 /// `decor("", attr="[[thread_position_in_grid]]")`.
-pub fn decor(space : String, attr? : String = "") -> ParamDecor {
-  { space, attr }
+pub fn decor(
+  space : String,
+  attr? : String = "",
+  by_ref? : Bool = false,
+) -> ParamDecor {
+  { space, attr, by_ref }
 }
 
 ///|
@@ -133,6 +147,25 @@ fn valid_attr_text(attr : String) -> Bool {
   if interior.find("[") is Some(_) || interior.find("]") is Some(_) {
     return false
   }
+  // An attribute payload is a compact token, so its contents are
+  // whitelisted rather than blacklisted character by character: comments
+  // and string literals are collapsed by parameter normalization, and a
+  // reparse would then differ from what was printed. The permitted set
+  // is what ds4's 22,851 lines of MSL actually use -- identifier
+  // characters plus space, parentheses and `+` (as in
+  // `[[function_constant(FC_MUL_MV + 0)]]`) -- widened with `,` and `-`
+  // for constant expressions.
+  for c in interior {
+    if !is_ident_char(c) &&
+      c != ' ' &&
+      c != '(' &&
+      c != ')' &&
+      c != '+' &&
+      c != '-' &&
+      c != ',' {
+      return false
+    }
+  }
   let mut depth = 0
   for c in interior {
     if c == '(' {
@@ -188,6 +221,45 @@ fn valid_space_prefix(space : String) -> Bool {
 }
 
 ///|
+/// Rules that need a parameter and its decoration together, so the
+/// printer and the bridge enforce exactly the same ones: a successful
+/// parse must always be printable, and a printable kernel must always
+/// parse back.
+fn decor_pairing_violation(
+  decl : @parser.FuncDecl,
+  decor : Array[ParamDecor],
+) -> String? {
+  if decl.params.length() != decor.length() {
+    return Some(
+      decl.name +
+      " has " +
+      decl.params.length().to_string() +
+      " parameters but " +
+      decor.length().to_string() +
+      " decorations",
+    )
+  }
+  for i in 0..<decl.params.length() {
+    let param = decl.params[i]
+    // MSL references bind to values of any type -- `constant Args &args`
+    // for a uniform block, `constant float &scale` for a scalar. The one
+    // shape that cannot round-trip is a reference to a pointer, which
+    // prints `T *&x` and has no unambiguous way back.
+    if decor[i].by_ref && param.ty is Pointer(_) {
+      return Some("parameter `" + param.name + "` is a reference to a pointer")
+    }
+    // An unnamed reference is legal C++ and unusable in a kernel: the
+    // body has nothing to call it. Refusing it keeps the abstract
+    // declarator `constant Args &` out of the printer, which the bridge
+    // would then have no name to recover.
+    if decor[i].by_ref && param.name == "" {
+      return Some("an unnamed parameter cannot be a reference")
+    }
+  }
+  None
+}
+
+///|
 /// Value scalars, named types, aggregates, and pointer chains to them.
 fn msl_param_type_ok(ty : @ctype.Type) -> Bool {
   match ty {
@@ -215,22 +287,19 @@ fn msl_param_type_ok(ty : @ctype.Type) -> Bool {
 /// here for the same reason the C printer picks one spelling everywhere:
 /// the parse half must reproduce the exact text.
 pub fn print_kernel(k : Kernel) -> String {
-  if k.decl.params.length() != k.decor.length() {
-    abort(
-      "print_kernel: " +
-      k.decl.name +
-      " has " +
-      k.decl.params.length().to_string() +
-      " parameters but " +
-      k.decor.length().to_string() +
-      " decorations",
-    )
+  match decor_pairing_violation(k.decl, k.decor) {
+    Some(msg) => abort("print_kernel: " + msg)
+    None => ()
   }
   let parts : Array[String] = []
   for i in 0..<k.decl.params.length() {
     let param = k.decl.params[i]
     let d = k.decor[i]
-    let mut text = @printer.print_declaration(param.ty, param.name)
+    let mut text = if d.by_ref {
+      @printer.print_declaration(param.ty, "&" + param.name)
+    } else {
+      @printer.print_declaration(param.ty, param.name)
+    }
     if d.space != "" {
       text = d.space + " " + text
     }
@@ -321,32 +390,61 @@ fn is_ident_char(c : Char) -> Bool {
 }
 
 ///|
-/// Splits one parameter's text into (space-prefix, C core, attribute).
-/// Malformed decoration -- an unterminated `[[` -- raises rather than
-/// aborting: hand-written source is expected input for the bridge.
-fn strip_param(text : String) -> (String, String, String) raise {
-  // Tabs and newlines separate tokens as well as spaces do; normalize
-  // so the prefix scan below sees one canonical separator.
-  let normalized = StringBuilder::new()
-  let mut last_space = false
-  for c in text {
-    if c == ' ' || c == '\t' || c == '\n' || c == '\r' {
+/// Collapses whitespace in a parameter's text and returns the collapsed
+/// text alongside a comment-and-literal-blanked copy of itself, built in
+/// the same pass so an index found in one slices the other.
+///
+/// Blanking has to happen before collapsing: a line comment ends at its
+/// newline, so collapsing newlines first would let `// note` run on and
+/// swallow whatever followed. Comment bodies collapse to a single space
+/// in both outputs, which the C parser is indifferent to and the AST
+/// records nothing of either way. Parameter declarators contain no
+/// string literals, so literal contents never reach the collapse.
+fn normalize_param(text : String) -> (String, String) {
+  let blanked = blank_literals(text)
+  let out_text = StringBuilder::new()
+  let out_scan = StringBuilder::new()
+  let mut last_space = true
+  for i in 0..<blanked.length() {
+    let b = blanked.get_char(i).unwrap_or(' ')
+    let c = text.get_char(i).unwrap_or(' ')
+    if b == ' ' || b == '\t' || b == '\n' || b == '\r' {
       if !last_space {
-        normalized.write_char(' ')
+        out_text.write_char(' ')
+        out_scan.write_char(' ')
       }
       last_space = true
     } else {
-      normalized.write_char(c)
+      out_text.write_char(c)
+      out_scan.write_char(b)
       last_space = false
     }
   }
-  let mut core = normalized.to_string().trim().to_owned()
+  let t = out_text.to_string()
+  let sc = out_scan.to_string()
+  // Both end in at most one collapsed space, so trimming keeps them the
+  // same length.
+  if t.has_suffix(" ") {
+    (t[:t.length() - 1].to_owned(), sc[:sc.length() - 1].to_owned())
+  } else {
+    (t, sc)
+  }
+}
+
+///|
+/// Splits one parameter's text into (space-prefix, C core, attribute).
+/// Malformed decoration -- an unterminated `[[` -- raises rather than
+/// aborting: hand-written source is expected input for the bridge.
+fn strip_param(text : String) -> (String, String, String, Bool) raise {
+  // Blanking runs BEFORE whitespace normalization, not after: a line
+  // comment is terminated by its newline, so collapsing newlines first
+  // would let `& // note\n args` swallow the parameter name. The two
+  // strings are then normalized in lockstep so an index found in the
+  // scan slices the text.
+  let (core_init, core_scan_init) = normalize_param(text)
+  let mut core = core_init
+  let mut core_scan = core_scan_init
   let mut attr = ""
-  // Attribute discovery runs on a comment-and-literal-blanked copy of
-  // the same (length-preserving) text, so `/* [[fake]] */` in a comment
-  // can never become an active attribute; the slice still comes from
-  // the real text.
-  let core_scan = blank_literals(core)
   match core_scan.find("[[") {
     Some(start) =>
       // The terminator must follow the opener: a stray `]]` earlier in
@@ -355,9 +453,9 @@ fn strip_param(text : String) -> (String, String, String) raise {
         Some(rel) => {
           let end_open = start + rel
           attr = core[start:end_open + 2].to_owned()
-          core = (core[:start].to_owned() + core[end_open + 2:].to_owned())
-            .trim()
-            .to_owned()
+          core = core[:start].to_owned() + core[end_open + 2:].to_owned()
+          core_scan = core_scan[:start].to_owned() +
+            core_scan[end_open + 2:].to_owned()
         }
         None => raise NotAKernel("unterminated [[ in `" + text + "`")
       }
@@ -365,6 +463,7 @@ fn strip_param(text : String) -> (String, String, String) raise {
   }
   let spaces : Array[String] = []
   let mut rest = core
+  let mut rest_scan = core_scan
   while true {
     let mut matched = false
     for w in space_words {
@@ -375,7 +474,9 @@ fn strip_param(text : String) -> (String, String, String) raise {
           continue
         }
         spaces.push(w)
-        rest = rest[w.length() + 1:].trim().to_owned()
+        // Both strings advance by the same count so indices stay aligned.
+        rest = rest[w.length() + 1:].to_owned()
+        rest_scan = rest_scan[w.length() + 1:].to_owned()
         matched = true
         break
       }
@@ -384,7 +485,44 @@ fn strip_param(text : String) -> (String, String, String) raise {
       break
     }
   }
-  (spaces.join(" "), rest, attr)
+  // The `&` of a reference parameter sits between the type and the name;
+  // C has no such declarator, so it comes out here as a decoration and
+  // the remaining text is ordinary C. Scanned on the blanked copy so a
+  // `&` inside a comment stays text, and rejected when doubled (`&&`)
+  // or combined with a pointer, neither of which the bridge reproduces.
+  let mut by_ref = false
+  match rest_scan.find("&") {
+    Some(at) => {
+      if rest_scan.find("&&") is Some(_) {
+        raise NotAKernel("rvalue references are outside the MSL subset")
+      }
+      if rest_scan.find("*") is Some(_) {
+        raise NotAKernel("references to pointers are outside the MSL subset")
+      }
+      // The `&` must sit in declarator position: a type before it, and
+      // exactly the parameter name after. `&Args args` and `Args args&`
+      // are not reference declarations, and stripping their ampersand
+      // would silently turn malformed input into a valid kernel.
+      let before = rest[:at].to_owned().trim().to_owned()
+      let after = rest[at + 1:].to_owned().trim().to_owned()
+      // The name is checked on the blanked suffix so a comment between
+      // `&` and the name -- `Args & /* uniform */ args` -- does not read
+      // as part of the identifier. The reassembled core keeps the
+      // original text; cfront skips comments, and the AST records none,
+      // so the round trip is unaffected.
+      let after_blanked = rest_scan[at + 1:].to_owned().trim().to_owned()
+      if before == "" || !is_identifier(after_blanked) {
+        raise NotAKernel("`&` is not in reference-declarator position")
+      }
+      by_ref = true
+      // A space, not nothing: the compact spelling `Args&args` would
+      // otherwise concatenate into the single token `Argsargs`, which
+      // the C parser reads as a different declaration entirely.
+      rest = (before + " " + after).trim().to_owned()
+    }
+    None => ()
+  }
+  (spaces.join(" "), rest, attr, by_ref)
 }
 
 ///|
@@ -407,6 +545,7 @@ fn blank_literals(text : String) -> String {
   let mut escaped = false
   let mut in_block_comment = false
   let mut in_line_comment = false
+  let mut pending_slash = false
   let mut prev : Char = ' '
   for c in text {
     if in_block_comment {
@@ -428,16 +567,30 @@ fn blank_literals(text : String) -> String {
       }
       continue
     }
-    if !in_string && !in_char && prev == '/' && (c == '*' || c == '/') {
-      if c == '*' {
-        in_block_comment = true
-      } else {
-        in_line_comment = true
+    if pending_slash {
+      pending_slash = false
+      if !in_string && !in_char && (c == '*' || c == '/') {
+        // A comment blanks whole, opener included: a leftover `/` would
+        // corrupt any scan that expects a clean token, which is how the
+        // reference-declarator check first saw one.
+        if c == '*' {
+          in_block_comment = true
+        } else {
+          in_line_comment = true
+        }
+        out.write_char(' ')
+        blank(c)
+        prev = ' '
+        continue
       }
-      // A lone `/` already written cannot form an identifier token, so
-      // it is harmless for the scans this feeds.
-      out.write_char(' ')
-      prev = ' '
+      out.write_char('/')
+    }
+    if !in_string && !in_char && c == '/' {
+      // Held back one character: only the next one says whether this
+      // opens a comment. Written on the next pass either way, so the
+      // output stays code-unit aligned with the input.
+      pending_slash = true
+      prev = c
       continue
     }
     prev = c
@@ -477,7 +630,28 @@ fn blank_literals(text : String) -> String {
     }
     out.write_char(c)
   }
+  if pending_slash {
+    out.write_char('/')
+  }
   out.to_string()
+}
+
+///|
+/// True when `text` is exactly one C identifier.
+fn is_identifier(text : String) -> Bool {
+  if text == "" {
+    return false
+  }
+  let first = text.get_char(0).unwrap_or(' ')
+  if first >= '0' && first <= '9' {
+    return false
+  }
+  for c in text {
+    if !is_ident_char(c) {
+      return false
+    }
+  }
+  true
 }
 
 ///|
@@ -648,7 +822,7 @@ pub fn parse_kernel(
   let decor : Array[ParamDecor] = []
   let cores : Array[String] = []
   for idx in 0..<params.length() {
-    let (space, core, attr) = strip_param(params[idx])
+    let (space, core, attr, by_ref) = strip_param(params[idx])
     // The printer's own predicate guards the extraction: whatever the
     // bridge accepts, the printer can emit, or the parse fails here.
     if !valid_attr_text(attr) {
@@ -662,7 +836,7 @@ pub fn parse_kernel(
     if blank_literals(core).find("[") is Some(_) {
       raise NotAKernel("array declarators are outside the MSL subset")
     }
-    decor.push({ space, attr })
+    decor.push({ space, attr, by_ref })
     cores.push(core)
   }
   // `(void)` is C's empty parameter list: cfront normalizes the pseudo-
@@ -724,17 +898,13 @@ pub fn parse_kernel(
     Some(msg) => raise NotAKernel(msg)
     None => ()
   }
-  // C normalization can drop parameters this bridge could not attribute
-  // -- a named `void x`, say. A count mismatch here would abort in
-  // print_kernel, so it is a parse failure, not a printable kernel.
-  if decl.params.length() != decor.length() {
-    raise NotAKernel(
-      "parameter list normalized away from its decorations (" +
-      decl.params.length().to_string() +
-      " parameters, " +
-      decor.length().to_string() +
-      " decorations)",
-    )
+  // The same pairing rules the printer enforces: C normalization can drop
+  // a parameter this bridge attributed (a named `void x`), and a
+  // reference to a scalar parses as C but has no printable spelling.
+  // Either way it is a parse failure, not a kernel that aborts later.
+  match decor_pairing_violation(decl, decor) {
+    Some(msg) => raise NotAKernel(msg)
+    None => ()
   }
   { qualifier, decl, decor }
 }

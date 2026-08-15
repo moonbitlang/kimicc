@@ -71,7 +71,44 @@ async test "generated MSL compiles through the runtime Metal compiler" {
       @msl.decor("", attr="[[thread_position_in_grid]]"),
     ],
   }
-  let source = @msl.print_kernels([add2, scaled])
+  // A uniform-block reference parameter -- `constant Args &args` -- the
+  // shape ds4's own hot kernels use and the one the round-trip tests
+  // exercise structurally. Only the Metal compiler can confirm the
+  // emitted spelling is valid MSL rather than merely self-consistent.
+  let uniform : @msl.Kernel = {
+    qualifier: "kernel",
+    decl: @build.func(
+      Void,
+      "gen_scale_uniform_f32",
+      [
+        @build.param(Named("gen_args"), "args"),
+        @build.param(Pointer(Float), "x"),
+        @build.param(Named("uint"), "i"),
+      ],
+      [
+        If(
+          @build.v("i").ge(@parser.int_literal(4096, UInt)),
+          Return(None),
+          None,
+        ),
+        ExprStmt(
+          CompoundAssign(
+            "*",
+            @build.v("x")[@build.v("i")],
+            MemberAccess(@build.v("args"), "scale"),
+          ),
+        ),
+      ],
+    ),
+    decor: [
+      @msl.decor("constant", by_ref=true),
+      @msl.decor("device"),
+      @msl.decor("", attr="[[thread_position_in_grid]]"),
+    ],
+  }
+  let prelude =
+    #|struct gen_args { float scale; };
+  let source = @msl.print_kernels([add2, scaled, uniform], prelude~)
   let metal_path = temp_file_path("msl_gate", source, ".metal")
   write_text_file(metal_path, source)
   let probe =
@@ -122,7 +159,8 @@ async test "generated MSL compiles through the runtime Metal compiler" {
     return
   }
   assert_eq(result.code, 0)
-  assert_true(result.output.contains("metal library compiled: 2 functions"))
+  assert_true(result.output.contains("metal library compiled: 3 functions"))
   assert_true(result.output.contains("gen_add2_f32_4096"))
   assert_true(result.output.contains("gen_scale_f32_4096"))
+  assert_true(result.output.contains("gen_scale_uniform_f32"))
 }

@@ -331,10 +331,17 @@ reference kernels alongside the fast ones.
    parser half is a decoration bridge (strip decorations lexically, parse
    the C core with cfront seeded with named types, reattach), exact for
    everything the package prints and a diagnostic for everything it does
-   not (references, templates, `constexpr`/`auto` — measured in ds4's
-   shaders at 249/204/281 uses, concentrated in dense.metal and
-   moe.metal; parsing *those* is a separately-sized phase 2 whose payoff
-   is specialization-by-transformation of antirez's own kernels). The
+   not (templates and `constexpr`/`auto` — measured in ds4's shaders at
+   204/281 uses, concentrated in dense.metal and moe.metal; parsing
+   *those* is a separately-sized phase 2 whose payoff is
+   specialization-by-transformation of antirez's own kernels).
+   Reference parameters were the one phase-1 exclusion the first real
+   target immediately needed — ds4's
+   `kernel_mul_mv_addr_iq2_xxs_pair_swiglu_f32` takes two
+   `constant ... &` uniform blocks, and a drop-in must match the
+   signature the host binds against — so `&` became a decoration
+   alongside the address space, with its own round-trip tests and a
+   Metal-compiler check on the emitted spelling. The
    compile gate is the runtime Metal compiler itself
    (`newLibraryWithSource` via a small ObjC probe) — the same compiler
    ds4 uses in production, needing no offline toolchain; it skips on
@@ -451,6 +458,177 @@ does not cover yet — that, not more q8_0, is the next performance lever,
 and it is also where fixed-model specialization has real room (per-
 expert dispatch, baked expert strides, the MoE variant explosion the
 generator exists to manage).
+
+## Why every performance result was parity: the roofline
+
+Four honest null results — fp32 forward 1.0x, scalar q8_0 parity, generated
+NEON at parity with hand-written (94.3 vs 89.2 ns/row), and the L3 drop-in at
+parity end to end — have one explanation, found when codex (xhigh) was asked
+to critique a proposed variant search rather than review code, and confirmed
+arithmetically here:
+
+A 4096-wide q8_0 row is 128 blocks × 34 bytes = **4,352 bytes** of weights
+read exactly once. ds4's hand-written kernel does it in 89.2 ns, which is
+**48.8 GB/s per core**. An M2 Ultra's 800 GB/s across 16 P-cores is a
+**50 GB/s per-core share**. The kernel is running at **98% of the memory
+bandwidth available to it**.
+
+So the q8_0 decode path is not compute-bound; it is at the DRAM roofline.
+Halving the arithmetic would leave the row still taking ~87 ns to arrive.
+That is why every specialization we measured tied and none won — we were
+optimizing compute in a regime where compute was free. This is not a defect
+in the generator: the generator produced code as good as an expert's, which
+is exactly what the bit-exact referees proved. It is a defect in target
+selection.
+
+The corollary tells us where generation *can* win — cases with arithmetic
+intensity to spend:
+
+- **Compressed expert formats.** IQ2_XXS is 2.06 bits/weight against q8_0's
+  8.50: four times less traffic per weight, plus codebook lookup, sign
+  expansion, and scale handling per block. Those kernels have real compute
+  to optimize. They also dominate MoE decode.
+- **Reuse across tokens.** ds4's own `dot_q8_0_row_2` amortizes one weight
+  row across two activation vectors, halving bytes per unit work. Tiling
+  further (R=2/4 rows, or the I8MM `vmmlaq_s32`/SMMLA path this host
+  advertises) raises intensity rather than chasing cycles under the roof.
+- **Prefill and batch**, where each weight is reused across many tokens.
+
+Two corrections to earlier work fell out of the same review. First, the
+generated Q2_K and IQ2_XXS kernels mirror ds4's `_f32` *reference*
+implementations; the production expert workers call the `_q8_K` variants
+(quantized activations) at roughly fifteen call sites. The generated kernels
+are bit-exact against what they mirror — the referees are sound — but what
+they mirror is not the hot path. Second, the microbenchmark itself has two
+distortions to fix before any search: the per-iteration row mutation creates
+store-to-load interaction, and `volatile sink +=` serializes an FP
+dependency. The fix is a separate implementation TU plus a runtime-selected
+function pointer, immutable cycled inputs, and a checksum after the timed
+batch.
+
+**Revised numeric standard for variant search.** Reassociation is the point
+of a variant search, so bit-exactness is unattainable except for the mirror
+variant, and judging against ds4 would let a buggy variant hide behind ds4's
+own reassociation. Three layers instead: keep bit-exactness for the mirror
+variant and scale decoding; prove integer/layout correctness independently
+with exact per-block `int32` dots (one-hot blocks and lanes, extremes,
+alternating signs) so an FP tolerance cannot mask an indexing bug; and judge
+reassociated results against a **double-precision oracle** with a
+conditioning-aware bound — `|candidate − oracle| ≤ 4·γ(m)·Σ|p[b]·dot[b]|`
+where `γ(m)=mu/(1−mu)`, `u=2⁻²⁴` — which stays meaningful under
+cancellation where a plain relative bound does not.
+
+**The profile settles the target.** `sample` over a live 16-thread CPU run
+(256-token prefill, 60-token decode), top-of-stack aggregate, excluding
+`__psynch_*` waits and `madvise`:
+
+| kernel | samples | share of compute |
+|---|---|---|
+| `ds4_vec_dot_iq2_xxs_pair_q8_K` | 12,147 | ~44% |
+| q8_0 batch workers (prefill) | 7,179 | ~26% |
+| `matvec_q2_k_accum_worker` | 3,585 | ~13% |
+| `matvec_f16_worker` | 2,713 | ~10% |
+| attention | 1,374 | ~5% |
+
+The single-row `dot_q8_0_row` — the kernel the entire CPU ladder was built
+around — **does not appear in the profile at all**. The IQ2_XXS pair kernel
+alone outweighs every q8_0 worker combined by 1.7x. Codex predicted this
+before the profile ran ("if single-row q8_0 is not 10–15% of decode, stop")
+and set the threshold correctly.
+
+**Why that kernel has room, unlike q8_0.** An IQ2_XXS row of 4096 is 16
+super-blocks × 66 bytes = 1,056 bytes, about 21 ns to arrive at the per-core
+share — while the arithmetic per row is far heavier: per 64 values it does 8
+codebook loads, 8 sign-table loads, 4 `vmulq_s8`, 4 `vdotq_s32`, and **two
+`vaddvq_s32` horizontal reductions**. That is a compute-bound kernel with
+identifiable slack, and two candidate improvements are visible by reading it:
+
+1. **Hoist the horizontal reduction.** `vaddvq_s32(p) * scale` runs twice per
+   32-value group — 256 horizontal reductions per 4096-wide row. Accumulating
+   `vfmaq_n_f32(acc, vcvtq_f32_s32(p), scale)` into a vector accumulator and
+   reducing once at the end computes the same sum (`Σ_g scale_g · Σ_lanes p`
+   either way, modulo rounding) with 255 fewer cross-lane reductions.
+2. **Use the pre-signed codebook.** This kernel loads the raw grid plus a sign
+   table and applies signs with four `vmulq_s8` per group. The 262KB
+   sign-expanded table — which `experiments/ds4_kernels` already bakes as a
+   static array for the scalar path — removes that work entirely, trading L1
+   footprint for instructions. Which side wins is exactly what a search
+   should decide by measurement rather than argument.
+
+That is the shape of the first real optimization campaign: a pair kernel that
+is compute-bound, dominates the profile, has two independent structural
+candidates, already has a bit-exact referee pattern, and whose baked table
+this repository already generates.
+
+**The Metal baseline, measured (2026-08-15).** ds4's own Metal build on the
+same prompt and checkpoint, against the CPU numbers this ladder was tuned
+against:
+
+| | CPU (16 threads) | Metal | speedup |
+|---|---|---|---|
+| prefill | 10.8 tok/s | 146.1 tok/s | 13.5x |
+| decode | 5.66 tok/s | 31.8 tok/s | 5.5x |
+
+Active weights are ~9.1 GB per token (routed experts 1.74 GB at 6/256,
+shared 1.10 GB, attention 5.53 GB, output head 0.54 GB), so Metal decode
+sustains **283 GB/s — 35% of the 800 GB/s peak**, and 349 GB/s (44%)
+counting only the 81% of wall time the GPU is actually busy
+(`DS4_METAL_GPU_BUSY_PROFILE`). CPU decode sustains 50 GB/s, 6% of peak.
+
+That is the decisive contrast with the q8_0 finding above. The CPU q8_0
+kernel sits at 98% of its bandwidth share and has nothing to give. The Metal
+decode path runs at well under half its roof, so its kernels are compute- or
+latency-bound and **there is roughly 2x of headroom before bandwidth becomes
+the limit** — plus a separate 19% of wall time where the GPU is idle between
+command buffers, which is a scheduling problem rather than a kernel one.
+Metal is both the deployment path and the one with room, which settles the
+backend question. The remaining question is which kernel, and that needs a
+per-kernel GPU breakdown (Instruments/`xctrace` Metal System Trace, or ds4's
+own `make metal-decode-schedule-bench`) before any kernel is written — the
+same discipline whose absence sent the CPU ladder at a kernel that never
+appears in a profile.
+
+**The Metal per-kernel profile, and the convergence.** ds4 carries its own
+stage instrumentation (`DS4_METAL_MOE_ONE_STAGE_PROFILE` and friends). With
+it enabled, the routed-MoE stages during decode, averaged over 43 layers ×
+24 tokens:
+
+| MoE stage | ms/token | share of MoE |
+|---|---|---|
+| `gate_up` (IQ2_XXS pair + SwiGLU) | 27.4 | 40% |
+| `down` (Q2_K) | 24.2 | 35% |
+| `activation_weight` | 9.3 | 13% |
+| `sum` | 8.2 | 12% |
+
+MoE totals ~51% of the profiled decode step. **Caveat that must travel with
+these numbers:** the instrumentation serializes the pipeline and costs 4.4x
+(31.8 → 7.3 tok/s), so absolute milliseconds are inflated and only the
+ratios between stages are trustworthy.
+
+The ranking matches the CPU profile exactly. On CPU,
+`ds4_vec_dot_iq2_xxs_pair_q8_K` is 44% of compute and the Q2_K worker 13%;
+on Metal, IQ2_XXS gate/up is 40% of MoE and Q2_K down 35%. **Both backends
+name the same two kernels** — routed-expert gate/up in IQ2_XXS, and routed
+down in Q2_K — which means the specialization target is backend-independent
+and work on one transfers.
+
+The Metal target is the `kernel_mul_mv_*_iq2_xxs_pair_swiglu_f32` family.
+Note what "family" means here: ds4 hand-maintains at least six spellings of
+it — `_id_pair`, `_id_pair_swiglu`, `_slots6_pair_swiglu`, `_addr_pair_swiglu`,
+`_addr_pair_swiglu_masked`, and an `_mm_id_pair_swiglu_f16` for prefill —
+each a manual variant for a different dispatch shape. That is precisely the
+variant explosion a generator exists to own, and it is being maintained by
+hand today.
+
+**Benchmark discipline** for any sweep, so a winner is real: randomize
+variant order (never row order — production streams contiguous rows and
+wants the prefetcher), interleave the baseline before and after each
+candidate group, use short epochs and compare ratios rather than absolute
+times across a long sweep, prefault model pages, run three regimes (L1-hot,
+larger-than-cache, real tensor shards under the production pool), match
+deployment QoS, and revalidate the winner in a fresh process with different
+code layout. Sub-2% microbenchmark wins stay unproven until they survive the
+full-pool test; macOS offers QoS influence, not core pinning.
 
 ## What stays out of scope
 
