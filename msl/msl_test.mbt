@@ -81,14 +81,18 @@ test "random decorations round-trip through the bridge" {
     let decors : Array[ParamDecor] = []
     for p in 0..<n_params {
       let name = "p" + p.to_string()
-      if state.next_uint() % 4 == 0 {
+      let named = state.next_uint() % 4 == 0
+      if named {
         params.push(@build.param(Named("uint"), name))
       } else {
         params.push(@build.param(Pointer(Float), name))
       }
+      // A reference binds only to a value of named type, so by_ref is
+      // drawn only where the type admits it.
       decors.push({
         space: spaces[(state.next_uint() % 5).reinterpret_as_int()],
         attr: attrs[(state.next_uint() % 4).reinterpret_as_int()],
+        by_ref: named && state.next_uint() % 2 == 0,
       })
     }
     let k : Kernel = {
@@ -394,4 +398,212 @@ test "spaced templates, commented attributes, malformed attributes" {
   } noraise {
     _ => fail("expected the malformed attribute to be rejected")
   }
+}
+
+///|
+/// Reference parameters: the `constant Args &args` idiom every real MSL
+/// kernel uses for its uniform block. Reference-ness is a decoration --
+/// C has no such declarator -- so it round-trips through the bridge like
+/// an address space does.
+test "reference parameters round-trip" {
+  let k : Kernel = {
+    qualifier: "kernel",
+    decl: @build.func(
+      Void,
+      "k",
+      [@build.param(Named("Args"), "args"), @build.param(Pointer(Float), "src")],
+      [@build.ret()],
+    ),
+    decor: [decor("constant", by_ref=true), decor("device const")],
+  }
+  let printed = print_kernel(k)
+  assert_true(printed.contains("constant Args &args"))
+  assert_eq(parse_kernel(printed, ["Args"]), k)
+  assert_eq(print_kernel(parse_kernel(printed, ["Args"])), printed)
+}
+
+///|
+/// The real target signature, read off ds4's
+/// `kernel_mul_mv_addr_iq2_xxs_pair_swiglu_f32`: two `constant` uniform
+/// references, `device` buffers, a `threadgroup` scratch pointer, and
+/// the thread-position attributes. If the bridge handles this shape, it
+/// handles the kernel the Metal rung actually has to generate.
+test "the ds4 IQ2_XXS pair-swiglu signature round-trips" {
+  let source =
+    #|kernel void gen_mul_mv_addr_iq2_xxs_pair_swiglu_f32(constant ds4_metal_args_mul_mv_id &args, constant ds4_metal_dsv4_moe_swiglu_weight_args &act, device const uint64_t *gate_addrs, device const uint64_t *up_addrs, device const char *src1, device char *dst_gate, device char *dst_up, threadgroup char *shmem [[threadgroup(0)]], uint3 tgpig [[threadgroup_position_in_grid]], ushort tiitg [[thread_index_in_threadgroup]], ushort sgitg [[simdgroup_index_in_threadgroup]]) {
+    #|  return;
+    #|}
+  // `uint64_t`/`uint3`/`ushort` are MSL spellings, not C ones, so they
+  // arrive as Named types -- which is also how a generator emits them.
+  let names = [
+    "ds4_metal_args_mul_mv_id", "ds4_metal_dsv4_moe_swiglu_weight_args", "uint3",
+    "ushort", "uint64_t",
+  ]
+  let k = parse_kernel(source, names)
+  assert_eq(k.decl.params.length(), 11)
+  assert_true(k.decor[0].by_ref)
+  assert_true(k.decor[1].by_ref)
+  assert_eq(k.decor[0].space, "constant")
+  assert_eq(k.decor[2].space, "device const")
+  assert_eq(k.decor[7].space, "threadgroup")
+  assert_eq(k.decor[8].attr, "[[threadgroup_position_in_grid]]")
+  assert_eq(print_kernel(k), source.trim_end(chars="\n").to_owned())
+  assert_eq(parse_kernel(print_kernel(k), names), k)
+}
+
+///|
+/// Declarator forms the bridge cannot take apart again are diagnostics,
+/// not silent misreads: rvalue references and references to pointers.
+test "exotic reference forms are rejected" {
+  try
+    parse_kernel("kernel void f(constant Args &&args) { return; }", ["Args"])
+    |> ignore
+  catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected the rvalue reference to be rejected")
+  }
+  try
+    parse_kernel("kernel void f(device float *&p) { return; }", []) |> ignore
+  catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected the reference-to-pointer to be rejected")
+  }
+}
+
+///|
+/// `constant float &scale` is ordinary MSL and round-trips; a reference
+/// to a pointer has no unambiguous spelling back and is refused.
+test "scalar references round-trip, pointer references do not" {
+  let k = parse_kernel("kernel void f(constant float &scale) { return; }", [])
+  assert_true(k.decor[0].by_ref)
+  assert_eq(print_kernel(k).contains("constant float &scale"), true)
+  assert_eq(parse_kernel(print_kernel(k), []), k)
+  try
+    parse_kernel("kernel void f(device float *&p) { return; }", []) |> ignore
+  catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected the reference-to-pointer to be rejected")
+  }
+}
+
+///|
+/// The compact spelling `Args&args` is valid MSL. Removing the `&` must
+/// leave a token boundary behind, or the type and name fuse into one
+/// identifier and the C parser reads a different declaration.
+test "compact reference spelling keeps its token boundary" {
+  let k = parse_kernel("kernel void f(constant Args&args) { return; }", ["Args"])
+  assert_eq(k.decl.params.length(), 1)
+  assert_eq(k.decl.params[0].name, "args")
+  assert_true(k.decor[0].by_ref)
+  assert_eq(print_kernel(k).contains("constant Args &args"), true)
+}
+
+///|
+/// An ampersand outside declarator position is malformed input, not a
+/// reference: stripping it would silently turn a broken signature into a
+/// well-formed kernel.
+test "misplaced ampersands are rejected" {
+  for
+    bad in (
+      [
+        "kernel void f(constant &Args args) { return; }", "kernel void f(constant Args args&) { return; }",
+      ] : Array[String]) {
+    try parse_kernel(bad, ["Args"]) |> ignore catch {
+      _ => ()
+    } noraise {
+      _ => fail("expected `\{bad}` to be rejected")
+    }
+  }
+}
+
+///|
+/// A comment sitting inside the reference declarator is text, not part
+/// of the parameter name.
+test "comments inside a reference declarator are tolerated" {
+  let k = parse_kernel(
+    "kernel void f(constant Args & /* uniform */ args) { return; }",
+    ["Args"],
+  )
+  assert_true(k.decor[0].by_ref)
+  assert_eq(k.decl.params[0].name, "args")
+  assert_eq(print_kernel(k).contains("constant Args &args"), true)
+}
+
+///|
+/// An unnamed reference would print the abstract declarator
+/// `constant Args &`, which has no name for the bridge to recover. Both
+/// directions consult the same pairing rule; the parse side raises (a
+/// malformed input) and the print side aborts (a construction error),
+/// which is how every other validation in this package behaves.
+test "unnamed reference parameters are refused" {
+  try
+    parse_kernel("kernel void f(constant Args &) { return; }", ["Args"])
+    |> ignore
+  catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected the unnamed reference to be rejected at parse")
+  }
+}
+
+///|
+/// A line comment ends at its newline. Blanking therefore has to run
+/// before whitespace collapsing, or the comment runs on and swallows the
+/// parameter name -- which is what happened before `normalize_param`
+/// built the text and its blanked twin in one pass.
+test "line comments inside a parameter do not swallow the name" {
+  let k = parse_kernel(
+    "kernel void f(constant Args & // uniform\n args) { return; }",
+    ["Args"],
+  )
+  assert_true(k.decor[0].by_ref)
+  assert_eq(k.decl.params[0].name, "args")
+  assert_eq(print_kernel(k).contains("constant Args &args"), true)
+  let k2 = parse_kernel(
+    "kernel void f(device // which\n float *x) { return; }",
+    [],
+  )
+  assert_eq(k2.decor[0].space, "device")
+  assert_eq(k2.decl.params[0].name, "x")
+}
+
+///|
+/// An attribute payload is a compact token whose contents are
+/// whitelisted to what real MSL uses. Two different outcomes, both
+/// stable: a quoted payload keeps its quotes through blanking and is
+/// refused outright, while a comment is collapsed away before the
+/// attribute is even extracted, leaving a spelling that reprints itself.
+/// What the contract requires is `parse(print(k)) == k`, which holds in
+/// both cases; the hole this closed was a constructed attribute carrying
+/// a comment or literal, which `print_kernel` now refuses.
+test "attribute payloads are restricted to real MSL spellings" {
+  let ok = parse_kernel(
+    "kernel void f(device float *x [[buffer(0)]], constant int &n [[function_constant(FC_MUL_MV + 0)]]) { return; }",
+    [],
+  )
+  assert_eq(ok.decor[0].attr, "[[buffer(0)]]")
+  assert_eq(ok.decor[1].attr, "[[function_constant(FC_MUL_MV + 0)]]")
+  assert_eq(parse_kernel(print_kernel(ok), []), ok)
+  // Quotes survive blanking and hit the whitelist.
+  try
+    parse_kernel(
+      "kernel void f(device float *x [[foo(\"bar\")]]) { return; }",
+      [],
+    )
+    |> ignore
+  catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected the quoted attribute payload to be refused")
+  }
+  // A comment collapses before extraction; the result is stable.
+  let collapsed = parse_kernel(
+    "kernel void f(device float *x [[buffer(/*slot*/0)]]) { return; }",
+    [],
+  )
+  assert_eq(collapsed.decor[0].attr, "[[buffer( 0)]]")
+  assert_eq(parse_kernel(print_kernel(collapsed), []), collapsed)
 }

@@ -7,7 +7,7 @@ import {
 }
 
 // Values
-pub fn decor(String, attr? : String) -> ParamDecor
+pub fn decor(String, attr? : String, by_ref? : Bool) -> ParamDecor
 
 pub fn parse_kernel(String, Array[String]) -> Kernel raise
 
@@ -33,6 +33,7 @@ pub(all) struct Kernel {
 pub(all) struct ParamDecor {
   space : String
   attr : String
+  by_ref : Bool
 } derive(Eq, @debug.Debug)
 
 // Type aliases
