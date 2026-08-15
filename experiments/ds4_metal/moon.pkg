@@ -1,0 +1,10 @@
+import {
+  "bobzhang/cfront/parser",
+  "bobzhang/cfront/printer",
+  "bobzhang/cfront/build",
+  "bobzhang/cfront/ctype",
+  "bobzhang/kimicc/msl",
+  "bobzhang/kimicc/experiments/ds4_kernels",
+}
+
+supported_targets = "+native"
