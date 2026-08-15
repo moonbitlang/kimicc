@@ -32,6 +32,7 @@ core_packages=(
   cfront/preprocessor
   cfront/printer
   cfront/qc_test
+  experiments/ds4_metal_qc
   codegen
   mir_codegen
   cmd/main

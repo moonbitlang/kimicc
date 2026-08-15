@@ -1,0 +1,7 @@
+import {
+  "bobzhang/kimicc/experiments/ds4_metal",
+  "moonbitlang/core/quickcheck/splitmix",
+  "moonbitlang/core/string",
+} for "test"
+
+supported_targets = "+native"
