@@ -15,7 +15,7 @@ test "ctype scalar predicates and aliases" {
 
 ///|
 test "ctype string literal helpers cover object and C lengths" {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_char('a')
   buf.write_char('\u0000')
   buf.write_string("bc")

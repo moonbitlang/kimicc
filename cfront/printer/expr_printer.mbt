@@ -307,7 +307,7 @@ fn print_arguments(args : ArrayView[@parser.Expr]) -> String {
 ///|
 /// Renders an `offsetof` member path.
 fn print_offset_path(path : ArrayView[@ctype.OffsetDesignator]) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut first = true
   for step in path {
     match step {
@@ -336,7 +336,7 @@ fn print_offset_path(path : ArrayView[@ctype.OffsetDesignator]) -> String {
 /// octal rather than `\x`, because a hex escape has no length limit in C and
 /// would absorb any following hex digit.
 fn escape_string(value : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for ch in value {
     match ch {
       '"' => buf.write_string("\\\"")

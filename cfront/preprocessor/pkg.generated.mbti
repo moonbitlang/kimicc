@@ -24,10 +24,14 @@ pub(all) struct PreprocessDependency {
   path : String
   system : Bool
 } derive(Eq)
+pub fn PreprocessDependency::equal(Self, Self) -> Bool
+pub fn PreprocessDependency::not_equal(Self, Self) -> Bool
 
 pub(all) enum PreprocessError {
   Message(String)
 } derive(Eq)
+pub fn PreprocessError::equal(Self, Self) -> Bool
+pub fn PreprocessError::not_equal(Self, Self) -> Bool
 pub fn PreprocessError::to_string(Self) -> String
 
 pub(all) struct PreprocessOptions {
@@ -42,18 +46,24 @@ pub(all) struct PreprocessOptions {
   allow_missing_includes : Bool
   emit_line_markers : Bool
 } derive(Eq)
+pub fn PreprocessOptions::equal(Self, Self) -> Bool
 pub fn PreprocessOptions::new(String) -> Self
+pub fn PreprocessOptions::not_equal(Self, Self) -> Bool
 
 pub(all) struct PreprocessPrefixMap {
   from_prefix : String
   to_prefix : String
 } derive(Eq)
+pub fn PreprocessPrefixMap::equal(Self, Self) -> Bool
+pub fn PreprocessPrefixMap::not_equal(Self, Self) -> Bool
 
 pub(all) struct PreprocessResult {
   text : String
   dependencies : Array[String]
   dependency_records : Array[PreprocessDependency]
 } derive(Eq)
+pub fn PreprocessResult::equal(Self, Self) -> Bool
+pub fn PreprocessResult::not_equal(Self, Self) -> Bool
 
 // Type aliases
 

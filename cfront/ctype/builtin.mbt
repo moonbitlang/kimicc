@@ -14,6 +14,9 @@ pub(all) enum BuiltinReturnRule {
 } derive(Eq)
 
 ///|
+pub extend BuiltinReturnRule with Eq::{not_equal, equal}
+
+///|
 /// Mode-independent object-size fact for `__builtin_object_size`-style queries.
 ///
 /// `whole` is the byte count remaining in the complete modeled object, while
@@ -22,6 +25,9 @@ pub(all) struct ObjectSizeFact {
   whole : Int
   subobject : Int
 } derive(Eq)
+
+///|
+pub extend ObjectSizeFact with Eq::{not_equal, equal}
 
 ///|
 /// Returns the C builtin fallback value for an unknown object size.

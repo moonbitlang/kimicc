@@ -45,6 +45,12 @@ pub(all) struct ParamDecor {
 } derive(Eq, Debug)
 
 ///|
+pub extend ParamDecor with Debug::{to_repr}
+
+///|
+pub extend ParamDecor with Eq::{not_equal, equal}
+
+///|
 /// One MSL kernel: the qualifier, the C function underneath, and one
 /// decoration per parameter (the arrays run parallel; `print_kernel`
 /// aborts on a length mismatch rather than misattributing bindings).
@@ -56,6 +62,12 @@ pub(all) struct Kernel {
   decl : @parser.FuncDecl
   decor : Array[ParamDecor]
 } derive(Eq, Debug)
+
+///|
+pub extend Kernel with Debug::{to_repr}
+
+///|
+pub extend Kernel with Eq::{not_equal, equal}
 
 ///|
 /// A parameter with no MSL decoration.
@@ -402,8 +414,8 @@ fn is_ident_char(c : Char) -> Bool {
 /// string literals, so literal contents never reach the collapse.
 fn normalize_param(text : String) -> (String, String) {
   let blanked = blank_literals(text)
-  let out_text = StringBuilder::new()
-  let out_scan = StringBuilder::new()
+  let out_text = StringBuilder()
+  let out_scan = StringBuilder()
   let mut last_space = true
   for i in 0..<blanked.length() {
     let b = blanked.get_char(i).unwrap_or(' ')
@@ -529,7 +541,7 @@ fn strip_param(text : String) -> (String, String, String, Bool) raise {
 /// Returns `text` with string and character literal contents blanked,
 /// so token scans cannot trigger on quoted text.
 fn blank_literals(text : String) -> String {
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   fn blank(c : Char) {
     // A non-BMP character occupies two UTF-16 code units; its blank
     // must too, or every offset found in the scan text would drift
@@ -686,11 +698,17 @@ pub(all) suberror MslParseError {
 } derive(Debug)
 
 ///|
+pub extend MslParseError with Debug::{to_repr}
+
+///|
 pub impl Show for MslParseError with fn to_string(self) {
   match self {
     NotAKernel(msg) => "not a printable kernel: " + msg
   }
 }
+
+///|
+pub extend MslParseError with Show::{to_string, output}
 
 ///|
 /// The decoration bridge: reads back a kernel this package printed.
@@ -722,7 +740,7 @@ pub fn parse_kernel(
   }
   // Collapse whitespace so `foo<4> (x)` and `foo<4>\n(x)` are caught
   // by the same scan as `foo<4>(x)`.
-  let collapsed = StringBuilder::new()
+  let collapsed = StringBuilder()
   let mut was_space = false
   for c in keyword_scan {
     if c == ' ' || c == '\t' || c == '\n' || c == '\r' {

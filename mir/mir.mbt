@@ -9,6 +9,9 @@ pub(all) struct FuncSig {
 } derive(Eq)
 
 ///|
+pub extend FuncSig with Eq::{not_equal, equal}
+
+///|
 /// Function parameter facts owned by MIR.
 ///
 /// This mirrors the semantic parameter information needed by later phases
@@ -17,6 +20,9 @@ pub(all) struct MirParam {
   name : String
   ty : @ctype.Type
 } derive(Eq)
+
+///|
+pub extend MirParam with Eq::{not_equal, equal}
 
 ///|
 /// Function declaration or definition metadata owned by MIR.
@@ -41,6 +47,9 @@ pub(all) struct MirFuncDecl {
 } derive(Eq)
 
 ///|
+pub extend MirFuncDecl with Eq::{not_equal, equal}
+
+///|
 /// Global declaration metadata owned by MIR.
 ///
 /// Simple initializer payloads are represented by `init`; unsupported
@@ -59,6 +68,9 @@ pub(all) struct MirGlobalDecl {
   symbol_alias : String?
   section : String?
 } derive(Eq)
+
+///|
+pub extend MirGlobalDecl with Eq::{not_equal, equal}
 
 ///|
 /// MIR-owned global initializer subset.
@@ -80,12 +92,18 @@ pub(all) enum MirGlobalInit {
 } derive(Eq)
 
 ///|
+pub extend MirGlobalInit with Eq::{not_equal, equal}
+
+///|
 /// Aggregate field declaration metadata owned by MIR.
 pub(all) struct MirAggregateField {
   name : String
   ty : @ctype.Type
   bit_width : Int?
 } derive(Eq)
+
+///|
+pub extend MirAggregateField with Eq::{not_equal, equal}
 
 ///|
 /// Struct or union declaration metadata owned by MIR.
@@ -100,11 +118,17 @@ pub(all) struct MirAggregateDecl {
 } derive(Eq)
 
 ///|
+pub extend MirAggregateDecl with Eq::{not_equal, equal}
+
+///|
 /// Lexical expression-typing context used by MIR semantic queries.
 pub(all) struct Scope {
   locals : Map[String, @ctype.Type]
   current_func : String
 } derive(Eq)
+
+///|
+pub extend Scope with Eq::{not_equal, equal}
 
 ///|
 /// Aggregate field layout in target object bytes.
@@ -120,6 +144,9 @@ pub(all) struct FieldLayout {
 } derive(Eq)
 
 ///|
+pub extend FieldLayout with Eq::{not_equal, equal}
+
+///|
 /// Struct or union layout facts for the selected target.
 pub(all) struct AggregateLayout {
   fields : Array[FieldLayout]
@@ -128,6 +155,9 @@ pub(all) struct AggregateLayout {
   is_union : Bool
   pack : Int?
 } derive(Eq)
+
+///|
+pub extend AggregateLayout with Eq::{not_equal, equal}
 
 ///|
 /// Target-sensitive C semantic facts derived from the parser AST.

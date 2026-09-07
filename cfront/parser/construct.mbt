@@ -14,9 +14,15 @@ pub impl Add for Expr with fn add(self, other) {
 }
 
 ///|
+pub extend Expr with Add::{add}
+
+///|
 pub impl Sub for Expr with fn sub(self, other) {
   Binary("-", self, other)
 }
+
+///|
+pub extend Expr with Sub::{sub}
 
 ///|
 pub impl Mul for Expr with fn mul(self, other) {
@@ -24,9 +30,15 @@ pub impl Mul for Expr with fn mul(self, other) {
 }
 
 ///|
+pub extend Expr with Mul::{mul}
+
+///|
 pub impl Div for Expr with fn div(self, other) {
   Binary("/", self, other)
 }
+
+///|
+pub extend Expr with Div::{div}
 
 ///|
 /// Negation as the parser records it: `-x` is the unary operator applied to
@@ -34,6 +46,9 @@ pub impl Div for Expr with fn div(self, other) {
 pub impl Neg for Expr with fn neg(self) {
   Unary("-", self)
 }
+
+///|
+pub extend Expr with Neg::{neg}
 
 ///|
 /// Indexing builds an `ArrayAccess`, so a strided load is spelled the way

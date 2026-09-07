@@ -57,7 +57,7 @@ fn Codegen::emit_load_int(self : Codegen, reg : String, n : Int64) -> Unit {
 ///|
 // Sanitize a label name for assembler output.
 fn sanitize_label(name : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for ch in name {
     match ch {
       '-' | '*' | ' ' | '.' | '@' | '$' | '#' => buf.write_char('_')

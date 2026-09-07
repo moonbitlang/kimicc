@@ -6,6 +6,9 @@ pub(all) enum Target {
 } derive(Eq)
 
 ///|
+pub extend Target with Eq::{not_equal, equal}
+
+///|
 /// Returns the default compilation target, `DarwinArm64`.
 ///
 /// kimicc's primary host is native ARM64 macOS, so the driver and code

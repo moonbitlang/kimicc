@@ -100,7 +100,7 @@ fn pp_unquote_string_literal(text : String) -> String {
 
 ///|
 fn pp_quote_string(text : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_char('"')
   for i = 0; i < text.length(); i = i + 1 {
     let ch = text[i].unsafe_to_char()

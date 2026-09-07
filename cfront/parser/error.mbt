@@ -12,10 +12,19 @@ pub(all) struct Position {
 } derive(Eq, Debug)
 
 ///|
+pub extend Position with Debug::{to_repr}
+
+///|
+pub extend Position with Eq::{not_equal, equal}
+
+///|
 /// Renders a position as `line:column`.
 pub impl Show for Position with fn to_string(self) {
   self.line.to_string() + ":" + self.column.to_string()
 }
+
+///|
+pub extend Position with Show::{to_string, output}
 
 ///|
 /// Returns the line and column of `offset` within `source`.
@@ -58,6 +67,12 @@ pub(all) suberror ParseError {
 } derive(Eq, Debug)
 
 ///|
+pub extend ParseError with Debug::{to_repr}
+
+///|
+pub extend ParseError with Eq::{not_equal, equal}
+
+///|
 /// Renders a diagnostic as `line:column: message`, the form editors parse.
 pub impl Show for ParseError with fn to_string(self) {
   match self {
@@ -68,3 +83,6 @@ pub impl Show for ParseError with fn to_string(self) {
     Malformed(position~, what~) => position.to_string() + ": malformed " + what
   }
 }
+
+///|
+pub extend ParseError with Show::{to_string, output}

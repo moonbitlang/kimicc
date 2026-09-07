@@ -313,7 +313,7 @@ fn Interpreter::string_from_char_initializers(
         }
     }
   }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for byte in bytes {
     buf.write_char(byte.to_int().unsafe_to_char())
   }
@@ -322,7 +322,7 @@ fn Interpreter::string_from_char_initializers(
 
 ///|
 fn string_from_fixed_char_string(value : String, length : Int) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let limit = if value.length() < length { value.length() } else { length }
   for i in 0..<limit {
     buf.write_char(value[i].to_int().unsafe_to_char())
@@ -335,7 +335,7 @@ fn string_from_fixed_char_string(value : String, length : Int) -> String {
 
 ///|
 fn zero_byte_string(length : Int) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for _ in 0..<length {
     buf.write_char('\u0000')
   }
@@ -1793,7 +1793,7 @@ fn replace_string_byte(value : String, offset : Int64, byte : Int64) -> String? 
     None
   } else {
     let target = offset.to_int()
-    let buf = StringBuilder::new()
+    let buf = StringBuilder()
     for i in 0..<value.length() {
       if i == target {
         buf.write_char((byte & 0xFFL).to_int().unsafe_to_char())

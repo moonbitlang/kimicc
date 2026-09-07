@@ -866,7 +866,7 @@ fn pp_parse_header_name(clean : Array[PpToken]) -> (String, Bool)? {
     return Some((pp_unquote_string_literal(clean[0].text), false))
   }
   if clean[0].is_punct("<") {
-    let buf = StringBuilder::new()
+    let buf = StringBuilder()
     let mut i = 1
     while i < clean.length() && !clean[i].is_punct(">") {
       buf.write_string(clean[i].text)
@@ -1499,7 +1499,7 @@ fn Preprocessor::process_source(
     }
   }
   self.include_stack.push(file)
-  let output = StringBuilder::new()
+  let output = StringBuilder()
   if self.options.emit_line_markers {
     output.write_string("#line 1 ")
     output.write_string(pp_quote_string(file))
@@ -1658,7 +1658,7 @@ fn pp_macro_param_source(macro_ : Macro, index : Int) -> String {
 
 ///|
 fn pp_macro_definition_source(name : String, macro_ : Macro) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("#define ")
   buf.write_string(name)
   if macro_.function_like {
@@ -1680,7 +1680,7 @@ fn pp_macro_definition_source(name : String, macro_ : Macro) -> String {
 
 ///|
 fn Preprocessor::dump_macro_definitions(self : Preprocessor) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for name in pp_sorted_macro_names(self.macros) {
     if !pp_macro_dump_skips_name(name) {
       match self.macros.get(name) {

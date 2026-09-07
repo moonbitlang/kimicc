@@ -10,7 +10,7 @@
 /// }
 /// ```
 pub fn print_stmt(stmt : @parser.Stmt) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   write_stmt(buf, stmt, 0)
   buf.to_string()
 }
