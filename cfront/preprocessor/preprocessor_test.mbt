@@ -163,8 +163,8 @@ test "file prefix maps remap physical file macro names" {
   let options : @preprocessor.PreprocessOptions = {
     ..@preprocessor.PreprocessOptions::new("/work/project/main.c"),
     file_prefix_maps: [
-      { from_prefix: "/work", to_prefix: "/mapped" },
-      { from_prefix: "/work/project", to_prefix: "/src" },
+      { from_prefix: "/work", to_prefix: "/mapped", },
+      { from_prefix: "/work/project", to_prefix: "/src", },
     ],
   }
   let source =
@@ -186,7 +186,7 @@ test "base file and include level follow physical include stack" {
   let options : @preprocessor.PreprocessOptions = {
     ..@preprocessor.PreprocessOptions::new("/work/project/main.c"),
     include_paths: ["preprocessor/testdata/include_level"],
-    file_prefix_maps: [{ from_prefix: "/work/project", to_prefix: "/src" }],
+    file_prefix_maps: [{ from_prefix: "/work/project", to_prefix: "/src", }],
   }
   let source =
     #|const char *main_base = __BASE_FILE__;
@@ -213,8 +213,8 @@ test "file name macro uses basename without prefix maps" {
     ..@preprocessor.PreprocessOptions::new("/work/project/main.c"),
     include_paths: ["preprocessor/testdata/include_level"],
     file_prefix_maps: [
-      { from_prefix: "/work/project/main.c", to_prefix: "/mapped/renamed.c" },
-      { from_prefix: "/work/project", to_prefix: "/src" },
+      { from_prefix: "/work/project/main.c", to_prefix: "/mapped/renamed.c", },
+      { from_prefix: "/work/project", to_prefix: "/src", },
     ],
   }
   let source =

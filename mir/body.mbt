@@ -225,7 +225,7 @@ fn BodyLowerContext::scope(self : BodyLowerContext) -> Scope {
       None => ()
     }
   }
-  { locals, current_func: self.current_func }
+  { locals, current_func: self.current_func, }
 }
 
 ///|
@@ -246,7 +246,7 @@ fn BodyLowerContext::declare_local(
   name : String,
   ty : @ctype.Type,
 ) -> MirLocal {
-  let binding = { id: self.next_id, name, ty }
+  let binding = { id: self.next_id, name, ty, }
   self.next_id += 1
   self.locals.push(binding)
   let index = self.scopes.length() - 1

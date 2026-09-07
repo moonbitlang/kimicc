@@ -1279,11 +1279,11 @@ test "driver emits one dependency sidecar for multi-source links" {
   assert_eq(dependency_output_path(opts, "main.c", "tool"), "tool.d")
   assert_eq(
     dependency_rule_content(opts, "main.c", "tool", [
-      { path: "main.c", system: false },
-      { path: "include/main.h", system: false },
-      { path: "helper.c", system: false },
-      { path: "/usr/include/stdio.h", system: true },
-      { path: "include/main.h", system: false },
+      { path: "main.c", system: false, },
+      { path: "include/main.h", system: false, },
+      { path: "helper.c", system: false, },
+      { path: "/usr/include/stdio.h", system: true, },
+      { path: "include/main.h", system: false, },
     ]),
     "tool: main.c include/main.h helper.c\n\ninclude/main.h:\n\nhelper.c:\n",
   )
@@ -1940,9 +1940,9 @@ test "driver parses dependency-only options and filters system headers" {
   assert_true(opts.dependency_output_path is Some("deps/foo.d"))
   assert_eq(
     dependency_rule_content(opts, "src/foo.c", "src/foo.o", [
-      { path: "src/foo.c", system: false },
-      { path: "include/local.h", system: false },
-      { path: "/usr/include/stdio.h", system: true },
+      { path: "src/foo.c", system: false, },
+      { path: "include/local.h", system: false, },
+      { path: "/usr/include/stdio.h", system: true, },
     ]),
     "foo.o: src/foo.c include/local.h\n\ninclude/local.h:\n",
   )

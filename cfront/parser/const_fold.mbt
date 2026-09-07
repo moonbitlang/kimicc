@@ -40,7 +40,7 @@ fn Parser::const_object_size_var_fact(
 ) -> @ctype.ObjectSizeFact? raise ParseError {
   if self.value_types.contains(name) {
     let size = self.const_type_size(self.value_types[name])
-    Some({ whole: size, subobject: size })
+    Some({ whole: size, subobject: size, })
   } else {
     None
   }

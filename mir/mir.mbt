@@ -244,7 +244,7 @@ pub fn Program::to_module(self : Program) -> MirModule {
 /// starting point for evaluating expressions that do not reference locals, for
 /// example file-scope constant initializers.
 pub fn Scope::empty() -> Scope {
-  { locals: {}, current_func: "" }
+  { locals: {}, current_func: "", }
 }
 
 ///|
@@ -1187,7 +1187,7 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
     let params : Array[MirParam] = []
     for param in decl.params {
       param_types.push(param.ty)
-      params.push({ name: param.name, ty: param.ty })
+      params.push({ name: param.name, ty: param.ty, })
     }
     funcs[decl.name] = {
       ret: decl.ret,
@@ -1233,7 +1233,11 @@ pub fn lower(source : @parser.Program, target : @target.Target) -> Program {
   for decl in source.structs {
     let fields : Array[MirAggregateField] = []
     for field in decl.fields {
-      fields.push({ name: field.name, ty: field.ty, bit_width: field.bit_width })
+      fields.push({
+        name: field.name,
+        ty: field.ty,
+        bit_width: field.bit_width,
+      })
     }
     let aggregate_decl = {
       name: decl.name,
@@ -1851,7 +1855,7 @@ fn MirModule::aggregate_layout_by_name(
 ) -> AggregateLayout {
   match self.layouts.get(name) {
     Some(layout) => layout
-    None => { fields: [], size: 8, align: 8, is_union: false, pack: None }
+    None => { fields: [], size: 8, align: 8, is_union: false, pack: None, }
   }
 }
 
@@ -2024,7 +2028,7 @@ pub fn MirModule::object_size_fact_for_type(
   ty : @ctype.Type,
 ) -> @ctype.ObjectSizeFact {
   let size = self.type_size(ty)
-  { whole: size, subobject: size }
+  { whole: size, subobject: size, }
 }
 
 ///|

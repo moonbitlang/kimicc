@@ -87,7 +87,7 @@ async test "the generated IQ2_XXS Metal kernel compiles on device" {
 /// alternative to this check is a bounds test in the hot loop.
 test "output shapes that would overrun the weights are refused" {
   // 2048 rows over 4 simdgroups x 4 rows divides evenly; 2044 does not.
-  let ok = @ds4_metal.generate({ in_dim: 4096, out_rows: 2048, nr0: 4, nsg: 4 })
+  let ok = @ds4_metal.generate({ in_dim: 4096, out_rows: 2048, nr0: 4, nsg: 4, })
   assert_true(ok.contains("gen_iq2_xxs_pair_4096"))
   // The staging loop must be strided by the real thread count, not
   // ds4's hardcoded four-per-thread, which is only correct at nsg == 2.

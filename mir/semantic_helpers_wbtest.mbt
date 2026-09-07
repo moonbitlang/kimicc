@@ -239,7 +239,7 @@ test "mir internal expression helpers fold constants with target layout" {
   local_types["local_x"] = SInt
   local_types["local_buf"] = Array(SChar, 16)
   local_types["local_s"] = Struct("S")
-  let local_scope : Scope = { locals: local_types, current_func: "main" }
+  let local_scope : Scope = { locals: local_types, current_func: "main", }
   expect_const(
     mir,
     Call(Var("__builtin_object_size"), [

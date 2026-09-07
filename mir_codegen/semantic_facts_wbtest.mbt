@@ -3,8 +3,8 @@ fn semantic_test_aggregate_decl() -> @mir.MirAggregateDecl {
   {
     name: "Pair",
     fields: [
-      { name: "head", ty: SInt, bit_width: None },
-      { name: "tail", ty: Array(SInt, 2), bit_width: None },
+      { name: "head", ty: SInt, bit_width: None, },
+      { name: "tail", ty: Array(SInt, 2), bit_width: None, },
     ],
     is_union: false,
     pack: None,

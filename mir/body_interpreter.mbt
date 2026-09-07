@@ -1034,7 +1034,7 @@ fn Program::scalar_byte_slot_in_type(
   if self.mir_body_scalar_byte_memory_type(ty) {
     let size = self.type_size(ty).to_int64()
     match mir_body_scalar_byte_offset(base, size, addr) {
-      Some(offset) => return Some({ base, ty, offset })
+      Some(offset) => return Some({ base, ty, offset, })
       None => ()
     }
   }
@@ -5740,7 +5740,7 @@ fn BodyInterpreter::snapshot_aggregate_arg(
   }
   let handle = self.next_aggregate_arg
   self.next_aggregate_arg += 1L
-  self.aggregate_args[handle] = { ty, slots }
+  self.aggregate_args[handle] = { ty, slots, }
   handle
 }
 

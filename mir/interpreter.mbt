@@ -18,7 +18,7 @@ priv struct InterpFrame {
 
 ///|
 fn InterpFrame::scope(self : InterpFrame) -> Scope {
-  { locals: self.local_types, current_func: self.name }
+  { locals: self.local_types, current_func: self.name, }
 }
 
 ///|
@@ -141,7 +141,7 @@ fn Interpreter::global_string_pointer_initializer(
 ) -> LiteralStringPointer? {
   match expr {
     String(value) =>
-      Some({ value, base: self.string_literal_base(value), offset: 0L })
+      Some({ value, base: self.string_literal_base(value), offset: 0L, })
     Cast(_, inner) => self.global_string_pointer_initializer(inner)
     AddrOf(Deref(inner)) => self.global_string_pointer_initializer(inner)
     AddrOf(ArrayAccess(base, index)) =>
@@ -788,7 +788,7 @@ fn Interpreter::literal_string_pointer_if_known(
 ) -> LiteralStringPointer? {
   match expr {
     String(value) =>
-      Some({ value, base: self.string_literal_base(value), offset: 0L })
+      Some({ value, base: self.string_literal_base(value), offset: 0L, })
     Cast(_, inner) => self.literal_string_pointer_if_known(frame, inner)
     Var(name) =>
       if frame.locals.contains(name) {
@@ -1881,7 +1881,7 @@ fn Interpreter::literal_string_pointer(
 ) -> LiteralStringPointer? {
   match expr {
     String(value) =>
-      Some({ value, base: self.string_literal_base(value), offset: 0L })
+      Some({ value, base: self.string_literal_base(value), offset: 0L, })
     Cast(_, inner) => self.literal_string_pointer(frame, inner)
     Var(name) => self.string_literal_pointer_at(self.read_var(frame, name))
     Binary("+", lhs, rhs) =>
@@ -3232,7 +3232,7 @@ fn Interpreter::call_func(
           0L
         }
         Some(body) => {
-          let frame = { locals: {}, local_types: {}, name }
+          let frame = { locals: {}, local_types: {}, name, }
           for i in 0..<decl.params.length() {
             let param = decl.params[i]
             if param.name != "" {

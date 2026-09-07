@@ -275,7 +275,7 @@ async fn run_command_capture(cmd : String, tag : String) -> CommandResult {
   let output_path = temp_file_path(tag, cmd, ".out")
   let rc = moonbit_system(@utf8.encode(cmd + " > " + output_path + " 2>&1"))
   let data = @fs.read_file(output_path)
-  { code: rc, output: data.text() }
+  { code: rc, output: data.text(), }
 }
 
 ///|
@@ -302,7 +302,7 @@ async fn run_command_capture_tail(
     ),
   )
   let data = @fs.read_file(tail_path)
-  { code: rc, output: "full-output: " + output_path + "\n" + data.text() }
+  { code: rc, output: "full-output: " + output_path + "\n" + data.text(), }
 }
 
 ///|
@@ -822,7 +822,7 @@ async fn run_sqlite_public_tcl_batch_with(
   compiler : SQLiteObjectCompiler,
 ) -> CommandResult {
   if !sqlite_public_tests_available() {
-    return { code: 0, output: "sqlite-public-tests-skipped\n" }
+    return { code: 0, output: "sqlite-public-tests-skipped\n", }
   }
   let root = sqlite_public_source_root()
   let testfixture = build_sqlite_public_testfixture_with(compiler)
@@ -848,10 +848,10 @@ async fn run_sqlite_public_tcl_batch_with(
     output.write_string("\n")
     output.write_string(result.output)
     if result.code != 0 {
-      return { code: result.code, output: output.to_string() }
+      return { code: result.code, output: output.to_string(), }
     }
   }
-  { code: 0, output: output.to_string() }
+  { code: 0, output: output.to_string(), }
 }
 
 ///|
@@ -876,7 +876,7 @@ async fn run_sqlite_public_tcl_batch_collect_with_root(
   root : String,
 ) -> CommandResult {
   if !sqlite_public_tests_available_at(root) {
-    return { code: 0, output: "sqlite-public-tests-skipped\n" }
+    return { code: 0, output: "sqlite-public-tests-skipped\n", }
   }
   let testfixture = build_sqlite_public_testfixture_with(compiler)
   let output = StringBuilder()
@@ -907,7 +907,7 @@ async fn run_sqlite_public_tcl_batch_collect_with_root(
       code = result.code
     }
   }
-  { code, output: output.to_string() }
+  { code, output: output.to_string(), }
 }
 
 ///|
@@ -926,7 +926,7 @@ async fn run_sqlite_public_tcl_script_tail_with(
   tail_lines : Int,
 ) -> CommandResult {
   if !sqlite_public_tests_available() {
-    return { code: 0, output: "sqlite-public-tests-skipped\n" }
+    return { code: 0, output: "sqlite-public-tests-skipped\n", }
   }
   let root = sqlite_public_source_root()
   let testfixture = build_sqlite_public_testfixture_with(compiler)
@@ -973,7 +973,7 @@ async fn run_sqlite_public_tcl_runner_tail_with_root(
   root : String,
 ) -> CommandResult {
   if !sqlite_public_tests_available_at(root) {
-    return { code: 0, output: "sqlite-public-tests-skipped\n" }
+    return { code: 0, output: "sqlite-public-tests-skipped\n", }
   }
   let testfixture = build_sqlite_public_testfixture_with(compiler)
   let run_seed = root + "/test/testrunner.tcl " + runner_args

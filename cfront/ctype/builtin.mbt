@@ -67,7 +67,7 @@ pub fn ObjectSizeFact::subtract_offset(
   if offset < 0 || offset > self.whole || offset > self.subobject {
     None
   } else {
-    Some({ whole: self.whole - offset, subobject: self.subobject - offset })
+    Some({ whole: self.whole - offset, subobject: self.subobject - offset, })
   }
 }
 
@@ -99,7 +99,7 @@ pub fn ObjectSizeFact::member_field(
   member_size : Int,
 ) -> ObjectSizeFact? {
   match self.subtract_offset(offset) {
-    Some(fact) => Some({ whole: fact.whole, subobject: member_size })
+    Some(fact) => Some({ whole: fact.whole, subobject: member_size, })
     None => None
   }
 }

@@ -247,6 +247,6 @@ fn IfExprParser::parse_conditional(self : IfExprParser) -> Int64 {
 
 ///|
 fn pp_eval_if_expr(tokens : Array[PpToken]) -> Int64 {
-  let parser = { tokens, pos: 0 }
+  let parser = { tokens, pos: 0, }
   parser.parse_conditional()
 }

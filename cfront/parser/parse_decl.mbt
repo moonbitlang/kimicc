@@ -334,7 +334,7 @@ fn Parser::parse_global_var_tail(
 fn Parser::parse_param(self : Parser) -> Param raise ParseError {
   if self.token == Ellipsis {
     self.advance()
-    return { ty: Void, name: "...", bit_width: None }
+    return { ty: Void, name: "...", bit_width: None, }
   }
   let spec = self.parse_decl_specifiers()
   let decl = self.parse_declarator(

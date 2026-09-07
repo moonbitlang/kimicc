@@ -18,7 +18,7 @@ pub fn param(ty : @ctype.Type, name : String) -> @parser.Param {
     Array(elem, _) => Pointer(elem)
     other => other
   }
-  { ty: adjusted, name, bit_width: None }
+  { ty: adjusted, name, bit_width: None, }
 }
 
 ///|
@@ -115,13 +115,13 @@ pub fn aggregate(
   is_union? : Bool = false,
   pack? : Int,
 ) -> @parser.StructDecl {
-  { name, fields, is_union, pack, is_anonymous: false }
+  { name, fields, is_union, pack, is_anonymous: false, }
 }
 
 ///|
 /// A field of an aggregate.
 pub fn field(ty : @ctype.Type, name : String) -> @parser.Param {
-  { ty, name, bit_width: None }
+  { ty, name, bit_width: None, }
 }
 
 ///|
@@ -143,7 +143,7 @@ pub fn program(
   for i in 0..<decls.length() {
     items.push(Func(i))
   }
-  { structs, globals, decls, items }
+  { structs, globals, decls, items, }
 }
 
 ///|
@@ -277,5 +277,5 @@ pub fn ordered_program(entries : Array[Item]) -> @parser.Program {
       }
     }
   }
-  { structs, globals, decls, items }
+  { structs, globals, decls, items, }
 }

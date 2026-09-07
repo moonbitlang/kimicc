@@ -37,7 +37,7 @@ pub fn compile(source : String) -> Module? raise @parser.ParseError {
     image.external_relocations,
   )
   if executable_memory_is_valid(memory) {
-    Some({ image, memory })
+    Some({ image, memory, })
   } else {
     None
   }

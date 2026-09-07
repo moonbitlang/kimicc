@@ -72,7 +72,7 @@ pub extend Kernel with Eq::{not_equal, equal}
 ///|
 /// A parameter with no MSL decoration.
 pub fn plain() -> ParamDecor {
-  { space: "", attr: "", by_ref: false }
+  { space: "", attr: "", by_ref: false, }
 }
 
 ///|
@@ -83,7 +83,7 @@ pub fn decor(
   attr? : String = "",
   by_ref? : Bool = false,
 ) -> ParamDecor {
-  { space, attr, by_ref }
+  { space, attr, by_ref, }
 }
 
 ///|
@@ -854,7 +854,7 @@ pub fn parse_kernel(
     if blank_literals(core).find("[") is Some(_) {
       raise NotAKernel("array declarators are outside the MSL subset")
     }
-    decor.push({ space, attr, by_ref })
+    decor.push({ space, attr, by_ref, })
     cores.push(core)
   }
   // `(void)` is C's empty parameter list: cfront normalizes the pseudo-
@@ -924,5 +924,5 @@ pub fn parse_kernel(
     Some(msg) => raise NotAKernel(msg)
     None => ()
   }
-  { qualifier, decl, decor }
+  { qualifier, decl, decor, }
 }
