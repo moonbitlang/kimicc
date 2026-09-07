@@ -105,7 +105,7 @@ test "parse standard extended float spellings used by glibc math" {
       ret: Float,
       name: "f32",
       params: [{ ty: Double, .. }, { ty: Double, .. }, { ty: LongDouble, .. }],
-      ..,
+      ..
     } => ()
     _ => fail("Expected extended float aliases")
   }
@@ -1158,17 +1158,17 @@ test "parse comma separated initialized globals" {
       {
         name: "action_fd",
         init: Some(Scalar(Unary("-", Number(1, _, SInt)))),
-        ..,
+        ..
       },
       {
         name: "entry_fd",
         init: Some(Scalar(Unary("-", Number(1, _, SInt)))),
-        ..,
+        ..
       },
       {
         name: "text_fd",
         init: Some(Scalar(Unary("-", Number(1, _, SInt)))),
-        ..,
+        ..
       },
     ] => ()
     _ => fail("Expected three initialized globals")

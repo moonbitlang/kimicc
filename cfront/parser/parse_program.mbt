@@ -118,7 +118,7 @@ fn Parser::parse_program(self : Parser) -> Program raise ParseError {
                 after_name_packed ||
                 self.skip_attributes_packed()
               let pack = combine_pack(is_packed, pragma_pack)
-              let decl = { name, fields, is_union, pack, is_anonymous: false }
+              let decl = { name, fields, is_union, pack, is_anonymous: false, }
               self.reserve_tag(name)
               self.add_aggregate(decl)
               self.struct_decls[name] = decl
@@ -209,7 +209,7 @@ fn Parser::parse_program(self : Parser) -> Program raise ParseError {
       self.items.insert(at + offset, Func(offset))
     }
   }
-  { structs: self.aggregates, globals: self.globals, decls, items: self.items }
+  { structs: self.aggregates, globals: self.globals, decls, items: self.items, }
 }
 
 ///|

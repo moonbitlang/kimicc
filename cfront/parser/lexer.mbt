@@ -201,7 +201,7 @@ pub struct Lexer {
 ///|
 /// Creates a lexer positioned at the start of `input`.
 pub fn Lexer::new(input : String) -> Lexer {
-  { input, pos: 0 }
+  { input, pos: 0, }
 }
 
 ///|

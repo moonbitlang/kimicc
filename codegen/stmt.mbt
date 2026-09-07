@@ -200,7 +200,7 @@ fn Codegen::gen_stmt(
         }
       }
       self.emit("\tb\t" + default_label)
-      self.switch_clauses.push({ labels, emitted: 0 })
+      self.switch_clauses.push({ labels, emitted: 0, })
       self.gen_stmt(body, frame_size)
       check_switch_clauses_emitted(self.switch_clauses.pop())
       self.emit(end_label + ":")

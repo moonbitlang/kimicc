@@ -2808,7 +2808,10 @@ fn preprocess_source_with_dependencies(
     if opts.forced_includes.length() > 0 || opts.macro_includes.length() > 0 {
       fail("--preprocessed cannot be combined with -include or -imacros")
     }
-    { text: source, dependency_records: [{ path: input_path, system: false }] }
+    {
+      text: source,
+      dependency_records: [{ path: input_path, system: false, }],
+    }
   } else {
     let preprocessed_source = driver_preprocess_source(source, opts)
     match
@@ -2817,10 +2820,10 @@ fn preprocess_source_with_dependencies(
         preprocess_options(input_path, opts),
       ) {
       Ok(result) =>
-        { text: result.text, dependency_records: result.dependency_records }
+        { text: result.text, dependency_records: result.dependency_records, }
       Err(err) => {
         fail(err.to_string())
-        { text: "", dependency_records: [] }
+        { text: "", dependency_records: [], }
       }
     }
   }
@@ -2847,10 +2850,10 @@ fn dump_macros_source_with_dependencies(
       preprocess_options(input_path, opts),
     ) {
     Ok(result) =>
-      { text: result.text, dependency_records: result.dependency_records }
+      { text: result.text, dependency_records: result.dependency_records, }
     Err(err) => {
       fail(err.to_string())
-      { text: "", dependency_records: [] }
+      { text: "", dependency_records: [], }
     }
   }
 }

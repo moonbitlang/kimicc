@@ -992,8 +992,8 @@ async test "direct macho object supports external branch relocation" {
 ///|
 async test "direct macho object runs fixture matrix" {
   let fixtures : Array[DirectObjectFixture] = [
-    { path: "test/run_fixtures/add.c", tag: "fixture_add", expected: 7 },
-    { path: "test/run_fixtures/arrays.c", tag: "fixture_arrays", expected: 3 },
+    { path: "test/run_fixtures/add.c", tag: "fixture_add", expected: 7, },
+    { path: "test/run_fixtures/arrays.c", tag: "fixture_arrays", expected: 3, },
     {
       path: "test/run_fixtures/bitwise.c",
       tag: "fixture_bitwise",
@@ -1009,13 +1009,17 @@ async test "direct macho object runs fixture matrix" {
       tag: "fixture_funcall",
       expected: 25,
     },
-    { path: "test/run_fixtures/globals.c", tag: "fixture_globals", expected: 2 },
+    {
+      path: "test/run_fixtures/globals.c",
+      tag: "fixture_globals",
+      expected: 2,
+    },
     {
       path: "test/run_fixtures/if_else.c",
       tag: "fixture_if_else",
       expected: 20,
     },
-    { path: "test/run_fixtures/logic.c", tag: "fixture_logic", expected: 3 },
+    { path: "test/run_fixtures/logic.c", tag: "fixture_logic", expected: 3, },
     {
       path: "test/run_fixtures/pointers.c",
       tag: "fixture_pointers",
@@ -1031,7 +1035,7 @@ async test "direct macho object runs fixture matrix" {
       tag: "fixture_return_42",
       expected: 42,
     },
-    { path: "test/run_fixtures/struct.c", tag: "fixture_struct", expected: 7 },
+    { path: "test/run_fixtures/struct.c", tag: "fixture_struct", expected: 7, },
     {
       path: "test/run_fixtures/switch_case.c",
       tag: "fixture_switch_case",
@@ -1047,13 +1051,13 @@ async test "direct macho object runs fixture matrix" {
       tag: "fixture_while_loop",
       expected: 10,
     },
-    { path: "test/fixtures/hello.c", tag: "fixture_hello", expected: 6 },
+    { path: "test/fixtures/hello.c", tag: "fixture_hello", expected: 6, },
     {
       path: "test/fixtures/var_decls.c",
       tag: "fixture_var_decls",
       expected: 100,
     },
-    { path: "test/fixtures/switch.c", tag: "fixture_switch", expected: 20 },
+    { path: "test/fixtures/switch.c", tag: "fixture_switch", expected: 20, },
     {
       path: "test/fixtures/pointers.c",
       tag: "fixture_pointers_full",

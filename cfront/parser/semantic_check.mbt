@@ -627,7 +627,7 @@ fn semantic_context(prog : Program) -> SemanticContext {
       structs[decl.name] = decl
     }
   }
-  { funcs, globals, structs }
+  { funcs, globals, structs, }
 }
 
 ///|

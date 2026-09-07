@@ -1358,7 +1358,7 @@ fn Codegen::find_bitfield_member(
       match self.find_field_layout_for_type(obj_ty, field) {
         Some((_, ty, _, size, bit_offset, bit_width)) =>
           if bit_width > 0 {
-            Some({ ty, size, bit_offset, bit_width, stack_temp_size: 0 })
+            Some({ ty, size, bit_offset, bit_width, stack_temp_size: 0, })
           } else {
             None
           }
@@ -1941,7 +1941,7 @@ fn Codegen::object_size_var_fact(
   match self.object_size_var_type(name) {
     Some(ty) => {
       let size = self.type_size(ty)
-      Some({ whole: size, subobject: size })
+      Some({ whole: size, subobject: size, })
     }
     None => None
   }
@@ -3601,7 +3601,7 @@ fn Codegen::emit_member_addr(
         }
         Some((_, ty, offset, size, bit_offset, bit_width)) => {
           self.emit_add_offset_to_x9(offset)
-          Some({ ty, size, bit_offset, bit_width, stack_temp_size })
+          Some({ ty, size, bit_offset, bit_width, stack_temp_size, })
         }
       }
     }

@@ -1844,7 +1844,7 @@ fn add_relocation_with_length(
   type_ : Int,
   length : Int,
 ) -> Unit {
-  section.relocs.push({ address, symbol, pcrel, length, external: true, type_ })
+  section.relocs.push({ address, symbol, pcrel, length, external: true, type_, })
 }
 
 ///|
@@ -2049,7 +2049,7 @@ fn parse_symbol_addend(value : String) -> SymbolAddend {
     i = i + 1
   }
   if split_at < 0 {
-    { symbol: text, addend: 0 }
+    { symbol: text, addend: 0, }
   } else {
     let symbol = slice_to(text, split_at)
     let amount = parse_int_or_abort(
@@ -2057,7 +2057,7 @@ fn parse_symbol_addend(value : String) -> SymbolAddend {
       ".quad symbol addend",
     )
     let addend = if text[split_at] == '-' { -amount } else { amount }
-    { symbol, addend }
+    { symbol, addend, }
   }
 }
 
@@ -2950,7 +2950,7 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
         )
     }
   }
-  { sections, globals, defined_symbols, symbols }
+  { sections, globals, defined_symbols, symbols, }
 }
 
 ///|
@@ -3227,7 +3227,7 @@ fn build_symbol_layout(obj : AssembledObject) -> SymbolLayout {
   }
   for name in undefs {
     indexes[name] = entries.length()
-    entries.push({ name, type_: 0x01, section_index: 0, value: 0 })
+    entries.push({ name, type_: 0x01, section_index: 0, value: 0, })
   }
   {
     entries,
@@ -3509,7 +3509,7 @@ fn write_jit_external_branch_stubs(
     let offset = branch_stub_offsets[symbol]
     patch_u32_in_array(image, offset, 0x58000050U)
     patch_u32_in_array(image, offset + 4, 0xd61f0200U)
-    external_relocations.push({ offset: offset + 8, symbol })
+    external_relocations.push({ offset: offset + 8, symbol, })
   }
 }
 
@@ -3610,7 +3610,7 @@ fn patch_jit_relocations(
       )
       base_relocations.push(got_offset)
     } else {
-      external_relocations.push({ offset: got_offset, symbol: got_symbol })
+      external_relocations.push({ offset: got_offset, symbol: got_symbol, })
     }
   }
   for section in obj.sections {
@@ -3624,7 +3624,7 @@ fn patch_jit_relocations(
             patch_i64_in_array(image, offset, target.to_int64() + addend)
             base_relocations.push(offset)
           } else {
-            external_relocations.push({ offset, symbol: reloc.symbol })
+            external_relocations.push({ offset, symbol: reloc.symbol, })
           }
         }
         2 => {

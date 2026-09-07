@@ -15,7 +15,7 @@ pub extend IntegerConstant with Eq::{not_equal, equal}
 /// Constructs an integer constant normalized to the destination C type.
 pub fn integer_constant(bits : Int64, ty : Type) -> IntegerConstant {
   let core_ty = ty.core_type()
-  { bits: core_ty.cast_integer_bits(bits), ty: core_ty }
+  { bits: core_ty.cast_integer_bits(bits), ty: core_ty, }
 }
 
 ///|

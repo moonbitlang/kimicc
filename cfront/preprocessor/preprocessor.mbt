@@ -14,7 +14,7 @@ fn Preprocessor::record_dependency(
   if !self.dependency_seen.contains(path) {
     self.dependency_seen[path] = true
     self.dependencies.push(path)
-    self.dependency_records.push({ path, system })
+    self.dependency_records.push({ path, system, })
   }
 }
 
@@ -822,7 +822,7 @@ fn Preprocessor::define_macro(
   let replacement = pp_without_whitespace(
     pp_line_after(tokens, replacement_start),
   )
-  self.macros[name] = { function_like, variadic, params, replacement }
+  self.macros[name] = { function_like, variadic, params, replacement, }
 }
 
 ///|
@@ -1060,17 +1060,17 @@ fn Preprocessor::include_search_dirs(
   let paths : Array[IncludeSearchDir] = []
   if system {
     for dir in self.options.system_include_paths {
-      paths.push({ dir, system: true })
+      paths.push({ dir, system: true, })
     }
     for dir in self.options.include_paths {
-      paths.push({ dir, system: false })
+      paths.push({ dir, system: false, })
     }
   } else {
     for dir in self.options.include_paths {
-      paths.push({ dir, system: false })
+      paths.push({ dir, system: false, })
     }
     for dir in self.options.system_include_paths {
-      paths.push({ dir, system: true })
+      paths.push({ dir, system: true, })
     }
   }
   paths

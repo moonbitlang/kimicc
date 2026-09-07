@@ -43,7 +43,7 @@ pub fn position_at(source : String, offset : Int) -> Position {
       column += 1
     }
   }
-  { offset, line, column }
+  { offset, line, column, }
 }
 
 ///|

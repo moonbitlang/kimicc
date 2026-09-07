@@ -169,8 +169,8 @@ test "replacing a grouped entry prints the replacement" {
     #|int before = 1;
     #|int keep(void) { return before; }
   let program = @parser.parse(source)
-  program.globals[0] = { ..program.globals[0], name: "after" }
-  program.decls[0] = { ..program.decls[0], name: "renamed" }
+  program.globals[0] = { ..program.globals[0], name: "after", }
+  program.decls[0] = { ..program.decls[0], name: "renamed", }
   let printed = @printer.print_program(program)
   assert_true(printed.contains("int after = 1;"))
   assert_true(!printed.contains("before = 1"))
@@ -404,7 +404,7 @@ test "appended aggregates print as top-level definitions" {
   let program = @parser.parse(source)
   program.structs.push({
     name: "Added",
-    fields: [{ ty: Struct("Base"), name: "value", bit_width: None }],
+    fields: [{ ty: Struct("Base"), name: "value", bit_width: None, }],
     is_union: false,
     pack: None,
     is_anonymous: false,
@@ -553,14 +553,14 @@ test "hidden definitions are a print fixed point" {
 test "hand-built anonymous members inline by provenance" {
   let inner : @parser.StructDecl = {
     name: "synthetic_tag",
-    fields: [{ ty: SInt, name: "value", bit_width: None }],
+    fields: [{ ty: SInt, name: "value", bit_width: None, }],
     is_union: false,
     pack: None,
     is_anonymous: true,
   }
   let outer : @parser.StructDecl = {
     name: "Outer",
-    fields: [{ ty: Struct("synthetic_tag"), name: "", bit_width: None }],
+    fields: [{ ty: Struct("synthetic_tag"), name: "", bit_width: None, }],
     is_union: false,
     pack: None,
     is_anonymous: false,

@@ -508,7 +508,7 @@ fn Parser::parse_struct_type_specifier(self : Parser) -> Type raise ParseError {
       let is_packed = leading_packed || self.skip_attributes_packed()
       let pack = combine_pack(is_packed, pragma_pack)
       let name = self.synthesize_anon_tag(false)
-      let decl = { name, fields, is_union: false, pack, is_anonymous: true }
+      let decl = { name, fields, is_union: false, pack, is_anonymous: true, }
       self.add_aggregate(decl)
       self.struct_decls[name] = decl
       Struct(name)
@@ -556,7 +556,7 @@ fn Parser::parse_union_type_specifier(self : Parser) -> Type raise ParseError {
       let is_packed = leading_packed || self.skip_attributes_packed()
       let pack = combine_pack(is_packed, pragma_pack)
       let name = self.synthesize_anon_tag(true)
-      let decl = { name, fields, is_union: true, pack, is_anonymous: true }
+      let decl = { name, fields, is_union: true, pack, is_anonymous: true, }
       self.add_aggregate(decl)
       self.struct_decls[name] = decl
       Union(name)
@@ -653,7 +653,7 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] raise ParseError {
     } else {
       None
     }
-    fields.push({ ty: field_ty, name: decl.name, bit_width })
+    fields.push({ ty: field_ty, name: decl.name, bit_width, })
     while self.token == Comma {
       self.advance()
       self.skip_attributes()
@@ -677,7 +677,11 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] raise ParseError {
       } else {
         None
       }
-      fields.push({ ty: extra_ty, name: extra.name, bit_width: extra_bit_width })
+      fields.push({
+        ty: extra_ty,
+        name: extra.name,
+        bit_width: extra_bit_width,
+      })
     }
     self.expect(Semicolon)
   }
@@ -702,7 +706,7 @@ fn Parser::parse_declarator(
       return self.parse_declarator(base_ty)
     }
     let decl = self.parse_declarator(Pointer(base_ty))
-    return { ..decl, ptr_depth: decl.ptr_depth + 1 }
+    return { ..decl, ptr_depth: decl.ptr_depth + 1, }
   }
   self.parse_direct_declarator(base_ty)
 }
@@ -729,7 +733,7 @@ fn Parser::parse_abstract_declarator_result(
       return self.parse_abstract_declarator_result(base_ty)
     }
     let decl = self.parse_abstract_declarator_result(Pointer(base_ty))
-    return { ..decl, ptr_depth: decl.ptr_depth + 1 }
+    return { ..decl, ptr_depth: decl.ptr_depth + 1, }
   }
   self.parse_direct_abstract_declarator_result(base_ty)
 }
@@ -1008,7 +1012,7 @@ fn Parser::parse_declarator_suffixes(
     }
   }
   ty = apply_pending_array_suffixes(ty, pending_arrays, push_mode)
-  { ty, name, ptr_depth, func_params, func_ret_ty, is_func_decl }
+  { ty, name, ptr_depth, func_params, func_ret_ty, is_func_decl, }
 }
 
 ///|

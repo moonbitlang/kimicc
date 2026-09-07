@@ -316,7 +316,7 @@ fn gen_stmts(
 fn gen_program(size : Int, state : @splitmix.RandomState) -> @parser.Program {
   let scaled = if size < 1 { 1 } else if size > 12 { 12 } else { size }
   let depth = 1 + scaled / 4
-  let next_name : Ref[Int] = { val: 0 }
+  let next_name : Ref[Int] = { val: 0, }
   let globals : Array[@parser.GlobalDecl] = []
   let global_names : Array[String] = []
   for _ in 0..<pick(state, 3) {
@@ -343,7 +343,7 @@ fn gen_program(size : Int, state : @splitmix.RandomState) -> @parser.Program {
     for _ in 0..<pick(state, 3) {
       let name = "p" + next_name.val.to_string()
       next_name.val += 1
-      params.push({ ty: SInt, name, bit_width: None })
+      params.push({ ty: SInt, name, bit_width: None, })
       vars.push(name)
     }
     let body = gen_stmts(1 + scaled / 2, depth, vars, false, next_name, state)
@@ -371,5 +371,5 @@ fn gen_program(size : Int, state : @splitmix.RandomState) -> @parser.Program {
   for i in 0..<decls.length() {
     items.push(Func(i))
   }
-  { structs: [], globals, decls, items }
+  { structs: [], globals, decls, items, }
 }

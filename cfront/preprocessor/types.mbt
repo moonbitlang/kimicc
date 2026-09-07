@@ -113,7 +113,7 @@ priv struct PpToken {
 
 ///|
 fn pp_token(kind : PpTokenKind, text : String) -> PpToken {
-  { kind, text }
+  { kind, text, }
 }
 
 ///|

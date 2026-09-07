@@ -3068,7 +3068,7 @@ fn X64Codegen::object_size_var_fact(
   match self.object_size_var_type(name) {
     Some(ty) => {
       let size = self.type_size(ty)
-      Some({ whole: size, subobject: size })
+      Some({ whole: size, subobject: size, })
     }
     None => None
   }
@@ -4288,7 +4288,7 @@ fn X64Codegen::bitfield_info(
       match self.field_layout(self.type_of(obj), field) {
         Some((_, ty, _, size, bit_offset, bit_width)) =>
           if bit_width > 0 {
-            Some({ ty, size, bit_offset, bit_width })
+            Some({ ty, size, bit_offset, bit_width, })
           } else {
             None
           }
@@ -7350,7 +7350,7 @@ fn X64Codegen::gen_stmt(self : X64Codegen, stmt : @parser.Stmt) -> Unit {
         }
       }
       self.emit("\tjmp\t" + default_label)
-      self.switch_clauses.push({ labels, emitted: 0 })
+      self.switch_clauses.push({ labels, emitted: 0, })
       self.gen_stmt(body)
       check_switch_clauses_emitted(self.switch_clauses.pop())
       self.emit(end_label + ":")

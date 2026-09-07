@@ -621,7 +621,7 @@ test "ctype floating helpers cover classification and comparisons" {
   inspect(@ctype.floating_constant_from_integer_bits(42L), content="42")
   inspect(@ctype.floating_constant_to_integer_bits(3.9), content="3")
   match @ctype.integer_constant_from_floating(260.0, UChar) {
-    { bits, ty } => {
+    { bits, ty, } => {
       inspect(bits, content="4")
       inspect(ty, content="UChar")
     }
@@ -1340,11 +1340,11 @@ test "ctype builtin object-size metadata covers object size queries" {
     "__builtin_dynamic_object_size", "dynamic_object_size",
   )
   inspect(
-    @ctype.object_size_fact_result(Some({ whole: 9, subobject: 3 }), 0L),
+    @ctype.object_size_fact_result(Some({ whole: 9, subobject: 3, }), 0L),
     content="9",
   )
   inspect(
-    @ctype.object_size_fact_result(Some({ whole: 9, subobject: 3 }), 1L),
+    @ctype.object_size_fact_result(Some({ whole: 9, subobject: 3, }), 1L),
     content="3",
   )
   inspect(@ctype.object_size_fact_result(None, 0L), content="-1")
@@ -1794,7 +1794,7 @@ test "ctype builtin printf libcall lowering facts cover checked wrappers" {
 
 ///|
 test "ctype object-size facts cover builtin modes" {
-  let fact : @ctype.ObjectSizeFact = { whole: 12, subobject: 5 }
+  let fact : @ctype.ObjectSizeFact = { whole: 12, subobject: 5, }
   inspect(fact.value(0L), content="12")
   inspect(fact.value(1L), content="5")
   inspect(@ctype.object_size_unknown(0L), content="-1")

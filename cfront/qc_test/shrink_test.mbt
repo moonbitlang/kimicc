@@ -26,7 +26,7 @@ fn shrink_program(program : @parser.Program) -> Array[@parser.Program] {
       Some(Compound(stmts)) =>
         for candidate in shrink_stmts(stmts) {
           let decls = program.decls.copy()
-          decls[i] = { ..decl, body: Some(Compound(candidate)) }
+          decls[i] = { ..decl, body: Some(Compound(candidate)), }
           out.push(rebuild(program.globals, decls))
         }
       _ => ()
@@ -47,7 +47,7 @@ fn rebuild(
   for i in 0..<decls.length() {
     items.push(Func(i))
   }
-  { structs: [], globals, decls, items }
+  { structs: [], globals, decls, items, }
 }
 
 ///|
