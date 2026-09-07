@@ -11,6 +11,9 @@ pub(all) struct MirLocal {
 } derive(Eq)
 
 ///|
+pub extend MirLocal with Eq::{not_equal, equal}
+
+///|
 /// Scalar MIR value expression.
 ///
 /// This is intentionally smaller than the parser AST. Unsupported source
@@ -65,6 +68,9 @@ pub(all) enum MirValue {
 } derive(Eq)
 
 ///|
+pub extend MirValue with Eq::{not_equal, equal}
+
+///|
 /// Structured MIR statement subset used before CFG/block lowering.
 pub(all) enum MirStmt {
   MirDeclare(MirLocal, MirValue?)
@@ -84,6 +90,9 @@ pub(all) enum MirStmt {
 } derive(Eq)
 
 ///|
+pub extend MirStmt with Eq::{not_equal, equal}
+
+///|
 /// MIR-owned function body. This is the boundary that lets later codegen stop
 /// walking parser statements and expressions.
 pub(all) struct MirFuncBody {
@@ -93,6 +102,9 @@ pub(all) struct MirFuncBody {
   locals : Array[MirLocal]
   body : Array[MirStmt]
 } derive(Eq)
+
+///|
+pub extend MirFuncBody with Eq::{not_equal, equal}
 
 ///|
 /// Returns the C type that this MIR value evaluates to.

@@ -846,7 +846,7 @@ fn deterministic_scalar_aggregate_differential_source(
   let long_seed = case_index * case_index * 97 - 500
   let shift = case_index % 5 + 1
   let alt_shift = shift % 5 + 1
-  let source = StringBuilder::new()
+  let source = StringBuilder()
   source.write_string("#include <stdio.h>\n")
   source.write_string(
     "typedef struct Pair { int a; unsigned int b; long c; } Pair;\n",
@@ -916,7 +916,7 @@ fn deterministic_scalar_control_differential_source(case_index : Int) -> String 
   let seed_a = case_index * 9973 + 123
   let seed_b = case_index * 7919 + 4567
   let rounds = case_index % 9 + 6
-  let source = StringBuilder::new()
+  let source = StringBuilder()
   source.write_string("#include <stdio.h>\n")
   source.write_string("static unsigned mix(unsigned x, unsigned y, int n) {\n")
   source.write_string("  unsigned r = x ^ (y + 1103515245u);\n")
@@ -994,7 +994,7 @@ fn deterministic_floating_differential_source(case_index : Int) -> String {
   let seed_a = case_index * 13 + 5
   let seed_b = case_index * 7 + 3
   let rounds = case_index % 5 + 4
-  let source = StringBuilder::new()
+  let source = StringBuilder()
   source.write_string("#include <stdio.h>\n")
   source.write_string(
     "typedef struct Sample { double d; float f; int tag; } Sample;\n",
@@ -1079,7 +1079,7 @@ fn deterministic_memory_differential_source(case_index : Int) -> String {
   let byte_probe = case_index % 17
   let matrix_row = case_index % 3
   let matrix_col = (case_index + 1) % 4
-  let source = StringBuilder::new()
+  let source = StringBuilder()
   source.write_string("#include <stdio.h>\n")
   source.write_string(
     "typedef struct Cell { int key; long value; unsigned char flag; } Cell;\n",
@@ -1244,7 +1244,7 @@ fn deterministic_variadic_differential_source(case_index : Int) -> String {
   let tag = case_index * 3 + 2
   let first_count = case_index % 4 + 4
   let second_count = (case_index + 1) % 4 + 3
-  let source = StringBuilder::new()
+  let source = StringBuilder()
   source.write_string("#include <stdio.h>\n")
   source.write_string("typedef __builtin_va_list va_list;\n")
   source.write_string("static long long scale(double value) {\n")
@@ -1332,7 +1332,7 @@ async test "e2e direct Mach-O variadic differential corpus matches clang" {
 fn deterministic_bitfield_differential_source(case_index : Int) -> String {
   let seed = case_index * 19 + 7
   let rounds = case_index % 7 + 8
-  let source = StringBuilder::new()
+  let source = StringBuilder()
   source.write_string("#include <stdio.h>\n")
   source.write_string("typedef struct Bits {\n")
   source.write_string("  unsigned a : 3;\n")
@@ -1412,7 +1412,7 @@ fn deterministic_bitfield_differential_source(case_index : Int) -> String {
 /// the earlier function reported the wrong layout.
 fn deterministic_tag_scope_differential_source(case_index : Int) -> String {
   let width = case_index % 3 + 1
-  let source = StringBuilder::new()
+  let source = StringBuilder()
   source.write_string("#include <stdio.h>\n")
   source.write_string("struct Tag { int a; int b; };\n")
   source.write_string(
@@ -1472,7 +1472,7 @@ async test "e2e deterministic tag scope differential corpus matches clang" {
 fn deterministic_pragma_pack_differential_source(case_index : Int) -> String {
   let pack = [1, 2, 4, 8][case_index % 4]
   let seed = case_index * 31 + 5
-  let source = StringBuilder::new()
+  let source = StringBuilder()
   source.write_string("#include <stdio.h>\n")
   source.write_string("#pragma pack(")
   source.write_string(pack.to_string())
@@ -3265,7 +3265,7 @@ fn deterministic_switch_clause_differential_source(case_index : Int) -> String {
   let low = base.to_string()
   let mid = (base + 1).to_string()
   let high = (base + 2).to_string()
-  let source = StringBuilder::new()
+  let source = StringBuilder()
   source.write_string("#include <stdio.h>\n")
   // Fallthrough, and a `default` that is neither first nor last.
   source.write_string("static int clause_mix(int n) {\n")

@@ -21,6 +21,9 @@ pub fn print_kernels(Array[Kernel], prelude? : String) -> String
 pub(all) suberror MslParseError {
   NotAKernel(String)
 } derive(@debug.Debug)
+pub fn MslParseError::output(Self, &Logger) -> Unit
+pub fn MslParseError::to_repr(Self) -> @debug.Repr
+pub fn MslParseError::to_string(Self) -> String
 pub impl Show for MslParseError
 
 // Types and methods
@@ -29,12 +32,18 @@ pub(all) struct Kernel {
   decl : @parser.FuncDecl
   decor : Array[ParamDecor]
 } derive(Eq, @debug.Debug)
+pub fn Kernel::equal(Self, Self) -> Bool
+pub fn Kernel::not_equal(Self, Self) -> Bool
+pub fn Kernel::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ParamDecor {
   space : String
   attr : String
   by_ref : Bool
 } derive(Eq, @debug.Debug)
+pub fn ParamDecor::equal(Self, Self) -> Bool
+pub fn ParamDecor::not_equal(Self, Self) -> Bool
+pub fn ParamDecor::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

@@ -238,7 +238,7 @@ fn write_binary_file(path : String, content : Bytes) -> Unit {
 
 ///|
 fn shell_quote(value : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("'")
   for ch in value {
     if ch.to_int() == 39 {
@@ -450,7 +450,7 @@ async fn compile_c_file_with_strict_mir_object_path(
 
 ///|
 fn shell_join_quoted(values : Array[String]) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut first = true
   for value in values {
     if first {
@@ -826,7 +826,7 @@ async fn run_sqlite_public_tcl_batch_with(
   }
   let root = sqlite_public_source_root()
   let testfixture = build_sqlite_public_testfixture_with(compiler)
-  let output = StringBuilder::new()
+  let output = StringBuilder()
   for test_path in test_paths {
     let run_tag = tag + "_" + compiler.tag() + "_" + source_id(test_path)
     let run_dir = temp_file_path(run_tag + "_work", test_path, "")
@@ -879,7 +879,7 @@ async fn run_sqlite_public_tcl_batch_collect_with_root(
     return { code: 0, output: "sqlite-public-tests-skipped\n" }
   }
   let testfixture = build_sqlite_public_testfixture_with(compiler)
-  let output = StringBuilder::new()
+  let output = StringBuilder()
   let mut code = 0
   for test_path in test_paths {
     let run_tag = tag + "_" + compiler.tag() + "_" + source_id(test_path)
@@ -1084,7 +1084,7 @@ async fn run_driver_with_strict_mir_sqlite_object(
 
 ///|
 fn c_string_literal(value : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_char('"')
   for ch in value {
     match ch {
@@ -1103,7 +1103,7 @@ fn c_string_literal(value : String) -> String {
 
 ///|
 fn sqlite_script_driver_source(sql_path : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let prefix =
     #|#include "sqlite3.h"
     #|#include <stdio.h>

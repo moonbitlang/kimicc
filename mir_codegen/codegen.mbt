@@ -52,7 +52,7 @@ fn write_octal_escape(buf : StringBuilder, value : Int) -> Unit {
 
 ///|
 fn escape_string(s : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for ch in s {
     let value = ch.to_int()
     if value < 0x20 || value >= 0x7f || ch == '\\' || ch == '"' {
@@ -66,7 +66,7 @@ fn escape_string(s : String) -> String {
 
 ///|
 fn escape_string_prefix(s : String, limit : Int) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut emitted = 0
   for ch in s {
     if emitted >= limit {
@@ -553,7 +553,7 @@ fn Codegen::emit_global_float(
 ///|
 fn Codegen::new() -> Codegen {
   {
-    output: StringBuilder::new(),
+    output: StringBuilder(),
     mir_module: None,
     label_counter: 0,
     local_offsets: {},

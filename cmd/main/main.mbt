@@ -1200,7 +1200,7 @@ fn split_response_file_content(
   content : String,
 ) -> Result[Array[String], String] {
   let args : Array[String] = []
-  let mut current = StringBuilder::new()
+  let mut current = StringBuilder()
   let mut has_current = false
   let mut quote : Char? = None
   let mut i = 0
@@ -1222,7 +1222,7 @@ fn split_response_file_content(
         if response_arg_is_space(ch) {
           if has_current {
             args.push(current.to_string())
-            current = StringBuilder::new()
+            current = StringBuilder()
             has_current = false
           }
         } else if ch == '"' || ch == '\'' {
@@ -2425,7 +2425,7 @@ fn preprocess_options(
 
 ///|
 fn c_string_literal(value : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_char('"')
   for ch in value {
     if ch == '\\' || ch == '"' {
@@ -2441,7 +2441,7 @@ fn c_string_literal(value : String) -> String {
 
 ///|
 fn forced_include_prefix(opts : DriverOptions) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for path in opts.forced_includes {
     buf.write_string("#include ")
     buf.write_string(c_string_literal(path))
@@ -2452,7 +2452,7 @@ fn forced_include_prefix(opts : DriverOptions) -> String {
 
 ///|
 fn macro_include_prefix(opts : DriverOptions) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for path in opts.macro_includes {
     buf.write_string("#pragma kimicc_imacros ")
     buf.write_string(c_string_literal(path))
@@ -2471,7 +2471,7 @@ fn driver_preprocess_source(source : String, opts : DriverOptions) -> String {
 
 ///|
 fn command_line_macro_prefix(opts : DriverOptions) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   if !opts.hosted {
     buf.write_string("#define __STDC_HOSTED__ 0\n")
   }
@@ -2547,7 +2547,7 @@ fn source_id(source : String) -> String {
 
 ///|
 fn shell_quote(value : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("'")
   for ch in value {
     if ch.to_int() == 39 {
@@ -2562,7 +2562,7 @@ fn shell_quote(value : String) -> String {
 
 ///|
 fn shell_join_quoted(values : Array[String]) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut first = true
   for value in values {
     if first {
@@ -2577,7 +2577,7 @@ fn shell_join_quoted(values : Array[String]) -> String {
 
 ///|
 fn makefile_escape_path(value : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for ch in value {
     if ch == '$' {
       buf.write_string("$$")
@@ -2622,7 +2622,7 @@ fn dependency_target(
   output_path : String,
 ) -> String {
   if opts.dependency_targets.length() > 0 {
-    let buf = StringBuilder::new()
+    let buf = StringBuilder()
     for i = 0; i < opts.dependency_targets.length(); i = i + 1 {
       if i > 0 {
         buf.write_char(' ')
@@ -2644,7 +2644,7 @@ fn dependency_file_content(
   output_path : String,
   dependencies : Array[String],
 ) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string(dependency_target(opts, input_path, output_path))
   buf.write_string(":")
   let seen : Map[String, Bool] = Map([])

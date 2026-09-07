@@ -40,6 +40,11 @@ pub(all) suberror ParseError {
   Unsupported(position~ : Position, what~ : String)
   Malformed(position~ : Position, what~ : String)
 } derive(Eq, @debug.Debug)
+pub fn ParseError::equal(Self, Self) -> Bool
+pub fn ParseError::not_equal(Self, Self) -> Bool
+pub fn ParseError::output(Self, &Logger) -> Unit
+pub fn ParseError::to_repr(Self) -> @debug.Repr
+pub fn ParseError::to_string(Self) -> String
 pub impl Show for ParseError
 
 // Types and methods
@@ -76,15 +81,23 @@ pub(all) enum Expr {
   DesignatedIndex(Int64, Expr)
   DesignatedRange(Int64, Int64, Expr)
 } derive(Eq, @debug.Debug)
+pub fn Expr::add(Self, Self) -> Self
+pub fn Expr::div(Self, Self) -> Self
 pub fn Expr::eq_expr(Self, Self) -> Self
+pub fn Expr::equal(Self, Self) -> Bool
 pub fn Expr::ge(Self, Self) -> Self
 pub fn Expr::gt(Self, Self) -> Self
 #alias("_[_]")
 pub fn Expr::index(Self, Self) -> Self
 pub fn Expr::le(Self, Self) -> Self
 pub fn Expr::lt(Self, Self) -> Self
+pub fn Expr::mul(Self, Self) -> Self
 pub fn Expr::ne_expr(Self, Self) -> Self
+pub fn Expr::neg(Self) -> Self
+pub fn Expr::not_equal(Self, Self) -> Bool
 pub fn Expr::rem(Self, Self) -> Self
+pub fn Expr::sub(Self, Self) -> Self
+pub fn Expr::to_repr(Self) -> @debug.Repr
 pub impl Add for Expr
 pub impl Div for Expr
 pub impl Mul for Expr
@@ -106,6 +119,9 @@ pub(all) struct FuncDecl {
   is_destructor : Bool
   body : Stmt?
 } derive(Eq, @debug.Debug)
+pub fn FuncDecl::equal(Self, Self) -> Bool
+pub fn FuncDecl::not_equal(Self, Self) -> Bool
+pub fn FuncDecl::to_repr(Self) -> @debug.Repr
 
 pub(all) struct GlobalDecl {
   ty : @ctype.Type
@@ -118,11 +134,17 @@ pub(all) struct GlobalDecl {
   symbol_alias : String?
   section : String?
 } derive(Eq, @debug.Debug)
+pub fn GlobalDecl::equal(Self, Self) -> Bool
+pub fn GlobalDecl::not_equal(Self, Self) -> Bool
+pub fn GlobalDecl::to_repr(Self) -> @debug.Repr
 
 pub(all) enum GlobalInit {
   Scalar(Expr)
   Array(Array[Expr])
 } derive(Eq, @debug.Debug)
+pub fn GlobalInit::equal(Self, Self) -> Bool
+pub fn GlobalInit::not_equal(Self, Self) -> Bool
+pub fn GlobalInit::to_repr(Self) -> @debug.Repr
 
 pub struct Lexer {
   input : String
@@ -136,6 +158,9 @@ pub(all) struct Param {
   name : String
   bit_width : Int?
 } derive(Eq, @debug.Debug)
+pub fn Param::equal(Self, Self) -> Bool
+pub fn Param::not_equal(Self, Self) -> Bool
+pub fn Param::to_repr(Self) -> @debug.Repr
 
 pub struct Parser {
   lexer : Lexer
@@ -169,6 +194,11 @@ pub(all) struct Position {
   line : Int
   column : Int
 } derive(Eq, @debug.Debug)
+pub fn Position::equal(Self, Self) -> Bool
+pub fn Position::not_equal(Self, Self) -> Bool
+pub fn Position::output(Self, &Logger) -> Unit
+pub fn Position::to_repr(Self) -> @debug.Repr
+pub fn Position::to_string(Self) -> String
 pub impl Show for Position
 
 type PragmaPackTable
@@ -179,6 +209,9 @@ pub(all) struct Program {
   decls : Array[FuncDecl]
   items : Array[TopLevel]
 } derive(Eq, @debug.Debug)
+pub fn Program::equal(Self, Self) -> Bool
+pub fn Program::not_equal(Self, Self) -> Bool
+pub fn Program::to_repr(Self) -> @debug.Repr
 
 pub(all) enum Stmt {
   ExprStmt(Expr)
@@ -198,6 +231,9 @@ pub(all) enum Stmt {
   DoWhile(Expr, Stmt)
   ComputedGoto(Expr)
 } derive(Eq, @debug.Debug)
+pub fn Stmt::equal(Self, Self) -> Bool
+pub fn Stmt::not_equal(Self, Self) -> Bool
+pub fn Stmt::to_repr(Self) -> @debug.Repr
 
 pub(all) struct StructDecl {
   name : String
@@ -206,6 +242,9 @@ pub(all) struct StructDecl {
   pack : Int?
   is_anonymous : Bool
 } derive(Eq, @debug.Debug)
+pub fn StructDecl::equal(Self, Self) -> Bool
+pub fn StructDecl::not_equal(Self, Self) -> Bool
+pub fn StructDecl::to_repr(Self) -> @debug.Repr
 
 pub(all) enum Token {
   EOF
@@ -295,12 +334,17 @@ pub(all) enum Token {
   Question
   Ampersand
 } derive(Eq)
+pub fn Token::equal(Self, Self) -> Bool
+pub fn Token::not_equal(Self, Self) -> Bool
 
 pub(all) enum TopLevel {
   Aggregate(Int)
   Global(Int)
   Func(Int)
 } derive(Eq, @debug.Debug)
+pub fn TopLevel::equal(Self, Self) -> Bool
+pub fn TopLevel::not_equal(Self, Self) -> Bool
+pub fn TopLevel::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 pub using @ctype {type OffsetDesignator}

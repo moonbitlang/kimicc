@@ -2192,7 +2192,7 @@ fn mir_body_nonnegative_radix_string(
     return None
   }
   let digits = if uppercase { "0123456789ABCDEF" } else { "0123456789abcdef" }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let stack : Array[Int] = []
   let mut n = value
   if n == 0L {
@@ -2223,7 +2223,7 @@ fn mir_body_printf_digits_with_precision(
   digits : String,
   precision : Int64,
 ) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let pad = precision - digits.length().to_int64()
   if pad > 0L {
     mir_body_write_repeat(buf, '0', pad)
@@ -2364,7 +2364,7 @@ fn mir_body_printf_fixed_parts(
 
 ///|
 fn mir_body_printf_exponent_suffix(exponent : Int, uppercase : Bool) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_char(if uppercase { 'E' } else { 'e' })
   if exponent < 0 {
     buf.write_char('-')
@@ -2508,7 +2508,7 @@ fn BodyInterpreter::printf_string_arg(
   precision : Int64,
 ) -> String? {
   let limit = if has_precision { precision } else { 100000L }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut index = 0L
   while index < limit {
     match self.c_memory_byte_for_addr(frame, mir_body_elem_addr(addr, index)) {
@@ -2545,7 +2545,7 @@ fn BodyInterpreter::literal_printf_format_output(
       if offset < 0L || offset > format.length().to_int64() {
         return None
       }
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       let mut index = offset.to_int()
       let mut value_index = first_value_index
       while index < format.length() {
@@ -2710,7 +2710,7 @@ fn BodyInterpreter::literal_printf_format_output(
             if has_precision {
               return None
             } else {
-              let char_buf = StringBuilder::new()
+              let char_buf = StringBuilder()
               char_buf.write_char(
                 (values[value_index] & 0xFFL).to_int().unsafe_to_char(),
               )

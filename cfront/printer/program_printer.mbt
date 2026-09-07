@@ -26,7 +26,7 @@
 /// }
 /// ```
 pub fn print_program(program : @parser.Program) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let anon = member_inline_defs(program)
   let inlined : Map[String, Bool] = Map([])
   // Anonymous definitions whose synthesized tag is referenced from outside

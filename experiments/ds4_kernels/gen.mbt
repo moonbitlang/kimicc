@@ -422,7 +422,7 @@ pub fn ksigns(s : Int) -> Int {
 /// set. Flattened to one dimension; the layout matches ds4's
 /// `int8_t [256][128][8]` byte for byte.
 fn signed_grid_values() -> Array[@parser.Expr] {
-  let out : Array[@parser.Expr] = Array::new(capacity=256 * 128 * 8)
+  let out : Array[@parser.Expr] = Array(capacity=256 * 128 * 8)
   for g in 0..<256 {
     let entry = iq2xxs_grid[g]
     for s in 0..<128 {

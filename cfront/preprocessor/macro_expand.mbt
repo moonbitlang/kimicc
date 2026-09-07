@@ -24,7 +24,7 @@ fn pp_macro_param_is_variadic(macro_ : Macro, index : Int) -> Bool {
 
 ///|
 fn pp_stringize_tokens(tokens : Array[PpToken]) -> PpToken {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut first = true
   for token in tokens {
     if token.is_whitespace() || token.is_newline() {

@@ -94,6 +94,9 @@ pub(all) enum Token {
 } derive(Eq)
 
 ///|
+pub extend Token with Eq::{not_equal, equal}
+
+///|
 impl Show for Token with fn to_string(self) {
   match self {
     EOF => "EOF"
@@ -797,7 +800,7 @@ fn Lexer::read_escape_value(self : Lexer) -> Int64 {
 fn Lexer::read_string(self : Lexer) -> Token raise ParseError {
   let start = self.pos
   self.advance() // skip opening "
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   while self.peek() != '"' && self.peek() != '\u0000' {
     let ch = self.peek()
     if ch == '\\' {

@@ -1,6 +1,6 @@
 ///|
 fn pp_normalize_source(input : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut i = 0
   while i < input.length() {
     if input[i] == '\\' && i + 1 < input.length() && input[i + 1] == '\n' {
@@ -283,7 +283,7 @@ fn pp_tokens_need_space(left : PpToken, right : PpToken) -> Bool {
 
 ///|
 fn pp_tokens_to_source(tokens : Array[PpToken]) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut previous : PpToken? = None
   for token in tokens {
     if token.is_whitespace() || token.is_newline() {

@@ -51,6 +51,12 @@ pub(all) enum Expr {
 } derive(Eq, Debug)
 
 ///|
+pub extend Expr with Debug::{to_repr}
+
+///|
+pub extend Expr with Eq::{not_equal, equal}
+
+///|
 /// Compatibility alias for parser-neutral offsetof designators.
 pub type OffsetDesignator = @ctype.OffsetDesignator
 
@@ -92,6 +98,12 @@ pub(all) enum Stmt {
 } derive(Eq, Debug)
 
 ///|
+pub extend Stmt with Debug::{to_repr}
+
+///|
+pub extend Stmt with Eq::{not_equal, equal}
+
+///|
 /// Function parameter or aggregate field.
 ///
 /// `bit_width` is `Some(width)` for C bit-fields and `None` otherwise.
@@ -100,6 +112,12 @@ pub(all) struct Param {
   name : String
   bit_width : Int?
 } derive(Eq, Debug)
+
+///|
+pub extend Param with Debug::{to_repr}
+
+///|
+pub extend Param with Eq::{not_equal, equal}
 
 ///|
 /// Struct or union declaration.
@@ -125,6 +143,12 @@ pub(all) struct StructDecl {
   pack : Int?
   is_anonymous : Bool
 } derive(Eq, Debug)
+
+///|
+pub extend StructDecl with Debug::{to_repr}
+
+///|
+pub extend StructDecl with Eq::{not_equal, equal}
 
 ///|
 /// Caps `natural` alignment by an aggregate's `pack` value.
@@ -160,6 +184,12 @@ pub(all) struct FuncDecl {
 } derive(Eq, Debug)
 
 ///|
+pub extend FuncDecl with Debug::{to_repr}
+
+///|
+pub extend FuncDecl with Eq::{not_equal, equal}
+
+///|
 /// Global initializer representation.
 ///
 /// `Scalar` covers scalar initializers and `Array` covers brace initializer
@@ -168,6 +198,12 @@ pub(all) enum GlobalInit {
   Scalar(Expr)
   Array(Array[Expr])
 } derive(Eq, Debug)
+
+///|
+pub extend GlobalInit with Debug::{to_repr}
+
+///|
+pub extend GlobalInit with Eq::{not_equal, equal}
 
 ///|
 /// Global variable declaration or definition.
@@ -184,6 +220,12 @@ pub(all) struct GlobalDecl {
   symbol_alias : String?
   section : String?
 } derive(Eq, Debug)
+
+///|
+pub extend GlobalDecl with Debug::{to_repr}
+
+///|
+pub extend GlobalDecl with Eq::{not_equal, equal}
 
 ///|
 /// One top-level entry of a translation unit, in the order it was written,
@@ -210,6 +252,12 @@ pub(all) enum TopLevel {
 } derive(Eq, Debug)
 
 ///|
+pub extend TopLevel with Debug::{to_repr}
+
+///|
+pub extend TopLevel with Eq::{not_equal, equal}
+
+///|
 /// Parsed C translation unit.
 ///
 /// `structs` stores aggregate declarations, `globals` stores global variables,
@@ -224,6 +272,12 @@ pub(all) struct Program {
   decls : Array[FuncDecl]
   items : Array[TopLevel]
 } derive(Eq, Debug)
+
+///|
+pub extend Program with Debug::{to_repr}
+
+///|
+pub extend Program with Eq::{not_equal, equal}
 
 ///|
 /// Builds an integer literal from a value, formatting the text canonically.

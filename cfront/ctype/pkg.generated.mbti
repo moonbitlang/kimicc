@@ -227,19 +227,25 @@ pub(all) enum BuiltinReturnRule {
   BuiltinAtomicTargetReturn(Type)
   BuiltinChooseExprReturn
 } derive(Eq)
+pub fn BuiltinReturnRule::equal(Self, Self) -> Bool
+pub fn BuiltinReturnRule::not_equal(Self, Self) -> Bool
 
 pub(all) struct IntegerConstant {
   bits : Int64
   ty : Type
 } derive(Eq)
 pub fn IntegerConstant::cast(Self, Type) -> Self
+pub fn IntegerConstant::equal(Self, Self) -> Bool
+pub fn IntegerConstant::not_equal(Self, Self) -> Bool
 
 pub(all) struct ObjectSizeFact {
   whole : Int
   subobject : Int
 } derive(Eq)
 pub fn ObjectSizeFact::array_element(Self, Int, Int, Int64) -> Self?
+pub fn ObjectSizeFact::equal(Self, Self) -> Bool
 pub fn ObjectSizeFact::member_field(Self, Int, Int) -> Self?
+pub fn ObjectSizeFact::not_equal(Self, Self) -> Bool
 pub fn ObjectSizeFact::subtract_offset(Self, Int) -> Self?
 pub fn ObjectSizeFact::value(Self, Int64) -> Int
 
@@ -247,6 +253,9 @@ pub(all) enum OffsetDesignator {
   OffsetField(String)
   OffsetIndex(Int64)
 } derive(Eq, @debug.Debug)
+pub fn OffsetDesignator::equal(Self, Self) -> Bool
+pub fn OffsetDesignator::not_equal(Self, Self) -> Bool
+pub fn OffsetDesignator::to_repr(Self) -> @debug.Repr
 
 pub(all) enum Type {
   Void
@@ -284,6 +293,7 @@ pub fn Type::cast_integer_bits(Self, Int64) -> Int64
 pub fn Type::const_int_width(Self) -> Int?
 pub fn Type::const_is_unsigned(Self) -> Bool
 pub fn Type::core_type(Self) -> Self
+pub fn Type::equal(Self, Self) -> Bool
 pub fn Type::field_receiver(Self) -> Self?
 pub fn Type::generic_builtin_bswap_width(Self) -> Int
 pub fn Type::generic_builtin_rotate_width(Self) -> Int
@@ -299,8 +309,12 @@ pub fn Type::is_integer(Self) -> Bool
 pub fn Type::is_object_aggregate(Self) -> Bool
 pub fn Type::is_signed(Self) -> Bool
 pub fn Type::is_unsigned_integer(Self) -> Bool
+pub fn Type::not_equal(Self, Self) -> Bool
+pub fn Type::output(Self, &Logger) -> Unit
 pub fn Type::pointer_or_array_element(Self) -> Self?
 pub fn Type::size(Self) -> Int
+pub fn Type::to_repr(Self) -> @debug.Repr
+pub fn Type::to_string(Self) -> String
 pub fn Type::to_unsigned(Self) -> Self
 pub fn Type::without_alignment(Self) -> Self
 pub impl Show for Type

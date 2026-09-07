@@ -28,6 +28,8 @@ pub(all) struct AggregateLayout {
   is_union : Bool
   pack : Int?
 } derive(Eq)
+pub fn AggregateLayout::equal(Self, Self) -> Bool
+pub fn AggregateLayout::not_equal(Self, Self) -> Bool
 
 pub(all) struct FieldLayout {
   name : String
@@ -37,6 +39,8 @@ pub(all) struct FieldLayout {
   bit_offset : Int
   bit_width : Int?
 } derive(Eq)
+pub fn FieldLayout::equal(Self, Self) -> Bool
+pub fn FieldLayout::not_equal(Self, Self) -> Bool
 
 pub(all) struct FuncSig {
   ret : @ctype.Type
@@ -45,6 +49,8 @@ pub(all) struct FuncSig {
   defined : Bool
   weak : Bool
 } derive(Eq)
+pub fn FuncSig::equal(Self, Self) -> Bool
+pub fn FuncSig::not_equal(Self, Self) -> Bool
 
 pub(all) struct MirAggregateDecl {
   name : String
@@ -52,12 +58,16 @@ pub(all) struct MirAggregateDecl {
   is_union : Bool
   pack : Int?
 } derive(Eq)
+pub fn MirAggregateDecl::equal(Self, Self) -> Bool
+pub fn MirAggregateDecl::not_equal(Self, Self) -> Bool
 
 pub(all) struct MirAggregateField {
   name : String
   ty : @ctype.Type
   bit_width : Int?
 } derive(Eq)
+pub fn MirAggregateField::equal(Self, Self) -> Bool
+pub fn MirAggregateField::not_equal(Self, Self) -> Bool
 
 pub(all) struct MirFuncBody {
   name : String
@@ -66,6 +76,8 @@ pub(all) struct MirFuncBody {
   locals : Array[MirLocal]
   body : Array[MirStmt]
 } derive(Eq)
+pub fn MirFuncBody::equal(Self, Self) -> Bool
+pub fn MirFuncBody::not_equal(Self, Self) -> Bool
 
 pub(all) struct MirFuncDecl {
   ret : @ctype.Type
@@ -82,6 +94,8 @@ pub(all) struct MirFuncDecl {
   is_destructor : Bool
   has_body : Bool
 } derive(Eq)
+pub fn MirFuncDecl::equal(Self, Self) -> Bool
+pub fn MirFuncDecl::not_equal(Self, Self) -> Bool
 
 pub(all) struct MirGlobalDecl {
   ty : @ctype.Type
@@ -95,6 +109,8 @@ pub(all) struct MirGlobalDecl {
   symbol_alias : String?
   section : String?
 } derive(Eq)
+pub fn MirGlobalDecl::equal(Self, Self) -> Bool
+pub fn MirGlobalDecl::not_equal(Self, Self) -> Bool
 
 pub(all) enum MirGlobalInit {
   MirGlobalScalarInt(Int64)
@@ -108,12 +124,16 @@ pub(all) enum MirGlobalInit {
   MirGlobalAggregateSparse(Array[(Int, MirGlobalInit)])
   MirGlobalInitUnsupported
 } derive(Eq)
+pub fn MirGlobalInit::equal(Self, Self) -> Bool
+pub fn MirGlobalInit::not_equal(Self, Self) -> Bool
 
 pub(all) struct MirLocal {
   id : Int
   name : String
   ty : @ctype.Type
 } derive(Eq)
+pub fn MirLocal::equal(Self, Self) -> Bool
+pub fn MirLocal::not_equal(Self, Self) -> Bool
 
 pub(all) struct MirModule {
   target : @target.Target
@@ -137,6 +157,8 @@ pub(all) struct MirParam {
   name : String
   ty : @ctype.Type
 } derive(Eq)
+pub fn MirParam::equal(Self, Self) -> Bool
+pub fn MirParam::not_equal(Self, Self) -> Bool
 
 pub(all) enum MirStmt {
   MirDeclare(MirLocal, MirValue?)
@@ -154,6 +176,8 @@ pub(all) enum MirStmt {
   MirContinue
   MirBlock(Array[MirStmt])
 } derive(Eq)
+pub fn MirStmt::equal(Self, Self) -> Bool
+pub fn MirStmt::not_equal(Self, Self) -> Bool
 
 pub(all) enum MirValue {
   MirConst(Int64, @ctype.Type)
@@ -192,6 +216,8 @@ pub(all) enum MirValue {
   MirPostUpdateMemory(MirValue, String, MirValue, @ctype.Type)
   MirTernary(MirValue, MirValue, MirValue, @ctype.Type)
 } derive(Eq)
+pub fn MirValue::equal(Self, Self) -> Bool
+pub fn MirValue::not_equal(Self, Self) -> Bool
 pub fn MirValue::ty(Self) -> @ctype.Type
 
 pub(all) struct Program {
@@ -219,6 +245,8 @@ pub(all) struct Scope {
   current_func : String
 } derive(Eq)
 pub fn Scope::empty() -> Self
+pub fn Scope::equal(Self, Self) -> Bool
+pub fn Scope::not_equal(Self, Self) -> Bool
 
 // Type aliases
 

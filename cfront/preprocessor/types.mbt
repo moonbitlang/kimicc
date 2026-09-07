@@ -6,6 +6,9 @@ pub(all) struct PreprocessPrefixMap {
 } derive(Eq)
 
 ///|
+pub extend PreprocessPrefixMap with Eq::{not_equal, equal}
+
+///|
 /// Options controlling C preprocessing.
 ///
 /// `filename` names the main translation unit for diagnostics, `__FILE__`,
@@ -23,6 +26,9 @@ pub(all) struct PreprocessOptions {
   allow_missing_includes : Bool
   emit_line_markers : Bool
 } derive(Eq)
+
+///|
+pub extend PreprocessOptions with Eq::{not_equal, equal}
 
 ///|
 /// Creates conservative default preprocessing options for one source file.
@@ -48,6 +54,9 @@ pub(all) enum PreprocessError {
 } derive(Eq)
 
 ///|
+pub extend PreprocessError with Eq::{not_equal, equal}
+
+///|
 /// One physical file read while preprocessing.
 ///
 /// `system` is true when the file was resolved from a system include search
@@ -56,6 +65,9 @@ pub(all) struct PreprocessDependency {
   path : String
   system : Bool
 } derive(Eq)
+
+///|
+pub extend PreprocessDependency with Eq::{not_equal, equal}
 
 ///|
 /// Preprocessed source plus the physical files read while preprocessing.
@@ -69,6 +81,9 @@ pub(all) struct PreprocessResult {
   dependencies : Array[String]
   dependency_records : Array[PreprocessDependency]
 } derive(Eq)
+
+///|
+pub extend PreprocessResult with Eq::{not_equal, equal}
 
 ///|
 /// Returns a human-readable preprocessing error message.

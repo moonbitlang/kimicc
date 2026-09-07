@@ -40,6 +40,12 @@ pub(all) enum Type {
 } derive(Eq, Debug)
 
 ///|
+pub extend Type with Debug::{to_repr}
+
+///|
+pub extend Type with Eq::{not_equal, equal}
+
+///|
 fn type_array_to_string(types : Array[Type]) -> String {
   let mut result = "["
   for i in 0..<types.length() {
@@ -91,6 +97,9 @@ pub impl Show for Type with fn to_string(self) {
       "Aligned(" + ty.to_string() + ", " + align.to_string() + ")"
   }
 }
+
+///|
+pub extend Type with Show::{to_string, output}
 
 ///|
 /// Removes transparent C type wrappers that do not change the underlying value
@@ -748,3 +757,9 @@ pub(all) enum OffsetDesignator {
   OffsetField(String)
   OffsetIndex(Int64)
 } derive(Eq, Debug)
+
+///|
+pub extend OffsetDesignator with Debug::{to_repr}
+
+///|
+pub extend OffsetDesignator with Eq::{not_equal, equal}

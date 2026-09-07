@@ -683,7 +683,7 @@ fn assert_sqlite_full_residuals(output : String, compiler : String) -> Unit {
 
 ///|
 fn sqlite_residual_failure_signature(output : String) -> String {
-  let signature = StringBuilder::new()
+  let signature = StringBuilder()
   let seen_failed : Map[String, Bool] = Map([])
   for raw in output.split("\n") {
     for part in raw.split("\r") {

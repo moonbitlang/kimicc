@@ -41,7 +41,7 @@ priv struct X64Codegen {
 ///|
 fn X64Codegen::new() -> X64Codegen {
   {
-    output: StringBuilder::new(),
+    output: StringBuilder(),
     mir_module: None,
     label_counter: 0,
     local_offsets: {},
