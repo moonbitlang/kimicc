@@ -87,7 +87,12 @@ patched = (
     + src[brace + 1 :]
 )
 open(path, "w").write(patched)
+# Diagnostic only. It must go to stderr: this script is invoked from the
+# MoonBit e2e tests, whose stdout carries moon's JSON test-driver events --
+# anything printed there corrupts the stream and `moon test` fails with
+# "Failed to parse test driver event".
 print(
     "patched %s: dispatch for widths %s%s"
-    % (path, widths, " with hit counters" if count else "")
+    % (path, widths, " with hit counters" if count else ""),
+    file=sys.stderr,
 )
