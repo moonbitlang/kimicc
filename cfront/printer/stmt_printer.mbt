@@ -164,9 +164,9 @@ fn write_label(
   indent : Int,
 ) -> Unit {
   write_indent(buf, indent)
-  buf.write_string(label)
-  buf.write_string("\n")
-  write_stmt(buf, body, indent)
+  buf <+
+    $|\{label}
+    $|\{buf => write_stmt(buf, body, indent)}
 }
 
 ///|
@@ -180,13 +180,27 @@ fn write_block(
     buf.write_string("{}")
     return
   }
-  buf.write_string("{\n")
-  for stmt in body {
+  buf <+
+    $|{
+    $|\{buf => write_body(buf, body, indent)}
+    $|\{"  ".repeat(indent)}}
+}
+
+///|
+/// Writes the statements of a block body at `indent + 1`, one per line and
+/// without a trailing newline, so the closing brace's indentation is written
+/// by the caller.
+fn write_body(
+  buf : StringBuilder,
+  body : ArrayView[@parser.Stmt],
+  indent : Int,
+) -> Unit {
+  for i, stmt in body {
+    if i > 0 {
+      buf.write_string("\n")
+    }
     write_stmt(buf, stmt, indent + 1)
-    buf.write_string("\n")
   }
-  write_indent(buf, indent)
-  buf.write_string("}")
 }
 
 ///|
