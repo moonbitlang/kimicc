@@ -9,7 +9,7 @@ repository = "https://github.com/bobzhang/kimicc"
 license = "Apache-2.0"
 
 import {
-  "moonbitlang/async@0.19.2",
+  "moonbitlang/async@0.22.4",
   "bobzhang/cfront@0.3.0",
 }
 
