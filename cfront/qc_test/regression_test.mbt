@@ -235,15 +235,36 @@ test "regression: string literals concatenate across comments" {
 }
 
 ///|
+/// A string literal's value as kimicc stores it: one `Char` per execution
+/// byte, with source characters above 0xff as their UTF-8 bytes.
+fn execution_bytes(text : String) -> String {
+  let buf = StringBuilder()
+  for ch in text {
+    if ch.to_int() > 0xff {
+      for byte in @utf8.encode(ch.to_string()) {
+        buf.write_char(byte.to_int().unsafe_to_char())
+      }
+    } else {
+      buf.write_char(ch)
+    }
+  }
+  buf.to_string()
+}
+
+///|
 /// A string literal holding a character outside the Basic Multilingual
 /// Plane -- an emoji in a UTF-8 source file -- failed with "unterminated
 /// string literal": the lexer stepped one UTF-16 code unit past a
 /// two-unit character and read the half it landed on as end of input.
+/// It now lexes, to the character's UTF-8 bytes (`execution_bytes`).
 test "regression: an astral character in a string literal lexes" {
   let program = @parser.parse(
     "char *s = \"a\u{1F600}b\";\nint c = '\u{1F600}';\n",
   )
-  assert_eq(program.globals[0].init, Some(Scalar(String("a\u{1F600}b"))))
+  assert_eq(
+    program.globals[0].init,
+    Some(Scalar(String("a\u{F0}\u{9F}\u{98}\u{80}b"))),
+  )
   assert_eq(
     program.globals[1].init,
     Some(Scalar(Number(0x1F600, "'\u{1F600}'", SInt))),
@@ -251,14 +272,31 @@ test "regression: an astral character in a string literal lexes" {
 }
 
 ///|
-/// A string literal character above 0xff is source text the lexer kept
-/// whole -- `中` from a UTF-8 file -- not a byte. The printer masked every
-/// non-ASCII character to a byte and wrote it as an octal escape, so
-/// `"中"` (U+4E2D) printed as `"\055"`: a hyphen.
+/// A string literal's characters above 0xff were stored as themselves, so
+/// kimicc measured `"😀"` in UTF-16 units (`sizeof` 3) and emitted the
+/// code point modulo 256 (`\000`). The lexer now stores the UTF-8 bytes,
+/// one per `Char`, the representation every consumer already assumes;
+/// characters 0x80-0xff keep their one-byte value, and a wide `\x` escape
+/// keeps its low byte.
+test "regression: wide source characters in string literals are UTF-8 bytes" {
+  let program = @parser.parse(
+    "char *s = \"\u{4E2D}\u{1F600}\u{E9}\";\nchar *t = \"\\x4e2d\\x41\";\n",
+  )
+  assert_eq(
+    program.globals[0].init,
+    Some(Scalar(String("\u{E4}\u{B8}\u{AD}\u{F0}\u{9F}\u{98}\u{80}\u{E9}"))),
+  )
+  assert_eq(program.globals[1].init, Some(Scalar(String("\u{2D}A"))))
+}
+
+///|
+/// The printer wrote a hand-built string's characters above 0xff masked to
+/// one byte, so `"中"` (U+4E2D) printed as `"\055"`: a hyphen. It now
+/// writes them as the source would, and the text means their UTF-8 bytes.
 test "regression: characters above 0xff print verbatim in string literals" {
   for value in ["\u{4E2D}\u{6587}", "a\u{1F600}b", "\u{e9}\u{100}"] {
     let (printed, back) = round_trip_expr(String(value))
-    assert_eq(back, Some(String(value)))
+    assert_eq(back, Some(String(execution_bytes(value))))
     assert_false(printed.contains("\\055"))
   }
   inspect(@printer.print_expr(String("\u{4E2D}")), content="\"\u{4E2D}\"")

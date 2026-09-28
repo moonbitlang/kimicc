@@ -837,14 +837,23 @@ fn Lexer::read_string(self : Lexer) -> Token raise ParseError {
     let ch = self.peek()
     if ch == '\\' {
       self.advance()
+      // An escape denotes one byte; a wider `\x` value keeps its low byte,
+      // as GCC and Clang truncate it.
       let value = self.read_escape_value()
-      buf.write_char(value.to_int().unsafe_to_char())
+      buf.write_char((value.to_int() & 0xff).unsafe_to_char())
+    } else if ch.to_int() > 0xff {
+      // A string literal's value is its execution bytes, one per `Char`,
+      // and the execution character set is UTF-8: a source character above
+      // 0xff stores the bytes of its UTF-8 encoding, so that the literal's
+      // length, `sizeof` and the bytes kimicc emits agree. (Characters
+      // 0x80-0xff keep their historical one-byte value.)
+      write_utf8_bytes(buf, ch.to_int())
+      // Step over both code units of a character outside the BMP; one
+      // step would land mid-pair, where `peek` reports `\u0000`.
+      self.pos += ch.utf16_len()
     } else {
       buf.write_char(ch)
-      // A character outside the Basic Multilingual Plane is two code
-      // units; stepping one lands mid-pair, where `peek` reports `\u0000`
-      // and the literal would look unterminated.
-      self.pos += ch.utf16_len()
+      self.advance()
     }
   }
   if self.peek() != '"' {
@@ -855,6 +864,27 @@ fn Lexer::read_string(self : Lexer) -> Token raise ParseError {
   }
   self.advance() // skip closing "
   String(buf.to_string())
+}
+
+///|
+/// Writes the UTF-8 encoding of the code point `code` (above 0x7f) to `buf`,
+/// one `Char` per byte.
+fn write_utf8_bytes(buf : StringBuilder, code : Int) -> Unit {
+  let bytes : Array[Int] = if code < 0x800 {
+    [0xc0 | (code >> 6), 0x80 | (code & 0x3f)]
+  } else if code < 0x10000 {
+    [0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f)]
+  } else {
+    [
+      0xf0 | (code >> 18),
+      0x80 | ((code >> 12) & 0x3f),
+      0x80 | ((code >> 6) & 0x3f),
+      0x80 | (code & 0x3f),
+    ]
+  }
+  for byte in bytes {
+    buf.write_char(byte.unsafe_to_char())
+  }
 }
 
 ///|

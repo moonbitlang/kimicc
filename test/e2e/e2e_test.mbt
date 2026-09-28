@@ -1005,6 +1005,50 @@ async test "sizeof string literal includes nul terminator" {
 }
 
 ///|
+/// Characters above 0xff in a string literal compile to their UTF-8 bytes,
+/// consistently in `sizeof`, `strlen`, array initializers and the emitted
+/// data: `"😀"` is five bytes, F0 9F 98 80 and the terminator. They were
+/// measured in UTF-16 units (`sizeof` 3) and emitted modulo 256 (`\000`).
+/// The byte values are checked against clang.
+async test "wide source characters in string literals compile to UTF-8 bytes" {
+  let source =
+    #|int printf(const char *, ...);
+    #|unsigned long strlen(const char *);
+    #|static const char global[] = "a😀中";
+    #|const char *pointer = "中😀z";
+    #|static void dump(const char *tag, const char *s, unsigned long n) {
+    #|  printf("%s:", tag);
+    #|  for (unsigned long i = 0; i < n; i++) printf(" %02x", (unsigned char)s[i]);
+    #|  printf("\n");
+    #|}
+    #|int main(void) {
+    #|  char local[] = "😀";
+    #|  printf("sizeof=%lu %lu %lu %lu\n", sizeof "😀", sizeof "中",
+    #|         sizeof global, sizeof local);
+    #|  printf("strlen=%lu %lu %lu\n", strlen(global), strlen(pointer),
+    #|         strlen("x😀y"));
+    #|  dump("global", global, sizeof global);
+    #|  dump("pointer", pointer, strlen(pointer) + 1);
+    #|  dump("local", local, sizeof local);
+    #|  dump("literal", "\x4e😀", sizeof "\x4e😀");
+    #|  return 0;
+    #|}
+  let result = run_source_against_clang_baseline(source, "utf8_string_literals")
+  inspect(
+    result.output,
+    content=(
+      #|sizeof=5 4 9 5
+      #|strlen=8 8 6
+      #|global: 61 f0 9f 98 80 e4 b8 ad 00
+      #|pointer: e4 b8 ad f0 9f 98 80 7a 00
+      #|local: f0 9f 98 80 00
+      #|literal: 4e f0 9f 98 80 00
+      #|
+    ),
+  )
+}
+
+///|
 async test "alignof type and expression operators fold to alignment" {
   let source =
     #|struct S { char c; int x; };

@@ -258,9 +258,9 @@ fn lex_literal(text : String) -> @parser.Expr {
 
 ///|
 /// A string literal body: bytes 0-255, biased toward the characters the
-/// printer must escape, plus source characters above 0xff -- CJK, the
-/// characters next to the surrogate range, and astral ones -- which a
-/// UTF-8 source file puts in a literal whole.
+/// printer must escape, plus the UTF-8 bytes of source characters above
+/// 0xff -- CJK, the characters next to the surrogate range, and astral
+/// ones -- which is how the lexer stores them.
 fn gen_string_body(state : @splitmix.RandomState) -> String {
   let buf = StringBuilder()
   let specials : ReadOnlyArray[Char] = [
@@ -276,7 +276,11 @@ fn gen_string_body(state : @splitmix.RandomState) -> String {
       0 => buf.write_char(specials[pick(state, specials.length())])
       1 => buf.write_char((32 + pick(state, 95)).unsafe_to_char())
       2 => buf.write_char(pick(state, 256).unsafe_to_char())
-      _ => buf.write_char(wide[pick(state, wide.length())])
+      // Stored as the lexer stores them: their UTF-8 bytes.
+      _ =>
+        buf.write_string(
+          execution_bytes(wide[pick(state, wide.length())].to_string()),
+        )
     }
   }
   buf.to_string()

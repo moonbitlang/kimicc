@@ -529,3 +529,30 @@ test "the parser returns or raises on damaged printed programs" {
     seed=2718,
   )
 }
+
+///|
+/// Any string, printed as a literal and read back, is the literal whose
+/// value is its execution bytes: bytes 0-255 as themselves (escaped where
+/// needed) and characters above 0xff as their UTF-8 encoding. The printer
+/// writes the latter verbatim, and the lexer stores their UTF-8 bytes.
+test "printed string literals reparse to their execution bytes" {
+  @quickcheck.check(
+    (text : String) => {
+      reparse_expr(@printer.print_expr(String(text))) ==
+      Some(String(execution_bytes(text)))
+    },
+    filter=text => text.iter().all(ch => !(ch.to_int() is (0xD800..=0xDFFF))),
+    observe=text => {
+      [
+        @quickcheck.classify(text.iter().any(ch => ch.to_int() > 0xff), "wide"),
+        @quickcheck.classify(
+          text.iter().any(ch => ch.to_int() > 0xffff),
+          "astral",
+        ),
+      ]
+    },
+    count=1000,
+    max_size=24,
+    seed=6502,
+  )
+}
