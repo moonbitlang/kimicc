@@ -291,3 +291,26 @@ test "regression: _Atomic after a star declares an atomic pointer" {
   let printed = @printer.print_program(program)
   assert_eq(@parser.parse(printed), program)
 }
+
+///|
+/// A parenthesized declarator is composed inside out but parsed in source
+/// order: an enumerator declared inside the parentheses is in scope for the
+/// suffixes after them (C11 6.2.1p7). Parsing the suffixes first left `N`
+/// undeclared there, and the unfolded bound became 0.
+test "regression: grouped declarator suffixes see names declared inside" {
+  let program = @parser.parse(
+    "int (*p[sizeof(enum { N = 3 })])[N];\nint (*(*fp[sizeof(enum { K = 2 })])(int))[K];\n",
+  )
+  assert_eq(program.globals[0].name, "p")
+  assert_eq(program.globals[0].ty, Array(Pointer(Array(SInt, 3)), 4))
+  assert_eq(program.globals[1].name, "fp")
+  assert_eq(
+    program.globals[1].ty,
+    Array(FuncPtr(Pointer(Array(SInt, 2)), [SInt], false), 4),
+  )
+  // The abstract form, in a type name.
+  assert_eq(
+    reparse_expr("sizeof(int (*[sizeof(enum { M = 5 })])[M])"),
+    Some(Sizeof(Array(Pointer(Array(SInt, 5)), 4))),
+  )
+}
