@@ -172,13 +172,18 @@ fn render_expr(expr : @parser.Expr) -> (String, Int) {
         print_expr_at(base, PREC_POSTFIX) + "[" + print_expr(index) + "]",
         PREC_POSTFIX,
       )
-    Sizeof(ty) => ("sizeof(" + print_type(ty) + ")", PREC_POSTFIX)
+    // `sizeof` and `_Alignof` are unary operators, not postfix ones: a postfix
+    // operator after `sizeof(x)` belongs to the operand -- `sizeof(x)[i]` is
+    // `sizeof((x)[i])` -- and after `sizeof(int)` it is not C at all. So they
+    // report unary precedence, and a postfix operator applied to one
+    // parenthesizes it.
+    Sizeof(ty) => ("sizeof(" + print_type(ty) + ")", PREC_UNARY)
     SizeofExpr(operand) =>
       // Always parenthesized: `sizeof x` would swallow a following `[0]`.
-      ("sizeof(" + print_expr(operand) + ")", PREC_POSTFIX)
-    Alignof(ty) => ("_Alignof(" + print_type(ty) + ")", PREC_POSTFIX)
+      ("sizeof(" + print_expr(operand) + ")", PREC_UNARY)
+    Alignof(ty) => ("_Alignof(" + print_type(ty) + ")", PREC_UNARY)
     AlignofExpr(operand) =>
-      ("_Alignof(" + print_expr(operand) + ")", PREC_POSTFIX)
+      ("_Alignof(" + print_expr(operand) + ")", PREC_UNARY)
     Cast(ty, operand) =>
       (
         "(" + print_type(ty) + ")" + print_expr_at(operand, PREC_UNARY),
