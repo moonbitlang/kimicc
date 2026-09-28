@@ -183,7 +183,9 @@ fn render_expr(expr : @parser.Expr) -> (String, Int) {
       ("sizeof(" + print_expr(operand) + ")", PREC_UNARY)
     Alignof(ty) => ("_Alignof(" + print_type(ty) + ")", PREC_UNARY)
     AlignofExpr(operand) =>
-      ("_Alignof(" + print_expr(operand) + ")", PREC_UNARY)
+      // `_Alignof(` reads one assignment-expression before its `)`, so a
+      // comma operand keeps its own parentheses.
+      ("_Alignof(" + print_expr_at(operand, PREC_ASSIGN) + ")", PREC_UNARY)
     Cast(ty, operand) =>
       (
         "(" + print_type(ty) + ")" + print_expr_at(operand, PREC_UNARY),

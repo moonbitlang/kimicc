@@ -532,8 +532,10 @@ fn write_global_decl(buf : StringBuilder, decl : @parser.GlobalDecl) -> Unit {
   buf.write_string(print_declaration(decl.ty, decl.name))
   match decl.init {
     Some(Scalar(value)) => {
+      // An initializer is an assignment-expression: a bare comma would end
+      // it and start the next declarator.
       buf.write_string(" = ")
-      buf.write_string(print_expr(value))
+      buf.write_string(print_expr_at(value, PREC_ASSIGN))
     }
     Some(Array(elements)) => {
       buf.write_string(" = { ")

@@ -52,3 +52,25 @@ test "regression: postfix operators on sizeof and _Alignof keep parentheses" {
     content="(sizeof(x))[a]",
   )
 }
+
+///|
+/// An initializer and the operand of `_Alignof(...)` are single
+/// assignment-expressions, so a comma-operator value must keep its
+/// parentheses. Printed bare, `int x = (a, b);` became `int x = a , b;` --
+/// a second declaration of `b` -- and `_Alignof((a, b))` became
+/// `_Alignof(a , b)`, which does not parse.
+test "regression: comma operands keep parentheses in initializers and _Alignof" {
+  let comma : @parser.Expr = Binary(",", Var("a"), Var("b"))
+  let (printed, back) = round_trip_expr(AlignofExpr(comma))
+  inspect(printed, content="_Alignof((a , b))")
+  assert_eq(back, Some(AlignofExpr(comma)))
+  let sources = [
+    "int a, b;\nint g = (1, 2);\n", "void h(int a, int b) {\n  int x = (a, b);\n}\n",
+    "void h(int a, int b) {\n  for (int i = (a, b), j = 0; i; ) ;\n}\n",
+  ]
+  for source in sources {
+    let program = @parser.parse(source)
+    let printed = @printer.print_program(program)
+    assert_eq(@parser.parse(printed), program)
+  }
+}
