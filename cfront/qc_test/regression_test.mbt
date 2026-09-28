@@ -173,3 +173,12 @@ test "regression: an apostrophe in a disabled group does not hide #endif" {
     content="int q;\n",
   )
 }
+
+///|
+/// A character outside the Basic Multilingual Plane, outside any literal
+/// or comment, made the preprocessor loop forever: its tokenizer sliced
+/// half a surrogate pair, got an empty token, and advanced by zero.
+test "regression: an astral character outside literals does not hang the preprocessor" {
+  inspect(preprocess_text("int \u{1F600} x;\n"), content="int\u{1F600}x;\n")
+  inspect(preprocess_text("\u{1F600}"), content="\u{1F600}\n")
+}

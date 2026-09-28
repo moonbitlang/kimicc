@@ -143,7 +143,18 @@ fn pp_punct_at(input : String, pos : Int) -> String {
   if pp_starts_with_at(input, pos, "^=") {
     return "^="
   }
-  input[pos:pos + 1].to_owned()
+  // Any other character is a token of its own -- a whole character, so a
+  // surrogate pair (an emoji) is taken together. Half a pair slices to an
+  // empty token, and the tokenizer, advancing by the token's length, would
+  // never move past it.
+  let width = if input[pos].is_leading_surrogate() &&
+    pos + 1 < input.length() &&
+    input[pos + 1].is_trailing_surrogate() {
+    2
+  } else {
+    1
+  }
+  input[pos:pos + width].to_owned()
 }
 
 ///|
