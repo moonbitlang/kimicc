@@ -1,6 +1,7 @@
 ///|
-/// Concrete counterexamples the properties in `syntax_qc_test.mbt` found,
-/// kept as named regressions next to them.
+/// Concrete counterexamples found by the properties in `syntax_qc_test.mbt`
+/// and `preprocessor_qc_test.mbt` (or while writing them), kept as named
+/// regressions next to them.
 
 ///|
 /// Parses `text` as the body of `void h(void)` and returns the expression of
