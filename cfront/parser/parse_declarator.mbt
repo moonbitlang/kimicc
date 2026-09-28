@@ -838,6 +838,20 @@ fn Parser::parse_direct_declarator(
     }
     LParen => {
       self.advance()
+      match self.parse_grouped_suffixes_first(base_ty) {
+        Some((suffixed, is_function, after_suffixes)) => {
+          let inner = self.parse_declarator(
+            suffixed,
+            base_is_function=is_function,
+          )
+          self.expect(RParen)
+          self.resume_at(after_suffixes)
+          // The star a function suffix absorbs is still a pointer level.
+          let ptr_depth = inner.ptr_depth + (if is_function { 1 } else { 0 })
+          return { ..inner, ptr_depth, }
+        }
+        None => ()
+      }
       let inner = self.parse_declarator(base_ty)
       self.expect(RParen)
       let push_suffix_inside = inner.ptr_depth > 0
@@ -854,6 +868,69 @@ fn Parser::parse_direct_declarator(
 }
 
 ///|
+/// A saved lexer position: where to continue after parsing out of order.
+priv struct ResumePoint {
+  pos : Int
+  token : Token
+  token_start : Int
+}
+
+///|
+fn Parser::resume_point(self : Parser) -> ResumePoint {
+  { pos: self.lexer.pos, token: self.token, token_start: self.token_start, }
+}
+
+///|
+fn Parser::resume_at(self : Parser, point : ResumePoint) -> Unit {
+  self.lexer.pos = point.pos
+  self.token = point.token
+  self.token_start = point.token_start
+}
+
+///|
+/// Handles a parenthesized pointer declarator followed by suffixes, such as
+/// `(*fp)(char)`, `(*p)[4]` or `(*f(void))(char)`, the way C reads it:
+/// inside out. The suffixes after the `)` apply to the base type first, and
+/// the declarator inside the parentheses then derives from that -- so the
+/// pointer points at the array or function, and a function declared inside
+/// returns it. Deriving the inside first and pushing the suffixes into the
+/// result afterwards cannot find the right level once the inside has
+/// suffixes of its own, as in `int (*(*fp)(int))(char)`.
+///
+/// Called just past the `(`. When it applies, parses the suffixes and
+/// returns the suffixed type, whether the last suffix was a parameter list
+/// (whose pointer the inner `*` spells, as with a function typedef), and
+/// where to resume after the suffixes; the lexer is left at the start of
+/// the inner declarator. Otherwise returns `None` with the lexer unmoved.
+fn Parser::parse_grouped_suffixes_first(
+  self : Parser,
+  base_ty : Type,
+) -> (Type, Bool, ResumePoint)? raise ParseError {
+  if !(self.token is (Star | BitXor)) {
+    return None
+  }
+  let inner_start = self.resume_point()
+  let mut depth = 1
+  while depth > 0 {
+    match self.token {
+      LParen => depth += 1
+      RParen => depth -= 1
+      EOF => self.unexpected("`)`")
+      _ => ()
+    }
+    self.advance()
+  }
+  if !(self.token is (LParen | LBracket)) {
+    self.resume_at(inner_start)
+    return None
+  }
+  let suffixed = self.parse_declarator_suffixes(base_ty, "", false, 0)
+  let after_suffixes = self.resume_point()
+  self.resume_at(inner_start)
+  Some((suffixed.ty, suffixed.is_func_decl, after_suffixes))
+}
+
+///|
 fn Parser::parse_direct_abstract_declarator_result(
   self : Parser,
   base_ty : Type,
@@ -863,6 +940,19 @@ fn Parser::parse_direct_abstract_declarator_result(
     LParen =>
       if self.is_parenthesized_abstract_declarator() {
         self.advance()
+        match self.parse_grouped_suffixes_first(base_ty) {
+          Some((suffixed, is_function, after_suffixes)) => {
+            let inner = self.parse_abstract_declarator_result(
+              suffixed,
+              base_is_function=is_function,
+            )
+            self.expect(RParen)
+            self.resume_at(after_suffixes)
+            let ptr_depth = inner.ptr_depth + (if is_function { 1 } else { 0 })
+            return { ..inner, ptr_depth, }
+          }
+          None => ()
+        }
         let inner = self.parse_abstract_declarator_result(base_ty)
         self.expect(RParen)
         {

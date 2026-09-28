@@ -113,3 +113,35 @@ test "regression: an atomic pointer prints as _Atomic(type-name)" {
     assert_eq(reparse_expr(@printer.print_expr(Sizeof(ty))), Some(Sizeof(ty)))
   }
 }
+
+///|
+/// Declarators whose return type is itself a function pointer. The parser
+/// read `int (*f(void))(char)` as a function returning `int *` -- dropping
+/// the `(char)` -- and `int (*(*fp)(int))(char)` as a pointer to a function
+/// taking `char`, swapping the two parameter lists.
+test "regression: function pointer return types parse to the declared type" {
+  let returns_fp = @parser.parse("int (*f(void))(char);\n")
+  assert_eq(returns_fp.decls[0].ret, FuncPtr(SInt, [SChar], false))
+  assert_eq(returns_fp.decls[0].params, [])
+  let returns_array_ptr = @parser.parse("int (*g(int n))[4];\n")
+  assert_eq(returns_array_ptr.decls[0].ret, Pointer(Array(SInt, 4)))
+  assert_eq(returns_array_ptr.decls[0].params.length(), 1)
+  let nested = @parser.parse("int (*(*fp)(int))(char);\n")
+  assert_eq(
+    nested.globals[0].ty,
+    FuncPtr(FuncPtr(SInt, [SChar], false), [SInt], false),
+  )
+  assert_eq(
+    reparse_expr("sizeof(int (*(*)(int))(char))"),
+    Some(Sizeof(FuncPtr(FuncPtr(SInt, [SChar], false), [SInt], false))),
+  )
+  // And the printed forms of those trees read back as themselves.
+  for
+    source in [
+      "int (*f(void))(char);\n", "int (*(*fp)(int))(char);\n", "char *(*(*h(int x))(long))(void) {\n  return 0;\n}\n",
+    ] {
+    let program = @parser.parse(source)
+    let printed = @printer.print_program(program)
+    assert_eq(@parser.parse(printed), program)
+  }
+}
