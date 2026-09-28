@@ -182,3 +182,20 @@ test "regression: an astral character outside literals does not hang the preproc
   inspect(preprocess_text("int \u{1F600} x;\n"), content="int\u{1F600}x;\n")
   inspect(preprocess_text("\u{1F600}"), content="\u{1F600}\n")
 }
+
+///|
+/// A preprocessing number continues through `+` or `-` only after an
+/// exponent letter. The tokenizer took any sign, so `9+SIZE` was one
+/// number token and `SIZE` was never expanded.
+test "regression: a macro after a number and a sign is expanded" {
+  inspect(
+    preprocess_text("#define SIZE 4\nint x = 9+SIZE;\nint y = 1-SIZE;\n"),
+    content="int x=9+4;\nint y=1-4;\n",
+  )
+  // The exponent sign stays part of the number, as C specifies: `0x1e+N`
+  // is one preprocessing number, and GCC does not expand it either.
+  inspect(
+    preprocess_text("#define N 4\ndouble d = 1e+5+N;\n"),
+    content="double d=1e+5+4;\n",
+  )
+}

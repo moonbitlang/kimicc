@@ -227,10 +227,14 @@ fn pp_tokenize(input : String) -> Array[PpToken] {
       i += 1
       while i < source.length() {
         let c = source[i]
+        // A preprocessing number takes a sign only as part of an exponent,
+        // `1e+5` or `0x1p-3`: in `9+N` the `+` and `N` are tokens of their
+        // own, and `N` is still a macro to expand.
+        let signed_exponent = (c == '+' || c == '-') &&
+          source[i - 1] is ('e' | 'E' | 'p' | 'P')
         if pp_is_ident_continue(c.unsafe_to_char()) ||
           c == '.' ||
-          c == '+' ||
-          c == '-' {
+          signed_exponent {
           i += 1
         } else {
           break
