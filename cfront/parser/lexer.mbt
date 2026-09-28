@@ -459,7 +459,7 @@ pub fn Lexer::next_token(self : Lexer) -> Token raise ParseError {
       let mut result = self.read_string()
       // Concatenate adjacent string literals
       while true {
-        self.skip_whitespace()
+        self.skip_whitespace_and_comments()
         // Skip preprocessor directives between adjacent strings
         while self.pos < self.input.length() && self.peek() == '#' {
           while self.pos < self.input.length() && self.peek() != '\n' {
@@ -468,7 +468,7 @@ pub fn Lexer::next_token(self : Lexer) -> Token raise ParseError {
           if self.pos < self.input.length() {
             self.pos += 1
           }
-          self.skip_whitespace()
+          self.skip_whitespace_and_comments()
         }
         if self.pos < self.input.length() && self.peek() == '"' {
           let next = self.read_string()
@@ -547,6 +547,38 @@ fn Lexer::skip_whitespace(self : Lexer) -> Unit {
       self.advance()
     } else {
       break
+    }
+  }
+}
+
+///|
+/// Skips whitespace and comments, which may separate adjacent string
+/// literals just as they separate any other tokens: `"a" /* c */ "b"` is
+/// the one literal `"ab"`.
+fn Lexer::skip_whitespace_and_comments(self : Lexer) -> Unit {
+  while true {
+    self.skip_whitespace()
+    if self.peek() != '/' || self.pos + 1 >= self.input.length() {
+      return
+    }
+    match self.input[self.pos + 1] {
+      '/' =>
+        while self.pos < self.input.length() && self.peek() != '\n' {
+          self.pos += 1
+        }
+      '*' => {
+        self.pos += 2
+        while self.pos < self.input.length() {
+          if self.peek() == '*' &&
+            self.pos + 1 < self.input.length() &&
+            self.input[self.pos + 1] == '/' {
+            self.pos += 2
+            break
+          }
+          self.pos += 1
+        }
+      }
+      _ => return
     }
   }
 }
@@ -805,8 +837,21 @@ fn Lexer::read_string(self : Lexer) -> Token raise ParseError {
     let ch = self.peek()
     if ch == '\\' {
       self.advance()
+      // An escape denotes one byte. C11 requires a `\x` value to fit in an
+      // unsigned char (Clang rejects `"\x4e2d"`); kimicc is permissive and
+      // keeps the low byte, as it always has.
       let value = self.read_escape_value()
-      buf.write_char(value.to_int().unsafe_to_char())
+      buf.write_char((value.to_int() & 0xff).unsafe_to_char())
+    } else if ch.to_int() > 0xff {
+      // A string literal's value is its execution bytes, one per `Char`,
+      // and the execution character set is UTF-8: a source character above
+      // 0xff stores the bytes of its UTF-8 encoding, so that the literal's
+      // length, `sizeof` and the bytes kimicc emits agree. (Characters
+      // 0x80-0xff keep their historical one-byte value.)
+      write_utf8_bytes(buf, ch.to_int())
+      // Step over both code units of a character outside the BMP; one
+      // step would land mid-pair, where `peek` reports `\u0000`.
+      self.pos += ch.utf16_len()
     } else {
       buf.write_char(ch)
       self.advance()
@@ -823,6 +868,27 @@ fn Lexer::read_string(self : Lexer) -> Token raise ParseError {
 }
 
 ///|
+/// Writes the UTF-8 encoding of the code point `code` (above 0x7f) to `buf`,
+/// one `Char` per byte.
+fn write_utf8_bytes(buf : StringBuilder, code : Int) -> Unit {
+  let bytes : Array[Int] = if code < 0x800 {
+    [0xc0 | (code >> 6), 0x80 | (code & 0x3f)]
+  } else if code < 0x10000 {
+    [0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f)]
+  } else {
+    [
+      0xf0 | (code >> 18),
+      0x80 | ((code >> 12) & 0x3f),
+      0x80 | ((code >> 6) & 0x3f),
+      0x80 | (code & 0x3f),
+    ]
+  }
+  for byte in bytes {
+    buf.write_char(byte.unsafe_to_char())
+  }
+}
+
+///|
 fn Lexer::read_char(self : Lexer) -> Token raise ParseError {
   let start = self.pos
   self.advance() // skip opening '
@@ -833,7 +899,7 @@ fn Lexer::read_char(self : Lexer) -> Token raise ParseError {
     value = self.read_escape_value()
   } else {
     value = ch.to_int().to_int64()
-    self.advance()
+    self.pos += ch.utf16_len()
   }
   if self.peek() != '\'' {
     raise Malformed(

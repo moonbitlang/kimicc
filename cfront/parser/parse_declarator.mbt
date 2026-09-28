@@ -699,16 +699,44 @@ fn Parser::parse_declarator(
 ) -> DeclaratorResult raise ParseError {
   if self.token == Star || self.token == BitXor {
     self.advance()
-    self.skip_qualifiers()
+    let is_atomic = self.skip_pointer_qualifiers()
     if base_is_function {
       // `F *x` over a function typedef declares the function pointer the base
       // already is; the star is spelling, not another level of indirection.
-      return self.parse_declarator(base_ty)
+      return self.parse_declarator(atomic_if(is_atomic, base_ty))
     }
-    let decl = self.parse_declarator(Pointer(base_ty))
+    let decl = self.parse_declarator(atomic_if(is_atomic, Pointer(base_ty)))
     return { ..decl, ptr_depth: decl.ptr_depth + 1, }
   }
   self.parse_direct_declarator(base_ty)
+}
+
+///|
+/// Skips the qualifiers after a `*`, reporting whether `_Atomic` was among
+/// them. `int *_Atomic p` declares an atomic pointer; `_Atomic` is not in
+/// `skip_qualifiers`' list, and left in place it was read as the declared
+/// name, which silently dropped the declaration at file scope.
+fn Parser::skip_pointer_qualifiers(self : Parser) -> Bool raise ParseError {
+  let mut is_atomic = false
+  while true {
+    self.skip_qualifiers()
+    if self.token == Ident("_Atomic") {
+      self.advance()
+      is_atomic = true
+    } else {
+      break
+    }
+  }
+  is_atomic
+}
+
+///|
+fn atomic_if(is_atomic : Bool, ty : Type) -> Type {
+  if is_atomic {
+    Atomic(ty)
+  } else {
+    ty
+  }
 }
 
 ///|
@@ -728,11 +756,15 @@ fn Parser::parse_abstract_declarator_result(
 ) -> AbstractDeclaratorResult raise ParseError {
   if self.token == Star || self.token == BitXor {
     self.advance()
-    self.skip_qualifiers()
+    let is_atomic = self.skip_pointer_qualifiers()
     if base_is_function {
-      return self.parse_abstract_declarator_result(base_ty)
+      return self.parse_abstract_declarator_result(
+        atomic_if(is_atomic, base_ty),
+      )
     }
-    let decl = self.parse_abstract_declarator_result(Pointer(base_ty))
+    let decl = self.parse_abstract_declarator_result(
+      atomic_if(is_atomic, Pointer(base_ty)),
+    )
     return { ..decl, ptr_depth: decl.ptr_depth + 1, }
   }
   self.parse_direct_abstract_declarator_result(base_ty)
@@ -838,6 +870,19 @@ fn Parser::parse_direct_declarator(
     }
     LParen => {
       self.advance()
+      if self.token is (Star | BitXor) {
+        // See `declarator_hole`: the inside first, in source order, over a
+        // placeholder; then the suffixes over the base; then compose.
+        let inner = self.parse_declarator(declarator_hole)
+        self.expect(RParen)
+        let (filler, is_function) = self.parse_grouped_suffixes(base_ty)
+        let fill = (ty : Type) => fill_declarator_hole(ty, filler, is_function)
+        return {
+          ..inner,
+          ty: fill(inner.ty),
+          func_ret_ty: inner.func_ret_ty.map(fill),
+        }
+      }
       let inner = self.parse_declarator(base_ty)
       self.expect(RParen)
       let push_suffix_inside = inner.ptr_depth > 0
@@ -854,6 +899,57 @@ fn Parser::parse_direct_declarator(
 }
 
 ///|
+/// The placeholder a parenthesized pointer declarator is parsed over.
+///
+/// C reads a declarator inside out: in `int (*fp)(char)` or
+/// `int (*p[2])[N]` the suffixes after the `)` apply to the base type first,
+/// and the declarator inside the parentheses derives from that. But names
+/// resolve in source order -- `int (*p[sizeof(enum { N = 3 })])[N]` declares
+/// `N` inside the parentheses and uses it after them -- so the tokens must
+/// be parsed left to right. The inside is therefore parsed first over this
+/// placeholder, the suffixes after it over the base type, and the suffixed
+/// type then substituted for the placeholder (`fill_declarator_hole`).
+/// Deriving the inside over the real base and pushing the suffixes into the
+/// result afterwards cannot find the right level once the inside has
+/// suffixes of its own, as in `int (*(*fp)(int))(char)`.
+let declarator_hole : Type = Named("\u{0}declarator hole")
+
+///|
+/// Parses the suffixes after a parenthesized pointer declarator over
+/// `base_ty`: the type the placeholder stands for, and whether it is a
+/// function -- whose pointer the innermost `*` spells, since `FuncPtr` is
+/// already a pointer. With no suffixes, the placeholder is the base.
+fn Parser::parse_grouped_suffixes(
+  self : Parser,
+  base_ty : Type,
+) -> (Type, Bool) raise ParseError {
+  if !(self.token is (LParen | LBracket)) {
+    return (base_ty, false)
+  }
+  let starts_with_params = self.token is LParen
+  let suffixed = self.parse_declarator_suffixes(base_ty, "", false, 0).ty
+  (suffixed, starts_with_params && suffixed is FuncPtr(_, _, _))
+}
+
+///|
+/// Substitutes `filler` for the placeholder in `ty`. A function filler
+/// replaces the pointer around the placeholder too (see
+/// `parse_grouped_suffixes`).
+fn fill_declarator_hole(ty : Type, filler : Type, is_function : Bool) -> Type {
+  let fill = (t : Type) => fill_declarator_hole(t, filler, is_function)
+  match ty {
+    Pointer(inner) if is_function && inner == declarator_hole => filler
+    Pointer(inner) => Pointer(fill(inner))
+    Array(inner, n) => Array(fill(inner), n)
+    // Parameter types are parsed over their own bases and never hold it.
+    FuncPtr(ret, params, variadic) => FuncPtr(fill(ret), params, variadic)
+    Atomic(inner) => Atomic(fill(inner))
+    Aligned(inner, n) => Aligned(fill(inner), n)
+    _ => if ty == declarator_hole { filler } else { ty }
+  }
+}
+
+///|
 fn Parser::parse_direct_abstract_declarator_result(
   self : Parser,
   base_ty : Type,
@@ -863,6 +959,16 @@ fn Parser::parse_direct_abstract_declarator_result(
     LParen =>
       if self.is_parenthesized_abstract_declarator() {
         self.advance()
+        if self.token is (Star | BitXor) {
+          // As for named declarators; see `declarator_hole`.
+          let inner = self.parse_abstract_declarator_result(declarator_hole)
+          self.expect(RParen)
+          let (filler, is_function) = self.parse_grouped_suffixes(base_ty)
+          return {
+            ..inner,
+            ty: fill_declarator_hole(inner.ty, filler, is_function),
+          }
+        }
         let inner = self.parse_abstract_declarator_result(base_ty)
         self.expect(RParen)
         {

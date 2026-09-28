@@ -1,6 +1,7 @@
 import {
   "bobzhang/cfront/parser",
   "bobzhang/cfront/printer",
+  "bobzhang/cfront/preprocessor",
   "bobzhang/cfront/build",
   "bobzhang/cfront/ctype",
   "moonbitlang/core/double",
@@ -8,6 +9,7 @@ import {
   "moonbitlang/core/quickcheck/splitmix",
   "moonbitlang/core/quickcheck/shrink",
   "moonbitlang/core/debug",
+  "moonbitlang/core/encoding/utf8",
 } for "test"
 
 supported_targets = "+native"

@@ -11,6 +11,12 @@ fn pp_normalize_source(input : String) -> String {
       i += 1
       while i < input.length() {
         let ch = input[i]
+        // A literal cannot span lines. An unmatched quote -- the apostrophe
+        // in `#if 0` / `don't` / `#endif` -- ends at the newline, as it does
+        // for GCC and Clang, instead of swallowing the lines that follow.
+        if ch == '\n' {
+          break
+        }
         buf.write_char(ch.unsafe_to_char())
         i += 1
         if ch == '\\' && i < input.length() {
@@ -52,6 +58,10 @@ fn pp_read_quoted(input : String, start : Int, quote : Char) -> Int {
   let mut i = start + 1
   while i < input.length() {
     let ch = input[i].unsafe_to_char()
+    // An unmatched quote ends at the newline; see `pp_normalize_source`.
+    if ch == '\n' {
+      break
+    }
     i += 1
     if ch == '\\' && i < input.length() {
       i += 1
@@ -133,7 +143,18 @@ fn pp_punct_at(input : String, pos : Int) -> String {
   if pp_starts_with_at(input, pos, "^=") {
     return "^="
   }
-  input[pos:pos + 1].to_owned()
+  // Any other character is a token of its own -- a whole character, so a
+  // surrogate pair (an emoji) is taken together. Half a pair slices to an
+  // empty token, and the tokenizer, advancing by the token's length, would
+  // never move past it.
+  let width = if input[pos].is_leading_surrogate() &&
+    pos + 1 < input.length() &&
+    input[pos + 1].is_trailing_surrogate() {
+    2
+  } else {
+    1
+  }
+  input[pos:pos + width].to_owned()
 }
 
 ///|
@@ -206,10 +227,14 @@ fn pp_tokenize(input : String) -> Array[PpToken] {
       i += 1
       while i < source.length() {
         let c = source[i]
+        // A preprocessing number takes a sign only as part of an exponent,
+        // `1e+5` or `0x1p-3`: in `9+N` the `+` and `N` are tokens of their
+        // own, and `N` is still a macro to expand.
+        let signed_exponent = (c == '+' || c == '-') &&
+          source[i - 1] is ('e' | 'E' | 'p' | 'P')
         if pp_is_ident_continue(c.unsafe_to_char()) ||
           c == '.' ||
-          c == '+' ||
-          c == '-' {
+          signed_exponent {
           i += 1
         } else {
           break
@@ -254,6 +279,13 @@ fn pp_first_non_space(tokens : Array[PpToken]) -> Int {
 }
 
 ///|
+/// Whether writing `right` straight after `left` would change how the text
+/// tokenizes, so the output needs a space between them.
+///
+/// Two words always get one, and so does a `.` before another `.` (see
+/// below). Otherwise the answer is whether the concatenation reads back as
+/// exactly these two tokens: `/` `*` would open a comment, `+` `++` reads as `++` `+`, `>` `=` as `>=`, `&` `&&` as `&&`
+/// `&`, and `1` `.` as the number `1.`.
 fn pp_tokens_need_space(left : PpToken, right : PpToken) -> Bool {
   let left_word = left.kind == PpIdent ||
     left.kind == PpNumber ||
@@ -266,19 +298,36 @@ fn pp_tokens_need_space(left : PpToken, right : PpToken) -> Bool {
   if left_word && right_word {
     return true
   }
-  if left.text == "+" && right.text == "+" {
-    return true
-  }
-  if left.text == "-" && right.text == "-" {
-    return true
-  }
   if left.kind == PpNumber && right.text == "..." {
     return true
   }
   if left.text == "..." && right.kind == PpNumber {
     return true
   }
-  false
+  // `..` is two tokens, but a third `.` after it would complete `...`, and
+  // this check sees one pair at a time; a `.` never touches a following one.
+  if left.text == "." && right.text.has_prefix(".") {
+    return true
+  }
+  // Brackets and separators never extend a token or get extended by one;
+  // skipping them keeps the common case cheap.
+  if pp_is_isolated_punct(left.text) || pp_is_isolated_punct(right.text) {
+    return false
+  }
+  // A token's text may itself hold several tokens (a paste that did not
+  // form one), so compare token lists rather than expect exactly two.
+  pp_token_texts(left.text + right.text) !=
+  pp_token_texts(left.text) + pp_token_texts(right.text)
+}
+
+///|
+fn pp_token_texts(text : String) -> Array[String] {
+  pp_without_whitespace(pp_tokenize(text)).map(token => token.text)
+}
+
+///|
+fn pp_is_isolated_punct(text : String) -> Bool {
+  text is ("(" | ")" | "[" | "]" | "{" | "}" | ";" | "," | "?" | "~")
 }
 
 ///|

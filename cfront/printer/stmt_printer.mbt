@@ -107,8 +107,10 @@ fn write_stmt(buf : StringBuilder, stmt : @parser.Stmt, indent : Int) -> Unit {
       buf.write_string(print_declaration(ty, name))
       match init {
         Some(value) => {
+          // An initializer is an assignment-expression: a bare comma would
+          // end it and start the next declarator.
           buf.write_string(" = ")
-          buf.write_string(print_expr(value))
+          buf.write_string(print_expr_at(value, PREC_ASSIGN))
         }
         None => ()
       }
@@ -249,7 +251,7 @@ fn write_for_init(buf : StringBuilder, init : Array[@parser.Stmt]) -> Unit {
         specifiers.push(specifier)
         declarators.push(
           match value {
-            Some(expr) => declarator + " = " + print_expr(expr)
+            Some(expr) => declarator + " = " + print_expr_at(expr, PREC_ASSIGN)
             None => declarator
           },
         )

@@ -166,19 +166,31 @@ fn render_expr(expr : @parser.Expr) -> (String, Int) {
     MemberAccess(base, field) =>
       (print_expr_at(base, PREC_POSTFIX) + "." + field, PREC_POSTFIX)
     Deref(operand) => ("*" + print_expr_at(operand, PREC_UNARY), PREC_UNARY)
-    AddrOf(operand) => ("&" + print_expr_at(operand, PREC_UNARY), PREC_UNARY)
+    AddrOf(operand) => {
+      let rendered = print_expr_at(operand, PREC_UNARY)
+      // `& &x` and `& &&l` need the space; without it they lex as `&&`.
+      let separator = if needs_unary_space("&", rendered) { " " } else { "" }
+      ("&" + separator + rendered, PREC_UNARY)
+    }
     ArrayAccess(base, index) =>
       (
         print_expr_at(base, PREC_POSTFIX) + "[" + print_expr(index) + "]",
         PREC_POSTFIX,
       )
-    Sizeof(ty) => ("sizeof(" + print_type(ty) + ")", PREC_POSTFIX)
+    // `sizeof` and `_Alignof` are unary operators, not postfix ones: a postfix
+    // operator after `sizeof(x)` belongs to the operand -- `sizeof(x)[i]` is
+    // `sizeof((x)[i])` -- and after `sizeof(int)` it is not C at all. So they
+    // report unary precedence, and a postfix operator applied to one
+    // parenthesizes it.
+    Sizeof(ty) => ("sizeof(" + print_type(ty) + ")", PREC_UNARY)
     SizeofExpr(operand) =>
       // Always parenthesized: `sizeof x` would swallow a following `[0]`.
-      ("sizeof(" + print_expr(operand) + ")", PREC_POSTFIX)
-    Alignof(ty) => ("_Alignof(" + print_type(ty) + ")", PREC_POSTFIX)
+      ("sizeof(" + print_expr(operand) + ")", PREC_UNARY)
+    Alignof(ty) => ("_Alignof(" + print_type(ty) + ")", PREC_UNARY)
     AlignofExpr(operand) =>
-      ("_Alignof(" + print_expr(operand) + ")", PREC_POSTFIX)
+      // `_Alignof(` reads one assignment-expression before its `)`, so a
+      // comma operand keeps its own parentheses.
+      ("_Alignof(" + print_expr_at(operand, PREC_ASSIGN) + ")", PREC_UNARY)
     Cast(ty, operand) =>
       (
         "(" + print_type(ty) + ")" + print_expr_at(operand, PREC_UNARY),
@@ -288,7 +300,9 @@ fn float_suffix(ty : @ctype.Type) -> String {
 /// lexing into a longer token.
 fn needs_unary_space(op : String, rendered : String) -> Bool {
   guard rendered is [first, ..] else { return false }
-  (op is "-" && first is '-') || (op is "+" && first is '+')
+  (op is "-" && first is '-') ||
+  (op is "+" && first is '+') ||
+  (op is "&" && first is '&')
 }
 
 ///|
@@ -334,7 +348,8 @@ fn print_offset_path(path : ArrayView[@ctype.OffsetDesignator]) -> String {
 /// The lexer decodes escapes when it builds the token, so the stored value is
 /// raw bytes and has to be re-escaped here. Non-printable bytes use three-digit
 /// octal rather than `\x`, because a hex escape has no length limit in C and
-/// would absorb any following hex digit.
+/// would absorb any following hex digit. Characters above 0xff are source
+/// text, not bytes, and are written as they are.
 fn escape_string(value : String) -> String {
   let buf = StringBuilder()
   for ch in value {
@@ -344,12 +359,21 @@ fn escape_string(value : String) -> String {
       '\n' => buf.write_string("\\n")
       '\t' => buf.write_string("\\t")
       '\r' => buf.write_string("\\r")
-      _ =>
-        if ch.to_int() < 32 || ch.to_int() > 126 {
-          buf.write_string(octal_escape(ch.to_int()))
+      _ => {
+        let code = ch.to_int()
+        // A character above 0xff is not a byte, so no octal escape spells
+        // it: it is a source character the lexer kept whole, such as `中`
+        // from a UTF-8 file, and it is written back as the source wrote it.
+        // (Masking it to a byte turned `"中"` into `"\055"`, a hyphen.) A
+        // lone surrogate cannot be written as text and keeps the escape.
+        if code < 32 ||
+          (code > 126 && code <= 0xff) ||
+          (code >= 0xd800 && code <= 0xdfff) {
+          buf.write_string(octal_escape(code))
         } else {
           buf.write_char(ch)
         }
+      }
     }
   }
   buf.to_string()
