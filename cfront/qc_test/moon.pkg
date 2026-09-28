@@ -1,6 +1,7 @@
 import {
   "bobzhang/cfront/parser",
   "bobzhang/cfront/printer",
+  "bobzhang/cfront/preprocessor",
   "bobzhang/cfront/build",
   "bobzhang/cfront/ctype",
   "moonbitlang/core/double",

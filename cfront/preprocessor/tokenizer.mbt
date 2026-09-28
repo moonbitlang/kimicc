@@ -11,6 +11,12 @@ fn pp_normalize_source(input : String) -> String {
       i += 1
       while i < input.length() {
         let ch = input[i]
+        // A literal cannot span lines. An unmatched quote -- the apostrophe
+        // in `#if 0` / `don't` / `#endif` -- ends at the newline, as it does
+        // for GCC and Clang, instead of swallowing the lines that follow.
+        if ch == '\n' {
+          break
+        }
         buf.write_char(ch.unsafe_to_char())
         i += 1
         if ch == '\\' && i < input.length() {
@@ -52,6 +58,10 @@ fn pp_read_quoted(input : String, start : Int, quote : Char) -> Int {
   let mut i = start + 1
   while i < input.length() {
     let ch = input[i].unsafe_to_char()
+    // An unmatched quote ends at the newline; see `pp_normalize_source`.
+    if ch == '\n' {
+      break
+    }
     i += 1
     if ch == '\\' && i < input.length() {
       i += 1

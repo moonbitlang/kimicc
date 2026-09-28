@@ -145,3 +145,31 @@ test "regression: function pointer return types parse to the declared type" {
     assert_eq(@parser.parse(printed), program)
   }
 }
+
+///|
+fn preprocess_text(source : String) -> String {
+  match
+    @preprocessor.preprocess(
+      source,
+      @preprocessor.PreprocessOptions::new("regression.c"),
+    ) {
+    Ok(text) => text
+    Err(err) => "error: " + err.to_string()
+  }
+}
+
+///|
+/// An unmatched quote ends at the end of its line. The `#if 0` comment
+/// idiom -- prose with an apostrophe inside a disabled group -- made the
+/// preprocessor read a character literal across the `#endif`, and fail
+/// with "unterminated conditional directive"; GCC and Clang accept it.
+test "regression: an apostrophe in a disabled group does not hide #endif" {
+  inspect(
+    preprocess_text("#if 0\ndon't do this\n#endif\nint q;\n"),
+    content="int q;\n",
+  )
+  inspect(
+    preprocess_text("#if 0\n\"unterminated\n#endif\nint q;\n"),
+    content="int q;\n",
+  )
+}
