@@ -837,8 +837,9 @@ fn Lexer::read_string(self : Lexer) -> Token raise ParseError {
     let ch = self.peek()
     if ch == '\\' {
       self.advance()
-      // An escape denotes one byte; a wider `\x` value keeps its low byte,
-      // as GCC and Clang truncate it.
+      // An escape denotes one byte. C11 requires a `\x` value to fit in an
+      // unsigned char (Clang rejects `"\x4e2d"`); kimicc is permissive and
+      // keeps the low byte, as it always has.
       let value = self.read_escape_value()
       buf.write_char((value.to_int() & 0xff).unsafe_to_char())
     } else if ch.to_int() > 0xff {
