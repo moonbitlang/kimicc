@@ -217,3 +217,18 @@ test "regression: preprocessor output keeps adjacent punctuators apart" {
   }
   inspect(preprocess_text("y / *p;\n"), content="y/ *p;\n")
 }
+
+///|
+/// Adjacent string literals concatenate across comments as well as
+/// whitespace. The lexer's concatenation step skipped only whitespace, so
+/// `"a" /* c */ "b"` was two literals in a row -- a parse error -- while
+/// the same text preprocessed (comments removed) parsed fine.
+test "regression: string literals concatenate across comments" {
+  for
+    source in [
+      "char *s = \"a\" /* c */ \"b\";\n", "char *s = \"a\" // c\n  \"b\";\n", "char *s = \"a\" /* c */ /* d */\n\"b\";\n",
+    ] {
+    let program = @parser.parse(source)
+    assert_eq(program.globals[0].init, Some(Scalar(String("ab"))))
+  }
+}

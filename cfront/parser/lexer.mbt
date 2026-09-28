@@ -459,7 +459,7 @@ pub fn Lexer::next_token(self : Lexer) -> Token raise ParseError {
       let mut result = self.read_string()
       // Concatenate adjacent string literals
       while true {
-        self.skip_whitespace()
+        self.skip_whitespace_and_comments()
         // Skip preprocessor directives between adjacent strings
         while self.pos < self.input.length() && self.peek() == '#' {
           while self.pos < self.input.length() && self.peek() != '\n' {
@@ -468,7 +468,7 @@ pub fn Lexer::next_token(self : Lexer) -> Token raise ParseError {
           if self.pos < self.input.length() {
             self.pos += 1
           }
-          self.skip_whitespace()
+          self.skip_whitespace_and_comments()
         }
         if self.pos < self.input.length() && self.peek() == '"' {
           let next = self.read_string()
@@ -547,6 +547,38 @@ fn Lexer::skip_whitespace(self : Lexer) -> Unit {
       self.advance()
     } else {
       break
+    }
+  }
+}
+
+///|
+/// Skips whitespace and comments, which may separate adjacent string
+/// literals just as they separate any other tokens: `"a" /* c */ "b"` is
+/// the one literal `"ab"`.
+fn Lexer::skip_whitespace_and_comments(self : Lexer) -> Unit {
+  while true {
+    self.skip_whitespace()
+    if self.peek() != '/' || self.pos + 1 >= self.input.length() {
+      return
+    }
+    match self.input[self.pos + 1] {
+      '/' =>
+        while self.pos < self.input.length() && self.peek() != '\n' {
+          self.pos += 1
+        }
+      '*' => {
+        self.pos += 2
+        while self.pos < self.input.length() {
+          if self.peek() == '*' &&
+            self.pos + 1 < self.input.length() &&
+            self.input[self.pos + 1] == '/' {
+            self.pos += 2
+            break
+          }
+          self.pos += 1
+        }
+      }
+      _ => return
     }
   }
 }
