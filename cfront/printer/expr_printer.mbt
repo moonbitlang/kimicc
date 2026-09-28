@@ -166,7 +166,12 @@ fn render_expr(expr : @parser.Expr) -> (String, Int) {
     MemberAccess(base, field) =>
       (print_expr_at(base, PREC_POSTFIX) + "." + field, PREC_POSTFIX)
     Deref(operand) => ("*" + print_expr_at(operand, PREC_UNARY), PREC_UNARY)
-    AddrOf(operand) => ("&" + print_expr_at(operand, PREC_UNARY), PREC_UNARY)
+    AddrOf(operand) => {
+      let rendered = print_expr_at(operand, PREC_UNARY)
+      // `& &x` and `& &&l` need the space; without it they lex as `&&`.
+      let separator = if needs_unary_space("&", rendered) { " " } else { "" }
+      ("&" + separator + rendered, PREC_UNARY)
+    }
     ArrayAccess(base, index) =>
       (
         print_expr_at(base, PREC_POSTFIX) + "[" + print_expr(index) + "]",
@@ -295,7 +300,9 @@ fn float_suffix(ty : @ctype.Type) -> String {
 /// lexing into a longer token.
 fn needs_unary_space(op : String, rendered : String) -> Bool {
   guard rendered is [first, ..] else { return false }
-  (op is "-" && first is '-') || (op is "+" && first is '+')
+  (op is "-" && first is '-') ||
+  (op is "+" && first is '+') ||
+  (op is "&" && first is '&')
 }
 
 ///|

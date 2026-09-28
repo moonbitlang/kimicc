@@ -74,3 +74,14 @@ test "regression: comma operands keep parentheses in initializers and _Alignof" 
     assert_eq(@parser.parse(printed), program)
   }
 }
+
+///|
+/// `&` applied to an expression that itself starts with `&` needs a space:
+/// `AddrOf(AddrOf(x))` printed as `&&x` lexes as the label address `&&x`.
+test "regression: nested address-of does not glue into &&" {
+  for expr in [@parser.Expr::AddrOf(AddrOf(Var("x"))), AddrOf(LabelAddr("L0"))] {
+    let (printed, back) = round_trip_expr(expr)
+    assert_true(printed.has_prefix("& &"))
+    assert_eq(back, Some(expr))
+  }
+}
