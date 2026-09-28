@@ -841,7 +841,10 @@ fn Lexer::read_string(self : Lexer) -> Token raise ParseError {
       buf.write_char(value.to_int().unsafe_to_char())
     } else {
       buf.write_char(ch)
-      self.advance()
+      // A character outside the Basic Multilingual Plane is two code
+      // units; stepping one lands mid-pair, where `peek` reports `\u0000`
+      // and the literal would look unterminated.
+      self.pos += ch.utf16_len()
     }
   }
   if self.peek() != '"' {
@@ -865,7 +868,7 @@ fn Lexer::read_char(self : Lexer) -> Token raise ParseError {
     value = self.read_escape_value()
   } else {
     value = ch.to_int().to_int64()
-    self.advance()
+    self.pos += ch.utf16_len()
   }
   if self.peek() != '\'' {
     raise Malformed(

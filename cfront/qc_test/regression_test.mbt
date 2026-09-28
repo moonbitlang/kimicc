@@ -232,3 +232,19 @@ test "regression: string literals concatenate across comments" {
     assert_eq(program.globals[0].init, Some(Scalar(String("ab"))))
   }
 }
+
+///|
+/// A string literal holding a character outside the Basic Multilingual
+/// Plane -- an emoji in a UTF-8 source file -- failed with "unterminated
+/// string literal": the lexer stepped one UTF-16 code unit past a
+/// two-unit character and read the half it landed on as end of input.
+test "regression: an astral character in a string literal lexes" {
+  let program = @parser.parse(
+    "char *s = \"a\u{1F600}b\";\nint c = '\u{1F600}';\n",
+  )
+  assert_eq(program.globals[0].init, Some(Scalar(String("a\u{1F600}b"))))
+  assert_eq(
+    program.globals[1].init,
+    Some(Scalar(Number(0x1F600, "'\u{1F600}'", SInt))),
+  )
+}
