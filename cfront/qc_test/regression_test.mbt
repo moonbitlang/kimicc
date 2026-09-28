@@ -248,3 +248,19 @@ test "regression: an astral character in a string literal lexes" {
     Some(Scalar(Number(0x1F600, "'\u{1F600}'", SInt))),
   )
 }
+
+///|
+/// A string literal character above 0xff is source text the lexer kept
+/// whole -- `中` from a UTF-8 file -- not a byte. The printer masked every
+/// non-ASCII character to a byte and wrote it as an octal escape, so
+/// `"中"` (U+4E2D) printed as `"\055"`: a hyphen.
+test "regression: characters above 0xff print verbatim in string literals" {
+  for value in ["\u{4E2D}\u{6587}", "a\u{1F600}b", "\u{e9}\u{100}"] {
+    let (printed, back) = round_trip_expr(String(value))
+    assert_eq(back, Some(String(value)))
+    assert_false(printed.contains("\\055"))
+  }
+  inspect(@printer.print_expr(String("\u{4E2D}")), content="\"\u{4E2D}\"")
+  // Bytes above 0x7e keep their octal escapes.
+  inspect(@printer.print_expr(String("\u{e9}")), content="\"\\351\"")
+}

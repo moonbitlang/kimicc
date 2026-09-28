@@ -348,7 +348,8 @@ fn print_offset_path(path : ArrayView[@ctype.OffsetDesignator]) -> String {
 /// The lexer decodes escapes when it builds the token, so the stored value is
 /// raw bytes and has to be re-escaped here. Non-printable bytes use three-digit
 /// octal rather than `\x`, because a hex escape has no length limit in C and
-/// would absorb any following hex digit.
+/// would absorb any following hex digit. Characters above 0xff are source
+/// text, not bytes, and are written as they are.
 fn escape_string(value : String) -> String {
   let buf = StringBuilder()
   for ch in value {
@@ -358,12 +359,21 @@ fn escape_string(value : String) -> String {
       '\n' => buf.write_string("\\n")
       '\t' => buf.write_string("\\t")
       '\r' => buf.write_string("\\r")
-      _ =>
-        if ch.to_int() < 32 || ch.to_int() > 126 {
-          buf.write_string(octal_escape(ch.to_int()))
+      _ => {
+        let code = ch.to_int()
+        // A character above 0xff is not a byte, so no octal escape spells
+        // it: it is a source character the lexer kept whole, such as `中`
+        // from a UTF-8 file, and it is written back as the source wrote it.
+        // (Masking it to a byte turned `"中"` into `"\055"`, a hyphen.) A
+        // lone surrogate cannot be written as text and keeps the escape.
+        if code < 32 ||
+          (code > 126 && code <= 0xff) ||
+          (code >= 0xd800 && code <= 0xdfff) {
+          buf.write_string(octal_escape(code))
         } else {
           buf.write_char(ch)
         }
+      }
     }
   }
   buf.to_string()
