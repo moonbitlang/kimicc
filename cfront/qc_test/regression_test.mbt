@@ -199,3 +199,21 @@ test "regression: a macro after a number and a sign is expanded" {
     content="double d=1e+5+4;\n",
   )
 }
+
+///|
+/// The preprocessor respaces its output, and wrote two punctuators with no
+/// space between them unless they were `+ +` or `- -`. So `y / *p`
+/// became `y/*p` -- a comment that swallowed the rest of the file -- and
+/// `a + ++i` became `a+++i`, which reads as `a++ + i`.
+test "regression: preprocessor output keeps adjacent punctuators apart" {
+  for
+    source in [
+      "int f(int y, int *p) { return y / *p; }\nint g(void) { return 1; }\n", "int f(int a, int i) { return a + ++i; }\n",
+      "int f(int a, int b) { return a & &b != 0; }\n", "int f(int a) { return a - -1; }\n",
+    ] {
+    let expected = @parser.parse(source)
+    let text = preprocess_text(source)
+    assert_eq(@parser.parse(text), expected)
+  }
+  inspect(preprocess_text("y / *p;\n"), content="y/ *p;\n")
+}

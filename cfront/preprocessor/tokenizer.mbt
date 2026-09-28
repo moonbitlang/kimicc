@@ -279,6 +279,13 @@ fn pp_first_non_space(tokens : Array[PpToken]) -> Int {
 }
 
 ///|
+/// Whether writing `right` straight after `left` would change how the text
+/// tokenizes, so the output needs a space between them.
+///
+/// Two words always get one. Otherwise the answer is whether the
+/// concatenation reads back as exactly these two tokens: `/` `*` would open
+/// a comment, `+` `++` reads as `++` `+`, `>` `=` as `>=`, `&` `&&` as `&&`
+/// `&`, and `1` `.` as the number `1.`.
 fn pp_tokens_need_space(left : PpToken, right : PpToken) -> Bool {
   let left_word = left.kind == PpIdent ||
     left.kind == PpNumber ||
@@ -291,19 +298,31 @@ fn pp_tokens_need_space(left : PpToken, right : PpToken) -> Bool {
   if left_word && right_word {
     return true
   }
-  if left.text == "+" && right.text == "+" {
-    return true
-  }
-  if left.text == "-" && right.text == "-" {
-    return true
-  }
   if left.kind == PpNumber && right.text == "..." {
     return true
   }
   if left.text == "..." && right.kind == PpNumber {
     return true
   }
-  false
+  // Brackets and separators never extend a token or get extended by one;
+  // skipping them keeps the common case cheap.
+  if pp_is_isolated_punct(left.text) || pp_is_isolated_punct(right.text) {
+    return false
+  }
+  // A token's text may itself hold several tokens (a paste that did not
+  // form one), so compare token lists rather than expect exactly two.
+  pp_token_texts(left.text + right.text) !=
+  pp_token_texts(left.text) + pp_token_texts(right.text)
+}
+
+///|
+fn pp_token_texts(text : String) -> Array[String] {
+  pp_without_whitespace(pp_tokenize(text)).map(token => token.text)
+}
+
+///|
+fn pp_is_isolated_punct(text : String) -> Bool {
+  text is ("(" | ")" | "[" | "]" | "{" | "}" | ";" | "," | "?" | "~")
 }
 
 ///|
