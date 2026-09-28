@@ -85,3 +85,31 @@ test "regression: nested address-of does not glue into &&" {
     assert_eq(back, Some(expr))
   }
 }
+
+///|
+/// An atomic pointer and a pointer to an atomic type are different types,
+/// and the specifier spelling only says the second: `Atomic(Pointer(UShort))`
+/// printed as `_Atomic unsigned short *x`, which declares
+/// `Pointer(Atomic(UShort))`. The type-name form keeps them apart.
+test "regression: an atomic pointer prints as _Atomic(type-name)" {
+  let atomic_pointer : @ctype.Type = Atomic(Pointer(UShort))
+  inspect(
+    @printer.print_declaration(atomic_pointer, "x"),
+    content="_Atomic(unsigned short *) x",
+  )
+  inspect(
+    @printer.print_declaration(Pointer(Atomic(UShort)), "x"),
+    content="_Atomic unsigned short *x",
+  )
+  inspect(
+    @printer.print_declaration(Pointer(atomic_pointer), "x"),
+    content="_Atomic(unsigned short *) *x",
+  )
+  for ty in [atomic_pointer, Pointer(atomic_pointer)] {
+    let program = @parser.parse(
+      "void h(void) {\n  " + @printer.print_declaration(ty, "x") + ";\n}\n",
+    )
+    assert_eq(program.decls[0].body, Some(Compound([VarDecl(ty, "x", None)])))
+    assert_eq(reparse_expr(@printer.print_expr(Sizeof(ty))), Some(Sizeof(ty)))
+  }
+}

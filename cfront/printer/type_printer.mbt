@@ -43,6 +43,12 @@ pub fn print_declaration(ty : @ctype.Type, name : String) -> String {
         ret,
         "(*" + name + ")(" + parameter_list(params, variadic) + ")",
       )
+    // `_Atomic` written as a specifier qualifies the base type, so
+    // `_Atomic int *x` is a pointer to an atomic int. An atomic pointer,
+    // array or function pointer has no specifier spelling; the type-name form
+    // `_Atomic(int *) x` says it.
+    Atomic(Pointer(_) | Array(_, _) | FuncPtr(_, _, _) as inner) =>
+      join_declarator(atomic_type_specifier(inner), name)
     Atomic(inner) => "_Atomic " + print_declaration(inner, name)
     Aligned(inner, alignment) =>
       "_Alignas(" +
@@ -51,6 +57,12 @@ pub fn print_declaration(ty : @ctype.Type, name : String) -> String {
       print_declaration(inner, name)
     _ => join_declarator(base_specifier(ty), name)
   }
+}
+
+///|
+/// The `_Atomic(type-name)` specifier for a derived type.
+fn atomic_type_specifier(inner : @ctype.Type) -> String {
+  "_Atomic(" + print_type(inner) + ")"
 }
 
 ///|
@@ -180,6 +192,8 @@ pub fn split_declaration(ty : @ctype.Type, name : String) -> (String, String) {
         ret,
         "(*" + name + ")(" + parameter_list(params, variadic) + ")",
       )
+    Atomic(Pointer(_) | Array(_, _) | FuncPtr(_, _, _) as inner) =>
+      (atomic_type_specifier(inner), name)
     Atomic(inner) => {
       let (specifier, declarator) = split_declaration(inner, name)
       ("_Atomic " + specifier, declarator)
