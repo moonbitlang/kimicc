@@ -699,16 +699,44 @@ fn Parser::parse_declarator(
 ) -> DeclaratorResult raise ParseError {
   if self.token == Star || self.token == BitXor {
     self.advance()
-    self.skip_qualifiers()
+    let atomic = self.skip_pointer_qualifiers()
     if base_is_function {
       // `F *x` over a function typedef declares the function pointer the base
       // already is; the star is spelling, not another level of indirection.
-      return self.parse_declarator(base_ty)
+      return self.parse_declarator(atomic_if(atomic, base_ty))
     }
-    let decl = self.parse_declarator(Pointer(base_ty))
+    let decl = self.parse_declarator(atomic_if(atomic, Pointer(base_ty)))
     return { ..decl, ptr_depth: decl.ptr_depth + 1, }
   }
   self.parse_direct_declarator(base_ty)
+}
+
+///|
+/// Skips the qualifiers after a `*`, reporting whether `_Atomic` was among
+/// them. `int *_Atomic p` declares an atomic pointer; `_Atomic` is not in
+/// `skip_qualifiers`' list, and left in place it was read as the declared
+/// name, which silently dropped the declaration at file scope.
+fn Parser::skip_pointer_qualifiers(self : Parser) -> Bool raise ParseError {
+  let mut atomic = false
+  while true {
+    self.skip_qualifiers()
+    if self.token == Ident("_Atomic") {
+      self.advance()
+      atomic = true
+    } else {
+      break
+    }
+  }
+  atomic
+}
+
+///|
+fn atomic_if(atomic : Bool, ty : Type) -> Type {
+  if atomic {
+    Atomic(ty)
+  } else {
+    ty
+  }
 }
 
 ///|
@@ -728,11 +756,13 @@ fn Parser::parse_abstract_declarator_result(
 ) -> AbstractDeclaratorResult raise ParseError {
   if self.token == Star || self.token == BitXor {
     self.advance()
-    self.skip_qualifiers()
+    let atomic = self.skip_pointer_qualifiers()
     if base_is_function {
-      return self.parse_abstract_declarator_result(base_ty)
+      return self.parse_abstract_declarator_result(atomic_if(atomic, base_ty))
     }
-    let decl = self.parse_abstract_declarator_result(Pointer(base_ty))
+    let decl = self.parse_abstract_declarator_result(
+      atomic_if(atomic, Pointer(base_ty)),
+    )
     return { ..decl, ptr_depth: decl.ptr_depth + 1, }
   }
   self.parse_direct_abstract_declarator_result(base_ty)

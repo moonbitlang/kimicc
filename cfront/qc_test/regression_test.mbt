@@ -264,3 +264,29 @@ test "regression: characters above 0xff print verbatim in string literals" {
   // Bytes above 0x7e keep their octal escapes.
   inspect(@printer.print_expr(String("\u{e9}")), content="\"\\351\"")
 }
+
+///|
+/// `_Atomic` after a `*` qualifies the pointer. The declarator parser did
+/// not know it as a pointer qualifier and read it as the declared name:
+/// `int *_Atomic x;` vanished at file scope and was a parse error in a
+/// block.
+test "regression: _Atomic after a star declares an atomic pointer" {
+  let program = @parser.parse(
+    "int *_Atomic x;\nint * const _Atomic y;\nvoid f(void) {\n  int *_Atomic p;\n}\n",
+  )
+  assert_eq(program.globals.map(g => (g.ty, g.name)), [
+    (Atomic(Pointer(SInt)), "x"),
+    (Atomic(Pointer(SInt)), "y"),
+  ])
+  assert_eq(
+    program.decls[0].body,
+    Some(Compound([VarDecl(Atomic(Pointer(SInt)), "p", None)])),
+  )
+  assert_eq(
+    reparse_expr("sizeof(int *_Atomic *)"),
+    Some(Sizeof(Pointer(Atomic(Pointer(SInt))))),
+  )
+  // The printer spells the same types as `_Atomic(int *)`.
+  let printed = @printer.print_program(program)
+  assert_eq(@parser.parse(printed), program)
+}
