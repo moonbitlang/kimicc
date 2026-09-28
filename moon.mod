@@ -1,6 +1,6 @@
 name = "bobzhang/kimicc"
 
-version = "0.1.245"
+version = "0.1.246"
 
 readme = "README.md"
 
@@ -10,7 +10,7 @@ license = "Apache-2.0"
 
 import {
   "moonbitlang/async@0.22.4",
-  "bobzhang/cfront@0.3.0",
+  "bobzhang/cfront@0.4.0",
 }
 
 preferred_target = "native"
