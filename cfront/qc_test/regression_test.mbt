@@ -352,3 +352,11 @@ test "regression: grouped declarator suffixes see names declared inside" {
     Some(Sizeof(Array(Pointer(Array(SInt, 5)), 4))),
   )
 }
+
+///|
+/// Three separate `.` tokens must not respace into `...`: the respacing
+/// check looks at one pair at a time, and `..` alone is two tokens.
+test "regression: separate dots do not respace into an ellipsis" {
+  inspect(preprocess_text("a . . . b\n"), content="a. . .b\n")
+  inspect(preprocess_text("#define D .\nD D D .5\n"), content=". . . .5\n")
+}

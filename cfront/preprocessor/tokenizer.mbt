@@ -282,9 +282,9 @@ fn pp_first_non_space(tokens : Array[PpToken]) -> Int {
 /// Whether writing `right` straight after `left` would change how the text
 /// tokenizes, so the output needs a space between them.
 ///
-/// Two words always get one. Otherwise the answer is whether the
-/// concatenation reads back as exactly these two tokens: `/` `*` would open
-/// a comment, `+` `++` reads as `++` `+`, `>` `=` as `>=`, `&` `&&` as `&&`
+/// Two words always get one, and so does a `.` before another `.` (see
+/// below). Otherwise the answer is whether the concatenation reads back as
+/// exactly these two tokens: `/` `*` would open a comment, `+` `++` reads as `++` `+`, `>` `=` as `>=`, `&` `&&` as `&&`
 /// `&`, and `1` `.` as the number `1.`.
 fn pp_tokens_need_space(left : PpToken, right : PpToken) -> Bool {
   let left_word = left.kind == PpIdent ||
@@ -302,6 +302,11 @@ fn pp_tokens_need_space(left : PpToken, right : PpToken) -> Bool {
     return true
   }
   if left.text == "..." && right.kind == PpNumber {
+    return true
+  }
+  // `..` is two tokens, but a third `.` after it would complete `...`, and
+  // this check sees one pair at a time; a `.` never touches a following one.
+  if left.text == "." && right.text.has_prefix(".") {
     return true
   }
   // Brackets and separators never extend a token or get extended by one;

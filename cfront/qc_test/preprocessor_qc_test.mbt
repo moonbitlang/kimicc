@@ -19,25 +19,6 @@ fn lex_all(text : String) -> Array[@parser.Token]? {
 }
 
 ///|
-/// Whether `tokens` has a `.` followed by a token that starts with `.` --
-/// another `.`, or a number like `.5`. C reads `..` and `..5` as two
-/// tokens, so the preprocessor may write them adjacent; `@parser.Lexer`
-/// rejects `..` outright. No C production puts either pair in a row, so the
-/// difference cannot matter to valid input, and the properties skip it.
-fn has_dot_pair(tokens : Array[@parser.Token]) -> Bool {
-  for i in 1..<tokens.length() {
-    if tokens[i - 1] is Dot &&
-      (
-        tokens[i] is Dot ||
-        (tokens[i] is FloatLiteral(text, _) && text.has_prefix("."))
-      ) {
-      return true
-    }
-  }
-  false
-}
-
-///|
 fn pp(text : String) -> String? {
   match
     @preprocessor.preprocess(text, @preprocessor.PreprocessOptions::new("qc.c")) {
@@ -120,7 +101,6 @@ test "preprocessing macro-free text preserves its tokens" {
       let text = pp_join(tokens.0, seed)
       match lex_all(text) {
         None => true
-        Some(expected) if has_dot_pair(expected) => true
         Some(expected) =>
           match pp(text) {
             Some(out) => lex_all(out) == Some(expected)
@@ -227,9 +207,6 @@ test "an object-like macro expands to its replacement tokens" {
       guard lex_all(substituted.join(" ")) is Some(expected) else {
         return true
       }
-      if has_dot_pair(expected) {
-        return true
-      }
       match pp(source) {
         Some(out) => lex_all(out) == Some(expected)
         None => false
@@ -251,9 +228,6 @@ test "a function-like macro substitutes its argument" {
       let plain = arg.0.filter(t => !(t is ("(" | ")" | ",")))
       let source = "#define W(p) [ p ]\nW(" + plain.join(" ") + ")\n"
       guard lex_all("[ " + plain.join(" ") + " ]") is Some(expected) else {
-        return true
-      }
-      if has_dot_pair(expected) {
         return true
       }
       match pp(source) {
