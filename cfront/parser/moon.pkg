@@ -2,5 +2,4 @@ import {
   "bobzhang/cfront/ctype",
   "bobzhang/cfront/target",
   "moonbitlang/core/double",
-  "moonbitlang/core/string",
 }
