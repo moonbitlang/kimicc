@@ -1,6 +1,6 @@
 ///|
 /// Returns the aggregate names a program defines, in definition order.
-fn tag_names(source : String) -> String raise ParseError {
+fn tag_names(source : String) -> String raise @parser.ParseError {
   let program = @parser.parse(source)
   let names = []
   for decl in program.structs {

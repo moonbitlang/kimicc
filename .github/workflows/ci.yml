@@ -59,7 +59,7 @@ jobs:
           fi
 
       - name: moon check
-        run: moon check --target native
+        run: moon check --deny-warn --target native
 
       - name: Check generated interfaces
         run: |

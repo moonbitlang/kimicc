@@ -2,7 +2,7 @@
 /// The add2 kernel from the plan discussion, spelled exactly: ds4's
 /// smallest Metal kernel with the dimension baked, which is the shape
 /// the L4 rung generates.
-fn add2_kernel() -> Kernel {
+fn add2_kernel() -> @msl.Kernel {
   let a = @build.v("a")
   let b = @build.v("b")
   let out = @build.v("out")
@@ -24,10 +24,10 @@ fn add2_kernel() -> Kernel {
       ],
     ),
     decor: [
-      decor("device const"),
-      decor("device const"),
-      decor("device"),
-      decor("", attr="[[thread_position_in_grid]]"),
+      @msl.decor("device const"),
+      @msl.decor("device const"),
+      @msl.decor("device"),
+      @msl.decor("", attr="[[thread_position_in_grid]]"),
     ],
   }
 }
@@ -36,7 +36,7 @@ fn add2_kernel() -> Kernel {
 /// The printed form is the MSL from the design discussion, word for
 /// word: decorated single-line signature, C body.
 test "print_kernel spells the add2 kernel as designed" {
-  let printed = print_kernel(add2_kernel())
+  let printed = @msl.print_kernel(add2_kernel())
   // The bare then-branch is the C printer's canonical spelling for an
   // unbraced single-statement branch (trailing space included).
   let expected = "kernel void gen_add2_f32_4096(" +
@@ -56,10 +56,10 @@ test "print_kernel spells the add2 kernel as designed" {
 /// holds, restored for the dialect.
 test "printed kernels round-trip through the decoration bridge" {
   let k = add2_kernel()
-  let printed = print_kernel(k)
-  let back = parse_kernel(printed, ["uint"])
+  let printed = @msl.print_kernel(k)
+  let back = @msl.parse_kernel(printed, ["uint"])
   assert_eq(back, k)
-  assert_eq(print_kernel(back), printed)
+  assert_eq(@msl.print_kernel(back), printed)
 }
 
 ///|
@@ -78,7 +78,7 @@ test "random decorations round-trip through the bridge" {
     let width = 32 * (1 + (state.next_uint() % 128).reinterpret_as_int())
     let n_params = 1 + (state.next_uint() % 4).reinterpret_as_int()
     let params : Array[@parser.Param] = []
-    let decors : Array[ParamDecor] = []
+    let decors : Array[@msl.ParamDecor] = []
     for p in 0..<n_params {
       let name = "p" + p.to_string()
       let named = state.next_uint() % 4 == 0
@@ -95,7 +95,7 @@ test "random decorations round-trip through the bridge" {
         by_ref: named && state.next_uint() % 2 == 0,
       })
     }
-    let k : Kernel = {
+    let k : @msl.Kernel = {
       qualifier: "kernel",
       decl: @build.func(Void, "k" + case_index.to_string(), params, [
         If(
@@ -107,12 +107,12 @@ test "random decorations round-trip through the bridge" {
       ]),
       decor: decors,
     }
-    let printed = print_kernel(k)
-    let back = parse_kernel(printed, ["uint"])
+    let printed = @msl.print_kernel(k)
+    let back = @msl.parse_kernel(printed, ["uint"])
     if back != k {
       fail("round-trip failed at case \{case_index}:\n\{printed}")
     }
-    if print_kernel(back) != printed {
+    if @msl.print_kernel(back) != printed {
       fail("reprint diverged at case \{case_index}:\n\{printed}")
     }
   }
@@ -124,7 +124,7 @@ test "random decorations round-trip through the bridge" {
 /// package prints, so the C parser under the bridge rejects it.
 test "reference parameters are rejected, not misread" {
   let source = "kernel void f(constant Args &args) { return; }"
-  try parse_kernel(source, []) |> ignore catch {
+  try @msl.parse_kernel(source, []) |> ignore catch {
     _ => ()
   } noraise {
     _ => fail("expected the reference parameter to be rejected")
@@ -138,7 +138,10 @@ test "reference parameters are rejected, not misread" {
 /// non-Compound body prints braced, never as `kernel void f() return;`.
 test "bridge failures raise and stray declarations are rejected" {
   try
-    parse_kernel("kernel void f(device float *x [[buffer(0)) { return; }", [])
+    @msl.parse_kernel(
+      "kernel void f(device float *x [[buffer(0)) { return; }",
+      [],
+    )
     |> ignore
   catch {
     _ => ()
@@ -146,7 +149,8 @@ test "bridge failures raise and stray declarations are rejected" {
     _ => fail("expected the unterminated attribute to raise")
   }
   try
-    parse_kernel("kernel void f(void) { return; } int leaked;", []) |> ignore
+    @msl.parse_kernel("kernel void f(void) { return; } int leaked;", [])
+    |> ignore
   catch {
     _ => ()
   } noraise {
@@ -155,13 +159,13 @@ test "bridge failures raise and stray declarations are rejected" {
   // A prototype and a storage-class flag are both shapes the printer
   // could not reproduce; the bridge rejects them up front, so a
   // successful parse is always printable.
-  try parse_kernel("kernel void f(void);", []) |> ignore catch {
+  try @msl.parse_kernel("kernel void f(void);", []) |> ignore catch {
     _ => ()
   } noraise {
     _ => fail("expected the prototype to be rejected")
   }
   try
-    parse_kernel("kernel static void f(void) { return; }", []) |> ignore
+    @msl.parse_kernel("kernel static void f(void) { return; }", []) |> ignore
   catch {
     _ => ()
   } noraise {
@@ -174,18 +178,18 @@ test "bridge failures raise and stray declarations are rejected" {
 /// silently, and `(void)` round-trips as the empty parameter list.
 test "trailing declarations are rejected and void lists round-trip" {
   try
-    parse_kernel("kernel void f(void) { return; } typedef int Hidden;", [])
+    @msl.parse_kernel("kernel void f(void) { return; } typedef int Hidden;", [])
     |> ignore
   catch {
     _ => ()
   } noraise {
     _ => fail("expected the trailing typedef to be rejected")
   }
-  let k = parse_kernel("kernel void f(void) { return; }", [])
+  let k = @msl.parse_kernel("kernel void f(void) { return; }", [])
   assert_eq(k.decl.params.length(), 0)
   assert_eq(k.decor.length(), 0)
-  let printed = print_kernel(k)
-  assert_eq(parse_kernel(printed, []), k)
+  let printed = @msl.print_kernel(k)
+  assert_eq(@msl.parse_kernel(printed, []), k)
 }
 
 ///|
@@ -194,17 +198,19 @@ test "trailing declarations are rejected and void lists round-trip" {
 /// failure rather than a later abort; and a non-stage qualifier never
 /// strips.
 test "string braces, named void, and non-stage qualifiers" {
-  let str_kernel = parse_kernel(
+  let str_kernel = @msl.parse_kernel(
     "kernel void f(device char *s) {\n  s[0] = '}';\n}",
     [],
   )
-  assert_eq(print_kernel(str_kernel).contains("'}'"), true)
-  try parse_kernel("kernel void f(void x) { return; }", []) |> ignore catch {
+  assert_eq(@msl.print_kernel(str_kernel).contains("'}'"), true)
+  try
+    @msl.parse_kernel("kernel void f(void x) { return; }", []) |> ignore
+  catch {
     _ => ()
   } noraise {
     _ => fail("expected the named void parameter to be rejected")
   }
-  try parse_kernel("static void f(void) { return; }", []) |> ignore catch {
+  try @msl.parse_kernel("static void f(void) { return; }", []) |> ignore catch {
     _ => ()
   } noraise {
     _ => fail("expected the non-stage qualifier to be rejected")
@@ -216,14 +222,16 @@ test "string braces, named void, and non-stage qualifiers" {
 /// declarations smuggled into the head both raise diagnostics.
 test "reversed delimiters and head declarations are rejected" {
   try
-    parse_kernel("kernel void f(float *x ]] [[bad) { return; }", []) |> ignore
+    @msl.parse_kernel("kernel void f(float *x ]] [[bad) { return; }", [])
+    |> ignore
   catch {
     _ => ()
   } noraise {
     _ => fail("expected reversed delimiters to raise")
   }
   try
-    parse_kernel("kernel typedef int X; void f(void) { return; }", []) |> ignore
+    @msl.parse_kernel("kernel typedef int X; void f(void) { return; }", [])
+    |> ignore
   catch {
     _ => ()
   } noraise {
@@ -237,7 +245,7 @@ test "reversed delimiters and head declarations are rejected" {
 /// abstract spelling cannot carry the function name.
 test "non-void kernel returns are rejected" {
   try
-    parse_kernel("kernel float f(void) { return 1.0f; }", []) |> ignore
+    @msl.parse_kernel("kernel float f(void) { return 1.0f; }", []) |> ignore
   catch {
     _ => ()
   } noraise {
@@ -251,7 +259,7 @@ test "non-void kernel returns are rejected" {
 /// before parsing.
 test "auto and array parameters are rejected before the C parse" {
   try
-    parse_kernel("kernel void f(device float *x) { auto y = x[0]; }", [])
+    @msl.parse_kernel("kernel void f(device float *x) { auto y = x[0]; }", [])
     |> ignore
   catch {
     _ => ()
@@ -259,7 +267,8 @@ test "auto and array parameters are rejected before the C parse" {
     _ => fail("expected auto to be rejected")
   }
   try
-    parse_kernel("kernel void f(device float x[4]) { return; }", []) |> ignore
+    @msl.parse_kernel("kernel void f(device float x[4]) { return; }", [])
+    |> ignore
   catch {
     _ => ()
   } noraise {
@@ -272,15 +281,15 @@ test "auto and array parameters are rejected before the C parse" {
 /// quoted `auto` is text, not a token; a pointer-to-array parameter does
 /// not decay and round-trips, while an outer array still rejects.
 test "quoted auto and pointer-to-array parameters round-trip" {
-  let quoted = parse_kernel(
+  let quoted = @msl.parse_kernel(
     "kernel void f(device char *s) {\n  s[0] = 'a';\n  auto_helper(s);\n}",
     [],
   )
-  assert_eq(print_kernel(quoted).contains("auto_helper"), true)
+  assert_eq(@msl.print_kernel(quoted).contains("auto_helper"), true)
   // Pointer-to-array left the subset when parameters closed over the
   // shapes real MSL kernels take; it now rejects like any bracket form.
   try
-    parse_kernel("kernel void f(device float (*p)[4]) { return; }", [])
+    @msl.parse_kernel("kernel void f(device float (*p)[4]) { return; }", [])
     |> ignore
   catch {
     _ => ()
@@ -295,14 +304,15 @@ test "quoted auto and pointer-to-array parameters round-trip" {
 /// outer array would otherwise decay silently -- raise diagnostics.
 test "function-pointer parameters are rejected" {
   try
-    parse_kernel("kernel void f(void (*p)(int)) { return; }", []) |> ignore
+    @msl.parse_kernel("kernel void f(void (*p)(int)) { return; }", []) |> ignore
   catch {
     _ => ()
   } noraise {
     _ => fail("expected the function-pointer parameter to be rejected")
   }
   try
-    parse_kernel("kernel void f(void (*p[4])(int)) { return; }", []) |> ignore
+    @msl.parse_kernel("kernel void f(void (*p[4])(int)) { return; }", [])
+    |> ignore
   catch {
     _ => ()
   } noraise {
@@ -314,29 +324,29 @@ test "function-pointer parameters are rejected" {
 /// Round 12, pinned: `void *` is opaque memory and passes; tabs and
 /// newlines separate decorations; a commented `auto` is text.
 test "void pointers, whitespace separators, and commented auto" {
-  let k = parse_kernel(
+  let k = @msl.parse_kernel(
     "kernel void f(threadgroup void *p [[threadgroup(0)]]) { return; }",
     [],
   )
-  assert_eq(print_kernel(k).contains("threadgroup void *p"), true)
-  let ws = parse_kernel("kernel void f(device\nfloat *x) { return; }", [])
+  assert_eq(@msl.print_kernel(k).contains("threadgroup void *p"), true)
+  let ws = @msl.parse_kernel("kernel void f(device\nfloat *x) { return; }", [])
   assert_eq(ws.decor[0].space, "device")
-  let commented = parse_kernel(
+  let commented = @msl.parse_kernel(
     "kernel void f(device float *x) { /* auto tuned */ return; }",
     [],
   )
-  assert_eq(print_kernel(commented).contains("return"), true)
+  assert_eq(@msl.print_kernel(commented).contains("return"), true)
 }
 
 ///|
 /// Round 13, pinned: braces inside comments are text; an emoji in a
 /// comment must not crash the code-unit scans.
 test "comment braces and non-BMP characters survive the bridge" {
-  let k = parse_kernel(
+  let k = @msl.parse_kernel(
     "kernel void f(device float *x) { /* } 🚀 { */ return; }",
     [],
   )
-  assert_eq(print_kernel(k).contains("return"), true)
+  assert_eq(@msl.print_kernel(k).contains("return"), true)
 }
 
 ///|
@@ -345,12 +355,12 @@ test "comment braces and non-BMP characters survive the bridge" {
 /// units), and the address-space vocabulary is closed over what the
 /// bridge strips.
 test "non-BMP comments before params and the closed vocabulary" {
-  let k = parse_kernel(
+  let k = @msl.parse_kernel(
     "kernel /* 🚀 */ void f(device float *x) { return; }",
     [],
   )
   assert_eq(k.decor[0].space, "device")
-  assert_eq(print_kernel(k).contains("device float *x"), true)
+  assert_eq(@msl.print_kernel(k).contains("device float *x"), true)
 }
 
 ///|
@@ -358,14 +368,16 @@ test "non-BMP comments before params and the closed vocabulary" {
 /// comparisons, and MSL's missing scalars reject at parse.
 test "template calls and non-MSL scalars are rejected" {
   try
-    parse_kernel("kernel void f(device float *x) { foo<4>(x); }", []) |> ignore
+    @msl.parse_kernel("kernel void f(device float *x) { foo<4>(x); }", [])
+    |> ignore
   catch {
     _ => ()
   } noraise {
     _ => fail("expected the template call to be rejected")
   }
   try
-    parse_kernel("kernel void f(device double *x) { return; }", []) |> ignore
+    @msl.parse_kernel("kernel void f(device double *x) { return; }", [])
+    |> ignore
   catch {
     _ => ()
   } noraise {
@@ -379,19 +391,20 @@ test "template calls and non-MSL scalars are rejected" {
 /// extracted attribute is a parse failure rather than a later abort.
 test "spaced templates, commented attributes, malformed attributes" {
   try
-    parse_kernel("kernel void f(device float *x) { foo<4> (x); }", []) |> ignore
+    @msl.parse_kernel("kernel void f(device float *x) { foo<4> (x); }", [])
+    |> ignore
   catch {
     _ => ()
   } noraise {
     _ => fail("expected the spaced template call to be rejected")
   }
-  let commented = parse_kernel(
+  let commented = @msl.parse_kernel(
     "kernel void f(device float *x /* [[fake]] */) { return; }",
     [],
   )
   assert_eq(commented.decor[0].attr, "")
   try
-    parse_kernel("kernel void f(device float *x [[a]b]]) { return; }", [])
+    @msl.parse_kernel("kernel void f(device float *x [[a]b]]) { return; }", [])
     |> ignore
   catch {
     _ => ()
@@ -406,7 +419,7 @@ test "spaced templates, commented attributes, malformed attributes" {
 /// C has no such declarator -- so it round-trips through the bridge like
 /// an address space does.
 test "reference parameters round-trip" {
-  let k : Kernel = {
+  let k : @msl.Kernel = {
     qualifier: "kernel",
     decl: @build.func(
       Void,
@@ -414,12 +427,12 @@ test "reference parameters round-trip" {
       [@build.param(Named("Args"), "args"), @build.param(Pointer(Float), "src")],
       [@build.ret()],
     ),
-    decor: [decor("constant", by_ref=true), decor("device const")],
+    decor: [@msl.decor("constant", by_ref=true), @msl.decor("device const")],
   }
-  let printed = print_kernel(k)
+  let printed = @msl.print_kernel(k)
   assert_true(printed.contains("constant Args &args"))
-  assert_eq(parse_kernel(printed, ["Args"]), k)
-  assert_eq(print_kernel(parse_kernel(printed, ["Args"])), printed)
+  assert_eq(@msl.parse_kernel(printed, ["Args"]), k)
+  assert_eq(@msl.print_kernel(@msl.parse_kernel(printed, ["Args"])), printed)
 }
 
 ///|
@@ -439,7 +452,7 @@ test "the ds4 IQ2_XXS pair-swiglu signature round-trips" {
     "ds4_metal_args_mul_mv_id", "ds4_metal_dsv4_moe_swiglu_weight_args", "uint3",
     "ushort", "uint64_t",
   ]
-  let k = parse_kernel(source, names)
+  let k = @msl.parse_kernel(source, names)
   assert_eq(k.decl.params.length(), 11)
   assert_true(k.decor[0].by_ref)
   assert_true(k.decor[1].by_ref)
@@ -447,8 +460,8 @@ test "the ds4 IQ2_XXS pair-swiglu signature round-trips" {
   assert_eq(k.decor[2].space, "device const")
   assert_eq(k.decor[7].space, "threadgroup")
   assert_eq(k.decor[8].attr, "[[threadgroup_position_in_grid]]")
-  assert_eq(print_kernel(k), source.trim_end(chars="\n").to_owned())
-  assert_eq(parse_kernel(print_kernel(k), names), k)
+  assert_eq(@msl.print_kernel(k), source.trim_end(chars="\n").to_owned())
+  assert_eq(@msl.parse_kernel(@msl.print_kernel(k), names), k)
 }
 
 ///|
@@ -456,7 +469,9 @@ test "the ds4 IQ2_XXS pair-swiglu signature round-trips" {
 /// not silent misreads: rvalue references and references to pointers.
 test "exotic reference forms are rejected" {
   try
-    parse_kernel("kernel void f(constant Args &&args) { return; }", ["Args"])
+    @msl.parse_kernel("kernel void f(constant Args &&args) { return; }", [
+      "Args",
+    ])
     |> ignore
   catch {
     _ => ()
@@ -464,7 +479,8 @@ test "exotic reference forms are rejected" {
     _ => fail("expected the rvalue reference to be rejected")
   }
   try
-    parse_kernel("kernel void f(device float *&p) { return; }", []) |> ignore
+    @msl.parse_kernel("kernel void f(device float *&p) { return; }", [])
+    |> ignore
   catch {
     _ => ()
   } noraise {
@@ -476,12 +492,16 @@ test "exotic reference forms are rejected" {
 /// `constant float &scale` is ordinary MSL and round-trips; a reference
 /// to a pointer has no unambiguous spelling back and is refused.
 test "scalar references round-trip, pointer references do not" {
-  let k = parse_kernel("kernel void f(constant float &scale) { return; }", [])
+  let k = @msl.parse_kernel(
+    "kernel void f(constant float &scale) { return; }",
+    [],
+  )
   assert_true(k.decor[0].by_ref)
-  assert_eq(print_kernel(k).contains("constant float &scale"), true)
-  assert_eq(parse_kernel(print_kernel(k), []), k)
+  assert_eq(@msl.print_kernel(k).contains("constant float &scale"), true)
+  assert_eq(@msl.parse_kernel(@msl.print_kernel(k), []), k)
   try
-    parse_kernel("kernel void f(device float *&p) { return; }", []) |> ignore
+    @msl.parse_kernel("kernel void f(device float *&p) { return; }", [])
+    |> ignore
   catch {
     _ => ()
   } noraise {
@@ -494,11 +514,13 @@ test "scalar references round-trip, pointer references do not" {
 /// leave a token boundary behind, or the type and name fuse into one
 /// identifier and the C parser reads a different declaration.
 test "compact reference spelling keeps its token boundary" {
-  let k = parse_kernel("kernel void f(constant Args&args) { return; }", ["Args"])
+  let k = @msl.parse_kernel("kernel void f(constant Args&args) { return; }", [
+    "Args",
+  ])
   assert_eq(k.decl.params.length(), 1)
   assert_eq(k.decl.params[0].name, "args")
   assert_true(k.decor[0].by_ref)
-  assert_eq(print_kernel(k).contains("constant Args &args"), true)
+  assert_eq(@msl.print_kernel(k).contains("constant Args &args"), true)
 }
 
 ///|
@@ -511,7 +533,7 @@ test "misplaced ampersands are rejected" {
       [
         "kernel void f(constant &Args args) { return; }", "kernel void f(constant Args args&) { return; }",
       ] : Array[String]) {
-    try parse_kernel(bad, ["Args"]) |> ignore catch {
+    try @msl.parse_kernel(bad, ["Args"]) |> ignore catch {
       _ => ()
     } noraise {
       _ => fail("expected `\{bad}` to be rejected")
@@ -523,13 +545,13 @@ test "misplaced ampersands are rejected" {
 /// A comment sitting inside the reference declarator is text, not part
 /// of the parameter name.
 test "comments inside a reference declarator are tolerated" {
-  let k = parse_kernel(
+  let k = @msl.parse_kernel(
     "kernel void f(constant Args & /* uniform */ args) { return; }",
     ["Args"],
   )
   assert_true(k.decor[0].by_ref)
   assert_eq(k.decl.params[0].name, "args")
-  assert_eq(print_kernel(k).contains("constant Args &args"), true)
+  assert_eq(@msl.print_kernel(k).contains("constant Args &args"), true)
 }
 
 ///|
@@ -540,7 +562,7 @@ test "comments inside a reference declarator are tolerated" {
 /// which is how every other validation in this package behaves.
 test "unnamed reference parameters are refused" {
   try
-    parse_kernel("kernel void f(constant Args &) { return; }", ["Args"])
+    @msl.parse_kernel("kernel void f(constant Args &) { return; }", ["Args"])
     |> ignore
   catch {
     _ => ()
@@ -555,14 +577,14 @@ test "unnamed reference parameters are refused" {
 /// parameter name -- which is what happened before `normalize_param`
 /// built the text and its blanked twin in one pass.
 test "line comments inside a parameter do not swallow the name" {
-  let k = parse_kernel(
+  let k = @msl.parse_kernel(
     "kernel void f(constant Args & // uniform\n args) { return; }",
     ["Args"],
   )
   assert_true(k.decor[0].by_ref)
   assert_eq(k.decl.params[0].name, "args")
-  assert_eq(print_kernel(k).contains("constant Args &args"), true)
-  let k2 = parse_kernel(
+  assert_eq(@msl.print_kernel(k).contains("constant Args &args"), true)
+  let k2 = @msl.parse_kernel(
     "kernel void f(device // which\n float *x) { return; }",
     [],
   )
@@ -580,16 +602,16 @@ test "line comments inside a parameter do not swallow the name" {
 /// both cases; the hole this closed was a constructed attribute carrying
 /// a comment or literal, which `print_kernel` now refuses.
 test "attribute payloads are restricted to real MSL spellings" {
-  let ok = parse_kernel(
+  let ok = @msl.parse_kernel(
     "kernel void f(device float *x [[buffer(0)]], constant int &n [[function_constant(FC_MUL_MV + 0)]]) { return; }",
     [],
   )
   assert_eq(ok.decor[0].attr, "[[buffer(0)]]")
   assert_eq(ok.decor[1].attr, "[[function_constant(FC_MUL_MV + 0)]]")
-  assert_eq(parse_kernel(print_kernel(ok), []), ok)
+  assert_eq(@msl.parse_kernel(@msl.print_kernel(ok), []), ok)
   // Quotes survive blanking and hit the whitelist.
   try
-    parse_kernel(
+    @msl.parse_kernel(
       "kernel void f(device float *x [[foo(\"bar\")]]) { return; }",
       [],
     )
@@ -600,10 +622,10 @@ test "attribute payloads are restricted to real MSL spellings" {
     _ => fail("expected the quoted attribute payload to be refused")
   }
   // A comment collapses before extraction; the result is stable.
-  let collapsed = parse_kernel(
+  let collapsed = @msl.parse_kernel(
     "kernel void f(device float *x [[buffer(/*slot*/0)]]) { return; }",
     [],
   )
   assert_eq(collapsed.decor[0].attr, "[[buffer( 0)]]")
-  assert_eq(parse_kernel(print_kernel(collapsed), []), collapsed)
+  assert_eq(@msl.parse_kernel(@msl.print_kernel(collapsed), []), collapsed)
 }
