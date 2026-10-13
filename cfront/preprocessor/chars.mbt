@@ -19,7 +19,7 @@ fn pp_is_ident_continue(ch : Char) -> Bool {
 }
 
 ///|
-fn pp_starts_with_at(input : String, pos : Int, needle : String) -> Bool {
+fn pp_starts_with_at(input : String, pos : Int32, needle : String) -> Bool {
   if pos + needle.length() > input.length() {
     return false
   }

@@ -1,7 +1,7 @@
 ///|
 priv struct IfExprParser {
   tokens : Array[PpToken]
-  mut pos : Int
+  mut pos : Int32
 }
 
 ///|

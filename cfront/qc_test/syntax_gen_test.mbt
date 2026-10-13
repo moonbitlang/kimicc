@@ -123,7 +123,7 @@ fn gen_base_type(state : @splitmix.RandomState) -> @ctype.Type {
 ///|
 /// A complete object type: what an array element, a `sizeof` operand or a
 /// local declaration may have.
-fn gen_object_type(depth : Int, state : @splitmix.RandomState) -> @ctype.Type {
+fn gen_object_type(depth : Int32, state : @splitmix.RandomState) -> @ctype.Type {
   if depth <= 0 {
     return gen_base_type(state)
   }
@@ -145,7 +145,10 @@ fn gen_object_type(depth : Int, state : @splitmix.RandomState) -> @ctype.Type {
 
 ///|
 /// What a pointer may point at: any object type, or `void`.
-fn gen_pointee_type(depth : Int, state : @splitmix.RandomState) -> @ctype.Type {
+fn gen_pointee_type(
+  depth : Int32,
+  state : @splitmix.RandomState,
+) -> @ctype.Type {
   if pick(state, 6) == 0 {
     Void
   } else {
@@ -156,7 +159,7 @@ fn gen_pointee_type(depth : Int, state : @splitmix.RandomState) -> @ctype.Type {
 ///|
 /// A parameter type: never an array (adjusted to a pointer) and never
 /// `void` (which spells an empty list).
-fn gen_param_type(depth : Int, state : @splitmix.RandomState) -> @ctype.Type {
+fn gen_param_type(depth : Int32, state : @splitmix.RandomState) -> @ctype.Type {
   match pick(state, 5) {
     0 => Pointer(gen_pointee_type(depth - 1, state))
     1 => if depth > 0 { gen_function_pointer(depth - 1, state) } else { SInt }
@@ -166,7 +169,7 @@ fn gen_param_type(depth : Int, state : @splitmix.RandomState) -> @ctype.Type {
 
 ///|
 /// A return type: `void`, a base type, a pointer, or a function pointer.
-fn gen_return_type(depth : Int, state : @splitmix.RandomState) -> @ctype.Type {
+fn gen_return_type(depth : Int32, state : @splitmix.RandomState) -> @ctype.Type {
   match pick(state, 6) {
     0 => Void
     1 => Pointer(gen_pointee_type(depth - 1, state))
@@ -177,7 +180,7 @@ fn gen_return_type(depth : Int, state : @splitmix.RandomState) -> @ctype.Type {
 
 ///|
 fn gen_function_pointer(
-  depth : Int,
+  depth : Int32,
   state : @splitmix.RandomState,
 ) -> @ctype.Type {
   let params : Array[@ctype.Type] = []
@@ -190,7 +193,7 @@ fn gen_function_pointer(
 
 ///|
 /// A cast target: `void`, a scalar, a pointer, or a function pointer.
-fn gen_cast_type(depth : Int, state : @splitmix.RandomState) -> @ctype.Type {
+fn gen_cast_type(depth : Int32, state : @splitmix.RandomState) -> @ctype.Type {
   match pick(state, 8) {
     0 => Void
     1 | 2 => Pointer(gen_pointee_type(depth, state))
@@ -301,7 +304,7 @@ fn gen_leaf(state : @splitmix.RandomState) -> @parser.Expr {
 ///|
 /// A syntactic lvalue: the only shapes the parser accepts as an assignment,
 /// `++` or `--` target.
-fn gen_lvalue(depth : Int, state : @splitmix.RandomState) -> @parser.Expr {
+fn gen_lvalue(depth : Int32, state : @splitmix.RandomState) -> @parser.Expr {
   if depth <= 0 {
     return Var(var_pool[pick(state, var_pool.length())])
   }
@@ -358,13 +361,13 @@ fn gen_offset_path(
 ///|
 /// An expression at most `depth` operators deep, over every form the printer
 /// and parser share outside initializers.
-fn gen_syn_expr(depth : Int, state : @splitmix.RandomState) -> @parser.Expr {
+fn gen_syn_expr(depth : Int32, state : @splitmix.RandomState) -> @parser.Expr {
   if depth <= 0 || pick(state, 5) == 0 {
     return gen_leaf(state)
   }
   let d = depth - 1
   match pick(state, 34) {
-    0..=7 =>
+    0..<=7 =>
       Binary(
         syn_binary_ops[pick(state, syn_binary_ops.length())],
         gen_syn_expr(d, state),
@@ -624,7 +627,7 @@ fn in_parser_image(expr : @parser.Expr) -> Bool {
 priv struct StmtCtx {
   in_loop : Bool
   in_switch : Bool
-  next_name : Ref[Int]
+  next_name : Ref[Int32]
 }
 
 ///|
@@ -638,7 +641,7 @@ fn fresh_name(ctx : StmtCtx, prefix : String) -> String {
 /// A local declaration: any object type, with an initializer when the type
 /// is scalar.
 fn gen_local_decl(
-  depth : Int,
+  depth : Int32,
   ctx : StmtCtx,
   state : @splitmix.RandomState,
 ) -> @parser.Stmt {
@@ -665,7 +668,7 @@ fn gen_local_decl(
 ///|
 /// A statement usable where C wants exactly one: never a declaration.
 fn gen_syn_stmt(
-  depth : Int,
+  depth : Int32,
   ctx : StmtCtx,
   state : @splitmix.RandomState,
 ) -> @parser.Stmt {
@@ -821,7 +824,7 @@ fn fixed_aggregates() -> Array[@parser.StructDecl] {
 
 ///|
 fn gen_syn_program(
-  size : Int,
+  size : Int32,
   state : @splitmix.RandomState,
 ) -> @parser.Program {
   let scaled = if size < 1 { 1 } else if size > 10 { 10 } else { size }

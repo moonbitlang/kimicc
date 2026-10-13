@@ -1,7 +1,7 @@
 ///|
 /// Returns the field-alignment cap declared on aggregate `name`, or `None` when
 /// it is unknown or uses natural alignment.
-fn Codegen::struct_pack(self : Codegen, name : String) -> Int? {
+fn Codegen::struct_pack(self : Codegen, name : String) -> Int32? {
   if self.struct_decls.contains(name) {
     self.struct_decls[name].pack
   } else {
@@ -10,7 +10,7 @@ fn Codegen::struct_pack(self : Codegen, name : String) -> Int? {
 }
 
 ///|
-fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
+fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int32 {
   match ty {
     Void => 0
     Bool | SChar | UChar => 1
@@ -87,7 +87,7 @@ fn Codegen::type_size(self : Codegen, ty : @parser.Type) -> Int {
 }
 
 ///|
-fn Codegen::type_align(self : Codegen, ty : @parser.Type) -> Int {
+fn Codegen::type_align(self : Codegen, ty : @parser.Type) -> Int32 {
   match ty {
     Void => 1
     Bool | SChar | UChar => 1
@@ -169,8 +169,8 @@ fn is_anon_type(ty : @parser.Type) -> Bool {
 fn Codegen::flatten_anon_fields(
   self : Codegen,
   ty : @parser.Type,
-  base_offset : Int,
-) -> Array[(String, @parser.Type, Int, Int, Int, Int)] {
+  base_offset : Int32,
+) -> Array[(String, @parser.Type, Int32, Int32, Int32, Int32)] {
   let name = match ty {
     Struct(n) | Union(n) => n
     _ => return []
@@ -331,7 +331,7 @@ fn Codegen::find_field_layout(
   self : Codegen,
   struct_name : String,
   field : String,
-) -> (String, @parser.Type, Int, Int, Int, Int)? {
+) -> (String, @parser.Type, Int32, Int32, Int32, Int32)? {
   if !self.struct_layouts.contains(struct_name) {
     return None
   }
@@ -348,7 +348,7 @@ fn Codegen::find_field_layout_for_type(
   self : Codegen,
   ty : @parser.Type,
   field : String,
-) -> (String, @parser.Type, Int, Int, Int, Int)? {
+) -> (String, @parser.Type, Int32, Int32, Int32, Int32)? {
   let lookup_ty = match darwin_field_receiver_type(ty) {
     Some(lookup_ty) => lookup_ty
     None => return None
@@ -364,7 +364,7 @@ fn Codegen::offset_of_path(
   self : Codegen,
   ty : @parser.Type,
   path : Array[@parser.OffsetDesignator],
-) -> Int? {
+) -> Int32? {
   let mut current_ty = ty
   let mut offset = 0
   for designator in path {

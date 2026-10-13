@@ -54,7 +54,7 @@ fn pp_normalize_source(input : String) -> String {
 }
 
 ///|
-fn pp_read_quoted(input : String, start : Int, quote : Char) -> Int {
+fn pp_read_quoted(input : String, start : Int32, quote : Char) -> Int32 {
   let mut i = start + 1
   while i < input.length() {
     let ch = input[i].unsafe_to_char()
@@ -73,7 +73,7 @@ fn pp_read_quoted(input : String, start : Int, quote : Char) -> Int {
 }
 
 ///|
-fn pp_punct_at(input : String, pos : Int) -> String {
+fn pp_punct_at(input : String, pos : Int32) -> String {
   if pp_starts_with_at(input, pos, "<<=") {
     return "<<="
   }
@@ -270,7 +270,7 @@ fn pp_without_whitespace(tokens : Array[PpToken]) -> Array[PpToken] {
 }
 
 ///|
-fn pp_first_non_space(tokens : Array[PpToken]) -> Int {
+fn pp_first_non_space(tokens : Array[PpToken]) -> Int32 {
   let mut i = 0
   while i < tokens.length() && tokens[i].is_whitespace() {
     i += 1

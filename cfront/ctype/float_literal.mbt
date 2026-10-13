@@ -94,7 +94,7 @@ fn parse_hex_float(text : String) -> Double {
     } else if i < length && text[i] is '+' {
       i += 1
     }
-    while i < length && text[i] is ('0'..='9') {
+    while i < length && text[i] is ('0'..<='9') {
       exponent = exponent * 10 + (text[i].to_int() - '0')
       i += 1
     }
@@ -107,12 +107,12 @@ fn parse_hex_float(text : String) -> Double {
 
 ///|
 /// Returns the value of a hexadecimal digit, or `None` for anything else.
-fn hex_digit_of(ch : UInt16) -> Int? {
-  if ch is ('0'..='9') {
+fn hex_digit_of(ch : UInt16) -> Int32? {
+  if ch is ('0'..<='9') {
     Some(ch.to_int() - '0')
-  } else if ch is ('a'..='f') {
+  } else if ch is ('a'..<='f') {
     Some(ch.to_int() - 'a' + 10)
-  } else if ch is ('A'..='F') {
+  } else if ch is ('A'..<='F') {
     Some(ch.to_int() - 'A' + 10)
   } else {
     None
@@ -122,7 +122,7 @@ fn hex_digit_of(ch : UInt16) -> Int? {
 ///|
 /// Returns two raised to `exponent`, by repeated multiplication so that no
 /// intermediate overflows for the exponents a literal can carry.
-fn power_of_two(exponent : Int) -> Double {
+fn power_of_two(exponent : Int32) -> Double {
   let mut result = 1.0
   let magnitude = if exponent < 0 { -exponent } else { exponent }
   for _ in 0..<magnitude {

@@ -27,9 +27,9 @@ pub(all) enum Type {
   Union(String)
   FuncPtr(Type, Array[Type], Bool)
   Pointer(Type)
-  Array(Type, Int)
+  Array(Type, Int32)
   Atomic(Type)
-  Aligned(Type, Int)
+  Aligned(Type, Int32)
   /// A type known only by its spelling -- vector types like
   /// `float32x4_t`, GPU types like `uint3` -- for code that is generated
   /// and printed but never compiled by this workspace's backends. The
@@ -274,7 +274,7 @@ pub fn Type::const_is_unsigned(self : Type) -> Bool {
 ///
 /// This is intentionally not the ABI storage width: `_Bool` folds as a 1-bit
 /// value. Pointer-like values use the current compiler's 64-bit address model.
-pub fn Type::const_int_width(self : Type) -> Int? {
+pub fn Type::const_int_width(self : Type) -> Int32? {
   match self {
     Bool => Some(1)
     SChar | UChar => Some(8)
@@ -347,7 +347,7 @@ pub fn integer_literal_type(value : Int64) -> Type {
 pub fn integer_literal_suffix_type(
   bits : Int64,
   is_unsigned : Bool,
-  long_count : Int,
+  long_count : Int32,
 ) -> Type {
   if long_count >= 2 {
     return if is_unsigned { ULongLong } else { SLongLong }
@@ -385,7 +385,7 @@ pub fn integer_constant_token_type(bits : Int64) -> Type {
 
 ///|
 /// Returns the integer width selected by generic `__builtin_bswap`.
-pub fn Type::generic_builtin_bswap_width(self : Type) -> Int {
+pub fn Type::generic_builtin_bswap_width(self : Type) -> Int32 {
   let width = self.const_int_width().unwrap_or(64)
   if width <= 16 {
     16
@@ -398,7 +398,7 @@ pub fn Type::generic_builtin_bswap_width(self : Type) -> Int {
 
 ///|
 /// Returns the integer width selected by generic rotate builtins.
-pub fn Type::generic_builtin_rotate_width(self : Type) -> Int {
+pub fn Type::generic_builtin_rotate_width(self : Type) -> Int32 {
   let width = self.const_int_width().unwrap_or(64)
   if width <= 32 {
     32
@@ -409,7 +409,7 @@ pub fn Type::generic_builtin_rotate_width(self : Type) -> Int {
 
 ///|
 /// Returns the usual integer conversion rank for scalar integer types.
-pub fn Type::integer_rank(self : Type) -> Int {
+pub fn Type::integer_rank(self : Type) -> Int32 {
   match self {
     Bool | SChar | UChar => 1
     SShort | UShort => 2
@@ -423,7 +423,7 @@ pub fn Type::integer_rank(self : Type) -> Int {
 }
 
 ///|
-fn unsigned_type_for_rank(rank : Int) -> Type {
+fn unsigned_type_for_rank(rank : Int32) -> Type {
   if rank >= 6 {
     UInt128
   } else if rank == 5 {
@@ -436,7 +436,7 @@ fn unsigned_type_for_rank(rank : Int) -> Type {
 }
 
 ///|
-fn signed_type_for_rank(rank : Int) -> Type {
+fn signed_type_for_rank(rank : Int32) -> Type {
   if rank >= 6 {
     SInt128
   } else if rank == 5 {
@@ -671,7 +671,7 @@ pub fn Type::atomic_target(self : Type) -> Type {
 ///
 /// This method aborts for `Struct(name)` and `Union(name)` because a bare
 /// `Type` does not include the aggregate declaration layout.
-pub fn Type::size(self : Type) -> Int {
+pub fn Type::size(self : Type) -> Int32 {
   match self {
     Void => 0
     Bool | SChar | UChar => 1
@@ -705,7 +705,7 @@ pub fn Type::size(self : Type) -> Int {
 ///
 /// This method aborts for `Struct(name)` and `Union(name)` because aggregate
 /// alignment depends on the corresponding declaration layout.
-pub fn Type::align(self : Type) -> Int {
+pub fn Type::align(self : Type) -> Int32 {
   match self {
     Void => 1
     Bool | SChar | UChar => 1

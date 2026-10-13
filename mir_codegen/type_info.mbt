@@ -1,5 +1,5 @@
 ///|
-fn Codegen::type_size(self : Codegen, ty : @ctype.Type) -> Int {
+fn Codegen::type_size(self : Codegen, ty : @ctype.Type) -> Int32 {
   match self.mir_module {
     Some(mir) => return mir.type_size(ty)
     None => ()
@@ -32,7 +32,7 @@ fn Codegen::type_size(self : Codegen, ty : @ctype.Type) -> Int {
 }
 
 ///|
-fn Codegen::type_align(self : Codegen, ty : @ctype.Type) -> Int {
+fn Codegen::type_align(self : Codegen, ty : @ctype.Type) -> Int32 {
   match self.mir_module {
     Some(mir) => return mir.type_align(ty)
     None => ()
@@ -76,7 +76,7 @@ fn Codegen::type_align(self : Codegen, ty : @ctype.Type) -> Int {
 ///|
 fn darwin_field_layout_tuple(
   layout : @mir.FieldLayout,
-) -> (String, @ctype.Type, Int, Int, Int, Int) {
+) -> (String, @ctype.Type, Int32, Int32, Int32, Int32) {
   let bit_width = match layout.bit_width {
     Some(width) => width
     None => 0
@@ -99,7 +99,7 @@ fn Codegen::register_mir_aggregate_layouts(
   for decl in mir.aggregate_decls {
     match mir.layouts.get(decl.name) {
       Some(layout) => {
-        let fields : Array[(String, @ctype.Type, Int, Int, Int, Int)] = []
+        let fields : Array[(String, @ctype.Type, Int32, Int32, Int32, Int32)] = []
         for field in layout.fields {
           fields.push(darwin_field_layout_tuple(field))
         }

@@ -10,12 +10,12 @@ priv enum BodyFlow {
 ///|
 priv struct BodyFrame {
   base : Int64
-  locals : Map[Int, Int64]
-  bindings : Map[Int, MirLocal]
+  locals : Map[Int32, Int64]
+  bindings : Map[Int32, MirLocal]
   memory : Map[Int64, Int64]
   variadic_args : Array[Int64]
-  va_list_indices : Map[Int, Int]
-  aggregate_arg_bases : Map[Int64, Int]
+  va_list_indices : Map[Int32, Int32]
+  aggregate_arg_bases : Map[Int64, Int32]
   alloca_bases : Map[Int64, Int64]
 }
 
@@ -31,12 +31,12 @@ fn BodyFrame::aggregate_arg_addr(self : BodyFrame, addr : Int64) -> Bool {
 }
 
 ///|
-fn mir_body_va_list_handle(local_id : Int) -> Int64 {
+fn mir_body_va_list_handle(local_id : Int32) -> Int64 {
   5000000000L + local_id.to_int64()
 }
 
 ///|
-fn mir_body_va_list_handle_local_id(handle : Int64) -> Int? {
+fn mir_body_va_list_handle_local_id(handle : Int64) -> Int32? {
   let base = 5000000000L
   if handle < base {
     None
@@ -46,7 +46,7 @@ fn mir_body_va_list_handle_local_id(handle : Int64) -> Int? {
 }
 
 ///|
-fn mir_body_va_arg_aggregate_addr(local_id : Int, index : Int) -> Int64 {
+fn mir_body_va_arg_aggregate_addr(local_id : Int32, index : Int32) -> Int64 {
   6000000000L + local_id.to_int64() * 100000L + index.to_int64() * 1000L
 }
 
@@ -85,8 +85,8 @@ priv struct BodyInterpreter {
   alloca_memory_ranges : Map[Int64, Int64]
   heap_memory_ranges : Map[Int64, Int64]
   mut error : String?
-  mut steps : Int
-  mut call_depth : Int
+  mut steps : Int32
+  mut call_depth : Int32
   mut strtok_next : Int64
   mut next_frame : Int64
   mut next_alloca : Int64
@@ -94,7 +94,7 @@ priv struct BodyInterpreter {
 }
 
 ///|
-fn mir_body_array_info(ty : @ctype.Type) -> (@ctype.Type, Int)? {
+fn mir_body_array_info(ty : @ctype.Type) -> (@ctype.Type, Int32)? {
   match ty {
     Array(elem, len) => Some((elem, len))
     Aligned(inner, _) => mir_body_array_info(inner)
@@ -122,7 +122,7 @@ fn mir_body_collect_label_addrs(
   stmts : Array[MirStmt],
   label_addrs : Map[String, Int64],
   label_names : Map[Int64, String],
-  next_label : Array[Int],
+  next_label : Array[Int32],
 ) -> Unit {
   for stmt in stmts {
     match stmt {
@@ -196,12 +196,12 @@ fn mir_body_global_scalar_init(
 fn mir_body_global_string_array_init(
   ty : @ctype.Type,
   value : String,
-) -> Array[(Int, MirGlobalInit)]? {
+) -> Array[(Int32, MirGlobalInit)]? {
   match mir_body_array_info(ty) {
     Some((elem_ty, len)) =>
       match elem_ty {
         SChar | UChar => {
-          let values : Array[(Int, MirGlobalInit)] = []
+          let values : Array[(Int32, MirGlobalInit)] = []
           let count = if value.length() < len { value.length() } else { len }
           for i in 0..<count {
             values.push((i, MirGlobalScalarInt(value[i].to_int().to_int64())))
@@ -218,10 +218,10 @@ fn mir_body_global_string_array_init(
 fn mir_body_global_array_init(
   ty : @ctype.Type,
   init : MirGlobalInit?,
-) -> Array[(Int, MirGlobalInit)]? {
+) -> Array[(Int32, MirGlobalInit)]? {
   match init {
     Some(MirGlobalArray(items)) => {
-      let values : Array[(Int, MirGlobalInit)] = []
+      let values : Array[(Int32, MirGlobalInit)] = []
       for i = 0; i < items.length(); i = i + 1 {
         values.push((i, items[i]))
       }
@@ -292,8 +292,8 @@ fn mir_body_global_aggregate_slots(
 ///|
 fn mir_body_global_bitfield_bits(
   init : MirGlobalInit?,
-  bit_width : Int,
-  bit_offset : Int,
+  bit_width : Int32,
+  bit_offset : Int32,
 ) -> Int64 {
   match init {
     Some(MirGlobalScalarInt(value)) =>
@@ -309,8 +309,8 @@ fn mir_body_init_global_bitfield_container(
   layout : AggregateLayout,
   slots : Array[MirGlobalInit?],
   base : Int64,
-  start : Int,
-) -> Int {
+  start : Int32,
+) -> Int32 {
   let field = layout.fields[start]
   let container_offset = field.offset
   let container_size = field.size
@@ -518,7 +518,7 @@ fn Program::runtime_body_truthy(
 }
 
 ///|
-fn mir_body_rotate_binary_op(op : String) -> (Int, Bool)? {
+fn mir_body_rotate_binary_op(op : String) -> (Int32, Bool)? {
   match op {
     "rotl32" => Some((32, true))
     "rotr32" => Some((32, false))
@@ -1498,7 +1498,7 @@ fn mir_body_typed_elem_addr_value(
 }
 
 ///|
-fn mir_body_offset_addr(base : Int64, offset : Int) -> Int64 {
+fn mir_body_offset_addr(base : Int64, offset : Int32) -> Int64 {
   base - 50000L - offset.to_int64()
 }
 
@@ -1543,7 +1543,7 @@ fn mir_body_checked_printf_format_indexes(
   name : String,
   args : Array[MirValue],
   ty : @ctype.Type,
-) -> (Int, Int)? {
+) -> (Int32, Int32)? {
   if !ty.is_integer() {
     return None
   }
@@ -1583,8 +1583,8 @@ fn mir_body_checked_printf_format_indexes(
 ///|
 fn mir_body_external_printf_format_indexes(
   name : String,
-  arg_count : Int,
-) -> (Int, Int)? {
+  arg_count : Int32,
+) -> (Int32, Int32)? {
   match name {
     "snprintf" => if arg_count >= 3 { Some((2, 3)) } else { None }
     "vsnprintf" => if arg_count == 4 { Some((2, arg_count)) } else { None }
@@ -1599,7 +1599,7 @@ fn mir_body_external_printf_format_indexes(
 }
 
 ///|
-fn mir_body_checked_vprintf_va_list_index(name : String) -> Int? {
+fn mir_body_checked_vprintf_va_list_index(name : String) -> Int32? {
   match name {
     "vsnprintf" => Some(3)
     "vsprintf" => Some(2)
@@ -1639,7 +1639,7 @@ fn BodyInterpreter::literal_printf_format_arg_count(
   self : BodyInterpreter,
   format_addr : Int64,
   name : String,
-) -> Int? {
+) -> Int32? {
   match self.string_literal_for_addr(format_addr) {
     Some((format, offset)) => {
       if offset < 0L || offset > format.length().to_int64() {
@@ -1815,7 +1815,7 @@ fn BodyInterpreter::literal_printf_format_length(
   format_addr : Int64,
   name : String,
   values : Array[Int64],
-  first_value_index : Int,
+  first_value_index : Int32,
 ) -> Int64? {
   match self.string_literal_for_addr(format_addr) {
     Some((format, offset)) => {
@@ -2193,7 +2193,7 @@ fn mir_body_nonnegative_radix_string(
   }
   let digits = if uppercase { "0123456789ABCDEF" } else { "0123456789abcdef" }
   let buf = StringBuilder()
-  let stack : Array[Int] = []
+  let stack : Array[Int32] = []
   let mut n = value
   if n == 0L {
     stack.push(0)
@@ -2363,7 +2363,10 @@ fn mir_body_printf_fixed_parts(
 }
 
 ///|
-fn mir_body_printf_exponent_suffix(exponent : Int, uppercase : Bool) -> String {
+fn mir_body_printf_exponent_suffix(
+  exponent : Int32,
+  uppercase : Bool,
+) -> String {
   let buf = StringBuilder()
   buf.write_char(if uppercase { 'E' } else { 'e' })
   if exponent < 0 {
@@ -2538,7 +2541,7 @@ fn BodyInterpreter::literal_printf_format_output(
   frame : BodyFrame,
   format_addr : Int64,
   values : Array[Int64],
-  first_value_index : Int,
+  first_value_index : Int32,
 ) -> String? {
   match self.string_literal_for_addr(format_addr) {
     Some((format, offset)) => {
@@ -4346,7 +4349,7 @@ fn BodyInterpreter::offset_addr(
   self : BodyInterpreter,
   frame : BodyFrame,
   base : Int64,
-  offset : Int,
+  offset : Int32,
 ) -> Int64 {
   let direct = mir_body_offset_addr(base, offset)
   if self.known_memory_addr(frame, direct) {
@@ -5144,7 +5147,7 @@ fn BodyInterpreter::eval_external_printf_call(
         Some(count) => count
         None => return Some(0L)
       }
-      let mut va_list_local_id : Int? = None
+      let mut va_list_local_id : Int32? = None
       let mut va_list_start = 0
       match mir_body_checked_vprintf_va_list_index(name) {
         Some(va_list_index) =>
@@ -6691,7 +6694,7 @@ fn BodyInterpreter::exec_stmts_from_index(
   self : BodyInterpreter,
   frame : BodyFrame,
   stmts : Array[MirStmt],
-  start : Int,
+  start : Int32,
 ) -> BodyFlow {
   for i in start..<stmts.length() {
     match self.exec_stmt(frame, stmts[i]) {
@@ -7147,7 +7150,7 @@ fn BodyInterpreter::call_func(
     return 0L
   }
   self.call_depth += 1
-  let bindings : Map[Int, MirLocal] = Map([])
+  let bindings : Map[Int32, MirLocal] = Map([])
   for binding in body.locals {
     bindings[binding.id] = binding
   }

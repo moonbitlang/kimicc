@@ -23,15 +23,15 @@
 /// Thread identifiers run over `[0, 32*nsg)` and the stride is exactly
 /// that width, so each index below `n` is reached from exactly one
 /// thread, for any `nsg`.
-fn strided_visits(nsg : Int, n : Int) -> Array[Int] {
+fn strided_visits(nsg : Int32, n : Int32) -> Array[Int32] {
   strided_visits_with(nsg, n, 32 * nsg)
 }
 
 ///|
 /// The same walk with the stride supplied, so a stride read back out of
 /// the generated source can be simulated directly.
-fn strided_visits_with(nsg : Int, n : Int, stride : Int) -> Array[Int] {
-  let out : Array[Int] = []
+fn strided_visits_with(nsg : Int32, n : Int32, stride : Int32) -> Array[Int32] {
+  let out : Array[Int32] = []
   for sgitg in 0..<nsg {
     for tiisg in 0..<32 {
       let mut idx = 32 * sgitg + tiisg
@@ -48,8 +48,8 @@ fn strided_visits_with(nsg : Int, n : Int, stride : Int) -> Array[Int] {
 /// The visit list of ds4's fixed-count form, kept here as the thing we
 /// deliberately diverged from: each thread writes `per_thread` entries
 /// starting at `tid * per_thread`, with no bound on `n`.
-fn fixed_visits(nsg : Int, per_thread : Int) -> Array[Int] {
-  let out : Array[Int] = []
+fn fixed_visits(nsg : Int32, per_thread : Int32) -> Array[Int32] {
+  let out : Array[Int32] = []
   for sgitg in 0..<nsg {
     for tiisg in 0..<32 {
       let base = (32 * sgitg + tiisg) * per_thread
@@ -65,7 +65,7 @@ fn fixed_visits(nsg : Int, per_thread : Int) -> Array[Int] {
 /// Every index below `n` is written exactly once, and nothing outside
 /// `[0, n)` is touched -- the property whose violation the compiler
 /// could not see.
-fn covers_exactly(visits : Array[Int], n : Int) -> Bool {
+fn covers_exactly(visits : Array[Int32], n : Int32) -> Bool {
   let seen = Array::make(n, 0)
   for idx in visits {
     if idx < 0 || idx >= n {
@@ -100,7 +100,7 @@ test "the strided staging loop covers both tables at any simdgroup width" {
 /// The same property over random widths, so the claim is not just the
 /// hand-picked list above.
 test "strided staging covers exactly over random widths" {
-  let state = @splitmix.new(seed=20260816)
+  let state = @splitmix.RandomState(seed=20260816)
   for case_index in 0..<200 {
     let nsg = 1 + (state.next_uint() % 64).reinterpret_as_int()
     let n = 1 + (state.next_uint() % 4096).reinterpret_as_int()
@@ -143,7 +143,7 @@ test "ds4's fixed-count staging is correct only at two simdgroups" {
 /// wrong bound, changes this text and fails the test.
 ///
 /// The emitted form is `for (int idx = ...; idx < N; idx += STRIDE)`.
-fn emitted_stride(source : String, n : Int) -> Int raise {
+fn emitted_stride(source : String, n : Int32) -> Int32 raise {
   let needle = "idx < " + n.to_string() + "; idx += "
   match source.find(needle) {
     Some(at) => {

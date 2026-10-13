@@ -839,7 +839,7 @@ async test "e2e mixed scalar aggregate return and argument ABI" {
 
 ///|
 fn deterministic_scalar_aggregate_differential_source(
-  case_index : Int,
+  case_index : Int32,
 ) -> String {
   let signed_seed = case_index * 37 - 111
   let unsigned_seed = case_index * 70001 + 12345
@@ -912,7 +912,9 @@ async test "e2e direct Mach-O scalar aggregate differential corpus matches clang
 }
 
 ///|
-fn deterministic_scalar_control_differential_source(case_index : Int) -> String {
+fn deterministic_scalar_control_differential_source(
+  case_index : Int32,
+) -> String {
   let seed_a = case_index * 9973 + 123
   let seed_b = case_index * 7919 + 4567
   let rounds = case_index % 9 + 6
@@ -990,7 +992,7 @@ async test "e2e direct Mach-O scalar control differential corpus matches clang" 
 }
 
 ///|
-fn deterministic_floating_differential_source(case_index : Int) -> String {
+fn deterministic_floating_differential_source(case_index : Int32) -> String {
   let seed_a = case_index * 13 + 5
   let seed_b = case_index * 7 + 3
   let rounds = case_index % 5 + 4
@@ -1072,7 +1074,7 @@ async test "e2e direct Mach-O floating differential corpus matches clang" {
 }
 
 ///|
-fn deterministic_memory_differential_source(case_index : Int) -> String {
+fn deterministic_memory_differential_source(case_index : Int32) -> String {
   let seed = case_index * 17 + 11
   let stride = case_index % 5 + 1
   let byte_offset = case_index % 5
@@ -1186,8 +1188,8 @@ async test "e2e direct Mach-O memory differential corpus matches clang" {
 ///|
 fn write_variadic_differential_arg(
   source : StringBuilder,
-  tag_value : Int,
-  arg_index : Int,
+  tag_value : Int32,
+  arg_index : Int32,
 ) -> Unit {
   match (tag_value + arg_index) % 4 {
     0 => {
@@ -1223,8 +1225,8 @@ fn write_variadic_differential_arg(
 ///|
 fn write_variadic_differential_call(
   source : StringBuilder,
-  tag_value : Int,
-  count : Int,
+  tag_value : Int32,
+  count : Int32,
 ) -> Unit {
   source.write_string("read_variadic(")
   source.write_string(tag_value.to_string())
@@ -1240,7 +1242,7 @@ fn write_variadic_differential_call(
 }
 
 ///|
-fn deterministic_variadic_differential_source(case_index : Int) -> String {
+fn deterministic_variadic_differential_source(case_index : Int32) -> String {
   let tag = case_index * 3 + 2
   let first_count = case_index % 4 + 4
   let second_count = (case_index + 1) % 4 + 3
@@ -1329,7 +1331,7 @@ async test "e2e direct Mach-O variadic differential corpus matches clang" {
 }
 
 ///|
-fn deterministic_bitfield_differential_source(case_index : Int) -> String {
+fn deterministic_bitfield_differential_source(case_index : Int32) -> String {
   let seed = case_index * 19 + 7
   let rounds = case_index % 7 + 8
   let source = StringBuilder()
@@ -1410,7 +1412,7 @@ fn deterministic_bitfield_differential_source(case_index : Int) -> String {
 /// C gives tags block scope, so each definition is its own type. kimicc kept one
 /// flat tag table, so a later definition replaced an earlier one and `sizeof` in
 /// the earlier function reported the wrong layout.
-fn deterministic_tag_scope_differential_source(case_index : Int) -> String {
+fn deterministic_tag_scope_differential_source(case_index : Int32) -> String {
   let width = case_index % 3 + 1
   let source = StringBuilder()
   source.write_string("#include <stdio.h>\n")
@@ -1469,7 +1471,7 @@ async test "e2e deterministic tag scope differential corpus matches clang" {
 /// Builds a program whose struct layouts only agree with clang if `#pragma
 /// pack` is honored: field offsets, aggregate sizes, `push`/`pop` nesting, and
 /// reads and writes through the resulting unaligned members.
-fn deterministic_pragma_pack_differential_source(case_index : Int) -> String {
+fn deterministic_pragma_pack_differential_source(case_index : Int32) -> String {
   let pack = [1, 2, 4, 8][case_index % 4]
   let seed = case_index * 31 + 5
   let source = StringBuilder()
@@ -3260,7 +3262,9 @@ async test "e2e unsigned int128 supports wide limb arithmetic" {
 ///
 /// The clause values move with `case_index` so that the corpus does not
 /// accidentally agree with clang only for one particular constant.
-fn deterministic_switch_clause_differential_source(case_index : Int) -> String {
+fn deterministic_switch_clause_differential_source(
+  case_index : Int32,
+) -> String {
   let base = case_index * 7 + 2
   let low = base.to_string()
   let mid = (base + 1).to_string()

@@ -177,7 +177,7 @@ fn Parser::const_builtin_object_size_value(
 }
 
 ///|
-fn Parser::long_double_size(self : Parser) -> Int {
+fn Parser::long_double_size(self : Parser) -> Int32 {
   match self.target {
     DarwinArm64 => 8
     LinuxAmd64 => 16
@@ -185,7 +185,7 @@ fn Parser::long_double_size(self : Parser) -> Int {
 }
 
 ///|
-fn Parser::long_double_align(self : Parser) -> Int {
+fn Parser::long_double_align(self : Parser) -> Int32 {
   match self.target {
     DarwinArm64 => 8
     LinuxAmd64 => 16
@@ -193,17 +193,17 @@ fn Parser::long_double_align(self : Parser) -> Int {
 }
 
 ///|
-fn Parser::float16_size(_self : Parser) -> Int {
+fn Parser::float16_size(_self : Parser) -> Int32 {
   2
 }
 
 ///|
-fn Parser::float16_align(_self : Parser) -> Int {
+fn Parser::float16_align(_self : Parser) -> Int32 {
   2
 }
 
 ///|
-fn Parser::float128_size(self : Parser) -> Int raise ParseError {
+fn Parser::float128_size(self : Parser) -> Int32 raise ParseError {
   match self.target {
     DarwinArm64 => self.unsupported("__float128 on this target")
     LinuxAmd64 => 16
@@ -211,7 +211,7 @@ fn Parser::float128_size(self : Parser) -> Int raise ParseError {
 }
 
 ///|
-fn Parser::float128_align(self : Parser) -> Int raise ParseError {
+fn Parser::float128_align(self : Parser) -> Int32 raise ParseError {
   match self.target {
     DarwinArm64 => self.unsupported("__float128 on this target")
     LinuxAmd64 => 16
@@ -482,7 +482,7 @@ fn Parser::fold_const(self : Parser, expr : Expr) -> Int64? raise ParseError {
 }
 
 ///|
-fn Parser::const_type_size(self : Parser, ty : Type) -> Int raise ParseError {
+fn Parser::const_type_size(self : Parser, ty : Type) -> Int32 raise ParseError {
   match ty {
     Void => 0
     Bool | SChar | UChar => 1
@@ -513,7 +513,7 @@ fn Parser::const_type_size(self : Parser, ty : Type) -> Int raise ParseError {
 }
 
 ///|
-fn Parser::const_type_align(self : Parser, ty : Type) -> Int raise ParseError {
+fn Parser::const_type_align(self : Parser, ty : Type) -> Int32 raise ParseError {
   match ty {
     Void => 1
     Bool | SChar | UChar => 1
@@ -554,7 +554,7 @@ fn Parser::const_type_align(self : Parser, ty : Type) -> Int raise ParseError {
 fn Parser::const_struct_size(
   self : Parser,
   name : String,
-) -> Int raise ParseError {
+) -> Int32 raise ParseError {
   if !self.struct_decls.contains(name) {
     return 8
   }
@@ -579,7 +579,7 @@ fn Parser::const_struct_size(
 fn Parser::const_union_size(
   self : Parser,
   name : String,
-) -> Int raise ParseError {
+) -> Int32 raise ParseError {
   if !self.struct_decls.contains(name) {
     return 8
   }
@@ -603,7 +603,7 @@ fn Parser::const_union_size(
 fn Parser::const_struct_align(
   self : Parser,
   name : String,
-) -> Int raise ParseError {
+) -> Int32 raise ParseError {
   if !self.struct_decls.contains(name) {
     return 8
   }
@@ -622,7 +622,7 @@ fn Parser::const_struct_align(
 fn Parser::const_union_align(
   self : Parser,
   name : String,
-) -> Int raise ParseError {
+) -> Int32 raise ParseError {
   self.const_struct_align(name)
 }
 
@@ -630,8 +630,8 @@ fn Parser::const_union_align(
 fn Parser::const_flatten_anon_fields(
   self : Parser,
   ty : Type,
-  base_offset : Int,
-) -> Array[(String, Type, Int, Int, Int, Int)] raise ParseError {
+  base_offset : Int32,
+) -> Array[(String, Type, Int32, Int32, Int32, Int32)] raise ParseError {
   let name = match ty {
     Struct(n) | Union(n) => n
     _ => return []
@@ -665,7 +665,7 @@ fn Parser::const_flatten_anon_fields(
 fn Parser::const_struct_layout(
   self : Parser,
   decl : StructDecl,
-) -> Array[(String, Type, Int, Int, Int, Int)] raise ParseError {
+) -> Array[(String, Type, Int32, Int32, Int32, Int32)] raise ParseError {
   let layout = []
   let mut offset = 0
   let mut in_bitfield_run = false
@@ -750,7 +750,7 @@ fn Parser::const_struct_layout(
 fn Parser::const_union_layout(
   self : Parser,
   decl : StructDecl,
-) -> Array[(String, Type, Int, Int, Int, Int)] raise ParseError {
+) -> Array[(String, Type, Int32, Int32, Int32, Int32)] raise ParseError {
   let layout = []
   for field in decl.fields {
     if field.name == "" && field.ty.is_anonymous_aggregate() {
@@ -776,7 +776,7 @@ fn Parser::const_field_layout(
   self : Parser,
   ty : Type,
   field : String,
-) -> (String, Type, Int, Int, Int, Int)? raise ParseError {
+) -> (String, Type, Int32, Int32, Int32, Int32)? raise ParseError {
   let name = match ty {
     Struct(n) | Union(n) => n
     Aligned(inner, _) | Atomic(inner) =>
@@ -805,7 +805,7 @@ fn Parser::const_offset_of(
   self : Parser,
   ty : Type,
   path : Array[OffsetDesignator],
-) -> Int? raise ParseError {
+) -> Int32? raise ParseError {
   let mut current_ty = ty
   let mut offset = 0
   for designator in path {

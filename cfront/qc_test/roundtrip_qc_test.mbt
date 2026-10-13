@@ -83,7 +83,7 @@ test "an open if behind a switch is braced before an else" {
 /// formats survives print and parse, and the value it denotes is exactly the
 /// input -- `@ctype.floating_literal_value` reads the text back.
 test "double literals round-trip over random values" {
-  let state = @splitmix.new(seed=20260812)
+  let state = @splitmix.RandomState(seed=20260812)
   let mut checked = 0
   while checked < 2000 {
     let bits = state.next_int64()

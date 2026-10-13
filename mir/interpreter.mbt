@@ -29,8 +29,8 @@ priv struct Interpreter {
   string_values : Map[Int64, String]
   string_offsets : Map[Int64, Int64]
   mut error : String?
-  mut steps : Int
-  mut call_depth : Int
+  mut steps : Int32
+  mut call_depth : Int32
   mut next_alloca : Int64
   mut next_string_base : Int64
 }
@@ -242,7 +242,7 @@ fn interpreter_char_core_type(ty : @ctype.Type) -> @ctype.Type {
 }
 
 ///|
-fn global_char_array_length(ty : @ctype.Type) -> Int? {
+fn global_char_array_length(ty : @ctype.Type) -> Int32? {
   match interpreter_char_core_type(ty) {
     Array(elem, length) =>
       match interpreter_char_core_type(elem) {
@@ -268,7 +268,7 @@ fn Interpreter::char_initializer_value(
 fn Interpreter::string_from_char_initializers(
   self : Interpreter,
   exprs : Array[@parser.Expr],
-  length : Int,
+  length : Int32,
 ) -> String? {
   let bytes : Array[Int64] = Array::make(length, 0L)
   let mut cursor = 0
@@ -321,7 +321,7 @@ fn Interpreter::string_from_char_initializers(
 }
 
 ///|
-fn string_from_fixed_char_string(value : String, length : Int) -> String {
+fn string_from_fixed_char_string(value : String, length : Int32) -> String {
   let buf = StringBuilder()
   let limit = if value.length() < length { value.length() } else { length }
   for i in 0..<limit {
@@ -334,7 +334,7 @@ fn string_from_fixed_char_string(value : String, length : Int) -> String {
 }
 
 ///|
-fn zero_byte_string(length : Int) -> String {
+fn zero_byte_string(length : Int32) -> String {
   let buf = StringBuilder()
   for _ in 0..<length {
     buf.write_char('\u0000')
@@ -758,7 +758,7 @@ fn Interpreter::eval_return_first_call_arg(
   self : Interpreter,
   frame : InterpFrame,
   args : Array[@parser.Expr],
-  count : Int,
+  count : Int32,
 ) -> Int64 {
   let limit = if args.length() < count { args.length() } else { count }
   let mut result = 0L
@@ -1096,7 +1096,7 @@ fn Interpreter::eval_builtin_identity_call(
   self : Interpreter,
   frame : InterpFrame,
   args : Array[@parser.Expr],
-  side_effect_arg : Int,
+  side_effect_arg : Int32,
 ) -> Int64 {
   let result = self.eval_first_call_arg_or_zero(frame, args)
   if side_effect_arg >= 0 && side_effect_arg < args.length() {
@@ -1305,7 +1305,7 @@ fn Interpreter::eval_builtin_strl_libcall_return(
 }
 
 ///|
-fn printf_format_source_position(symbol : String) -> Int? {
+fn printf_format_source_position(symbol : String) -> Int32? {
   match symbol {
     "snprintf" => Some(2)
     "sprintf" => Some(1)
@@ -1613,7 +1613,7 @@ fn unsigned_overflow_arithmetic(
   op : String,
   left : Int64,
   right : Int64,
-  width : Int,
+  width : Int32,
 ) -> (Int64, Bool) {
   let x = left.reinterpret_as_uint64()
   let y = right.reinterpret_as_uint64()
@@ -1641,7 +1641,7 @@ fn signed_overflow_arithmetic(
   op : String,
   left : Int64,
   right : Int64,
-  width : Int,
+  width : Int32,
 ) -> (Int64, Bool) {
   let result = match op {
     "+" => left + right
@@ -1950,7 +1950,7 @@ fn Interpreter::literal_printf_format_length(
   name : String,
   args : Array[@parser.Expr],
   values : Array[Int64],
-  first_value_index : Int,
+  first_value_index : Int32,
 ) -> Int64? {
   match literal_string_arg(expr) {
     Some(format) => {
@@ -2263,7 +2263,7 @@ fn string_literal_find_last_byte_from(
 }
 
 ///|
-fn string_literal_c_length(value : String) -> Int {
+fn string_literal_c_length(value : String) -> Int32 {
   @ctype.string_literal_c_length(value)
 }
 

@@ -17,22 +17,22 @@
 /// KV cache and scratch live as statics inside the generated file, since a
 /// fixed model has fixed sizes.
 pub(all) struct Config {
-  dim : Int
-  hidden : Int
-  n_layers : Int
-  n_heads : Int
+  dim : Int32
+  hidden : Int32
+  n_layers : Int32
+  n_heads : Int32
   // Grouped-query attention is not generated yet. The field exists so a
   // real checkpoint's value is stated and checked: a GQA model has smaller
   // `wk`/`wv` tensors, and reading it with full-width offsets would fetch
   // wrong weights silently. `generate_forward` aborts unless it equals
   // `n_heads`.
-  n_kv_heads : Int
-  vocab : Int
-  seq : Int
+  n_kv_heads : Int32
+  vocab : Int32
+  seq : Int32
 }
 
 ///|
-fn lit(n : Int) -> @parser.Expr {
+fn lit(n : Int32) -> @parser.Expr {
   @parser.int_literal(n.to_int64(), SInt)
 }
 
@@ -51,7 +51,7 @@ fn flit(x : Double) -> @parser.Expr {
 
 ///|
 /// `o[i] = w[i] * (x[i] * rsqrt(mean(x^2) + eps))`, bound `n` constant.
-fn rmsnorm_fn(name : String, n : Int) -> @parser.FuncDecl {
+fn rmsnorm_fn(name : String, n : Int32) -> @parser.FuncDecl {
   let fptr : @ctype.Type = Pointer(Float)
   let o = @build.v("o")
   let x = @build.v("x")
@@ -78,7 +78,7 @@ fn rmsnorm_fn(name : String, n : Int) -> @parser.FuncDecl {
 
 ///|
 /// `o = W x` with `W` row-major `rows x cols`, both bounds constant.
-fn matmul_fn(name : String, rows : Int, cols : Int) -> @parser.FuncDecl {
+fn matmul_fn(name : String, rows : Int32, cols : Int32) -> @parser.FuncDecl {
   let fptr : @ctype.Type = Pointer(Float)
   let o = @build.v("o")
   let x = @build.v("x")

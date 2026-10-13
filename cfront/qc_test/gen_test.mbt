@@ -51,7 +51,7 @@ impl @debug.Debug for GenProgram with fn to_repr(self) {
 
 ///|
 /// A uniform pick in `[0, bound)`.
-fn pick(state : @splitmix.RandomState, bound : Int) -> Int {
+fn pick(state : @splitmix.RandomState, bound : Int32) -> Int32 {
   if bound <= 1 {
     0
   } else {
@@ -65,7 +65,7 @@ fn gen_literal(state : @splitmix.RandomState) -> @parser.Expr {
   let value : Int64 = match pick(state, 8) {
     0 => 0
     1 => 1
-    2..=5 => pick(state, 100).to_int64()
+    2..<=5 => pick(state, 100).to_int64()
     6 => pick(state, 65536).to_int64()
     _ => 2147483647
   }
@@ -79,7 +79,7 @@ fn gen_literal(state : @splitmix.RandomState) -> @parser.Expr {
 /// strings; precedence and associativity in the printed text are exactly
 /// what this property hunts.
 fn gen_expr(
-  depth : Int,
+  depth : Int32,
   vars : Array[String],
   state : @splitmix.RandomState,
 ) -> @parser.Expr {
@@ -94,7 +94,7 @@ fn gen_expr(
     "|", "&&", "||",
   ]
   match pick(state, 8) {
-    0..=4 =>
+    0..<=4 =>
       Binary(
         binary_ops[pick(state, binary_ops.length())],
         gen_expr(depth - 1, vars, state),
@@ -135,10 +135,10 @@ fn captures_else(stmt : @parser.Stmt) -> Bool {
 /// statement, a nested bare `if`, or a `while` whose body is itself bare --
 /// the shapes whose trailing substatement can be an open `if`.
 fn gen_branch_stmt(
-  depth : Int,
+  depth : Int32,
   vars : Array[String],
   in_loop : Bool,
-  next_name : Ref[Int],
+  next_name : Ref[Int32],
   state : @splitmix.RandomState,
 ) -> @parser.Stmt {
   if depth <= 0 {
@@ -180,11 +180,11 @@ fn gen_branch_stmt(
 /// generated, so later statements can reference earlier names; the caller's
 /// copy is unshared, matching C block scope.
 fn gen_stmts(
-  budget : Int,
-  depth : Int,
+  budget : Int32,
+  depth : Int32,
   vars : Array[String],
   in_loop : Bool,
-  next_name : Ref[Int],
+  next_name : Ref[Int32],
   state : @splitmix.RandomState,
 ) -> Array[@parser.Stmt] {
   let stmts : Array[@parser.Stmt] = []
@@ -313,10 +313,10 @@ fn gen_stmts(
 }
 
 ///|
-fn gen_program(size : Int, state : @splitmix.RandomState) -> @parser.Program {
+fn gen_program(size : Int32, state : @splitmix.RandomState) -> @parser.Program {
   let scaled = if size < 1 { 1 } else if size > 12 { 12 } else { size }
   let depth = 1 + scaled / 4
-  let next_name : Ref[Int] = { val: 0, }
+  let next_name : Ref[Int32] = { val: 0, }
   let globals : Array[@parser.GlobalDecl] = []
   let global_names : Array[String] = []
   for _ in 0..<pick(state, 3) {

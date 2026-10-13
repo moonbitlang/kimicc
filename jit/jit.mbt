@@ -63,7 +63,7 @@ pub fn compile_c(
 ///
 /// For example, both `"answer"` and `"_answer"` are accepted. The result is a
 /// byte offset into the module's in-memory image.
-pub fn Module::symbol_offset(self : Module, name : String) -> Int? {
+pub fn Module::symbol_offset(self : Module, name : String) -> Int32? {
   let normalized = normalize_symbol_name(name)
   for symbol in self.image.symbols {
     if symbol.name == normalized {
@@ -78,7 +78,7 @@ pub fn Module::symbol_offset(self : Module, name : String) -> Int? {
 ///
 /// Returns `None` if the symbol is missing. Calling a symbol with a different
 /// native signature is undefined behavior.
-pub fn Module::call_i32_0(self : Module, name : String) -> Int? {
+pub fn Module::call_i32_0(self : Module, name : String) -> Int32? {
   match self.symbol_offset(name) {
     Some(offset) => Some(executable_memory_call_i32_0(self.memory, offset))
     None => None
@@ -90,7 +90,7 @@ pub fn Module::call_i32_0(self : Module, name : String) -> Int? {
 ///
 /// Returns `None` if the symbol is missing. Calling a symbol with a different
 /// native signature is undefined behavior.
-pub fn Module::call_i32_1(self : Module, name : String, arg0 : Int) -> Int? {
+pub fn Module::call_i32_1(self : Module, name : String, arg0 : Int32) -> Int32? {
   match self.symbol_offset(name) {
     Some(offset) =>
       Some(executable_memory_call_i32_1(self.memory, offset, arg0))
@@ -106,9 +106,9 @@ pub fn Module::call_i32_1(self : Module, name : String, arg0 : Int) -> Int? {
 pub fn Module::call_i32_2(
   self : Module,
   name : String,
-  arg0 : Int,
-  arg1 : Int,
-) -> Int? {
+  arg0 : Int32,
+  arg1 : Int32,
+) -> Int32? {
   match self.symbol_offset(name) {
     Some(offset) =>
       Some(executable_memory_call_i32_2(self.memory, offset, arg0, arg1))
@@ -124,10 +124,10 @@ pub fn Module::call_i32_2(
 pub fn Module::call_i32_3(
   self : Module,
   name : String,
-  arg0 : Int,
-  arg1 : Int,
-  arg2 : Int,
-) -> Int? {
+  arg0 : Int32,
+  arg1 : Int32,
+  arg2 : Int32,
+) -> Int32? {
   match self.symbol_offset(name) {
     Some(offset) =>
       Some(executable_memory_call_i32_3(self.memory, offset, arg0, arg1, arg2))
@@ -142,7 +142,7 @@ pub fn Module::call_i32_3(
 pub fn call_i32_0(
   source : String,
   name : String,
-) -> Int? raise @parser.ParseError {
+) -> Int32? raise @parser.ParseError {
   match compile(source) {
     Some(module_) => module_.call_i32_0(name)
     None => None
@@ -156,9 +156,9 @@ pub fn call_i32_0(
 pub fn call_i32_2(
   source : String,
   name : String,
-  arg0 : Int,
-  arg1 : Int,
-) -> Int? raise @parser.ParseError {
+  arg0 : Int32,
+  arg1 : Int32,
+) -> Int32? raise @parser.ParseError {
   match compile(source) {
     Some(module_) => module_.call_i32_2(name, arg0, arg1)
     None => None
@@ -172,10 +172,10 @@ pub fn call_i32_2(
 pub fn call_i32_3(
   source : String,
   name : String,
-  arg0 : Int,
-  arg1 : Int,
-  arg2 : Int,
-) -> Int? raise @parser.ParseError {
+  arg0 : Int32,
+  arg1 : Int32,
+  arg2 : Int32,
+) -> Int32? raise @parser.ParseError {
   match compile(source) {
     Some(module_) => module_.call_i32_3(name, arg0, arg1, arg2)
     None => None
@@ -189,8 +189,8 @@ pub fn call_i32_3(
 pub fn call_i32_1(
   source : String,
   name : String,
-  arg0 : Int,
-) -> Int? raise @parser.ParseError {
+  arg0 : Int32,
+) -> Int32? raise @parser.ParseError {
   match compile(source) {
     Some(module_) => module_.call_i32_1(name, arg0)
     None => None

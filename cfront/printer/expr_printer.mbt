@@ -4,56 +4,56 @@
 /// `print_expr_at` renders a subexpression with the minimum precedence its
 /// position tolerates and parenthesizes anything looser, which is what keeps
 /// the printed text parsing back to the same tree.
-const PREC_COMMA : Int = 0
+const PREC_COMMA : Int32 = 0
 
 ///|
-const PREC_ASSIGN : Int = 1
+const PREC_ASSIGN : Int32 = 1
 
 ///|
-const PREC_TERNARY : Int = 2
+const PREC_TERNARY : Int32 = 2
 
 ///|
-const PREC_LOGICAL_OR : Int = 3
+const PREC_LOGICAL_OR : Int32 = 3
 
 ///|
-const PREC_LOGICAL_AND : Int = 4
+const PREC_LOGICAL_AND : Int32 = 4
 
 ///|
-const PREC_BIT_OR : Int = 5
+const PREC_BIT_OR : Int32 = 5
 
 ///|
-const PREC_BIT_XOR : Int = 6
+const PREC_BIT_XOR : Int32 = 6
 
 ///|
-const PREC_BIT_AND : Int = 7
+const PREC_BIT_AND : Int32 = 7
 
 ///|
-const PREC_EQUALITY : Int = 8
+const PREC_EQUALITY : Int32 = 8
 
 ///|
-const PREC_RELATIONAL : Int = 9
+const PREC_RELATIONAL : Int32 = 9
 
 ///|
-const PREC_SHIFT : Int = 10
+const PREC_SHIFT : Int32 = 10
 
 ///|
-const PREC_ADDITIVE : Int = 11
+const PREC_ADDITIVE : Int32 = 11
 
 ///|
-const PREC_MULTIPLICATIVE : Int = 12
+const PREC_MULTIPLICATIVE : Int32 = 12
 
 ///|
-const PREC_UNARY : Int = 13
+const PREC_UNARY : Int32 = 13
 
 ///|
-const PREC_POSTFIX : Int = 14
+const PREC_POSTFIX : Int32 = 14
 
 ///|
-const PREC_PRIMARY : Int = 15
+const PREC_PRIMARY : Int32 = 15
 
 ///|
 /// Returns the precedence of a binary operator spelling.
-fn binary_precedence(op : String) -> Int {
+fn binary_precedence(op : String) -> Int32 {
   match op {
     "," => PREC_COMMA
     "||" => PREC_LOGICAL_OR
@@ -100,7 +100,7 @@ pub fn print_expr(expr : @parser.Expr) -> String {
 ///|
 /// Renders `expr`, wrapping it in parentheses when its precedence is looser
 /// than `min_prec` allows.
-fn print_expr_at(expr : @parser.Expr, min_prec : Int) -> String {
+fn print_expr_at(expr : @parser.Expr, min_prec : Int32) -> String {
   let (text, prec) = render_expr(expr)
   if prec < min_prec {
     "(" + text + ")"
@@ -111,7 +111,7 @@ fn print_expr_at(expr : @parser.Expr, min_prec : Int) -> String {
 
 ///|
 /// Renders an expression and reports the precedence of its outermost operator.
-fn render_expr(expr : @parser.Expr) -> (String, Int) {
+fn render_expr(expr : @parser.Expr) -> (String, Int32) {
   match expr {
     // Printed exactly as written, so `0xff` stays `0xff` and the suffix the
     // text already carries is not reconstructed.
@@ -381,7 +381,7 @@ fn escape_string(value : String) -> String {
 
 ///|
 /// Formats a byte as a three-digit octal escape.
-fn octal_escape(code : Int) -> String {
+fn octal_escape(code : Int32) -> String {
   let digits = code & 0xff
   let hundreds = digits / 64
   let tens = digits / 8 % 8

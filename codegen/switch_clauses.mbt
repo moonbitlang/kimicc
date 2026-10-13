@@ -7,7 +7,7 @@
 /// back out in the order the body reaches them.
 struct SwitchClauses {
   labels : ReadOnlyArray[String]
-  mut emitted : Int
+  mut emitted : Int32
 }
 
 ///|

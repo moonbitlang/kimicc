@@ -186,9 +186,9 @@ test "printed expressions reparse to the same tree" {
 
 ///|
 /// Every matched pair of parentheses in `text`, as (open, close) offsets.
-fn paren_pairs(text : String) -> Array[(Int, Int)] {
+fn paren_pairs(text : String) -> Array[(Int32, Int32)] {
   let pairs = []
-  let stack : Array[Int] = []
+  let stack : Array[Int32] = []
   let mut in_quote : Char? = None
   let mut i = 0
   while i < text.length() {
@@ -508,7 +508,7 @@ test "the parser returns or raises on arbitrary token soups" {
 /// parser gets deep into its productions before the damage shows.
 test "the parser returns or raises on damaged printed programs" {
   @quickcheck.check(
-    (input : (SynProgram, UInt, UInt)) => {
+    (input : (SynProgram, UInt32, UInt32)) => {
       let (p, at, len) = input
       let printed = @printer.print_program(p.0)
       let start = (at % (printed.length().reinterpret_as_uint() + 1)).reinterpret_as_int()
@@ -541,7 +541,7 @@ test "printed string literals reparse to their execution bytes" {
       reparse_expr(@printer.print_expr(String(text))) ==
       Some(String(execution_bytes(text)))
     },
-    filter=text => text.iter().all(ch => !(ch.to_int() is (0xD800..=0xDFFF))),
+    filter=text => text.iter().all(ch => !(ch.to_int() is (0xD800..<=0xDFFF))),
     observe=text => {
       [
         @quickcheck.classify(text.iter().any(ch => ch.to_int() > 0xff), "wide"),

@@ -46,7 +46,7 @@ let cc_marker : String = "/*@@cfront-qc@@*/"
 /// Skipped in the default run, since it needs a compiler and a shell.
 #skip("emits programs for qc_test/cc_check.sh")
 test "emit generated programs for a C compiler" {
-  let state = @splitmix.new(seed=20260928)
+  let state = @splitmix.RandomState(seed=20260928)
   for i in 0..<150 {
     let program = gen_program(4 + i % 9, state)
     // File-scope initializers must be constant in C; the generator lets

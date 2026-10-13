@@ -1,7 +1,7 @@
 ///|
 /// Number of bytes in a C string literal object, including the implicit
 /// terminating NUL byte.
-pub fn string_literal_array_length(value : String) -> Int {
+pub fn string_literal_array_length(value : String) -> Int32 {
   value.length() + 1
 }
 
@@ -14,7 +14,7 @@ pub fn string_literal_object_size(value : String) -> Int64 {
 
 ///|
 /// C `strlen` result for a string-literal byte sequence.
-pub fn string_literal_c_length(value : String) -> Int {
+pub fn string_literal_c_length(value : String) -> Int32 {
   for i in 0..<value.length() {
     if value[i].to_int() == 0 {
       return i

@@ -8,7 +8,7 @@ fn pp_clone_tokens(tokens : Array[PpToken]) -> Array[PpToken] {
 }
 
 ///|
-fn pp_macro_param_index(macro_ : Macro, name : String) -> Int {
+fn pp_macro_param_index(macro_ : Macro, name : String) -> Int32 {
   for i = 0; i < macro_.params.length(); i = i + 1 {
     if macro_.params[i] == name {
       return i
@@ -18,7 +18,7 @@ fn pp_macro_param_index(macro_ : Macro, name : String) -> Int {
 }
 
 ///|
-fn pp_macro_param_is_variadic(macro_ : Macro, index : Int) -> Bool {
+fn pp_macro_param_is_variadic(macro_ : Macro, index : Int32) -> Bool {
   macro_.variadic && index == macro_.params.length() - 1
 }
 
@@ -52,7 +52,7 @@ fn pp_paste_token(left : PpToken, right : PpToken) -> PpToken {
 }
 
 ///|
-fn pp_skip_parenthesized(tokens : Array[PpToken], lparen : Int) -> Int {
+fn pp_skip_parenthesized(tokens : Array[PpToken], lparen : Int32) -> Int32 {
   let mut depth = 0
   let mut i = lparen
   while i < tokens.length() {
@@ -506,9 +506,9 @@ fn Preprocessor::disabled_with(
 fn Preprocessor::parse_macro_invocation(
   self : Preprocessor,
   tokens : Array[PpToken],
-  lparen : Int,
+  lparen : Int32,
   name : String,
-) -> (Array[Array[PpToken]], Int)? {
+) -> (Array[Array[PpToken]], Int32)? {
   if lparen >= tokens.length() || !tokens[lparen].is_punct("(") {
     return None
   }
@@ -547,7 +547,7 @@ fn Preprocessor::macro_argument(
   _self : Preprocessor,
   macro_ : Macro,
   args : Array[Array[PpToken]],
-  index : Int,
+  index : Int32,
 ) -> Array[PpToken] {
   if pp_macro_param_is_variadic(macro_, index) {
     let result : Array[PpToken] = []
@@ -572,12 +572,12 @@ fn Preprocessor::expanded_macro_argument(
   self : Preprocessor,
   macro_ : Macro,
   args : Array[Array[PpToken]],
-  index : Int,
+  index : Int32,
   disabled : Map[String, Bool],
   file : String,
   file_remappable : Bool,
-  line : Int,
-  depth : Int,
+  line : Int32,
+  depth : Int32,
 ) -> Array[PpToken] {
   self.expand_tokens(
     self.macro_argument(macro_, args, index),
@@ -611,8 +611,8 @@ fn Preprocessor::substitute_macro_replacement(
   disabled : Map[String, Bool],
   file : String,
   file_remappable : Bool,
-  line : Int,
-  depth : Int,
+  line : Int32,
+  depth : Int32,
 ) -> Array[PpToken] {
   let result : Array[PpToken] = []
   let has_variadic_args = self.variadic_argument_nonempty(macro_, args)
@@ -726,8 +726,8 @@ fn Preprocessor::substitute_macro(
   disabled : Map[String, Bool],
   file : String,
   file_remappable : Bool,
-  line : Int,
-  depth : Int,
+  line : Int32,
+  depth : Int32,
 ) -> Array[PpToken] {
   self.substitute_macro_replacement(
     macro_,
@@ -785,8 +785,8 @@ fn Preprocessor::expand_tokens(
   disabled : Map[String, Bool],
   file : String,
   file_remappable : Bool,
-  line : Int,
-  depth : Int,
+  line : Int32,
+  depth : Int32,
 ) -> Array[PpToken] {
   if depth > 200 || self.error is Some(_) {
     return pp_clone_tokens(tokens)

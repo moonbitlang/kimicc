@@ -22,8 +22,8 @@ pub extend BuiltinReturnRule with Eq::{not_equal, equal}
 /// `whole` is the byte count remaining in the complete modeled object, while
 /// `subobject` is the byte count remaining in the nearest modeled subobject.
 pub(all) struct ObjectSizeFact {
-  whole : Int
-  subobject : Int
+  whole : Int32
+  subobject : Int32
 } derive(Eq)
 
 ///|
@@ -41,7 +41,7 @@ pub fn object_size_unknown(mode : Int64) -> Int64 {
 
 ///|
 /// Selects the whole-object or nearest-subobject size for the requested mode.
-pub fn ObjectSizeFact::value(self : ObjectSizeFact, mode : Int64) -> Int {
+pub fn ObjectSizeFact::value(self : ObjectSizeFact, mode : Int64) -> Int32 {
   if (mode & 1L) != 0L {
     self.subobject
   } else {
@@ -62,7 +62,7 @@ pub fn object_size_fact_result(fact : ObjectSizeFact?, mode : Int64) -> Int64 {
 /// Applies a byte offset to both modeled object-size facts.
 pub fn ObjectSizeFact::subtract_offset(
   self : ObjectSizeFact,
-  offset : Int,
+  offset : Int32,
 ) -> ObjectSizeFact? {
   if offset < 0 || offset > self.whole || offset > self.subobject {
     None
@@ -75,8 +75,8 @@ pub fn ObjectSizeFact::subtract_offset(
 /// Applies an array element index to a modeled object-size fact.
 pub fn ObjectSizeFact::array_element(
   self : ObjectSizeFact,
-  length : Int,
-  elem_size : Int,
+  length : Int32,
+  elem_size : Int32,
   index : Int64,
 ) -> ObjectSizeFact? {
   if index < 0L {
@@ -95,8 +95,8 @@ pub fn ObjectSizeFact::array_element(
 /// Applies a member offset while resetting the nearest-subobject size.
 pub fn ObjectSizeFact::member_field(
   self : ObjectSizeFact,
-  offset : Int,
-  member_size : Int,
+  offset : Int32,
+  member_size : Int32,
 ) -> ObjectSizeFact? {
   match self.subtract_offset(offset) {
     Some(fact) => Some({ whole: fact.whole, subobject: member_size, })
@@ -422,7 +422,7 @@ pub fn builtin_return_rule(name : String) -> BuiltinReturnRule? {
 ///|
 /// Source argument index whose folded constant value is needed to resolve a
 /// builtin return-type rule.
-pub fn builtin_return_condition_arg_index(name : String) -> Int? {
+pub fn builtin_return_condition_arg_index(name : String) -> Int32? {
   match builtin_return_rule(name) {
     Some(BuiltinChooseExprReturn) => Some(0)
     _ => None
@@ -473,7 +473,7 @@ pub fn builtin_return_type(
 ///
 /// The second tuple item is the source argument index to evaluate for side
 /// effects after the result operand, or `-1` when there is no extra operand.
-pub fn builtin_identity_call_info(name : String) -> (String, Int)? {
+pub fn builtin_identity_call_info(name : String) -> (String, Int32)? {
   match name {
     "__builtin_expect" | "__builtin_expect_with_probability" =>
       Some(("expect", 1))
@@ -520,7 +520,7 @@ pub fn builtin_trap_call_info(name : String) -> String? {
 /// Parser-neutral operation selected by synchronization fence builtins.
 ///
 /// The integer is the source argument count expected by strict MIR lowering.
-pub fn builtin_fence_call_info(name : String) -> (String, Int)? {
+pub fn builtin_fence_call_info(name : String) -> (String, Int32)? {
   match name {
     "__sync_synchronize" => Some(("sync_synchronize", 0))
     "__atomic_thread_fence" | "__c11_atomic_thread_fence" =>
@@ -535,7 +535,7 @@ pub fn builtin_fence_call_info(name : String) -> (String, Int)? {
 /// Parser-neutral fixed integer value returned by side-effect-free builtins.
 ///
 /// The integer in the tuple tail is the expected source argument count.
-pub fn builtin_fixed_int_constant_call_info(name : String) -> (Int64, Int)? {
+pub fn builtin_fixed_int_constant_call_info(name : String) -> (Int64, Int32)? {
   match name {
     "__builtin_flt_rounds" => Some((1L, 0))
     _ => None
@@ -546,7 +546,7 @@ pub fn builtin_fixed_int_constant_call_info(name : String) -> (Int64, Int)? {
 /// Parser-neutral operation selected by stack-allocation builtins.
 ///
 /// The integer is the source argument count expected by strict MIR lowering.
-pub fn builtin_stack_alloc_call_info(name : String) -> (String, Int)? {
+pub fn builtin_stack_alloc_call_info(name : String) -> (String, Int32)? {
   match name {
     "__builtin_alloca" => Some(("alloca", 1))
     "__builtin_alloca_with_align" => Some(("alloca_align", 2))
@@ -558,7 +558,7 @@ pub fn builtin_stack_alloc_call_info(name : String) -> (String, Int)? {
 /// Parser-neutral operation selected by variadic setup builtins.
 ///
 /// The integer is the source argument count expected by strict MIR lowering.
-pub fn builtin_va_setup_call_info(name : String) -> (String, Int)? {
+pub fn builtin_va_setup_call_info(name : String) -> (String, Int32)? {
   match name {
     "__builtin_va_start" => Some(("va_start", 2))
     "__builtin_va_copy" => Some(("va_copy", 2))
@@ -571,7 +571,7 @@ pub fn builtin_va_setup_call_info(name : String) -> (String, Int)? {
 /// Parser-neutral operation selected by Darwin fd_set helper builtins.
 ///
 /// The integer is the source argument count expected by strict MIR lowering.
-pub fn builtin_darwin_fd_helper_call_info(name : String) -> (String, Int)? {
+pub fn builtin_darwin_fd_helper_call_info(name : String) -> (String, Int32)? {
   match name {
     "__darwin_fd_set" => Some(("set", 2))
     "__darwin_fd_clr" => Some(("clr", 2))
@@ -584,7 +584,7 @@ pub fn builtin_darwin_fd_helper_call_info(name : String) -> (String, Int)? {
 /// Parser-neutral operation selected by zero-memory builtins.
 ///
 /// The integer is the source argument count expected by strict MIR lowering.
-pub fn builtin_zero_memory_call_info(name : String) -> (String, Int)? {
+pub fn builtin_zero_memory_call_info(name : String) -> (String, Int32)? {
   match name {
     "__builtin_bzero" => Some(("bzero", 2))
     _ => None
@@ -647,7 +647,7 @@ pub fn builtin_atomic_lock_free_size_supported(size : Int64) -> Bool {
 ///
 /// The string is the MIR/direct-backend operation family, and the integer is
 /// the minimum source argument count expected by strict MIR lowering.
-pub fn builtin_atomic_load_store_call_info(name : String) -> (String, Int)? {
+pub fn builtin_atomic_load_store_call_info(name : String) -> (String, Int32)? {
   match name {
     "__atomic_load" => Some(("load_ptr", 3))
     "__atomic_load_n" | "__c11_atomic_load" => Some(("load_value", 2))
@@ -662,7 +662,7 @@ pub fn builtin_atomic_load_store_call_info(name : String) -> (String, Int)? {
 ///
 /// The string is the operation family, and the integer is the minimum source
 /// argument count expected by strict MIR lowering.
-pub fn builtin_atomic_zero_store_call_info(name : String) -> (String, Int)? {
+pub fn builtin_atomic_zero_store_call_info(name : String) -> (String, Int32)? {
   match name {
     "__atomic_clear" => Some(("clear", 1))
     "__sync_lock_release" => Some(("release", 1))
@@ -676,7 +676,9 @@ pub fn builtin_atomic_zero_store_call_info(name : String) -> (String, Int)? {
 /// The string is the operation family. The integers are the minimum source
 /// argument count and the first source argument index used as memory-order or
 /// legacy sync extra operands.
-pub fn builtin_atomic_exchange_call_info(name : String) -> (String, Int, Int)? {
+pub fn builtin_atomic_exchange_call_info(
+  name : String,
+) -> (String, Int32, Int32)? {
   match name {
     "__atomic_exchange" => Some(("exchange_ptr", 4, 3))
     "__atomic_test_and_set" => Some(("test_and_set", 1, 1))
@@ -696,7 +698,7 @@ pub fn builtin_atomic_exchange_call_info(name : String) -> (String, Int, Int)? {
 /// legacy sync extra operands.
 pub fn builtin_atomic_compare_exchange_call_info(
   name : String,
-) -> (String, Int, Int)? {
+) -> (String, Int32, Int32)? {
   match name {
     "__atomic_compare_exchange" => Some(("compare_exchange_ptr", 6, 3))
     "__atomic_compare_exchange_n"
@@ -718,7 +720,7 @@ pub fn builtin_atomic_compare_exchange_call_info(
 /// as memory-order or legacy sync extra operands.
 pub fn builtin_atomic_update_call_info(
   name : String,
-) -> (String, Bool, Int, Int)? {
+) -> (String, Bool, Int32, Int32)? {
   match name {
     "__atomic_add_fetch" => Some(("+", true, 2, 2))
     "__atomic_sub_fetch" => Some(("-", true, 2, 2))
@@ -795,8 +797,8 @@ pub fn builtin_overflow_op(name : String) -> String? {
 /// arguments forwarded to that libcall.
 pub fn builtin_memory_libcall_info(
   name : String,
-  arg_count : Int,
-) -> (String, Int)? {
+  arg_count : Int32,
+) -> (String, Int32)? {
   match name {
     "__builtin_memcpy" =>
       if arg_count == 3 {
@@ -935,7 +937,7 @@ pub fn builtin_memory_libcall_info(
 /// `memset`, `memccpy`, or `strcpy`) to coerce each forwarded argument to the
 /// libc prototype. Pointer and length positions are typed precisely; any index
 /// beyond the named ones falls back to `ULong` (the `size_t` count argument).
-pub fn builtin_memory_libcall_arg_type(symbol : String, index : Int) -> Type {
+pub fn builtin_memory_libcall_arg_type(symbol : String, index : Int32) -> Type {
   match symbol {
     "memset" =>
       match index {
@@ -972,8 +974,8 @@ pub fn builtin_memory_libcall_arg_type(symbol : String, index : Int) -> Type {
 /// argument count does not match the builtin's prototype.
 pub fn builtin_heap_libcall_info(
   name : String,
-  arg_count : Int,
-) -> (String, Int)? {
+  arg_count : Int32,
+) -> (String, Int32)? {
   match name {
     "__builtin_malloc" =>
       if arg_count == 1 {
@@ -1017,7 +1019,7 @@ pub fn builtin_heap_libcall_info(
 /// selected libc symbol (`malloc`, `calloc`, `realloc`, `free`, `strdup`,
 /// `strndup`) its prototype type, defaulting to `Pointer(Void)` for unmodeled
 /// positions.
-pub fn builtin_heap_libcall_arg_type(symbol : String, index : Int) -> Type {
+pub fn builtin_heap_libcall_arg_type(symbol : String, index : Int32) -> Type {
   match symbol {
     "malloc" => ULong
     "calloc" => ULong
@@ -1045,8 +1047,8 @@ pub fn builtin_heap_libcall_arg_type(symbol : String, index : Int) -> Type {
 /// Returns `None` for unknown names or mismatched argument counts.
 pub fn builtin_length_libcall_info(
   name : String,
-  arg_count : Int,
-) -> (String, Int)? {
+  arg_count : Int32,
+) -> (String, Int32)? {
   match name {
     "__builtin_strlen" =>
       if arg_count == 1 {
@@ -1069,7 +1071,7 @@ pub fn builtin_length_libcall_info(
 ///
 /// Argument 0 is the `char *` string; any later argument is the `size_t`
 /// bound, returned as `ULong`.
-pub fn builtin_length_libcall_arg_type(index : Int) -> Type {
+pub fn builtin_length_libcall_arg_type(index : Int32) -> Type {
   if index == 0 {
     Pointer(SChar)
   } else {
@@ -1086,8 +1088,8 @@ pub fn builtin_length_libcall_arg_type(index : Int) -> Type {
 /// argument counts.
 pub fn builtin_compare_libcall_info(
   name : String,
-  arg_count : Int,
-) -> (String, Int)? {
+  arg_count : Int32,
+) -> (String, Int32)? {
   match name {
     "__builtin_strcmp" =>
       if arg_count == 2 {
@@ -1118,7 +1120,7 @@ pub fn builtin_compare_libcall_info(
 /// Companion to `builtin_compare_libcall_info`. The pointer operands of
 /// `strcmp`/`strncmp` are `char *` and those of `memcmp` are `void *`; the
 /// trailing length argument is `size_t` (`ULong`).
-pub fn builtin_compare_libcall_arg_type(symbol : String, index : Int) -> Type {
+pub fn builtin_compare_libcall_arg_type(symbol : String, index : Int32) -> Type {
   match symbol {
     "strcmp" | "strncmp" =>
       match index {
@@ -1144,8 +1146,8 @@ pub fn builtin_compare_libcall_arg_type(symbol : String, index : Int) -> Type {
 /// or mismatched argument counts.
 pub fn builtin_search_libcall_info(
   name : String,
-  arg_count : Int,
-) -> (String, Int)? {
+  arg_count : Int32,
+) -> (String, Int32)? {
   match name {
     "__builtin_strchr" =>
       if arg_count == 2 {
@@ -1187,7 +1189,7 @@ pub fn builtin_search_libcall_info(
 /// Companion to `builtin_search_libcall_info`. String searches take `char *`
 /// haystacks/needles and an `int` character argument; memory searches take
 /// `void *` operands; trailing length arguments are `size_t` (`ULong`).
-pub fn builtin_search_libcall_arg_type(symbol : String, index : Int) -> Type {
+pub fn builtin_search_libcall_arg_type(symbol : String, index : Int32) -> Type {
   match symbol {
     "strchr" | "strrchr" =>
       match index {
@@ -1224,8 +1226,8 @@ pub fn builtin_search_libcall_arg_type(symbol : String, index : Int) -> Type {
 /// `None` for unknown names or mismatched argument counts.
 pub fn builtin_span_libcall_info(
   name : String,
-  arg_count : Int,
-) -> (String, Int)? {
+  arg_count : Int32,
+) -> (String, Int32)? {
   match name {
     "__builtin_strspn" =>
       if arg_count == 2 {
@@ -1258,8 +1260,8 @@ pub fn builtin_span_libcall_info(
 /// for unknown names or mismatched argument counts.
 pub fn builtin_strl_libcall_info(
   name : String,
-  arg_count : Int,
-) -> (String, Int)? {
+  arg_count : Int32,
+) -> (String, Int32)? {
   match name {
     "__builtin___strlcpy_chk" =>
       if arg_count == 4 {
@@ -1282,7 +1284,7 @@ pub fn builtin_strl_libcall_info(
 ///
 /// Arguments 0 and 1 are the `char *` destination and source; argument 2 is the
 /// `size_t` buffer size, returned as `ULong`.
-pub fn builtin_strl_libcall_arg_type(index : Int) -> Type {
+pub fn builtin_strl_libcall_arg_type(index : Int32) -> Type {
   match index {
     0 | 1 => Pointer(SChar)
     _ => ULong
@@ -1301,7 +1303,10 @@ pub fn builtin_strl_libcall_arg_type(index : Int) -> Type {
 ///
 /// Unlike the other `_info` helpers this returns only the symbol; the source
 /// argument positions to forward come from `builtin_printf_source_indexes`.
-pub fn builtin_printf_libcall_symbol(name : String, arg_count : Int) -> String? {
+pub fn builtin_printf_libcall_symbol(
+  name : String,
+  arg_count : Int32,
+) -> String? {
   match name {
     "__builtin_snprintf" => if arg_count >= 3 { Some("snprintf") } else { None }
     "__builtin_vsnprintf" =>
@@ -1377,8 +1382,8 @@ pub fn builtin_printf_libcall_symbol(name : String, arg_count : Int) -> String? 
 /// the argument count is too small.
 pub fn builtin_printf_source_indexes(
   name : String,
-  arg_count : Int,
-) -> Array[Int]? {
+  arg_count : Int32,
+) -> Array[Int32]? {
   match name {
     "__builtin_snprintf" =>
       if arg_count >= 3 {
@@ -1493,8 +1498,8 @@ pub fn builtin_printf_source_indexes(
 /// `builtin_printf_source_indexes`, letting the lowering decide whether a given
 /// original argument is forwarded to the libc call or dropped as a guard.
 pub fn builtin_printf_source_index_used(
-  indexes : Array[Int],
-  index : Int,
+  indexes : Array[Int32],
+  index : Int32,
 ) -> Bool {
   for value in indexes {
     if value == index {
@@ -1526,7 +1531,7 @@ pub fn builtin_printf_libcall_variadic(symbol : String) -> Bool {
 /// `None` once past the fixed prototype — those trailing positions belong to
 /// the variadic format arguments (see `builtin_printf_libcall_variadic`) and
 /// are typed from the call instead.
-pub fn builtin_printf_libcall_arg_type(symbol : String, index : Int) -> Type? {
+pub fn builtin_printf_libcall_arg_type(symbol : String, index : Int32) -> Type? {
   match symbol {
     "snprintf" =>
       match index {

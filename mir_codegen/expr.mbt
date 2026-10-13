@@ -114,7 +114,7 @@ fn unary_integer_result_type(ty : @ctype.Type) -> @ctype.Type {
 }
 
 ///|
-fn bitfield_mask(width : Int) -> Int64 {
+fn bitfield_mask(width : Int32) -> Int64 {
   if width >= 64 {
     -1L
   } else {
@@ -228,7 +228,7 @@ fn Codegen::emit_i64_overflow_arithmetic(
 }
 
 ///|
-fn Codegen::emit_add_offset_to_x9(self : Codegen, offset : Int) -> Unit {
+fn Codegen::emit_add_offset_to_x9(self : Codegen, offset : Int32) -> Unit {
   if offset == 0 {
     return
   }

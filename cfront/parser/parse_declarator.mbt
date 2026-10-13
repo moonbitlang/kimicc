@@ -8,7 +8,7 @@ priv struct DeclSpec {
   mut is_extern : Bool
   mut is_inline : Bool
   mut is_auto_type : Bool
-  mut align : Int?
+  mut align : Int32?
   mut mode : String?
   mut is_weak : Bool
   mut visibility : String?
@@ -22,7 +22,7 @@ priv struct DeclSpec {
 priv struct DeclaratorResult {
   ty : Type
   name : String
-  ptr_depth : Int
+  ptr_depth : Int32
   func_params : Array[Param]?
   func_ret_ty : Type?
   is_func_decl : Bool
@@ -31,7 +31,7 @@ priv struct DeclaratorResult {
 ///|
 priv struct AbstractDeclaratorResult {
   ty : Type
-  ptr_depth : Int
+  ptr_depth : Int32
 }
 
 ///|
@@ -695,7 +695,7 @@ fn Parser::parse_struct_body(self : Parser) -> Array[Param] raise ParseError {
 fn Parser::parse_declarator(
   self : Parser,
   base_ty : Type,
-  base_is_function? : Bool = false,
+  base_is_function~ : Bool = false,
 ) -> DeclaratorResult raise ParseError {
   if self.token == Star || self.token == BitXor {
     self.advance()
@@ -743,7 +743,7 @@ fn atomic_if(is_atomic : Bool, ty : Type) -> Type {
 fn Parser::parse_abstract_declarator(
   self : Parser,
   base_ty : Type,
-  base_is_function? : Bool = false,
+  base_is_function~ : Bool = false,
 ) -> Type raise ParseError {
   self.parse_abstract_declarator_result(base_ty, base_is_function~).ty
 }
@@ -752,7 +752,7 @@ fn Parser::parse_abstract_declarator(
 fn Parser::parse_abstract_declarator_result(
   self : Parser,
   base_ty : Type,
-  base_is_function? : Bool = false,
+  base_is_function~ : Bool = false,
 ) -> AbstractDeclaratorResult raise ParseError {
   if self.token == Star || self.token == BitXor {
     self.advance()
@@ -771,7 +771,7 @@ fn Parser::parse_abstract_declarator_result(
 }
 
 ///|
-fn function_param_info(params : Array[Param]) -> (Int, Bool) {
+fn function_param_info(params : Array[Param]) -> (Int32, Bool) {
   if params.length() > 0 && params[params.length() - 1].name == "..." {
     (params.length() - 1, true)
   } else {
@@ -799,7 +799,7 @@ fn normalized_function_param_types(
 fn make_function_pointer_type(
   ty : Type,
   push_mode : Bool,
-  ptr_depth : Int,
+  ptr_depth : Int32,
   param_types : Array[Type],
   variadic : Bool,
 ) -> Type {
@@ -812,7 +812,7 @@ fn make_function_pointer_type(
 ///|
 fn push_function_pointer_inside(
   ty : Type,
-  ptr_depth : Int,
+  ptr_depth : Int32,
   param_types : Array[Type],
   variadic : Bool,
 ) -> Type {
@@ -850,7 +850,7 @@ fn type_contains_func_ptr(ty : Type) -> Bool {
 }
 
 ///|
-fn apply_decl_align(ty : Type, align : Int?) -> Type {
+fn apply_decl_align(ty : Type, align : Int32?) -> Type {
   match align {
     Some(n) => if n > 0 { Aligned(ty, n) } else { ty }
     None => ty
@@ -1055,7 +1055,7 @@ fn Parser::skip_array_parameter_qualifiers(
 }
 
 ///|
-fn Parser::parse_array_declarator_size(self : Parser) -> Int raise ParseError {
+fn Parser::parse_array_declarator_size(self : Parser) -> Int32 raise ParseError {
   self.advance()
   self.skip_array_parameter_qualifiers()
   let size = if self.token == RBracket {
@@ -1081,10 +1081,10 @@ fn Parser::parse_declarator_suffixes(
   base_ty : Type,
   name : String,
   push_mode : Bool,
-  ptr_depth : Int,
+  ptr_depth : Int32,
 ) -> DeclaratorResult raise ParseError {
   let mut ty = base_ty
-  let mut pending_arrays : Array[Int] = []
+  let mut pending_arrays : Array[Int32] = []
   let mut func_params : Array[Param]? = None
   let mut func_ret_ty : Type? = None
   let mut is_func_decl = false
@@ -1126,10 +1126,10 @@ fn Parser::parse_abstract_declarator_suffixes(
   self : Parser,
   ty : Type,
   push_mode : Bool,
-  ptr_depth : Int,
+  ptr_depth : Int32,
 ) -> Type raise ParseError {
   let mut result = ty
-  let mut pending_arrays : Array[Int] = []
+  let mut pending_arrays : Array[Int32] = []
   while true {
     match self.token {
       LBracket => pending_arrays.push(self.parse_array_declarator_size())
@@ -1159,7 +1159,7 @@ fn Parser::parse_abstract_declarator_suffixes(
 }
 
 ///|
-fn apply_array_suffixes(ty : Type, sizes : Array[Int]) -> Type {
+fn apply_array_suffixes(ty : Type, sizes : Array[Int32]) -> Type {
   let mut result = ty
   for i = sizes.length() - 1; i >= 0; i = i - 1 {
     result = Array(result, sizes[i])
@@ -1168,7 +1168,7 @@ fn apply_array_suffixes(ty : Type, sizes : Array[Int]) -> Type {
 }
 
 ///|
-fn push_array_suffixes_inside(ty : Type, sizes : Array[Int]) -> Type {
+fn push_array_suffixes_inside(ty : Type, sizes : Array[Int32]) -> Type {
   match ty {
     Pointer(inner) => Pointer(push_array_suffixes_inside(inner, sizes))
     _ => apply_array_suffixes(ty, sizes)
@@ -1178,7 +1178,7 @@ fn push_array_suffixes_inside(ty : Type, sizes : Array[Int]) -> Type {
 ///|
 fn apply_pending_array_suffixes(
   ty : Type,
-  sizes : Array[Int],
+  sizes : Array[Int32],
   push_mode : Bool,
 ) -> Type {
   if sizes.length() == 0 {

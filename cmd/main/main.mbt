@@ -11,11 +11,11 @@ extern "c" fn moonbit_file_exists(path : Bytes) -> Bool = "moonbit_file_exists"
 
 ///|
 #borrow(path, content)
-extern "c" fn moonbit_write_file(path : Bytes, content : Bytes) -> Int = "moonbit_write_file"
+extern "c" fn moonbit_write_file(path : Bytes, content : Bytes) -> Int32 = "moonbit_write_file"
 
 ///|
 #borrow(cmd)
-extern "c" fn moonbit_system(cmd : Bytes) -> Int = "moonbit_system"
+extern "c" fn moonbit_system(cmd : Bytes) -> Int32 = "moonbit_system"
 
 ///|
 #borrow(message)
@@ -26,7 +26,7 @@ extern "c" fn moonbit_write_stderr(message : Bytes) -> Unit = "moonbit_write_std
 extern "c" fn moonbit_write_stdout(message : Bytes) -> Unit = "moonbit_write_stdout"
 
 ///|
-extern "c" fn moonbit_exit(code : Int) -> Unit = "moonbit_exit"
+extern "c" fn moonbit_exit(code : Int32) -> Unit = "moonbit_exit"
 
 ///|
 priv enum DriverOutput {
@@ -322,10 +322,10 @@ fn add_file_prefix_map(
 ///|
 fn option_value(
   argv : Array[String],
-  index : Int,
+  index : Int32,
   prefix : String,
   name : String,
-) -> Result[(String, Int), String] {
+) -> Result[(String, Int32), String] {
   let arg = argv[index]
   if arg.length() > prefix.length() {
     Ok((arg[prefix.length():].to_owned(), index))
@@ -339,8 +339,8 @@ fn option_value(
 ///|
 fn strip_joined_equals_value(
   value : String,
-  value_index : Int,
-  option_index : Int,
+  value_index : Int32,
+  option_index : Int32,
 ) -> String {
   if value_index == option_index && starts_with(value, "=") {
     value[1:].to_owned()
@@ -352,10 +352,10 @@ fn strip_joined_equals_value(
 ///|
 fn include_path_option_value(
   argv : Array[String],
-  index : Int,
+  index : Int32,
   prefix : String,
   name : String,
-) -> Result[(String, Int), String] {
+) -> Result[(String, Int32), String] {
   match option_value(argv, index, prefix, name) {
     Ok((value, next_i)) =>
       Ok((strip_joined_equals_value(value, next_i, index), next_i))
@@ -366,9 +366,9 @@ fn include_path_option_value(
 ///|
 fn long_option_value(
   argv : Array[String],
-  index : Int,
+  index : Int32,
   name : String,
-) -> Result[(String, Int), String] {
+) -> Result[(String, Int32), String] {
   let arg = argv[index]
   let eq_prefix = name + "="
   if starts_with(arg, eq_prefix) {
@@ -617,10 +617,10 @@ fn is_wp_option_name(value : String) -> Bool {
 ///|
 fn wp_option_value(
   parts : Array[String],
-  index : Int,
+  index : Int32,
   prefix : String,
   option : String,
-) -> Result[(String, Int), String] {
+) -> Result[(String, Int32), String] {
   let part = parts[index]
   let value = part[prefix.length():].to_owned()
   if value != "" {
@@ -635,10 +635,10 @@ fn wp_option_value(
 ///|
 fn wp_include_path_option_value(
   parts : Array[String],
-  index : Int,
+  index : Int32,
   prefix : String,
   option : String,
-) -> Result[(String, Int), String] {
+) -> Result[(String, Int32), String] {
   match wp_option_value(parts, index, prefix, option) {
     Ok((value, next_i)) =>
       Ok((strip_joined_equals_value(value, next_i, index), next_i))
@@ -787,9 +787,9 @@ fn apply_wp_options(opts : DriverOptions, arg : String) -> Result[Unit, String] 
 ///|
 fn xpreprocessor_value(
   argv : Array[String],
-  index : Int,
+  index : Int32,
   option : String,
-) -> Result[(String, Int), String] {
+) -> Result[(String, Int32), String] {
   if index + 3 < argv.length() && argv[index + 2] == "-Xpreprocessor" {
     Ok((argv[index + 3], index + 3))
   } else {
@@ -800,10 +800,10 @@ fn xpreprocessor_value(
 ///|
 fn xpreprocessor_option_value(
   argv : Array[String],
-  index : Int,
+  index : Int32,
   prefix : String,
   option : String,
-) -> Result[(String, Int), String] {
+) -> Result[(String, Int32), String] {
   let arg = argv[index + 1]
   let value = arg[prefix.length():].to_owned()
   if value != "" {
@@ -816,10 +816,10 @@ fn xpreprocessor_option_value(
 ///|
 fn xpreprocessor_include_path_option_value(
   argv : Array[String],
-  index : Int,
+  index : Int32,
   prefix : String,
   option : String,
-) -> Result[(String, Int), String] {
+) -> Result[(String, Int32), String] {
   match xpreprocessor_option_value(argv, index, prefix, option) {
     Ok((value, next_i)) =>
       Ok((strip_joined_equals_value(value, next_i, index + 1), next_i))
@@ -831,8 +831,8 @@ fn xpreprocessor_include_path_option_value(
 fn consume_xpreprocessor_option(
   opts : DriverOptions,
   argv : Array[String],
-  index : Int,
-) -> Result[Int, String] {
+  index : Int32,
+) -> Result[Int32, String] {
   if index + 1 >= argv.length() {
     return Err("missing argument after -Xpreprocessor")
   }
@@ -1254,7 +1254,7 @@ fn split_response_file_content(
 fn expand_response_arg_into(
   expanded : Array[String],
   arg : String,
-  depth : Int,
+  depth : Int32,
 ) -> Result[Unit, String] {
   if starts_with(arg, "@rpath/") ||
     starts_with(arg, "@loader_path/") ||
@@ -1301,9 +1301,9 @@ fn expand_response_args(argv : Array[String]) -> Result[Array[String], String] {
 fn consume_ignored_option(
   opts : DriverOptions,
   argv : Array[String],
-  index : Int,
+  index : Int32,
   arg : String,
-) -> Result[Int, String] {
+) -> Result[Int32, String] {
   match arg {
     "--config"
     | "--analyzer-output"
@@ -1631,10 +1631,10 @@ fn consume_ignored_option(
 fn consume_linker_option_values(
   opts : DriverOptions,
   argv : Array[String],
-  index : Int,
+  index : Int32,
   arg : String,
-  value_count : Int,
-) -> Result[Int, String] {
+  value_count : Int32,
+) -> Result[Int32, String] {
   if index + value_count < argv.length() {
     opts.linker_args.push(arg)
     for offset in 1..<=value_count {
@@ -1650,9 +1650,9 @@ fn consume_linker_option_values(
 fn consume_linker_option(
   opts : DriverOptions,
   argv : Array[String],
-  index : Int,
+  index : Int32,
   arg : String,
-) -> Result[Int, String] {
+) -> Result[Int32, String] {
   match arg {
     "-rename_section" => consume_linker_option_values(opts, argv, index, arg, 4)
     "-platform_version"
@@ -1923,7 +1923,7 @@ fn consume_linker_option(
 }
 
 ///|
-fn compile_only_input_count(opts : DriverOptions) -> Int {
+fn compile_only_input_count(opts : DriverOptions) -> Int32 {
   let mut count = opts.extra_input_paths.length() +
     opts.assembly_input_paths.length()
   match opts.input_path {

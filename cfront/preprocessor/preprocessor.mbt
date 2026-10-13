@@ -764,7 +764,7 @@ fn pp_macro_dump_skips_name(name : String) -> Bool {
 }
 
 ///|
-fn pp_line_after(tokens : Array[PpToken], start : Int) -> Array[PpToken] {
+fn pp_line_after(tokens : Array[PpToken], start : Int32) -> Array[PpToken] {
   let result : Array[PpToken] = []
   for i = start; i < tokens.length(); i = i + 1 {
     result.push(tokens[i])
@@ -828,8 +828,8 @@ fn Preprocessor::define_macro(
 ///|
 fn pp_parenthesized_body(
   tokens : Array[PpToken],
-  lparen : Int,
-) -> (Array[PpToken], Int)? {
+  lparen : Int32,
+) -> (Array[PpToken], Int32)? {
   if lparen >= tokens.length() || !tokens[lparen].is_punct("(") {
     return None
   }
@@ -884,7 +884,7 @@ fn Preprocessor::parse_include_query_name(
   self : Preprocessor,
   tokens : Array[PpToken],
   file : String,
-  line : Int,
+  line : Int32,
 ) -> (String, Bool)? {
   let clean = pp_without_whitespace(tokens)
   match pp_parse_header_name(clean) {
@@ -901,7 +901,7 @@ fn Preprocessor::has_include_query(
   tokens : Array[PpToken],
   including_file : String,
   logical_file : String,
-  line : Int,
+  line : Int32,
   next : Bool,
 ) -> Bool {
   match self.parse_include_query_name(tokens, logical_file, line) {
@@ -921,7 +921,7 @@ fn Preprocessor::replace_defined_operators(
   tokens : Array[PpToken],
   including_file : String,
   logical_file : String,
-  line : Int,
+  line : Int32,
 ) -> Array[PpToken] {
   let clean = pp_without_whitespace(tokens)
   let result : Array[PpToken] = []
@@ -997,7 +997,7 @@ fn Preprocessor::eval_if(
   tokens : Array[PpToken],
   including_file : String,
   logical_file : String,
-  line : Int,
+  line : Int32,
 ) -> Bool {
   let defined_replaced = self.replace_defined_operators(
     tokens, including_file, logical_file, line,
@@ -1026,7 +1026,7 @@ fn Preprocessor::parse_include_name(
   self : Preprocessor,
   tokens : Array[PpToken],
   file : String,
-  line : Int,
+  line : Int32,
 ) -> (String, Bool)? {
   let clean = pp_without_whitespace(tokens)
   if clean.length() == 0 {
@@ -1138,7 +1138,7 @@ fn Preprocessor::process_include(
   tokens : Array[PpToken],
   including_file : String,
   logical_file : String,
-  line : Int,
+  line : Int32,
 ) -> String {
   match self.parse_include_name(tokens, logical_file, line) {
     Some((name, system)) =>
@@ -1175,7 +1175,7 @@ fn Preprocessor::process_include_next(
   tokens : Array[PpToken],
   including_file : String,
   logical_file : String,
-  line : Int,
+  line : Int32,
 ) -> String {
   match self.parse_include_name(tokens, logical_file, line) {
     Some((name, system)) =>
@@ -1211,7 +1211,7 @@ fn Preprocessor::process_line_directive(
   self : Preprocessor,
   tokens : Array[PpToken],
   logical_file : String,
-  line : Int,
+  line : Int32,
 ) -> Unit {
   let expanded = self.expand_tokens(tokens, {}, logical_file, true, line, 0)
   let clean = pp_without_whitespace(expanded)
@@ -1237,7 +1237,7 @@ fn Preprocessor::process_directive(
   stack : Array[ConditionalFrame],
   physical_file : String,
   logical_file : String,
-  line : Int,
+  line : Int32,
 ) -> String {
   let hash = pp_first_non_space(tokens)
   if hash >= tokens.length() || !tokens[hash].is_punct("#") {
@@ -1465,7 +1465,7 @@ fn Preprocessor::flush_pending_tokens(
   output : StringBuilder,
   file : String,
   file_remappable : Bool,
-  line : Int,
+  line : Int32,
   is_final : Bool,
 ) -> (Array[PpToken], Bool) {
   if pending.length() == 0 {
@@ -1643,7 +1643,7 @@ fn pp_sorted_macro_names(macros : Map[String, Macro]) -> Array[String] {
 }
 
 ///|
-fn pp_macro_param_source(macro_ : Macro, index : Int) -> String {
+fn pp_macro_param_source(macro_ : Macro, index : Int32) -> String {
   let param = macro_.params[index]
   if macro_.variadic && index == macro_.params.length() - 1 {
     if param == "__VA_ARGS__" {

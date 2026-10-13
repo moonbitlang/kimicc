@@ -123,7 +123,7 @@ fn mir_body_codegen_abi_int_type(ty : @ctype.Type) -> Bool {
 }
 
 ///|
-fn mir_body_codegen_abi_int_slots(ty : @ctype.Type) -> Int {
+fn mir_body_codegen_abi_int_slots(ty : @ctype.Type) -> Int32 {
   match peel_aligned_type(ty) {
     SInt128 | UInt128 => 2
     Atomic(inner) => mir_body_codegen_abi_int_slots(inner)
@@ -132,7 +132,7 @@ fn mir_body_codegen_abi_int_slots(ty : @ctype.Type) -> Int {
 }
 
 ///|
-fn mir_body_codegen_abi_int_stack_align_slots(ty : @ctype.Type) -> Int {
+fn mir_body_codegen_abi_int_stack_align_slots(ty : @ctype.Type) -> Int32 {
   match peel_aligned_type(ty) {
     SInt128 | UInt128 => 2
     Atomic(inner) => mir_body_codegen_abi_int_stack_align_slots(inner)
@@ -141,7 +141,10 @@ fn mir_body_codegen_abi_int_stack_align_slots(ty : @ctype.Type) -> Int {
 }
 
 ///|
-fn mir_body_codegen_align_stack_slots(index : Int, align_slots : Int) -> Int {
+fn mir_body_codegen_align_stack_slots(
+  index : Int32,
+  align_slots : Int32,
+) -> Int32 {
   (index + align_slots - 1) / align_slots * align_slots
 }
 
@@ -239,8 +242,8 @@ fn mir_body_codegen_register_aggregate_return_type(
 ///|
 fn mir_body_codegen_variadic_args_supported(
   params : Array[@ctype.Type],
-  named_count : Int,
-  int_arg_limit : Int,
+  named_count : Int32,
+  int_arg_limit : Int32,
 ) -> Bool {
   let mut int_count = 0
   let mut fp_reg_count = 0
@@ -267,8 +270,8 @@ fn mir_body_codegen_variadic_args_supported(
 ///|
 fn mir_body_codegen_darwin_variadic_args_supported(
   params : Array[@ctype.Type],
-  named_count : Int,
-  int_arg_limit : Int,
+  named_count : Int32,
+  int_arg_limit : Int32,
   mir : @mir.MirModule,
 ) -> Bool {
   let mut int_count = 0
@@ -333,8 +336,8 @@ fn mir_body_codegen_darwin_args_with_stack_supported(
 ///|
 fn mir_body_codegen_x64_variadic_args_supported(
   params : Array[@ctype.Type],
-  named_count : Int,
-  int_arg_limit : Int,
+  named_count : Int32,
+  int_arg_limit : Int32,
   mir : @mir.MirModule,
 ) -> Bool {
   ignore(named_count)
@@ -574,7 +577,7 @@ fn mir_body_codegen_fp_binary_type(
 }
 
 ///|
-fn mir_body_codegen_arm_fp_reg(ty : @ctype.Type, index : Int) -> String {
+fn mir_body_codegen_arm_fp_reg(ty : @ctype.Type, index : Int32) -> String {
   let prefix = if peel_aligned_type(ty) == Float { "s" } else { "d" }
   prefix + index.to_string()
 }
@@ -679,7 +682,7 @@ fn Codegen::emit_mir_fp_class_result(
 fn Codegen::emit_mir_fp_arg_from_x9(
   self : Codegen,
   ty : @ctype.Type,
-  index : Int,
+  index : Int32,
 ) -> Unit {
   self.emit(
     "\tfmov\t" +
@@ -811,7 +814,7 @@ fn mir_body_codegen_addressed_object_type(ty : @ctype.Type) -> Bool {
 ///|
 fn mir_body_codegen_array_address_base(
   value : @mir.MirValue,
-  int_arg_limit : Int,
+  int_arg_limit : Int32,
   mir : @mir.MirModule,
 ) -> Bool {
   match value {
@@ -827,7 +830,7 @@ fn mir_body_codegen_array_address_base(
 ///|
 fn mir_body_codegen_pointer_operand_supported(
   value : @mir.MirValue,
-  int_arg_limit : Int,
+  int_arg_limit : Int32,
   mir : @mir.MirModule,
 ) -> Bool {
   match pointer_or_array_element_type(value.ty()) {
@@ -839,7 +842,7 @@ fn mir_body_codegen_pointer_operand_supported(
 ///|
 fn mir_body_codegen_register_aggregate_call_value_supported(
   value : @mir.MirValue,
-  int_arg_limit : Int,
+  int_arg_limit : Int32,
   mir : @mir.MirModule,
 ) -> Bool {
   match value {
@@ -881,7 +884,7 @@ fn mir_body_codegen_register_aggregate_call_value_supported(
 ///|
 fn mir_body_codegen_memory_aggregate_call_value_supported(
   value : @mir.MirValue,
-  int_arg_limit : Int,
+  int_arg_limit : Int32,
   mir : @mir.MirModule,
 ) -> Bool {
   match value {
@@ -923,7 +926,7 @@ fn mir_body_codegen_memory_aggregate_call_value_supported(
 ///|
 fn mir_body_codegen_value_supported(
   value : @mir.MirValue,
-  int_arg_limit : Int,
+  int_arg_limit : Int32,
   mir : @mir.MirModule,
 ) -> Bool {
   match value {
@@ -1268,7 +1271,7 @@ fn mir_body_codegen_atomic_load_supported(
   ptr : @mir.MirValue,
   order : @mir.MirValue,
   ret : @ctype.Type,
-  int_arg_limit : Int,
+  int_arg_limit : Int32,
   mir : @mir.MirModule,
 ) -> Bool {
   mir_body_codegen_abi_scalar_type(ret) &&
@@ -1284,7 +1287,7 @@ fn mir_body_codegen_atomic_store_supported(
   ptr : @mir.MirValue,
   value : @mir.MirValue,
   order : @mir.MirValue,
-  int_arg_limit : Int,
+  int_arg_limit : Int32,
   mir : @mir.MirModule,
 ) -> Bool {
   peel_aligned_type(value.ty()) != Void &&
@@ -1320,7 +1323,7 @@ fn mir_body_codegen_atomic_update_op_supported(op : String) -> Bool {
 ///|
 fn mir_body_codegen_atomic_extra_values_supported(
   values : Array[@mir.MirValue],
-  int_arg_limit : Int,
+  int_arg_limit : Int32,
   mir : @mir.MirModule,
 ) -> Bool {
   for value in values {
@@ -1338,7 +1341,7 @@ fn mir_body_codegen_atomic_update_supported(
   value : @mir.MirValue,
   extras : Array[@mir.MirValue],
   ret : @ctype.Type,
-  int_arg_limit : Int,
+  int_arg_limit : Int32,
   mir : @mir.MirModule,
 ) -> Bool {
   mir_body_codegen_atomic_update_op_supported(op) &&
@@ -1356,7 +1359,7 @@ fn mir_body_codegen_atomic_exchange_supported(
   value : @mir.MirValue,
   extras : Array[@mir.MirValue],
   ret : @ctype.Type,
-  int_arg_limit : Int,
+  int_arg_limit : Int32,
   mir : @mir.MirModule,
 ) -> Bool {
   mir_body_codegen_abi_int_type(ret) &&
@@ -1373,7 +1376,7 @@ fn mir_body_codegen_atomic_compare_exchange_supported(
   expected : @mir.MirValue,
   desired : @mir.MirValue,
   extras : Array[@mir.MirValue],
-  int_arg_limit : Int,
+  int_arg_limit : Int32,
   mir : @mir.MirModule,
 ) -> Bool {
   mir_body_codegen_atomic_rmw_target_supported(ptr) &&
@@ -1384,7 +1387,7 @@ fn mir_body_codegen_atomic_compare_exchange_supported(
 }
 
 ///|
-fn mir_body_codegen_rotate_op(op : String) -> (Int, Bool)? {
+fn mir_body_codegen_rotate_op(op : String) -> (Int32, Bool)? {
   match op {
     "rotl32" => Some((32, true))
     "rotr32" => Some((32, false))
@@ -1436,7 +1439,7 @@ fn mir_body_codegen_overflow_supported(
   left : @mir.MirValue,
   right : @mir.MirValue,
   result_ptr : @mir.MirValue,
-  int_arg_limit : Int,
+  int_arg_limit : Int32,
   mir : @mir.MirModule,
 ) -> Bool {
   if !mir_body_codegen_overflow_op_supported(op) ||
@@ -1456,7 +1459,7 @@ fn mir_body_codegen_builtin_lib_call_supported(
   name : String,
   args : Array[@mir.MirValue],
   ret : @ctype.Type,
-  int_arg_limit : Int,
+  int_arg_limit : Int32,
 ) -> Bool {
   if mir_body_codegen_printf_libcall_variadic(name) && ret.is_integer() {
     let params : Array[@ctype.Type] = []
@@ -1483,7 +1486,7 @@ fn mir_body_codegen_direct_call_symbol(name : String) -> String {
 ///|
 fn mir_body_codegen_direct_call_source_indexes(
   args : Array[@mir.MirValue],
-) -> Array[Int] {
+) -> Array[Int32] {
   let indexes = []
   for i in 0..<args.length() {
     indexes.push(i)
@@ -1508,7 +1511,7 @@ fn mir_body_codegen_printf_libcall_variadic(name : String) -> Bool {
 }
 
 ///|
-fn mir_body_codegen_direct_call_named_arg_count(name : String) -> Int {
+fn mir_body_codegen_direct_call_named_arg_count(name : String) -> Int32 {
   match name {
     "snprintf" => 3
     "sprintf" => 2
@@ -1528,7 +1531,7 @@ fn Codegen::mir_direct_call_variadic(self : Codegen, name : String) -> Bool {
 fn Codegen::mir_direct_call_named_arg_count(
   self : Codegen,
   name : String,
-) -> Int {
+) -> Int32 {
   if mir_body_codegen_direct_call_variadic(name) {
     mir_body_codegen_direct_call_named_arg_count(name)
   } else {
@@ -1548,7 +1551,7 @@ fn X64Codegen::mir_direct_call_variadic(
 ///|
 fn mir_body_codegen_lowered_builtin_arg_type(
   name : String,
-  index : Int,
+  index : Int32,
 ) -> @ctype.Type? {
   match name {
     "snprintf" =>
@@ -1607,7 +1610,7 @@ fn mir_body_codegen_call_supported(
   name : String,
   args : Array[@mir.MirValue],
   ret : @ctype.Type,
-  int_arg_limit : Int,
+  int_arg_limit : Int32,
   mir : @mir.MirModule,
 ) -> Bool {
   if mir_body_codegen_builtin_lib_call_supported(name, args, ret, int_arg_limit) {
@@ -1697,7 +1700,7 @@ fn mir_body_codegen_indirect_call_supported(
   callee_ty : @ctype.Type,
   args : Array[@mir.MirValue],
   ret : @ctype.Type,
-  int_arg_limit : Int,
+  int_arg_limit : Int32,
   mir : @mir.MirModule,
 ) -> Bool {
   let ret_supported = mir_body_codegen_abi_scalar_type(ret) ||
@@ -1810,7 +1813,7 @@ fn mir_body_default_argument_promoted_types(
 }
 
 ///|
-fn mir_indirect_call_named_arg_count(callee_ty : @ctype.Type) -> Int {
+fn mir_indirect_call_named_arg_count(callee_ty : @ctype.Type) -> Int32 {
   match mir_indirect_callable_type(callee_ty) {
     Some(FuncPtr(_, params, _)) => params.length()
     _ => 0
@@ -1820,7 +1823,7 @@ fn mir_indirect_call_named_arg_count(callee_ty : @ctype.Type) -> Int {
 ///|
 fn mir_indirect_call_arg_type(
   callee_ty : @ctype.Type,
-  index : Int,
+  index : Int32,
   actual : @ctype.Type,
 ) -> @ctype.Type {
   match mir_indirect_callable_type(callee_ty) {
@@ -1841,7 +1844,7 @@ fn mir_indirect_call_arg_type(
 ///|
 fn mir_body_codegen_aggregate_return_value_supported(
   value : @mir.MirValue,
-  int_arg_limit : Int,
+  int_arg_limit : Int32,
   mir : @mir.MirModule,
 ) -> Bool {
   if !mir_body_codegen_register_aggregate_return_type(value.ty(), mir) {
@@ -1863,7 +1866,7 @@ fn mir_body_codegen_aggregate_return_value_supported(
 ///|
 fn mir_body_codegen_memory_aggregate_return_value_supported(
   value : @mir.MirValue,
-  int_arg_limit : Int,
+  int_arg_limit : Int32,
   mir : @mir.MirModule,
 ) -> Bool {
   if !mir_body_codegen_x64_memory_aggregate_return_type(value.ty(), mir) {
@@ -1886,7 +1889,7 @@ fn mir_body_codegen_memory_aggregate_return_value_supported(
 fn mir_body_codegen_return_value_supported(
   value : @mir.MirValue,
   ret : @ctype.Type,
-  int_arg_limit : Int,
+  int_arg_limit : Int32,
   mir : @mir.MirModule,
 ) -> Bool {
   if mir_body_codegen_abi_scalar_type(ret) {
@@ -1909,7 +1912,7 @@ fn mir_body_codegen_return_value_supported(
 fn mir_body_codegen_stmt_supported(
   stmt : @mir.MirStmt,
   ret : @ctype.Type,
-  int_arg_limit : Int,
+  int_arg_limit : Int32,
   mir : @mir.MirModule,
 ) -> Bool {
   match stmt {
@@ -1980,7 +1983,7 @@ fn mir_body_codegen_stmt_supported(
 fn mir_body_codegen_stmts_supported(
   stmts : Array[@mir.MirStmt],
   ret : @ctype.Type,
-  int_arg_limit : Int,
+  int_arg_limit : Int32,
   mir : @mir.MirModule,
 ) -> Bool {
   for stmt in stmts {
@@ -1995,7 +1998,7 @@ fn mir_body_codegen_stmts_supported(
 fn mir_body_codegen_func_supported(
   body : @mir.MirFuncBody,
   variadic : Bool,
-  int_arg_limit : Int,
+  int_arg_limit : Int32,
   mir : @mir.MirModule,
 ) -> Bool {
   ignore(variadic)
@@ -2138,8 +2141,8 @@ fn mir_body_pointer_diff_elem(
 fn Codegen::mir_body_offsets(
   self : Codegen,
   body : @mir.MirFuncBody,
-) -> Map[Int, Int] {
-  let offsets : Map[Int, Int] = Map([])
+) -> Map[Int32, Int32] {
+  let offsets : Map[Int32, Int32] = Map([])
   for binding in body.locals {
     if mir_body_codegen_local_type(binding.ty) {
       offsets[binding.id] = self.alloc_local(
@@ -2347,8 +2350,8 @@ fn Codegen::emit_mir_atomic_load(
   self : Codegen,
   ptr : @mir.MirValue,
   order : @mir.MirValue,
-  offsets : Map[Int, Int],
-  frame_size : Int,
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
 ) -> Unit {
   let elem_ty = mir_body_codegen_atomic_target_type(ptr.ty())
   self.gen_mir_value(ptr, offsets, frame_size)
@@ -2371,8 +2374,8 @@ fn Codegen::emit_mir_atomic_store(
   ptr : @mir.MirValue,
   value : @mir.MirValue,
   order : @mir.MirValue,
-  offsets : Map[Int, Int],
-  frame_size : Int,
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
 ) -> Unit {
   let elem_ty = mir_body_codegen_atomic_target_type(ptr.ty())
   self.gen_mir_value(ptr, offsets, frame_size)
@@ -2487,8 +2490,8 @@ fn Codegen::emit_mir_atomic_update_loop(
 fn Codegen::emit_mir_ignored_values(
   self : Codegen,
   values : Array[@mir.MirValue],
-  offsets : Map[Int, Int],
-  frame_size : Int,
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
 ) -> Unit {
   for value in values {
     self.gen_mir_value(value, offsets, frame_size)
@@ -2501,8 +2504,8 @@ fn Codegen::emit_mir_atomic_update(
   ptr : @mir.MirValue,
   value : @mir.MirValue,
   extras : Array[@mir.MirValue],
-  offsets : Map[Int, Int],
-  frame_size : Int,
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
   op : String,
   return_new : Bool,
 ) -> Unit {
@@ -2528,8 +2531,8 @@ fn Codegen::emit_mir_atomic_exchange(
   ptr : @mir.MirValue,
   value : @mir.MirValue,
   extras : Array[@mir.MirValue],
-  offsets : Map[Int, Int],
-  frame_size : Int,
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
 ) -> Unit {
   self.emit_mir_ignored_values(extras, offsets, frame_size)
   let elem_ty = mir_body_codegen_atomic_target_type(ptr.ty())
@@ -2571,8 +2574,8 @@ fn Codegen::emit_mir_atomic_compare_exchange(
   expected : @mir.MirValue,
   desired : @mir.MirValue,
   extras : Array[@mir.MirValue],
-  offsets : Map[Int, Int],
-  frame_size : Int,
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
 ) -> Unit {
   self.emit_mir_ignored_values(extras, offsets, frame_size)
   let elem_ty = mir_body_codegen_atomic_target_type(ptr.ty())
@@ -2627,7 +2630,7 @@ fn Codegen::emit_mir_atomic_compare_exchange(
 }
 
 ///|
-fn Codegen::mir_pointer_update_scale(self : Codegen, ty : @ctype.Type) -> Int {
+fn Codegen::mir_pointer_update_scale(self : Codegen, ty : @ctype.Type) -> Int32 {
   match pointer_or_array_element_type(ty) {
     Some(elem_ty) => self.mir_pointer_element_scale(elem_ty)
     None => 1
@@ -2638,7 +2641,7 @@ fn Codegen::mir_pointer_update_scale(self : Codegen, ty : @ctype.Type) -> Int {
 fn Codegen::mir_pointer_element_scale(
   self : Codegen,
   elem_ty : @ctype.Type,
-) -> Int {
+) -> Int32 {
   match elem_ty {
     Void => 1
     _ => self.type_size(elem_ty)
@@ -2663,8 +2666,8 @@ fn Codegen::emit_mir_overflow_arithmetic_builtin(
   left : @mir.MirValue,
   right : @mir.MirValue,
   result_ptr : @mir.MirValue,
-  offsets : Map[Int, Int],
-  frame_size : Int,
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
   op : String,
 ) -> Unit {
   let result_ty = match mir_body_codegen_overflow_result_type(result_ptr) {
@@ -2702,7 +2705,7 @@ fn Codegen::emit_mir_overflow_arithmetic_builtin(
 }
 
 ///|
-fn mir_body_codegen_va_slot_advance(size : Int) -> Int {
+fn mir_body_codegen_va_slot_advance(size : Int32) -> Int32 {
   if size < 8 {
     8
   } else {
@@ -2715,8 +2718,8 @@ fn Codegen::emit_mir_bzero(
   self : Codegen,
   dst : @mir.MirValue,
   size : @mir.MirValue,
-  offsets : Map[Int, Int],
-  frame_size : Int,
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
 ) -> Unit {
   self.gen_mir_value(dst, offsets, frame_size)
   self.emit("\tstr\tx9, [sp, #-16]!")
@@ -2732,8 +2735,8 @@ fn Codegen::emit_mir_bzero(
 fn Codegen::emit_mir_va_start(
   self : Codegen,
   target : @mir.MirValue,
-  offsets : Map[Int, Int],
-  frame_size : Int,
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
 ) -> Unit {
   match target {
     MirLocal(binding) => {
@@ -2750,8 +2753,8 @@ fn Codegen::emit_mir_va_copy(
   self : Codegen,
   target : @mir.MirValue,
   source : @mir.MirValue,
-  offsets : Map[Int, Int],
-  frame_size : Int,
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
 ) -> Unit {
   match target {
     MirLocal(binding) => {
@@ -2768,8 +2771,8 @@ fn Codegen::emit_mir_va_arg(
   self : Codegen,
   ap : @mir.MirValue,
   ty : @ctype.Type,
-  offsets : Map[Int, Int],
-  frame_size : Int,
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
 ) -> Unit {
   let binding = match ap {
     MirLocal(binding) => binding
@@ -2794,8 +2797,8 @@ fn Codegen::emit_mir_va_arg_addr(
   self : Codegen,
   ap : @mir.MirValue,
   ty : @ctype.Type,
-  offsets : Map[Int, Int],
-  frame_size : Int,
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
 ) -> Unit {
   let binding = match ap {
     MirLocal(binding) => binding
@@ -2820,7 +2823,7 @@ fn Codegen::emit_mir_va_arg_addr(
 }
 
 ///|
-fn mir_body_codegen_arm_addr_ref(base : String, offset : Int) -> String {
+fn mir_body_codegen_arm_addr_ref(base : String, offset : Int32) -> String {
   if offset == 0 {
     "[" + base + "]"
   } else {
@@ -2849,7 +2852,7 @@ fn Codegen::is_memory_aggregate(self : Codegen, ty : @ctype.Type) -> Bool {
 fn Codegen::darwin_hfa_parts(
   self : Codegen,
   ty : @ctype.Type,
-) -> (@ctype.Type, Int)? {
+) -> (@ctype.Type, Int32)? {
   match peel_aligned_type(ty) {
     Float => Some((Float, 1))
     Double | LongDouble => Some((Double, 1))
@@ -2922,16 +2925,16 @@ fn Codegen::is_hfa_aggregate(self : Codegen, ty : @ctype.Type) -> Bool {
 fn Codegen::darwin_hfa_member_offsets(
   self : Codegen,
   ty : @ctype.Type,
-  base_offset : Int,
-) -> (@ctype.Type, Array[Int])? {
+  base_offset : Int32,
+) -> (@ctype.Type, Array[Int32])? {
   match peel_aligned_type(ty) {
     Float => {
-      let offsets : Array[Int] = []
+      let offsets : Array[Int32] = []
       offsets.push(base_offset)
       Some((Float, offsets))
     }
     Double | LongDouble => {
-      let offsets : Array[Int] = []
+      let offsets : Array[Int32] = []
       offsets.push(base_offset)
       Some((Double, offsets))
     }
@@ -2941,7 +2944,7 @@ fn Codegen::darwin_hfa_member_offsets(
         Some(parts) => parts
         None => return None
       }
-      let offsets : Array[Int] = []
+      let offsets : Array[Int32] = []
       let elem_size = self.type_size(elem)
       for i in 0..<len {
         for offset in elem_offsets {
@@ -2962,8 +2965,8 @@ fn Codegen::darwin_hfa_member_offsets(
       if layout.fields.length() == 0 {
         return None
       }
-      let offsets : Array[Int] = []
-      let mut union_offsets : Array[Int] = []
+      let offsets : Array[Int32] = []
+      let mut union_offsets : Array[Int32] = []
       let mut fp_ty : @ctype.Type? = None
       for field in layout.fields {
         if field.bit_width is Some(_) {
@@ -3053,9 +3056,9 @@ fn Codegen::emit_save_darwin_aggregate_call_arg_raw(
   self : Codegen,
   arg : @mir.MirValue,
   ty : @ctype.Type,
-  raw_size : Int,
-  offsets : Map[Int, Int],
-  frame_size : Int,
+  raw_size : Int32,
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
 ) -> Unit {
   match arg {
     MirCall(_, _, _) | MirIndirectCall(_, _, _) => {
@@ -3089,8 +3092,8 @@ fn Codegen::emit_save_darwin_aggregate_call_arg_raw(
 fn Codegen::emit_load_hfa_aggregate_arg_from_raw(
   self : Codegen,
   ty : @ctype.Type,
-  raw_offset : Int,
-  fp_start : Int,
+  raw_offset : Int32,
+  fp_start : Int32,
 ) -> Unit {
   let (base, offsets) = match self.darwin_hfa_member_offsets(ty, 0) {
     Some(parts) => parts
@@ -3110,9 +3113,9 @@ fn Codegen::emit_load_hfa_aggregate_arg_from_raw(
 fn Codegen::emit_store_hfa_aggregate_param_from_regs(
   self : Codegen,
   ty : @ctype.Type,
-  local_offset : Int,
-  fp_start : Int,
-  frame_size : Int,
+  local_offset : Int32,
+  fp_start : Int32,
+  frame_size : Int32,
 ) -> Unit {
   let (base, offsets) = match self.darwin_hfa_member_offsets(ty, 0) {
     Some(parts) => parts
@@ -3133,9 +3136,9 @@ fn Codegen::emit_store_hfa_aggregate_param_from_regs(
 fn Codegen::emit_store_register_aggregate_param_from_regs(
   self : Codegen,
   ty : @ctype.Type,
-  local_offset : Int,
-  int_start : Int,
-  frame_size : Int,
+  local_offset : Int32,
+  int_start : Int32,
+  frame_size : Int32,
 ) -> Unit {
   let size = self.type_size(ty)
   self.emit_local_addr(local_offset, frame_size)
@@ -3164,7 +3167,7 @@ fn Codegen::emit_addr_with_offset_to_reg(
   self : Codegen,
   dst : String,
   base : String,
-  offset : Int,
+  offset : Int32,
 ) -> Unit {
   if offset == 0 {
     self.emit("\tmov\t" + dst + ", " + base)
@@ -3185,8 +3188,8 @@ fn Codegen::emit_addr_with_offset_to_reg(
 fn Codegen::emit_copy_darwin_aggregate_arg_from_raw_to_stack(
   self : Codegen,
   ty : @ctype.Type,
-  raw_offset : Int,
-  stack_offset : Int,
+  raw_offset : Int32,
+  stack_offset : Int32,
 ) -> Unit {
   self.emit_addr_with_offset_to_reg("x11", "sp", raw_offset)
   self.emit_addr_with_offset_to_reg("x10", "sp", stack_offset)
@@ -3198,9 +3201,9 @@ fn Codegen::emit_save_darwin_variadic_aggregate_arg_raw(
   self : Codegen,
   arg : @mir.MirValue,
   ty : @ctype.Type,
-  offsets : Map[Int, Int],
-  frame_size : Int,
-) -> (Int, Int) {
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
+) -> (Int32, Int32) {
   let size = self.type_size(ty)
   if size > 16 {
     let copy_size = (size + 15) / 16 * 16
@@ -3226,9 +3229,9 @@ fn Codegen::emit_save_darwin_variadic_aggregate_arg_raw(
 ///|
 fn Codegen::emit_pass_darwin_indirect_aggregate_arg_from_raw(
   self : Codegen,
-  raw_offset : Int,
-  int_arg_index : Int,
-  stack_arg_index : Int,
+  raw_offset : Int32,
+  int_arg_index : Int32,
+  stack_arg_index : Int32,
 ) -> Unit {
   if int_arg_index >= 0 {
     self.emit_addr_with_offset_to_reg(
@@ -3246,9 +3249,9 @@ fn Codegen::emit_pass_darwin_indirect_aggregate_arg_from_raw(
 fn Codegen::emit_store_darwin_aggregate_param_from_stack(
   self : Codegen,
   ty : @ctype.Type,
-  local_offset : Int,
-  stack_offset : Int,
-  frame_size : Int,
+  local_offset : Int32,
+  stack_offset : Int32,
+  frame_size : Int32,
 ) -> Unit {
   self.emit_local_addr(local_offset, frame_size)
   self.emit("\tmov\tx10, x9")
@@ -3260,9 +3263,9 @@ fn Codegen::emit_store_darwin_aggregate_param_from_stack(
 fn Codegen::emit_store_darwin_indirect_aggregate_param(
   self : Codegen,
   ty : @ctype.Type,
-  local_offset : Int,
+  local_offset : Int32,
   src_reg : String,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   self.emit("\tmov\tx11, " + src_reg)
   self.emit_local_addr(local_offset, frame_size)
@@ -3275,8 +3278,8 @@ fn Codegen::emit_load_reg_bytes_from_addr(
   self : Codegen,
   dst : String,
   addr : String,
-  offset : Int,
-  size : Int,
+  offset : Int32,
+  size : Int32,
 ) -> Unit {
   if size <= 0 {
     self.emit("\tmov\t" + dst + ", #0")
@@ -3314,8 +3317,8 @@ fn Codegen::emit_store_reg_bytes_to_addr(
   self : Codegen,
   src : String,
   addr : String,
-  offset : Int,
-  size : Int,
+  offset : Int32,
+  size : Int32,
 ) -> Unit {
   let mut pos = 0
   while pos < size {
@@ -3417,7 +3420,7 @@ fn Codegen::emit_copy_memory_aggregate_from_x11_to_x10(
 }
 
 ///|
-fn Codegen::sret_result_offset(self : Codegen, ret_ty : @ctype.Type) -> Int {
+fn Codegen::sret_result_offset(self : Codegen, ret_ty : @ctype.Type) -> Int32 {
   if self.pending_sret_offset >= 0 {
     self.pending_sret_offset
   } else if self.is_memory_aggregate(ret_ty) {
@@ -3434,7 +3437,7 @@ fn Codegen::sret_result_offset(self : Codegen, ret_ty : @ctype.Type) -> Int {
 fn Codegen::emit_call_sret_addr(
   self : Codegen,
   ret_ty : @ctype.Type,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   let offset = self.sret_result_offset(ret_ty)
   if offset >= 0 {
@@ -3447,7 +3450,7 @@ fn Codegen::emit_call_sret_addr(
 fn Codegen::emit_sret_result_addr(
   self : Codegen,
   ret_ty : @ctype.Type,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   let offset = self.sret_result_offset(ret_ty)
   if offset < 0 {
@@ -3457,7 +3460,7 @@ fn Codegen::emit_sret_result_addr(
 }
 
 ///|
-fn Codegen::emit_sret_dest_addr(self : Codegen, frame_size : Int) -> Unit {
+fn Codegen::emit_sret_dest_addr(self : Codegen, frame_size : Int32) -> Unit {
   if self.sret_dest_offset < 0 {
     abort("Darwin ARM64 MIR backend missing aggregate return destination")
   }
@@ -3469,8 +3472,8 @@ fn Codegen::emit_sret_dest_addr(self : Codegen, frame_size : Int) -> Unit {
 fn Codegen::gen_mir_aggregate_return_addr(
   self : Codegen,
   value : @mir.MirValue,
-  offsets : Map[Int, Int],
-  frame_size : Int,
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
 ) -> Unit {
   match value {
     MirLocal(binding) => self.emit_local_addr(offsets[binding.id], frame_size)
@@ -3489,8 +3492,8 @@ fn Codegen::emit_mir_rotate_op(
   lhs : @mir.MirValue,
   rhs : @mir.MirValue,
   ty : @ctype.Type,
-  offsets : Map[Int, Int],
-  frame_size : Int,
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
 ) -> Unit {
   let (width, left) = match mir_body_codegen_rotate_op(op) {
     Some(value) => value
@@ -3532,8 +3535,8 @@ fn Codegen::emit_mir_rotate_op(
 fn Codegen::gen_mir_value(
   self : Codegen,
   value : @mir.MirValue,
-  offsets : Map[Int, Int],
-  frame_size : Int,
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
 ) -> Unit {
   match value {
     MirConst(bits, ty) => {
@@ -4123,8 +4126,8 @@ fn Codegen::gen_mir_value(
       if self.mir_direct_call_variadic(name) {
         let named_count = self.mir_direct_call_named_arg_count(name)
         let expected_types : Array[@ctype.Type] = []
-        let arg_slot_counts : Array[Int] = []
-        let arg_raw_sizes : Array[Int] = []
+        let arg_slot_counts : Array[Int32] = []
+        let arg_raw_sizes : Array[Int32] = []
         for i in 0..<source_indexes.length() {
           let arg = args[source_indexes[i]]
           let expected = self.mir_call_arg_type(name, i, arg.ty())
@@ -4258,14 +4261,14 @@ fn Codegen::gen_mir_value(
         )
       } else {
         let expected_types : Array[@ctype.Type] = []
-        let int_arg_indexes : Array[Int] = []
-        let fp_arg_indexes : Array[Int] = []
-        let stack_arg_indexes : Array[Int] = []
+        let int_arg_indexes : Array[Int32] = []
+        let fp_arg_indexes : Array[Int32] = []
+        let stack_arg_indexes : Array[Int32] = []
         let arg_is_hfa : Array[Bool] = []
         let arg_is_register_aggregate : Array[Bool] = []
         let arg_is_indirect_aggregate : Array[Bool] = []
-        let arg_slot_counts : Array[Int] = []
-        let arg_raw_sizes : Array[Int] = []
+        let arg_slot_counts : Array[Int32] = []
+        let arg_raw_sizes : Array[Int32] = []
         let mut int_arg_index = 0
         let mut fp_arg_index = 0
         let mut stack_arg_index = 0
@@ -4520,8 +4523,8 @@ fn Codegen::gen_mir_value(
       if mir_indirect_call_variadic(callee.ty()) {
         let named_count = mir_indirect_call_named_arg_count(callee.ty())
         let expected_types : Array[@ctype.Type] = []
-        let arg_slot_counts : Array[Int] = []
-        let arg_raw_sizes : Array[Int] = []
+        let arg_slot_counts : Array[Int32] = []
+        let arg_raw_sizes : Array[Int32] = []
         for i in 0..<args.length() {
           let arg = args[i]
           let expected = mir_indirect_call_arg_type(callee.ty(), i, arg.ty())
@@ -4670,14 +4673,14 @@ fn Codegen::gen_mir_value(
         return
       }
       let expected_types : Array[@ctype.Type] = []
-      let int_arg_indexes : Array[Int] = []
-      let fp_arg_indexes : Array[Int] = []
-      let stack_arg_indexes : Array[Int] = []
+      let int_arg_indexes : Array[Int32] = []
+      let fp_arg_indexes : Array[Int32] = []
+      let stack_arg_indexes : Array[Int32] = []
       let arg_is_hfa : Array[Bool] = []
       let arg_is_register_aggregate : Array[Bool] = []
       let arg_is_indirect_aggregate : Array[Bool] = []
-      let arg_slot_counts : Array[Int] = []
-      let arg_raw_sizes : Array[Int] = []
+      let arg_slot_counts : Array[Int32] = []
+      let arg_raw_sizes : Array[Int32] = []
       let mut int_arg_index = 0
       let mut fp_arg_index = 0
       let mut stack_arg_index = 0
@@ -4934,8 +4937,8 @@ fn Codegen::gen_mir_value(
 fn Codegen::emit_mir_cond_jump_false(
   self : Codegen,
   cond : @mir.MirValue,
-  offsets : Map[Int, Int],
-  frame_size : Int,
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
   false_label : String,
 ) -> Unit {
   self.gen_mir_value(cond, offsets, frame_size)
@@ -4996,8 +4999,8 @@ fn Codegen::emit_mir_fp_binary_from_x10_x9(
 fn Codegen::gen_mir_address_base(
   self : Codegen,
   value : @mir.MirValue,
-  offsets : Map[Int, Int],
-  frame_size : Int,
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
 ) -> Unit {
   match value {
     MirLocal(binding) =>
@@ -5013,7 +5016,7 @@ fn Codegen::gen_mir_address_base(
 fn Codegen::mir_call_arg_type(
   self : Codegen,
   name : String,
-  index : Int,
+  index : Int32,
   actual : @ctype.Type,
 ) -> @ctype.Type {
   match mir_body_codegen_lowered_builtin_arg_type(name, index) {
@@ -5056,7 +5059,7 @@ fn Codegen::emit_mir_abi_int_return_conversion(
 fn Codegen::emit_store_frame_offset(
   self : Codegen,
   src_reg : String,
-  off : Int,
+  off : Int32,
 ) -> Unit {
   if off >= -256 && off <= 255 {
     self.emit("\tstr\t" + src_reg + ", [x29, #" + off.to_string() + "]")
@@ -5070,8 +5073,8 @@ fn Codegen::emit_store_frame_offset(
 fn Codegen::emit_store_mir_local_scalar(
   self : Codegen,
   src_reg : String,
-  offset : Int,
-  frame_size : Int,
+  offset : Int32,
+  frame_size : Int32,
   ty : @ctype.Type,
 ) -> Unit {
   match peel_aligned_type(ty) {
@@ -5200,8 +5203,8 @@ fn Codegen::gen_mir_int128_binary(
   lhs : @mir.MirValue,
   rhs : @mir.MirValue,
   ty : @ctype.Type,
-  offsets : Map[Int, Int],
-  frame_size : Int,
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
 ) -> Unit {
   let left_ty = mir_body_binary_left_type(op, lhs.ty(), rhs.ty())
   let right_ty = mir_body_binary_right_type(op, lhs.ty(), rhs.ty())
@@ -5277,8 +5280,8 @@ fn Codegen::gen_mir_binary(
   lhs : @mir.MirValue,
   rhs : @mir.MirValue,
   ty : @ctype.Type,
-  offsets : Map[Int, Int],
-  frame_size : Int,
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
 ) -> Unit {
   match op {
     "alloca_align" => {
@@ -5592,8 +5595,8 @@ fn Codegen::gen_mir_binary(
 fn Codegen::gen_mir_stmt(
   self : Codegen,
   stmt : @mir.MirStmt,
-  offsets : Map[Int, Int],
-  frame_size : Int,
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
 ) -> Unit {
   match stmt {
     MirDeclare(binding, init) =>
@@ -5833,8 +5836,8 @@ fn Codegen::gen_mir_stmt(
 fn Codegen::gen_mir_stmts(
   self : Codegen,
   stmts : Array[@mir.MirStmt],
-  offsets : Map[Int, Int],
-  frame_size : Int,
+  offsets : Map[Int32, Int32],
+  frame_size : Int32,
 ) -> Unit {
   for stmt in stmts {
     self.gen_mir_stmt(stmt, offsets, frame_size)
@@ -6274,10 +6277,10 @@ fn X64Codegen::emit_mir_spill_scalar(
 
 ///|
 fn mir_body_codegen_raw_arg_offset(
-  raw_sizes : Array[Int],
-  index : Int,
-  stack_area : Int,
-) -> Int {
+  raw_sizes : Array[Int32],
+  index : Int32,
+  stack_area : Int32,
+) -> Int32 {
   let mut offset = stack_area
   let start = index + 1
   for i in start..<raw_sizes.length() {
@@ -6289,8 +6292,8 @@ fn mir_body_codegen_raw_arg_offset(
 ///|
 fn X64Codegen::emit_mir_copy_int128_arg_from_raw_to_stack(
   self : X64Codegen,
-  raw_offset : Int,
-  stack_offset : Int,
+  raw_offset : Int32,
+  stack_offset : Int32,
 ) -> Unit {
   self.emit("\tmov\trax, QWORD PTR " + x64_rsp_ref(raw_offset))
   self.emit("\tmov\tQWORD PTR " + x64_rsp_ref(stack_offset) + ", rax")
@@ -6302,8 +6305,8 @@ fn X64Codegen::emit_mir_copy_int128_arg_from_raw_to_stack(
 fn X64Codegen::emit_mir_load_int128_arg_from_raw_to_regs(
   self : X64Codegen,
   arg_regs : Array[String],
-  start_index : Int,
-  raw_offset : Int,
+  start_index : Int32,
+  raw_offset : Int32,
 ) -> Unit {
   self.emit(
     "\tmov\t" + arg_regs[start_index] + ", QWORD PTR " + x64_rsp_ref(raw_offset),
@@ -6321,8 +6324,8 @@ fn X64Codegen::emit_mir_save_aggregate_call_arg_raw(
   self : X64Codegen,
   arg : @mir.MirValue,
   ty : @ctype.Type,
-  raw_size : Int,
-  offsets : Map[Int, Int],
+  raw_size : Int32,
+  offsets : Map[Int32, Int32],
 ) -> Unit {
   match arg {
     MirCall(_, _, _) | MirIndirectCall(_, _, _) =>
@@ -6354,10 +6357,10 @@ fn X64Codegen::emit_mir_save_aggregate_call_arg_raw(
 fn X64Codegen::emit_mir_store_aggregate_param_from_regs(
   self : X64Codegen,
   ty : @ctype.Type,
-  local_offset : Int,
+  local_offset : Int32,
   classes : Array[X64AggregateClass],
-  int_start : Int,
-  fp_start : Int,
+  int_start : Int32,
+  fp_start : Int32,
 ) -> Unit {
   let arg_regs : ReadOnlyArray[String] = [
     "rdi", "rsi", "rdx", "rcx", "r8", "r9",
@@ -6398,8 +6401,8 @@ fn X64Codegen::emit_mir_store_aggregate_param_from_regs(
 fn X64Codegen::emit_mir_copy_aggregate_param_from_stack(
   self : X64Codegen,
   ty : @ctype.Type,
-  local_offset : Int,
-  stack_arg_index : Int,
+  local_offset : Int32,
+  stack_arg_index : Int32,
 ) -> Unit {
   self.emit_local_addr(local_offset)
   self.emit("\tmov\tr10, rax")
@@ -6441,7 +6444,7 @@ fn X64Codegen::emit_mir_atomic_load(
   self : X64Codegen,
   ptr : @mir.MirValue,
   order : @mir.MirValue,
-  offsets : Map[Int, Int],
+  offsets : Map[Int32, Int32],
 ) -> Unit {
   let elem_ty = mir_body_codegen_atomic_target_type(ptr.ty())
   self.gen_mir_value(ptr, offsets)
@@ -6457,7 +6460,7 @@ fn X64Codegen::emit_mir_atomic_store(
   ptr : @mir.MirValue,
   value : @mir.MirValue,
   order : @mir.MirValue,
-  offsets : Map[Int, Int],
+  offsets : Map[Int32, Int32],
 ) -> Unit {
   let elem_ty = mir_body_codegen_atomic_target_type(ptr.ty())
   self.gen_mir_value(ptr, offsets)
@@ -6494,7 +6497,7 @@ fn X64Codegen::emit_mir_pop_to(self : X64Codegen, reg : String) -> Unit {
 fn X64Codegen::emit_mir_ignored_values(
   self : X64Codegen,
   values : Array[@mir.MirValue],
-  offsets : Map[Int, Int],
+  offsets : Map[Int32, Int32],
 ) -> Unit {
   for value in values {
     self.gen_mir_value(value, offsets)
@@ -6507,7 +6510,7 @@ fn X64Codegen::emit_mir_atomic_update(
   ptr : @mir.MirValue,
   value : @mir.MirValue,
   extras : Array[@mir.MirValue],
-  offsets : Map[Int, Int],
+  offsets : Map[Int32, Int32],
   op : String,
   return_new : Bool,
 ) -> Unit {
@@ -6529,7 +6532,7 @@ fn X64Codegen::emit_mir_atomic_exchange(
   ptr : @mir.MirValue,
   value : @mir.MirValue,
   extras : Array[@mir.MirValue],
-  offsets : Map[Int, Int],
+  offsets : Map[Int32, Int32],
 ) -> Unit {
   self.emit_mir_ignored_values(extras, offsets)
   let elem_ty = mir_body_codegen_atomic_target_type(ptr.ty())
@@ -6557,7 +6560,7 @@ fn X64Codegen::emit_mir_atomic_compare_exchange(
   expected : @mir.MirValue,
   desired : @mir.MirValue,
   extras : Array[@mir.MirValue],
-  offsets : Map[Int, Int],
+  offsets : Map[Int32, Int32],
 ) -> Unit {
   self.emit_mir_ignored_values(extras, offsets)
   let elem_ty = mir_body_codegen_atomic_target_type(ptr.ty())
@@ -6594,7 +6597,7 @@ fn X64Codegen::emit_mir_atomic_compare_exchange(
 fn X64Codegen::mir_pointer_update_scale(
   self : X64Codegen,
   ty : @ctype.Type,
-) -> Int {
+) -> Int32 {
   match pointer_or_array_element_type(ty) {
     Some(elem_ty) => self.mir_pointer_element_scale(elem_ty)
     None => 1
@@ -6605,7 +6608,7 @@ fn X64Codegen::mir_pointer_update_scale(
 fn X64Codegen::mir_pointer_element_scale(
   self : X64Codegen,
   elem_ty : @ctype.Type,
-) -> Int {
+) -> Int32 {
   match elem_ty {
     Void => 1
     _ => self.type_size(elem_ty)
@@ -6643,7 +6646,7 @@ fn X64Codegen::emit_mir_fp_binary_xmm0_xmm1(
 fn X64Codegen::ensure_mir_va_list_storage(
   self : X64Codegen,
   binding : @mir.MirLocal,
-) -> Int {
+) -> Int32 {
   self.ensure_va_list_storage(mir_body_local_name(binding))
 }
 
@@ -6858,8 +6861,8 @@ fn X64Codegen::collect_mir_va_list_storage_stmt(
 fn X64Codegen::mir_body_offsets(
   self : X64Codegen,
   body : @mir.MirFuncBody,
-) -> Map[Int, Int] {
-  let offsets : Map[Int, Int] = Map([])
+) -> Map[Int32, Int32] {
+  let offsets : Map[Int32, Int32] = Map([])
   for binding in body.locals {
     if mir_body_codegen_local_type(binding.ty) {
       offsets[binding.id] = self.alloc_local(
@@ -6889,8 +6892,8 @@ fn X64Codegen::mir_body_offsets(
 ///|
 fn x64_compute_mir_va_initial_offsets(
   params : Array[@mir.MirLocal],
-  initial_int_slots : Int,
-) -> (Int, Int, Int) {
+  initial_int_slots : Int32,
+) -> (Int32, Int32, Int32) {
   let mut int_idx = initial_int_slots
   let mut fp_idx = 0
   let mut stack_idx = 0
@@ -6943,8 +6946,8 @@ fn X64Codegen::emit_mir_save_variadic_registers(self : X64Codegen) -> Unit {
 fn X64Codegen::emit_mir_store_va_list_pointer(
   self : X64Codegen,
   binding : @mir.MirLocal,
-  state_offset : Int,
-  offsets : Map[Int, Int],
+  state_offset : Int32,
+  offsets : Map[Int32, Int32],
 ) -> Unit {
   self.emit("\tlea\trax, " + self.local_ref(state_offset))
   self.emit("\tmov\tQWORD PTR " + self.local_ref(offsets[binding.id]) + ", rax")
@@ -6954,7 +6957,7 @@ fn X64Codegen::emit_mir_store_va_list_pointer(
 fn X64Codegen::emit_mir_va_start(
   self : X64Codegen,
   target : @mir.MirValue,
-  offsets : Map[Int, Int],
+  offsets : Map[Int32, Int32],
 ) -> Unit {
   if self.va_reg_save_offset < 0 {
     abort("MIR va_start used in non-variadic x86-64 function")
@@ -6998,7 +7001,7 @@ fn X64Codegen::emit_mir_va_copy(
   self : X64Codegen,
   target : @mir.MirValue,
   source : @mir.MirValue,
-  offsets : Map[Int, Int],
+  offsets : Map[Int32, Int32],
 ) -> Unit {
   match target {
     MirLocal(binding) => {
@@ -7029,7 +7032,7 @@ fn X64Codegen::emit_mir_va_arg(
   self : X64Codegen,
   ap : @mir.MirValue,
   ty : @ctype.Type,
-  offsets : Map[Int, Int],
+  offsets : Map[Int32, Int32],
 ) -> Unit {
   let overflow_label = self.new_label()
   let load_label = self.new_label()
@@ -7101,7 +7104,7 @@ fn X64Codegen::emit_mir_va_arg_aggregate_addr(
   self : X64Codegen,
   ap : @mir.MirValue,
   ty : @ctype.Type,
-  offsets : Map[Int, Int],
+  offsets : Map[Int32, Int32],
 ) -> Unit {
   if self.va_arg_scratch_offset < 0 {
     abort("x86-64 MIR backend missing aggregate va_arg scratch storage")
@@ -7186,7 +7189,7 @@ fn X64Codegen::emit_mir_bzero(
   self : X64Codegen,
   dst : @mir.MirValue,
   size : @mir.MirValue,
-  offsets : Map[Int, Int],
+  offsets : Map[Int32, Int32],
 ) -> Unit {
   self.gen_mir_value(dst, offsets)
   self.emit_mir_push_rax()
@@ -7205,7 +7208,7 @@ fn X64Codegen::emit_mir_overflow_arithmetic_builtin(
   left : @mir.MirValue,
   right : @mir.MirValue,
   result_ptr : @mir.MirValue,
-  offsets : Map[Int, Int],
+  offsets : Map[Int32, Int32],
   op : String,
 ) -> Unit {
   let result_ty = match mir_body_codegen_overflow_result_type(result_ptr) {
@@ -7263,7 +7266,7 @@ fn X64Codegen::emit_mir_rotate_op(
   lhs : @mir.MirValue,
   rhs : @mir.MirValue,
   ty : @ctype.Type,
-  offsets : Map[Int, Int],
+  offsets : Map[Int32, Int32],
 ) -> Unit {
   let (width, left) = match mir_body_codegen_rotate_op(op) {
     Some(value) => value
@@ -7291,7 +7294,7 @@ fn X64Codegen::emit_mir_rotate_op(
 fn X64Codegen::gen_mir_value(
   self : X64Codegen,
   value : @mir.MirValue,
-  offsets : Map[Int, Int],
+  offsets : Map[Int32, Int32],
 ) -> Unit {
   match value {
     MirConst(bits, ty) =>
@@ -7878,13 +7881,13 @@ fn X64Codegen::gen_mir_value(
           "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
         ]
         let expected_types : Array[@ctype.Type] = []
-        let int_arg_indexes : Array[Int] = []
-        let fp_arg_indexes : Array[Int] = []
-        let stack_arg_indexes : Array[Int] = []
+        let int_arg_indexes : Array[Int32] = []
+        let fp_arg_indexes : Array[Int32] = []
+        let stack_arg_indexes : Array[Int32] = []
         let arg_is_aggregate : Array[Bool] = []
         let arg_classes : Array[Array[X64AggregateClass]] = []
-        let arg_words : Array[Int] = []
-        let raw_sizes : Array[Int] = []
+        let arg_words : Array[Int32] = []
+        let raw_sizes : Array[Int32] = []
         let mut int_arg_index = if has_sret { 1 } else { 0 }
         let mut fp_arg_index = 0
         let mut stack_arg_index = 0
@@ -8158,13 +8161,13 @@ fn X64Codegen::gen_mir_value(
           "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
         ]
         let expected_types : Array[@ctype.Type] = []
-        let int_arg_indexes : Array[Int] = []
-        let fp_arg_indexes : Array[Int] = []
-        let stack_arg_indexes : Array[Int] = []
+        let int_arg_indexes : Array[Int32] = []
+        let fp_arg_indexes : Array[Int32] = []
+        let stack_arg_indexes : Array[Int32] = []
         let arg_is_aggregate : Array[Bool] = []
         let arg_classes : Array[Array[X64AggregateClass]] = []
-        let arg_words : Array[Int] = []
-        let raw_sizes : Array[Int] = []
+        let arg_words : Array[Int32] = []
+        let raw_sizes : Array[Int32] = []
         let mut int_arg_index = if has_sret { 1 } else { 0 }
         let mut fp_arg_index = 0
         let mut stack_arg_index = 0
@@ -8419,13 +8422,13 @@ fn X64Codegen::gen_mir_value(
         "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
       ]
       let expected_types : Array[@ctype.Type] = []
-      let int_arg_indexes : Array[Int] = []
-      let fp_arg_indexes : Array[Int] = []
-      let stack_arg_indexes : Array[Int] = []
+      let int_arg_indexes : Array[Int32] = []
+      let fp_arg_indexes : Array[Int32] = []
+      let stack_arg_indexes : Array[Int32] = []
       let arg_is_aggregate : Array[Bool] = []
       let arg_classes : Array[Array[X64AggregateClass]] = []
-      let arg_words : Array[Int] = []
-      let raw_sizes : Array[Int] = []
+      let arg_words : Array[Int32] = []
+      let raw_sizes : Array[Int32] = []
       let mut int_arg_index = if has_sret { 1 } else { 0 }
       let mut fp_arg_index = 0
       let mut stack_arg_index = 0
@@ -8678,7 +8681,7 @@ fn X64Codegen::gen_mir_value(
 fn X64Codegen::emit_mir_cond_jump_false(
   self : X64Codegen,
   cond : @mir.MirValue,
-  offsets : Map[Int, Int],
+  offsets : Map[Int32, Int32],
   false_label : String,
 ) -> Unit {
   self.gen_mir_value(cond, offsets)
@@ -8697,7 +8700,7 @@ fn X64Codegen::emit_mir_cond_jump_false(
 fn X64Codegen::gen_mir_address_base(
   self : X64Codegen,
   value : @mir.MirValue,
-  offsets : Map[Int, Int],
+  offsets : Map[Int32, Int32],
 ) -> Unit {
   match value {
     MirLocal(binding) =>
@@ -8713,7 +8716,7 @@ fn X64Codegen::gen_mir_address_base(
 fn X64Codegen::mir_call_arg_type(
   self : X64Codegen,
   name : String,
-  index : Int,
+  index : Int32,
   actual : @ctype.Type,
 ) -> @ctype.Type {
   match mir_body_codegen_lowered_builtin_arg_type(name, index) {
@@ -8742,7 +8745,7 @@ fn X64Codegen::gen_mir_int128_binary(
   lhs : @mir.MirValue,
   rhs : @mir.MirValue,
   ty : @ctype.Type,
-  offsets : Map[Int, Int],
+  offsets : Map[Int32, Int32],
 ) -> Unit {
   let left_ty = mir_body_binary_left_type(op, lhs.ty(), rhs.ty())
   let right_ty = mir_body_binary_right_type(op, lhs.ty(), rhs.ty())
@@ -8832,7 +8835,7 @@ fn X64Codegen::gen_mir_binary(
   lhs : @mir.MirValue,
   rhs : @mir.MirValue,
   ty : @ctype.Type,
-  offsets : Map[Int, Int],
+  offsets : Map[Int32, Int32],
 ) -> Unit {
   match op {
     "alloca_align" => {
@@ -9110,7 +9113,7 @@ fn X64Codegen::gen_mir_binary(
 fn X64Codegen::gen_mir_aggregate_return_addr(
   self : X64Codegen,
   value : @mir.MirValue,
-  offsets : Map[Int, Int],
+  offsets : Map[Int32, Int32],
 ) -> Unit {
   match value {
     MirLocal(binding) => self.emit_local_addr(offsets[binding.id])
@@ -9126,7 +9129,7 @@ fn X64Codegen::gen_mir_aggregate_return_addr(
 fn X64Codegen::emit_store_small_aggregate_return_to_local(
   self : X64Codegen,
   ty : @ctype.Type,
-  offset : Int,
+  offset : Int32,
 ) -> Unit {
   self.emit("\tlea\tr10, " + self.local_ref(offset))
   self.emit_store_small_aggregate_return(ty)
@@ -9136,7 +9139,7 @@ fn X64Codegen::emit_store_small_aggregate_return_to_local(
 fn X64Codegen::gen_mir_stmt(
   self : X64Codegen,
   stmt : @mir.MirStmt,
-  offsets : Map[Int, Int],
+  offsets : Map[Int32, Int32],
 ) -> Unit {
   match stmt {
     MirDeclare(binding, init) =>
@@ -9344,7 +9347,7 @@ fn X64Codegen::gen_mir_stmt(
 fn X64Codegen::gen_mir_stmts(
   self : X64Codegen,
   stmts : Array[@mir.MirStmt],
-  offsets : Map[Int, Int],
+  offsets : Map[Int32, Int32],
 ) -> Unit {
   for stmt in stmts {
     self.gen_mir_stmt(stmt, offsets)

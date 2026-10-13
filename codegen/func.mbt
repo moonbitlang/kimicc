@@ -16,7 +16,7 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
       self.sret_scratch_size = 0
       self.pending_sret_offset = -1
       // Allocate space for params
-      let param_offsets : Map[String, Int] = Map([])
+      let param_offsets : Map[String, Int32] = Map([])
       let param_types : Map[String, @parser.Type] = Map([])
       let mut param_stack_end = 0
       if self.is_indirect_aggregate(decl.ret) {
@@ -241,9 +241,9 @@ fn Codegen::gen_func(self : Codegen, decl : @parser.FuncDecl) -> Unit {
 fn Codegen::emit_copy_indirect_param_to_local(
   self : Codegen,
   src_reg : String,
-  offset : Int,
-  size : Int,
-  frame_size : Int,
+  offset : Int32,
+  size : Int32,
+  frame_size : Int32,
 ) -> Unit {
   self.emit("\tmov\tx10, " + src_reg)
   self.emit_local_addr(offset, frame_size)
@@ -277,8 +277,8 @@ fn Codegen::emit_copy_indirect_param_to_local(
 fn Codegen::emit_load_local(
   self : Codegen,
   dst_reg : String,
-  offset : Int,
-  frame_size : Int,
+  offset : Int32,
+  frame_size : Int32,
 ) -> Unit {
   let off = offset - frame_size
   if off >= -256 && off <= 255 {
@@ -293,8 +293,8 @@ fn Codegen::emit_load_local(
 fn Codegen::emit_store_local(
   self : Codegen,
   src_reg : String,
-  offset : Int,
-  frame_size : Int,
+  offset : Int32,
+  frame_size : Int32,
 ) -> Unit {
   let off = offset - frame_size
   if off >= -256 && off <= 255 {
@@ -308,8 +308,8 @@ fn Codegen::emit_store_local(
 ///|
 fn Codegen::emit_local_addr(
   self : Codegen,
-  offset : Int,
-  frame_size : Int,
+  offset : Int32,
+  frame_size : Int32,
 ) -> Unit {
   let off = offset - frame_size
   if off >= -256 && off <= 255 {
@@ -325,7 +325,7 @@ fn Codegen::alloc_local(
   self : Codegen,
   name : String,
   ty : @parser.Type,
-) -> Int {
+) -> Int32 {
   let size = self.type_size(ty)
   let natural_align = self.type_align(ty)
   let align = if natural_align > 8 { natural_align } else { 8 }
@@ -340,7 +340,7 @@ fn Codegen::alloc_local(
 }
 
 ///|
-fn compound_literal_local_name(id : Int) -> String {
+fn compound_literal_local_name(id : Int32) -> String {
   "__kimicc_compound_literal_" + id.to_string()
 }
 

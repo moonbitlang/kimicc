@@ -162,7 +162,7 @@ priv struct Preprocessor {
   dependency_records : Array[PreprocessDependency]
   dependency_seen : Map[String, Bool]
   mut line_control_file : String?
-  mut line_control_line : Int?
-  mut counter : Int
+  mut line_control_line : Int32?
+  mut counter : Int32
   mut error : PreprocessError?
 }

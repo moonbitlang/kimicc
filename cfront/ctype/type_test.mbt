@@ -105,7 +105,7 @@ test "ctype generic and classify builtins expose parser-neutral type facts" {
 }
 
 ///|
-fn expect_const_int_width(ty : @ctype.Type, expected : Int) -> Unit {
+fn expect_const_int_width(ty : @ctype.Type, expected : Int32) -> Unit {
   match ty.const_int_width() {
     Some(actual) =>
       if actual != expected {
@@ -245,7 +245,7 @@ fn expect_integer_builtin_constant(
 ///|
 fn expect_integer_builtin_constant_from_folded_args(
   name : String,
-  arg_count : Int,
+  arg_count : Int32,
   arg0 : @ctype.IntegerConstant?,
   arg1 : @ctype.IntegerConstant?,
   first_ty : @ctype.Type,
@@ -411,7 +411,7 @@ test "ctype generic integer builtin widths cover scalar facts" {
 fn expect_integer_count_builtin_info(
   name : String,
   expected_kind : String,
-  expected_width : Int,
+  expected_width : Int32,
 ) -> Unit {
   match @ctype.integer_count_builtin_info(name) {
     Some((kind, width)) => {
@@ -472,7 +472,7 @@ fn expect_integer_bswap_builtin_info(
   name : String,
   first_ty : @ctype.Type,
   expected_ty : @ctype.Type,
-  expected_width : Int,
+  expected_width : Int32,
 ) -> Unit {
   match @ctype.integer_bswap_builtin_info(name, first_ty) {
     Some((actual_ty, actual_width)) => {
@@ -492,7 +492,7 @@ fn expect_integer_rotate_builtin_info(
   name : String,
   first_ty : @ctype.Type,
   expected_ty : @ctype.Type,
-  expected_width : Int,
+  expected_width : Int32,
   expected_left : Bool,
 ) -> Unit {
   match @ctype.integer_rotate_builtin_info(name, first_ty) {
@@ -934,7 +934,7 @@ fn expect_no_builtin_return_rule(name : String) -> Unit {
 ///|
 fn expect_builtin_return_condition_arg_index(
   name : String,
-  expected_index : Int,
+  expected_index : Int32,
 ) -> Unit {
   match @ctype.builtin_return_condition_arg_index(name) {
     Some(index) =>
@@ -1032,7 +1032,7 @@ test "ctype builtin return type resolver applies argument facts" {
 fn expect_builtin_identity_call_info(
   name : String,
   expected_kind : String,
-  expected_side_effect_arg : Int,
+  expected_side_effect_arg : Int32,
 ) -> Unit {
   match @ctype.builtin_identity_call_info(name) {
     Some((kind, side_effect_arg)) => {
@@ -1142,7 +1142,7 @@ test "ctype builtin trap metadata covers trap-like calls" {
 fn expect_builtin_fence_call_info(
   name : String,
   expected_kind : String,
-  expected_arg_count : Int,
+  expected_arg_count : Int32,
 ) -> Unit {
   match @ctype.builtin_fence_call_info(name) {
     Some((kind, arg_count)) => {
@@ -1176,7 +1176,7 @@ test "ctype builtin fence metadata covers sync and atomic fences" {
 fn expect_builtin_fixed_int_constant_call_info(
   name : String,
   expected_value : Int64,
-  expected_arg_count : Int,
+  expected_arg_count : Int32,
 ) -> Unit {
   match @ctype.builtin_fixed_int_constant_call_info(name) {
     Some((value, arg_count)) => {
@@ -1204,7 +1204,7 @@ test "ctype builtin fixed integer constant metadata covers flt rounds" {
 fn expect_builtin_stack_alloc_call_info(
   name : String,
   expected_op : String,
-  expected_arg_count : Int,
+  expected_arg_count : Int32,
 ) -> Unit {
   match @ctype.builtin_stack_alloc_call_info(name) {
     Some((op, arg_count)) => {
@@ -1235,7 +1235,7 @@ test "ctype builtin stack allocation metadata covers alloca calls" {
 fn expect_builtin_va_setup_call_info(
   name : String,
   expected_op : String,
-  expected_arg_count : Int,
+  expected_arg_count : Int32,
 ) -> Unit {
   match @ctype.builtin_va_setup_call_info(name) {
     Some((op, arg_count)) => {
@@ -1265,7 +1265,7 @@ test "ctype builtin va setup metadata covers varargs setup calls" {
 fn expect_builtin_darwin_fd_helper_call_info(
   name : String,
   expected_op : String,
-  expected_arg_count : Int,
+  expected_arg_count : Int32,
 ) -> Unit {
   match @ctype.builtin_darwin_fd_helper_call_info(name) {
     Some((op, arg_count)) => {
@@ -1295,7 +1295,7 @@ test "ctype Darwin fd helper metadata covers fd_set helpers" {
 fn expect_builtin_zero_memory_call_info(
   name : String,
   expected_op : String,
-  expected_arg_count : Int,
+  expected_arg_count : Int32,
 ) -> Unit {
   match @ctype.builtin_zero_memory_call_info(name) {
     Some((op, arg_count)) => {
@@ -1440,7 +1440,7 @@ test "ctype atomic lock-free builtin metadata covers query shape" {
 fn expect_builtin_atomic_load_store_call_info(
   name : String,
   expected_op : String,
-  expected_min_arg_count : Int,
+  expected_min_arg_count : Int32,
 ) -> Unit {
   match @ctype.builtin_atomic_load_store_call_info(name) {
     Some((op, min_arg_count)) => {
@@ -1479,7 +1479,7 @@ test "ctype atomic load-store builtin metadata covers operation shape" {
 fn expect_builtin_atomic_zero_store_call_info(
   name : String,
   expected_op : String,
-  expected_min_arg_count : Int,
+  expected_min_arg_count : Int32,
 ) -> Unit {
   match @ctype.builtin_atomic_zero_store_call_info(name) {
     Some((op, min_arg_count)) => {
@@ -1510,8 +1510,8 @@ test "ctype atomic zero-store builtin metadata covers operation shape" {
 fn expect_builtin_atomic_exchange_call_info(
   name : String,
   expected_op : String,
-  expected_min_arg_count : Int,
-  expected_extra_start : Int,
+  expected_min_arg_count : Int32,
+  expected_extra_start : Int32,
 ) -> Unit {
   match @ctype.builtin_atomic_exchange_call_info(name) {
     Some((op, min_arg_count, extra_start)) => {
@@ -1559,8 +1559,8 @@ test "ctype atomic exchange builtin metadata covers operation shape" {
 fn expect_builtin_atomic_compare_exchange_call_info(
   name : String,
   expected_op : String,
-  expected_min_arg_count : Int,
-  expected_extra_start : Int,
+  expected_min_arg_count : Int32,
+  expected_extra_start : Int32,
 ) -> Unit {
   match @ctype.builtin_atomic_compare_exchange_call_info(name) {
     Some((op, min_arg_count, extra_start)) => {
@@ -1625,8 +1625,8 @@ fn expect_builtin_atomic_update_call_info(
   name : String,
   expected_op : String,
   expected_return_new : Bool,
-  expected_min_arg_count : Int,
-  expected_extra_start : Int,
+  expected_min_arg_count : Int32,
+  expected_extra_start : Int32,
 ) -> Unit {
   match @ctype.builtin_atomic_update_call_info(name) {
     Some((op, return_new, min_arg_count, extra_start)) => {
@@ -1670,9 +1670,9 @@ test "ctype atomic update builtin metadata covers operation and result shape" {
 
 ///|
 fn expect_builtin_libcall_info(
-  actual : (String, Int)?,
+  actual : (String, Int32)?,
   expected_symbol : String,
-  expected_count : Int,
+  expected_count : Int32,
 ) -> Unit {
   match actual {
     Some((symbol, count)) =>

@@ -195,7 +195,7 @@ impl Show for Token with fn to_string(self) {
 /// and low-level parser tooling; most consumers should call `parse`.
 pub struct Lexer {
   input : String
-  mut pos : Int
+  mut pos : Int32
 }
 
 ///|
@@ -741,7 +741,7 @@ fn Lexer::read_ident(self : Lexer) -> Token {
 }
 
 ///|
-fn hex_digit_value(ch : Char) -> Int? {
+fn hex_digit_value(ch : Char) -> Int32? {
   if ch >= '0' && ch <= '9' {
     Some(ch.to_int() - '0'.to_int())
   } else if ch >= 'a' && ch <= 'f' {
@@ -870,8 +870,8 @@ fn Lexer::read_string(self : Lexer) -> Token raise ParseError {
 ///|
 /// Writes the UTF-8 encoding of the code point `code` (above 0x7f) to `buf`,
 /// one `Char` per byte.
-fn write_utf8_bytes(buf : StringBuilder, code : Int) -> Unit {
-  let bytes : Array[Int] = if code < 0x800 {
+fn write_utf8_bytes(buf : StringBuilder, code : Int32) -> Unit {
+  let bytes : Array[Int32] = if code < 0x800 {
     [0xc0 | (code >> 6), 0x80 | (code & 0x3f)]
   } else if code < 0x10000 {
     [0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f)]
@@ -922,7 +922,7 @@ fn Lexer::peek_next(self : Lexer) -> Char {
 }
 
 ///|
-fn Lexer::peek_offset(self : Lexer, offset : Int) -> Char {
+fn Lexer::peek_offset(self : Lexer, offset : Int32) -> Char {
   if self.pos + offset >= self.input.length() {
     '\u0000'
   } else {
@@ -953,7 +953,7 @@ fn is_alpha(ch : Char) -> Bool {
 ///
 /// The suffix determines the literal's type, so it is consumed here rather than
 /// skipped: dropping it made `sizeof(1L)` report 4 instead of 8.
-fn Lexer::read_integer_suffix(self : Lexer) -> (Bool, Int) {
+fn Lexer::read_integer_suffix(self : Lexer) -> (Bool, Int32) {
   let mut is_unsigned = false
   let mut long_count = 0
   for ;; {
