@@ -596,7 +596,7 @@ fn Parser::global_name_taken(self : Parser, name : String) -> Bool {
 }
 
 ///|
-fn initializer_element_count(init_exprs : Array[Expr]) -> Int {
+fn initializer_element_count(init_exprs : Array[Expr]) -> Int32 {
   let mut count = 0
   let mut cursor = 0
   for expr in init_exprs {
@@ -680,7 +680,7 @@ fn local_init_core_type(ty : Type) -> Type {
 }
 
 ///|
-fn local_init_infer_array_size(ty : Type, count : Int) -> Type {
+fn local_init_infer_array_size(ty : Type, count : Int32) -> Type {
   match ty {
     Array(elem, 0) => Array(elem, count)
     Atomic(inner) => Atomic(local_init_infer_array_size(inner, count))

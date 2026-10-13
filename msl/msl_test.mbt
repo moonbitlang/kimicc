@@ -73,7 +73,7 @@ test "random decorations round-trip through the bridge" {
   let attrs : ReadOnlyArray[String] = [
     "", "[[thread_position_in_grid]]", "[[threadgroup(0)]]", "[[buffer(2)]]",
   ]
-  let state = @splitmix.new(seed=20260813)
+  let state = @splitmix.RandomState(seed=20260813)
   for case_index in 0..<60 {
     let width = 32 * (1 + (state.next_uint() % 128).reinterpret_as_int())
     let n_params = 1 + (state.next_uint() % 4).reinterpret_as_int()

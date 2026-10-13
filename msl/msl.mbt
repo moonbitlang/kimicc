@@ -80,8 +80,8 @@ pub fn plain() -> ParamDecor {
 /// `decor("", attr="[[thread_position_in_grid]]")`.
 pub fn decor(
   space : String,
-  attr? : String = "",
-  by_ref? : Bool = false,
+  attr~ : String = "",
+  by_ref~ : Bool = false,
 ) -> ParamDecor {
   { space, attr, by_ref, }
 }
@@ -375,7 +375,7 @@ pub fn print_kernel(k : Kernel) -> String {
 /// Prints a translation unit of kernels with an optional prelude (the
 /// place for `#include <metal_stdlib>` when a kernel needs library
 /// functions; the scalar and vector types themselves are MSL builtins).
-pub fn print_kernels(kernels : Array[Kernel], prelude? : String = "") -> String {
+pub fn print_kernels(kernels : Array[Kernel], prelude~ : String = "") -> String {
   let parts : Array[String] = []
   if prelude != "" {
     parts.push(prelude)
@@ -668,7 +668,7 @@ fn is_identifier(text : String) -> Bool {
 
 ///|
 /// Finds `word` in `text` at identifier boundaries.
-fn find_word(text : String, word : String) -> Int? {
+fn find_word(text : String, word : String) -> Int32? {
   let mut from = 0
   while from < text.length() {
     match text[from:].to_owned().find(word) {

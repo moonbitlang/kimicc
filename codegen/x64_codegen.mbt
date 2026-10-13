@@ -1,39 +1,39 @@
 ///|
 priv struct X64Codegen {
   output : StringBuilder
-  mut label_counter : Int
-  mut local_offsets : Map[String, Int]
+  mut label_counter : Int32
+  mut local_offsets : Map[String, Int32]
   mut var_types : Map[String, @parser.Type]
-  mut stack_size : Int
-  mut stack_align : Int
+  mut stack_size : Int32
+  mut stack_align : Int32
   mut local_base_reg : String
   mut func_name : String
   func_rets : Map[String, @parser.Type]
   func_variadic : Map[String, Bool]
-  func_param_counts : Map[String, Int]
+  func_param_counts : Map[String, Int32]
   func_param_types : Map[String, Array[@parser.Type]]
   func_defined : Map[String, Bool]
   func_weak : Map[String, Bool]
   struct_layouts : Map[
     String,
-    Array[(String, @parser.Type, Int, Int, Int, Int)],
+    Array[(String, @parser.Type, Int32, Int32, Int32, Int32)],
   ]
   struct_decls : Map[String, @parser.StructDecl]
   globals : Map[String, CodegenGlobalDecl]
   strings : Array[String]
   fp_literals : Array[Double]
-  mut va_list_offsets : Map[String, Int]
-  mut va_reg_save_offset : Int
-  mut va_initial_gp_offset : Int
-  mut va_initial_fp_offset : Int
-  mut va_initial_overflow_offset : Int
-  mut sret_dest_offset : Int
-  mut sret_scratch_offset : Int
-  mut sret_scratch_size : Int
-  mut sret_scratch_align : Int
-  mut va_arg_scratch_offset : Int
-  mut va_arg_scratch_size : Int
-  mut va_arg_scratch_align : Int
+  mut va_list_offsets : Map[String, Int32]
+  mut va_reg_save_offset : Int32
+  mut va_initial_gp_offset : Int32
+  mut va_initial_fp_offset : Int32
+  mut va_initial_overflow_offset : Int32
+  mut sret_dest_offset : Int32
+  mut sret_scratch_offset : Int32
+  mut sret_scratch_size : Int32
+  mut sret_scratch_align : Int32
+  mut va_arg_scratch_offset : Int32
+  mut va_arg_scratch_size : Int32
+  mut va_arg_scratch_align : Int32
   mut break_label : String?
   mut continue_label : String?
   // One entry per `switch` being emitted, innermost last.
@@ -137,7 +137,7 @@ fn X64Codegen::new_label(self : X64Codegen) -> String {
 ///|
 /// Returns the field-alignment cap declared on aggregate `name`, or `None` when
 /// it is unknown or uses natural alignment.
-fn X64Codegen::struct_pack(self : X64Codegen, name : String) -> Int? {
+fn X64Codegen::struct_pack(self : X64Codegen, name : String) -> Int32? {
   if self.struct_decls.contains(name) {
     self.struct_decls[name].pack
   } else {
@@ -146,7 +146,7 @@ fn X64Codegen::struct_pack(self : X64Codegen, name : String) -> Int? {
 }
 
 ///|
-fn x64_align_to(value : Int, align : Int) -> Int {
+fn x64_align_to(value : Int32, align : Int32) -> Int32 {
   if align <= 1 {
     value
   } else {
@@ -163,7 +163,7 @@ fn x64_align_to(value : Int, align : Int) -> Int {
 fn X64Codegen::pointer_element_size(
   self : X64Codegen,
   elem_ty : @parser.Type,
-) -> Int {
+) -> Int32 {
   match elem_ty.core_type() {
     Void => 1
     _ => self.type_size(elem_ty)
@@ -191,7 +191,7 @@ fn x64_reject_unsupported_scalar(ty : @parser.Type) -> Unit {
 }
 
 ///|
-fn x64_atomic_mem_operand(addr_reg : String, width : Int) -> String {
+fn x64_atomic_mem_operand(addr_reg : String, width : Int32) -> String {
   match width {
     1 => "BYTE PTR [" + addr_reg + "]"
     2 => "WORD PTR [" + addr_reg + "]"
@@ -201,7 +201,7 @@ fn x64_atomic_mem_operand(addr_reg : String, width : Int) -> String {
 }
 
 ///|
-fn x64_atomic_rax_reg(width : Int) -> String {
+fn x64_atomic_rax_reg(width : Int32) -> String {
   match width {
     1 => "al"
     2 => "ax"
@@ -211,7 +211,7 @@ fn x64_atomic_rax_reg(width : Int) -> String {
 }
 
 ///|
-fn x64_atomic_r10_reg(width : Int) -> String {
+fn x64_atomic_r10_reg(width : Int32) -> String {
   match width {
     1 => "r10b"
     2 => "r10w"
@@ -221,7 +221,7 @@ fn x64_atomic_r10_reg(width : Int) -> String {
 }
 
 ///|
-fn x64_atomic_r11_reg(width : Int) -> String {
+fn x64_atomic_r11_reg(width : Int32) -> String {
   match width {
     1 => "r11b"
     2 => "r11w"
@@ -239,9 +239,9 @@ priv enum X64AggregateClass {
 ///|
 priv struct X64BitfieldInfo {
   ty : @parser.Type
-  size : Int
-  bit_offset : Int
-  bit_width : Int
+  size : Int32
+  bit_offset : Int32
+  bit_width : Int32
 }
 
 ///|
@@ -268,7 +268,7 @@ fn x64_signed_i32_bits(value : Int64) -> Int64 {
 }
 
 ///|
-fn X64Codegen::type_size(self : X64Codegen, ty : @parser.Type) -> Int {
+fn X64Codegen::type_size(self : X64Codegen, ty : @parser.Type) -> Int32 {
   match ty {
     Atomic(inner) | Aligned(inner, _) => self.type_size(inner)
     _ =>
@@ -331,7 +331,7 @@ fn X64Codegen::type_size(self : X64Codegen, ty : @parser.Type) -> Int {
 }
 
 ///|
-fn X64Codegen::type_align(self : X64Codegen, ty : @parser.Type) -> Int {
+fn X64Codegen::type_align(self : X64Codegen, ty : @parser.Type) -> Int32 {
   match ty {
     Atomic(inner) => self.type_align(inner)
     Aligned(inner, align) => {
@@ -398,7 +398,7 @@ fn X64Codegen::compute_struct_layout(
   if self.struct_layouts.contains(decl.name) {
     return
   }
-  let fields : Array[(String, @parser.Type, Int, Int, Int, Int)] = []
+  let fields : Array[(String, @parser.Type, Int32, Int32, Int32, Int32)] = []
   if decl.is_union {
     for field in decl.fields {
       let size = self.type_size(field.ty)
@@ -482,7 +482,7 @@ fn X64Codegen::alloc_local(
   self : X64Codegen,
   name : String,
   ty : @parser.Type,
-) -> Int {
+) -> Int32 {
   let size = self.type_size(ty)
   let natural_align = self.type_align(ty)
   let align = if natural_align > 8 { natural_align } else { 8 }
@@ -499,7 +499,7 @@ fn X64Codegen::alloc_local(
 }
 
 ///|
-fn x64_rsp_ref(offset : Int) -> String {
+fn x64_rsp_ref(offset : Int32) -> String {
   if offset == 0 {
     "[rsp]"
   } else {
@@ -508,7 +508,7 @@ fn x64_rsp_ref(offset : Int) -> String {
 }
 
 ///|
-fn x64_base_neg_ref(base : String, offset : Int, extra : Int) -> String {
+fn x64_base_neg_ref(base : String, offset : Int32, extra : Int32) -> String {
   let total = offset - extra
   if total > 0 {
     "[" + base + " - " + total.to_string() + "]"
@@ -520,21 +520,21 @@ fn x64_base_neg_ref(base : String, offset : Int, extra : Int) -> String {
 }
 
 ///|
-fn X64Codegen::local_ref(self : X64Codegen, offset : Int) -> String {
+fn X64Codegen::local_ref(self : X64Codegen, offset : Int32) -> String {
   x64_base_neg_ref(self.local_base_reg, offset, 0)
 }
 
 ///|
 fn X64Codegen::local_neg_ref(
   self : X64Codegen,
-  offset : Int,
-  extra : Int,
+  offset : Int32,
+  extra : Int32,
 ) -> String {
   x64_base_neg_ref(self.local_base_reg, offset, extra)
 }
 
 ///|
-fn X64Codegen::emit_local_addr(self : X64Codegen, offset : Int) -> Unit {
+fn X64Codegen::emit_local_addr(self : X64Codegen, offset : Int32) -> Unit {
   self.emit("\tlea\trax, " + self.local_ref(offset))
 }
 
@@ -604,7 +604,7 @@ fn X64Codegen::emit_store_indirect(
 ///|
 fn X64Codegen::emit_store_local_from_rax(
   self : X64Codegen,
-  offset : Int,
+  offset : Int32,
   ty : @parser.Type,
 ) -> Unit {
   match ty.core_type() {
@@ -630,7 +630,7 @@ fn X64Codegen::emit_store_local_from_rax(
 fn X64Codegen::emit_store_int_reg_to_local(
   self : X64Codegen,
   reg : String,
-  offset : Int,
+  offset : Int32,
 ) -> Unit {
   self.emit("\tmov\tQWORD PTR " + self.local_ref(offset) + ", " + reg)
 }
@@ -639,7 +639,7 @@ fn X64Codegen::emit_store_int_reg_to_local(
 fn X64Codegen::emit_store_fp_reg_to_local(
   self : X64Codegen,
   reg : String,
-  offset : Int,
+  offset : Int32,
   ty : @parser.Type,
 ) -> Unit {
   match ty.core_type() {
@@ -673,8 +673,8 @@ fn x64_scalar_aggregate_class(ty : @parser.Type) -> X64AggregateClass? {
 ///|
 fn x64_mark_aggregate_class_range(
   classes : Array[X64AggregateClass],
-  offset : Int,
-  size : Int,
+  offset : Int32,
+  size : Int32,
   class_ : X64AggregateClass,
 ) -> Bool {
   if size <= 0 {
@@ -695,7 +695,7 @@ fn x64_mark_aggregate_class_range(
 fn X64Codegen::classify_aggregate_field(
   self : X64Codegen,
   ty : @parser.Type,
-  offset : Int,
+  offset : Int32,
   classes : Array[X64AggregateClass],
 ) -> Bool {
   match ty.core_type() {
@@ -754,7 +754,7 @@ fn X64Codegen::classify_aggregate_field(
 fn X64Codegen::aggregate_has_unaligned_field(
   self : X64Codegen,
   ty : @parser.Type,
-  offset : Int,
+  offset : Int32,
 ) -> Bool {
   match ty {
     Atomic(inner) => self.aggregate_has_unaligned_field(inner, offset)
@@ -828,7 +828,7 @@ fn X64Codegen::aggregate_classes(
 fn x64_class_count(
   classes : Array[X64AggregateClass],
   expected : X64AggregateClass,
-) -> Int {
+) -> Int32 {
   let mut count = 0
   for class_ in classes {
     if class_ == expected {
@@ -858,7 +858,7 @@ fn X64Codegen::is_memory_aggregate(
 fn X64Codegen::aggregate_word_count(
   self : X64Codegen,
   ty : @parser.Type,
-) -> Int {
+) -> Int32 {
   x64_align_to(self.type_size(ty), 8) / 8
 }
 
@@ -866,7 +866,7 @@ fn X64Codegen::aggregate_word_count(
 fn X64Codegen::stack_arg_align_slots(
   self : X64Codegen,
   ty : @parser.Type,
-) -> Int {
+) -> Int32 {
   let align = self.type_align(ty)
   if ty.is_int128() || align > 8 {
     x64_align_to(align, 8) / 8
@@ -878,19 +878,19 @@ fn X64Codegen::stack_arg_align_slots(
 ///|
 fn X64Codegen::align_stack_arg_index(
   self : X64Codegen,
-  index : Int,
+  index : Int32,
   ty : @parser.Type,
-) -> Int {
+) -> Int32 {
   x64_align_to(index, self.stack_arg_align_slots(ty))
 }
 
 ///|
 fn X64Codegen::align_call_stack_arg(
   self : X64Codegen,
-  index : Int,
-  call_align : Int,
+  index : Int32,
+  call_align : Int32,
   ty : @parser.Type,
-) -> (Int, Int) {
+) -> (Int32, Int32) {
   let align_slots = self.stack_arg_align_slots(ty)
   let aligned_index = x64_align_to(index, align_slots)
   let stack_align = align_slots * 8
@@ -903,7 +903,7 @@ fn X64Codegen::align_call_stack_arg(
 }
 
 ///|
-fn x64_mem_at_reg(reg : String, offset : Int) -> String {
+fn x64_mem_at_reg(reg : String, offset : Int32) -> String {
   if offset == 0 {
     "[" + reg + "]"
   } else {
@@ -912,12 +912,12 @@ fn x64_mem_at_reg(reg : String, offset : Int) -> String {
 }
 
 ///|
-fn x64_sized_mem_at_reg(reg : String, offset : Int, width : Int) -> String {
+fn x64_sized_mem_at_reg(reg : String, offset : Int32, width : Int32) -> String {
   x64_sized_mem_ref(x64_mem_at_reg(reg, offset), width)
 }
 
 ///|
-fn x64_sized_mem_ref(mem : String, width : Int) -> String {
+fn x64_sized_mem_ref(mem : String, width : Int32) -> String {
   let prefix = match width {
     1 => "BYTE PTR "
     2 => "WORD PTR "
@@ -928,7 +928,7 @@ fn x64_sized_mem_ref(mem : String, width : Int) -> String {
 }
 
 ///|
-fn x64_sized_reg(width : Int) -> String {
+fn x64_sized_reg(width : Int32) -> String {
   match width {
     1 => "al"
     2 => "ax"
@@ -992,8 +992,8 @@ fn x64_reg32(reg : String) -> String {
 fn X64Codegen::aggregate_word_width(
   self : X64Codegen,
   ty : @parser.Type,
-  word : Int,
-) -> Int {
+  word : Int32,
+) -> Int32 {
   let remaining = self.type_size(ty) - word * 8
   if remaining >= 8 {
     8
@@ -1009,8 +1009,8 @@ fn X64Codegen::emit_load_int_bytes_from_mem_reg(
   self : X64Codegen,
   dst_reg : String,
   base_reg : String,
-  offset : Int,
-  width : Int,
+  offset : Int32,
+  width : Int32,
 ) -> Unit {
   match width {
     1 =>
@@ -1088,8 +1088,8 @@ fn X64Codegen::emit_store_int_bytes_to_mem_reg(
   self : X64Codegen,
   src_reg : String,
   base_reg : String,
-  offset : Int,
-  width : Int,
+  offset : Int32,
+  width : Int32,
 ) -> Unit {
   self.emit_store_int_bytes_to_mem_refs(
     src_reg,
@@ -1105,9 +1105,9 @@ fn X64Codegen::emit_store_int_bytes_to_mem_reg(
 fn X64Codegen::emit_store_int_bytes_to_local(
   self : X64Codegen,
   src_reg : String,
-  local_offset : Int,
-  byte_offset : Int,
-  width : Int,
+  local_offset : Int32,
+  byte_offset : Int32,
+  width : Int32,
 ) -> Unit {
   self.emit_store_int_bytes_to_mem_refs(
     src_reg,
@@ -1127,7 +1127,7 @@ fn X64Codegen::emit_store_int_bytes_to_mem_refs(
   mem2 : String,
   mem4 : String,
   mem6 : String,
-  width : Int,
+  width : Int32,
 ) -> Unit {
   match width {
     1 =>
@@ -1176,8 +1176,8 @@ fn X64Codegen::emit_load_sse_word_from_mem_reg(
   self : X64Codegen,
   dst_reg : String,
   base_reg : String,
-  offset : Int,
-  width : Int,
+  offset : Int32,
+  width : Int32,
 ) -> Unit {
   if width <= 4 {
     self.emit(
@@ -1195,8 +1195,8 @@ fn X64Codegen::emit_store_sse_word_to_mem_reg(
   self : X64Codegen,
   src_reg : String,
   base_reg : String,
-  offset : Int,
-  width : Int,
+  offset : Int32,
+  width : Int32,
 ) -> Unit {
   if width <= 4 {
     self.emit(
@@ -1213,9 +1213,9 @@ fn X64Codegen::emit_store_sse_word_to_mem_reg(
 fn X64Codegen::emit_store_sse_word_to_local(
   self : X64Codegen,
   src_reg : String,
-  local_offset : Int,
-  byte_offset : Int,
-  width : Int,
+  local_offset : Int32,
+  byte_offset : Int32,
+  width : Int32,
 ) -> Unit {
   let mem = self.local_neg_ref(local_offset, byte_offset)
   if width <= 4 {
@@ -1394,9 +1394,9 @@ fn X64Codegen::emit_init_scalar_at_addr(
 fn X64Codegen::emit_init_bitfield_at_addr(
   self : X64Codegen,
   field_ty : @parser.Type,
-  container_size : Int,
-  bit_offset : Int,
-  bit_width : Int,
+  container_size : Int32,
+  bit_offset : Int32,
+  bit_width : Int32,
   init_expr : @parser.Expr,
 ) -> Unit {
   let value = @parser.scalar_initializer_value(init_expr)
@@ -1725,8 +1725,8 @@ fn X64Codegen::emit_call_sret_addr(
 fn X64Codegen::compute_va_initial_offsets(
   self : X64Codegen,
   params : Array[@parser.Param],
-  initial_gp_slots : Int,
-) -> (Int, Int, Int) {
+  initial_gp_slots : Int32,
+) -> (Int32, Int32, Int32) {
   let mut int_idx = initial_gp_slots
   let mut fp_idx = 0
   let mut stack_idx = 0
@@ -1803,7 +1803,10 @@ fn X64Codegen::emit_save_variadic_registers(self : X64Codegen) -> Unit {
 }
 
 ///|
-fn X64Codegen::ensure_va_list_storage(self : X64Codegen, name : String) -> Int {
+fn X64Codegen::ensure_va_list_storage(
+  self : X64Codegen,
+  name : String,
+) -> Int32 {
   if self.va_list_offsets.contains(name) {
     self.va_list_offsets[name]
   } else {
@@ -1817,7 +1820,7 @@ fn X64Codegen::ensure_va_list_storage(self : X64Codegen, name : String) -> Int {
 fn X64Codegen::emit_store_va_list_pointer(
   self : X64Codegen,
   dest : @parser.Expr,
-  state_offset : Int,
+  state_offset : Int32,
 ) -> Unit {
   match dest {
     Var(name) =>
@@ -1911,7 +1914,7 @@ fn X64Codegen::emit_va_copy(
 ///|
 fn x64_first_call_args(
   args : Array[@parser.Expr],
-  count : Int,
+  count : Int32,
 ) -> Array[@parser.Expr] {
   let selected : Array[@parser.Expr] = []
   for i = 0; i < count; i = i + 1 {
@@ -1927,7 +1930,7 @@ fn X64Codegen::emit_builtin_lib_call(
   self : X64Codegen,
   name : String,
   args : Array[@parser.Expr],
-  count : Int,
+  count : Int32,
   ret_ty : @parser.Type,
   param_types : Array[@parser.Type],
 ) -> Unit {
@@ -2130,7 +2133,7 @@ fn X64Codegen::emit_ctype_strl_builtin_call(
 ///|
 fn x64_indexed_call_args(
   args : Array[@parser.Expr],
-  source_indexes : Array[Int],
+  source_indexes : Array[Int32],
 ) -> Array[@parser.Expr] {
   let selected : Array[@parser.Expr] = []
   for index in source_indexes {
@@ -2237,7 +2240,7 @@ fn X64Codegen::emit_builtin_first_arg(
 fn X64Codegen::emit_builtin_clz(
   self : X64Codegen,
   args : Array[@parser.Expr],
-  width : Int,
+  width : Int32,
 ) -> Unit {
   if !self.emit_builtin_first_arg(args) {
     return
@@ -2256,7 +2259,7 @@ fn X64Codegen::emit_builtin_clz(
 fn X64Codegen::emit_builtin_ctz(
   self : X64Codegen,
   args : Array[@parser.Expr],
-  width : Int,
+  width : Int32,
 ) -> Unit {
   if !self.emit_builtin_first_arg(args) {
     return
@@ -2273,7 +2276,7 @@ fn X64Codegen::emit_builtin_ctz(
 fn X64Codegen::emit_builtin_ffs(
   self : X64Codegen,
   args : Array[@parser.Expr],
-  width : Int,
+  width : Int32,
 ) -> Unit {
   if !self.emit_builtin_first_arg(args) {
     return
@@ -2300,7 +2303,7 @@ fn X64Codegen::emit_builtin_ffs(
 fn X64Codegen::emit_builtin_bswap(
   self : X64Codegen,
   args : Array[@parser.Expr],
-  width : Int,
+  width : Int32,
 ) -> Unit {
   if !self.emit_builtin_first_arg(args) {
     return
@@ -2320,7 +2323,7 @@ fn X64Codegen::emit_builtin_bswap(
 fn X64Codegen::emit_builtin_rotate(
   self : X64Codegen,
   args : Array[@parser.Expr],
-  width : Int,
+  width : Int32,
   left : Bool,
 ) -> Unit {
   if args.length() < 2 {
@@ -2345,7 +2348,7 @@ fn X64Codegen::emit_builtin_rotate(
 fn X64Codegen::emit_builtin_popcount(
   self : X64Codegen,
   args : Array[@parser.Expr],
-  width : Int,
+  width : Int32,
 ) -> Unit {
   if !self.emit_builtin_first_arg(args) {
     return
@@ -2385,7 +2388,7 @@ fn X64Codegen::emit_builtin_popcount(
 fn X64Codegen::emit_builtin_parity(
   self : X64Codegen,
   args : Array[@parser.Expr],
-  width : Int,
+  width : Int32,
 ) -> Unit {
   self.emit_builtin_popcount(args, width)
   self.emit("\tand\trax, 1")
@@ -3223,7 +3226,7 @@ fn X64Codegen::emit_atomic_clean_rax(
 fn X64Codegen::emit_atomic_update_op(
   self : X64Codegen,
   op : String,
-  width : Int,
+  width : Int32,
 ) -> Unit {
   let dst = x64_atomic_r11_reg(width)
   let value = x64_atomic_r10_reg(width)
@@ -4207,7 +4210,7 @@ fn X64Codegen::field_info(
   self : X64Codegen,
   ty : @parser.Type,
   field_name : String,
-) -> (@parser.Type, Int) {
+) -> (@parser.Type, Int32) {
   match self.field_layout(ty, field_name) {
     Some((_, field_ty, offset, _, _, _)) => (field_ty, offset)
     None => abort("unknown field: " + field_name)
@@ -4224,7 +4227,7 @@ fn X64Codegen::field_layout(
   self : X64Codegen,
   ty : @parser.Type,
   field_name : String,
-) -> (String, @parser.Type, Int, Int, Int, Int)? {
+) -> (String, @parser.Type, Int32, Int32, Int32, Int32)? {
   let lookup_ty = match x64_field_receiver_type(ty) {
     Some(lookup_ty) => lookup_ty
     None => return None
@@ -4247,7 +4250,7 @@ fn X64Codegen::offset_of_path(
   self : X64Codegen,
   ty : @parser.Type,
   path : Array[@parser.OffsetDesignator],
-) -> Int? {
+) -> Int32? {
   let mut current_ty = ty
   let mut offset = 0
   for designator in path {
@@ -4311,7 +4314,7 @@ fn x64_bitfield_promoted_type(info : X64BitfieldInfo) -> @parser.Type {
 fn X64Codegen::emit_load_container_to_rax(
   self : X64Codegen,
   addr_reg : String,
-  size : Int,
+  size : Int32,
 ) -> Unit {
   let mem = x64_mem_at_reg(addr_reg, 0)
   match size {
@@ -4326,7 +4329,7 @@ fn X64Codegen::emit_load_container_to_rax(
 fn X64Codegen::emit_load_container_to_rdx(
   self : X64Codegen,
   addr_reg : String,
-  size : Int,
+  size : Int32,
 ) -> Unit {
   let mem = x64_mem_at_reg(addr_reg, 0)
   match size {
@@ -4341,7 +4344,7 @@ fn X64Codegen::emit_load_container_to_rdx(
 fn X64Codegen::emit_store_container_from_rdx(
   self : X64Codegen,
   addr_reg : String,
-  size : Int,
+  size : Int32,
 ) -> Unit {
   let mem = x64_mem_at_reg(addr_reg, 0)
   match size {
@@ -4658,7 +4661,7 @@ fn X64Codegen::gen_compound_literal_addr(
   self : X64Codegen,
   ty : @parser.Type,
   init_exprs : Array[@parser.Expr],
-  id : Int,
+  id : Int32,
 ) -> Unit {
   let ty = codegen_file_scope_compound_literal_type(ty, init_exprs)
   let name = compound_literal_local_name(id)
@@ -6138,7 +6141,7 @@ fn X64Codegen::gen_compound_assign(
 fn X64Codegen::gen_inc_dec(
   self : X64Codegen,
   expr : @parser.Expr,
-  delta : Int,
+  delta : Int32,
   postfix : Bool,
 ) -> Unit {
   let expr_ty = self.type_of(expr)
@@ -6290,9 +6293,9 @@ fn x64_default_argument_promotion(ty : @parser.Type) -> @parser.Type {
 fn X64Codegen::declared_call_arg_type(
   self : X64Codegen,
   func : @parser.Expr,
-  index : Int,
+  index : Int32,
   actual : @parser.Type,
-  named_count_limit : Int?,
+  named_count_limit : Int32?,
 ) -> @parser.Type {
   match named_count_limit {
     Some(limit) =>
@@ -6334,7 +6337,7 @@ fn X64Codegen::declared_call_arg_type(
 fn X64Codegen::named_call_arg_count(
   self : X64Codegen,
   func : @parser.Expr,
-) -> Int {
+) -> Int32 {
   match self.type_of(func) {
     FuncPtr(_, params, true) => params.length()
     _ =>
@@ -6376,11 +6379,11 @@ fn X64Codegen::gen_call(
   let arg_is_fp : Array[Bool] = []
   let arg_is_aggregate : Array[Bool] = []
   let arg_classes : Array[Array[X64AggregateClass]] = []
-  let arg_words : Array[Int] = []
-  let arg_int_reg_index : Array[Int] = []
-  let arg_fp_reg_index : Array[Int] = []
-  let arg_stack_index : Array[Int] = []
-  let arg_temp_index : Array[Int] = []
+  let arg_words : Array[Int32] = []
+  let arg_int_reg_index : Array[Int32] = []
+  let arg_fp_reg_index : Array[Int32] = []
+  let arg_stack_index : Array[Int32] = []
+  let arg_temp_index : Array[Int32] = []
   let ret_ty = self.type_of(Call(func, args))
   x64_reject_unsupported_scalar(ret_ty)
   let has_sret = self.is_memory_aggregate(ret_ty)
@@ -7401,7 +7404,7 @@ fn X64Codegen::emit_function(
       self.continue_label = None
       self.emitted_labels = {}
       self.defined_labels = {}
-      let param_offsets : Map[String, Int] = Map([])
+      let param_offsets : Map[String, Int32] = Map([])
       let param_types : Map[String, @parser.Type] = Map([])
       if self.is_memory_aggregate(decl.ret) {
         self.sret_dest_offset = self.alloc_local(
@@ -8009,7 +8012,7 @@ fn X64Codegen::fold_float_const(
 fn X64Codegen::global_lvalue_reloc(
   self : X64Codegen,
   expr : @parser.Expr,
-) -> (String, Int)? {
+) -> (String, Int32)? {
   match expr {
     Var(name) => Some((name, 0))
     CompoundLiteral(_, _, id) =>
@@ -8053,7 +8056,7 @@ fn X64Codegen::global_lvalue_reloc(
 fn X64Codegen::global_address_reloc_parts(
   self : X64Codegen,
   expr : @parser.Expr,
-) -> (String, Int)? {
+) -> (String, Int32)? {
   match expr {
     Var(name) => Some((name, 0))
     CompoundLiteral(_, _, id) =>
@@ -8109,7 +8112,7 @@ fn X64Codegen::global_offset_bytes(
   self : X64Codegen,
   base : @parser.Expr,
   offset : Int64,
-) -> Int {
+) -> Int32 {
   match self.global_expr_type(base).pointer_or_array_element() {
     Some(elem_ty) => offset.to_int() * self.pointer_element_size(elem_ty)
     None => offset.to_int()
@@ -8119,7 +8122,7 @@ fn X64Codegen::global_offset_bytes(
 ///|
 fn X64Codegen::emit_global_int_by_size(
   self : X64Codegen,
-  size : Int,
+  size : Int32,
   value : Int64,
 ) -> Unit {
   match size {
@@ -8147,8 +8150,8 @@ fn X64Codegen::emit_global_float(
 fn X64Codegen::global_bitfield_bits(
   self : X64Codegen,
   init_expr : @parser.Expr,
-  bit_width : Int,
-  bit_offset : Int,
+  bit_width : Int32,
+  bit_offset : Int32,
 ) -> Int64 {
   match self.fold_const(x64_initializer_value(init_expr)) {
     Some(value) => (value & bitfield_mask(bit_width)) << bit_offset

@@ -1,10 +1,10 @@
 ///|
 #borrow(path, content)
-extern "c" fn moonbit_write_file(path : Bytes, content : Bytes) -> Int = "moonbit_write_file"
+extern "c" fn moonbit_write_file(path : Bytes, content : Bytes) -> Int32 = "moonbit_write_file"
 
 ///|
 #borrow(cmd)
-extern "c" fn moonbit_system(cmd : Bytes) -> Int = "moonbit_system"
+extern "c" fn moonbit_system(cmd : Bytes) -> Int32 = "moonbit_system"
 
 ///|
 fn compile(source : String) -> String raise @parser.ParseError {
@@ -30,7 +30,7 @@ fn source_id(source : String) -> String {
 }
 
 ///|
-fn run_source(source : String) -> Int raise @parser.ParseError {
+fn run_source(source : String) -> Int32 raise @parser.ParseError {
   let assembly = compile(source)
   let id = source_id(source)
   let asm_path = "/tmp/kimicc_test_" + id + ".s"
@@ -67,7 +67,7 @@ fn run_source_against_mir_oracle(
 }
 
 ///|
-fn run_source_async(source : String) -> Int raise @parser.ParseError {
+fn run_source_async(source : String) -> Int32 raise @parser.ParseError {
   run_source(source)
 }
 
@@ -193,7 +193,7 @@ async fn run_source_strict_mir_against_parser_codegen(
 
 ///|
 priv struct CommandResult {
-  code : Int
+  code : Int32
   output : String
 }
 
@@ -265,7 +265,7 @@ fn run_command_checked(cmd : String, context : String) -> Unit {
 }
 
 ///|
-fn run_command_exit_silent(cmd : String, tag : String) -> Int {
+fn run_command_exit_silent(cmd : String, tag : String) -> Int32 {
   let output_path = temp_file_path(tag, cmd, ".out")
   moonbit_system(@utf8.encode(cmd + " > " + shell_quote(output_path) + " 2>&1"))
 }
@@ -282,7 +282,7 @@ async fn run_command_capture(cmd : String, tag : String) -> CommandResult {
 async fn run_command_capture_tail(
   cmd : String,
   tag : String,
-  tail_lines : Int,
+  tail_lines : Int32,
 ) -> CommandResult {
   let output_path = temp_file_path(tag, cmd, ".out")
   let tail_path = output_path + ".tail"
@@ -377,7 +377,7 @@ fn compile_source_to_direct_object_path(
 fn run_source_direct_object_async(
   source : String,
   tag : String,
-) -> Int raise @parser.ParseError {
+) -> Int32 raise @parser.ParseError {
   let obj_path = compile_source_to_direct_object_path(source, tag)
   let bin_path = temp_file_path(tag + "_direct_bin", source, "")
   run_command_checked(
@@ -923,7 +923,7 @@ async fn run_sqlite_public_tcl_script_tail_with(
   test_path : String,
   tag : String,
   compiler : SQLiteObjectCompiler,
-  tail_lines : Int,
+  tail_lines : Int32,
 ) -> CommandResult {
   if !sqlite_public_tests_available() {
     return { code: 0, output: "sqlite-public-tests-skipped\n", }
@@ -953,7 +953,7 @@ async fn run_sqlite_public_tcl_runner_tail_with(
   runner_args : String,
   tag : String,
   compiler : SQLiteObjectCompiler,
-  tail_lines : Int,
+  tail_lines : Int32,
 ) -> CommandResult {
   run_sqlite_public_tcl_runner_tail_with_root(
     runner_args,
@@ -969,7 +969,7 @@ async fn run_sqlite_public_tcl_runner_tail_with_root(
   runner_args : String,
   tag : String,
   compiler : SQLiteObjectCompiler,
-  tail_lines : Int,
+  tail_lines : Int32,
   root : String,
 ) -> CommandResult {
   if !sqlite_public_tests_available_at(root) {

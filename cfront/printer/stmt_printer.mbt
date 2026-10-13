@@ -17,7 +17,7 @@ pub fn print_stmt(stmt : @parser.Stmt) -> String {
 
 ///|
 /// Writes `indent` levels of two-space indentation.
-fn write_indent(buf : StringBuilder, indent : Int) -> Unit {
+fn write_indent(buf : StringBuilder, indent : Int32) -> Unit {
   for _ in 0..<indent {
     buf.write_string("  ")
   }
@@ -26,7 +26,7 @@ fn write_indent(buf : StringBuilder, indent : Int) -> Unit {
 ///|
 /// Writes a statement at the given indentation level, without a trailing
 /// newline.
-fn write_stmt(buf : StringBuilder, stmt : @parser.Stmt, indent : Int) -> Unit {
+fn write_stmt(buf : StringBuilder, stmt : @parser.Stmt, indent : Int32) -> Unit {
   match stmt {
     ExprStmt(expr) => {
       write_indent(buf, indent)
@@ -163,7 +163,7 @@ fn write_label(
   buf : StringBuilder,
   label : String,
   body : @parser.Stmt,
-  indent : Int,
+  indent : Int32,
 ) -> Unit {
   write_indent(buf, indent)
   buf.write_string(label)
@@ -176,7 +176,7 @@ fn write_label(
 fn write_block(
   buf : StringBuilder,
   body : ArrayView[@parser.Stmt],
-  indent : Int,
+  indent : Int32,
 ) -> Unit {
   if body.length() == 0 {
     buf.write_string("{}")
@@ -214,7 +214,11 @@ fn branch_captures_else(stmt : @parser.Stmt) -> Bool {
 ///
 /// A compound body is written inline after the enclosing keyword; anything else
 /// goes on its own indented line so that a bare `if (c) x = 1;` stays readable.
-fn write_branch(buf : StringBuilder, stmt : @parser.Stmt, indent : Int) -> Unit {
+fn write_branch(
+  buf : StringBuilder,
+  stmt : @parser.Stmt,
+  indent : Int32,
+) -> Unit {
   match stmt {
     Compound(body) => write_block(buf, body, indent)
     other => {

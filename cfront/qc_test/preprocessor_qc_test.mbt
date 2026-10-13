@@ -77,9 +77,9 @@ impl @debug.Debug for PpTokens with fn to_repr(self) {
 ///|
 /// `tokens` joined by separators chosen by a seeded walk, so the same input
 /// always renders the same text.
-fn pp_join(tokens : Array[String], seed : Int) -> String {
+fn pp_join(tokens : Array[String], seed : Int32) -> String {
   let buf = StringBuilder()
-  let state = @splitmix.new(seed=seed.to_uint64())
+  let state = @splitmix.RandomState(seed=seed.to_uint64())
   for i, token in tokens {
     if i > 0 {
       buf.write_string(pp_separators[pick(state, pp_separators.length())])
@@ -96,7 +96,7 @@ fn pp_join(tokens : Array[String], seed : Int) -> String {
 /// two tokens into one (`- -` into `--`, `L "s"` into `L"s"`) or splits one.
 test "preprocessing macro-free text preserves its tokens" {
   @quickcheck.check(
-    (input : (PpTokens, Int)) => {
+    (input : (PpTokens, Int32)) => {
       let (tokens, seed) = input
       let text = pp_join(tokens.0, seed)
       match lex_all(text) {
@@ -125,11 +125,11 @@ let skipped_lines : ReadOnlyArray[String] = [
 ]
 
 ///|
-struct SkippedGroup(Array[Int])
+struct SkippedGroup(Array[Int32])
 
 ///|
 impl @quickcheck.Arbitrary for SkippedGroup with fn arbitrary(size, state) {
-  let lines : Array[Int] = []
+  let lines : Array[Int32] = []
   for _ in 0..<pick(state, size + 1) {
     lines.push(pick(state, skipped_lines.length()))
   }
@@ -184,7 +184,7 @@ test "an #if 0 group vanishes" {
 /// glue with.
 test "an object-like macro expands to its replacement tokens" {
   @quickcheck.check(
-    (input : (PpTokens, PpTokens, UInt)) => {
+    (input : (PpTokens, PpTokens, UInt32)) => {
       let (body, text, every) = input
       // Every `every % 3 + 1`-th token of the text becomes the macro name.
       let stride = (every % 3).reinterpret_as_int() + 1
@@ -255,7 +255,7 @@ test "the preprocessor returns a result on arbitrary directive soups" {
     "/*", "\\", "\u{1F600}",
   ]
   @quickcheck.check(
-    (picks : Array[UInt]) => {
+    (picks : Array[UInt32]) => {
       let text = picks
         .map(i => {
           lines[(i % lines.length().reinterpret_as_uint()).reinterpret_as_int()]

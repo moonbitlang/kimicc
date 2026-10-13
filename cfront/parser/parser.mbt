@@ -9,7 +9,7 @@ pub struct Parser {
   target : @target.Target
   pragma_pack : PragmaPackTable
   mut token : Token
-  mut token_start : Int
+  mut token_start : Int32
   typedefs : Map[String, Type]
   // Typedef names that denote a bare function type, like `typedef void F(int)`.
   // The type model spells every function as a pointer, so the map is what
@@ -31,19 +31,19 @@ pub struct Parser {
   // a name. See tag_scope.mbt.
   mut tag_aliases : Map[String, String]
   used_tag_names : Map[String, Bool]
-  mut block_depth : Int
+  mut block_depth : Int32
   // Depth of struct/union body nesting. A definition written inside another
   // aggregate's member list is not a top-level entry -- it prints inside its
   // parent -- so `add_aggregate` skips the items tape while this is nonzero.
-  mut struct_body_depth : Int
+  mut struct_body_depth : Int32
   local_func_decls : Array[FuncDecl]
-  mut anon_counter : Int
+  mut anon_counter : Int32
   enum_constants : Map[String, Int64]
   globals : Array[GlobalDecl]
   mut value_types : Map[String, Type]
   mut current_func_name : String
   mut static_locals : Map[String, String]
-  mut compound_literal_counter : Int
+  mut compound_literal_counter : Int32
 }
 
 ///|
@@ -145,7 +145,7 @@ pub fn parse_for_target(
 pub fn parse_with_named_types(
   input : String,
   type_names : Array[String],
-  target? : @target.Target = @target.Target::default(),
+  target~ : @target.Target = @target.Target::default(),
 ) -> Program raise ParseError {
   let lexer = Lexer::new(input)
   let parser = Parser::new_for_target(lexer, target)

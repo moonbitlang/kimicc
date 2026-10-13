@@ -1,7 +1,7 @@
 ///|
 /// Masks an integer bit pattern to the low `width` bits used by C integer
 /// builtins.
-pub fn mask_int_width(value : Int64, width : Int) -> Int64 {
+pub fn mask_int_width(value : Int64, width : Int32) -> Int64 {
   if width >= 64 {
     value
   } else {
@@ -11,7 +11,7 @@ pub fn mask_int_width(value : Int64, width : Int) -> Int64 {
 
 ///|
 /// Counts leading zero bits after masking to the requested integer width.
-pub fn count_leading_zero_bits(value : Int64, width : Int) -> Int64 {
+pub fn count_leading_zero_bits(value : Int64, width : Int32) -> Int64 {
   let value = mask_int_width(value, width)
   for i in 0..<width {
     let shift = width - 1 - i
@@ -24,7 +24,7 @@ pub fn count_leading_zero_bits(value : Int64, width : Int) -> Int64 {
 
 ///|
 /// Counts trailing zero bits after masking to the requested integer width.
-pub fn count_trailing_zero_bits(value : Int64, width : Int) -> Int64 {
+pub fn count_trailing_zero_bits(value : Int64, width : Int32) -> Int64 {
   let value = mask_int_width(value, width)
   for i in 0..<width {
     if ((value >> i) & 1L) != 0L {
@@ -36,7 +36,7 @@ pub fn count_trailing_zero_bits(value : Int64, width : Int) -> Int64 {
 
 ///|
 /// Returns the one-based index of the least-significant set bit, or zero.
-pub fn first_set_bit(value : Int64, width : Int) -> Int64 {
+pub fn first_set_bit(value : Int64, width : Int32) -> Int64 {
   let value = mask_int_width(value, width)
   if value == 0L {
     0L
@@ -47,7 +47,7 @@ pub fn first_set_bit(value : Int64, width : Int) -> Int64 {
 
 ///|
 /// Counts one bits after masking to the requested integer width.
-pub fn count_one_bits(value : Int64, width : Int) -> Int64 {
+pub fn count_one_bits(value : Int64, width : Int32) -> Int64 {
   let mut value = mask_int_width(value, width)
   let mut count = 0L
   for _ in 0..<width {
@@ -59,7 +59,7 @@ pub fn count_one_bits(value : Int64, width : Int) -> Int64 {
 
 ///|
 /// Byte-swaps the low `width` bits. `width` is expected to be byte-aligned.
-pub fn byte_swap_bits(value : Int64, width : Int) -> Int64 {
+pub fn byte_swap_bits(value : Int64, width : Int32) -> Int64 {
   let value = mask_int_width(value, width)
   let mut result = 0L
   for i in 0..<(width / 8) {
@@ -69,7 +69,7 @@ pub fn byte_swap_bits(value : Int64, width : Int) -> Int64 {
 }
 
 ///|
-fn normalized_bit_shift(shift : Int64, width : Int) -> Int {
+fn normalized_bit_shift(shift : Int64, width : Int32) -> Int32 {
   let mut amount = (shift % width.to_int64()).to_int()
   if amount < 0 {
     amount += width
@@ -78,7 +78,11 @@ fn normalized_bit_shift(shift : Int64, width : Int) -> Int {
 }
 
 ///|
-fn logical_right_shift_bits(value : Int64, width : Int, shift : Int) -> Int64 {
+fn logical_right_shift_bits(
+  value : Int64,
+  width : Int32,
+  shift : Int32,
+) -> Int64 {
   if shift == 0 {
     mask_int_width(value, width)
   } else if width >= 64 {
@@ -93,7 +97,7 @@ fn logical_right_shift_bits(value : Int64, width : Int, shift : Int) -> Int64 {
 pub fn rotate_bits(
   value : Int64,
   shift : Int64,
-  width : Int,
+  width : Int32,
   left : Bool,
 ) -> Int64 {
   let amount = normalized_bit_shift(shift, width)

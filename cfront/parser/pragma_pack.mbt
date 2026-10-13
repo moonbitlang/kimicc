@@ -11,7 +11,7 @@
 /// byte offset and answering `pack_at(pos)` as a pure function of position.
 /// `events` holds `(offset_of_directive_end, pack_in_effect_after_it)`.
 struct PragmaPackTable {
-  events : Array[(Int, Int?)]
+  events : Array[(Int32, Int32?)]
 }
 
 ///|
@@ -35,9 +35,9 @@ struct PragmaPackTable {
 /// pragma rather than just `pack`, so honoring it needs the macro expander to
 /// emit line-structured output first.
 fn PragmaPackTable::scan(input : String) -> PragmaPackTable {
-  let events : Array[(Int, Int?)] = []
-  let stack : Array[Int?] = []
-  let mut current : Int? = None
+  let events : Array[(Int32, Int32?)] = []
+  let stack : Array[Int32?] = []
+  let mut current : Int32? = None
   let len = input.length()
   let mut i = 0
   let mut at_line_start = true
@@ -134,7 +134,7 @@ fn PragmaPackTable::scan(input : String) -> PragmaPackTable {
 /// Callers must sample this *before* parsing an aggregate body, because the
 /// closing `}` may be followed by a `#pragma pack(pop)` that the lexer has
 /// already scanned past by the time the declaration is constructed.
-fn Parser::current_pack(self : Parser) -> Int? {
+fn Parser::current_pack(self : Parser) -> Int32? {
   self.pragma_pack.pack_at(self.lexer.pos)
 }
 
@@ -144,7 +144,7 @@ fn Parser::current_pack(self : Parser) -> Int? {
 ///
 /// `__attribute__((packed))` means "align every field to 1", which is the
 /// strongest possible cap, so it wins over any pragma.
-fn combine_pack(is_packed : Bool, pragma : Int?) -> Int? {
+fn combine_pack(is_packed : Bool, pragma : Int32?) -> Int32? {
   if is_packed {
     Some(1)
   } else {
@@ -158,18 +158,22 @@ fn combine_pack(is_packed : Bool, pragma : Int?) -> Int? {
 /// natural alignment. `pack(0)` is spelled that way: C compilers accept `0` and
 /// treat it as `pack()`.
 priv enum PackAction {
-  PackSet(Int?)
+  PackSet(Int32?)
   PackPushKeep
-  PackPush(Int?)
+  PackPush(Int32?)
   PackPop
-  PackPopSet(Int?)
+  PackPopSet(Int32?)
 }
 
 ///|
 /// Recognizes `#pragma pack(...)` on the directive line `input[start:end]`,
 /// returning the transition it encodes, or `None` when the line is some other
 /// directive or an unrecognized `pack` form.
-fn parse_pack_directive(input : String, start : Int, end : Int) -> PackAction? {
+fn parse_pack_directive(
+  input : String,
+  start : Int32,
+  end : Int32,
+) -> PackAction? {
   let mut i = start + 1 // past '#'
   fn skip_spaces() -> Unit {
     while i < end && (input[i] is ' ' || input[i] is '\t' || input[i] is '\r') {
@@ -181,9 +185,9 @@ fn parse_pack_directive(input : String, start : Int, end : Int) -> PackAction? {
     let word_start = i
     while i < end &&
           (
-            input[i] is ('a'..='z') ||
-            input[i] is ('A'..='Z') ||
-            input[i] is ('0'..='9') ||
+            input[i] is ('a'..<='z') ||
+            input[i] is ('A'..<='Z') ||
+            input[i] is ('0'..<='9') ||
             input[i] is '_'
           ) {
       i += 1
@@ -210,7 +214,7 @@ fn parse_pack_directive(input : String, start : Int, end : Int) -> PackAction? {
   }
   // Check the bare `pack(N)` form before reading a keyword, because `read_word`
   // also accepts digits and would otherwise swallow the number.
-  if i < end && input[i] is ('0'..='9') {
+  if i < end && input[i] is ('0'..<='9') {
     return match read_pack_cap(input, i, end) {
       Some(cap) => Some(PackSet(cap))
       None => None
@@ -253,7 +257,7 @@ fn parse_pack_directive(input : String, start : Int, end : Int) -> PackAction? {
 /// octal -- `010` is 8, while `016` is 14 and therefore rejected. Only positive
 /// powers of two up to 16 are accepted, plus `0`, which C compilers treat as
 /// `pack()`. Anything else yields `None`, which makes the whole directive inert.
-fn read_pack_cap(input : String, from : Int, end : Int) -> Int?? {
+fn read_pack_cap(input : String, from : Int32, end : Int32) -> Int32?? {
   let value = match read_c_integer_literal(input, from, end) {
     Some(n) => n
     None => return None
@@ -273,7 +277,7 @@ fn read_pack_cap(input : String, from : Int, end : Int) -> Int?? {
 ///
 /// Returns `None` for a malformed literal or one large enough to overflow,
 /// which callers treat as "ignore this directive" rather than guessing.
-fn read_c_integer_literal(input : String, from : Int, end : Int) -> Int? {
+fn read_c_integer_literal(input : String, from : Int32, end : Int32) -> Int32? {
   let mut i = from
   let mut radix = 10
   if i < end && input[i] is '0' {
@@ -293,9 +297,9 @@ fn read_c_integer_literal(input : String, from : Int, end : Int) -> Int? {
   let mut value = 0
   while i < end {
     let digit = match input[i] {
-      '0'..='9' => input[i].to_int() - '0'
-      'a'..='f' => input[i].to_int() - 'a' + 10
-      'A'..='F' => input[i].to_int() - 'A' + 10
+      '0'..<='9' => input[i].to_int() - '0'
+      'a'..<='f' => input[i].to_int() - 'a' + 10
+      'A'..<='F' => input[i].to_int() - 'A' + 10
       _ => break
     }
     if digit >= radix {
@@ -334,10 +338,10 @@ fn read_c_integer_literal(input : String, from : Int, end : Int) -> Int? {
   // Reject trailing garbage such as `1abc`, which is not a valid literal.
   if i < end &&
     (
-      input[i] is ('a'..='z') ||
-      input[i] is ('A'..='Z') ||
+      input[i] is ('a'..<='z') ||
+      input[i] is ('A'..<='Z') ||
       input[i] is '_' ||
-      input[i] is ('0'..='9')
+      input[i] is ('0'..<='9')
     ) {
     return None
   }
@@ -347,7 +351,7 @@ fn read_c_integer_literal(input : String, from : Int, end : Int) -> Int? {
 ///|
 /// Returns the pack cap in effect at byte offset `pos`, or `None` for natural
 /// alignment.
-fn PragmaPackTable::pack_at(self : PragmaPackTable, pos : Int) -> Int? {
+fn PragmaPackTable::pack_at(self : PragmaPackTable, pos : Int32) -> Int32? {
   // Binary search for the last directive that ends at or before `pos`.
   let events = self.events
   if events.length() == 0 {

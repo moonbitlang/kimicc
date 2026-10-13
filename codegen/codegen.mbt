@@ -6,19 +6,19 @@
 /// details and use `generate` as the stable entry point.
 pub struct Codegen {
   output : StringBuilder
-  mut label_counter : Int
-  mut local_offsets : Map[String, Int]
+  mut label_counter : Int32
+  mut local_offsets : Map[String, Int32]
   mut var_types : Map[String, @parser.Type]
-  mut stack_size : Int
+  mut stack_size : Int32
   mut func_name : String
   mut func_params : Array[@parser.Param]
   func_rets : Map[String, @parser.Type]
   func_variadic : Map[String, Bool]
-  func_param_counts : Map[String, Int]
+  func_param_counts : Map[String, Int32]
   func_param_types : Map[String, Array[@parser.Type]]
   struct_layouts : Map[
     String,
-    Array[(String, @parser.Type, Int, Int, Int, Int)],
+    Array[(String, @parser.Type, Int32, Int32, Int32, Int32)],
   ]
   struct_decls : Map[String, @parser.StructDecl]
   strings : Array[String]
@@ -30,14 +30,14 @@ pub struct Codegen {
   mut emitted_labels : Map[String, String]
   mut defined_labels : Map[String, Bool]
   mut fp_literals : Array[Double]
-  mut sret_dest_offset : Int
-  mut sret_scratch_offset : Int
-  mut sret_scratch_size : Int
-  mut pending_sret_offset : Int
+  mut sret_dest_offset : Int32
+  mut sret_scratch_offset : Int32
+  mut sret_scratch_size : Int32
+  mut pending_sret_offset : Int32
 }
 
 ///|
-fn octal_digit_char(d : Int) -> Char {
+fn octal_digit_char(d : Int32) -> Char {
   match d {
     0 => '0'
     1 => '1'
@@ -51,7 +51,7 @@ fn octal_digit_char(d : Int) -> Char {
 }
 
 ///|
-fn write_octal_escape(buf : StringBuilder, value : Int) -> Unit {
+fn write_octal_escape(buf : StringBuilder, value : Int32) -> Unit {
   let byte = value % 256
   buf.write_char('\\')
   buf.write_char(octal_digit_char(byte / 64))
@@ -74,7 +74,7 @@ fn escape_string(s : String) -> String {
 }
 
 ///|
-fn escape_string_prefix(s : String, limit : Int) -> String {
+fn escape_string_prefix(s : String, limit : Int32) -> String {
   let buf = StringBuilder()
   let mut emitted = 0
   for ch in s {
@@ -93,7 +93,7 @@ fn escape_string_prefix(s : String, limit : Int) -> String {
 }
 
 ///|
-fn global_char_array_string_directive(value : String, width : Int) -> String {
+fn global_char_array_string_directive(value : String, width : Int32) -> String {
   if value.length() < width {
     "\t.asciz\t\"" + escape_string(value) + "\""
   } else {
@@ -102,7 +102,7 @@ fn global_char_array_string_directive(value : String, width : Int) -> String {
 }
 
 ///|
-fn global_char_array_string_padding(value : String, width : Int) -> Int {
+fn global_char_array_string_padding(value : String, width : Int32) -> Int32 {
   if value.length() < width {
     width - value.length() - 1
   } else {
@@ -111,7 +111,7 @@ fn global_char_array_string_padding(value : String, width : Int) -> Int {
 }
 
 ///|
-fn reloc_with_offset(base : String, offset : Int) -> String {
+fn reloc_with_offset(base : String, offset : Int32) -> String {
   if offset == 0 {
     base
   } else if offset > 0 {
@@ -300,12 +300,12 @@ fn codegen_global_decls_from_parser(
 }
 
 ///|
-fn codegen_file_scope_compound_literal_name(id : Int) -> String {
+fn codegen_file_scope_compound_literal_name(id : Int32) -> String {
   "__kimicc_file_scope_compound_literal_" + id.to_string()
 }
 
 ///|
-fn codegen_compound_literal_array_length(exprs : Array[@parser.Expr]) -> Int {
+fn codegen_compound_literal_array_length(exprs : Array[@parser.Expr]) -> Int32 {
   let mut cursor = 0
   let mut length = 0
   for expr in exprs {
@@ -355,7 +355,7 @@ fn codegen_file_scope_compound_literal_type(
 fn codegen_file_scope_compound_literal_global(
   ty : @parser.Type,
   exprs : Array[@parser.Expr],
-  id : Int,
+  id : Int32,
 ) -> @parser.GlobalDecl {
   let completed_ty = codegen_file_scope_compound_literal_type(ty, exprs)
   {
@@ -374,7 +374,7 @@ fn codegen_file_scope_compound_literal_global(
 ///|
 fn collect_codegen_file_scope_compound_literal_globals_expr(
   expr : @parser.Expr,
-  seen : Map[Int, Bool],
+  seen : Map[Int32, Bool],
   globals : Array[@parser.GlobalDecl],
 ) -> Unit {
   match expr {
@@ -471,7 +471,7 @@ fn append_codegen_file_scope_compound_literal_globals(
   source_globals : Array[@parser.GlobalDecl],
 ) -> Array[@parser.GlobalDecl] {
   let result = source_globals.copy()
-  let seen : Map[Int, Bool] = Map([])
+  let seen : Map[Int32, Bool] = Map([])
   let generated : Array[@parser.GlobalDecl] = []
   for global in source_globals {
     match global.init {
@@ -1100,7 +1100,7 @@ fn Codegen::designator_matches_type(
 fn Codegen::global_lvalue_reloc(
   self : Codegen,
   expr : @parser.Expr,
-) -> (String, Int)? {
+) -> (String, Int32)? {
   match expr {
     Var(name) => Some(("_" + name, 0))
     CompoundLiteral(_, _, id) =>
@@ -1144,7 +1144,7 @@ fn Codegen::global_lvalue_reloc(
 fn Codegen::global_address_reloc_parts(
   self : Codegen,
   expr : @parser.Expr,
-) -> (String, Int)? {
+) -> (String, Int32)? {
   match expr {
     Cast(_, e) => self.global_address_reloc_parts(e)
     AddrOf(e) => self.global_lvalue_reloc(e)
@@ -1196,7 +1196,10 @@ fn Codegen::global_address_reloc(
 }
 
 ///|
-fn Codegen::pointer_element_size(self : Codegen, elem_ty : @parser.Type) -> Int {
+fn Codegen::pointer_element_size(
+  self : Codegen,
+  elem_ty : @parser.Type,
+) -> Int32 {
   match elem_ty.without_alignment() {
     Void => 1
     _ => self.type_size(elem_ty)
@@ -1208,7 +1211,7 @@ fn Codegen::global_offset_bytes(
   self : Codegen,
   base : @parser.Expr,
   offset : Int64,
-) -> Int {
+) -> Int32 {
   match self.global_expr_type(base).without_alignment() {
     Pointer(elem) | Array(elem, _) =>
       offset.to_int() * self.pointer_element_size(elem)
@@ -1431,7 +1434,7 @@ fn global_initializer_value(expr : @parser.Expr) -> @parser.Expr {
 ///|
 fn Codegen::emit_global_int_by_size(
   self : Codegen,
-  size : Int,
+  size : Int32,
   value : Int64,
 ) -> Unit {
   match size {
@@ -1446,8 +1449,8 @@ fn Codegen::emit_global_int_by_size(
 fn Codegen::global_bitfield_bits(
   self : Codegen,
   init_expr : @parser.Expr,
-  bit_width : Int,
-  bit_offset : Int,
+  bit_width : Int32,
+  bit_offset : Int32,
 ) -> Int64 {
   match self.fold_const(global_initializer_value(init_expr)) {
     Some(value) => (value & bitfield_mask(bit_width)) << bit_offset
@@ -1636,7 +1639,7 @@ fn Codegen::emit_global_array(
 }
 
 ///|
-fn global_align_power(align : Int) -> Int {
+fn global_align_power(align : Int32) -> Int32 {
   let mut power = 0
   let mut bytes = 1
   while bytes < align {

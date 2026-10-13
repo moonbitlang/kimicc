@@ -4,7 +4,7 @@
 priv struct DirectObjectFixture {
   path : String
   tag : String
-  expected : Int
+  expected : Int32
 }
 
 ///|

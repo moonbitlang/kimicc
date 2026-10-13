@@ -2,7 +2,7 @@
 fn Codegen::type_of(
   self : Codegen,
   expr : @parser.Expr,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> @parser.Type {
   match expr {
     Number(value, _, _) => @ctype.integer_literal_type(value)
@@ -308,10 +308,10 @@ fn Codegen::emit_atomic_update_op(
 fn Codegen::emit_atomic_update(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
   op : String,
   return_new : Bool,
-  extra_start : Int,
+  extra_start : Int32,
 ) -> Unit {
   if args.length() >= 2 {
     let elem_ty = self.type_of(args[0], frame_size).atomic_target()
@@ -343,8 +343,8 @@ fn Codegen::emit_atomic_update(
 fn Codegen::emit_atomic_exchange(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
-  extra_start : Int,
+  frame_size : Int32,
+  extra_start : Int32,
 ) -> Unit {
   if args.length() >= 2 {
     let elem_ty = self.type_of(args[0], frame_size).atomic_target()
@@ -393,8 +393,8 @@ fn Codegen::emit_atomic_exchange(
 fn Codegen::emit_atomic_compare_exchange(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
-  extra_start : Int,
+  frame_size : Int32,
+  extra_start : Int32,
 ) -> Unit {
   if args.length() >= 3 {
     let elem_ty = self.type_of(args[0], frame_size).atomic_target()
@@ -462,8 +462,8 @@ fn Codegen::emit_atomic_compare_exchange(
 fn Codegen::emit_sync_compare_exchange(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
-  extra_start : Int,
+  frame_size : Int32,
+  extra_start : Int32,
   return_old : Bool,
 ) -> Unit {
   if args.length() >= 3 {
@@ -673,7 +673,7 @@ fn Codegen::emit_sync_compare_exchange_value_raw(
 fn Codegen::emit_atomic_load_ptr_builtin(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   if args.length() >= 3 {
     let elem_ty = self.type_of(args[0], frame_size).atomic_target()
@@ -694,7 +694,7 @@ fn Codegen::emit_atomic_load_ptr_builtin(
 fn Codegen::emit_atomic_store_ptr_builtin(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   if args.length() >= 3 {
     let elem_ty = self.type_of(args[0], frame_size).atomic_target()
@@ -715,7 +715,7 @@ fn Codegen::emit_atomic_store_ptr_builtin(
 fn Codegen::emit_atomic_zero_store_builtin(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
   evaluate_order : Bool,
 ) -> Unit {
   if args.length() >= 1 {
@@ -736,8 +736,8 @@ fn Codegen::emit_atomic_zero_store_builtin(
 fn Codegen::emit_atomic_test_and_set_builtin(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
-  extra_start : Int,
+  frame_size : Int32,
+  extra_start : Int32,
 ) -> Unit {
   if args.length() >= 1 {
     let elem_ty = self.type_of(args[0], frame_size).atomic_target()
@@ -760,7 +760,7 @@ fn Codegen::emit_atomic_test_and_set_builtin(
 fn Codegen::emit_atomic_exchange_ptr_builtin(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   if args.length() >= 4 {
     let elem_ty = self.type_of(args[0], frame_size).atomic_target()
@@ -787,7 +787,7 @@ fn Codegen::emit_atomic_exchange_ptr_builtin(
 fn Codegen::emit_atomic_compare_exchange_ptr_builtin(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   if args.length() >= 6 {
     let elem_ty = self.type_of(args[0], frame_size).atomic_target()
@@ -814,7 +814,7 @@ fn Codegen::emit_atomic_compare_exchange_ptr_builtin(
 fn Codegen::emit_atomic_lock_free_builtin(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
   evaluate_pointer : Bool,
 ) -> Unit {
   if args.length() > 0 {
@@ -844,7 +844,7 @@ fn Codegen::emit_atomic_lock_free_builtin(
 fn Codegen::emit_darwin_fd_helper(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
   op : String,
 ) -> Unit {
   if args.length() >= 2 {
@@ -885,7 +885,7 @@ fn Codegen::emit_darwin_fd_helper(
 fn Codegen::emit_sp_offset_addr(
   self : Codegen,
   reg : String,
-  offset : Int,
+  offset : Int32,
 ) -> Unit {
   if offset == 0 {
     self.emit("\tmov\t" + reg + ", sp")
@@ -902,8 +902,8 @@ fn Codegen::emit_copy_large_arg_to_call_area(
   self : Codegen,
   arg : @parser.Expr,
   ty : @parser.Type,
-  frame_size : Int,
-  dest_offset : Int,
+  frame_size : Int32,
+  dest_offset : Int32,
 ) -> Unit {
   self.gen_aggregate_addr(arg, frame_size)
   self.emit("\tmov\tx1, x9")
@@ -918,8 +918,8 @@ fn Codegen::emit_save_small_aggregate_arg_to_stack(
   self : Codegen,
   arg : @parser.Expr,
   ty : @parser.Type,
-  frame_size : Int,
-  dest_offset : Int,
+  frame_size : Int32,
+  dest_offset : Int32,
 ) -> Unit {
   let size = self.type_size(ty)
   match arg {
@@ -975,7 +975,7 @@ fn Codegen::emit_save_small_aggregate_arg_to_stack(
 fn Codegen::emit_call_sret_addr(
   self : Codegen,
   ret_ty : @parser.Type,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   let offset = if self.pending_sret_offset >= 0 {
     self.pending_sret_offset
@@ -995,7 +995,7 @@ fn Codegen::emit_va_arg_aggregate_addr(
   self : Codegen,
   ap_expr : @parser.Expr,
   ty : @parser.Type,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   let size = self.type_size(ty)
   if size > 16 {
@@ -1036,10 +1036,10 @@ fn Codegen::emit_va_arg_aggregate_addr(
 fn Codegen::declared_call_arg_type(
   self : Codegen,
   func : @parser.Expr,
-  index : Int,
+  index : Int32,
   actual : @parser.Type,
-  named_count_limit : Int?,
-  frame_size : Int,
+  named_count_limit : Int32?,
+  frame_size : Int32,
 ) -> @parser.Type {
   match named_count_limit {
     Some(limit) => if index >= limit { return actual }
@@ -1092,7 +1092,7 @@ fn Codegen::builtin_return_type(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> @parser.Type? {
   let arg_types : Array[@parser.Type] = []
   for arg in args {
@@ -1115,7 +1115,7 @@ fn Codegen::call_return_type(
   self : Codegen,
   func : @parser.Expr,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> @parser.Type {
   match self.type_of(func, frame_size) {
     FuncPtr(ret, _, _) => ret
@@ -1145,7 +1145,7 @@ fn Codegen::emit_call_result(self : Codegen, ret_ty : @parser.Type) -> Unit {
 }
 
 ///|
-fn bitfield_mask(width : Int) -> Int64 {
+fn bitfield_mask(width : Int32) -> Int64 {
   if width >= 64 {
     -1L
   } else {
@@ -1194,7 +1194,7 @@ fn Codegen::gen_compound_assign(
   op : String,
   lhs : @parser.Expr,
   rhs : @parser.Expr,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   match self.find_bitfield_member(lhs, frame_size) {
     Some(info) => {
@@ -1350,7 +1350,7 @@ fn Codegen::gen_compound_assign(
 fn Codegen::find_bitfield_member(
   self : Codegen,
   expr : @parser.Expr,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> MemberAddrInfo? {
   match expr {
     MemberAccess(obj, field) => {
@@ -1376,7 +1376,7 @@ fn Codegen::gen_bitfield_compound_assign(
   lhs : @parser.Expr,
   rhs : @parser.Expr,
   info : MemberAddrInfo,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   let lhs_ty = info.ty
   let rhs_ty = self.type_of(rhs, frame_size)
@@ -1474,7 +1474,7 @@ fn Codegen::emit_floating_step_bits(
   ty : @parser.Type,
   old_reg : String,
   new_reg : String,
-  delta : Int,
+  delta : Int32,
 ) -> Bool {
   match ty.without_alignment() {
     Float => {
@@ -1509,9 +1509,9 @@ fn Codegen::emit_floating_step_bits(
 fn Codegen::gen_bitfield_inc_dec(
   self : Codegen,
   expr : @parser.Expr,
-  delta : Int,
+  delta : Int32,
   postfix : Bool,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   match self.find_bitfield_member(expr, frame_size) {
     Some(info) => {
@@ -1582,7 +1582,7 @@ fn Codegen::gen_bitfield_inc_dec(
 fn Codegen::gen_callee_addr(
   self : Codegen,
   func : @parser.Expr,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   match func {
     // In call position, `(*fp)(...)` calls the function pointer value. It does
@@ -1614,8 +1614,8 @@ fn Codegen::emit_builtin_lib_call(
   self : Codegen,
   target : String,
   args : Array[@parser.Expr],
-  arg_count : Int,
-  frame_size : Int,
+  arg_count : Int32,
+  frame_size : Int32,
 ) -> Unit {
   let save_size = (arg_count * 8 + 15) / 16 * 16
   if save_size > 0 {
@@ -1644,8 +1644,8 @@ fn Codegen::emit_ctype_libcall_result(
   self : Codegen,
   symbol : String,
   args : Array[@parser.Expr],
-  arg_count : Int,
-  frame_size : Int,
+  arg_count : Int32,
+  frame_size : Int32,
 ) -> Bool {
   self.emit_builtin_lib_call("_" + symbol, args, arg_count, frame_size)
   self.emit("\tmov\tx9, x0")
@@ -1657,8 +1657,8 @@ fn Codegen::emit_ctype_indexed_builtin_call(
   self : Codegen,
   target : String,
   args : Array[@parser.Expr],
-  source_indexes : Array[Int],
-  frame_size : Int,
+  source_indexes : Array[Int32],
+  frame_size : Int32,
 ) -> Unit {
   let lowered_args : Array[@parser.Expr] = []
   for i = 0; i < args.length(); i = i + 1 {
@@ -1679,7 +1679,7 @@ fn Codegen::emit_ctype_printf_builtin_call(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   match
     (
@@ -1701,7 +1701,7 @@ fn Codegen::emit_ctype_heap_builtin_call(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   match @ctype.builtin_heap_libcall_info(name, args.length()) {
     Some((symbol, call_arg_count)) => {
@@ -1721,7 +1721,7 @@ fn Codegen::emit_ctype_libcall_builtin_call(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   if self.emit_ctype_heap_builtin_call(name, args, frame_size) {
     return true
@@ -1778,8 +1778,8 @@ fn Codegen::emit_ctype_libcall_builtin_call(
 fn Codegen::emit_builtin_rotate(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
-  width : Int,
+  frame_size : Int32,
+  width : Int32,
   left : Bool,
 ) -> Unit {
   if args.length() < 2 {
@@ -1818,8 +1818,8 @@ fn Codegen::emit_builtin_rotate(
 fn Codegen::emit_builtin_abs(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
-  width : Int,
+  frame_size : Int32,
+  width : Int32,
 ) -> Unit {
   if args.length() == 0 {
     self.emit("\tmov\tx9, #0")
@@ -1843,7 +1843,7 @@ fn Codegen::emit_builtin_abs(
 fn Codegen::emit_builtin_is_aligned(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   if args.length() < 2 {
     self.emit("\tmov\tx9, #0")
@@ -1863,7 +1863,7 @@ fn Codegen::emit_builtin_is_aligned(
 fn Codegen::emit_builtin_align_value(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
   round_up : Bool,
 ) -> Unit {
   if args.length() < 2 {
@@ -2089,7 +2089,7 @@ fn Codegen::builtin_object_size_value(
 fn Codegen::overflow_result_type(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> @parser.Type {
   if args.length() >= 3 {
     match self.type_of(args[2], frame_size).pointer_or_array_element() {
@@ -2202,7 +2202,7 @@ fn Codegen::emit_i64_overflow_arithmetic(
 fn Codegen::emit_overflow_arithmetic_builtin(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
   op : String,
 ) -> Unit {
   if args.length() < 3 {
@@ -2241,8 +2241,8 @@ fn Codegen::emit_overflow_arithmetic_builtin(
 fn Codegen::emit_builtin_ffs(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
-  width : Int,
+  frame_size : Int32,
+  width : Int32,
 ) -> Unit {
   if args.length() == 0 {
     self.emit("\tmov\tx9, #0")
@@ -2272,8 +2272,8 @@ fn Codegen::emit_builtin_ffs(
 fn Codegen::emit_builtin_bswap(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
-  width : Int,
+  frame_size : Int32,
+  width : Int32,
 ) -> Unit {
   if args.length() == 0 {
     self.emit("\tmov\tx9, #0")
@@ -2294,8 +2294,8 @@ fn Codegen::emit_builtin_bswap(
 fn Codegen::emit_builtin_popcount(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
-  width : Int,
+  frame_size : Int32,
+  width : Int32,
 ) -> Unit {
   if args.length() == 0 {
     self.emit("\tmov\tx9, #0")
@@ -2331,8 +2331,8 @@ fn Codegen::emit_builtin_popcount(
 fn Codegen::emit_builtin_parity(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
-  width : Int,
+  frame_size : Int32,
+  width : Int32,
 ) -> Unit {
   self.emit_builtin_popcount(args, frame_size, width)
   self.emit("\tand\tx9, x9, #1")
@@ -2343,7 +2343,7 @@ fn Codegen::emit_ctype_integer_count_builtin_call(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   match @ctype.integer_count_builtin_info(name) {
     Some((kind, width)) => {
@@ -2388,7 +2388,7 @@ fn Codegen::emit_ctype_integer_abs_builtin_call(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   match @ctype.integer_abs_builtin_type(name) {
     Some(ty) => {
@@ -2412,7 +2412,7 @@ fn Codegen::emit_ctype_integer_bswap_builtin_call(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   let first_ty = if args.length() == 0 {
     @ctype.Type::UInt
@@ -2433,7 +2433,7 @@ fn Codegen::emit_ctype_integer_rotate_builtin_call(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   let first_ty = if args.length() == 0 {
     @ctype.Type::UInt
@@ -2454,7 +2454,7 @@ fn Codegen::emit_ctype_integer_alignment_builtin_call(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   let first_ty = if args.length() == 0 {
     @ctype.Type::ULong
@@ -2480,7 +2480,7 @@ fn Codegen::emit_ctype_identity_builtin_call(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   match @ctype.builtin_identity_call_info(name) {
     Some((_, side_effect_arg)) => {
@@ -2505,7 +2505,7 @@ fn Codegen::emit_ctype_noop_builtin_call(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   match @ctype.builtin_noop_call_info(name) {
     Some(kind) => {
@@ -2532,7 +2532,7 @@ fn Codegen::emit_ctype_noop_builtin_call(
 fn Codegen::emit_builtin_address_query(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
   kind : String,
 ) -> Bool {
   match kind {
@@ -2580,7 +2580,7 @@ fn Codegen::emit_ctype_address_query_builtin_call(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   match @ctype.builtin_address_query_info(name) {
     Some(kind) => self.emit_builtin_address_query(args, frame_size, kind)
@@ -2604,7 +2604,7 @@ fn Codegen::emit_ctype_fence_builtin_call(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   match @ctype.builtin_fence_call_info(name) {
     Some(("sync_synchronize", _)) => {
@@ -2654,7 +2654,7 @@ fn Codegen::emit_ctype_stack_alloc_builtin_call(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   match @ctype.builtin_stack_alloc_call_info(name) {
     Some(("alloca", expected_arg_count)) =>
@@ -2701,7 +2701,7 @@ fn Codegen::emit_ctype_va_setup_builtin_call(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   match @ctype.builtin_va_setup_call_info(name) {
     Some(("va_start", _)) => {
@@ -2752,7 +2752,7 @@ fn Codegen::emit_ctype_zero_memory_builtin_call(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   match @ctype.builtin_zero_memory_call_info(name) {
     Some(("bzero", expected_arg_count)) =>
@@ -2812,7 +2812,7 @@ fn Codegen::emit_ctype_atomic_lock_free_builtin_call(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   match @ctype.builtin_atomic_lock_free_call_info(name) {
     Some((_, evaluate_pointer)) => {
@@ -2828,7 +2828,7 @@ fn Codegen::emit_ctype_atomic_load_store_builtin_call(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   match @ctype.builtin_atomic_load_store_call_info(name) {
     Some(("load_ptr", _)) => {
@@ -2890,7 +2890,7 @@ fn Codegen::emit_ctype_atomic_zero_store_builtin_call(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   match @ctype.builtin_atomic_zero_store_call_info(name) {
     Some(("clear", _)) => {
@@ -2910,7 +2910,7 @@ fn Codegen::emit_ctype_atomic_exchange_builtin_call(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   match @ctype.builtin_atomic_exchange_call_info(name) {
     Some(("exchange_ptr", _, _)) => {
@@ -2935,7 +2935,7 @@ fn Codegen::emit_ctype_atomic_compare_exchange_builtin_call(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   match @ctype.builtin_atomic_compare_exchange_call_info(name) {
     Some(("compare_exchange_ptr", _, _)) => {
@@ -2963,7 +2963,7 @@ fn Codegen::emit_ctype_darwin_fd_helper_builtin_call(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   match @ctype.builtin_darwin_fd_helper_call_info(name) {
     Some((op, _)) => {
@@ -3020,7 +3020,7 @@ fn Codegen::emit_ctype_floating_constant_builtin_call(
 fn Codegen::emit_builtin_unary_fp(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
   ty : @parser.Type,
   instr : String,
 ) -> Unit {
@@ -3048,7 +3048,7 @@ fn Codegen::emit_builtin_unary_fp(
 fn Codegen::emit_builtin_copysign(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
   ty : @parser.Type,
 ) -> Unit {
   if args.length() < 2 {
@@ -3087,7 +3087,7 @@ fn Codegen::emit_builtin_copysign(
 fn Codegen::binary_fp_builtin_type(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> @parser.Type {
   if args.length() >= 2 {
     let lhs_ty = self.type_of(args[0], frame_size).without_alignment()
@@ -3123,7 +3123,7 @@ fn Codegen::emit_builtin_fp_compare_result(self : Codegen, op : String) -> Unit 
 fn Codegen::emit_builtin_fp_compare(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
   op : String,
 ) -> Unit {
   if args.length() < 2 {
@@ -3190,7 +3190,7 @@ fn Codegen::emit_fp_class_constant(
 fn Codegen::emit_builtin_fp_class(
   self : Codegen,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
   ty : @parser.Type,
   op : String,
 ) -> Unit {
@@ -3286,7 +3286,7 @@ fn Codegen::emit_builtin_fp_class(
 fn Codegen::gen_ignored_expr_side_effects(
   self : Codegen,
   expr : @parser.Expr,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   match expr {
     Assign(_, _)
@@ -3349,7 +3349,7 @@ fn Codegen::emit_builtin_call(
   self : Codegen,
   name : String,
   args : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Bool {
   match @ctype.builtin_overflow_op(name) {
     Some(op) => {
@@ -3525,18 +3525,18 @@ fn Codegen::emit_load_register_aggregate_from_x9(
 ///|
 priv struct MemberAddrInfo {
   ty : @parser.Type
-  size : Int
-  bit_offset : Int
-  bit_width : Int
-  stack_temp_size : Int
+  size : Int32
+  bit_offset : Int32
+  bit_width : Int32
+  stack_temp_size : Int32
 }
 
 ///|
 fn Codegen::emit_member_base_addr(
   self : Codegen,
   obj : @parser.Expr,
-  frame_size : Int,
-) -> Int {
+  frame_size : Int32,
+) -> Int32 {
   let obj_ty = self.type_of(obj, frame_size)
   match obj {
     Call(_, _) if self.is_register_aggregate(obj_ty) => {
@@ -3586,7 +3586,7 @@ fn Codegen::emit_member_base_addr(
 fn Codegen::emit_member_addr(
   self : Codegen,
   expr : @parser.Expr,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> MemberAddrInfo? {
   match expr {
     MemberAccess(obj, field) => {
@@ -3610,7 +3610,7 @@ fn Codegen::emit_member_addr(
 }
 
 ///|
-fn Codegen::emit_add_offset_to_x9(self : Codegen, offset : Int) -> Unit {
+fn Codegen::emit_add_offset_to_x9(self : Codegen, offset : Int32) -> Unit {
   if offset == 0 {
     return
   }
@@ -3640,7 +3640,7 @@ fn Codegen::emit_copy_aggregate_from_addr_on_stack(
 fn Codegen::emit_copy_aggregate_addr_to_scratch(
   self : Codegen,
   ty : @parser.Type,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   if self.sret_scratch_offset < 0 {
     abort("Darwin ARM64 backend missing aggregate expression scratch storage")
@@ -3657,7 +3657,7 @@ fn Codegen::emit_aggregate_expr_addr_in_scratch(
   self : Codegen,
   ty : @parser.Type,
   expr : @parser.Expr,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   if self.sret_scratch_offset < 0 {
     abort("Darwin ARM64 backend missing aggregate expression scratch storage")
@@ -3698,7 +3698,7 @@ fn Codegen::emit_init_scalar_at_addr(
   self : Codegen,
   ty : @parser.Type,
   init_expr : @parser.Expr,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   // Braces may wrap a scalar initializer, so read through them to the value
   // they denote before generating it.
@@ -3716,7 +3716,7 @@ fn Codegen::emit_init_value_at_addr(
   self : Codegen,
   ty : @parser.Type,
   init_expr : @parser.Expr,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   let value = match init_expr {
     DesignatedField(_, e) => e
@@ -3792,11 +3792,11 @@ fn Codegen::emit_init_value_at_addr(
 fn Codegen::emit_init_bitfield_at_addr(
   self : Codegen,
   field_ty : @parser.Type,
-  container_size : Int,
-  bit_offset : Int,
-  bit_width : Int,
+  container_size : Int32,
+  bit_offset : Int32,
+  bit_width : Int32,
   init_expr : @parser.Expr,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   let value = @parser.scalar_initializer_value(init_expr)
   self.emit("\tstr\tx9, [sp, #-16]!")
@@ -3832,7 +3832,7 @@ fn Codegen::emit_init_string_array_at_addr(
   self : Codegen,
   ty : @parser.Type,
   value : String,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   match ty.core_type() {
     Array(elem_ty, n) => {
@@ -3863,7 +3863,7 @@ fn Codegen::emit_init_aggregate_at_addr(
   self : Codegen,
   ty : @parser.Type,
   init_exprs : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   self.emit_init_aggregate_at_addr_with_zero(ty, init_exprs, frame_size, true)
 }
@@ -3873,7 +3873,7 @@ fn Codegen::emit_init_aggregate_at_addr_with_zero(
   self : Codegen,
   ty : @parser.Type,
   init_exprs : Array[@parser.Expr],
-  frame_size : Int,
+  frame_size : Int32,
   zero_first : Bool,
 ) -> Unit {
   self.emit("\tstr\tx9, [sp, #-16]!")
@@ -4133,7 +4133,7 @@ fn Codegen::gen_int128_binary(
   right : @parser.Expr,
   left_ty : @parser.Type,
   right_ty : @parser.Type,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   let result_ty = if op == "<<" || op == ">>" {
     left_ty.integer_promote()
@@ -4228,7 +4228,7 @@ fn Codegen::gen_int128_binary(
 fn Codegen::gen_expr(
   self : Codegen,
   expr : @parser.Expr,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   match expr {
     Number(n, _, _) => self.emit_load_int("x9", n)
@@ -5776,7 +5776,7 @@ fn Codegen::gen_expr(
 fn Codegen::gen_aggregate_addr(
   self : Codegen,
   expr : @parser.Expr,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   match expr {
     Ternary(cond, then_expr, else_expr) => {
@@ -5851,7 +5851,7 @@ fn Codegen::gen_aggregate_addr(
 fn Codegen::gen_addr(
   self : Codegen,
   expr : @parser.Expr,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   match expr {
     Var(name) =>

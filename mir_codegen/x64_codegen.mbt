@@ -3,35 +3,38 @@
 priv struct X64Codegen {
   output : StringBuilder
   mut mir_module : @mir.MirModule?
-  mut label_counter : Int
-  mut local_offsets : Map[String, Int]
+  mut label_counter : Int32
+  mut local_offsets : Map[String, Int32]
   mut var_types : Map[String, @ctype.Type]
-  mut stack_size : Int
-  mut stack_align : Int
+  mut stack_size : Int32
+  mut stack_align : Int32
   mut local_base_reg : String
   mut func_name : String
   func_rets : Map[String, @ctype.Type]
   func_variadic : Map[String, Bool]
-  func_param_counts : Map[String, Int]
+  func_param_counts : Map[String, Int32]
   func_param_types : Map[String, Array[@ctype.Type]]
   func_defined : Map[String, Bool]
   func_weak : Map[String, Bool]
-  struct_layouts : Map[String, Array[(String, @ctype.Type, Int, Int, Int, Int)]]
+  struct_layouts : Map[
+    String,
+    Array[(String, @ctype.Type, Int32, Int32, Int32, Int32)],
+  ]
   globals : Map[String, CodegenGlobalDecl]
   strings : Array[String]
   fp_literals : Array[Double]
-  mut va_list_offsets : Map[String, Int]
-  mut va_reg_save_offset : Int
-  mut va_initial_gp_offset : Int
-  mut va_initial_fp_offset : Int
-  mut va_initial_overflow_offset : Int
-  mut sret_dest_offset : Int
-  mut sret_scratch_offset : Int
-  mut sret_scratch_size : Int
-  mut sret_scratch_align : Int
-  mut va_arg_scratch_offset : Int
-  mut va_arg_scratch_size : Int
-  mut va_arg_scratch_align : Int
+  mut va_list_offsets : Map[String, Int32]
+  mut va_reg_save_offset : Int32
+  mut va_initial_gp_offset : Int32
+  mut va_initial_fp_offset : Int32
+  mut va_initial_overflow_offset : Int32
+  mut sret_dest_offset : Int32
+  mut sret_scratch_offset : Int32
+  mut sret_scratch_size : Int32
+  mut sret_scratch_align : Int32
+  mut va_arg_scratch_offset : Int32
+  mut va_arg_scratch_size : Int32
+  mut va_arg_scratch_align : Int32
   mut break_label : String?
   mut continue_label : String?
   mut emitted_labels : Map[String, String]
@@ -137,7 +140,7 @@ fn X64Codegen::new_label(self : X64Codegen) -> String {
 }
 
 ///|
-fn x64_align_to(value : Int, align : Int) -> Int {
+fn x64_align_to(value : Int32, align : Int32) -> Int32 {
   if align <= 1 {
     value
   } else {
@@ -177,7 +180,7 @@ fn x64_is_aggregate_type(ty : @ctype.Type) -> Bool {
 }
 
 ///|
-fn x64_atomic_mem_operand(addr_reg : String, width : Int) -> String {
+fn x64_atomic_mem_operand(addr_reg : String, width : Int32) -> String {
   match width {
     1 => "BYTE PTR [" + addr_reg + "]"
     2 => "WORD PTR [" + addr_reg + "]"
@@ -187,7 +190,7 @@ fn x64_atomic_mem_operand(addr_reg : String, width : Int) -> String {
 }
 
 ///|
-fn x64_atomic_rax_reg(width : Int) -> String {
+fn x64_atomic_rax_reg(width : Int32) -> String {
   match width {
     1 => "al"
     2 => "ax"
@@ -197,7 +200,7 @@ fn x64_atomic_rax_reg(width : Int) -> String {
 }
 
 ///|
-fn x64_atomic_r10_reg(width : Int) -> String {
+fn x64_atomic_r10_reg(width : Int32) -> String {
   match width {
     1 => "r10b"
     2 => "r10w"
@@ -207,7 +210,7 @@ fn x64_atomic_r10_reg(width : Int) -> String {
 }
 
 ///|
-fn x64_atomic_r11_reg(width : Int) -> String {
+fn x64_atomic_r11_reg(width : Int32) -> String {
   match width {
     1 => "r11b"
     2 => "r11w"
@@ -246,7 +249,7 @@ fn x64_signed_i32_bits(value : Int64) -> Int64 {
 }
 
 ///|
-fn X64Codegen::type_size(self : X64Codegen, ty : @ctype.Type) -> Int {
+fn X64Codegen::type_size(self : X64Codegen, ty : @ctype.Type) -> Int32 {
   match self.mir_module {
     Some(mir) => return mir.type_size(ty)
     None => ()
@@ -278,7 +281,7 @@ fn X64Codegen::type_size(self : X64Codegen, ty : @ctype.Type) -> Int {
 }
 
 ///|
-fn X64Codegen::type_align(self : X64Codegen, ty : @ctype.Type) -> Int {
+fn X64Codegen::type_align(self : X64Codegen, ty : @ctype.Type) -> Int32 {
   match self.mir_module {
     Some(mir) => return mir.type_align(ty)
     None => ()
@@ -331,7 +334,7 @@ fn X64Codegen::ensure_struct_layout(self : X64Codegen, name : String) -> Unit {
 ///|
 fn x64_field_layout_tuple(
   layout : @mir.FieldLayout,
-) -> (String, @ctype.Type, Int, Int, Int, Int) {
+) -> (String, @ctype.Type, Int32, Int32, Int32, Int32) {
   (
     layout.name,
     layout.ty,
@@ -353,7 +356,7 @@ fn X64Codegen::register_mir_aggregate_layouts(
   for decl in mir.aggregate_decls {
     match mir.layouts.get(decl.name) {
       Some(layout) => {
-        let fields : Array[(String, @ctype.Type, Int, Int, Int, Int)] = []
+        let fields : Array[(String, @ctype.Type, Int32, Int32, Int32, Int32)] = []
         for field in layout.fields {
           fields.push(x64_field_layout_tuple(field))
         }
@@ -369,7 +372,7 @@ fn X64Codegen::alloc_local(
   self : X64Codegen,
   name : String,
   ty : @ctype.Type,
-) -> Int {
+) -> Int32 {
   let size = self.type_size(ty)
   let natural_align = self.type_align(ty)
   let align = if natural_align > 8 { natural_align } else { 8 }
@@ -386,7 +389,7 @@ fn X64Codegen::alloc_local(
 }
 
 ///|
-fn x64_rsp_ref(offset : Int) -> String {
+fn x64_rsp_ref(offset : Int32) -> String {
   if offset == 0 {
     "[rsp]"
   } else {
@@ -395,7 +398,7 @@ fn x64_rsp_ref(offset : Int) -> String {
 }
 
 ///|
-fn x64_base_neg_ref(base : String, offset : Int, extra : Int) -> String {
+fn x64_base_neg_ref(base : String, offset : Int32, extra : Int32) -> String {
   let total = offset - extra
   if total > 0 {
     "[" + base + " - " + total.to_string() + "]"
@@ -407,21 +410,21 @@ fn x64_base_neg_ref(base : String, offset : Int, extra : Int) -> String {
 }
 
 ///|
-fn X64Codegen::local_ref(self : X64Codegen, offset : Int) -> String {
+fn X64Codegen::local_ref(self : X64Codegen, offset : Int32) -> String {
   x64_base_neg_ref(self.local_base_reg, offset, 0)
 }
 
 ///|
 fn X64Codegen::local_neg_ref(
   self : X64Codegen,
-  offset : Int,
-  extra : Int,
+  offset : Int32,
+  extra : Int32,
 ) -> String {
   x64_base_neg_ref(self.local_base_reg, offset, extra)
 }
 
 ///|
-fn X64Codegen::emit_local_addr(self : X64Codegen, offset : Int) -> Unit {
+fn X64Codegen::emit_local_addr(self : X64Codegen, offset : Int32) -> Unit {
   self.emit("\tlea\trax, " + self.local_ref(offset))
 }
 
@@ -478,7 +481,7 @@ fn X64Codegen::emit_store_indirect(self : X64Codegen, ty : @ctype.Type) -> Unit 
 ///|
 fn X64Codegen::emit_store_local_from_rax(
   self : X64Codegen,
-  offset : Int,
+  offset : Int32,
   ty : @ctype.Type,
 ) -> Unit {
   match x64_core_type(ty) {
@@ -504,7 +507,7 @@ fn X64Codegen::emit_store_local_from_rax(
 fn X64Codegen::emit_store_int_reg_to_local(
   self : X64Codegen,
   reg : String,
-  offset : Int,
+  offset : Int32,
 ) -> Unit {
   self.emit("\tmov\tQWORD PTR " + self.local_ref(offset) + ", " + reg)
 }
@@ -513,7 +516,7 @@ fn X64Codegen::emit_store_int_reg_to_local(
 fn X64Codegen::emit_store_fp_reg_to_local(
   self : X64Codegen,
   reg : String,
-  offset : Int,
+  offset : Int32,
   ty : @ctype.Type,
 ) -> Unit {
   match x64_core_type(ty) {
@@ -547,8 +550,8 @@ fn x64_scalar_aggregate_class(ty : @ctype.Type) -> X64AggregateClass? {
 ///|
 fn x64_mark_aggregate_class_range(
   classes : Array[X64AggregateClass],
-  offset : Int,
-  size : Int,
+  offset : Int32,
+  size : Int32,
   class_ : X64AggregateClass,
 ) -> Bool {
   if size <= 0 {
@@ -569,7 +572,7 @@ fn x64_mark_aggregate_class_range(
 fn X64Codegen::classify_aggregate_field(
   self : X64Codegen,
   ty : @ctype.Type,
-  offset : Int,
+  offset : Int32,
   classes : Array[X64AggregateClass],
 ) -> Bool {
   match x64_core_type(ty) {
@@ -628,7 +631,7 @@ fn X64Codegen::classify_aggregate_field(
 fn X64Codegen::aggregate_has_unaligned_field(
   self : X64Codegen,
   ty : @ctype.Type,
-  offset : Int,
+  offset : Int32,
 ) -> Bool {
   match ty {
     Atomic(inner) => self.aggregate_has_unaligned_field(inner, offset)
@@ -702,7 +705,7 @@ fn X64Codegen::aggregate_classes(
 fn x64_class_count(
   classes : Array[X64AggregateClass],
   expected : X64AggregateClass,
-) -> Int {
+) -> Int32 {
   let mut count = 0
   for class_ in classes {
     if class_ == expected {
@@ -726,7 +729,10 @@ fn X64Codegen::is_memory_aggregate(self : X64Codegen, ty : @ctype.Type) -> Bool 
 }
 
 ///|
-fn X64Codegen::aggregate_word_count(self : X64Codegen, ty : @ctype.Type) -> Int {
+fn X64Codegen::aggregate_word_count(
+  self : X64Codegen,
+  ty : @ctype.Type,
+) -> Int32 {
   x64_align_to(self.type_size(ty), 8) / 8
 }
 
@@ -734,7 +740,7 @@ fn X64Codegen::aggregate_word_count(self : X64Codegen, ty : @ctype.Type) -> Int 
 fn X64Codegen::stack_arg_align_slots(
   self : X64Codegen,
   ty : @ctype.Type,
-) -> Int {
+) -> Int32 {
   let align = self.type_align(ty)
   if x64_is_int128_type(ty) || align > 8 {
     x64_align_to(align, 8) / 8
@@ -746,10 +752,10 @@ fn X64Codegen::stack_arg_align_slots(
 ///|
 fn X64Codegen::align_call_stack_arg(
   self : X64Codegen,
-  index : Int,
-  call_align : Int,
+  index : Int32,
+  call_align : Int32,
   ty : @ctype.Type,
-) -> (Int, Int) {
+) -> (Int32, Int32) {
   let align_slots = self.stack_arg_align_slots(ty)
   let aligned_index = x64_align_to(index, align_slots)
   let stack_align = align_slots * 8
@@ -762,7 +768,7 @@ fn X64Codegen::align_call_stack_arg(
 }
 
 ///|
-fn x64_mem_at_reg(reg : String, offset : Int) -> String {
+fn x64_mem_at_reg(reg : String, offset : Int32) -> String {
   if offset == 0 {
     "[" + reg + "]"
   } else {
@@ -771,12 +777,12 @@ fn x64_mem_at_reg(reg : String, offset : Int) -> String {
 }
 
 ///|
-fn x64_sized_mem_at_reg(reg : String, offset : Int, width : Int) -> String {
+fn x64_sized_mem_at_reg(reg : String, offset : Int32, width : Int32) -> String {
   x64_sized_mem_ref(x64_mem_at_reg(reg, offset), width)
 }
 
 ///|
-fn x64_sized_mem_ref(mem : String, width : Int) -> String {
+fn x64_sized_mem_ref(mem : String, width : Int32) -> String {
   let prefix = match width {
     1 => "BYTE PTR "
     2 => "WORD PTR "
@@ -787,7 +793,7 @@ fn x64_sized_mem_ref(mem : String, width : Int) -> String {
 }
 
 ///|
-fn x64_sized_reg(width : Int) -> String {
+fn x64_sized_reg(width : Int32) -> String {
   match width {
     1 => "al"
     2 => "ax"
@@ -851,8 +857,8 @@ fn x64_reg32(reg : String) -> String {
 fn X64Codegen::aggregate_word_width(
   self : X64Codegen,
   ty : @ctype.Type,
-  word : Int,
-) -> Int {
+  word : Int32,
+) -> Int32 {
   let remaining = self.type_size(ty) - word * 8
   if remaining >= 8 {
     8
@@ -868,8 +874,8 @@ fn X64Codegen::emit_load_int_bytes_from_mem_reg(
   self : X64Codegen,
   dst_reg : String,
   base_reg : String,
-  offset : Int,
-  width : Int,
+  offset : Int32,
+  width : Int32,
 ) -> Unit {
   match width {
     1 =>
@@ -947,8 +953,8 @@ fn X64Codegen::emit_store_int_bytes_to_mem_reg(
   self : X64Codegen,
   src_reg : String,
   base_reg : String,
-  offset : Int,
-  width : Int,
+  offset : Int32,
+  width : Int32,
 ) -> Unit {
   self.emit_store_int_bytes_to_mem_refs(
     src_reg,
@@ -968,7 +974,7 @@ fn X64Codegen::emit_store_int_bytes_to_mem_refs(
   mem2 : String,
   mem4 : String,
   mem6 : String,
-  width : Int,
+  width : Int32,
 ) -> Unit {
   match width {
     1 =>
@@ -1017,8 +1023,8 @@ fn X64Codegen::emit_load_sse_word_from_mem_reg(
   self : X64Codegen,
   dst_reg : String,
   base_reg : String,
-  offset : Int,
-  width : Int,
+  offset : Int32,
+  width : Int32,
 ) -> Unit {
   if width <= 4 {
     self.emit(
@@ -1036,8 +1042,8 @@ fn X64Codegen::emit_store_sse_word_to_mem_reg(
   self : X64Codegen,
   src_reg : String,
   base_reg : String,
-  offset : Int,
-  width : Int,
+  offset : Int32,
+  width : Int32,
 ) -> Unit {
   if width <= 4 {
     self.emit(
@@ -1177,7 +1183,10 @@ fn X64Codegen::emit_call_sret_addr(
 }
 
 ///|
-fn X64Codegen::ensure_va_list_storage(self : X64Codegen, name : String) -> Int {
+fn X64Codegen::ensure_va_list_storage(
+  self : X64Codegen,
+  name : String,
+) -> Int32 {
   if self.va_list_offsets.contains(name) {
     self.va_list_offsets[name]
   } else {
@@ -1232,7 +1241,7 @@ fn X64Codegen::emit_atomic_clean_rax(
 fn X64Codegen::emit_atomic_update_op(
   self : X64Codegen,
   op : String,
-  width : Int,
+  width : Int32,
 ) -> Unit {
   let dst = x64_atomic_r11_reg(width)
   let value = x64_atomic_r10_reg(width)
@@ -1620,7 +1629,7 @@ fn X64Codegen::label_ref(self : X64Codegen, name : String) -> String {
 ///|
 fn X64Codegen::emit_global_int_by_size(
   self : X64Codegen,
-  size : Int,
+  size : Int32,
   value : Int64,
 ) -> Unit {
   match size {
@@ -1996,7 +2005,7 @@ fn X64Codegen::emit_mir_global_aggregate(
 fn X64Codegen::emit_mir_global_sparse_aggregate(
   self : X64Codegen,
   name : String,
-  values : Array[(Int, @mir.MirGlobalInit)],
+  values : Array[(Int32, @mir.MirGlobalInit)],
 ) -> Unit {
   let layout = match self.mir_aggregate_layout(name) {
     Some(layout) => layout
@@ -2026,8 +2035,8 @@ fn X64Codegen::emit_mir_global_sparse_aggregate(
 fn X64Codegen::mir_global_bitfield_bits(
   self : X64Codegen,
   init : @mir.MirGlobalInit?,
-  bit_width : Int,
-  bit_offset : Int,
+  bit_width : Int32,
+  bit_offset : Int32,
 ) -> Int64 {
   let _ = self
   match init {
@@ -2042,8 +2051,8 @@ fn X64Codegen::emit_mir_global_bitfield_container(
   self : X64Codegen,
   layout : @mir.AggregateLayout,
   slots : Array[@mir.MirGlobalInit?],
-  start : Int,
-) -> (Int, Int) {
+  start : Int32,
+) -> (Int32, Int32) {
   let field = layout.fields[start]
   let container_offset = field.offset
   let container_size = field.size

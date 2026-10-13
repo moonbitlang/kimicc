@@ -6,9 +6,9 @@
 /// raised rather than tracked per token, because the parsing path never needs
 /// them and tracking them would cost on every character.
 pub(all) struct Position {
-  offset : Int
-  line : Int
-  column : Int
+  offset : Int32
+  line : Int32
+  column : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -31,7 +31,7 @@ pub extend Position with Show::{to_string, output}
 ///
 /// Scanning from the start each time is fine: this runs only when an error is
 /// being reported.
-pub fn position_at(source : String, offset : Int) -> Position {
+pub fn position_at(source : String, offset : Int32) -> Position {
   let limit = if offset < source.length() { offset } else { source.length() }
   let mut line = 1
   let mut column = 1

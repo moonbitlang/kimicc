@@ -44,7 +44,7 @@ pub(all) enum Expr {
   VaArg(Expr, Type)
   OffsetOf(Type, Array[OffsetDesignator])
   Array(Array[Expr])
-  CompoundLiteral(Type, Array[Expr], Int)
+  CompoundLiteral(Type, Array[Expr], Int32)
   DesignatedField(String, Expr)
   DesignatedIndex(Int64, Expr)
   DesignatedRange(Int64, Int64, Expr)
@@ -110,7 +110,7 @@ pub extend Stmt with Eq::{not_equal, equal}
 pub(all) struct Param {
   ty : Type
   name : String
-  bit_width : Int?
+  bit_width : Int32?
 } derive(Eq, Debug)
 
 ///|
@@ -140,7 +140,7 @@ pub(all) struct StructDecl {
   name : String
   fields : Array[Param]
   is_union : Bool
-  pack : Int?
+  pack : Int32?
   is_anonymous : Bool
 } derive(Eq, Debug)
 
@@ -156,7 +156,7 @@ pub extend StructDecl with Eq::{not_equal, equal}
 /// This is the single rule behind both `__attribute__((packed))` and
 /// `#pragma pack(N)`: a field is aligned to the smaller of its natural
 /// alignment and the cap in effect.
-pub fn packed_align(pack : Int?, natural : Int) -> Int {
+pub fn packed_align(pack : Int32?, natural : Int32) -> Int32 {
   match pack {
     Some(n) => if n < natural { n } else { natural }
     None => natural
@@ -246,9 +246,9 @@ pub extend GlobalDecl with Eq::{not_equal, equal}
 /// aggregate's member list prints inside its parent and takes no top-level
 /// place of its own.
 pub(all) enum TopLevel {
-  Aggregate(Int)
-  Global(Int)
-  Func(Int)
+  Aggregate(Int32)
+  Global(Int32)
+  Func(Int32)
 } derive(Eq, Debug)
 
 ///|

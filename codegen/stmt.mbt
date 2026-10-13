@@ -34,7 +34,7 @@ fn Codegen::emit_switch_case_compare(
 fn Codegen::gen_stmt(
   self : Codegen,
   stmt : @parser.Stmt,
-  frame_size : Int,
+  frame_size : Int32,
 ) -> Unit {
   match stmt {
     Compound(stmts) => {

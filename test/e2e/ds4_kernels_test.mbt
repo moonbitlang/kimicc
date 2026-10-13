@@ -31,7 +31,7 @@ async test "ds4 kernel generator emits canonical C that clang accepts" {
 /// gate test above and the referee; here they stay empty so the 262144-
 /// entry sign table is not rebuilt hundreds of times.
 test "ds4 kernels round-trip through print and parse for arbitrary widths" {
-  let state = @splitmix.new(seed=20260813)
+  let state = @splitmix.RandomState(seed=20260813)
   for case_index in 0..<40 {
     let q8_a = 1 + (state.next_uint() % 96).reinterpret_as_int()
     let q8_b = 1 + (state.next_uint() % 96).reinterpret_as_int()

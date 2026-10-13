@@ -4,31 +4,34 @@ priv struct Codegen {
   /// Darwin ARM64 assembly generator for a lowered MIR module.
   output : StringBuilder
   mut mir_module : @mir.MirModule?
-  mut label_counter : Int
-  mut local_offsets : Map[String, Int]
+  mut label_counter : Int32
+  mut local_offsets : Map[String, Int32]
   mut var_types : Map[String, @ctype.Type]
-  mut stack_size : Int
+  mut stack_size : Int32
   mut func_name : String
   func_rets : Map[String, @ctype.Type]
   func_variadic : Map[String, Bool]
-  func_param_counts : Map[String, Int]
+  func_param_counts : Map[String, Int32]
   func_param_types : Map[String, Array[@ctype.Type]]
-  struct_layouts : Map[String, Array[(String, @ctype.Type, Int, Int, Int, Int)]]
+  struct_layouts : Map[
+    String,
+    Array[(String, @ctype.Type, Int32, Int32, Int32, Int32)],
+  ]
   strings : Array[String]
   mut break_label : String?
   mut continue_label : String?
   globals : Map[String, CodegenGlobalDecl]
   mut emitted_labels : Map[String, String]
   mut defined_labels : Map[String, Bool]
-  mut sret_dest_offset : Int
-  mut sret_scratch_offset : Int
-  mut sret_scratch_size : Int
-  mut sret_scratch_align : Int
-  mut pending_sret_offset : Int
+  mut sret_dest_offset : Int32
+  mut sret_scratch_offset : Int32
+  mut sret_scratch_size : Int32
+  mut sret_scratch_align : Int32
+  mut pending_sret_offset : Int32
 }
 
 ///|
-fn octal_digit_char(d : Int) -> Char {
+fn octal_digit_char(d : Int32) -> Char {
   match d {
     0 => '0'
     1 => '1'
@@ -42,7 +45,7 @@ fn octal_digit_char(d : Int) -> Char {
 }
 
 ///|
-fn write_octal_escape(buf : StringBuilder, value : Int) -> Unit {
+fn write_octal_escape(buf : StringBuilder, value : Int32) -> Unit {
   let byte = value % 256
   buf.write_char('\\')
   buf.write_char(octal_digit_char(byte / 64))
@@ -65,7 +68,7 @@ fn escape_string(s : String) -> String {
 }
 
 ///|
-fn escape_string_prefix(s : String, limit : Int) -> String {
+fn escape_string_prefix(s : String, limit : Int32) -> String {
   let buf = StringBuilder()
   let mut emitted = 0
   for ch in s {
@@ -84,7 +87,7 @@ fn escape_string_prefix(s : String, limit : Int) -> String {
 }
 
 ///|
-fn global_char_array_string_directive(value : String, width : Int) -> String {
+fn global_char_array_string_directive(value : String, width : Int32) -> String {
   if value.length() < width {
     "\t.asciz\t\"" + escape_string(value) + "\""
   } else {
@@ -93,7 +96,7 @@ fn global_char_array_string_directive(value : String, width : Int) -> String {
 }
 
 ///|
-fn global_char_array_string_padding(value : String, width : Int) -> Int {
+fn global_char_array_string_padding(value : String, width : Int32) -> Int32 {
   if value.length() < width {
     width - value.length() - 1
   } else {
@@ -102,7 +105,7 @@ fn global_char_array_string_padding(value : String, width : Int) -> Int {
 }
 
 ///|
-fn reloc_with_offset(base : String, offset : Int) -> String {
+fn reloc_with_offset(base : String, offset : Int32) -> String {
   if offset == 0 {
     base
   } else if offset > 0 {
@@ -937,7 +940,7 @@ fn Codegen::emit_mir_global_aggregate(
 fn Codegen::emit_mir_global_sparse_aggregate(
   self : Codegen,
   name : String,
-  values : Array[(Int, @mir.MirGlobalInit)],
+  values : Array[(Int32, @mir.MirGlobalInit)],
 ) -> Unit {
   let layout = match self.mir_aggregate_layout(name) {
     Some(layout) => layout
@@ -967,8 +970,8 @@ fn Codegen::emit_mir_global_sparse_aggregate(
 fn Codegen::mir_global_bitfield_bits(
   self : Codegen,
   init : @mir.MirGlobalInit?,
-  bit_width : Int,
-  bit_offset : Int,
+  bit_width : Int32,
+  bit_offset : Int32,
 ) -> Int64 {
   let _ = self
   match init {
@@ -983,8 +986,8 @@ fn Codegen::emit_mir_global_bitfield_container(
   self : Codegen,
   layout : @mir.AggregateLayout,
   slots : Array[@mir.MirGlobalInit?],
-  start : Int,
-) -> (Int, Int) {
+  start : Int32,
+) -> (Int32, Int32) {
   let field = layout.fields[start]
   let container_offset = field.offset
   let container_size = field.size
@@ -1095,7 +1098,7 @@ fn Codegen::try_emit_mir_global_init(
 ///|
 fn Codegen::emit_global_int_by_size(
   self : Codegen,
-  size : Int,
+  size : Int32,
   value : Int64,
 ) -> Unit {
   match size {
@@ -1107,7 +1110,7 @@ fn Codegen::emit_global_int_by_size(
 }
 
 ///|
-fn global_align_power(align : Int) -> Int {
+fn global_align_power(align : Int32) -> Int32 {
   let mut power = 0
   let mut bytes = 1
   while bytes < align {

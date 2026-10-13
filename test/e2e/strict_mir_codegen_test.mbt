@@ -23,7 +23,7 @@ fn compile_strict_mir_for_target(
 }
 
 ///|
-fn run_source_strict_mir(source : String) -> Int raise @parser.ParseError {
+fn run_source_strict_mir(source : String) -> Int32 raise @parser.ParseError {
   let assembly = compile_strict_mir(source)
   let id = source_id(source)
   let asm_path = "/tmp/kimicc_strict_mir_test_" + id + ".s"
@@ -42,7 +42,7 @@ fn run_source_strict_mir(source : String) -> Int raise @parser.ParseError {
 fn run_strict_mir_with_clang_driver(
   callee_source : String,
   driver_source : String,
-) -> Int raise @parser.ParseError {
+) -> Int32 raise @parser.ParseError {
   let assembly = compile_strict_mir(callee_source)
   let id = source_id(callee_source + driver_source)
   let asm_path = "/tmp/kimicc_strict_mir_driver_" + id + ".s"

@@ -2,8 +2,8 @@
 fn Codegen::emit_store_local(
   self : Codegen,
   src_reg : String,
-  offset : Int,
-  frame_size : Int,
+  offset : Int32,
+  frame_size : Int32,
 ) -> Unit {
   let off = offset - frame_size
   if off >= -256 && off <= 255 {
@@ -17,8 +17,8 @@ fn Codegen::emit_store_local(
 ///|
 fn Codegen::emit_local_addr(
   self : Codegen,
-  offset : Int,
-  frame_size : Int,
+  offset : Int32,
+  frame_size : Int32,
 ) -> Unit {
   let off = offset - frame_size
   if off >= -256 && off <= 255 {
@@ -30,7 +30,11 @@ fn Codegen::emit_local_addr(
 }
 
 ///|
-fn Codegen::alloc_local(self : Codegen, name : String, ty : @ctype.Type) -> Int {
+fn Codegen::alloc_local(
+  self : Codegen,
+  name : String,
+  ty : @ctype.Type,
+) -> Int32 {
   let size = self.type_size(ty)
   let natural_align = self.type_align(ty)
   let align = if natural_align > 8 { natural_align } else { 8 }

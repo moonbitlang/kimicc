@@ -83,11 +83,11 @@ pub(all) enum MirGlobalInit {
   MirGlobalScalarFloat(Double)
   MirGlobalString(String)
   MirGlobalSymbol(String)
-  MirGlobalSymbolOffset(String, Int)
+  MirGlobalSymbolOffset(String, Int32)
   MirGlobalLabelAddr(String)
   MirGlobalArray(Array[MirGlobalInit])
-  MirGlobalArraySparse(Array[(Int, MirGlobalInit)])
-  MirGlobalAggregateSparse(Array[(Int, MirGlobalInit)])
+  MirGlobalArraySparse(Array[(Int32, MirGlobalInit)])
+  MirGlobalAggregateSparse(Array[(Int32, MirGlobalInit)])
   MirGlobalInitUnsupported
 } derive(Eq)
 
@@ -99,7 +99,7 @@ pub extend MirGlobalInit with Eq::{not_equal, equal}
 pub(all) struct MirAggregateField {
   name : String
   ty : @ctype.Type
-  bit_width : Int?
+  bit_width : Int32?
 } derive(Eq)
 
 ///|
@@ -114,7 +114,7 @@ pub(all) struct MirAggregateDecl {
   name : String
   fields : Array[MirAggregateField]
   is_union : Bool
-  pack : Int?
+  pack : Int32?
 } derive(Eq)
 
 ///|
@@ -137,10 +137,10 @@ pub extend Scope with Eq::{not_equal, equal}
 pub(all) struct FieldLayout {
   name : String
   ty : @ctype.Type
-  offset : Int
-  size : Int
-  bit_offset : Int
-  bit_width : Int?
+  offset : Int32
+  size : Int32
+  bit_offset : Int32
+  bit_width : Int32?
 } derive(Eq)
 
 ///|
@@ -150,10 +150,10 @@ pub extend FieldLayout with Eq::{not_equal, equal}
 /// Struct or union layout facts for the selected target.
 pub(all) struct AggregateLayout {
   fields : Array[FieldLayout]
-  size : Int
-  align : Int
+  size : Int32
+  align : Int32
   is_union : Bool
-  pack : Int?
+  pack : Int32?
 } derive(Eq)
 
 ///|
@@ -391,12 +391,12 @@ fn MirGlobalDecl::from_parser(g : @parser.GlobalDecl) -> MirGlobalDecl {
 }
 
 ///|
-fn mir_file_scope_compound_literal_name(id : Int) -> String {
+fn mir_file_scope_compound_literal_name(id : Int32) -> String {
   "__kimicc_file_scope_compound_literal_" + id.to_string()
 }
 
 ///|
-fn mir_compound_literal_array_length(exprs : Array[@parser.Expr]) -> Int {
+fn mir_compound_literal_array_length(exprs : Array[@parser.Expr]) -> Int32 {
   let mut cursor = 0
   let mut length = 0
   for expr in exprs {
@@ -649,7 +649,7 @@ fn Program::lower_mir_global_sparse_array_init(
   elem_ty : @ctype.Type,
   exprs : Array[@parser.Expr],
 ) -> MirGlobalInit {
-  let values : Array[(Int, MirGlobalInit)] = []
+  let values : Array[(Int32, MirGlobalInit)] = []
   let mut cursor = 0
   for expr in exprs {
     match expr {
@@ -680,7 +680,10 @@ fn Program::lower_mir_global_sparse_array_init(
 }
 
 ///|
-fn aggregate_field_index(layout : AggregateLayout, field_name : String) -> Int {
+fn aggregate_field_index(
+  layout : AggregateLayout,
+  field_name : String,
+) -> Int32 {
   for i = 0; i < layout.fields.length(); i = i + 1 {
     if layout.fields[i].name == field_name {
       return i
@@ -695,7 +698,7 @@ fn Program::lower_mir_global_sparse_aggregate_init(
   layout : AggregateLayout,
   exprs : Array[@parser.Expr],
 ) -> MirGlobalInit {
-  let values : Array[(Int, MirGlobalInit)] = []
+  let values : Array[(Int32, MirGlobalInit)] = []
   if layout.is_union {
     if exprs.length() > 0 {
       match exprs[0] {
@@ -821,7 +824,7 @@ fn Program::lower_mir_file_scope_compound_literal_global(
   self : Program,
   ty : @ctype.Type,
   exprs : Array[@parser.Expr],
-  id : Int,
+  id : Int32,
 ) -> MirGlobalDecl {
   let completed_ty = mir_file_scope_compound_literal_type(ty, exprs)
   {
@@ -844,7 +847,7 @@ fn Program::lower_mir_file_scope_compound_literal_global(
 fn Program::collect_mir_file_scope_compound_literal_globals_expr(
   self : Program,
   expr : @parser.Expr,
-  seen : Map[Int, Bool],
+  seen : Map[Int32, Bool],
   globals : Array[MirGlobalDecl],
 ) -> Unit {
   match expr {
@@ -943,7 +946,7 @@ fn Program::append_mir_file_scope_compound_literal_globals(
   self : Program,
   source_globals : Array[@parser.GlobalDecl],
 ) -> Unit {
-  let seen : Map[Int, Bool] = Map([])
+  let seen : Map[Int32, Bool] = Map([])
   let generated : Array[MirGlobalDecl] = []
   for global in source_globals {
     match global.init {
@@ -1019,7 +1022,7 @@ fn Program::lower_mir_global_scalar_init_for_type(
 fn Program::global_init_pointer_element_size(
   self : Program,
   elem_ty : @ctype.Type,
-) -> Int {
+) -> Int32 {
   match self.core_type(elem_ty) {
     Void => 1
     _ => self.type_size(elem_ty)
@@ -1031,7 +1034,7 @@ fn Program::global_init_offset_bytes(
   self : Program,
   base : @parser.Expr,
   offset : Int64,
-) -> Int {
+) -> Int32 {
   match self.core_type(self.global_expr_type(base)) {
     Pointer(elem) | Array(elem, _) =>
       offset.to_int() * self.global_init_pointer_element_size(elem)
@@ -1043,7 +1046,7 @@ fn Program::global_init_offset_bytes(
 fn Program::lower_mir_global_lvalue_reloc_parts(
   self : Program,
   expr : @parser.Expr,
-) -> (String, Int)? {
+) -> (String, Int32)? {
   match expr {
     Var(name) => Some((name, 0))
     CompoundLiteral(_, _, id) =>
@@ -1087,7 +1090,7 @@ fn Program::lower_mir_global_lvalue_reloc_parts(
 fn Program::lower_mir_global_address_reloc_parts(
   self : Program,
   expr : @parser.Expr,
-) -> (String, Int)? {
+) -> (String, Int32)? {
   match expr {
     Var(name) => Some((name, 0))
     CompoundLiteral(_, _, id) =>
@@ -1377,7 +1380,7 @@ fn Program::ternary_result_type(
 ///   inspect(program.type_size(Struct("P")), content="8")
 /// }
 /// ```
-pub fn Program::type_size(self : Program, ty : @ctype.Type) -> Int {
+pub fn Program::type_size(self : Program, ty : @ctype.Type) -> Int32 {
   match ty {
     Atomic(inner) | Aligned(inner, _) => self.type_size(inner)
     _ =>
@@ -1437,7 +1440,7 @@ pub fn Program::type_size(self : Program, ty : @ctype.Type) -> Int {
 ///   inspect(program.type_align(Aligned(SChar, 16)), content="16")
 /// }
 /// ```
-pub fn Program::type_align(self : Program, ty : @ctype.Type) -> Int {
+pub fn Program::type_align(self : Program, ty : @ctype.Type) -> Int32 {
   match ty {
     Atomic(inner) => self.type_align(inner)
     Aligned(inner, align) => {
@@ -1486,7 +1489,7 @@ pub fn Program::type_align(self : Program, ty : @ctype.Type) -> Int {
 }
 
 ///|
-fn align_to(value : Int, align : Int) -> Int {
+fn align_to(value : Int32, align : Int32) -> Int32 {
   if align <= 1 {
     value
   } else {
@@ -1503,7 +1506,7 @@ fn align_to(value : Int, align : Int) -> Int {
 fn Program::flatten_anon_fields(
   self : Program,
   ty : @ctype.Type,
-  base_offset : Int,
+  base_offset : Int32,
 ) -> Array[FieldLayout] {
   let name = match self.core_type(ty) {
     Struct(n) | Union(n) => n
@@ -1807,7 +1810,7 @@ pub fn Program::offset_of_path(
   self : Program,
   ty : @ctype.Type,
   path : Array[@ctype.OffsetDesignator],
-) -> Int? {
+) -> Int32? {
   let mut current_ty = ty
   let mut offset = 0
   for designator in path {
@@ -1865,7 +1868,7 @@ fn MirModule::aggregate_layout_by_name(
 /// The parser-free counterpart of `Program::type_size`: it resolves aggregates
 /// through the layouts carried by the module, so the backend can size types
 /// without the parser AST.
-pub fn MirModule::type_size(self : MirModule, ty : @ctype.Type) -> Int {
+pub fn MirModule::type_size(self : MirModule, ty : @ctype.Type) -> Int32 {
   match ty {
     Atomic(inner) | Aligned(inner, _) => self.type_size(inner)
     _ =>
@@ -1909,7 +1912,7 @@ pub fn MirModule::type_size(self : MirModule, ty : @ctype.Type) -> Int {
 /// Returns the alignment in bytes of a C type under this module's target ABI.
 ///
 /// The parser-free counterpart of `Program::type_align`.
-pub fn MirModule::type_align(self : MirModule, ty : @ctype.Type) -> Int {
+pub fn MirModule::type_align(self : MirModule, ty : @ctype.Type) -> Int32 {
   match ty {
     Atomic(inner) => self.type_align(inner)
     Aligned(inner, align) => {
@@ -1991,7 +1994,7 @@ pub fn MirModule::offset_of_path(
   self : MirModule,
   ty : @ctype.Type,
   path : Array[@ctype.OffsetDesignator],
-) -> Int? {
+) -> Int32? {
   let mut current_ty = ty
   let mut offset = 0
   for designator in path {

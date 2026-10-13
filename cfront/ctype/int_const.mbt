@@ -278,7 +278,7 @@ pub fn integer_abs_builtin_type(name : String) -> Type? {
 
 ///|
 /// Parser-neutral operation class and bit width for integer count/query builtins.
-pub fn integer_count_builtin_info(name : String) -> (String, Int)? {
+pub fn integer_count_builtin_info(name : String) -> (String, Int32)? {
   match name {
     "__builtin_clz" => Some(("clz", 32))
     "__builtin_clzl" | "__builtin_clzll" => Some(("clz", 64))
@@ -299,7 +299,7 @@ pub fn integer_count_builtin_info(name : String) -> (String, Int)? {
 pub fn integer_bswap_builtin_info(
   name : String,
   first_ty : Type,
-) -> (Type, Int)? {
+) -> (Type, Int32)? {
   match name {
     "__builtin_bswap16" => Some((UShort, 16))
     "__builtin_bswap32" => Some((UInt, 32))
@@ -317,7 +317,7 @@ pub fn integer_bswap_builtin_info(
 pub fn integer_rotate_builtin_info(
   name : String,
   first_ty : Type,
-) -> (Type, Int, Bool)? {
+) -> (Type, Int32, Bool)? {
   match name {
     "__builtin_rotateleft" =>
       Some(
@@ -486,7 +486,7 @@ pub fn integer_scalar_builtin_constant(
 /// helper distinguish absent operands from present but non-foldable operands.
 pub fn integer_scalar_builtin_constant_from_folded_args(
   name : String,
-  arg_count : Int,
+  arg_count : Int32,
   arg0 : IntegerConstant?,
   arg1 : IntegerConstant?,
   first_ty : Type,

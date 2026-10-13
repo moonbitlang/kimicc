@@ -26,19 +26,19 @@
 /// not a claim.
 pub(all) struct Config {
   /// Input width, `ne00`. Must be a positive multiple of 256 (QK_K).
-  in_dim : Int
+  in_dim : Int32
   /// Output rows per expert, `ne0` -- the expert FFN width.
-  out_rows : Int
+  out_rows : Int32
   /// Weight rows each thread accumulates; ds4 hardcodes 4.
-  nr0 : Int
+  nr0 : Int32
   /// Simdgroups per threadgroup. ds4 supplies this as a Metal function
   /// constant; a generated kernel bakes it, which is the same
   /// information reaching the compiler by a different route.
-  nsg : Int
+  nsg : Int32
 }
 
 ///|
-fn lit(n : Int) -> @parser.Expr {
+fn lit(n : Int32) -> @parser.Expr {
   @parser.int_literal(n.to_int64(), SInt)
 }
 
@@ -124,7 +124,11 @@ fn staging_stmts(cfg : Config) -> Array[@parser.Stmt] {
   // correct for every `nsg`, and since `nsg` is baked the bounds are
   // still constants to the compiler.
   let stride = 32 * cfg.nsg
-  fn copy_loop(dst : @parser.Expr, src : String, count : Int) -> @parser.Stmt {
+  fn copy_loop(
+    dst : @parser.Expr,
+    src : String,
+    count : Int32,
+  ) -> @parser.Stmt {
     For(
       [
         VarDecl(

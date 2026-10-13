@@ -1,7 +1,7 @@
 ///|
 priv struct AttributeInfo {
   mut is_packed : Bool
-  mut align : Int?
+  mut align : Int32?
   mut mode : String?
   mut is_weak : Bool
   mut visibility : String?
@@ -27,7 +27,7 @@ fn empty_attribute_info() -> AttributeInfo {
 }
 
 ///|
-fn merge_align(lhs : Int?, rhs : Int?) -> Int? {
+fn merge_align(lhs : Int32?, rhs : Int32?) -> Int32? {
   match (lhs, rhs) {
     (Some(a), Some(b)) => Some(if a > b { a } else { b })
     (Some(_), None) => lhs
@@ -37,7 +37,7 @@ fn merge_align(lhs : Int?, rhs : Int?) -> Int? {
 }
 
 ///|
-fn Parser::default_aligned_attribute_value(self : Parser) -> Int {
+fn Parser::default_aligned_attribute_value(self : Parser) -> Int32 {
   match self.target {
     DarwinArm64 | LinuxAmd64 => 16
   }
@@ -269,7 +269,7 @@ fn type_is_unsigned_integer(ty : Type) -> Bool {
 ///|
 fn sized_integer_type(
   unsigned : Bool,
-  bits : Int,
+  bits : Int32,
   position : Position,
 ) -> Type raise ParseError {
   match bits {
@@ -409,7 +409,7 @@ fn Parser::parse_typeof_specifier(self : Parser) -> Type raise ParseError {
 }
 
 ///|
-fn Parser::parse_alignas_specifier(self : Parser) -> Int? raise ParseError {
+fn Parser::parse_alignas_specifier(self : Parser) -> Int32? raise ParseError {
   match self.token {
     Ident("_Alignas") | Ident("alignas") => ()
     _ => return None

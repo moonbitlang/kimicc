@@ -5,7 +5,7 @@
 /// so later passes do not need to recover binding information from source AST
 /// nodes.
 pub(all) struct MirLocal {
-  id : Int
+  id : Int32
   name : String
   ty : @ctype.Type
 } derive(Eq)
@@ -31,7 +31,7 @@ pub(all) enum MirValue {
   MirLabelAddr(String)
   MirStringAddr(String)
   MirElemAddr(MirValue, MirValue, @ctype.Type)
-  MirOffsetAddr(MirValue, Int, @ctype.Type)
+  MirOffsetAddr(MirValue, Int32, @ctype.Type)
   MirLoad(MirValue, @ctype.Type)
   MirUnary(String, MirValue, @ctype.Type)
   MirBinary(String, MirValue, MirValue, @ctype.Type)
@@ -157,13 +157,13 @@ pub fn MirValue::ty(self : MirValue) -> @ctype.Type {
 priv struct BodyLowerContext {
   scopes : Array[Map[String, MirLocal]]
   locals : Array[MirLocal]
-  mut next_id : Int
+  mut next_id : Int32
   current_func : String
   // One entry per `switch` being lowered, innermost last. A `case` clause
   // records itself in the innermost entry, which is what makes a nested switch
   // own its own clauses without any traversal that has to know to stop.
   switches : Array[Array[(Int64?, String)]]
-  mut next_switch_label : Int
+  mut next_switch_label : Int32
 }
 
 ///|
@@ -335,7 +335,7 @@ fn mir_body_array_element_addressable_type(ty : @ctype.Type) -> Bool {
 }
 
 ///|
-fn mir_body_array_local_info(ty : @ctype.Type) -> (@ctype.Type, Int)? {
+fn mir_body_array_local_info(ty : @ctype.Type) -> (@ctype.Type, Int32)? {
   match ty {
     Array(elem, len) => Some((elem, len))
     Aligned(inner, _) => mir_body_array_local_info(inner)
@@ -747,7 +747,7 @@ fn Program::lower_mir_zero_object_stores(
   let mut offset = 0
   while offset < size {
     let remaining = size - offset
-    let (chunk_ty, chunk_size) : (@ctype.Type, Int) = if remaining >= 8 &&
+    let (chunk_ty, chunk_size) : (@ctype.Type, Int32) = if remaining >= 8 &&
       offset % 8 == 0 {
       (ULongLong, 8)
     } else if remaining >= 4 && offset % 4 == 0 {
@@ -1376,7 +1376,7 @@ fn mir_body_source_builtin_call_name(name : String) -> Bool {
 fn Program::lower_mir_identity_builtin(
   self : Program,
   args : Array[@parser.Expr],
-  side_effect_arg : Int?,
+  side_effect_arg : Int32?,
   ty : @ctype.Type,
   ctx : BodyLowerContext,
 ) -> MirValue? {
@@ -2039,7 +2039,7 @@ fn Program::lower_mir_integer_unary_builtin(
 }
 
 ///|
-fn mir_body_rotate_builtin_op(width : Int, left : Bool) -> String? {
+fn mir_body_rotate_builtin_op(width : Int32, left : Bool) -> String? {
   match (width, left) {
     (32, true) => Some("rotl32")
     (32, false) => Some("rotr32")
@@ -2694,7 +2694,7 @@ fn Program::lower_mir_atomic_load_store_builtin(
 fn Program::lower_mir_atomic_extra_args(
   self : Program,
   args : Array[@parser.Expr],
-  start : Int,
+  start : Int32,
   ctx : BodyLowerContext,
 ) -> Array[MirValue]? {
   let values : Array[MirValue] = []
@@ -3109,7 +3109,7 @@ fn Program::lower_mir_array_compound_literal_addr(
   self : Program,
   lit_ty : @ctype.Type,
   items : Array[@parser.Expr],
-  id : Int,
+  id : Int32,
   ctx : BodyLowerContext,
 ) -> MirValue? {
   let completed_ty = mir_file_scope_compound_literal_type(lit_ty, items)
@@ -3343,7 +3343,7 @@ fn Program::lower_mir_member_addr(
 }
 
 ///|
-fn mir_body_bitfield_mask(width : Int) -> Int64 {
+fn mir_body_bitfield_mask(width : Int32) -> Int64 {
   if width >= 64 {
     -1L
   } else {
@@ -3611,7 +3611,7 @@ fn Program::lower_mir_bitfield_post_step(
 ///|
 fn mir_body_offset_addr_value(
   base : MirValue,
-  offset : Int,
+  offset : Int32,
   ty : @ctype.Type,
 ) -> MirValue {
   match base {

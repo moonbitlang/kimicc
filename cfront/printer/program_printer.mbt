@@ -118,7 +118,7 @@ pub fn print_program(program : @parser.Program) -> String {
   // -- are already complete.
   // Everything below the item-held ceiling that no member claimed as its
   // definition site prints at its creation position.
-  let hidden : Array[(Int, @parser.StructDecl)] = []
+  let hidden : Array[(Int32, @parser.StructDecl)] = []
   let mut max_top_index = -1
   for item in program.items {
     match item {
@@ -138,9 +138,9 @@ pub fn print_program(program : @parser.Program) -> String {
   }
   let mut next_hidden = 0
   if program.items.length() > 0 {
-    let seen_structs : Map[Int, Bool] = Map([])
-    let seen_globals : Map[Int, Bool] = Map([])
-    let seen_decls : Map[Int, Bool] = Map([])
+    let seen_structs : Map[Int32, Bool] = Map([])
+    let seen_globals : Map[Int32, Bool] = Map([])
+    let seen_decls : Map[Int32, Bool] = Map([])
     for item in program.items {
       match item {
         // Items index the grouped arrays rather than carrying copies, so a
@@ -254,10 +254,10 @@ pub fn print_program(program : @parser.Program) -> String {
 /// prints at top level.
 fn member_inline_defs(
   program : @parser.Program,
-) -> Map[String, (@parser.StructDecl, Int)] {
-  let inline : Map[String, (@parser.StructDecl, Int)] = Map([])
+) -> Map[String, (@parser.StructDecl, Int32)] {
+  let inline : Map[String, (@parser.StructDecl, Int32)] = Map([])
   if program.items.length() > 0 {
-    let top : Map[Int, Bool] = Map([])
+    let top : Map[Int32, Bool] = Map([])
     let mut max_top = -1
     for item in program.items {
       match item {
@@ -274,7 +274,7 @@ fn member_inline_defs(
     // parent's index, and the parent holds an item -- so anything above every
     // item-held index was appended after parsing and is a top-level entry,
     // not a member definition.
-    let candidates : Map[String, (@parser.StructDecl, Int)] = Map([])
+    let candidates : Map[String, (@parser.StructDecl, Int32)] = Map([])
     for index, decl in program.structs {
       if !top.contains(index) && index < max_top {
         candidates[decl.name] = (decl, index)
@@ -321,7 +321,7 @@ fn member_inline_defs(
     }
     return inline
   }
-  let defs : Map[String, (@parser.StructDecl, Int)] = Map([])
+  let defs : Map[String, (@parser.StructDecl, Int32)] = Map([])
   for index, decl in program.structs {
     defs[decl.name] = (decl, index)
   }
@@ -358,8 +358,8 @@ fn member_inline_defs(
 fn write_struct_decl(
   buf : StringBuilder,
   decl : @parser.StructDecl,
-  decl_index : Int,
-  anon : Map[String, (@parser.StructDecl, Int)],
+  decl_index : Int32,
+  anon : Map[String, (@parser.StructDecl, Int32)],
   anon_named : Map[String, Bool],
   inlined : Map[String, Bool],
 ) -> Unit {
@@ -402,9 +402,9 @@ fn write_struct_decl(
 fn write_aggregate_fields(
   buf : StringBuilder,
   decl : @parser.StructDecl,
-  decl_index : Int,
-  indent : Int,
-  anon : Map[String, (@parser.StructDecl, Int)],
+  decl_index : Int32,
+  indent : Int32,
+  anon : Map[String, (@parser.StructDecl, Int32)],
   anon_named : Map[String, Bool],
   inlined : Map[String, Bool],
 ) -> Unit {
@@ -664,14 +664,16 @@ fn write_symbol_attributes(
 /// so the collector walks the types reachable from declarations, statements,
 /// and the expressions that embed a type: casts, `sizeof`, `_Alignof`,
 /// compound literals, `va_arg`, and `offsetof`.
-fn referenced_tags(program : @parser.Program) -> Map[String, (Bool, Bool, Int)] {
+fn referenced_tags(
+  program : @parser.Program,
+) -> Map[String, (Bool, Bool, Int32)] {
   // Per name: (referenced as a struct, referenced as a union, mention
   // count). Both kind flags can be true -- the same spelling can name a
   // file-scope tag of one kind and a prototype-scope tag of the other. The
   // count includes every type-position mention anywhere, including the
   // defining member's own; consumers that need external references subtract
   // the defining mention.
-  let tags : Map[String, (Bool, Bool, Int)] = Map([])
+  let tags : Map[String, (Bool, Bool, Int32)] = Map([])
   fn take(ty : @ctype.Type) -> Unit {
     match ty {
       Struct(name) => {
@@ -827,7 +829,7 @@ fn referenced_tags(program : @parser.Program) -> Map[String, (Bool, Bool, Int)] 
 
 ///|
 /// Whether `index` is named by an `Aggregate` item.
-fn item_held(program : @parser.Program, index : Int) -> Bool {
+fn item_held(program : @parser.Program, index : Int32) -> Bool {
   for item in program.items {
     if item is Aggregate(held) && held == index {
       return true
@@ -846,10 +848,10 @@ fn item_held(program : @parser.Program, index : Int) -> Bool {
 /// site rather than a reference. A positive result means the synthesized tag
 /// must be spelled out for those references to resolve.
 fn external_tag_references(
-  referenced : Map[String, (Bool, Bool, Int)],
+  referenced : Map[String, (Bool, Bool, Int32)],
   carried : Map[String, Bool],
   tag : String,
-) -> Int {
+) -> Int32 {
   let count = match referenced.get(tag) {
     Some((_, _, mentions)) => mentions
     None => 0

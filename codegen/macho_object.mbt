@@ -1,45 +1,45 @@
 ///|
 priv struct PendingBranch {
-  section_index : Int
-  offset : Int
+  section_index : Int32
+  offset : Int32
   label : String
   link : Bool
 }
 
 ///|
 priv struct PendingCbz {
-  section_index : Int
-  offset : Int
+  section_index : Int32
+  offset : Int32
   label : String
-  reg : Int
+  reg : Int32
   nonzero : Bool
 }
 
 ///|
 priv struct PendingCondBranch {
-  section_index : Int
-  offset : Int
+  section_index : Int32
+  offset : Int32
   label : String
   cond : String
 }
 
 ///|
 priv struct SymbolLocation {
-  section_index : Int
-  offset : Int
+  section_index : Int32
+  offset : Int32
 }
 
 ///|
 priv struct ObjectSection {
   sectname : String
   segname : String
-  flags : UInt
-  mut align_power : Int
-  bytes : Array[Int]
+  flags : UInt32
+  mut align_power : Int32
+  bytes : Array[Int32]
   relocs : Array[Relocation]
-  mut addr : Int
-  mut offset : Int
-  mut reloff : Int
+  mut addr : Int32
+  mut offset : Int32
+  mut reloff : Int32
 }
 
 ///|
@@ -52,41 +52,41 @@ priv struct AssembledObject {
 
 ///|
 priv struct Relocation {
-  address : Int
+  address : Int32
   symbol : String
   pcrel : Bool
-  length : Int
+  length : Int32
   external : Bool
-  type_ : Int
+  type_ : Int32
 }
 
 ///|
 priv struct SymbolAddend {
   symbol : String
-  addend : Int
+  addend : Int32
 }
 
 ///|
 priv struct SymbolEntry {
   name : String
-  type_ : Int
-  section_index : Int
-  value : Int
+  type_ : Int32
+  section_index : Int32
+  value : Int32
 }
 
 ///|
 priv struct JitExternalRelocation {
-  offset : Int
+  offset : Int32
   symbol : String
 }
 
 ///|
 priv struct SymbolLayout {
   entries : Array[SymbolEntry]
-  indexes : Map[String, Int]
-  nlocals : Int
-  nextdefs : Int
-  nundefs : Int
+  indexes : Map[String, Int32]
+  nlocals : Int32
+  nextdefs : Int32
+  nundefs : Int32
 }
 
 ///|
@@ -96,7 +96,7 @@ priv struct SymbolLayout {
 /// leading underscore. `offset` is the byte offset into `JitImage.code`.
 pub struct JitSymbol {
   name : String
-  offset : Int
+  offset : Int32
 }
 
 ///|
@@ -107,14 +107,14 @@ pub struct JitSymbol {
 /// Relocation byte arrays are loader-private encodings.
 pub struct JitImage {
   code : Bytes
-  executable_size : Int
+  executable_size : Int32
   base_relocations : Bytes
   external_relocations : Bytes
   symbols : Array[JitSymbol]
 }
 
 ///|
-fn write_u32_le(buf : @buffer.Buffer, value : UInt) -> Unit {
+fn write_u32_le(buf : @buffer.Buffer, value : UInt32) -> Unit {
   buf.write_byte((value & 0xffU).reinterpret_as_int().to_byte())
   buf.write_byte(((value >> 8) & 0xffU).reinterpret_as_int().to_byte())
   buf.write_byte(((value >> 16) & 0xffU).reinterpret_as_int().to_byte())
@@ -122,14 +122,14 @@ fn write_u32_le(buf : @buffer.Buffer, value : UInt) -> Unit {
 }
 
 ///|
-fn write_u16_le(buf : @buffer.Buffer, value : Int) -> Unit {
+fn write_u16_le(buf : @buffer.Buffer, value : Int32) -> Unit {
   let v = value.reinterpret_as_uint()
   buf.write_byte((v & 0xffU).reinterpret_as_int().to_byte())
   buf.write_byte(((v >> 8) & 0xffU).reinterpret_as_int().to_byte())
 }
 
 ///|
-fn write_i32_le(buf : @buffer.Buffer, value : Int) -> Unit {
+fn write_i32_le(buf : @buffer.Buffer, value : Int32) -> Unit {
   write_u32_le(buf, value.reinterpret_as_uint())
 }
 
@@ -146,7 +146,11 @@ fn write_u64_le(buf : @buffer.Buffer, value : Int64) -> Unit {
 }
 
 ///|
-fn write_fixed_ascii(buf : @buffer.Buffer, value : String, width : Int) -> Unit {
+fn write_fixed_ascii(
+  buf : @buffer.Buffer,
+  value : String,
+  width : Int32,
+) -> Unit {
   let mut written = 0
   for ch in value {
     if written < width {
@@ -169,7 +173,7 @@ fn write_ascii_z(buf : @buffer.Buffer, value : String) -> Unit {
 }
 
 ///|
-fn align_int(value : Int, align : Int) -> Int {
+fn align_int(value : Int32, align : Int32) -> Int32 {
   if align <= 1 {
     value
   } else {
@@ -178,12 +182,12 @@ fn align_int(value : Int, align : Int) -> Int {
 }
 
 ///|
-fn append_byte(section : ObjectSection, value : Int) -> Unit {
+fn append_byte(section : ObjectSection, value : Int32) -> Unit {
   section.bytes.push(value & 0xff)
 }
 
 ///|
-fn append_u32_to_section(section : ObjectSection, value : UInt) -> Unit {
+fn append_u32_to_section(section : ObjectSection, value : UInt32) -> Unit {
   append_byte(section, (value & 0xffU).reinterpret_as_int())
   append_byte(section, ((value >> 8) & 0xffU).reinterpret_as_int())
   append_byte(section, ((value >> 16) & 0xffU).reinterpret_as_int())
@@ -217,8 +221,8 @@ fn append_u64_bits_to_section(section : ObjectSection, value : UInt64) -> Unit {
 ///|
 fn patch_u32_in_section(
   section : ObjectSection,
-  offset : Int,
-  value : UInt,
+  offset : Int32,
+  value : UInt32,
 ) -> Unit {
   section.bytes[offset] = (value & 0xffU).reinterpret_as_int()
   section.bytes[offset + 1] = ((value >> 8) & 0xffU).reinterpret_as_int()
@@ -227,7 +231,11 @@ fn patch_u32_in_section(
 }
 
 ///|
-fn patch_u32_in_array(values : Array[Int], offset : Int, value : UInt) -> Unit {
+fn patch_u32_in_array(
+  values : Array[Int32],
+  offset : Int32,
+  value : UInt32,
+) -> Unit {
   values[offset] = (value & 0xffU).reinterpret_as_int()
   values[offset + 1] = ((value >> 8) & 0xffU).reinterpret_as_int()
   values[offset + 2] = ((value >> 16) & 0xffU).reinterpret_as_int()
@@ -235,7 +243,7 @@ fn patch_u32_in_array(values : Array[Int], offset : Int, value : UInt) -> Unit {
 }
 
 ///|
-fn read_u32_from_array(values : Array[Int], offset : Int) -> UInt {
+fn read_u32_from_array(values : Array[Int32], offset : Int32) -> UInt32 {
   values[offset].reinterpret_as_uint() |
   (values[offset + 1].reinterpret_as_uint() << 8) |
   (values[offset + 2].reinterpret_as_uint() << 16) |
@@ -243,7 +251,7 @@ fn read_u32_from_array(values : Array[Int], offset : Int) -> UInt {
 }
 
 ///|
-fn read_i64_from_array(values : Array[Int], offset : Int) -> Int64 {
+fn read_i64_from_array(values : Array[Int32], offset : Int32) -> Int64 {
   ((values[offset].to_int64() & 0xffL) << 0) |
   ((values[offset + 1].to_int64() & 0xffL) << 8) |
   ((values[offset + 2].to_int64() & 0xffL) << 16) |
@@ -255,7 +263,11 @@ fn read_i64_from_array(values : Array[Int], offset : Int) -> Int64 {
 }
 
 ///|
-fn patch_i64_in_array(values : Array[Int], offset : Int, value : Int64) -> Unit {
+fn patch_i64_in_array(
+  values : Array[Int32],
+  offset : Int32,
+  value : Int64,
+) -> Unit {
   values[offset] = ((value >> 0) & 0xffL).to_int()
   values[offset + 1] = ((value >> 8) & 0xffL).to_int()
   values[offset + 2] = ((value >> 16) & 0xffL).to_int()
@@ -269,7 +281,7 @@ fn patch_i64_in_array(values : Array[Int], offset : Int, value : Int64) -> Unit 
 ///|
 fn align_section(
   section : ObjectSection,
-  align : Int,
+  align : Int32,
   text_fill : Bool,
 ) -> Unit {
   while (section.bytes.length() & (align - 1)) != 0 {
@@ -294,7 +306,7 @@ fn section_is_zerofill(section : ObjectSection) -> Bool {
 }
 
 ///|
-fn write_padding_to_offset(buf : @buffer.Buffer, offset : Int) -> Unit {
+fn write_padding_to_offset(buf : @buffer.Buffer, offset : Int32) -> Unit {
   while buf.length() < offset {
     buf.write_byte((0).to_byte())
   }
@@ -304,19 +316,19 @@ fn write_padding_to_offset(buf : @buffer.Buffer, offset : Int) -> Unit {
 }
 
 ///|
-fn parse_int_or_abort(value : String, context : String) -> Int {
+fn parse_int_or_abort(value : String, context : String) -> Int32 {
   @string.parse_int(value) catch {
     _ => abort("cannot parse integer in " + context + ": " + value)
   }
 }
 
 ///|
-fn slice_from(text : String, start : Int) -> String {
+fn slice_from(text : String, start : Int32) -> String {
   text[start:].to_owned()
 }
 
 ///|
-fn slice_to(text : String, end : Int) -> String {
+fn slice_to(text : String, end : Int32) -> String {
   text[:end].to_owned()
 }
 
@@ -326,7 +338,7 @@ fn trim_to_owned(text : String) -> String {
 }
 
 ///|
-fn parse_register(reg : String) -> Int {
+fn parse_register(reg : String) -> Int32 {
   if reg == "sp" || reg == "xzr" || reg == "wzr" {
     31
   } else if reg.has_prefix("x") || reg.has_prefix("w") {
@@ -337,7 +349,7 @@ fn parse_register(reg : String) -> Int {
 }
 
 ///|
-fn parse_fp_register(reg : String) -> Int {
+fn parse_fp_register(reg : String) -> Int32 {
   if reg.has_prefix("d") || reg.has_prefix("s") {
     parse_int_or_abort(slice_from(reg, 1), "floating-point register")
   } else {
@@ -351,7 +363,7 @@ fn is_fp_register(reg : String) -> Bool {
 }
 
 ///|
-fn fp_register_scale(reg : String) -> Int {
+fn fp_register_scale(reg : String) -> Int32 {
   if reg.has_prefix("d") {
     8
   } else if reg.has_prefix("s") {
@@ -362,7 +374,7 @@ fn fp_register_scale(reg : String) -> Int {
 }
 
 ///|
-fn parse_immediate(imm : String) -> Int {
+fn parse_immediate(imm : String) -> Int32 {
   let s = trim_to_owned(imm)
   if s.has_prefix("#") {
     parse_int_or_abort(slice_from(s, 1), "immediate")
@@ -372,7 +384,7 @@ fn parse_immediate(imm : String) -> Int {
 }
 
 ///|
-fn digit_value_or_abort(ch : Char, base : Int, context : String) -> Int {
+fn digit_value_or_abort(ch : Char, base : Int32, context : String) -> Int32 {
   let digit = if ch >= '0' && ch <= '9' {
     ch.to_int() - '0'.to_int()
   } else if ch >= 'a' && ch <= 'f' {
@@ -436,9 +448,9 @@ fn split_operands(rest : String) -> Array[String] {
 fn encode_add_sub_imm(
   dst : String,
   src : String,
-  imm : Int,
+  imm : Int32,
   is_sub : Bool,
-) -> UInt {
+) -> UInt32 {
   if imm < 0 {
     encode_add_sub_imm(dst, src, -imm, !is_sub)
   } else {
@@ -462,9 +474,9 @@ fn encode_add_sub_imm(
 fn encode_add_sub_imm_with_base(
   dst : String,
   src : String,
-  imm : Int,
-  base : UInt,
-) -> UInt {
+  imm : Int32,
+  base : UInt32,
+) -> UInt32 {
   let (encoded_imm, shift) = encode_add_sub_imm12_fields(imm, "add/sub")
   let rd = parse_register(dst)
   let rn = parse_register(src)
@@ -476,7 +488,7 @@ fn encode_add_sub_imm_with_base(
 }
 
 ///|
-fn encode_add_sub_imm12_fields(imm : Int, context : String) -> (Int, Int) {
+fn encode_add_sub_imm12_fields(imm : Int32, context : String) -> (Int32, Int32) {
   if imm < 0 {
     abort(context + " immediate must be non-negative")
   } else if imm <= 4095 {
@@ -494,8 +506,8 @@ fn encode_add_sub_reg(
   left : String,
   right : String,
   is_sub : Bool,
-  shift : Int,
-) -> UInt {
+  shift : Int32,
+) -> UInt32 {
   if (dst == "sp" || left == "sp") && right.has_prefix("x") {
     if shift != 0 {
       abort("unsupported sp add/sub register shift in object backend")
@@ -530,9 +542,9 @@ fn encode_add_sub_reg_with_base(
   dst : String,
   left : String,
   right : String,
-  shift : Int,
-  base : UInt,
-) -> UInt {
+  shift : Int32,
+  base : UInt32,
+) -> UInt32 {
   let rd = parse_register(dst)
   let rn = parse_register(left)
   let rm = parse_register(right)
@@ -549,7 +561,7 @@ fn encode_add_sub_reg_with_base(
 }
 
 ///|
-fn encode_add_sub(rest : String, is_sub : Bool) -> UInt {
+fn encode_add_sub(rest : String, is_sub : Bool) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 3 && parts.length() != 4 {
     abort("malformed add/sub instruction")
@@ -569,7 +581,7 @@ fn encode_add_sub(rest : String, is_sub : Bool) -> UInt {
 }
 
 ///|
-fn encode_add_sub_flags(rest : String, is_sub : Bool) -> UInt {
+fn encode_add_sub_flags(rest : String, is_sub : Bool) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 3 && parts.length() != 4 {
     abort("malformed flag-setting add/sub instruction")
@@ -617,7 +629,7 @@ fn encode_add_sub_flags(rest : String, is_sub : Bool) -> UInt {
 }
 
 ///|
-fn encode_mul(rest : String) -> UInt {
+fn encode_mul(rest : String) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 3 {
     abort("malformed mul instruction")
@@ -632,7 +644,7 @@ fn encode_mul(rest : String) -> UInt {
 }
 
 ///|
-fn encode_madd(rest : String) -> UInt {
+fn encode_madd(rest : String) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 4 {
     abort("malformed madd instruction")
@@ -649,7 +661,7 @@ fn encode_madd(rest : String) -> UInt {
 }
 
 ///|
-fn encode_msub(rest : String) -> UInt {
+fn encode_msub(rest : String) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 4 {
     abort("malformed msub instruction")
@@ -666,7 +678,7 @@ fn encode_msub(rest : String) -> UInt {
 }
 
 ///|
-fn encode_sdiv(rest : String) -> UInt {
+fn encode_sdiv(rest : String) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 3 {
     abort("malformed sdiv instruction")
@@ -681,7 +693,7 @@ fn encode_sdiv(rest : String) -> UInt {
 }
 
 ///|
-fn encode_three_register(rest : String, base : UInt, name : String) -> UInt {
+fn encode_three_register(rest : String, base : UInt32, name : String) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 3 {
     abort("malformed " + name + " instruction")
@@ -698,10 +710,10 @@ fn encode_three_register(rest : String, base : UInt, name : String) -> UInt {
 ///|
 fn encode_logical_register(
   rest : String,
-  w_base : UInt,
-  x_base : UInt,
+  w_base : UInt32,
+  x_base : UInt32,
   name : String,
-) -> UInt {
+) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 3 {
     abort("malformed " + name + " instruction")
@@ -729,7 +741,7 @@ fn encode_logical_register(
 }
 
 ///|
-fn encode_shift(rest : String, kind : String) -> UInt {
+fn encode_shift(rest : String, kind : String) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 3 {
     abort("malformed " + kind + " instruction")
@@ -769,7 +781,7 @@ fn encode_shift(rest : String, kind : String) -> UInt {
 }
 
 ///|
-fn low_mask_u64(width : Int) -> UInt64 {
+fn low_mask_u64(width : Int32) -> UInt64 {
   if width == 64 {
     0xffffffffffffffffUL
   } else {
@@ -778,7 +790,7 @@ fn low_mask_u64(width : Int) -> UInt64 {
 }
 
 ///|
-fn rotate_right_u64(value : UInt64, rotation : Int, width : Int) -> UInt64 {
+fn rotate_right_u64(value : UInt64, rotation : Int32, width : Int32) -> UInt64 {
   let mask = low_mask_u64(width)
   let amount = rotation % width
   if amount == 0 {
@@ -791,8 +803,8 @@ fn rotate_right_u64(value : UInt64, rotation : Int, width : Int) -> UInt64 {
 ///|
 fn repeat_mask_pattern(
   pattern : UInt64,
-  element_width : Int,
-  width : Int,
+  element_width : Int32,
+  width : Int32,
 ) -> UInt64 {
   let element_mask = low_mask_u64(element_width)
   let mut value = 0UL
@@ -807,12 +819,12 @@ fn repeat_mask_pattern(
 ///|
 fn encode_logical_immediate_mask(
   mask : UInt64,
-  width : Int,
-  base : UInt,
-  rn : Int,
-  rd : Int,
+  width : Int32,
+  base : UInt32,
+  rn : Int32,
+  rd : Int32,
   name : String,
-) -> UInt {
+) -> UInt32 {
   let width_mask = low_mask_u64(width)
   let value = mask & width_mask
   if value == 0UL || value == width_mask {
@@ -849,7 +861,7 @@ fn encode_logical_immediate_mask(
 }
 
 ///|
-fn encode_and(rest : String) -> UInt {
+fn encode_and(rest : String) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 3 {
     abort("malformed and instruction")
@@ -868,7 +880,7 @@ fn encode_and(rest : String) -> UInt {
 }
 
 ///|
-fn encode_bic(rest : String) -> UInt {
+fn encode_bic(rest : String) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 3 {
     abort("malformed bic instruction")
@@ -889,7 +901,7 @@ fn encode_bic(rest : String) -> UInt {
 }
 
 ///|
-fn encode_cmp(rest : String) -> UInt {
+fn encode_cmp(rest : String) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 2 {
     abort("malformed cmp instruction")
@@ -914,7 +926,7 @@ fn encode_cmp(rest : String) -> UInt {
 }
 
 ///|
-fn condition_code(cond : String) -> Int {
+fn condition_code(cond : String) -> Int32 {
   match cond {
     "eq" => 0
     "ne" => 1
@@ -935,12 +947,12 @@ fn condition_code(cond : String) -> Int {
 }
 
 ///|
-fn inverted_condition_code(cond : String) -> Int {
+fn inverted_condition_code(cond : String) -> Int32 {
   condition_code(cond) ^ 1
 }
 
 ///|
-fn encode_cset(rest : String) -> UInt {
+fn encode_cset(rest : String) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 2 {
     abort("malformed cset instruction")
@@ -951,7 +963,7 @@ fn encode_cset(rest : String) -> UInt {
 }
 
 ///|
-fn encode_mov_reg(dst : String, src : String) -> UInt {
+fn encode_mov_reg(dst : String, src : String) -> UInt32 {
   let rd = parse_register(dst)
   let rn = parse_register(src)
   if dst == "sp" || src == "sp" {
@@ -966,7 +978,7 @@ fn encode_stur_64(
   rt_text : String,
   base_text : String,
   offset_text : String,
-) -> UInt {
+) -> UInt32 {
   let rt = parse_register(rt_text)
   let rn = parse_register(clean_mem_token(base_text))
   let offset = parse_immediate(clean_mem_token(offset_text))
@@ -985,7 +997,7 @@ fn encode_str_unsigned_offset(
   rt_text : String,
   base_text : String,
   offset_text : String,
-) -> UInt {
+) -> UInt32 {
   let rt = parse_register(rt_text)
   let rn = parse_register(clean_mem_token(base_text))
   let offset = parse_immediate(clean_mem_token(offset_text))
@@ -1005,7 +1017,7 @@ fn encode_str_offset(
   rt_text : String,
   base_text : String,
   offset_text : String,
-) -> UInt {
+) -> UInt32 {
   let offset = parse_immediate(clean_mem_token(offset_text))
   let scale = if rt_text.has_prefix("w") { 4 } else { 8 }
   if offset >= 0 && offset % scale == 0 {
@@ -1020,7 +1032,7 @@ fn encode_str_pre_64(
   rt_text : String,
   base_text : String,
   offset_text : String,
-) -> UInt {
+) -> UInt32 {
   let rt = parse_register(rt_text)
   let rn = parse_register(clean_mem_token(base_text))
   let offset = parse_immediate(clean_mem_token(offset_text))
@@ -1040,7 +1052,7 @@ fn encode_fp_mem_signed(
   base_text : String,
   offset_text : String,
   is_load : Bool,
-) -> UInt {
+) -> UInt32 {
   let rt = parse_fp_register(rt_text)
   let rn = parse_register(clean_mem_token(base_text))
   let offset = parse_immediate(clean_mem_token(offset_text))
@@ -1067,7 +1079,7 @@ fn encode_fp_mem_pre(
   base_text : String,
   offset_text : String,
   is_load : Bool,
-) -> UInt {
+) -> UInt32 {
   encode_fp_mem_signed(rt_text, base_text, offset_text, is_load) | 0x00000c00U
 }
 
@@ -1077,7 +1089,7 @@ fn encode_fp_mem_unsigned(
   base_text : String,
   offset_text : String,
   is_load : Bool,
-) -> UInt {
+) -> UInt32 {
   let rt = parse_fp_register(rt_text)
   let rn = parse_register(clean_mem_token(base_text))
   let offset = parse_immediate(clean_mem_token(offset_text))
@@ -1105,7 +1117,7 @@ fn encode_fp_mem(
   base_text : String,
   offset_text : String,
   is_load : Bool,
-) -> UInt {
+) -> UInt32 {
   let cleaned_offset = clean_mem_token(offset_text)
   let offset = parse_immediate(cleaned_offset)
   let scale = fp_register_scale(rt_text)
@@ -1117,7 +1129,7 @@ fn encode_fp_mem(
 }
 
 ///|
-fn encode_ldr_unsigned(rt_text : String, base_text : String) -> UInt {
+fn encode_ldr_unsigned(rt_text : String, base_text : String) -> UInt32 {
   let rt = parse_register(rt_text)
   let rn = parse_register(clean_mem_token(base_text))
   let base = if rt_text.has_prefix("w") { 0xb9400000U } else { 0xf9400000U }
@@ -1129,7 +1141,7 @@ fn encode_ldr_unsigned_offset(
   rt_text : String,
   base_text : String,
   offset_text : String,
-) -> UInt {
+) -> UInt32 {
   let rt = parse_register(rt_text)
   let rn = parse_register(clean_mem_token(base_text))
   let offset = parse_immediate(clean_mem_token(offset_text))
@@ -1149,7 +1161,7 @@ fn encode_ldur(
   rt_text : String,
   base_text : String,
   offset_text : String,
-) -> UInt {
+) -> UInt32 {
   let rt = parse_register(rt_text)
   let rn = parse_register(clean_mem_token(base_text))
   let offset = parse_immediate(clean_mem_token(offset_text))
@@ -1168,7 +1180,7 @@ fn encode_ldr_offset(
   rt_text : String,
   base_text : String,
   offset_text : String,
-) -> UInt {
+) -> UInt32 {
   let offset = parse_immediate(clean_mem_token(offset_text))
   let scale = if rt_text.has_prefix("w") { 4 } else { 8 }
   if offset >= 0 && offset % scale == 0 {
@@ -1183,7 +1195,7 @@ fn encode_ldr_post_64(
   rt_text : String,
   base_text : String,
   offset_text : String,
-) -> UInt {
+) -> UInt32 {
   let rt = parse_register(rt_text)
   let rn = parse_register(clean_mem_token(base_text))
   let offset = parse_immediate(clean_mem_token(offset_text))
@@ -1208,7 +1220,7 @@ fn encode_register_offset_memory(
   base_text : String,
   offset_text : String,
   is_load : Bool,
-) -> UInt {
+) -> UInt32 {
   let rt = parse_register(rt_text)
   let rn = parse_register(clean_mem_token(base_text))
   let rm = parse_register(clean_mem_token(offset_text))
@@ -1235,7 +1247,7 @@ fn encode_fp_register_offset_memory(
   base_text : String,
   offset_text : String,
   is_load : Bool,
-) -> UInt {
+) -> UInt32 {
   let rt = parse_fp_register(rt_text)
   let rn = parse_register(clean_mem_token(base_text))
   let rm = parse_register(clean_mem_token(offset_text))
@@ -1257,7 +1269,7 @@ fn encode_fp_register_offset_memory(
 }
 
 ///|
-fn encode_str(rest : String) -> UInt {
+fn encode_str(rest : String) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() == 2 && is_fp_register(parts[0]) {
     encode_fp_mem_unsigned(parts[0], parts[1], "#0", false)
@@ -1286,7 +1298,7 @@ fn encode_str(rest : String) -> UInt {
 }
 
 ///|
-fn encode_ldr(rest : String) -> UInt {
+fn encode_ldr(rest : String) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() == 2 && is_fp_register(parts[0]) {
     encode_fp_mem_unsigned(parts[0], parts[1], "#0", true)
@@ -1314,7 +1326,7 @@ fn encode_ldr(rest : String) -> UInt {
 }
 
 ///|
-fn encode_movz(dst : String, imm : Int, shift : Int) -> UInt {
+fn encode_movz(dst : String, imm : Int32, shift : Int32) -> UInt32 {
   let rd = parse_register(dst)
   let hw = shift / 16
   let base = if dst.has_prefix("w") { 0x52800000U } else { 0xd2800000U }
@@ -1325,7 +1337,7 @@ fn encode_movz(dst : String, imm : Int, shift : Int) -> UInt {
 }
 
 ///|
-fn encode_movk(dst : String, imm : Int, shift : Int) -> UInt {
+fn encode_movk(dst : String, imm : Int32, shift : Int32) -> UInt32 {
   let rd = parse_register(dst)
   let hw = shift / 16
   let base = if dst.has_prefix("w") { 0x72800000U } else { 0xf2800000U }
@@ -1336,7 +1348,7 @@ fn encode_movk(dst : String, imm : Int, shift : Int) -> UInt {
 }
 
 ///|
-fn encode_movn(dst : String, imm : Int, shift : Int) -> UInt {
+fn encode_movn(dst : String, imm : Int32, shift : Int32) -> UInt32 {
   let rd = parse_register(dst)
   let hw = shift / 16
   let base = if dst.has_prefix("w") { 0x12800000U } else { 0x92800000U }
@@ -1347,21 +1359,21 @@ fn encode_movn(dst : String, imm : Int, shift : Int) -> UInt {
 }
 
 ///|
-fn encode_sxtw(dst : String, src : String) -> UInt {
+fn encode_sxtw(dst : String, src : String) -> UInt32 {
   let rd = parse_register(dst)
   let rn = parse_register(src)
   0x93407c00U | (rn.reinterpret_as_uint() << 5) | rd.reinterpret_as_uint()
 }
 
 ///|
-fn encode_sxtb(dst : String, src : String) -> UInt {
+fn encode_sxtb(dst : String, src : String) -> UInt32 {
   let rd = parse_register(dst)
   let rn = parse_register(src)
   0x93401c00U | (rn.reinterpret_as_uint() << 5) | rd.reinterpret_as_uint()
 }
 
 ///|
-fn encode_sxth(dst : String, src : String) -> UInt {
+fn encode_sxth(dst : String, src : String) -> UInt32 {
   let rd = parse_register(dst)
   let rn = parse_register(src)
   0x93403c00U | (rn.reinterpret_as_uint() << 5) | rd.reinterpret_as_uint()
@@ -1370,10 +1382,10 @@ fn encode_sxth(dst : String, src : String) -> UInt {
 ///|
 fn encode_byte_halfword_memory(
   rest : String,
-  base : UInt,
-  scale : Int,
+  base : UInt32,
+  scale : Int32,
   name : String,
-) -> UInt {
+) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 2 && parts.length() != 3 {
     abort("malformed " + name + " instruction")
@@ -1392,7 +1404,7 @@ fn encode_byte_halfword_memory(
 }
 
 ///|
-fn encode_mov_wide(rest : String, kind : String) -> UInt {
+fn encode_mov_wide(rest : String, kind : String) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() < 2 {
     abort("malformed " + kind + " instruction")
@@ -1417,7 +1429,7 @@ fn encode_mov_wide(rest : String, kind : String) -> UInt {
 }
 
 ///|
-fn encode_mov_immediate(dst : String, imm : Int64) -> UInt {
+fn encode_mov_immediate(dst : String, imm : Int64) -> UInt32 {
   let shifts = [0, 16, 32, 48]
   if imm >= 0L {
     for shift in shifts {
@@ -1439,7 +1451,7 @@ fn encode_mov_immediate(dst : String, imm : Int64) -> UInt {
 }
 
 ///|
-fn encode_mov(rest : String) -> UInt {
+fn encode_mov(rest : String) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 2 {
     abort("malformed mov instruction")
@@ -1452,7 +1464,7 @@ fn encode_mov(rest : String) -> UInt {
 }
 
 ///|
-fn encode_mvn(rest : String) -> UInt {
+fn encode_mvn(rest : String) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 2 {
     abort("malformed mvn instruction")
@@ -1467,17 +1479,17 @@ fn encode_mvn(rest : String) -> UInt {
 }
 
 ///|
-fn encode_neg(rest : String) -> UInt {
+fn encode_neg(rest : String) -> UInt32 {
   encode_neg_with_base(rest, 0x4b000000U, 0xcb000000U, "neg")
 }
 
 ///|
 fn encode_neg_with_base(
   rest : String,
-  w_base : UInt,
-  x_base : UInt,
+  w_base : UInt32,
+  x_base : UInt32,
   name : String,
-) -> UInt {
+) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 2 {
     abort("malformed " + name + " instruction")
@@ -1492,13 +1504,13 @@ fn encode_neg_with_base(
 }
 
 ///|
-fn encode_blr(rest : String) -> UInt {
+fn encode_blr(rest : String) -> UInt32 {
   let rn = parse_register(trim_to_owned(rest))
   0xd63f0000U | (rn.reinterpret_as_uint() << 5)
 }
 
 ///|
-fn encode_br(rest : String) -> UInt {
+fn encode_br(rest : String) -> UInt32 {
   let rn = parse_register(trim_to_owned(rest))
   0xd61f0000U | (rn.reinterpret_as_uint() << 5)
 }
@@ -1506,10 +1518,10 @@ fn encode_br(rest : String) -> UInt {
 ///|
 fn encode_unary_register(
   rest : String,
-  w_base : UInt,
-  x_base : UInt,
+  w_base : UInt32,
+  x_base : UInt32,
   name : String,
-) -> UInt {
+) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 2 {
     abort("malformed " + name + " instruction")
@@ -1525,7 +1537,7 @@ fn encode_unary_register(
 }
 
 ///|
-fn encode_fmov(rest : String) -> UInt {
+fn encode_fmov(rest : String) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 2 {
     abort("malformed fmov instruction")
@@ -1554,10 +1566,10 @@ fn encode_fmov(rest : String) -> UInt {
 ///|
 fn encode_fp_three_register(
   rest : String,
-  double_base : UInt,
-  single_base : UInt,
+  double_base : UInt32,
+  single_base : UInt32,
   name : String,
-) -> UInt {
+) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 3 {
     abort("malformed " + name + " instruction")
@@ -1587,10 +1599,10 @@ fn encode_fp_three_register(
 ///|
 fn encode_fp_two_register(
   rest : String,
-  double_base : UInt,
-  single_base : UInt,
+  double_base : UInt32,
+  single_base : UInt32,
   name : String,
-) -> UInt {
+) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 2 {
     abort("malformed " + name + " instruction")
@@ -1606,7 +1618,7 @@ fn encode_fp_two_register(
 }
 
 ///|
-fn encode_fp_precision_convert(rest : String) -> UInt {
+fn encode_fp_precision_convert(rest : String) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 2 {
     abort("malformed fcvt instruction")
@@ -1623,7 +1635,7 @@ fn encode_fp_precision_convert(rest : String) -> UInt {
 }
 
 ///|
-fn encode_fcmp(rest : String) -> UInt {
+fn encode_fcmp(rest : String) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 2 {
     abort("malformed fcmp instruction")
@@ -1643,7 +1655,7 @@ fn encode_fp_convert_to_int(
   rest : String,
   signed : Bool,
   name : String,
-) -> UInt {
+) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 2 {
     abort("malformed " + name + " instruction")
@@ -1685,7 +1697,7 @@ fn encode_int_convert_to_fp(
   rest : String,
   signed : Bool,
   name : String,
-) -> UInt {
+) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 2 {
     abort("malformed " + name + " instruction")
@@ -1723,7 +1735,7 @@ fn encode_int_convert_to_fp(
 }
 
 ///|
-fn encode_dmb(rest : String) -> UInt {
+fn encode_dmb(rest : String) -> UInt32 {
   let option = trim_to_owned(rest)
   match option {
     "ish" => 0xd5033bbfU
@@ -1734,7 +1746,7 @@ fn encode_dmb(rest : String) -> UInt {
 }
 
 ///|
-fn encode_atomic_memory(rest : String, base : UInt, name : String) -> UInt {
+fn encode_atomic_memory(rest : String, base : UInt32, name : String) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 2 {
     abort("malformed " + name + " instruction")
@@ -1745,12 +1757,16 @@ fn encode_atomic_memory(rest : String, base : UInt, name : String) -> UInt {
 }
 
 ///|
-fn encode_exclusive_load(rest : String, base : UInt, name : String) -> UInt {
+fn encode_exclusive_load(rest : String, base : UInt32, name : String) -> UInt32 {
   encode_atomic_memory(rest, base, name)
 }
 
 ///|
-fn encode_exclusive_store(rest : String, base : UInt, name : String) -> UInt {
+fn encode_exclusive_store(
+  rest : String,
+  base : UInt32,
+  name : String,
+) -> UInt32 {
   let parts = split_operands(rest)
   if parts.length() != 3 {
     abort("malformed " + name + " instruction")
@@ -1765,17 +1781,21 @@ fn encode_exclusive_store(rest : String, base : UInt, name : String) -> UInt {
 }
 
 ///|
-fn encode_branch(from_offset : Int, target_offset : Int) -> UInt {
+fn encode_branch(from_offset : Int32, target_offset : Int32) -> UInt32 {
   encode_branch_with_base(from_offset, target_offset, 0x14000000U)
 }
 
 ///|
-fn encode_branch_link(from_offset : Int, target_offset : Int) -> UInt {
+fn encode_branch_link(from_offset : Int32, target_offset : Int32) -> UInt32 {
   encode_branch_with_base(from_offset, target_offset, 0x94000000U)
 }
 
 ///|
-fn encode_cbz(from_offset : Int, target_offset : Int, reg : Int) -> UInt {
+fn encode_cbz(
+  from_offset : Int32,
+  target_offset : Int32,
+  reg : Int32,
+) -> UInt32 {
   let delta = (target_offset - from_offset) / 4
   if delta < -(1 << 18) || delta >= 1 << 18 {
     abort("cbz target out of range for Mach-O object backend")
@@ -1785,16 +1805,20 @@ fn encode_cbz(from_offset : Int, target_offset : Int, reg : Int) -> UInt {
 }
 
 ///|
-fn encode_cbnz(from_offset : Int, target_offset : Int, reg : Int) -> UInt {
+fn encode_cbnz(
+  from_offset : Int32,
+  target_offset : Int32,
+  reg : Int32,
+) -> UInt32 {
   encode_cbz(from_offset, target_offset, reg) | 0x01000000U
 }
 
 ///|
 fn encode_cond_branch(
-  from_offset : Int,
-  target_offset : Int,
+  from_offset : Int32,
+  target_offset : Int32,
   cond : String,
-) -> UInt {
+) -> UInt32 {
   let delta = (target_offset - from_offset) / 4
   if delta < -(1 << 18) || delta >= 1 << 18 {
     abort("conditional branch target out of range for Mach-O object backend")
@@ -1806,16 +1830,16 @@ fn encode_cond_branch(
 }
 
 ///|
-fn encode_adrp(dst : String) -> UInt {
+fn encode_adrp(dst : String) -> UInt32 {
   0x90000000U | parse_register(dst).reinterpret_as_uint()
 }
 
 ///|
 fn encode_branch_with_base(
-  from_offset : Int,
-  target_offset : Int,
-  base : UInt,
-) -> UInt {
+  from_offset : Int32,
+  target_offset : Int32,
+  base : UInt32,
+) -> UInt32 {
   let delta = (target_offset - from_offset) / 4
   if delta < -(1 << 25) || delta >= 1 << 25 {
     abort("branch target out of range for Mach-O object backend")
@@ -1827,10 +1851,10 @@ fn encode_branch_with_base(
 ///|
 fn add_relocation(
   section : ObjectSection,
-  address : Int,
+  address : Int32,
   symbol : String,
   pcrel : Bool,
-  type_ : Int,
+  type_ : Int32,
 ) -> Unit {
   add_relocation_with_length(section, address, symbol, pcrel, type_, 2)
 }
@@ -1838,11 +1862,11 @@ fn add_relocation(
 ///|
 fn add_relocation_with_length(
   section : ObjectSection,
-  address : Int,
+  address : Int32,
   symbol : String,
   pcrel : Bool,
-  type_ : Int,
-  length : Int,
+  type_ : Int32,
+  length : Int32,
 ) -> Unit {
   section.relocs.push({ address, symbol, pcrel, length, external: true, type_, })
 }
@@ -1857,7 +1881,7 @@ fn strip_reloc_suffix(operand : String, suffix : String) -> String {
 }
 
 ///|
-fn parse_p2align(line : String) -> Int {
+fn parse_p2align(line : String) -> Int32 {
   let rest = trim_to_owned(slice_from(line, ".p2align".length()))
   let parts = split_operands(rest)
   if parts.length() == 0 {
@@ -1877,7 +1901,7 @@ fn push_global_once(globals : Array[String], name : String) -> Unit {
 }
 
 ///|
-fn default_section_align_power(segname : String, sectname : String) -> Int {
+fn default_section_align_power(segname : String, sectname : String) -> Int32 {
   if segname == "__TEXT" && sectname == "__text" {
     2
   } else if segname == "__TEXT" && sectname == "__const" {
@@ -1890,7 +1914,7 @@ fn default_section_align_power(segname : String, sectname : String) -> Int {
 }
 
 ///|
-fn section_flags(segname : String, sectname : String, line : String) -> UInt {
+fn section_flags(segname : String, sectname : String, line : String) -> UInt32 {
   if segname == "__TEXT" && sectname == "__text" {
     0x80000400U
   } else if segname == "__DATA" && sectname == "__bss" {
@@ -1910,9 +1934,9 @@ fn get_or_add_section(
   sections : Array[ObjectSection],
   segname : String,
   sectname : String,
-  flags : UInt,
-  align_power : Int,
-) -> Int {
+  flags : UInt32,
+  align_power : Int32,
+) -> Int32 {
   for i = 0; i < sections.length(); i = i + 1 {
     if sections[i].segname == segname && sections[i].sectname == sectname {
       return i
@@ -1933,7 +1957,7 @@ fn get_or_add_section(
 }
 
 ///|
-fn parse_section_index(sections : Array[ObjectSection], line : String) -> Int {
+fn parse_section_index(sections : Array[ObjectSection], line : String) -> Int32 {
   let rest = trim_to_owned(slice_from(line, ".section".length()))
   let parts = split_operands(rest)
   if parts.length() < 2 {
@@ -1956,7 +1980,7 @@ fn directive_rest(line : String, directive : String) -> String {
 }
 
 ///|
-fn parse_data_integer(value : String, context : String) -> Int {
+fn parse_data_integer(value : String, context : String) -> Int32 {
   parse_int_or_abort(trim_to_owned(value), context)
 }
 
@@ -2011,7 +2035,7 @@ fn append_data_integer_bytes(
   section : ObjectSection,
   value : String,
   context : String,
-  width : Int,
+  width : Int32,
 ) -> Unit {
   let n = parse_data_integer_i64(value, context)
   let (min, max) = match width {
@@ -2101,8 +2125,8 @@ fn is_octal_char(ch : UInt16) -> Bool {
 }
 
 ///|
-fn parse_asm_string_literal(rest : String) -> Array[Int] {
-  let bytes : Array[Int] = []
+fn parse_asm_string_literal(rest : String) -> Array[Int32] {
+  let bytes : Array[Int32] = []
   let s = trim_to_owned(rest)
   if s.length() < 2 || s[0] != '"' {
     abort("malformed string directive in Mach-O object backend: " + rest)
@@ -2954,7 +2978,7 @@ fn assemble_object_from_darwin_arm64(assembly : String) -> AssembledObject {
 }
 
 ///|
-fn write_macho_header(buf : @buffer.Buffer, sizeofcmds : Int) -> Unit {
+fn write_macho_header(buf : @buffer.Buffer, sizeofcmds : Int32) -> Unit {
   write_u32_le(buf, 0xfeedfacfU) // MH_MAGIC_64
   write_u32_le(buf, 0x0100000cU) // CPU_TYPE_ARM64
   write_i32_le(buf, 0) // CPU_SUBTYPE_ARM64_ALL
@@ -2969,9 +2993,9 @@ fn write_macho_header(buf : @buffer.Buffer, sizeofcmds : Int) -> Unit {
 fn write_segment_command(
   buf : @buffer.Buffer,
   sections : Array[ObjectSection],
-  segment_fileoff : Int,
-  segment_filesize : Int,
-  segment_vmsize : Int,
+  segment_fileoff : Int32,
+  segment_filesize : Int32,
+  segment_vmsize : Int32,
 ) -> Unit {
   write_u32_le(buf, 0x19U) // LC_SEGMENT_64
   write_i32_le(buf, 72 + sections.length() * 80)
@@ -3018,10 +3042,10 @@ fn write_build_version_command(buf : @buffer.Buffer) -> Unit {
 ///|
 fn write_symtab_command(
   buf : @buffer.Buffer,
-  symoff : Int,
-  nsyms : Int,
-  stroff : Int,
-  strsize : Int,
+  symoff : Int32,
+  nsyms : Int32,
+  stroff : Int32,
+  strsize : Int32,
 ) -> Unit {
   write_u32_le(buf, 0x2U) // LC_SYMTAB
   write_i32_le(buf, 24)
@@ -3034,9 +3058,9 @@ fn write_symtab_command(
 ///|
 fn write_dysymtab_command(
   buf : @buffer.Buffer,
-  nlocals : Int,
-  nextdefs : Int,
-  nundefs : Int,
+  nlocals : Int32,
+  nextdefs : Int32,
+  nundefs : Int32,
 ) -> Unit {
   write_u32_le(buf, 0xbU) // LC_DYSYMTAB
   write_i32_le(buf, 80)
@@ -3072,7 +3096,7 @@ fn append_sections(
 fn write_relocation(
   buf : @buffer.Buffer,
   reloc : Relocation,
-  symbol_indexes : Map[String, Int],
+  symbol_indexes : Map[String, Int32],
 ) -> Unit {
   if !symbol_indexes.contains(reloc.symbol) {
     abort("missing relocation symbol in Mach-O object backend: " + reloc.symbol)
@@ -3092,7 +3116,7 @@ fn write_relocation(
 fn write_relocations(
   buf : @buffer.Buffer,
   sections : Array[ObjectSection],
-  symbol_indexes : Map[String, Int],
+  symbol_indexes : Map[String, Int32],
 ) -> Unit {
   for section in sections {
     if section.relocs.length() > 0 {
@@ -3105,7 +3129,7 @@ fn write_relocations(
 }
 
 ///|
-fn symbol_string_size(symbols : Array[SymbolEntry]) -> Int {
+fn symbol_string_size(symbols : Array[SymbolEntry]) -> Int32 {
   let mut size = 1
   for symbol in symbols {
     size = size + symbol.name.length() + 1
@@ -3164,7 +3188,7 @@ fn symbol_value(
   name : String,
   symbols : Map[String, SymbolLocation],
   sections : Array[ObjectSection],
-) -> Int {
+) -> Int32 {
   match symbols.get(name) {
     Some(loc) => sections[loc.section_index].addr + loc.offset
     None => 0
@@ -3204,7 +3228,7 @@ fn build_symbol_layout(obj : AssembledObject) -> SymbolLayout {
     }
   }
   let entries : Array[SymbolEntry] = []
-  let indexes : Map[String, Int] = Map([])
+  let indexes : Map[String, Int32] = Map([])
   for name in locals {
     indexes[name] = entries.length()
     let loc = obj.symbols[name]
@@ -3241,8 +3265,8 @@ fn build_symbol_layout(obj : AssembledObject) -> SymbolLayout {
 ///|
 fn layout_sections(
   sections : Array[ObjectSection],
-  content_offset : Int,
-) -> (Int, Int, Int) {
+  content_offset : Int32,
+) -> (Int32, Int32, Int32) {
   let mut file_cursor = content_offset
   let mut addr_cursor = 0
   let mut first_fileoff = content_offset
@@ -3281,7 +3305,7 @@ fn layout_sections(
 }
 
 ///|
-fn layout_relocations(sections : Array[ObjectSection], offset : Int) -> Int {
+fn layout_relocations(sections : Array[ObjectSection], offset : Int32) -> Int32 {
   let mut cursor = align_int(offset, 4)
   for section in sections {
     if section.relocs.length() > 0 {
@@ -3340,7 +3364,7 @@ fn macho_object_from_assembled(obj : AssembledObject) -> Bytes {
 }
 
 ///|
-fn section_bytes_to_bytes(values : Array[Int]) -> Bytes {
+fn section_bytes_to_bytes(values : Array[Int32]) -> Bytes {
   let buf = Buffer(size_hint=values.length())
   for value in values {
     buf.write_byte(value.to_byte())
@@ -3349,7 +3373,7 @@ fn section_bytes_to_bytes(values : Array[Int]) -> Bytes {
 }
 
 ///|
-fn u32_offsets_to_bytes(values : Array[Int]) -> Bytes {
+fn u32_offsets_to_bytes(values : Array[Int32]) -> Bytes {
   let buf = Buffer(size_hint=values.length() * 4)
   for value in values {
     write_i32_le(buf, value)
@@ -3377,7 +3401,7 @@ fn jit_external_relocations_to_bytes(
 }
 
 ///|
-fn find_text_section(obj : AssembledObject) -> Int {
+fn find_text_section(obj : AssembledObject) -> Int32 {
   for i = 0; i < obj.sections.length(); i = i + 1 {
     if section_is_text(obj.sections[i]) {
       return i
@@ -3392,7 +3416,7 @@ fn section_is_jit_executable(section : ObjectSection) -> Bool {
 }
 
 ///|
-fn jit_page_size() -> Int {
+fn jit_page_size() -> Int32 {
   16384
 }
 
@@ -3432,7 +3456,7 @@ fn layout_jit_sections(
   sections : Array[ObjectSection],
   got_symbols : Array[String],
   external_branch_symbols : Array[String],
-) -> (Int, Map[String, Int], Map[String, Int], Int) {
+) -> (Int32, Map[String, Int32], Map[String, Int32], Int32) {
   let mut cursor = 0
   for section in sections {
     if section_is_jit_executable(section) {
@@ -3444,7 +3468,7 @@ fn layout_jit_sections(
     }
   }
   cursor = align_int(cursor, 4)
-  let branch_stub_offsets : Map[String, Int] = Map([])
+  let branch_stub_offsets : Map[String, Int32] = Map([])
   for symbol in external_branch_symbols {
     branch_stub_offsets[symbol] = cursor
     cursor = cursor + 16
@@ -3461,7 +3485,7 @@ fn layout_jit_sections(
     }
   }
   cursor = align_int(cursor, 8)
-  let got_offsets : Map[String, Int] = Map([])
+  let got_offsets : Map[String, Int32] = Map([])
   for symbol in got_symbols {
     got_offsets[symbol] = cursor
     cursor = cursor + 8
@@ -3479,7 +3503,7 @@ fn layout_jit_sections(
 }
 
 ///|
-fn symbol_image_addr(obj : AssembledObject, symbol : String) -> Int {
+fn symbol_image_addr(obj : AssembledObject, symbol : String) -> Int32 {
   match obj.symbols.get(symbol) {
     Some(loc) => obj.sections[loc.section_index].addr + loc.offset
     None => abort("JIT image does not support external symbol yet: " + symbol)
@@ -3488,7 +3512,7 @@ fn symbol_image_addr(obj : AssembledObject, symbol : String) -> Int {
 
 ///|
 fn copy_jit_sections(
-  image : Array[Int],
+  image : Array[Int32],
   sections : Array[ObjectSection],
 ) -> Unit {
   for section in sections {
@@ -3500,9 +3524,9 @@ fn copy_jit_sections(
 
 ///|
 fn write_jit_external_branch_stubs(
-  image : Array[Int],
+  image : Array[Int32],
   symbols : Array[String],
-  branch_stub_offsets : Map[String, Int],
+  branch_stub_offsets : Map[String, Int32],
   external_relocations : Array[JitExternalRelocation],
 ) -> Unit {
   for symbol in symbols {
@@ -3514,7 +3538,7 @@ fn write_jit_external_branch_stubs(
 }
 
 ///|
-fn patch_jit_adrp(image : Array[Int], offset : Int, target : Int) -> Unit {
+fn patch_jit_adrp(image : Array[Int32], offset : Int32, target : Int32) -> Unit {
   let delta_pages = target / 4096 - offset / 4096
   if delta_pages < -(1 << 20) || delta_pages >= 1 << 20 {
     abort("JIT adrp relocation target out of range")
@@ -3537,7 +3561,7 @@ fn patch_jit_adrp(image : Array[Int], offset : Int, target : Int) -> Unit {
 }
 
 ///|
-fn jit_pageoff_scale(insn : UInt, reloc_type : Int) -> Int {
+fn jit_pageoff_scale(insn : UInt32, reloc_type : Int32) -> Int32 {
   if reloc_type == 6 {
     8
   } else if (insn & 0xffc00000U) == 0xf9400000U {
@@ -3553,10 +3577,10 @@ fn jit_pageoff_scale(insn : UInt, reloc_type : Int) -> Int {
 
 ///|
 fn patch_jit_pageoff(
-  image : Array[Int],
-  offset : Int,
-  target : Int,
-  reloc_type : Int,
+  image : Array[Int32],
+  offset : Int32,
+  target : Int32,
+  reloc_type : Int32,
 ) -> Unit {
   let pageoff = target & 0xfff
   let insn = read_u32_from_array(image, offset)
@@ -3576,7 +3600,11 @@ fn patch_jit_pageoff(
 }
 
 ///|
-fn patch_jit_branch(image : Array[Int], offset : Int, target : Int) -> Unit {
+fn patch_jit_branch(
+  image : Array[Int32],
+  offset : Int32,
+  target : Int32,
+) -> Unit {
   let insn = read_u32_from_array(image, offset)
   let delta = (target - offset) / 4
   if delta < -(1 << 25) || delta >= 1 << 25 {
@@ -3593,13 +3621,13 @@ fn patch_jit_branch(image : Array[Int], offset : Int, target : Int) -> Unit {
 ///|
 fn patch_jit_relocations(
   obj : AssembledObject,
-  image : Array[Int],
+  image : Array[Int32],
   got_symbols : Array[String],
-  got_offsets : Map[String, Int],
-  branch_stub_offsets : Map[String, Int],
+  got_offsets : Map[String, Int32],
+  branch_stub_offsets : Map[String, Int32],
   external_relocations : Array[JitExternalRelocation],
-) -> Array[Int] {
-  let base_relocations : Array[Int] = []
+) -> Array[Int32] {
+  let base_relocations : Array[Int32] = []
   for got_symbol in got_symbols {
     let got_offset = got_offsets[got_symbol]
     if symbol_is_defined(obj, got_symbol) {
@@ -3666,7 +3694,7 @@ fn patch_jit_relocations(
 ///|
 fn jit_symbols_from_assembled(
   obj : AssembledObject,
-  text_index : Int,
+  text_index : Int32,
 ) -> Array[JitSymbol] {
   let symbols : Array[JitSymbol] = []
   for name in obj.defined_symbols {

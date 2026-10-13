@@ -34,16 +34,16 @@
 pub(all) struct Config {
   /// One q8_0 row-dot kernel per entry; any positive row width, a final
   /// short block is emitted for widths not divisible by 32.
-  q8_dims : Array[Int]
+  q8_dims : Array[Int32]
   /// One Q2_K kernel per entry; widths must be positive multiples of 256.
-  q2k_dims : Array[Int]
+  q2k_dims : Array[Int32]
   /// One IQ2_XXS kernel per entry; widths must be positive multiples of
   /// 256. Non-empty means the sign table is emitted.
-  iq2_dims : Array[Int]
+  iq2_dims : Array[Int32]
 }
 
 ///|
-fn lit(n : Int) -> @parser.Expr {
+fn lit(n : Int32) -> @parser.Expr {
   @parser.int_literal(n.to_int64(), SInt)
 }
 
@@ -56,7 +56,7 @@ fn flit(x : Double) -> @parser.Expr {
 /// A possibly-negative literal in canonical form: the parser never
 /// produces a negative `int_literal`, it produces negation applied to a
 /// positive one.
-fn slit(n : Int) -> @parser.Expr {
+fn slit(n : Int32) -> @parser.Expr {
   if n < 0 {
     Unary("-", lit(-n))
   } else {
@@ -65,12 +65,12 @@ fn slit(n : Int) -> @parser.Expr {
 }
 
 ///|
-fn shr(a : @parser.Expr, n : Int) -> @parser.Expr {
+fn shr(a : @parser.Expr, n : Int32) -> @parser.Expr {
   Binary(">>", a, lit(n))
 }
 
 ///|
-fn band(a : @parser.Expr, n : Int) -> @parser.Expr {
+fn band(a : @parser.Expr, n : Int32) -> @parser.Expr {
   Binary("&", a, lit(n))
 }
 
@@ -171,7 +171,7 @@ fn f16_to_f32_fn() -> @parser.FuncDecl {
 /// One q8_0 block: load the f16 scale, integer-dot `n` quants against the
 /// activation quants, accumulate scale * xscale[b] * dot. `b` is either
 /// the loop counter (full blocks) or a folded constant (the tail block).
-fn q8_block_stmts(b : @parser.Expr, n : Int) -> Array[@parser.Stmt] {
+fn q8_block_stmts(b : @parser.Expr, n : Int32) -> Array[@parser.Stmt] {
   let row = @build.v("row")
   let xq = @build.v("xq")
   let xscale = @build.v("xscale")
@@ -209,7 +209,7 @@ fn q8_block_stmts(b : @parser.Expr, n : Int) -> Array[@parser.Stmt] {
 /// against pre-quantized activations, ds4's `dot_q8_0_row` with the row
 /// width and block count baked. (`char` is the toolkit's canonical
 /// spelling of SChar; the referee's function-pointer types match it.)
-fn dot_q8_0_row_fn(d : Int) -> @parser.FuncDecl {
+fn dot_q8_0_row_fn(d : Int32) -> @parser.FuncDecl {
   let full = d / 32
   let rem = d % 32
   let body : Array[@parser.Stmt] = [@build.decl(Float, "acc", init=flit(0.0))]
@@ -243,7 +243,7 @@ fn dot_q8_0_row_fn(d : Int) -> @parser.FuncDecl {
 /// products hoist out of the 16-element loop. The per-element float tree
 /// `(d*sc_lo)*q - dmin*sc_hi`, times `y[k]`, summed in k order, is ds4's
 /// exactly.
-fn dot_q2_k_fn(d : Int) -> @parser.FuncDecl {
+fn dot_q2_k_fn(d : Int32) -> @parser.FuncDecl {
   let nb = d / 256
   let x = @build.v("x")
   let y = @build.v("y")
@@ -326,7 +326,7 @@ fn dot_q2_k_fn(d : Int) -> @parser.FuncDecl {
 /// 32-value groups and four 8-value lanes unrolled (their byte offsets
 /// and sign-word shifts fold to constants), and the codebook lookup
 /// aimed at the baked sign table instead of the runtime-built one.
-fn dot_iq2_xxs_fn(d : Int) -> @parser.FuncDecl {
+fn dot_iq2_xxs_fn(d : Int32) -> @parser.FuncDecl {
   let nb = d / 256
   let x = @build.v("x")
   let y = @build.v("y")
@@ -408,7 +408,7 @@ fn dot_iq2_xxs_fn(d : Int) -> @parser.FuncDecl {
 /// `j` (ds4 stores the same 128 bytes as a literal table). The referee
 /// memcmp against ds4's expansion is what makes this reconstruction safe
 /// to rely on.
-pub fn ksigns(s : Int) -> Int {
+pub fn ksigns(s : Int32) -> Int32 {
   let mut parity = 0
   for j in 0..<7 {
     parity = parity ^ ((s >> j) & 1)
@@ -466,7 +466,7 @@ pub fn generate_kernels(cfg : Config) -> String {
       )
     }
   }
-  fn require_distinct(dims : Array[Int], kind : String) {
+  fn require_distinct(dims : Array[Int32], kind : String) {
     for i in 0..<dims.length() {
       for k in 0..<i {
         if dims[i] == dims[k] {
@@ -587,7 +587,7 @@ fn q8_neon_half(
 /// `vaddvq_f32(vaddq_f32(...))` reduction. The accumulation order
 /// mirrors ds4's exactly, so the native-flags referee can hold the
 /// comparison to bit equality.
-fn dot_q8_0_row_neon_fn(d : Int) -> @parser.FuncDecl {
+fn dot_q8_0_row_neon_fn(d : Int32) -> @parser.FuncDecl {
   let blocks = d / 32
   let b = @build.v("b")
   let body : Array[@parser.Stmt] = [
@@ -668,7 +668,7 @@ fn f16_to_f32_vcvt_fn() -> @parser.FuncDecl {
 /// `gen_f16_to_f32`, so it composes after a `generate_kernels` result in
 /// the same unit. Widths must be positive multiples of 32, ds4's own
 /// precondition for taking this path.
-pub fn generate_q8_neon_kernels(dims : Array[Int]) -> String {
+pub fn generate_q8_neon_kernels(dims : Array[Int32]) -> String {
   let items : Array[@build.Item] = [Func(f16_to_f32_vcvt_fn())]
   for i in 0..<dims.length() {
     let d = dims[i]

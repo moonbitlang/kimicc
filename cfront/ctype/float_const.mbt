@@ -110,7 +110,7 @@ pub fn integer_constant_from_floating(
 /// `nan`/`inf`/`huge_val` constant builtins (across their `f`/`l` suffixes),
 /// returning their arity (`0`, `1`, or `2`). Returns `None` for names this
 /// folder does not model. It gates `floating_builtin_constant_from_folded_args`.
-pub fn floating_builtin_constant_arg_count(name : String) -> Int? {
+pub fn floating_builtin_constant_arg_count(name : String) -> Int32? {
   match name {
     "__builtin_fabs"
     | "__builtin_fabsf"
@@ -354,7 +354,7 @@ pub fn floating_builtin_compare(
 /// builtins with explicit MIR semantics.
 pub fn floating_builtin_runtime_math_info(
   name : String,
-) -> (String, Type, Int)? {
+) -> (String, Type, Int32)? {
   match name {
     "__builtin_fabsf" => Some(("fabs", Float, 1))
     "__builtin_fabs" | "__builtin_fabsl" => Some(("fabs", Double, 1))

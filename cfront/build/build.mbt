@@ -30,9 +30,9 @@ pub fn func(
   name : String,
   params : Array[@parser.Param],
   body : Array[@parser.Stmt],
-  variadic? : Bool = false,
-  is_static? : Bool = false,
-  is_inline? : Bool = false,
+  variadic~ : Bool = false,
+  is_static~ : Bool = false,
+  is_inline~ : Bool = false,
 ) -> @parser.FuncDecl {
   {
     ret,
@@ -57,8 +57,8 @@ pub fn prototype(
   ret : @ctype.Type,
   name : String,
   params : Array[@parser.Param],
-  variadic? : Bool = false,
-  is_static? : Bool = false,
+  variadic~ : Bool = false,
+  is_static~ : Bool = false,
 ) -> @parser.FuncDecl {
   {
     ret,
@@ -83,8 +83,8 @@ pub fn global(
   ty : @ctype.Type,
   name : String,
   init? : @parser.GlobalInit,
-  is_static? : Bool = false,
-  is_extern? : Bool = false,
+  is_static~ : Bool = false,
+  is_extern~ : Bool = false,
 ) -> @parser.GlobalDecl {
   // A brace initializer over a scalar destination denotes the value inside,
   // which is what the parser records for `int x = {1}`.
@@ -112,8 +112,8 @@ pub fn global(
 pub fn aggregate(
   name : String,
   fields : Array[@parser.Param],
-  is_union? : Bool = false,
-  pack? : Int,
+  is_union~ : Bool = false,
+  pack? : Int32,
 ) -> @parser.StructDecl {
   { name, fields, is_union, pack, is_anonymous: false, }
 }
@@ -129,9 +129,9 @@ pub fn field(ty : @ctype.Type, name : String) -> @parser.Param {
 /// order given -- aggregates, then globals, then functions -- which is what
 /// a parsed program carries and what `Program` equality includes.
 pub fn program(
-  structs? : Array[@parser.StructDecl] = [],
-  globals? : Array[@parser.GlobalDecl] = [],
-  decls? : Array[@parser.FuncDecl] = [],
+  structs~ : Array[@parser.StructDecl] = [],
+  globals~ : Array[@parser.GlobalDecl] = [],
+  decls~ : Array[@parser.FuncDecl] = [],
 ) -> @parser.Program {
   let items : Array[@parser.TopLevel] = []
   for i in 0..<structs.length() {
@@ -223,7 +223,7 @@ pub fn for_range(
   name : String,
   bound : @parser.Expr,
   body : Array[@parser.Stmt],
-  ty? : @ctype.Type = SInt,
+  ty~ : @ctype.Type = SInt,
 ) -> @parser.Stmt {
   let counter : @parser.Expr = Var(name)
   // The zero initializer's literal type must be one a suffix can spell:
