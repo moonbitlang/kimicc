@@ -4,11 +4,11 @@ package "bobzhang/kimicc/experiments/ds4_kernels"
 // Values
 pub fn generate_kernels(Config) -> String
 
-pub fn generate_q8_neon_kernels(Array[Int]) -> String
+pub fn generate_q8_neon_kernels(Array[Int32]) -> String
 
 pub let iq2xxs_grid : Array[UInt64]
 
-pub fn ksigns(Int) -> Int
+pub fn ksigns(Int32) -> Int32
 
 pub let neon_type_names : Array[String]
 
@@ -16,9 +16,9 @@ pub let neon_type_names : Array[String]
 
 // Types and methods
 pub(all) struct Config {
-  q8_dims : Array[Int]
-  q2k_dims : Array[Int]
-  iq2_dims : Array[Int]
+  q8_dims : Array[Int32]
+  q2k_dims : Array[Int32]
+  iq2_dims : Array[Int32]
 }
 
 // Type aliases

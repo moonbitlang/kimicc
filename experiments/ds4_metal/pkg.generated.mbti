@@ -8,10 +8,10 @@ pub fn generate(Config) -> String
 
 // Types and methods
 pub(all) struct Config {
-  in_dim : Int
-  out_rows : Int
-  nr0 : Int
-  nsg : Int
+  in_dim : Int32
+  out_rows : Int32
+  nr0 : Int32
+  nsg : Int32
 }
 
 // Type aliases

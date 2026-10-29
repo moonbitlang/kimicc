@@ -20,7 +20,7 @@ pub fn int_literal(Int64, @ctype.Type) -> Expr
 
 pub fn named_abi_violation(Program) -> String?
 
-pub fn packed_align(Int?, Int) -> Int
+pub fn packed_align(Int32?, Int32) -> Int32
 
 pub fn parse(String) -> Program raise ParseError
 
@@ -28,7 +28,7 @@ pub fn parse_for_target(String, @target.Target) -> Program raise ParseError
 
 pub fn parse_with_named_types(String, Array[String], target? : @target.Target) -> Program raise ParseError
 
-pub fn position_at(String, Int) -> Position
+pub fn position_at(String, Int32) -> Position
 
 pub fn scalar_initializer_value(Expr) -> Expr
 
@@ -76,7 +76,7 @@ pub(all) enum Expr {
   VaArg(Expr, @ctype.Type)
   OffsetOf(@ctype.Type, Array[@ctype.OffsetDesignator])
   Array(Array[Expr])
-  CompoundLiteral(@ctype.Type, Array[Expr], Int)
+  CompoundLiteral(@ctype.Type, Array[Expr], Int32)
   DesignatedField(String, Expr)
   DesignatedIndex(Int64, Expr)
   DesignatedRange(Int64, Int64, Expr)
@@ -148,7 +148,7 @@ pub fn GlobalInit::to_repr(Self) -> @debug.Repr
 
 pub struct Lexer {
   input : String
-  mut pos : Int
+  mut pos : Int32
 }
 pub fn Lexer::new(String) -> Self
 pub fn Lexer::next_token(Self) -> Token raise ParseError
@@ -156,7 +156,7 @@ pub fn Lexer::next_token(Self) -> Token raise ParseError
 pub(all) struct Param {
   ty : @ctype.Type
   name : String
-  bit_width : Int?
+  bit_width : Int32?
 } derive(Eq, @debug.Debug)
 pub fn Param::equal(Self, Self) -> Bool
 pub fn Param::not_equal(Self, Self) -> Bool
@@ -167,7 +167,7 @@ pub struct Parser {
   target : @target.Target
   pragma_pack : PragmaPackTable
   mut token : Token
-  mut token_start : Int
+  mut token_start : Int32
   typedefs : Map[String, @ctype.Type]
   function_typedefs : Map[String, Bool]
   aggregates : Array[StructDecl]
@@ -175,24 +175,24 @@ pub struct Parser {
   struct_decls : Map[String, StructDecl]
   mut tag_aliases : Map[String, String]
   used_tag_names : Map[String, Bool]
-  mut block_depth : Int
-  mut struct_body_depth : Int
+  mut block_depth : Int32
+  mut struct_body_depth : Int32
   local_func_decls : Array[FuncDecl]
-  mut anon_counter : Int
+  mut anon_counter : Int32
   enum_constants : Map[String, Int64]
   globals : Array[GlobalDecl]
   mut value_types : Map[String, @ctype.Type]
   mut current_func_name : String
   mut static_locals : Map[String, String]
-  mut compound_literal_counter : Int
+  mut compound_literal_counter : Int32
 }
 pub fn Parser::new(Lexer) -> Self raise ParseError
 pub fn Parser::new_for_target(Lexer, @target.Target) -> Self raise ParseError
 
 pub(all) struct Position {
-  offset : Int
-  line : Int
-  column : Int
+  offset : Int32
+  line : Int32
+  column : Int32
 } derive(Eq, @debug.Debug)
 pub fn Position::equal(Self, Self) -> Bool
 pub fn Position::not_equal(Self, Self) -> Bool
@@ -239,7 +239,7 @@ pub(all) struct StructDecl {
   name : String
   fields : Array[Param]
   is_union : Bool
-  pack : Int?
+  pack : Int32?
   is_anonymous : Bool
 } derive(Eq, @debug.Debug)
 pub fn StructDecl::equal(Self, Self) -> Bool
@@ -338,9 +338,9 @@ pub fn Token::equal(Self, Self) -> Bool
 pub fn Token::not_equal(Self, Self) -> Bool
 
 pub(all) enum TopLevel {
-  Aggregate(Int)
-  Global(Int)
-  Func(Int)
+  Aggregate(Int32)
+  Global(Int32)
+  Func(Int32)
 } derive(Eq, @debug.Debug)
 pub fn TopLevel::equal(Self, Self) -> Bool
 pub fn TopLevel::not_equal(Self, Self) -> Bool
