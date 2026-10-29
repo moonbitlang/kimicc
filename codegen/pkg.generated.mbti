@@ -19,17 +19,17 @@ pub fn generate_macho_object(@parser.Program) -> Bytes
 // Types and methods
 pub struct Codegen {
   output : StringBuilder
-  mut label_counter : Int
-  mut local_offsets : Map[String, Int]
+  mut label_counter : Int32
+  mut local_offsets : Map[String, Int32]
   mut var_types : Map[String, @ctype.Type]
-  mut stack_size : Int
+  mut stack_size : Int32
   mut func_name : String
   mut func_params : Array[@parser.Param]
   func_rets : Map[String, @ctype.Type]
   func_variadic : Map[String, Bool]
-  func_param_counts : Map[String, Int]
+  func_param_counts : Map[String, Int32]
   func_param_types : Map[String, Array[@ctype.Type]]
-  struct_layouts : Map[String, Array[(String, @ctype.Type, Int, Int, Int, Int)]]
+  struct_layouts : Map[String, Array[(String, @ctype.Type, Int32, Int32, Int32, Int32)]]
   struct_decls : Map[String, @parser.StructDecl]
   strings : Array[String]
   mut break_label : String?
@@ -39,10 +39,10 @@ pub struct Codegen {
   mut emitted_labels : Map[String, String]
   mut defined_labels : Map[String, Bool]
   mut fp_literals : Array[Double]
-  mut sret_dest_offset : Int
-  mut sret_scratch_offset : Int
-  mut sret_scratch_size : Int
-  mut pending_sret_offset : Int
+  mut sret_dest_offset : Int32
+  mut sret_scratch_offset : Int32
+  mut sret_scratch_size : Int32
+  mut pending_sret_offset : Int32
 }
 pub fn Codegen::generate(Self, @parser.Program) -> String
 pub fn Codegen::new() -> Self
@@ -51,7 +51,7 @@ type CodegenGlobalDecl
 
 pub struct JitImage {
   code : Bytes
-  executable_size : Int
+  executable_size : Int32
   base_relocations : Bytes
   external_relocations : Bytes
   symbols : Array[JitSymbol]
@@ -59,7 +59,7 @@ pub struct JitImage {
 
 pub struct JitSymbol {
   name : String
-  offset : Int
+  offset : Int32
 }
 
 type SwitchClauses

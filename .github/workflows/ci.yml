@@ -69,6 +69,14 @@ jobs:
             exit 1
           fi
 
+      - name: Validate standalone cfront archive
+        run: |
+          MOON_WORK=off moon -C cfront package
+          archive_dir=$(mktemp -d)
+          unzip -q _build/publish/bobzhang-cfront-*.zip -d "$archive_dir"
+          moon -C "$archive_dir" check --deny-warn --target native
+          moon -C "$archive_dir" test --target native
+
       - name: Fetch external e2e fixtures
         run: scripts/fetch-external-parser-fixtures.sh
 

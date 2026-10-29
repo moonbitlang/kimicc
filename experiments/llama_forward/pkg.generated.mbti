@@ -8,13 +8,13 @@ pub fn generate_forward(Config) -> String
 
 // Types and methods
 pub(all) struct Config {
-  dim : Int
-  hidden : Int
-  n_layers : Int
-  n_heads : Int
-  n_kv_heads : Int
-  vocab : Int
-  seq : Int
+  dim : Int32
+  hidden : Int32
+  n_layers : Int32
+  n_heads : Int32
+  n_kv_heads : Int32
+  vocab : Int32
+  seq : Int32
 }
 
 // Type aliases

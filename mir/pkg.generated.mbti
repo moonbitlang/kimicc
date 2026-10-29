@@ -23,10 +23,10 @@ pub fn merge_global_decls(Array[MirGlobalDecl]) -> Array[MirGlobalDecl]
 // Types and methods
 pub(all) struct AggregateLayout {
   fields : Array[FieldLayout]
-  size : Int
-  align : Int
+  size : Int32
+  align : Int32
   is_union : Bool
-  pack : Int?
+  pack : Int32?
 } derive(Eq)
 pub fn AggregateLayout::equal(Self, Self) -> Bool
 pub fn AggregateLayout::not_equal(Self, Self) -> Bool
@@ -34,10 +34,10 @@ pub fn AggregateLayout::not_equal(Self, Self) -> Bool
 pub(all) struct FieldLayout {
   name : String
   ty : @ctype.Type
-  offset : Int
-  size : Int
-  bit_offset : Int
-  bit_width : Int?
+  offset : Int32
+  size : Int32
+  bit_offset : Int32
+  bit_width : Int32?
 } derive(Eq)
 pub fn FieldLayout::equal(Self, Self) -> Bool
 pub fn FieldLayout::not_equal(Self, Self) -> Bool
@@ -56,7 +56,7 @@ pub(all) struct MirAggregateDecl {
   name : String
   fields : Array[MirAggregateField]
   is_union : Bool
-  pack : Int?
+  pack : Int32?
 } derive(Eq)
 pub fn MirAggregateDecl::equal(Self, Self) -> Bool
 pub fn MirAggregateDecl::not_equal(Self, Self) -> Bool
@@ -64,7 +64,7 @@ pub fn MirAggregateDecl::not_equal(Self, Self) -> Bool
 pub(all) struct MirAggregateField {
   name : String
   ty : @ctype.Type
-  bit_width : Int?
+  bit_width : Int32?
 } derive(Eq)
 pub fn MirAggregateField::equal(Self, Self) -> Bool
 pub fn MirAggregateField::not_equal(Self, Self) -> Bool
@@ -117,18 +117,18 @@ pub(all) enum MirGlobalInit {
   MirGlobalScalarFloat(Double)
   MirGlobalString(String)
   MirGlobalSymbol(String)
-  MirGlobalSymbolOffset(String, Int)
+  MirGlobalSymbolOffset(String, Int32)
   MirGlobalLabelAddr(String)
   MirGlobalArray(Array[MirGlobalInit])
-  MirGlobalArraySparse(Array[(Int, MirGlobalInit)])
-  MirGlobalAggregateSparse(Array[(Int, MirGlobalInit)])
+  MirGlobalArraySparse(Array[(Int32, MirGlobalInit)])
+  MirGlobalAggregateSparse(Array[(Int32, MirGlobalInit)])
   MirGlobalInitUnsupported
 } derive(Eq)
 pub fn MirGlobalInit::equal(Self, Self) -> Bool
 pub fn MirGlobalInit::not_equal(Self, Self) -> Bool
 
 pub(all) struct MirLocal {
-  id : Int
+  id : Int32
   name : String
   ty : @ctype.Type
 } derive(Eq)
@@ -149,9 +149,9 @@ pub(all) struct MirModule {
 pub fn MirModule::field_layout(Self, @ctype.Type, String) -> FieldLayout?
 pub fn MirModule::object_size_fact_for_type(Self, @ctype.Type) -> @ctype.ObjectSizeFact
 pub fn MirModule::object_size_path_fact(Self, @ctype.Type, Array[@ctype.OffsetDesignator]) -> @ctype.ObjectSizeFact?
-pub fn MirModule::offset_of_path(Self, @ctype.Type, Array[@ctype.OffsetDesignator]) -> Int?
-pub fn MirModule::type_align(Self, @ctype.Type) -> Int
-pub fn MirModule::type_size(Self, @ctype.Type) -> Int
+pub fn MirModule::offset_of_path(Self, @ctype.Type, Array[@ctype.OffsetDesignator]) -> Int32?
+pub fn MirModule::type_align(Self, @ctype.Type) -> Int32
+pub fn MirModule::type_size(Self, @ctype.Type) -> Int32
 
 pub(all) struct MirParam {
   name : String
@@ -188,7 +188,7 @@ pub(all) enum MirValue {
   MirLabelAddr(String)
   MirStringAddr(String)
   MirElemAddr(MirValue, MirValue, @ctype.Type)
-  MirOffsetAddr(MirValue, Int, @ctype.Type)
+  MirOffsetAddr(MirValue, Int32, @ctype.Type)
   MirLoad(MirValue, @ctype.Type)
   MirUnary(String, MirValue, @ctype.Type)
   MirBinary(String, MirValue, MirValue, @ctype.Type)
@@ -235,10 +235,10 @@ pub(all) struct Program {
 pub fn Program::field_layout(Self, @ctype.Type, String) -> FieldLayout?
 pub fn Program::interpret_body_i64(Self, String, Array[Int64]) -> Result[Int64, String]
 pub fn Program::interpret_i64(Self, String, Array[Int64]) -> Result[Int64, String]
-pub fn Program::offset_of_path(Self, @ctype.Type, Array[@ctype.OffsetDesignator]) -> Int?
+pub fn Program::offset_of_path(Self, @ctype.Type, Array[@ctype.OffsetDesignator]) -> Int32?
 pub fn Program::to_module(Self) -> MirModule
-pub fn Program::type_align(Self, @ctype.Type) -> Int
-pub fn Program::type_size(Self, @ctype.Type) -> Int
+pub fn Program::type_align(Self, @ctype.Type) -> Int32
+pub fn Program::type_size(Self, @ctype.Type) -> Int32
 
 pub(all) struct Scope {
   locals : Map[String, @ctype.Type]

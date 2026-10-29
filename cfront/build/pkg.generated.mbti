@@ -9,7 +9,7 @@ import {
 // Values
 pub fn add_assign(@parser.Expr, @parser.Expr) -> @parser.Stmt
 
-pub fn aggregate(String, Array[@parser.Param], is_union? : Bool, pack? : Int) -> @parser.StructDecl
+pub fn aggregate(String, Array[@parser.Param], is_union? : Bool, pack? : Int32) -> @parser.StructDecl
 
 pub fn assign(@parser.Expr, @parser.Expr) -> @parser.Stmt
 

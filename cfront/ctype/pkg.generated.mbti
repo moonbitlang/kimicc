@@ -12,53 +12,53 @@ pub fn binary_result_type(String, Type, Type, Bool) -> Type
 
 pub fn builtin_address_query_info(String) -> String?
 
-pub fn builtin_atomic_compare_exchange_call_info(String) -> (String, Int, Int)?
+pub fn builtin_atomic_compare_exchange_call_info(String) -> (String, Int32, Int32)?
 
-pub fn builtin_atomic_exchange_call_info(String) -> (String, Int, Int)?
+pub fn builtin_atomic_exchange_call_info(String) -> (String, Int32, Int32)?
 
-pub fn builtin_atomic_load_store_call_info(String) -> (String, Int)?
+pub fn builtin_atomic_load_store_call_info(String) -> (String, Int32)?
 
 pub fn builtin_atomic_lock_free_call_info(String) -> (String, Bool)?
 
 pub fn builtin_atomic_lock_free_size_supported(Int64) -> Bool
 
-pub fn builtin_atomic_update_call_info(String) -> (String, Bool, Int, Int)?
+pub fn builtin_atomic_update_call_info(String) -> (String, Bool, Int32, Int32)?
 
 pub fn builtin_atomic_update_op(String) -> (String, Bool)?
 
-pub fn builtin_atomic_zero_store_call_info(String) -> (String, Int)?
+pub fn builtin_atomic_zero_store_call_info(String) -> (String, Int32)?
 
 pub fn builtin_classify_type_code(Type) -> Int64
 
-pub fn builtin_compare_libcall_arg_type(String, Int) -> Type
+pub fn builtin_compare_libcall_arg_type(String, Int32) -> Type
 
-pub fn builtin_compare_libcall_info(String, Int) -> (String, Int)?
+pub fn builtin_compare_libcall_info(String, Int32) -> (String, Int32)?
 
 pub fn builtin_constant_query_call_info(String) -> String?
 
 pub fn builtin_constant_query_result(String, Bool) -> Int64?
 
-pub fn builtin_darwin_fd_helper_call_info(String) -> (String, Int)?
+pub fn builtin_darwin_fd_helper_call_info(String) -> (String, Int32)?
 
-pub fn builtin_fence_call_info(String) -> (String, Int)?
+pub fn builtin_fence_call_info(String) -> (String, Int32)?
 
-pub fn builtin_fixed_int_constant_call_info(String) -> (Int64, Int)?
+pub fn builtin_fixed_int_constant_call_info(String) -> (Int64, Int32)?
 
 pub fn builtin_fixed_return_type(String) -> Type?
 
-pub fn builtin_heap_libcall_arg_type(String, Int) -> Type
+pub fn builtin_heap_libcall_arg_type(String, Int32) -> Type
 
-pub fn builtin_heap_libcall_info(String, Int) -> (String, Int)?
+pub fn builtin_heap_libcall_info(String, Int32) -> (String, Int32)?
 
-pub fn builtin_identity_call_info(String) -> (String, Int)?
+pub fn builtin_identity_call_info(String) -> (String, Int32)?
 
-pub fn builtin_length_libcall_arg_type(Int) -> Type
+pub fn builtin_length_libcall_arg_type(Int32) -> Type
 
-pub fn builtin_length_libcall_info(String, Int) -> (String, Int)?
+pub fn builtin_length_libcall_info(String, Int32) -> (String, Int32)?
 
-pub fn builtin_memory_libcall_arg_type(String, Int) -> Type
+pub fn builtin_memory_libcall_arg_type(String, Int32) -> Type
 
-pub fn builtin_memory_libcall_info(String, Int) -> (String, Int)?
+pub fn builtin_memory_libcall_info(String, Int32) -> (String, Int32)?
 
 pub fn builtin_noop_call_info(String) -> String?
 
@@ -66,49 +66,49 @@ pub fn builtin_object_size_call_info(String) -> String?
 
 pub fn builtin_overflow_op(String) -> String?
 
-pub fn builtin_printf_libcall_arg_type(String, Int) -> Type?
+pub fn builtin_printf_libcall_arg_type(String, Int32) -> Type?
 
-pub fn builtin_printf_libcall_symbol(String, Int) -> String?
+pub fn builtin_printf_libcall_symbol(String, Int32) -> String?
 
 pub fn builtin_printf_libcall_variadic(String) -> Bool
 
-pub fn builtin_printf_source_index_used(Array[Int], Int) -> Bool
+pub fn builtin_printf_source_index_used(Array[Int32], Int32) -> Bool
 
-pub fn builtin_printf_source_indexes(String, Int) -> Array[Int]?
+pub fn builtin_printf_source_indexes(String, Int32) -> Array[Int32]?
 
-pub fn builtin_return_condition_arg_index(String) -> Int?
+pub fn builtin_return_condition_arg_index(String) -> Int32?
 
 pub fn builtin_return_rule(String) -> BuiltinReturnRule?
 
 pub fn builtin_return_type(String, Array[Type], Int64?) -> Type?
 
-pub fn builtin_search_libcall_arg_type(String, Int) -> Type
+pub fn builtin_search_libcall_arg_type(String, Int32) -> Type
 
-pub fn builtin_search_libcall_info(String, Int) -> (String, Int)?
+pub fn builtin_search_libcall_info(String, Int32) -> (String, Int32)?
 
-pub fn builtin_span_libcall_info(String, Int) -> (String, Int)?
+pub fn builtin_span_libcall_info(String, Int32) -> (String, Int32)?
 
-pub fn builtin_stack_alloc_call_info(String) -> (String, Int)?
+pub fn builtin_stack_alloc_call_info(String) -> (String, Int32)?
 
-pub fn builtin_strl_libcall_arg_type(Int) -> Type
+pub fn builtin_strl_libcall_arg_type(Int32) -> Type
 
-pub fn builtin_strl_libcall_info(String, Int) -> (String, Int)?
+pub fn builtin_strl_libcall_info(String, Int32) -> (String, Int32)?
 
 pub fn builtin_trap_call_info(String) -> String?
 
-pub fn builtin_va_setup_call_info(String) -> (String, Int)?
+pub fn builtin_va_setup_call_info(String) -> (String, Int32)?
 
-pub fn builtin_zero_memory_call_info(String) -> (String, Int)?
+pub fn builtin_zero_memory_call_info(String) -> (String, Int32)?
 
-pub fn byte_swap_bits(Int64, Int) -> Int64
+pub fn byte_swap_bits(Int64, Int32) -> Int64
 
-pub fn count_leading_zero_bits(Int64, Int) -> Int64
+pub fn count_leading_zero_bits(Int64, Int32) -> Int64
 
-pub fn count_one_bits(Int64, Int) -> Int64
+pub fn count_one_bits(Int64, Int32) -> Int64
 
-pub fn count_trailing_zero_bits(Int64, Int) -> Int64
+pub fn count_trailing_zero_bits(Int64, Int32) -> Int64
 
-pub fn first_set_bit(Int64, Int) -> Int64
+pub fn first_set_bit(Int64, Int32) -> Int64
 
 pub fn float_literal_suffix_type(Char?) -> Type
 
@@ -122,7 +122,7 @@ pub fn floating_builtin_compare_op(String) -> String?
 
 pub fn floating_builtin_constant(String, Double?, Double?) -> Double?
 
-pub fn floating_builtin_constant_arg_count(String) -> Int?
+pub fn floating_builtin_constant_arg_count(String) -> Int32?
 
 pub fn floating_builtin_constant_bits_info(String) -> (Int64, Type)?
 
@@ -130,7 +130,7 @@ pub fn floating_builtin_constant_from_folded_args(String, Double?, Double?) -> D
 
 pub fn floating_builtin_runtime_class_info(String) -> (String, Type)?
 
-pub fn floating_builtin_runtime_math_info(String) -> (String, Type, Int)?
+pub fn floating_builtin_runtime_math_info(String) -> (String, Type, Int32)?
 
 pub fn floating_classify(String, Double, Type) -> Bool?
 
@@ -158,7 +158,7 @@ pub fn integer_abs_builtin_type(String) -> Type?
 
 pub fn integer_alignment_builtin_info(String, Type) -> (String, Type)?
 
-pub fn integer_bswap_builtin_info(String, Type) -> (Type, Int)?
+pub fn integer_bswap_builtin_info(String, Type) -> (Type, Int32)?
 
 pub fn integer_common_type(Type, Type) -> Type
 
@@ -186,29 +186,29 @@ pub fn integer_constant_token_type(Int64) -> Type
 
 pub fn integer_constant_unary(String, IntegerConstant) -> IntegerConstant?
 
-pub fn integer_count_builtin_info(String) -> (String, Int)?
+pub fn integer_count_builtin_info(String) -> (String, Int32)?
 
-pub fn integer_literal_suffix_type(Int64, Bool, Int) -> Type
+pub fn integer_literal_suffix_type(Int64, Bool, Int32) -> Type
 
 pub fn integer_literal_type(Int64) -> Type
 
-pub fn integer_rotate_builtin_info(String, Type) -> (Type, Int, Bool)?
+pub fn integer_rotate_builtin_info(String, Type) -> (Type, Int32, Bool)?
 
 pub fn integer_scalar_builtin_constant(String, IntegerConstant?, IntegerConstant?, Type) -> IntegerConstant?
 
-pub fn integer_scalar_builtin_constant_from_folded_args(String, Int, IntegerConstant?, IntegerConstant?, Type) -> IntegerConstant?
+pub fn integer_scalar_builtin_constant_from_folded_args(String, Int32, IntegerConstant?, IntegerConstant?, Type) -> IntegerConstant?
 
-pub fn mask_int_width(Int64, Int) -> Int64
+pub fn mask_int_width(Int64, Int32) -> Int64
 
 pub fn object_size_fact_result(ObjectSizeFact?, Int64) -> Int64
 
 pub fn object_size_unknown(Int64) -> Int64
 
-pub fn rotate_bits(Int64, Int64, Int, Bool) -> Int64
+pub fn rotate_bits(Int64, Int64, Int32, Bool) -> Int64
 
-pub fn string_literal_array_length(String) -> Int
+pub fn string_literal_array_length(String) -> Int32
 
-pub fn string_literal_c_length(String) -> Int
+pub fn string_literal_c_length(String) -> Int32
 
 pub fn string_literal_c_length_from(String, Int64) -> Int64
 
@@ -239,15 +239,15 @@ pub fn IntegerConstant::equal(Self, Self) -> Bool
 pub fn IntegerConstant::not_equal(Self, Self) -> Bool
 
 pub(all) struct ObjectSizeFact {
-  whole : Int
-  subobject : Int
+  whole : Int32
+  subobject : Int32
 } derive(Eq)
-pub fn ObjectSizeFact::array_element(Self, Int, Int, Int64) -> Self?
+pub fn ObjectSizeFact::array_element(Self, Int32, Int32, Int64) -> Self?
 pub fn ObjectSizeFact::equal(Self, Self) -> Bool
-pub fn ObjectSizeFact::member_field(Self, Int, Int) -> Self?
+pub fn ObjectSizeFact::member_field(Self, Int32, Int32) -> Self?
 pub fn ObjectSizeFact::not_equal(Self, Self) -> Bool
-pub fn ObjectSizeFact::subtract_offset(Self, Int) -> Self?
-pub fn ObjectSizeFact::value(Self, Int64) -> Int
+pub fn ObjectSizeFact::subtract_offset(Self, Int32) -> Self?
+pub fn ObjectSizeFact::value(Self, Int64) -> Int32
 
 pub(all) enum OffsetDesignator {
   OffsetField(String)
@@ -281,24 +281,24 @@ pub(all) enum Type {
   Union(String)
   FuncPtr(Type, Array[Type], Bool)
   Pointer(Type)
-  Array(Type, Int)
+  Array(Type, Int32)
   Atomic(Type)
-  Aligned(Type, Int)
+  Aligned(Type, Int32)
   Named(String)
 } derive(Eq, @debug.Debug)
-pub fn Type::align(Self) -> Int
+pub fn Type::align(Self) -> Int32
 pub fn Type::array_element(Self) -> Self?
 pub fn Type::atomic_target(Self) -> Self
 pub fn Type::cast_integer_bits(Self, Int64) -> Int64
-pub fn Type::const_int_width(Self) -> Int?
+pub fn Type::const_int_width(Self) -> Int32?
 pub fn Type::const_is_unsigned(Self) -> Bool
 pub fn Type::core_type(Self) -> Self
 pub fn Type::equal(Self, Self) -> Bool
 pub fn Type::field_receiver(Self) -> Self?
-pub fn Type::generic_builtin_bswap_width(Self) -> Int
-pub fn Type::generic_builtin_rotate_width(Self) -> Int
+pub fn Type::generic_builtin_bswap_width(Self) -> Int32
+pub fn Type::generic_builtin_rotate_width(Self) -> Int32
 pub fn Type::integer_promote(Self) -> Self
-pub fn Type::integer_rank(Self) -> Int
+pub fn Type::integer_rank(Self) -> Int32
 pub fn Type::is_aggregate(Self) -> Bool
 pub fn Type::is_anonymous_aggregate(Self) -> Bool
 pub fn Type::is_float_or_double(Self) -> Bool
@@ -312,7 +312,7 @@ pub fn Type::is_unsigned_integer(Self) -> Bool
 pub fn Type::not_equal(Self, Self) -> Bool
 pub fn Type::output(Self, &Logger) -> Unit
 pub fn Type::pointer_or_array_element(Self) -> Self?
-pub fn Type::size(Self) -> Int
+pub fn Type::size(Self) -> Int32
 pub fn Type::to_repr(Self) -> @debug.Repr
 pub fn Type::to_string(Self) -> String
 pub fn Type::to_unsigned(Self) -> Self

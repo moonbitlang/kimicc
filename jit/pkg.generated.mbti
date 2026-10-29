@@ -7,13 +7,13 @@ import {
 }
 
 // Values
-pub fn call_i32_0(String, String) -> Int? raise @parser.ParseError
+pub fn call_i32_0(String, String) -> Int32? raise @parser.ParseError
 
-pub fn call_i32_1(String, String, Int) -> Int? raise @parser.ParseError
+pub fn call_i32_1(String, String, Int32) -> Int32? raise @parser.ParseError
 
-pub fn call_i32_2(String, String, Int, Int) -> Int? raise @parser.ParseError
+pub fn call_i32_2(String, String, Int32, Int32) -> Int32? raise @parser.ParseError
 
-pub fn call_i32_3(String, String, Int, Int, Int) -> Int? raise @parser.ParseError
+pub fn call_i32_3(String, String, Int32, Int32, Int32) -> Int32? raise @parser.ParseError
 
 pub fn compile(String) -> Module? raise @parser.ParseError
 
@@ -23,11 +23,11 @@ pub fn compile_c(String, @preprocessor.PreprocessOptions) -> Result[Module?, @pr
 
 // Types and methods
 type Module
-pub fn Module::call_i32_0(Self, String) -> Int?
-pub fn Module::call_i32_1(Self, String, Int) -> Int?
-pub fn Module::call_i32_2(Self, String, Int, Int) -> Int?
-pub fn Module::call_i32_3(Self, String, Int, Int, Int) -> Int?
-pub fn Module::symbol_offset(Self, String) -> Int?
+pub fn Module::call_i32_0(Self, String) -> Int32?
+pub fn Module::call_i32_1(Self, String, Int32) -> Int32?
+pub fn Module::call_i32_2(Self, String, Int32, Int32) -> Int32?
+pub fn Module::call_i32_3(Self, String, Int32, Int32, Int32) -> Int32?
+pub fn Module::symbol_offset(Self, String) -> Int32?
 
 // Type aliases
 
