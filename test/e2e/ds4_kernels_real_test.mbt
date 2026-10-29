@@ -33,18 +33,18 @@
 /// The checkout and checkpoint are machine-local (~/git/ds4); the test
 /// skips wherever they are absent, CI included.
 async test "generated ds4 kernels match ds4 bit for bit" {
-  // One command, so the redirect covers the whole probe: a && chain
-  // would bind the capture to its last link only.
+  // Test readability so dangling checkpoint symlinks are unavailable fixtures.
+  // The compound command keeps the capture redirect on the whole probe.
   // DS4_HOME overrides the checkout root's parent, for machines that keep
   // it elsewhere -- and it lets the skip branch itself be exercised
   // (DS4_HOME=/nonexistent) without disturbing $HOME, which moon needs.
   let have = run_command_capture(
-    "ls \"${DS4_HOME:-$HOME}/git/ds4/ds4.c\" " +
+    "for path in \"${DS4_HOME:-$HOME}/git/ds4/ds4.c\" " +
     "\"${DS4_HOME:-$HOME}/git/ds4/ds4flash.gguf\" " +
     "\"${DS4_HOME:-$HOME}/git/ds4/ds4_distributed.o\" " +
     "\"${DS4_HOME:-$HOME}/git/ds4/ds4_tp.o\" " +
     "\"${DS4_HOME:-$HOME}/git/ds4/ds4_ssd.o\" " +
-    "\"${DS4_HOME:-$HOME}/git/ds4/ds4_layer_pack.o\"",
+    "\"${DS4_HOME:-$HOME}/git/ds4/ds4_layer_pack.o\"; do test -r \"$path\" || exit 1; done",
     "ds4_present",
   )
   if have.code != 0 {

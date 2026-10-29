@@ -33,10 +33,10 @@
 /// Runs only where the ds4 checkout and checkpoint live; skips in CI.
 async test "generated kernels drop into ds4-bench and agree on real logits" {
   let have = run_command_capture(
-    "ls \"${DS4_HOME:-$HOME}/git/ds4/ds4.c\" " +
+    "for path in \"${DS4_HOME:-$HOME}/git/ds4/ds4.c\" " +
     "\"${DS4_HOME:-$HOME}/git/ds4/ds4flash.gguf\" " +
     "\"${DS4_HOME:-$HOME}/git/ds4/Makefile\" " +
-    "\"${DS4_HOME:-$HOME}/git/ds4/tests/long_context_story_prompt.txt\"",
+    "\"${DS4_HOME:-$HOME}/git/ds4/tests/long_context_story_prompt.txt\"; do test -r \"$path\" || exit 1; done",
     "ds4_ab_present",
   )
   if have.code != 0 {
